@@ -100,6 +100,15 @@ func (m Model) browserKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	name := key.String()
 	m.remember(b)
 	switch name {
+	case "ctrl+a":
+		if b.kind == browseAssign {
+			m.autoplay = !m.autoplay
+			if m.autoplay && m.player == nil {
+				m.autoplay = false
+				m.message = "no audio output to autoplay on"
+			}
+			return m, m.scheduleAutoplay()
+		}
 	case "esc", "q":
 		m.browser = nil
 		m.stopListening()
@@ -114,7 +123,10 @@ func (m Model) browserKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	rows := b.tree.Rows()
 	here := b.tree.Folder(b.at)
-	if name == "/" {
+	if name == "/" && b.kind == browseAssign {
+		return m.openSearch(b.root, true, b.pad)
+	}
+	if name == "/" || (name == "p" && b.kind == browseAssign) {
 		// Typing a path stays possible, starting from the folder in front.
 		m.browser = nil
 		m.stopListening()
@@ -189,6 +201,7 @@ func (m Model) browserKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if moved {
 		b.confirm = false
+		return m, tea.Batch(m.wanted(), m.scheduleAutoplay())
 	}
 	return m, m.wanted()
 }
@@ -354,7 +367,7 @@ func (m Model) assignBox(g geom) string {
 		st.bold.Render(fmt.Sprintf("Assign a file to %s", b.pad)), target, "",
 		m.sourceTabs(b.root), "",
 		body, "",
-		st.dim.Render("Enter assign  ·  Space listen  ·  v mark  ·  Tab/l open  ·  h close  ·  t source  ·  / type a path  ·  Esc cancel"),
+		st.dim.Render("Enter assign  ·  Space listen  ·  Ctrl-A autoplay " + onOff(m.autoplay) + "  ·  v mark  ·  Tab/l open  ·  t source  ·  / search  ·  p type a path  ·  Esc"),
 	}
 	return st.modal.Width(width).Render(strings.Join(lines, "\n"))
 }

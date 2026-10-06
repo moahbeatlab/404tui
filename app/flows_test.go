@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"slices"
@@ -353,5 +354,226 @@ func TestProjectExportAndPlannedRestore(t *testing.T) {
 	}
 	if err := app.RestoreProject(router, nil, nil); err == nil {
 		t.Error("restoring nothing succeeded")
+	}
+}
+
+func TestCopyPadsKeepsSampleAndSettings(t *testing.T) {
+	d, s := connect(t)
+	router := app.NewRouted(d)
+	s.AddFile("SD:IMPORT/kick.wav", wav(4800, 10))
+	s.AddFile("SD:IMPORT/hat.wav", wav(2400, 20))
+	a2, a3, c5 := pad(t, "A2"), pad(t, "A3"), pad(t, "C5")
+	app.Assign(d, router, a2, "SD:IMPORT/kick.wav")
+	app.Assign(d, router, a3, "SD:IMPORT/hat.wav")
+	level, _ := proto.ParamByName("level")
+	loop, _ := proto.ParamByName("loop")
+	d.SetParam(level.ID, proto.TargetPad(a2), 99)
+	d.SetParam(loop.ID, proto.TargetPad(a2), 1)
+	d.SetChopPoints(a2, []uint32{0, 1200})
+
+	copies, err := app.PlanCopy([]proto.PadIndex{a3, a2}, c5)
+	if err != nil || len(copies) != 2 || copies[0] != (app.Copy{From: a2, To: c5}) || copies[1].To != pad(t, "C6") {
+		t.Fatalf("plan = %+v (%v)", copies, err)
+	}
+	n, failed := app.CopyPads(d, copies)
+	if n != 2 || failed != nil {
+		t.Fatalf("copied %d, failed %v", n, failed)
+	}
+	block, _ := d.PadBlock(c5)
+	if v, _ := block.Param(level.ID); block.Name() != "kick" || v != 99 {
+		t.Errorf("C5: %q, level %d", block.Name(), v)
+	}
+	if v, _ := block.Param(loop.ID); v != 1 {
+		t.Errorf("C5 loop = %d", v)
+	}
+	if chops := block.ChopPoints(); chops[0] != 0 || chops[1] != 1200 || chops[2] >= 0 {
+		t.Errorf("C5 chop points = %v", chops)
+	}
+	copied, _ := s.File(c5.SamplePath(1))
+	original, _ := s.File(a2.SamplePath(1))
+	if !bytes.Equal(copied, original) {
+		t.Error("the copied sample differs from the original")
+	}
+	if s.PadName(pad(t, "C6")) != "hat" || s.PadName(a2) != "kick" {
+		t.Errorf("C6 %q, A2 %q", s.PadName(pad(t, "C6")), s.PadName(a2))
+	}
+}
+
+func TestPlanCopyAndOverlappingCopies(t *testing.T) {
+	d, s := connect(t)
+	router := app.NewRouted(d)
+	for i, name := range []string{"one", "two", "three"} {
+		s.AddFile("SD:IMPORT/"+name+".wav", wav(480, int16(i)))
+		app.Assign(d, router, proto.AllPads()[i], "SD:IMPORT/"+name+".wav")
+	}
+	// Shifting A1-A3 up one pad copies A2 onto A3 while A3 is still needed for A4.
+	pads := proto.AllPads()[:3]
+	copies, _ := app.PlanCopy(pads, pad(t, "A2"))
+	if n, failed := app.CopyPads(d, copies); n != 3 || failed != nil {
+		t.Fatalf("copied %d, failed %v", n, failed)
+	}
+	for pad, want := range map[string]string{"A1": "one", "A2": "one", "A3": "two", "A4": "three"} {
+		if got := s.PadName(proto.AllPads()[map[string]int{"A1": 0, "A2": 1, "A3": 2, "A4": 3}[pad]]); got != want {
+			t.Errorf("%s is %q, want %q", pad, got, want)
+		}
+	}
+
+	if _, err := app.PlanCopy(pads, pad(t, "J15")); err == nil || !strings.Contains(err.Error(), "past J16") {
+		t.Errorf("a plan past the end: %v", err)
+	}
+	if copies, _ := app.PlanCopy(pads[:1], pad(t, "A1")); len(copies) != 0 {
+		t.Errorf("copying a pad onto itself planned %v", copies)
+	}
+	if _, err := app.PlanCopy(nil, pad(t, "A1")); err == nil {
+		t.Error("planning nothing succeeded")
+	}
+	// An empty source fails alone and the rest still copy.
+	copies = []app.Copy{{From: pad(t, "B1"), To: pad(t, "B2")}, {From: pad(t, "A1"), To: pad(t, "B3")}}
+	if n, failed := app.CopyPads(d, copies); n != 1 || len(failed) != 1 || !strings.Contains(failed[0], "no sample") {
+		t.Errorf("copied %d, failed %v", n, failed)
+	}
+}
+
+func TestBankTempoAndVolume(t *testing.T) {
+	d, _ := connect(t)
+	snap, err := app.Load(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Banks[2].Tempo != 120 || snap.Banks[2].Volume != 127 || snap.UsesProjectTempo {
+		t.Errorf("defaults: %+v project tempo %v", snap.Banks[2], snap.UsesProjectTempo)
+	}
+	if err := app.SetBankTempo(d, 2, 98.5); err != nil {
+		t.Fatal(err)
+	}
+	// The unit stores the volume as 127 minus what is shown; it comes back as set.
+	if err := app.SetBankVolume(d, 2, 90); err != nil {
+		t.Fatal(err)
+	}
+	snap, _ = app.Load(d)
+	if snap.Banks[2].Tempo != 98.5 || snap.Banks[2].Volume != 90 {
+		t.Errorf("bank C: %+v", snap.Banks[2])
+	}
+	if snap.Banks[1].Tempo != 120 || snap.Banks[3].Volume != 127 {
+		t.Errorf("another bank changed: %+v %+v", snap.Banks[1], snap.Banks[3])
+	}
+	for _, bad := range []float64{39.9, 200.1, -1} {
+		if err := app.SetBankTempo(d, 0, bad); err == nil {
+			t.Errorf("tempo %v accepted", bad)
+		}
+	}
+	for _, bad := range []int{-1, 128} {
+		if err := app.SetBankVolume(d, 0, bad); err == nil {
+			t.Errorf("volume %d accepted", bad)
+		}
+	}
+	if err := app.SetBankTempo(d, 10, 100); err == nil {
+		t.Error("bank 11 accepted")
+	}
+	if err := app.SetBankVolume(d, 9, 0); err != nil {
+		t.Error(err)
+	}
+	if snap, _ = app.Load(d); snap.Banks[9].Volume != 0 {
+		t.Errorf("bank J volume %d", snap.Banks[9].Volume)
+	}
+}
+
+func TestIndexSearchAcrossFolders(t *testing.T) {
+	d, s := connect(t)
+	for _, f := range []string{
+		"SD:IMPORT/Drums/808 Kick.wav", "SD:IMPORT/Drums/Snare.wav", "SD:IMPORT/Drums/hats/Closed Hat.aif",
+		"SD:IMPORT/Kicks/deep.flac", "SD:IMPORT/notes.txt", "SD:EXPORT/old kick take 2.wav",
+	} {
+		s.AddFile(f, []byte("x"))
+	}
+	ix, err := app.BuildIndex(app.NewRouted(d), app.CardRoot, app.DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ix.Files) != 5 || ix.Truncated {
+		t.Fatalf("indexed %d files, truncated %v", len(ix.Files), ix.Truncated)
+	}
+	rels := func(q string) []string {
+		var out []string
+		for _, f := range ix.Search(q, 0) {
+			out = append(out, f.Rel)
+		}
+		return out
+	}
+	// A match in the file's own name comes before one only in a folder name.
+	if got := rels("kick"); !slices.Equal(got, []string{"EXPORT/old kick take 2.wav", "IMPORT/Drums/808 Kick.wav", "IMPORT/Kicks/deep.flac"}) {
+		t.Errorf("kick: %v", got)
+	}
+	// Every word has to match, case ignored, folders included.
+	if got := rels("DRUMS hat"); !slices.Equal(got, []string{"IMPORT/Drums/hats/Closed Hat.aif"}) {
+		t.Errorf("drums hat: %v", got)
+	}
+	if got := rels("  "); got != nil {
+		t.Errorf("an empty query listed %v", got)
+	}
+	if got := rels("nothing"); len(got) != 0 {
+		t.Errorf("nothing: %v", got)
+	}
+	if got := ix.Search("kick", 2); len(got) != 2 {
+		t.Errorf("limit: %d", len(got))
+	}
+	if !slices.Equal(app.Ancestors(app.CardRoot, "SD:IMPORT/Drums/hats/Closed Hat.aif"), []string{"SD:IMPORT", "SD:IMPORT/Drums", "SD:IMPORT/Drums/hats"}) {
+		t.Errorf("ancestors: %v", app.Ancestors(app.CardRoot, "SD:IMPORT/Drums/hats/Closed Hat.aif"))
+	}
+
+	// Limits stop the walk and say so.
+	small, _ := app.BuildIndex(app.NewRouted(d), app.CardRoot, app.IndexLimits{MaxFolders: 2, MaxFiles: 100, MaxDepth: 10})
+	if !small.Truncated {
+		t.Error("a walk cut short by MaxFolders was not marked truncated")
+	}
+	shallow, _ := app.BuildIndex(app.NewRouted(d), app.CardRoot, app.IndexLimits{MaxFolders: 100, MaxFiles: 100, MaxDepth: 1})
+	if !shallow.Truncated || len(shallow.Files) >= 5 {
+		t.Errorf("depth limit: %d files, truncated %v", len(shallow.Files), shallow.Truncated)
+	}
+	if _, err := app.BuildIndex(app.NewRouted(d), "SD:nowhere", app.DefaultLimits); err == nil {
+		t.Error("indexing a missing folder succeeded")
+	}
+}
+
+func TestPadFactsAndPatternUsage(t *testing.T) {
+	d, s := connect(t)
+	router := app.NewRouted(d)
+	s.AddFile("SD:IMPORT/loop.wav", func() []byte {
+		x := formats.Sample{Channels: 2, Samples: make([]int16, 2*24000)}
+		return x.WAV()
+	}())
+	a5 := pad(t, "A5")
+	if _, err := app.Assign(d, router, a5, "SD:IMPORT/loop.wav"); err != nil {
+		t.Fatal(err)
+	}
+	snap, _ := app.Load(d)
+	row := snap.Pads[a5.Index()]
+	if row.Params == nil || len(row.ChopFrames) != 0 || row.StartBytes != 512 {
+		t.Fatalf("row = %+v", row)
+	}
+	if _, ok := row.Params["level"]; !ok {
+		t.Errorf("params = %v", row.Params)
+	}
+	facts, err := app.ReadPadFacts(router, row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 24000 stereo frames at 48 kHz: half a second, the whole sample selected.
+	if facts.Channels != 2 || facts.Frames != 24000 || facts.Seconds != 0.5 || facts.File != "BANK1-05.SMP" ||
+		facts.StartFrame != 0 || facts.EndFrame != 24000 {
+		t.Errorf("facts = %+v", facts)
+	}
+	if _, err := app.ReadPadFacts(router, snap.Pads[0]); err == nil {
+		t.Error("facts of a pad with no sample succeeded")
+	}
+
+	s.SetPattern(pad(t, "B2"), a5, pad(t, "A1"))
+	s.SetPattern(pad(t, "C3"), a5)
+	usage, err := app.PatternUsage(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(usage[a5], []proto.PadIndex{pad(t, "B2"), pad(t, "C3")}) || !slices.Equal(usage[pad(t, "A1")], []proto.PadIndex{pad(t, "B2")}) || len(usage[pad(t, "A2")]) != 0 {
+		t.Errorf("usage = %v", usage)
 	}
 }

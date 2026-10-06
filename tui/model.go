@@ -6,7 +6,9 @@ package tui
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -30,9 +32,10 @@ const (
 
 var sectionNames = [secCount]string{"Pads", "Patterns", "Files", "Projects"}
 
-const (
-	tickEvery = 120 * time.Millisecond
-	// Ticks between looks at what the unit reports on its own.
+// tickEvery is how often the UI ticks; tests shorten it.
+var tickEvery = 120 * time.Millisecond
+
+const ( // Ticks between looks at what the unit reports on its own.
 	pollTicks = 4
 	// waveColumns is how many points of a waveform are kept; more than any screen is wide.
 	waveColumns = 96
@@ -61,6 +64,8 @@ const (
 	// promptConfirmRestore asks whether to overwrite a project with the backup read from
 	// prompt.plan.
 	promptConfirmRestore
+	// promptBank edits a bank's tempo and volume: two fields, Tab moves between them.
+	promptBank
 )
 
 // prompt is a question in front of the section: a name or path to type, or a delete to
@@ -77,6 +82,9 @@ type prompt struct {
 	suffix bool
 	// plan is the backup a project restore asks about.
 	plan *app.RestorePlan
+	// fields and field are the bank dialog's tempo and volume, and the one being typed.
+	fields [2]string
+	field  int
 }
 
 // picker is the pad chooser a file is assigned through, or the bank chooser of a
@@ -85,6 +93,8 @@ type picker struct {
 	retarget bool
 	// Assign: the files to put on pads, in order.
 	files []string
+	// copyFrom: the pads being copied; the picker chooses where the first one goes.
+	copyFrom []proto.PadIndex
 	// retarget: the pattern slot and the bank its pads are in.
 	slot       proto.PadIndex
 	sourceBank int
@@ -100,6 +110,17 @@ type palette struct {
 	filter string
 	cursor int
 }
+
+// ErrNoUnit is what a Connect returns when no unit is plugged in yet; the UI keeps waiting
+// quietly instead of reporting it.
+var ErrNoUnit = errors.New("no unit")
+
+// Connect opens a link to a unit. The UI calls it again and again until it succeeds, and
+// again after the link is lost.
+type Connect func() (app.Unit, io.Closer, error)
+
+// connectTicks is how many ticks pass between attempts to find a unit.
+const connectTicks = 8
 
 // Model is the whole UI. It never calls the unit from Update: every call runs as a
 // command and comes back as a message, so the screen stays responsive.
@@ -125,6 +146,10 @@ type Model struct {
 	picker  *picker
 	palette *palette
 	browser *browser
+	search  *search
+	editor  *editor
+	// indexes are the file indexes searches use, one per source, kept until files change.
+	indexes map[string]*app.Index
 
 	snap *app.Snapshot
 	// bank is the bank in front on Pads and Patterns; pad is the cursor within a bank.
@@ -141,6 +166,8 @@ type Model struct {
 	hasSelected bool
 	playing     bool
 	playingPad  proto.PadIndex
+	// playPos is how many frames of it have played.
+	playPos uint32
 
 	patterns      map[int][]app.PatternRow
 	patternCursor int
@@ -152,15 +179,23 @@ type Model struct {
 	fileMoved string
 	// fileMarks are audio files picked for a multi-file assign.
 	fileMarks map[string]bool
-	// listening is the file being auditioned.
+	// listening is the file being auditioned; autoplay plays a result as the cursor lands on
+	// it, after autoSeq stops changing; audioErr says why there is no audio output.
 	listening string
+	autoplay  bool
+	autoSeq   int
+	audioErr  string
 
 	projectAt int
 
-	waves    map[waveKey][]proto.Peak
-	waveBusy bool
-	infos    map[string]fileInfo
-	infoBusy bool
+	// facts are what the SMP file of each pad says (length, channels), read as the pad is
+	// looked at; usage tells which pattern slots play each pad.
+	facts      map[factKey]padFacts
+	factsBusy  bool
+	usage      map[proto.PadIndex][]proto.PadIndex
+	usageState int // 0: not read, 1: reading, 2: in hand
+	infos      map[string]fileInfo
+	infoBusy   bool
 
 	// lastAssigned is the pad a file last went onto; a file goes to the next free one.
 	lastAssigned proto.PadIndex
@@ -169,6 +204,14 @@ type Model struct {
 	// is kept apart from the bank in view on Pads.
 	target int
 
+	// connect finds a unit when there is none; closer closes the one in use.
+	connect        Connect
+	closer         io.Closer
+	connecting     bool
+	connectedFrame int
+	lost           bool
+	waitErr        string
+
 	// store keeps the state between runs; mem is what it holds and saved the last bytes
 	// written, shared by the copies of the model.
 	store Store
@@ -176,8 +219,14 @@ type Model struct {
 	saved *[]byte
 }
 
-// waveKey identifies the sample a cached waveform belongs to.
-type waveKey struct {
+// padFacts is the outcome of reading a pad's sample header.
+type padFacts struct {
+	facts app.PadFacts
+	err   error
+}
+
+// factKey identifies the sample cached facts belong to.
+type factKey struct {
 	pad  proto.PadIndex
 	size uint32
 	name string
@@ -195,7 +244,10 @@ type fileInfo struct {
 // New returns the UI for a connected unit. player may be nil, in which case files cannot
 // be auditioned.
 func New(unit app.Unit, player app.Player, store Store) Model {
-	routed := app.NewRouted(unit)
+	var routed app.Unit
+	if unit != nil {
+		routed = app.NewRouted(unit)
+	}
 	m := Model{
 		unit:      routed,
 		player:    player,
@@ -208,8 +260,9 @@ func New(unit app.Unit, player app.Player, store Store) Model {
 		patterns:  map[int][]app.PatternRow{},
 		root:      app.CardRoot,
 		fileMarks: map[string]bool{},
-		waves:     map[waveKey][]proto.Peak{},
+		facts:     map[factKey]padFacts{},
 		infos:     map[string]fileInfo{},
+		indexes:   map[string]*app.Index{},
 		store:     store,
 		saved:     new([]byte),
 	}
@@ -231,6 +284,26 @@ func New(unit app.Unit, player app.Player, store Store) Model {
 		}
 	}
 	*m.saved = stateBytes(m.mem)
+	if unit == nil {
+		m.busy = ""
+	}
+	return m
+}
+
+// WithAudio tells the UI about the audio output: the player, or why there is none.
+func (m Model) WithAudio(player app.Player, err error) Model {
+	m.player = player
+	if err != nil {
+		m.audioErr = err.Error()
+	}
+	return m
+}
+
+// NewConnecting returns the UI for a unit that may not be plugged in yet: it waits, with a
+// screen saying so, connects by itself, and reconnects if the cable is pulled.
+func NewConnecting(connect Connect, player app.Player, store Store) Model {
+	m := New(nil, player, store)
+	m.connect = connect
 	return m
 }
 
@@ -305,11 +378,24 @@ type (
 		changed  bool
 		activity device.Activity
 		have     bool
+		// lost is set when the link to the unit is gone.
+		lost bool
 	}
-	waveMsg struct {
-		key   waveKey
-		peaks []proto.Peak
+	// connectMsg is the outcome of an attempt to find a unit.
+	connectMsg struct {
+		unit   app.Unit
+		closer io.Closer
+		err    error
+	}
+	factsMsg struct {
+		key   factKey
+		facts app.PadFacts
 		err   error
+	}
+	usageMsg struct {
+		usage   map[proto.PadIndex][]proto.PadIndex
+		err     error
+		project uint8
 	}
 	infoMsg struct {
 		path string
@@ -335,7 +421,14 @@ type (
 		plan *app.RestorePlan
 		err  error
 	}
-	noteMsg string
+	// listenMsg is the outcome of starting a file playing.
+	listenMsg struct {
+		path string
+		err  error
+	}
+	// autoplayMsg fires a moment after the cursor stopped on a result.
+	autoplayMsg struct{ seq int }
+	noteMsg     string
 )
 
 func tick() tea.Cmd {
@@ -343,7 +436,22 @@ func tick() tea.Cmd {
 }
 
 func (m Model) Init() tea.Cmd {
+	if m.unit == nil {
+		return tea.Batch(m.tryConnect(), tick())
+	}
 	return tea.Batch(m.load(""), tick())
+}
+
+// tryConnect looks for a unit and opens it.
+func (m Model) tryConnect() tea.Cmd {
+	connect := m.connect
+	if connect == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		unit, closer, err := connect()
+		return connectMsg{unit: unit, closer: closer, err: err}
+	}
 }
 
 // edit runs a change on the unit as a command, apart from the poll of its reports.
@@ -401,21 +509,34 @@ func (m Model) poll() tea.Cmd {
 		}
 		defer ops.Unlock()
 		msg := pollMsg{changed: app.ProjectChanged(unit.TakeEvents())}
-		if a, err := unit.Activity(); err == nil {
+		a, err := unit.Activity()
+		switch {
+		case err == nil:
 			msg.activity, msg.have = a, true
+		case errors.Is(err, device.ErrClosed):
+			msg.lost = true
 		}
 		return msg
 	}
 }
 
-// padWave reads the waveform of a pad's sample.
-func (m Model) padWave(key waveKey, frames uint32, channels int) tea.Cmd {
+// padFactsCmd reads the header of a pad's sample file.
+func (m Model) padFactsCmd(key factKey, row app.PadRow) tea.Cmd {
 	return func() tea.Msg {
 		m.ops.Lock()
 		defer m.ops.Unlock()
-		per := max((frames+waveColumns-1)/waveColumns, 1)
-		peaks, err := m.unit.Peaks(key.pad, 1, 0, min(waveColumns, frames), per)
-		return waveMsg{key: key, peaks: peaks, err: err}
+		facts, err := app.ReadPadFacts(m.unit, row)
+		return factsMsg{key: key, facts: facts, err: err}
+	}
+}
+
+// usageCmd finds out which patterns play which pads.
+func (m Model) usageCmd(project uint8) tea.Cmd {
+	return func() tea.Msg {
+		m.ops.Lock()
+		defer m.ops.Unlock()
+		usage, err := app.PatternUsage(m.unit)
+		return usageMsg{usage: usage, err: err, project: project}
 	}
 }
 
@@ -479,6 +600,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.mouse(msg)
 	case tickMsg:
 		m.frame++
+		if m.unit == nil {
+			if m.connect != nil && !m.connecting && m.frame%connectTicks == 0 {
+				m.connecting = true
+				return m, tea.Batch(tick(), m.tryConnect())
+			}
+			return m, tick()
+		}
 		if m.frame%pollTicks == 0 && m.busy == "" && !m.polling {
 			m.polling = true
 			return m, tea.Batch(tick(), m.poll())
@@ -486,8 +614,15 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tick()
 	case pollMsg:
 		return m.polled(msg)
+	case connectMsg:
+		return m.connected(msg)
+	case indexMsg:
+		return m.indexed(msg)
 	case loadedMsg:
 		m.busy = ""
+		if msg.err != nil && errors.Is(msg.err, device.ErrClosed) {
+			return m.lose()
+		}
 		if msg.err != nil {
 			m.message = "reading the unit failed: " + msg.err.Error()
 			break
@@ -496,8 +631,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.snap == nil || m.snap.Project != msg.snap.Project {
 			m.patterns = map[int][]app.PatternRow{}
 			m.pattern = nil
+			m.usage, m.usageState = nil, 0
 		}
-		m.waves = map[waveKey][]proto.Peak{}
+		m.facts = map[factKey]padFacts{}
 		m.snap = msg.snap
 		if m.hasSelected = msg.snap.HasSelected; m.hasSelected {
 			m.selected = msg.snap.Selected
@@ -522,6 +658,21 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.busy = ""
 	case noteMsg:
 		m.message = string(msg)
+	case listenMsg:
+		if msg.err != nil {
+			if m.listening == msg.path {
+				m.listening = ""
+			}
+			m.message = "listening failed: " + msg.err.Error()
+		} else if m.listening == msg.path {
+			m.message = "♪ playing " + app.Base(msg.path)
+		}
+	case autoplayMsg:
+		if m.autoplay && msg.seq == m.autoSeq {
+			if path := m.autoplayPath(); path != "" {
+				return m.playFile(path)
+			}
+		}
 	case patternsMsg:
 		m.busy = ""
 		if msg.err != nil {
@@ -538,6 +689,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pattern = msg.detail
 		if msg.note != "" {
 			m.message = msg.note
+			// A retarget changes which pads the patterns play.
+			m.usage, m.usageState = nil, 0
 		}
 	case dirMsg:
 		m.busy = ""
@@ -598,14 +751,22 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		m.prompt = &prompt{kind: promptConfirmRestore, plan: msg.plan}
-	case waveMsg:
-		m.waveBusy = false
-		if msg.err == nil {
-			m.waves[msg.key] = msg.peaks
-		} else {
-			m.waves[msg.key] = []proto.Peak{}
-		}
+	case factsMsg:
+		m.factsBusy = false
+		m.facts[msg.key] = padFacts{facts: msg.facts, err: msg.err}
 		return m, m.wanted()
+	case usageMsg:
+		// An answer about a project that is no longer the one in view is dropped.
+		if m.snap != nil && msg.project == m.snap.Project {
+			m.usage, m.usageState = msg.usage, 2
+			if msg.err != nil {
+				m.usageState = 0
+				m.usage = nil
+			}
+		} else {
+			m.usageState = 0
+		}
+		return m, nil
 	case infoMsg:
 		m.infoBusy = false
 		m.infos[msg.path] = msg.info
@@ -620,9 +781,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // it has selected or is playing is followed.
 func (m Model) polled(msg pollMsg) (tea.Model, tea.Cmd) {
 	m.polling = false
+	if msg.lost {
+		return m.lose()
+	}
 	if msg.have {
 		a := msg.activity
-		m.playing = a.Playing
+		m.playing, m.playPos = a.Playing, a.Position
 		if a.HasSelected {
 			if a.Playing {
 				m.playingPad = a.Selected
@@ -643,11 +807,62 @@ func (m Model) polled(msg pollMsg) (tea.Model, tea.Cmd) {
 	return m, m.wanted()
 }
 
+// connected takes up a unit that was found.
+func (m Model) connected(msg connectMsg) (tea.Model, tea.Cmd) {
+	m.connecting = false
+	switch {
+	case msg.err != nil:
+		m.waitErr = ""
+		if !errors.Is(msg.err, ErrNoUnit) {
+			m.waitErr = msg.err.Error()
+		}
+		return m, nil
+	case m.unit != nil:
+		// Another attempt got there first.
+		if msg.closer != nil {
+			msg.closer.Close()
+		}
+		return m, nil
+	}
+	m.unit, m.closer = app.NewRouted(msg.unit), msg.closer
+	m.waitErr, m.lost = "", false
+	m.connectedFrame = m.frame
+	m.busy = "reading the unit"
+	return m, m.load(fmt.Sprintf("● Connected to the SP-404MKII on %s", msg.unit.PortName()))
+}
+
+// lose handles the link to the unit going away: everything on screen is dropped, and the UI
+// goes back to waiting for it.
+func (m Model) lose() (tea.Model, tea.Cmd) {
+	if m.connect == nil {
+		m.message = "the connection to the unit was lost"
+		m.busy = ""
+		return m, nil
+	}
+	if m.closer != nil {
+		m.closer.Close()
+	}
+	m.stopListening()
+	m.unit, m.closer, m.snap = nil, nil, nil
+	m.lost, m.busy, m.polling, m.connecting = true, "", false, false
+	m.prompt, m.picker, m.palette, m.browser = nil, nil, nil, nil
+	m.message = ""
+	return m, nil
+}
+
 // wanted starts whatever the section in front needs and is not in hand yet: the patterns of
 // a bank, the file listing, a waveform.
 func (m *Model) wanted() tea.Cmd {
 	if m.busy != "" || m.snap == nil {
 		return nil
+	}
+	if s := m.search; s != nil && !m.infoBusy {
+		if f, ok := s.current(); ok {
+			if _, have := m.infos[f.Path]; !have {
+				m.infoBusy = true
+				return m.fileInfoCmd(f.Path)
+			}
+		}
 	}
 	if b := m.browser; b != nil && b.kind == browseAssign && b.tree != nil && b.at < len(b.tree.Rows()) && !m.infoBusy {
 		node := b.tree.Rows()[b.at]
@@ -674,14 +889,16 @@ func (m *Model) wanted() tea.Cmd {
 			}
 		}
 	case secPads:
-		if row := m.padRow(); row.HasSample && !m.waveBusy {
-			key := waveKey{row.Pad, row.Size, row.Name}
-			if _, have := m.waves[key]; !have {
-				channels := 1
-				m.waveBusy = true
-				frames := (row.Size - min(row.Size, 512)) / 2
-				return m.padWave(key, max(frames, 1), channels)
+		if row := m.padRow(); row.HasSample && !m.factsBusy {
+			key := factKey{row.Pad, row.Size, row.Name}
+			if _, have := m.facts[key]; !have {
+				m.factsBusy = true
+				return m.padFactsCmd(key, row)
 			}
+		}
+		if m.usageState == 0 {
+			m.usageState = 1
+			return m.usageCmd(m.snap.Project)
 		}
 	}
 	return nil

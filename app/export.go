@@ -91,7 +91,10 @@ func exportFileName(pad proto.PadIndex, name string) string {
 }
 
 // snapshot is a pad's settings as the sidecar keeps them; nil for an empty pad.
-func snapshot(u ExportUnit, project uint8, pad proto.PadIndex) (*savedPad, error) {
+func snapshot(u interface {
+	PadBlock(pad proto.PadIndex) (*proto.PadBlock, error)
+	ReadPrefix(path string, n uint32) ([]byte, bool, error)
+}, project uint8, pad proto.PadIndex) (*savedPad, error) {
 	block, err := u.PadBlock(pad)
 	if err != nil {
 		return nil, err

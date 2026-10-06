@@ -1,10 +1,14 @@
 package tui
 
 import (
+	"errors"
+	"io"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/device"
@@ -12,6 +16,10 @@ import (
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/sim"
 )
+
+func init() { tickEvery = time.Millisecond }
+
+func ansiStrip(s string) string { return ansi.Strip(s) }
 
 // screen drives the UI as the program would, running each command to its message.
 type screen struct {
@@ -35,10 +43,16 @@ func (m *memStore) Save(s State) { m.state = s; m.saves++ }
 type fakePlayer struct {
 	played  []formats.Sample
 	stopped int
+	playing bool
 }
 
-func (f *fakePlayer) Play(s formats.Sample) error { f.played = append(f.played, s); return nil }
-func (f *fakePlayer) Stop()                       { f.stopped++ }
+func (f *fakePlayer) Play(s formats.Sample) error {
+	f.played = append(f.played, s)
+	f.playing = true
+	return nil
+}
+func (f *fakePlayer) Stop()         { f.stopped++; f.playing = false }
+func (f *fakePlayer) Playing() bool { return f.playing }
 
 func wav(frames int) []byte {
 	s := formats.Sample{Channels: 1, Samples: make([]int16, frames)}
@@ -114,6 +128,9 @@ func (s *screen) press(keys ...string) {
 		"backspace": {Type: tea.KeyBackspace},
 		"ctrl+u":    {Type: tea.KeyCtrlU},
 		"space":     {Type: tea.KeySpace, Runes: []rune{' '}},
+		"ctrl+l":    {Type: tea.KeyCtrlL},
+		"up":        {Type: tea.KeyUp},
+		"down":      {Type: tea.KeyDown},
 	}
 	for _, k := range keys {
 		if key, ok := named[k]; ok {
@@ -379,9 +396,9 @@ func TestFilesBrowseMoveRenameAndSearch(t *testing.T) {
 	}
 
 	s.press("g", "/")
-	s.shows("Find by name")
+	s.shows("Search SD card for audio files")
 	s.typeText("snare")
-	s.press("enter")
+	s.press("tab")
 	m := s.m()
 	if node, _ := m.fileNode(); node.Name != "snare.wav" {
 		t.Errorf("search landed on %q", node.Name)
@@ -568,7 +585,7 @@ func TestAssignDialogListensAndTakesATypedPath(t *testing.T) {
 	if s.player.stopped == 0 {
 		t.Error("closing the dialog left the sound playing")
 	}
-	s.press("a", "/")
+	s.press("a", "p")
 	s.shows("Assign the audio file at this path to A16")
 	s.press("ctrl+u")
 	s.typeText("SD:IMPORT/pack/snare.wav")
@@ -605,6 +622,70 @@ func TestListenToAFile(t *testing.T) {
 	if s.player.stopped == 0 || s.m().listening != "" {
 		t.Error("a second Space did not stop it")
 	}
+}
+
+func TestCopyPadsToAnotherBank(t *testing.T) {
+	s := open(t)
+	// Copying needs real SMP files on the unit, so put samples on through the app.
+	m := s.m()
+	for i, name := range []string{"kick", "snare", "hat"} {
+		s.sim.AddFile("SD:IMPORT/"+name+".wav", wav(480+i*10))
+		if _, err := app.Assign(m.unit, m.unit, proto.AllPads()[i], "SD:IMPORT/"+name+".wav"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.press("r")
+
+	// One pad: it opens on the next free pad of the same bank, and any bank can be typed.
+	s.press("c")
+	s.shows("Copy A1 to a pad", "A4 is empty")
+	s.press("C", "5")
+	s.shows("C5 is empty")
+	s.press("enter")
+	s.shows("A1 copied to C5")
+	if s.padName("C5") != "kick" || s.padName("A1") != "kick" {
+		t.Errorf("C5 %q, A1 %q", s.padName("C5"), s.padName("A1"))
+	}
+	// The cursor is on the copy.
+	if m := s.m(); m.bank != 2 || m.pad != 4 {
+		t.Errorf("bank %d pad %d", m.bank, m.pad)
+	}
+
+	// A pad that holds a sample is replaced only on a second Enter.
+	s.press("c", "A", "2")
+	s.shows("A2 holds \"snare\"")
+	s.press("enter")
+	s.shows("Press Enter again to replace them")
+	if s.padName("A2") != "snare" {
+		t.Fatal("A2 changed before the confirmation")
+	}
+	s.press("esc")
+	if s.padName("A2") != "snare" {
+		t.Error("cancelling replaced A2")
+	}
+	s.press("c", "A", "2", "enter", "enter")
+	s.shows("C5 copied to A2")
+	if s.padName("A2") != "kick" {
+		t.Errorf("A2 is %q", s.padName("A2"))
+	}
+
+	// Marked pads keep their layout: all of bank A onto bank E.
+	s.press("V", "c")
+	s.shows("Copy 3 pads, keeping their layout")
+	s.press("E", "1")
+	s.shows("E1 is empty"[:0] + "all free")
+	s.press("enter")
+	s.shows("3 pads copied, from A1 to E1")
+	if s.padName("E1") != "kick" || s.padName("E2") != "kick" || s.padName("E3") != "hat" {
+		t.Errorf("E1 %q, E2 %q, E3 %q", s.padName("E1"), s.padName("E2"), s.padName("E3"))
+	}
+
+	// Past the end does not fit, and an empty pad has nothing to copy.
+	s.press("V", "c", "J", "1", "5")
+	s.shows("past J16")
+	s.press("esc", "esc")
+	s.press("G", "c")
+	s.shows("nothing to copy")
 }
 
 func TestMovePickUpAndSwap(t *testing.T) {
@@ -685,7 +766,7 @@ func TestMouse(t *testing.T) {
 		t.Errorf("clicked bank A, got %d", s.m().bank)
 	}
 	// A tile: the second click on the pad in front previews it. Pad 2 is top row, column 2.
-	x, y := g.bodyX+(g.tileW+1)+2, rowBody+1
+	x, y := g.bodyX+(g.tileW+1)+2, rowBody+g.top+1
 	s.click(x, y)
 	if s.m().pad != 1 {
 		t.Errorf("clicked pad 2, got pad %d", s.m().pad)
@@ -698,7 +779,7 @@ func TestMouse(t *testing.T) {
 		t.Error("a click between tiles moved the cursor")
 	}
 	// A tile in the bottom row.
-	s.click(g.bodyX+2, rowBody+3*(g.tileH+1)+1)
+	s.click(g.bodyX+2, rowBody+g.top+3*(g.tileH+1)+1)
 	if s.m().pad != 12 {
 		t.Errorf("clicked pad 13, got pad %d", s.m().pad)
 	}
@@ -793,9 +874,7 @@ func TestExportAndRestoreThroughTheFolderBrowser(t *testing.T) {
 	// the folder it is in.
 	s.press("3", "tab", "j", "j", "tab", "R")
 	s.shows("Restore pads from the export in…", "▾ PROJECT_01-A/", "samples.json")
-	s.press("esc", "/")
-	s.typeText("samples")
-	s.press("enter")
+	s.press("esc", "j", "j", "j", "j")
 	s.shows("Pad export")
 	s.press("enter")
 	s.shows("3 pads restored from SD:IMPORT/PROJECT_01-A")
@@ -902,4 +981,465 @@ func TestProjectExportAndRestoreRefuse(t *testing.T) {
 	s.press("e", "/")
 	s.shows("Export project 1 to the folder")
 	s.press("esc")
+}
+
+// TestConnectingAnnouncesAndReconnects drives the UI through no unit, plugging one in,
+// pulling the cable and plugging it back.
+func TestConnectingAnnouncesAndReconnects(t *testing.T) {
+	sm := sim.New()
+	pad1, _ := proto.NewPadIndex(0)
+	sm.SetSample(pad1, "kick", 48_000)
+	attempts, plugged := 0, false
+	connect := func() (app.Unit, io.Closer, error) {
+		attempts++
+		if !plugged {
+			return nil, nil, ErrNoUnit
+		}
+		d := device.New(sm, "sim")
+		return d, d, nil
+	}
+	sc := &screen{t: t, sim: sm, player: &fakePlayer{}, store: &memStore{}}
+	sc.model = NewConnecting(connect, sc.player, nil)
+	sc.run(sc.model.Init())
+	ticks := func(n int) {
+		for i := 0; i < n; i++ {
+			sc.send(tickMsg{})
+		}
+	}
+
+	// Nothing plugged in: it says it is waiting, keeps looking, and keys do nothing but quit.
+	sc.shows("404tui", "○ no unit", "Waiting for an SP-404MKII", "USB 0582:02e7")
+	before := attempts
+	ticks(connectTicks * 3)
+	if attempts < before+3 {
+		t.Errorf("only %d attempts in three intervals", attempts-before)
+	}
+	sc.press("3", "a", "d")
+	sc.shows("Waiting for an SP-404MKII")
+	sc.press("T")
+	sc.press("?")
+	sc.shows("Keybindings")
+	sc.press("esc")
+	sc.hides("Keybindings")
+
+	// Plug it in: it connects by itself and announces it.
+	plugged = true
+	ticks(connectTicks)
+	sc.shows("● CONNECTED  sim", "kick", "● Connected to the SP-404MKII on sim")
+	sc.hides("Waiting for")
+	// The loud banner gives way to a quiet one.
+	ticks(60)
+	sc.hides("CONNECTED")
+	sc.shows("● sim")
+
+	// Pull the cable: the next look at the unit notices, and it goes back to waiting.
+	plugged = false
+	sc.sim.Close()
+	ticks(pollTicks)
+	sc.shows("The connection to the unit was lost.", "Waiting for an SP-404MKII", "○ no unit")
+	sc.hides("kick")
+
+	// Plug it back in: it reconnects and loads again.
+	sc.sim.Reopen()
+	plugged = true
+	ticks(connectTicks)
+	sc.shows("● CONNECTED  sim", "kick")
+	sc.hides("was lost")
+}
+
+// TestConnectingShowsRealErrors: a unit that is there but fails to open is reported.
+func TestConnectingShowsRealErrors(t *testing.T) {
+	connect := func() (app.Unit, io.Closer, error) { return nil, nil, errors.New("permission denied on /dev/cu.x") }
+	sc := &screen{t: t, player: &fakePlayer{}, store: &memStore{}}
+	sc.model = NewConnecting(connect, nil, nil)
+	sc.run(sc.model.Init())
+	sc.shows("permission denied on /dev/cu.x")
+}
+
+func TestBankTempoAndVolumeFromThePads(t *testing.T) {
+	s := open(t)
+	s.shows("Bank A", "Tempo 120.00 BPM", "Volume", "127", "b edit")
+	// Steps show at once and reach the unit.
+	s.press(">", ">", ">")
+	s.shows("Tempo 123.00 BPM")
+	s.press("-", "-")
+	s.shows("Volume", "117")
+	s.press("r")
+	s.shows("Tempo 123.00 BPM", "117")
+	// Another bank has its own.
+	s.press("]")
+	s.shows("Bank B", "Tempo 120.00 BPM", "127")
+	s.press("+")
+	s.shows("bank B volume is at its limit")
+	s.press("[", "<")
+	s.shows("Tempo 122.00 BPM")
+
+	// The dialog: Tab between the fields, typed values.
+	s.press("b")
+	s.shows("Bank A", "Tempo (40-200 BPM)", "Volume (0-127)", "> 122.00")
+	s.press("ctrl+u")
+	s.typeText("98.5")
+	s.press("tab", "ctrl+u")
+	s.typeText("64")
+	s.press("enter")
+	s.shows("bank A: tempo 98.50 BPM, volume 64", "Tempo 98.50 BPM")
+	// Out-of-range values are refused and the bank is left alone.
+	s.press("b", "ctrl+u")
+	s.typeText("300")
+	s.press("enter")
+	s.shows("bank tempo must be between 40 and 200 BPM", "Tempo 98.50 BPM")
+	s.press("b", "esc")
+	s.hides("Tempo (40-200 BPM)")
+	// The same keys work on Patterns, where the bank's tempo matters.
+	s.press("2")
+	s.shows("Bank A", "Tempo 98.50 BPM")
+	s.press("]", ">")
+	s.shows("Bank B", "Tempo 121.00 BPM")
+}
+
+func TestBankBarShowsWhenProjectTempoIsInUse(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	m.snap.UsesProjectTempo, m.snap.ProjectTempo = true, 100.5
+	s.model = m
+	s.shows("(project tempo 100.50 is in use)")
+}
+
+func TestSearchFindsAudioAnywhereOnTheCard(t *testing.T) {
+	s := open(t)
+	for _, f := range []string{"SD:IMPORT/Drums/808 Kick.wav", "SD:IMPORT/Drums/Snare.wav", "SD:IMPORT/Kicks/deep.wav", "SD:EXPORT/old kick take 2.wav"} {
+		s.sim.AddFile(f, wav(480))
+	}
+	s.press("3", "/")
+	s.shows("Search SD card for audio files", "audio files indexed")
+	s.typeText("kick")
+	// The file's own name matches come first, then ones that only match a folder.
+	s.shows("808 Kick.wav", "kick.wav", "old kick take 2.wav", "deep.wav")
+	m := s.m()
+	if m.search.results[0].Name() != "old kick take 2.wav" || m.search.results[3].Name() != "deep.wav" {
+		t.Errorf("order: %q ... %q", m.search.results[0].Name(), m.search.results[3].Name())
+	}
+	// Words narrow it down, folders included; the details of the result in front show.
+	s.typeText(" drums")
+	s.shows("808 Kick.wav", "0.01 s")
+	s.hides("old kick")
+	// Enter opens the pad picker on the target bank.
+	s.press("enter")
+	s.shows("Assign 808 Kick.wav to a pad", "A4 is empty")
+	s.press("esc")
+
+	// Tab shows the file in the tree, with its folders open.
+	s.press("/")
+	s.typeText("deep")
+	s.press("tab")
+	s.shows("▾ IMPORT/", "▾ Kicks/", "deep.wav")
+	m = s.m()
+	if node, _ := m.fileNode(); node.Name != "deep.wav" {
+		t.Errorf("revealed %q", node.Name)
+	}
+	s.press("/")
+	s.typeText("nothing at all")
+	s.shows("nothing matches")
+	s.press("ctrl+u")
+	s.shows("audio files indexed")
+	s.press("esc")
+	s.hides("Search SD card")
+}
+
+func TestSearchListensAndMovesThroughResults(t *testing.T) {
+	s := open(t)
+	s.press("3", "/")
+	s.typeText("wav")
+	s.press("down", "ctrl+l")
+	if len(s.player.played) != 1 {
+		t.Fatalf("played %d", len(s.player.played))
+	}
+	s.press("up", "ctrl+l")
+	if len(s.player.played) != 2 {
+		t.Errorf("played %d after moving", len(s.player.played))
+	}
+	s.press("esc")
+	if s.player.stopped == 0 {
+		t.Error("closing the search left the sound playing")
+	}
+}
+
+func TestSearchIsCachedUntilFilesChange(t *testing.T) {
+	s := open(t)
+	s.press("3", "/")
+	s.typeText("fresh")
+	s.shows("nothing matches")
+	s.press("esc")
+	s.sim.AddFile("SD:IMPORT/fresh start.wav", wav(480))
+	// The index was built before the file was there, and is kept.
+	s.press("/")
+	s.typeText("fresh")
+	s.shows("nothing matches")
+	s.press("esc", "r", "3", "/")
+	s.typeText("fresh")
+	s.shows("fresh start.wav")
+	s.press("esc")
+	// Renaming a file also drops it.
+	s.press("tab", "j", "j", "n")
+	s.press("ctrl+u")
+	s.typeText("renamed.wav")
+	s.press("enter")
+	s.press("/")
+	s.typeText("renamed")
+	s.shows("renamed.wav")
+}
+
+func TestSearchFromTheAssignDialog(t *testing.T) {
+	s := open(t)
+	// Pad 16 is empty: Enter on a result puts the file straight on it.
+	s.press("G", "a", "/")
+	s.shows("Search SD card for audio files for A16")
+	s.typeText("snare")
+	s.shows("snare.wav")
+	s.press("enter")
+	s.shows("snare.wav: assigned to A16")
+	if s.padName("A16") != "snare" || s.m().browser != nil || s.m().search != nil {
+		t.Errorf("A16 %q, dialog open %v", s.padName("A16"), s.m().browser != nil)
+	}
+
+	// A pad that holds a sample asks for a second Enter.
+	s.press("g", "a", "/")
+	s.typeText("kick")
+	s.shows("A1 holds \"kick\" — it will be replaced")
+	s.press("enter")
+	s.shows("Press Enter again to replace")
+	s.press("esc")
+	s.shows("Assign a file to A1")
+	// Tab shows the result in the dialog's own tree.
+	s.press("/")
+	s.typeText("snare")
+	s.press("tab")
+	s.shows("▾ IMPORT/", "▾ pack/", "Assign a file to A1")
+	m := s.m()
+	if node := m.browser.tree.Rows()[m.browser.at]; node.Name != "snare.wav" {
+		t.Errorf("dialog cursor on %q", node.Name)
+	}
+}
+
+func TestSearchResultsAreInAlignedColumns(t *testing.T) {
+	s := open(t)
+	s.sim.AddFile("SD:Loops/Deep House/Basslines/hdhkb_bassloop01_f_124bpm.wav", wav(480))
+	s.sim.AddFile("SD:Loops/Deep House/Basslines/a.wav", wav(480))
+	s.sim.AddFile("SD:Loops/another very long folder name/with subfolders/that go on/and on/x.wav", wav(480))
+	s.press("3", "/")
+	s.typeText(".wav")
+	// The folder column starts at the column of its header in every row, whatever the name.
+	lines := strings.Split(ansiStrip(s.model.View()), "\n")
+	col, rows := -1, 0
+	for _, line := range lines {
+		r := []rune(line)
+		if i := strings.Index(line, "Folder"); i >= 0 && strings.Contains(line, "Name") {
+			col = len([]rune(line[:i]))
+			continue
+		}
+		if col < 0 || !strings.Contains(line, ".wav") || len(r) <= col+1 {
+			continue
+		}
+		rows++
+		if r[col-1] != ' ' || r[col-2] != ' ' || r[col] == ' ' {
+			t.Errorf("the folder column is not at %d in %q", col, line)
+		}
+	}
+	if rows < 4 {
+		t.Fatalf("found %d result rows:\n%s", rows, ansiStrip(s.model.View()))
+	}
+	// A long folder is cut at its start, keeping the part next to the file.
+	s.shows("Name", "Folder")
+	s.press("ctrl+u")
+	s.typeText("x")
+	view := ansiStrip(s.model.View())
+	if !strings.Contains(view, "…") || !strings.Contains(view, "and on") {
+		t.Errorf("long folder not cut at its start:\n%s", view)
+	}
+}
+
+func TestListenPlaysAgainOnceItHasFinished(t *testing.T) {
+	s := open(t)
+	s.press("3", "tab", "j", "j", "space")
+	s.shows("♪ playing kick.wav")
+	// While it sounds, the same key stops it.
+	s.press("space")
+	if s.player.stopped == 0 || s.m().listening != "" {
+		t.Fatal("pressing it while it sounds did not stop it")
+	}
+	// Once it has finished, the same key plays it again instead of "stopping" nothing.
+	s.press("space")
+	if len(s.player.played) != 2 {
+		t.Fatalf("played %d", len(s.player.played))
+	}
+	s.player.playing = false // it ran to the end
+	s.press("space")
+	if len(s.player.played) != 3 {
+		t.Errorf("after it finished, the key did not play it again (%d plays)", len(s.player.played))
+	}
+}
+
+func TestNoAudioOutputSaysWhy(t *testing.T) {
+	s := open(t)
+	m := s.m().WithAudio(nil, errors.New("no output device"))
+	s.model = m
+	s.press("3", "tab", "j", "j", "space")
+	s.shows("no audio output to listen on: no output device")
+	s.press("/")
+	s.typeText("kick")
+	s.press("ctrl+a")
+	s.shows("no audio output to autoplay on")
+}
+
+func TestAutoplayInTheSearchPlaysWhereTheCursorRests(t *testing.T) {
+	s := open(t)
+	s.press("3", "/")
+	s.typeText("wav")
+	s.shows("Ctrl-A autoplay off")
+	s.press("ctrl+a")
+	s.shows("Ctrl-A autoplay on")
+	before := len(s.player.played)
+	s.press("down")
+	if len(s.player.played) != before+1 {
+		t.Fatalf("moving with autoplay on played %d", len(s.player.played)-before)
+	}
+	// An autoplay timer that was overtaken by another move does nothing.
+	m := s.m()
+	stale := autoplayMsg{seq: m.autoSeq - 1}
+	s.send(stale)
+	if len(s.player.played) != before+1 {
+		t.Error("a stale autoplay timer played something")
+	}
+	s.press("ctrl+a", "up")
+	if len(s.player.played) != before+1 {
+		t.Error("autoplay off still played")
+	}
+	s.shows("Ctrl-A autoplay off")
+}
+
+func TestAutoplayInTheAssignDialog(t *testing.T) {
+	s := open(t)
+	s.press("G", "a", "ctrl+a", "tab", "j", "j")
+	if len(s.player.played) == 0 {
+		t.Fatal("autoplay in the dialog played nothing")
+	}
+	s.shows("Ctrl-A autoplay on")
+	s.press("esc")
+	if s.player.stopped == 0 {
+		t.Error("closing the dialog left it playing")
+	}
+}
+
+func TestPadDetailShowsSampleSettingsUsageAndProgress(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	s.sim.AddFile("SD:IMPORT/loop.wav", wav(96000))
+	a5 := pad(t, "A5")
+	if _, err := app.Assign(m.unit, m.unit, a5, "SD:IMPORT/loop.wav"); err != nil {
+		t.Fatal(err)
+	}
+	set := func(name string, v int32) {
+		info, _ := proto.ParamByName(name)
+		if err := m.unit.SetParam(info.ID, proto.TargetPad(a5), v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set("level", 100)
+	set("bpm", 12000)
+	set("balance", 70)
+	set("pitch-coarse", 3)
+	set("play-mode", 1)
+	set("loop", 1)
+	set("bus-fx", 2)
+	set("mute-group", 4)
+	m.unit.SetChopPoints(a5, []uint32{24000, 48000})
+	s.sim.SetPattern(pad(t, "B2"), a5)
+	s.sim.SetPattern(pad(t, "C3"), a5)
+
+	s.press("r", "j")
+	s.shows("A5  loop", "2.00 s", "mono", "BANK1-05.SMP", "≈", "Trim", "0.00–2.00 s", "2 chop points", "┃",
+		"Level", "100", "Pan", "R6", "Play reverse", "● Loop", "○ Gate",
+		"Pitch +3 st", "Bus FX BUS 2", "Mute group 4", "Used in B2 · C3", "S edit settings")
+	s.hides("waveform")
+	// While it sounds on the unit, how far along it is.
+	frames := uint32(48000)
+	s.sim.SetPlaying(&frames)
+	s.sim.Select(0, 4)
+	s.send(s.pollResult())
+	s.shows("▶", "1.00 / 2.00 s")
+	// A pad nothing uses says so; an empty one offers what to do.
+	s.press("j")
+	s.shows("No sample on this pad.", "Used in no pattern")
+}
+
+func TestPadSettingsEditor(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	s.sim.AddFile("SD:IMPORT/loop.wav", wav(4800))
+	for _, name := range []string{"A1", "A2"} {
+		if _, err := app.Assign(m.unit, m.unit, pad(t, name), "SD:IMPORT/loop.wav"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Start from known values: the simulator's pads begin at zero for everything.
+	for _, name := range []string{"A1", "A2"} {
+		for param, v := range map[string]int32{"level": 100, "balance": 64, "play-mode": 0, "gate": 0, "pitch-coarse": 0} {
+			info, _ := proto.ParamByName(param)
+			m.unit.SetParam(info.ID, proto.TargetPad(pad(t, name)), v)
+		}
+	}
+	s.press("r")
+
+	// Quick level keys step by 5, at once and on the unit.
+	s.press(".", ".")
+	s.shows("110")
+	s.press(",")
+	s.shows("105")
+	s.press("r")
+	s.shows("105")
+
+	s.press("S")
+	s.shows("Settings  ·  A1  loop", "Level", "Pan", "Pitch (semitones)", "Time stretch", "Play mode", "Mute group", "Bus FX", "Release")
+	// Level is first; h and l step it. Then move down to Pan and Pitch.
+	s.press("l")
+	s.shows("110")
+	s.press("j", "l", "l", "j", "l", "l", "l")
+	s.shows("C"[:0]+"R8", "+3")
+	// Cycling settings wrap round: play mode has four values.
+	s.press("j", "j", "j", "j")
+	for i := 0; i < 5; i++ {
+		s.press("l")
+	}
+	s.shows("reverse")
+	s.press("l", "l", "l")
+	s.shows("forward")
+	// On/off settings toggle with Space.
+	s.press("j", "space")
+	s.shows("Gate", "on")
+	s.press("esc")
+	s.hides("Settings  ·")
+	for name, want := range map[string]int32{"level": 110, "balance": 72, "pitch-coarse": 3, "play-mode": 0, "gate": 1} {
+		info, _ := proto.ParamByName(name)
+		block, _ := s.dev.PadBlock(pad(t, "A1"))
+		if got, _ := block.Param(info.ID); got != want {
+			t.Errorf("the unit has %s = %d, want %d", name, got, want)
+		}
+	}
+	// The detail panel shows what changed.
+	s.shows("Play forward", "● Gate", "Pitch +3 st")
+
+	// With pads marked it changes all of them.
+	s.press("v", "l", "v", "S", "j", "j", "j", "j", "j", "j", "l")
+	s.shows("Settings  ·  2 pads, showing A1")
+	s.press("esc", "esc")
+	for _, name := range []string{"A1", "A2"} {
+		block, _ := s.dev.PadBlock(pad(t, name))
+		info, _ := proto.ParamByName("play-mode")
+		if got, _ := block.Param(info.ID); got != 1 {
+			t.Errorf("%s play mode = %d, want 1", name, got)
+		}
+	}
+	// An empty pad has nothing to edit.
+	s.press("G", "S")
+	s.shows("nothing to edit")
 }

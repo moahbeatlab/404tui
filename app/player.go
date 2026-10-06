@@ -8,4 +8,6 @@ type Player interface {
 	// Play stops whatever is playing and starts the sample from the beginning.
 	Play(formats.Sample) error
 	Stop()
+	// Playing reports whether a sound is still sounding.
+	Playing() bool
 }

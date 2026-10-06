@@ -19,11 +19,13 @@ var helpText = [][2]string{
 	{"h j k l, arrows", "move (on the pad grid: left, down, up, right)"},
 	{"[ / ]", "previous / next bank"},
 	{"g / G", "first / last"},
-	{"/", "find by name"},
+	{"/ (Pads, Projects)", "find a pad or project by name"},
 	{"Enter (Pads)", "preview the pad on the unit"},
-	{"a (Pads)", "pick a file to assign to the pad"},
 	{"n / d (Pads)", "rename / delete the sample"},
 	{"v / V (Pads)", "mark a pad / every pad with a sample"},
+	{"S, , . (Pads)", "edit the pad's settings in a dialog; step its level down/up"},
+	{"b, < >, - + (Pads)", "bank tempo and volume: edit in a dialog, or step them"},
+	{"c (Pads)", "copy the pad (or marked pads) to another pad, in any bank"},
 	{"x, then p or s", "pick up a pad's sample, then move or swap it onto another"},
 	{"e / R (Pads)", "export the bank / restore an export"},
 	{"Enter (Patterns)", "open the pattern; b retargets its pads to another bank"},
@@ -32,6 +34,7 @@ var helpText = [][2]string{
 	{"[ ] (Files)", "choose the target bank for assigns"},
 	{"A-J, 1-16 (picker)", "type a bank letter and a pad number: C, 7, Enter"},
 	{"e / R (Projects)", "export the project / restore one from a backup folder"},
+	{"/ (Files, dialog)", "search every audio file in the source by keyword: Enter assigns, Tab shows it in the tree"},
 	{"Space (Files)", "listen to the file on this computer"},
 	{"v (Files)", "mark audio files; Enter then fills free pads in order"},
 	{"Tab / l / h (Files)", "open or close a folder, go to the parent"},
@@ -53,6 +56,10 @@ func (m Model) View() string {
 	switch {
 	case m.help:
 		main = m.center(m.helpBox(), g.bodyH)
+	case m.search != nil:
+		main = m.center(m.searchBox(g), g.bodyH)
+	case m.editor != nil:
+		main = m.center(m.editorBox(), g.bodyH)
 	case m.browser != nil:
 		main = m.center(m.browserBox(g), g.bodyH)
 	case m.prompt != nil:
@@ -61,6 +68,8 @@ func (m Model) View() string {
 		main = m.center(m.pickerBox(), g.bodyH)
 	case m.palette != nil:
 		main = m.center(m.paletteBox(), g.bodyH)
+	case m.unit == nil:
+		main = m.center(m.waitingBox(), g.bodyH)
 	case m.busy != "":
 		main = m.center(m.st.accent.Render(spinner[m.frame%len(spinner)])+" "+m.st.text.Render(m.busy+"…"), g.bodyH)
 	case m.snap == nil:
@@ -150,6 +159,9 @@ func (m Model) body(g geom) string {
 func (m Model) header() string {
 	st := m.st
 	badge := lipgloss.NewStyle().Background(st.th.accent).Foreground(st.th.cursorFg).Bold(true).Render(" 404tui ")
+	if m.unit == nil {
+		return spaceBetween(badge, st.warn.Render("○ no unit")+" ", m.width)
+	}
 	if m.snap == nil {
 		return badge
 	}
@@ -161,7 +173,11 @@ func (m Model) header() string {
 	free := float64(m.snap.FreeKb) / 1024 / 1024
 	left += st.dim.Render(fmt.Sprintf("   %.1f GB free", free))
 
-	right := st.dim.Render(m.snap.Port)
+	// For a few seconds after connecting, say so loudly.
+	right := st.good.Render("●") + " " + st.dim.Render(m.snap.Port)
+	if m.connect != nil && m.frame-m.connectedFrame < 50 {
+		right = st.good.Render("● CONNECTED  " + m.snap.Port)
+	}
 	if m.playing {
 		right = st.hot.Render(fmt.Sprintf("▶ %s  ", m.playingPad)) + right
 	} else if m.hasSelected {
@@ -227,16 +243,19 @@ func (m Model) statusBar() string {
 	var chips []string
 	switch m.section {
 	case secPads:
-		chips = []string{chip("Enter", "preview"), chip("a", "assign"), chip("v", "mark"), chip("n", "rename"), chip("d", "delete"), chip("x", "move"), chip("e", "export"), chip("[ ]", "bank")}
+		chips = []string{chip("Enter", "preview"), chip("a", "assign"), chip("v", "mark"), chip("n", "rename"), chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("e", "export"), chip("[ ]", "bank")}
 	case secPatterns:
 		chips = []string{chip("Enter", "open"), chip("b", "retarget"), chip("[ ]", "bank"), chip("Esc", "back")}
 	case secFiles:
-		chips = []string{chip("Enter", "assign"), chip("[ ]", "target bank"), chip("Space", "listen"), chip("v", "mark"), chip("Tab", "open"), chip("n", "rename"), chip("m", "move"), chip("t", "source")}
+		chips = []string{chip("Enter", "assign"), chip("/", "search"), chip("[ ]", "target bank"), chip("Space", "listen"), chip("v", "mark"), chip("Tab", "open"), chip("n", "rename"), chip("m", "move"), chip("t", "source")}
 	case secProjects:
 		chips = []string{chip("Enter", "select"), chip("n", "rename"), chip("e", "export"), chip("R", "restore")}
 	}
 	chips = append(chips, chip(":", "commands"), chip("?", "help"), chip("q", "quit"))
 	line := strings.Join(chips, st.faint.Render("  "))
+	if m.listening != "" && m.player != nil && m.player.Playing() {
+		line = st.hot.Render("♪ "+ansi.Truncate(app.Base(m.listening), 28, "…")) + st.faint.Render("  │  ") + line
+	}
 	if m.message != "" {
 		line = st.warn.Render(m.message) + st.faint.Render("  │  ") + line
 	}
@@ -398,16 +417,33 @@ func (m Model) padsBody(g geom) string {
 		})
 	})
 	detail := m.padDetail(g)
+	bar := m.bankBar() + "\n\n"
 	if g.side {
-		return lipgloss.JoinHorizontal(lipgloss.Top, grid, "  ", lipgloss.JoinVertical(lipgloss.Left, detail, m.session(g)))
+		return bar + lipgloss.JoinHorizontal(lipgloss.Top, grid, "  ", lipgloss.JoinVertical(lipgloss.Left, detail, m.session(g)))
 	}
 	if g.detailH < 4 {
-		return grid
+		return bar + grid
 	}
-	return grid + "\n\n" + detail
+	return bar + grid + "\n\n" + detail
 }
 
-// padDetail is the panel under (or beside) the grid: the selected pad's waveform and settings.
+// bankBar is the line above the grids: the bank's tempo and volume, and how to change them.
+func (m Model) bankBar() string {
+	st := m.st
+	info := m.snap.Banks[m.bank]
+	tempo := st.text.Render(fmt.Sprintf("%.2f BPM", info.Tempo))
+	if m.snap.UsesProjectTempo {
+		tempo = st.faint.Render(fmt.Sprintf("%.2f BPM", info.Tempo)) + st.dim.Render(fmt.Sprintf("  (project tempo %.2f is in use)", m.snap.ProjectTempo))
+	}
+	return st.accent.Render(fmt.Sprintf("Bank %c", 'A'+m.bank)) +
+		st.dim.Render("   Tempo ") + tempo +
+		st.dim.Render("   Volume ") + st.accent.Render(levelBar(12, info.Volume, 127)) + st.text.Render(fmt.Sprintf(" %d", info.Volume)) +
+		st.faint.Render("    b edit  < > tempo  - + volume")
+}
+
+// padDetail is the panel under (or beside) the grid: what is on the selected pad. The sample
+// (length, trim, chop points), its settings, the patterns that play it, and while it
+// sounds on the unit, how far along it is.
 func (m Model) padDetail(g geom) string {
 	st := m.st
 	row := m.padRow()
@@ -418,26 +454,162 @@ func (m Model) padDetail(g geom) string {
 	if len(m.marked) > 0 {
 		title += st.good.Render(fmt.Sprintf("   %d marked", len(m.marked)))
 	}
-	inner := g.detailW - 4
-	var lines []string
+	height := max(g.detailH, 5)
 	if !row.HasSample {
-		lines = []string{st.dim.Render("No sample on this pad."), "", st.dim.Render("a  picks a file for it    n  names it")}
-	} else {
-		lines = append(lines, m.waveform(row, inner)...)
-		flag := func(label string, on bool) string {
-			if on {
-				return st.good.Render("● ") + st.text.Render(label)
-			}
-			return st.faint.Render("○ " + label)
+		lines := []string{st.dim.Render("No sample on this pad."), "", st.dim.Render("a  picks a file for it    c  copies another pad here")}
+		if used := m.usedIn(row); used != "" {
+			lines = append(lines, "", used)
 		}
-		lines = append(lines,
-			st.dim.Render("Level ")+st.accent.Render(levelBar(12, int(row.Level), 127))+st.text.Render(fmt.Sprintf(" %-3d", row.Level))+
-				st.dim.Render("  BPM ")+st.text.Render(fmt.Sprintf("%.2f", row.BPM))+
-				st.dim.Render("  Size ")+st.text.Render(fmt.Sprintf("%.1f KB", float64(row.Size)/1024)),
-			flag("Gate", row.Gate)+"  "+flag("Loop", row.Loop)+"  "+flag("BPM sync", row.BPMSync)+
-				st.dim.Render(fmt.Sprintf("  Chops %d", row.Chops)))
+		return m.box(title, strings.Join(lines, "\n"), g.detailW, height, false)
 	}
-	return m.box(title, strings.Join(lines, "\n"), g.detailW, max(g.detailH, 5), false)
+
+	inner := g.detailW - 4
+	res, have := m.facts[factKey{row.Pad, row.Size, row.Name}]
+	kv := func(label, value string) string { return st.dim.Render(label+" ") + st.text.Render(value) }
+	flag := func(label string, on bool) string {
+		if on {
+			return st.good.Render("● ") + st.text.Render(label)
+		}
+		return st.faint.Render("○ " + label)
+	}
+	p := func(name string) int32 { return row.Params[name] }
+	flags := p("mode-flags")
+	sep := st.faint.Render("  ·  ")
+
+	var lines []string
+	// The sample.
+	switch {
+	case !have:
+		lines = append(lines, st.faint.Render("reading the sample…"))
+	case res.err != nil:
+		lines = append(lines, st.bad.Render(res.err.Error()))
+	default:
+		f := res.facts
+		channels := "mono"
+		if f.Channels > 1 {
+			channels = "stereo"
+		}
+		line := st.text.Render(fmt.Sprintf("%.2f s", f.Seconds)) + sep + st.text.Render(channels) + sep +
+			st.text.Render(fmt.Sprintf("%.1f KB", float64(row.Size)/1024)) + sep + st.dim.Render(f.File)
+		if row.BPM > 0 && f.Seconds > 0 {
+			line += sep + st.dim.Render(fmt.Sprintf("≈ %.1f bars at %.2f BPM", f.Seconds*row.BPM/60/4, row.BPM))
+		}
+		lines = append(lines, line)
+		lines = append(lines, m.trimBar(row, f, clamp(inner-46, 10, 48)))
+	}
+	// Level and pan, then how it plays.
+	lines = append(lines,
+		kv("Level", "")+st.accent.Render(levelBar(12, int(row.Level), 127))+st.text.Render(fmt.Sprintf(" %-3d", row.Level))+
+			"  "+kv("Pan", panText(p("balance")))+"  "+kv("BPM", fmt.Sprintf("%.2f", row.BPM)),
+		kv("Play", playModeName(p("play-mode")))+"   "+flag("Gate", p("gate") != 0)+"  "+flag("Loop", p("loop") != 0)+
+			"  "+flag("One shot", flags&0x20 != 0)+"  "+flag("BPM sync", p("bpm-sync") != 0))
+	if m.playing && m.playingPad == row.Pad && have && res.err == nil && res.facts.Frames > 0 {
+		f := res.facts
+		frac := min(float64(m.playPos)/float64(f.Frames), 1)
+		lines = append(lines, st.hot.Render("▶ ")+st.hot.Render(levelBar(20, int(frac*100), 100))+
+			st.text.Render(fmt.Sprintf("  %.2f / %.2f s", float64(m.playPos)/48000, f.Seconds)))
+	}
+	lines = append(lines, m.usedIn(row))
+	// Settings, as numbers.
+	lines = append(lines,
+		kv("Pitch", fmt.Sprintf("%+d st %+d ct", p("pitch-coarse"), p("pitch-fine")))+"  "+
+			kv("Stretch", fmt.Sprintf("%.0f%%", float64(p("time-stretch"))/100))+"  "+flag("Vinyl", p("vinyl") != 0),
+		kv("Bus FX", busName(p("bus-fx")))+"  "+kv("Mute group", offOr(p("mute-group")))+"  "+
+			kv("Pad link", offOr(p("pad-link")))+"  "+kv("Roll", fmt.Sprint(p("roll"))),
+		kv("Attack", fmt.Sprint(p("attack")))+"  "+kv("Hold", fmt.Sprint(p("hold")))+"  "+kv("Release", fmt.Sprint(p("release"))))
+	lines = append(lines, "", st.faint.Render("S edit settings  ·  , . level  ·  c copy  ·  Enter preview"))
+	return m.box(title, strings.Join(lines, "\n"), g.detailW, height, false)
+}
+
+// usedIn is the line naming the patterns that play a pad.
+func (m Model) usedIn(row app.PadRow) string {
+	st := m.st
+	if m.usageState != 2 {
+		return st.dim.Render("Used in ") + st.faint.Render("reading patterns…")
+	}
+	slots := m.usage[row.Pad]
+	if len(slots) == 0 {
+		return st.dim.Render("Used in ") + st.faint.Render("no pattern")
+	}
+	names := make([]string, len(slots))
+	for i, slot := range slots {
+		names[i] = slot.String()
+	}
+	return st.dim.Render("Used in ") + st.warn.Render(strings.Join(names, " · "))
+}
+
+// trimBar draws the sample's length as a line: the part that plays solid, what is trimmed
+// away dotted, chop points as ┃ and the loop start as ◆.
+func (m Model) trimBar(row app.PadRow, f app.PadFacts, width int) string {
+	st := m.st
+	if f.Frames == 0 || width < 8 {
+		return ""
+	}
+	cells := make([]rune, width)
+	for i := range cells {
+		frame := uint32(uint64(i) * uint64(f.Frames) / uint64(width))
+		if frame >= f.StartFrame && frame < f.EndFrame {
+			cells[i] = '━'
+		} else {
+			cells[i] = '╌'
+		}
+	}
+	at := func(frame uint32) int { return min(int(uint64(frame)*uint64(width)/uint64(f.Frames)), width-1) }
+	if f.LoopFrame > f.StartFrame && f.LoopFrame < f.EndFrame {
+		cells[at(f.LoopFrame)] = '◆'
+	}
+	for _, c := range row.ChopFrames {
+		cells[at(c)] = '┃'
+	}
+	text := fmt.Sprintf("  %.2f–%.2f s", float64(f.StartFrame)/48000, float64(f.EndFrame)/48000)
+	if n := len(row.ChopFrames); n > 0 {
+		text += fmt.Sprintf("  ·  %d chop points", n)
+	}
+	return st.dim.Render("Trim  ") + st.accent.Render(string(cells)) + st.dim.Render(text)
+}
+
+func playModeName(v int32) string {
+	switch v {
+	case 0:
+		return "forward"
+	case 1:
+		return "reverse"
+	case 2:
+		return "fwd ping-pong"
+	case 3:
+		return "rev ping-pong"
+	}
+	return fmt.Sprint(v)
+}
+
+// panText is the balance as the unit shows it: 64 is the centre.
+func panText(v int32) string {
+	switch d := int(v) - 64; {
+	case d == 0:
+		return "C"
+	case d < 0:
+		return fmt.Sprintf("L%d", -d)
+	default:
+		return fmt.Sprintf("R%d", d)
+	}
+}
+
+func busName(v int32) string {
+	switch v {
+	case 0:
+		return "off"
+	case 1, 2:
+		return fmt.Sprintf("BUS %d", v)
+	}
+	return fmt.Sprint(v)
+}
+
+// offOr is a setting where 0 means off.
+func offOr(v int32) string {
+	if v == 0 {
+		return "off"
+	}
+	return fmt.Sprint(v)
 }
 
 // session is a small panel for wide screens: the unit, its card, and what is picked up.
@@ -467,31 +639,6 @@ func (m Model) unitLine() string {
 		return fmt.Sprintf("selected %s", m.selected)
 	}
 	return "idle"
-}
-
-// waveform is the pad's waveform as two rows of block characters, or a note when it is
-// not there.
-func (m Model) waveform(row app.PadRow, width int) []string {
-	st := m.st
-	peaks, have := m.waves[waveKey{row.Pad, row.Size, row.Name}]
-	switch {
-	case !have:
-		return []string{st.faint.Render("loading waveform…"), ""}
-	case len(peaks) == 0:
-		return []string{st.faint.Render("(no waveform)"), ""}
-	}
-	amps := make([]int, len(peaks))
-	for i, p := range peaks {
-		amps[i] = max(abs16(p.Min), abs16(p.Max))
-	}
-	return m.bars(amps, width)
-}
-
-func abs16(v int16) int {
-	if v < 0 {
-		return -int(v)
-	}
-	return int(v)
 }
 
 // bars draws amplitudes (0..32768) as two rows of block characters, scaled to width.
@@ -544,13 +691,14 @@ func (m Model) patternsBody(g geom) string {
 		lines = []string{m.st.text.Render("Plays " + strings.Join(names, " ")), "", m.st.dim.Render("Enter opens the step grid")}
 	}
 	detail := m.box("Pattern "+cur.Slot.String(), strings.Join(lines, "\n"), g.detailW, max(g.detailH, 5), false)
+	bar := m.bankBar() + "\n\n"
 	if g.side {
-		return lipgloss.JoinHorizontal(lipgloss.Top, grid, "  ", lipgloss.JoinVertical(lipgloss.Left, detail, m.session(g)))
+		return bar + lipgloss.JoinHorizontal(lipgloss.Top, grid, "  ", lipgloss.JoinVertical(lipgloss.Left, detail, m.session(g)))
 	}
 	if g.detailH < 4 {
-		return grid
+		return bar + grid
 	}
-	return grid + "\n\n" + detail
+	return bar + grid + "\n\n" + detail
 }
 
 // patternDetail is an opened pattern: its step grid, one row per pad it plays.
@@ -775,6 +923,25 @@ func (m Model) projectsBody(g geom) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, list, " ", detail)
 }
 
+// waitingBox is what the screen says while there is no unit.
+func (m Model) waitingBox() string {
+	st := m.st
+	title := "Waiting for an SP-404MKII"
+	lines := []string{
+		st.accent.Render(spinner[m.frame%len(spinner)]) + " " + st.bold.Render(title), "",
+		st.text.Render("Connect it with a USB-C cable and switch it on."),
+		st.dim.Render("Looking for USB 0582:02e7; it connects by itself."),
+	}
+	if m.lost {
+		lines = append([]string{st.bad.Render("The connection to the unit was lost.")}, append([]string{""}, lines...)...)
+	}
+	if m.waitErr != "" {
+		lines = append(lines, "", st.warn.Render(m.waitErr))
+	}
+	lines = append(lines, "", st.dim.Render("q quit  ·  ? help"))
+	return st.modal.Render(strings.Join(lines, "\n"))
+}
+
 // ---- overlays ----
 
 func (m Model) helpBox() string {
@@ -830,6 +997,17 @@ func (m Model) promptBox() string {
 	case promptRestore:
 		title = "Restore pads from the export in the folder"
 		hint = "replaces the samples on the pads it lists  ·  "
+	case promptBank:
+		field := func(i int, label, value string) string {
+			line := st.dim.Render(fmt.Sprintf("%-16s", label))
+			if i == p.field {
+				return line + st.accent.Render("> ") + value + "█"
+			}
+			return line + "  " + st.text.Render(value)
+		}
+		return st.modal.Width(min(m.width-6, 56)).Render(st.bold.Render(fmt.Sprintf("Bank %c", 'A'+m.bank)) + "\n\n" +
+			field(0, "Tempo (40-200 BPM)", p.fields[0]) + "\n" + field(1, "Volume (0-127)", p.fields[1]) +
+			"\n\n" + st.dim.Render("Tab switches field  ·  Enter apply  ·  Esc cancel"))
 	case promptSearch:
 		title = "Find by name"
 	case promptAssignFile:
@@ -893,6 +1071,9 @@ func (m Model) pickerBox() string {
 		return st.modal.Render(st.bold.Render(fmt.Sprintf("Pattern %s: move its pads from bank %c to bank", p.slot, 'A'+p.sourceBank)) +
 			"\n\n" + strip.String() + "\n\n" + st.dim.Render("←/→ or A-J choose  ·  Enter apply  ·  Esc cancel"))
 	}
+	if len(p.copyFrom) > 0 {
+		return m.copyPickerBox()
+	}
 	title := fmt.Sprintf("Assign %s to a pad", app.Base(p.files[0]))
 	if len(p.files) > 1 {
 		title = fmt.Sprintf("Assign %d files, from the pad you choose onward, to free pads", len(p.files))
@@ -926,6 +1107,56 @@ func (m Model) pickerBox() string {
 	}
 	return st.modal.Render(st.bold.Render(title) + "\n\n" + strip.String() + typed + "\n\n" + grid + "\n\n" + line +
 		"\n\n" + st.dim.Render("A-J bank  ·  1-16 pad  ·  hjkl move  ·  [ ] bank  ·  Enter assign  ·  Esc cancel"))
+}
+
+// copyPickerBox is the pad chooser of a copy: where the pad (or the first of several) goes.
+func (m Model) copyPickerBox() string {
+	st, p := m.st, m.picker
+	title := fmt.Sprintf("Copy %s to a pad", p.copyFrom[0])
+	if len(p.copyFrom) > 1 {
+		title = fmt.Sprintf("Copy %d pads, keeping their layout, from the pad you choose onward", len(p.copyFrom))
+	}
+	var strip strings.Builder
+	counts := m.bankCountsForPicker()
+	for b := 0; b < proto.Banks; b++ {
+		cell := fmt.Sprintf(" %c ", 'A'+b)
+		switch {
+		case b == p.bank:
+			strip.WriteString(lipgloss.NewStyle().Background(st.th.accent).Foreground(st.th.cursorFg).Bold(true).Render(cell))
+		case counts[b] > 0:
+			strip.WriteString(st.text.Render(cell))
+		default:
+			strip.WriteString(st.faint.Render(cell))
+		}
+	}
+	target, _ := proto.PadFromBankPad(uint16(p.bank), uint16(p.pad))
+	line := st.dim.Render(fmt.Sprintf("%s is empty", target))
+	copies, err := app.PlanCopy(p.copyFrom, target)
+	switch {
+	case err != nil:
+		line = st.bad.Render(err.Error())
+	case len(copies) == 0:
+		line = st.dim.Render("that is the pad itself")
+	default:
+		held := func(pad proto.PadIndex) bool { return m.snap.Pads[pad.Index()].HasSample }
+		n := app.Occupied(copies, held)
+		switch {
+		case n > 0 && p.confirm:
+			line = st.bad.Render("Press Enter again to replace them")
+		case n == 1 && len(copies) == 1:
+			line = st.warn.Render(fmt.Sprintf("%s holds %q — it will be replaced", target, m.snap.Pads[copies[0].To.Index()].Name))
+		case n > 0:
+			line = st.warn.Render(fmt.Sprintf("%d of the %d pads it lands on hold samples — they will be replaced", n, len(copies)))
+		case len(copies) > 1:
+			line = st.dim.Render(fmt.Sprintf("%s to %s, all free", copies[0].To, copies[len(copies)-1].To))
+		}
+	}
+	typed := ""
+	if p.digits != "" {
+		typed = st.accent.Render("  pad " + p.digits + "…")
+	}
+	return st.modal.Render(st.bold.Render(title) + "\n\n" + strip.String() + typed + "\n\n" + m.pickerGrid() + "\n\n" + line +
+		"\n\n" + st.dim.Render("A-J bank  ·  1-16 pad  ·  hjkl move  ·  [ ] bank  ·  Enter copy  ·  Esc cancel"))
 }
 
 func (m Model) bankCountsForPicker() [proto.Banks]int {

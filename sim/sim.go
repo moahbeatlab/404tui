@@ -47,17 +47,20 @@ type Sim struct {
 	closed bool
 	dec    proto.Decoder
 
-	playing  *uint32
-	project  uint8
-	bank     uint8
-	pad      uint8
-	names    [16]string
-	blocks   [proto.PadCount][]byte
-	patterns map[uint16][]proto.PadIndex
-	files    map[string][]byte
-	dirs     map[string]bool
-	handles  map[int32]*handle
-	next     int32
+	playing *uint32
+	// Bank tempo (BPM × 100) and volume as stored on the unit (127 minus the volume).
+	bankTempo [proto.Banks]uint32
+	bankVol   [proto.Banks]uint32
+	project   uint8
+	bank      uint8
+	pad       uint8
+	names     [16]string
+	blocks    [proto.PadCount][]byte
+	patterns  map[uint16][]proto.PadIndex
+	files     map[string][]byte
+	dirs      map[string]bool
+	handles   map[int32]*handle
+	next      int32
 
 	// Requests holds every control payload the host sent, in order.
 	Requests [][]byte
@@ -78,6 +81,9 @@ func New() *Sim {
 	}
 	for i := range s.names {
 		s.names[i] = fmt.Sprintf("PROJECT_%02d", i+1)
+	}
+	for b := range s.bankTempo {
+		s.bankTempo[b] = 12_000
 	}
 	for i := range s.blocks {
 		s.blocks[i] = emptyBlock(uint16(i))
@@ -413,8 +419,9 @@ func boolByte(b bool) byte {
 func (s *Sim) settings(project byte) []byte {
 	words := make([]uint32, proto.SettingsWords)
 	words[0] = 12_000
-	for i := 12; i < 22; i++ {
-		words[i] = 12_000 << 1
+	for b := 0; b < proto.Banks; b++ {
+		words[12+b] = s.bankTempo[b] << 1
+		words[23+b/2] |= s.bankVol[b] << (16 * (b % 2))
 	}
 	p := []byte{proto.ReplyProjectSettings, project, 0}
 	for _, w := range words {
@@ -486,6 +493,10 @@ func (s *Sim) setParam(p []byte) {
 		s.bank, s.pad = byte(value), 0
 	case target == uint16(proto.TargetGlobal) && id == 0x01:
 		s.pad = byte(value)
+	case target == uint16(proto.TargetGlobal) && id >= proto.BankTempoBase && id < proto.BankTempoBase+proto.Banks:
+		s.bankTempo[id-proto.BankTempoBase] = value
+	case target == uint16(proto.TargetGlobal) && id >= proto.BankVolumeBase && id < proto.BankVolumeBase+proto.Banks:
+		s.bankVol[id-proto.BankVolumeBase] = value
 	case target < proto.PadCount && id >= proto.ChopPointFirst && id < proto.ChopPointFirst+proto.PadBlockChopPoints:
 		binary.LittleEndian.PutUint32(s.blocks[target][chopOffset+4*int(id-proto.ChopPointFirst):], value)
 	case target < proto.PadCount && id >= 0x67 && id <= 0x7B:

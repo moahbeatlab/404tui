@@ -109,6 +109,12 @@ type PadRow struct {
 	BPMSync bool
 	// Chops is how many chop points the pad has.
 	Chops int
+	// Params are the pad's settings by name (see proto.Params), as the unit stores them.
+	Params map[string]int32
+	// StartBytes, EndBytes and LoopBytes are the play region and loop start as byte offsets
+	// into the SMP file; ChopFrames are the chop points in sample frames.
+	StartBytes, EndBytes, LoopBytes uint32
+	ChopFrames                      []uint32
 }
 
 // Snapshot is the state of the unit and its current project at one moment.
@@ -124,6 +130,11 @@ type Snapshot struct {
 	Projects []string
 	// Pads are all 160 pads in order, A1 to J16.
 	Pads []PadRow
+	// Banks are the tempo and volume of each bank. While the project's tempo is in use
+	// (UsesProjectTempo) the bank tempos have no effect.
+	Banks            [proto.Banks]BankInfo
+	UsesProjectTempo bool
+	ProjectTempo     float64
 }
 
 // Bank returns the 16 pads of a bank, 0..=9.
@@ -162,6 +173,12 @@ func Load(u interface {
 		Projects:    names,
 		Pads:        make([]PadRow, 0, len(blocks)),
 	}
+	for b := 0; b < proto.Banks; b++ {
+		bs := st.Settings.Bank(b)
+		snap.Banks[b] = BankInfo{Tempo: float64(bs.Tempo) / 100, Volume: int(bs.Volume)}
+	}
+	snap.UsesProjectTempo = st.Settings.UsesProjectTempo()
+	snap.ProjectTempo = float64(st.Settings.ProjectTempo()) / 100
 	for _, b := range blocks {
 		level, _ := b.Param(paramLevel)
 		bpm, _ := b.Param(paramBPM)
@@ -170,17 +187,22 @@ func Load(u interface {
 			return v != 0
 		}
 		snap.Pads = append(snap.Pads, PadRow{
-			Pad:       b.Pad,
-			HasSample: b.HasSample(),
-			Name:      b.Name(),
-			Level:     level,
-			BPM:       float64(bpm) / 100,
-			Size:      b.FileSize(),
-			Gate:      flag(paramGate),
-			Loop:      flag(paramLoop),
-			BPMSync:   flag(paramBPMSync),
-			Chops:     chops(b),
+			Pad:        b.Pad,
+			HasSample:  b.HasSample(),
+			Name:       b.Name(),
+			Level:      level,
+			BPM:        float64(bpm) / 100,
+			Size:       b.FileSize(),
+			Gate:       flag(paramGate),
+			Loop:       flag(paramLoop),
+			BPMSync:    flag(paramBPMSync),
+			Chops:      chops(b),
+			Params:     params(b),
+			ChopFrames: chopFrames(b),
 		})
+		row := &snap.Pads[len(snap.Pads)-1]
+		row.StartBytes, row.EndBytes = b.StartEndBytes()
+		row.LoopBytes = b.LoopStartBytes()
 	}
 	return snap, nil
 }
@@ -270,4 +292,28 @@ func chops(b *proto.PadBlock) int {
 		}
 	}
 	return n
+}
+
+// params reads every pad setting whose place in the pad block is known.
+func params(b *proto.PadBlock) map[string]int32 {
+	out := map[string]int32{}
+	for _, p := range proto.Params {
+		if p.Scope != proto.ScopePad {
+			continue
+		}
+		if v, ok := b.Param(p.ID); ok {
+			out[p.Name] = v
+		}
+	}
+	return out
+}
+
+func chopFrames(b *proto.PadBlock) []uint32 {
+	var out []uint32
+	for _, c := range b.ChopPoints() {
+		if c >= 0 {
+			out = append(out, uint32(c))
+		}
+	}
+	return out
 }

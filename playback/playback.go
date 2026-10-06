@@ -54,6 +54,13 @@ func (p *Player) Play(s formats.Sample) error {
 	return nil
 }
 
+// Playing reports whether a sound is still sounding.
+func (p *Player) Playing() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.current != nil && p.current.IsPlaying()
+}
+
 // Stop stops whatever is playing.
 func (p *Player) Stop() {
 	p.mu.Lock()

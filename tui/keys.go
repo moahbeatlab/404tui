@@ -2,7 +2,9 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -25,6 +27,15 @@ var commands = []command{
 	{"v", "Mark / unmark pad", []int{secPads}},
 	{"V", "Mark every pad with a sample in the bank", []int{secPads}},
 	{"d", "Delete sample (of every marked pad)", []int{secPads}},
+	{"S", "Edit this pad's settings (or the marked pads')", []int{secPads}},
+	{",", "Pad level down (of the marked pads)", []int{secPads}},
+	{".", "Pad level up (of the marked pads)", []int{secPads}},
+	{"c", "Copy this pad (or the marked ones) to another pad, in any bank", []int{secPads}},
+	{"b", "Edit this bank's tempo and volume", []int{secPads, secPatterns}},
+	{"<", "Bank tempo down 1 BPM", []int{secPads, secPatterns}},
+	{">", "Bank tempo up 1 BPM", []int{secPads, secPatterns}},
+	{"-", "Bank volume down", []int{secPads, secPatterns}},
+	{"+", "Bank volume up", []int{secPads, secPatterns}},
 	{"x", "Pick up pad to move it", []int{secPads}},
 	{"p", "Move the picked-up pad here (overwrite)", []int{secPads}},
 	{"s", "Swap the picked-up pad with this one", []int{secPads}},
@@ -49,7 +60,8 @@ var commands = []command{
 	{"R", "Restore this project from a backup folder", []int{secProjects}},
 	{"[", "Previous bank", []int{secPads, secPatterns}},
 	{"]", "Next bank", []int{secPads, secPatterns}},
-	{"/", "Find by name", []int{secPads, secFiles, secProjects}},
+	{"/", "Find a pad or project by name", []int{secPads, secProjects}},
+	{"/", "Search every audio file in this source by keyword", []int{secFiles}},
 	{"1", "Go to Pads", nil},
 	{"2", "Go to Patterns", nil},
 	{"3", "Go to Files", nil},
@@ -112,6 +124,10 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch {
+	case m.search != nil:
+		return m.searchKey(key)
+	case m.editor != nil:
+		return m.editorKey(key)
 	case m.browser != nil:
 		return m.browserKey(key)
 	case m.prompt != nil:
@@ -120,6 +136,19 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.pickerKey(key)
 	case m.palette != nil:
 		return m.paletteKey(key)
+	}
+	if m.unit == nil {
+		// Nothing to work on until a unit is connected.
+		switch name {
+		case "q", "esc":
+			return m, tea.Quit
+		case "?":
+			m.help = true
+		case "T":
+			m.themeAt = (m.themeAt + 1) % len(themes)
+			m.st = newStyles(themes[m.themeAt])
+		}
+		return m, nil
 	}
 	if name == "?" {
 		m.help = true
@@ -159,13 +188,18 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "r":
 		m.patterns = map[int][]app.PatternRow{}
+		m.usage, m.usageState = nil, 0
+		clear(m.indexes)
 		m.tree = nil
 		m.infos = map[string]fileInfo{}
 		m.pattern = nil
 		m.busy = "reading the unit"
 		return m, m.load("refreshed")
 	case "/":
-		if m.section != secPatterns {
+		switch m.section {
+		case secFiles:
+			return m.openSearch(m.root, false, proto.PadIndex{})
+		case secPads, secProjects:
 			m.prompt = &prompt{kind: promptSearch}
 		}
 		return m, nil
@@ -342,6 +376,22 @@ func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 		return m.openBrowser(browseExport, app.CardRoot, []string{"SD:exports"}, "")
 	case "R":
 		return m.openBrowser(browseRestore, app.CardRoot, []string{"SD:exports"}, "")
+	case "c":
+		pads := withSamples(m.targets())
+		if len(pads) == 0 {
+			m.message = "nothing to copy: no sample there"
+			break
+		}
+		// It opens on the next free pad after this one, in the same bank.
+		m.picker = &picker{copyFrom: pads, bank: m.bank, pad: m.freeAfter(m.bank, m.pad)}
+	case "<", ">", "-", "+", "=", "b":
+		return m.bankKey(name)
+	case "S":
+		return m.openEditor()
+	case ",":
+		return m.nudge("level", -1)
+	case ".":
+		return m.nudge("level", 1)
 	case "x":
 		m.moving, m.hasMoving = row.Pad, true
 		if !row.HasSample {
@@ -382,6 +432,105 @@ func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// bankKey changes the tempo and volume of the bank in view: < > a BPM at a time, - + in
+// steps of 5, and b opens a dialog to type them. The change shows at once and is sent to the
+// unit behind it.
+func (m Model) bankKey(name string) (tea.Model, tea.Cmd) {
+	bank, unit := m.bank, m.unit
+	info := &m.snap.Banks[bank]
+	if name == "b" {
+		m.prompt = &prompt{kind: promptBank, fields: [2]string{fmt.Sprintf("%.2f", info.Tempo), fmt.Sprint(info.Volume)}}
+		return m, nil
+	}
+	if name == "<" || name == ">" {
+		delta := 1.0
+		if name == "<" {
+			delta = -1
+		}
+		tempo := info.Tempo + delta
+		if tempo < app.MinBankBPM || tempo > app.MaxBankBPM {
+			m.message = fmt.Sprintf("bank tempo stays between %.0f and %.0f BPM", app.MinBankBPM, app.MaxBankBPM)
+			return m, nil
+		}
+		info.Tempo = tempo
+		return m, m.edit(func() tea.Msg {
+			if err := app.SetBankTempo(unit, bank, tempo); err != nil {
+				return doneMsg{message: "bank tempo: " + err.Error(), reload: true}
+			}
+			return noteMsg(fmt.Sprintf("bank %c tempo %.2f BPM", 'A'+bank, tempo))
+		})
+	}
+	delta := 5
+	if name == "-" {
+		delta = -5
+	}
+	volume := clamp(info.Volume+delta, 0, app.MaxBankVolume)
+	if volume == info.Volume {
+		m.message = fmt.Sprintf("bank %c volume is at its limit", 'A'+bank)
+		return m, nil
+	}
+	info.Volume = volume
+	return m, m.edit(func() tea.Msg {
+		if err := app.SetBankVolume(unit, bank, volume); err != nil {
+			return doneMsg{message: "bank volume: " + err.Error(), reload: true}
+		}
+		return noteMsg(fmt.Sprintf("bank %c volume %d", 'A'+bank, volume))
+	})
+}
+
+// bankPromptKey types into the bank dialog.
+func (m Model) bankPromptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	p := m.prompt
+	switch name := key.String(); {
+	case name == "esc":
+		m.prompt = nil
+	case name == "tab" || name == "shift+tab" || name == "down" || name == "up":
+		p.field = 1 - p.field
+	case name == "enter":
+		return m.applyBank()
+	case name == "backspace":
+		if f := p.fields[p.field]; f != "" {
+			p.fields[p.field] = f[:len(f)-1]
+		}
+	case name == "ctrl+u":
+		p.fields[p.field] = ""
+	case key.Type == tea.KeyRunes:
+		for _, r := range key.Runes {
+			if (r >= '0' && r <= '9') || (r == '.' && p.field == 0) {
+				p.fields[p.field] += string(r)
+			}
+		}
+	}
+	return m, nil
+}
+
+// applyBank sends the values typed in the bank dialog, the ones that changed.
+func (m Model) applyBank() (tea.Model, tea.Cmd) {
+	p, bank, unit := m.prompt, m.bank, m.unit
+	m.prompt = nil
+	tempo, terr := strconv.ParseFloat(strings.TrimSpace(p.fields[0]), 64)
+	volume, verr := strconv.Atoi(strings.TrimSpace(p.fields[1]))
+	if terr != nil || verr != nil {
+		m.message = "bank settings: tempo and volume have to be numbers"
+		return m, nil
+	}
+	cur := m.snap.Banks[bank]
+	m.busy = "setting the bank"
+	return m, m.edit(func() tea.Msg {
+		if tempo != cur.Tempo {
+			if err := app.SetBankTempo(unit, bank, tempo); err != nil {
+				return doneMsg{message: err.Error(), reload: true}
+			}
+		}
+		if volume != cur.Volume {
+			if err := app.SetBankVolume(unit, bank, volume); err != nil {
+				return doneMsg{message: err.Error(), reload: true}
+			}
+		}
+		return doneMsg{message: fmt.Sprintf("bank %c: tempo %.2f BPM, volume %d", 'A'+bank, tempo, volume), reload: true}
+	})
+}
+
 // ---- Patterns ----
 
 func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
@@ -402,6 +551,8 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch name {
+	case "<", ">", "-", "+", "=", "b":
+		return m.bankKey(name)
 	case "h", "left":
 		m.patternCursor = clamp(m.patternCursor%4-1, 0, 3) + m.patternCursor/4*4
 	case "l", "right":
@@ -646,28 +797,67 @@ func (m Model) assign(files []string, start proto.PadIndex) (tea.Model, tea.Cmd)
 	})
 }
 
-// listen plays an audio file through the computer's speakers; a second press stops it.
+// listen plays an audio file through the computer's speakers; pressing it again while it is
+// still sounding stops it, and once it has finished it plays again.
 func (m Model) listen(path string) (tea.Model, tea.Cmd) {
 	if m.player == nil {
 		m.message = "no audio output to listen on"
+		if m.audioErr != "" {
+			m.message += ": " + m.audioErr
+		}
 		return m, nil
 	}
-	if m.listening == path {
+	if m.listening == path && m.player.Playing() {
 		m.stopListening()
 		return m, nil
 	}
+	return m.playFile(path)
+}
+
+// playFile starts a file playing, whatever is playing now.
+func (m Model) playFile(path string) (tea.Model, tea.Cmd) {
+	if m.player == nil {
+		return m.listen(path)
+	}
 	m.listening = path
+	m.message = "decoding " + app.Base(path) + "…"
 	player, unit := m.player, m.unit
 	return m, func() tea.Msg {
 		imported, err := app.LoadSample(unit, path)
 		if err != nil {
-			return noteMsg("listening failed: " + err.Error())
+			return listenMsg{path: path, err: err}
 		}
-		if err := player.Play(imported.Sample); err != nil {
-			return noteMsg("listening failed: " + err.Error())
-		}
-		return noteMsg("listening to " + app.Base(path) + "; Space stops")
+		return listenMsg{path: path, err: player.Play(imported.Sample)}
 	}
+}
+
+// autoplayPath is the audio file the search or the assign dialog has under the cursor.
+func (m Model) autoplayPath() string {
+	switch {
+	case m.search != nil:
+		if f, ok := m.search.current(); ok {
+			return f.Path
+		}
+	case m.browser != nil && m.browser.kind == browseAssign && m.browser.tree != nil && m.browser.at < len(m.browser.tree.Rows()):
+		if node := m.browser.tree.Rows()[m.browser.at]; !node.Dir && isAudio(node.Name) {
+			return node.Path
+		}
+	}
+	return ""
+}
+
+// autoplayDelay is how long the cursor has to rest before autoplay plays what it is on, so
+// scrolling through a list does not play every file it passes.
+const autoplayDelay = 250 * time.Millisecond
+
+// scheduleAutoplay plays the file under the cursor shortly, if autoplay is on.
+func (m *Model) scheduleAutoplay() tea.Cmd {
+	if !m.autoplay || m.player == nil {
+		return nil
+	}
+	m.autoSeq++
+	seq := m.autoSeq
+	return tea.Tick(autoplayDelay, func(time.Time) tea.Msg { return autoplayMsg{seq: seq} })
 }
 
 // paste moves the marked path into dir.
@@ -692,6 +882,8 @@ func (m Model) paste(dir string) (tea.Model, tea.Cmd) {
 // afterFiles runs a change to the files and then lists the volume again, with the same
 // folders open.
 func (m *Model) afterFiles(change func() string) tea.Cmd {
+	// What was indexed for searching may have changed.
+	clear(m.indexes)
 	root, unit := m.root, m.unit
 	var open []string
 	if m.tree != nil {
@@ -794,12 +986,66 @@ func (m Model) pickerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// pickBankPad is the pad to rest on in the bank the picker moved to: the next free one.
+// pickBankPad is the pad to rest on in the bank the picker moved to: the next free one
+// (for a copy, the first free one).
 func (m Model) pickBankPad(p *picker) int {
-	if p.retarget {
+	switch {
+	case p.retarget:
 		return 0
+	case len(p.copyFrom) > 0:
+		return m.freeAfter(p.bank, -1)
 	}
 	return m.nextFree(p.bank)
+}
+
+// freeAfter is the first pad without a sample after position from in a bank, wrapping
+// round; from itself when the bank is full.
+func (m Model) freeAfter(bank, from int) int {
+	rows := m.snap.Bank(bank)
+	for i := 1; i <= proto.PadsPerBank; i++ {
+		if p := (from + i + proto.PadsPerBank) % proto.PadsPerBank; !rows[p].HasSample {
+			return p
+		}
+	}
+	return max(from, 0)
+}
+
+// copyEnter copies the picker's pads to the chosen pad; pads that hold a sample are
+// replaced only on a second Enter.
+func (m Model) copyEnter() (tea.Model, tea.Cmd) {
+	p := m.picker
+	target, _ := proto.PadFromBankPad(uint16(p.bank), uint16(p.pad))
+	copies, err := app.PlanCopy(p.copyFrom, target)
+	if err != nil {
+		m.picker = nil
+		m.message = err.Error()
+		return m, nil
+	}
+	if len(copies) == 0 {
+		m.picker = nil
+		m.message = "that is the pad itself"
+		return m, nil
+	}
+	held := func(pad proto.PadIndex) bool { return m.snap.Pads[pad.Index()].HasSample }
+	if app.Occupied(copies, held) > 0 && !p.confirm {
+		p.confirm = true
+		return m, nil
+	}
+	m.picker = nil
+	m.marked = map[int]bool{}
+	m.busy = "copying"
+	unit, first := m.unit, copies[0].To
+	return m, m.edit(func() tea.Msg {
+		n, failed := app.CopyPads(unit, copies)
+		message := fmt.Sprintf("%d pads copied, from %s to %s on", n, copies[0].From, first)
+		if len(copies) == 1 {
+			message = fmt.Sprintf("%s copied to %s", copies[0].From, first)
+		}
+		if len(failed) > 0 {
+			message += "; failed: " + strings.Join(failed, ", ")
+		}
+		return doneMsg{message: message, reload: true, focus: &first}
+	})
 }
 
 func atoi(s string) int {
@@ -830,6 +1076,9 @@ func (m Model) pickerEnter() (tea.Model, tea.Cmd) {
 			return patternMsg{detail: detail, err: err, note: note}
 		})
 	}
+	if len(p.copyFrom) > 0 {
+		return m.copyEnter()
+	}
 	target, _ := proto.PadFromBankPad(uint16(p.bank), uint16(p.pad))
 	held := m.snap.Pads[target.Index()].HasSample
 	// A pad that holds a sample is replaced only on a second Enter.
@@ -844,6 +1093,9 @@ func (m Model) pickerEnter() (tea.Model, tea.Cmd) {
 
 func (m Model) promptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	p := m.prompt
+	if p.kind == promptBank {
+		return m.bankPromptKey(key)
+	}
 	name := key.String()
 	if name == "esc" {
 		m.prompt = nil

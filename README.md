@@ -25,15 +25,29 @@ The UI is laid out after the unit itself:
 - Navigation is a rail down the left: the four sections, and under them the banks or the
   file sources of the section you are in.
 - **Pads** is a 4×4 grid in the unit's own arrangement (pad 1 at the top left), with the
-  selected pad's waveform and settings below. The cursor
+  selected pad's details beside or below it: length, trim and chop points, its settings,
+  which patterns play it, and a progress bar while it sounds on the unit. `S` edits its
+  settings (or the marked pads') in a dialog, and `,` `.` step its level. The cursor
   follows pads you hit on the unit, and a sounding pad lights up.
+- **Connecting:** the UI starts even with no unit, shows a waiting screen, connects by itself
+  when you plug it in (the header shows `● CONNECTED` and the port), and goes back to waiting
+  and reconnects if the cable is pulled.
+- **Bank tempo and volume** sit in a bar above the pad grid (and on Patterns): `< >` step the
+  tempo by 1 BPM, `- +` the volume by 5, and `b` opens a dialog to type both.
+- **Copying pads:** `c` copies the selected pad (or the marked ones, which keep their layout)
+  to any pad in any bank, through the same bank-letter and pad-number picker. The unit has
+  no copy command, so the sample is read and written onto the other pad together with its
+  settings and chop points. Pads that already hold a sample are replaced only after a second
+  Enter.
 - **Patterns** shows the 16 pattern slots the same way; Enter opens a step grid, and `b`
   moves a pattern's pads to another bank.
 - **Files** browses the SD card, the unit's storage or this computer. The rail shows the
   **target bank**; `[` `]` change it. Enter on an audio file opens a pad picker on that
   bank's next free pad, so Enter, Enter assigns it. Type a bank letter and a pad number
   (`C`, `7`) to go elsewhere. `v` marks several files to fill free pads in order, and Space
-  listens first.
+  listens first. `Ctrl-A` turns on autoplay (a file plays as the cursor rests on it). `/` searches every audio file in the source by keyword (words narrow it,
+  folders count, the first search indexes the source and later ones are instant): Enter
+  assigns, Tab shows the file in the tree, Ctrl-L listens.
 - **Assigning from Pads:** `a` opens a file dialog for the selected pad, with the file tree,
   file details and Space to listen. It reopens exactly where you left it (source, open
   folders, highlighted file), also after restarting; that and the Files tree position,
@@ -74,3 +88,10 @@ Tests: `go test ./...`
 GPL-3.0-or-later, as SparkyMK2. See `LICENSE`.
 
 Not affiliated with or endorsed by Roland.
+
+## Audio
+
+Files are auditioned on the computer's default output. `sp404 beep` plays a test tone and
+`sp404 play <file>` plays a file, to tell silence in the UI from a problem with the output
+(for example the system sending sound to the SP-404 itself when it is connected as the
+USB audio device). If there is no output, the UI says why when you try to listen.

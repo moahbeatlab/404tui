@@ -24,6 +24,8 @@ type geom struct {
 	railW        int
 	bodyX, bodyW int
 	bodyH        int
+	// top is the rows above the pad grid: the bank bar and a gap.
+	top int
 	// side puts the detail panel beside the grid instead of under it.
 	side         bool
 	tileW, tileH int
@@ -41,24 +43,28 @@ func (m Model) geom() geom {
 	}
 	g.bodyX = g.railW + 2
 	g.bodyW = max(m.width-g.bodyX-1, 20)
+	if m.section == secPads || m.section == secPatterns {
+		g.top = 2
+	}
 	g.side = g.bodyW >= 100
 	avail := g.bodyW
 	if g.side {
-		avail = g.bodyW * 55 / 100
+		avail = g.bodyW * 42 / 100
 	}
 	g.tileW = clamp((avail-3)/4, 8, 24)
 	g.tileH = 3
-	if (g.side && g.bodyH < 15) || (!g.side && g.bodyH < 22) {
+	// The detail panel wants about 13 rows under the grid; below that the tiles shrink.
+	if (g.side && g.bodyH-g.top < 15) || (!g.side && g.bodyH-g.top < 27) {
 		g.tileH = 2
 	}
 	g.gridW = 4*g.tileW + 3
 	g.gridH = 4*g.tileH + 3
 	if g.side {
 		g.detailW = g.bodyW - g.gridW - 2
-		g.detailH = min(g.bodyH, 10)
+		g.detailH = min(g.bodyH-g.top, 13)
 	} else {
 		g.detailW = g.bodyW
-		g.detailH = min(g.bodyH-g.gridH-1, 8)
+		g.detailH = min(g.bodyH-g.top-g.gridH-1, 13)
 	}
 	g.listW = clamp(g.bodyW*55/100, 28, 90)
 	return g
@@ -141,7 +147,7 @@ func padPosition(p int) (col, row int) {
 }
 
 func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if m.busy != "" || m.snap == nil || m.help || m.prompt != nil || m.picker != nil || m.palette != nil || m.browser != nil {
+	if m.unit == nil || m.busy != "" || m.snap == nil || m.help || m.prompt != nil || m.picker != nil || m.palette != nil || m.browser != nil {
 		return m, nil
 	}
 	wheel := 0
@@ -240,6 +246,10 @@ func (m Model) clickBody(x, y int, g geom) (tea.Model, tea.Cmd) {
 	switch m.section {
 	case secPads, secPatterns:
 		if m.section == secPatterns && m.pattern != nil {
+			return m, nil
+		}
+		y -= g.top
+		if y < 0 {
 			return m, nil
 		}
 		col, row := x/(g.tileW+1), y/(g.tileH+1)
