@@ -7,15 +7,21 @@ import (
 	"log/slog"
 	"os"
 
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/device"
+	"github.com/moahbeatlab/404tui/playback"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/serialport"
 	"github.com/moahbeatlab/404tui/sim"
+	"github.com/moahbeatlab/404tui/tui"
 )
 
 const usage = `usage: sp404 [flags] <command>
 
 commands:
+  menu         full-screen terminal UI (the default when no command is given)
   ports        list connected SP-404MKII serial ports
   status       current project, selected pad and project names
   pads         pads of the current project that hold a sample
@@ -33,11 +39,11 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
-	if flag.NArg() == 0 {
-		flag.Usage()
-		os.Exit(2)
+	args := flag.Args()
+	if len(args) == 0 {
+		args = []string{"menu"}
 	}
-	if err := run(flag.Args(), *port, *simulate, *verbose); err != nil {
+	if err := run(args, *port, *simulate, *verbose); err != nil {
 		fmt.Fprintln(os.Stderr, "sp404:", err)
 		os.Exit(1)
 	}
@@ -61,6 +67,14 @@ func run(args []string, port string, simulate, verbose bool) error {
 	defer dev.Close()
 
 	switch args[0] {
+	case "menu":
+		// Without an audio output the files just cannot be auditioned.
+		var player app.Player
+		if p, err := playback.Open(); err == nil {
+			player = p
+		}
+		_, err := tea.NewProgram(tui.New(dev, player, tui.DefaultStore()), tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
+		return err
 	case "status":
 		return status(dev)
 	case "pads":

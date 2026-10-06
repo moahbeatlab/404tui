@@ -47,6 +47,7 @@ type Sim struct {
 	closed bool
 	dec    proto.Decoder
 
+	playing  *uint32
 	project  uint8
 	bank     uint8
 	pad      uint8
@@ -134,6 +135,28 @@ func (s *Sim) SetPattern(slot proto.PadIndex, pads ...proto.PadIndex) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.patterns[slot.Index()] = pads
+}
+
+// PadName is the name of the sample on a pad, empty when there is none.
+func (s *Sim) PadName(pad proto.PadIndex) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b := s.blocks[pad.Index()]
+	return strings.TrimRight(cstring(b[nameOffset:nameOffset+nameLen]), " ")
+}
+
+// Select selects a bank and pad, as hitting a pad on the unit does.
+func (s *Sim) Select(bank, pad uint8) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.bank, s.pad = bank, pad
+}
+
+// SetPlaying makes the unit report a sounding pad at a frame position; nil silences it.
+func (s *Sim) SetPlaying(frames *uint32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.playing = frames
 }
 
 // Selected is the bank and pad last selected.
@@ -226,6 +249,16 @@ func (s *Sim) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// Reopen readies a closed simulation for a new session, as plugging the cable in again
+// does; what is on the unit stays.
+func (s *Sim) Reopen() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = false
+	s.out = nil
+	s.dec = proto.Decoder{}
+}
+
 func (s *Sim) Close() error {
 	s.mu.Lock()
 	s.closed = true
@@ -289,7 +322,11 @@ func (s *Sim) handleControl(p []byte) {
 	}
 	switch p[0] {
 	case 0xFE:
-		status := []byte{proto.ReplyStatus, s.project, 0, s.bank, 0, s.pad, 0, 0, 0xff, 0xff, 0xff, 0xff}
+		position := []byte{0xff, 0xff, 0xff, 0xff}
+		if s.playing != nil {
+			position = binary.LittleEndian.AppendUint32(nil, *s.playing)
+		}
+		status := append([]byte{proto.ReplyStatus, s.project, 0, s.bank, 0, s.pad, 0, 0}, position...)
 		s.emit(proto.Long(proto.ChannelControl, status))
 	case 0xFD:
 		s.control(s.settings(p[1]))
@@ -754,7 +791,12 @@ func (s *Sim) exists(path string) bool {
 func (s *Sim) children(dir string) []string {
 	seen := map[string]bool{}
 	add := func(path string) {
-		if rest, ok := strings.CutPrefix(path, dir+"/"); ok && rest != "" && !strings.Contains(rest, "/") {
+		rest, ok := strings.CutPrefix(path, dir+"/")
+		// The unit's own storage is reached through a prefix; it is not a folder of the card.
+		if dir == "" && rest == strings.Trim(fileapi.Root, "/") {
+			return
+		}
+		if ok && rest != "" && !strings.Contains(rest, "/") {
 			seen[rest] = true
 		}
 	}

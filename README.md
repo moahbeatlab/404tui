@@ -10,18 +10,48 @@ project's `docs/re/`; comments here that mention `docs/re/` refer to it.
 
 ## Status
 
-Early. The protocol and device session are ported and tested against a simulated device
-in this repo. They have **not yet been verified against real hardware**. The terminal UI,
-sample-format parsing and audio import are not ported yet.
+The protocol, device session and the terminal UI are in place and tested against a
+simulated device in this repo. None of it has been **verified against real hardware**
+yet. The simulator encodes the protocol as read from SparkyMK2's code and docs, so it
+checks sequencing and data handling, not the unit's actual behaviour.
 
 ## Usage
 
-    go run ./cmd/sp404 status          # current project, selected pad, project names
-    go run ./cmd/sp404 pads            # pads that hold a sample
-    go run ./cmd/sp404 ls SD:IMPORT    # list a folder on the SD card
-    go run ./cmd/sp404 -sim status     # the same, against the simulated device
+    go run ./cmd/sp404                 # the terminal UI (same as `menu`)
+    go run ./cmd/sp404 -sim            # the terminal UI against the simulated device
 
-Add `-v` to log the session, and `-port` to pick a serial port.
+The UI is laid out after the unit itself:
+
+- Navigation is a rail down the left: the four sections, and under them the banks or the
+  file sources of the section you are in.
+- **Pads** is a 4×4 grid in the unit's own arrangement (pad 1 at the top left), with the
+  selected pad's waveform and settings below. The cursor
+  follows pads you hit on the unit, and a sounding pad lights up.
+- **Patterns** shows the 16 pattern slots the same way; Enter opens a step grid, and `b`
+  moves a pattern's pads to another bank.
+- **Files** browses the SD card, the unit's storage or this computer. The rail shows the
+  **target bank**; `[` `]` change it. Enter on an audio file opens a pad picker on that
+  bank's next free pad, so Enter, Enter assigns it. Type a bank letter and a pad number
+  (`C`, `7`) to go elsewhere. `v` marks several files to fill free pads in order, and Space
+  listens first.
+- **Assigning from Pads:** `a` opens a file dialog for the selected pad, with the file tree,
+  file details and Space to listen. It reopens exactly where you left it (source, open
+  folders, highlighted file), also after restarting; that and the Files tree position,
+  bank and theme are kept in `state.json` in your config folder.
+- **Projects** switches and renames projects. `e` exports the project (all its files) to the
+  SD card or this computer, and `R` restores a backup folder (the one holding `PADCONF.BIN`)
+  over the project: it reads and checks the backup, shows what will be erased, and asks
+  before it writes anything.
+
+Keys are vim-style (`h j k l`, `g`/`G`, `[`/`]` for banks, `1`-`4` for sections); `:`
+opens a command palette, `?` lists every key, `/` finds by name, `T` changes the colour
+theme, and the mouse works for tabs, banks, pads, rows and the wheel. Bank export writes
+one WAV per pad plus a `samples.json` with each pad's settings. `e` and `R` open the same
+folder tree as Files (SD card, unit storage or this computer) to choose where to export to
+or which export to restore; `/` types a path instead.
+
+Other commands: `ports`, `status`, `pads`, `ls [path]`. Add `-v` to log the session and
+`-port` to pick a serial port.
 
 ## Layout
 
@@ -31,6 +61,10 @@ Add `-v` to log the session, and `-port` to pick a serial port.
 | `device` | Session with the unit over a `Port`: transactions, events, files, import, render |
 | `serialport` | Finds and opens the unit's USB serial port |
 | `sim` | In-memory SP-404MKII, for tests and for working without the hardware |
+| `formats` | SMP, WAV, AIFF, FLAC, MP3 decoding with resampling to 48 kHz, patterns |
+| `app` | What the tool does with a unit, apart from how it is shown: assign, export/restore, patterns, file tree |
+| `playback` | Plays samples on this computer's speakers |
+| `tui` | The Bubble Tea UI |
 | `cmd/sp404` | The command |
 
 Tests: `go test ./...`
