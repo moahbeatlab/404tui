@@ -1,0 +1,7 @@
+# Built binary
+/sp404
+
+# Raw USB captures (may contain user samples)
+captures/
+*.pcap
+*.pcapng
