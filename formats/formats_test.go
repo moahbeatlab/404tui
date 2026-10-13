@@ -226,6 +226,44 @@ func TestPatternDeltasAndTrailer(t *testing.T) {
 	}
 }
 
+func TestStartPatternStartsEveryPadTogether(t *testing.T) {
+	a1, a5, g16 := mustPad("A1"), mustPad("A5"), mustPad("G16")
+	b, err := StartPattern([]proto.PadIndex{a1, a5, g16}, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Three notes, 3840 ticks of filler (15 x 255 + 15), the end record and the trailer.
+	if len(b) != (3+16+2)*record {
+		t.Fatalf("%d bytes", len(b))
+	}
+	if !slices.Equal(b[:record], []byte{0, noteFirst, 0, 0, 127, 64, 0x00, 0x0F}) {
+		t.Errorf("first record = % x", b[:record])
+	}
+	if !slices.Equal(b[len(b)-record:], []byte{2, 0, 0, 0, 0, 0x80, 0x04, 0x01}) {
+		t.Errorf("trailer = % x", b[len(b)-record:])
+	}
+	p, err := ParsePattern(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Length != 2*4*PPQ || p.BeatsPerBar() != 4 || len(p.Events) != 3 {
+		t.Fatalf("length %d, beats %d, %d events", p.Length, p.BeatsPerBar(), len(p.Events))
+	}
+	for i, want := range []proto.PadIndex{a1, a5, g16} {
+		if e := p.Events[i]; e.Pad != want || e.Tick != 0 || e.Length != 3840 || e.Velocity != 127 || e.Pitch != 0 {
+			t.Errorf("event %d = %+v", i, e)
+		}
+	}
+	for _, bars := range []int{0, MaxStartBars + 1} {
+		if _, err := StartPattern([]proto.PadIndex{a1}, bars); err == nil {
+			t.Errorf("%d bars accepted", bars)
+		}
+	}
+	if _, err := StartPattern(nil, 2); err == nil {
+		t.Error("a pattern without pads accepted")
+	}
+}
+
 func mustPad(name string) proto.PadIndex {
 	p, err := proto.ParsePad(name)
 	if err != nil {

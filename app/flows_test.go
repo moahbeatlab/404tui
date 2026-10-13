@@ -211,6 +211,39 @@ func TestExportAndRestoreRefuse(t *testing.T) {
 	}
 }
 
+func TestWriteStartPatternMakesAPatternTheUnitLists(t *testing.T) {
+	d, s := connect(t)
+	c3, pads := pad(t, "C3"), []proto.PadIndex{pad(t, "B1"), pad(t, "B4")}
+	if rows, _ := app.LoadPatterns(d, 2); rows[2].Exists {
+		t.Fatal("C3 holds a pattern before one is written")
+	}
+	if err := app.WriteStartPattern(d, c3, pads, app.StartBars); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.File(formats.PatternPath(1, c3)); !ok {
+		t.Fatal("no pattern file")
+	}
+	rows, err := app.LoadPatterns(d, 2)
+	if err != nil || !rows[2].Exists || !slices.Equal(rows[2].Pads, pads) {
+		t.Fatalf("C3 = %+v (%v)", rows[2], err)
+	}
+	detail, err := app.OpenPattern(d, c3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Beats != 4 || detail.Length != 3840 || detail.SourceBank != 1 || len(detail.Grid.Rows) != 2 {
+		t.Errorf("detail = %+v", detail)
+	}
+	for _, row := range detail.Grid.Rows {
+		if !row.Hits[0] || slices.Contains(row.Hits[1:], true) {
+			t.Errorf("%s hits = %v", row.Pad, row.Hits)
+		}
+	}
+	if err := app.WriteStartPattern(d, c3, nil, app.StartBars); err == nil {
+		t.Error("a pattern without pads was written")
+	}
+}
+
 func TestPatternDetailAndRetarget(t *testing.T) {
 	d, s := connect(t)
 	a1, a2, b2 := pad(t, "A1"), pad(t, "A2"), pad(t, "B2")

@@ -1603,6 +1603,79 @@ func TestRestoreAsksWhichBankToRestoreOnto(t *testing.T) {
 	s.press("esc")
 }
 
+func TestRestoreCanAlsoMakeAPatternOfTheRestoredPads(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	// A1 and A3 hold samples; A2 is empty and stays out of the export and the pattern.
+	for _, name := range []string{"A1", "A3"} {
+		s.sim.AddFile("SD:IMPORT/"+name+".wav", wav(480))
+		if _, err := app.Assign(m.unit, m.unit, pad(t, name), "SD:IMPORT/"+name+".wav"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := app.ExportPads(m.unit, []proto.PadIndex{pad(t, "A1"), pad(t, "A3")}, "SD:exports/A-bank", nil); err != nil {
+		t.Fatal(err)
+	}
+	s.sim.SetPattern(pad(t, "G1"), pad(t, "A1"))
+	s.press("r")
+	restore := func() {
+		s.press("R", "/")
+		s.press("ctrl+u")
+		s.typeText("SD:exports/A-bank")
+		s.press("enter")
+	}
+
+	// p turns the pattern on and off; Enter then asks for the slot, in the target bank.
+	restore()
+	s.shows("[ ] p  also make a pattern", "Enter restore")
+	s.press("p", "p", "p")
+	s.shows("[x] p  also make a pattern", "every restored pad on beat 1, held for 2 bars", "Enter choose the pattern slot")
+	s.press("G", "enter")
+	s.shows("Pattern for the 2 pads restored onto bank G: which slot?", "G2 is free", " 1 1 pads")
+	// The slot that holds a pattern asks twice; Esc goes back to the bank, nothing done.
+	s.press("h", "enter")
+	s.shows("Press Enter again to replace it")
+	s.press("esc")
+	s.shows("onto which bank?")
+	if s.padName("G1") != "" {
+		t.Fatal("restored before the slot was chosen")
+	}
+	// Another bank's slots can be chosen: H1 is its first free one.
+	s.press("enter", "]")
+	s.shows("H1 is free")
+	s.press("l", "enter")
+	s.shows("2 pads restored onto bank G from SD:exports/A-bank; pattern H2 starts them together (2 bars)")
+	if s.padName("G1") != "A1" || s.padName("G3") != "A3" || s.padName("G2") != "" {
+		t.Errorf("G1 %q, G2 %q, G3 %q", s.padName("G1"), s.padName("G2"), s.padName("G3"))
+	}
+	b, ok := s.sim.File(formats.PatternPath(1, pad(t, "H2")))
+	if !ok {
+		t.Fatal("no pattern file for H2")
+	}
+	p, err := formats.ParsePattern(b)
+	if err != nil || len(p.Events) != 2 || p.Events[0].Pad != pad(t, "G1") || p.Events[1].Pad != pad(t, "G3") || p.Length != 3840 {
+		t.Fatalf("pattern = %+v (%v)", p, err)
+	}
+	for _, e := range p.Events {
+		if e.Tick != 0 || e.Length != 3840 {
+			t.Errorf("note = %+v", e)
+		}
+	}
+	// The Patterns section knows the new pattern without being asked to read again.
+	if rows, err := app.LoadPatterns(s.m().unit, 7); err != nil || !rows[1].Exists || len(rows[1].Pads) != 2 {
+		t.Errorf("H2 = %+v (%v)", rows[1], err)
+	}
+
+	// Without p, a restore makes no pattern.
+	restore()
+	s.press("C", "enter")
+	s.shows("2 pads restored onto bank C from SD:exports/A-bank")
+	s.hides("pattern C")
+	if rows, _ := app.LoadPatterns(s.m().unit, 2); rows[0].Exists {
+		t.Error("a pattern was made without asking for one")
+	}
+}
+
 func TestRestoreOfAnExportAcrossBanksGoesBackWhereItWas(t *testing.T) {
 	s := open(t)
 	m := s.m()

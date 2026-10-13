@@ -144,6 +144,27 @@ func RetargetPattern(u PatternFiles, slot proto.PadIndex, from, to int) (int, er
 	return changed, nil
 }
 
+// StartBars is the length of the pattern a restore can make.
+const StartBars = 2
+
+// WriteStartPattern writes a new pattern into slot of the current project: bars bars in
+// which every one of pads starts on the first beat and is held to the end. Whatever the
+// slot held is replaced.
+func WriteStartPattern(u PatternFiles, slot proto.PadIndex, pads []proto.PadIndex, bars int) error {
+	b, err := formats.StartPattern(pads, bars)
+	if err != nil {
+		return err
+	}
+	current, err := u.CurrentProject()
+	if err != nil {
+		return err
+	}
+	if err := u.WriteFile(formats.PatternPath(current+1, slot), b); err != nil {
+		return fmt.Errorf("pattern %s: write failed: %w", slot, err)
+	}
+	return nil
+}
+
 // StepGlyphs draws one row of the grid: a beat marker every 4 steps.
 func StepGlyphs(hits []bool, hit, rest string) string {
 	out := ""

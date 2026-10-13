@@ -114,6 +114,11 @@ type picker struct {
 	files []string
 	// restorePlan: an export being put back; the picker chooses the bank it goes onto.
 	restorePlan *app.PadRestore
+	// withPattern: the restore also makes a pattern of the restored pads (p). slots is the
+	// second step that asks which pattern slot, in bank ptnBank at position pad.
+	withPattern bool
+	slots       bool
+	ptnBank     int
 	// copyFrom: the pads being copied; the picker chooses where the first one goes.
 	copyFrom []proto.PadIndex
 	// retarget: the pattern slot and the bank its pads are in.
@@ -408,6 +413,8 @@ type (
 		focus   *proto.PadIndex
 		// assigned marks a file put on pad focus.
 		assigned bool
+		// patterns marks that a pattern was written: what is known of them is read again.
+		patterns bool
 	}
 	patternsMsg struct {
 		bank int
@@ -780,6 +787,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.target = int(msg.focus.Bank())
 			}
 		}
+		if msg.patterns {
+			m.patterns = map[int][]app.PatternRow{}
+			m.usage, m.usageState = nil, 0
+		}
 		if msg.reload {
 			m.busy = "reading the unit"
 			return m, m.load(msg.message)
@@ -841,6 +852,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		m.patterns[msg.bank] = msg.rows
+		if p := m.picker; p != nil && p.slots && p.ptnBank == msg.bank {
+			p.pad = firstFreeSlot(msg.rows)
+		}
 	case patternMsg:
 		m.busy = ""
 		if msg.err != nil {
@@ -918,7 +932,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		// An export that spans banks goes back where each pad came from.
-		return m.runRestore(msg.plan, -1)
+		return m.runRestore(msg.plan, -1, nil)
 	case deletePlanMsg:
 		m.busy = ""
 		if msg.err != nil {

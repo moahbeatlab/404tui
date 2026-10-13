@@ -45,7 +45,7 @@ var commands = []command{
 	{"p", "Move the picked-up pad here (overwrite)", []int{secPads}},
 	{"s", "Swap the picked-up pad with this one", []int{secPads}},
 	{"e", "Export this bank: choose a folder, get WAV files + samples.json", []int{secPads}},
-	{"R", "Restore pads from an export: choose its folder, then the bank", []int{secPads}},
+	{"R", "Restore pads from an export: choose its folder, then the bank (p there also makes a pattern)", []int{secPads}},
 	{"enter", "Open pattern", []int{secPatterns}},
 	{"b", "Retarget the open pattern to another bank", []int{secPatterns}},
 	{"enter", "Assign this file to a pad", []int{secFiles}},
@@ -1163,6 +1163,9 @@ func (m Model) paletteKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) pickerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	p := m.picker
 	name := key.String()
+	if p.slots {
+		return m.patternSlotKey(name)
+	}
 	step := func(dx, dy int) {
 		col, row := p.pad%4, p.pad/4
 		p.pad = clamp(row+dy, 0, 3)*4 + clamp(col+dx, 0, 3)
@@ -1215,10 +1218,85 @@ func (m Model) pickerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		step(0, 1)
 	case "k", "up":
 		step(0, -1)
+	case "p":
+		if p.restorePlan != nil {
+			p.withPattern = !p.withPattern
+		}
 	case "enter":
 		return m.pickerEnter()
 	}
 	return m, nil
+}
+
+// patternSlotKey is the second step of a restore that also makes a pattern: which slot
+// the pattern goes into. Esc goes back to the choice of bank.
+func (m Model) patternSlotKey(name string) (tea.Model, tea.Cmd) {
+	p := m.picker
+	bank := func(b int) (tea.Model, tea.Cmd) {
+		p.ptnBank, p.confirm = (b+proto.Banks)%proto.Banks, false
+		return m.patternSlots()
+	}
+	step := func(dx, dy int) {
+		col, row := p.pad%4, p.pad/4
+		p.pad = clamp(row+dy, 0, 3)*4 + clamp(col+dx, 0, 3)
+		p.confirm = false
+	}
+	if len(name) == 1 && name[0] >= 'A' && name[0] <= 'J' {
+		return bank(int(name[0] - 'A'))
+	}
+	switch name {
+	case "esc", "q":
+		p.slots, p.confirm, p.pad = false, false, 0
+	case "[", "H":
+		return bank(p.ptnBank - 1)
+	case "]", "L":
+		return bank(p.ptnBank + 1)
+	case "h", "left":
+		step(-1, 0)
+	case "l", "right":
+		step(1, 0)
+	case "j", "down":
+		step(0, 1)
+	case "k", "up":
+		step(0, -1)
+	case "enter":
+		rows := m.patterns[p.ptnBank]
+		if rows == nil {
+			return m.patternSlots()
+		}
+		// A slot that holds a pattern is replaced only on a second Enter.
+		if rows[p.pad].Exists && !p.confirm {
+			p.confirm = true
+			return m, nil
+		}
+		plan, to, slot := p.restorePlan, p.bank, rows[p.pad].Slot
+		m.picker = nil
+		return m.runRestore(plan, to, &slot)
+	}
+	return m, nil
+}
+
+// patternSlots rests the slot chooser on the first free slot of its bank, reading the
+// bank's patterns first when they are not in hand.
+func (m Model) patternSlots() (tea.Model, tea.Cmd) {
+	p := m.picker
+	rows := m.patterns[p.ptnBank]
+	if rows == nil {
+		m.busy = "reading patterns"
+		return m, m.loadPatterns(p.ptnBank)
+	}
+	p.pad = firstFreeSlot(rows)
+	return m, nil
+}
+
+// firstFreeSlot is the first slot without a pattern; the first slot when all are taken.
+func firstFreeSlot(rows []app.PatternRow) int {
+	for i, row := range rows {
+		if !row.Exists {
+			return i
+		}
+	}
+	return 0
 }
 
 // pickBankPad is the pad to rest on in the bank the picker moved to: the next free one
@@ -1565,8 +1643,9 @@ func (m Model) restoreFrom(dir string) (tea.Model, tea.Cmd) {
 	})
 }
 
-// runRestore puts an export onto a bank (-1: back where each pad came from).
-func (m Model) runRestore(plan *app.PadRestore, bank int) (tea.Model, tea.Cmd) {
+// runRestore puts an export onto a bank (-1: back where each pad came from). With a slot,
+// it then writes a pattern there that starts every restored pad together.
+func (m Model) runRestore(plan *app.PadRestore, bank int, slot *proto.PadIndex) (tea.Model, tea.Cmd) {
 	unit := m.unit
 	targets, err := plan.Targets(bank)
 	if err != nil {
@@ -1580,7 +1659,14 @@ func (m Model) runRestore(plan *app.PadRestore, bank int) (tea.Model, tea.Cmd) {
 		if err != nil {
 			return doneMsg{message: "restore failed: " + err.Error(), reload: true}
 		}
-		return doneMsg{message: summary, reload: true, focus: &first}
+		if slot == nil {
+			return doneMsg{message: summary, reload: true, focus: &first}
+		}
+		if err := app.WriteStartPattern(unit, *slot, targets, app.StartBars); err != nil {
+			return doneMsg{message: summary + "; the pattern was not made: " + err.Error(), reload: true, focus: &first}
+		}
+		summary += fmt.Sprintf("; pattern %s starts them together (%d bars)", *slot, app.StartBars)
+		return doneMsg{message: summary, reload: true, focus: &first, patterns: true}
 	})
 }
 
@@ -1605,9 +1691,14 @@ func (m Model) restoreEnter() (tea.Model, tea.Cmd) {
 		p.confirm = true
 		return m, nil
 	}
+	if p.withPattern {
+		// Next: which slot the pattern goes into.
+		p.slots, p.ptnBank, p.confirm = true, p.bank, false
+		return m.patternSlots()
+	}
 	plan, bank := p.restorePlan, p.bank
 	m.picker = nil
-	return m.runRestore(plan, bank)
+	return m.runRestore(plan, bank, nil)
 }
 
 // find moves the cursor to the next thing whose name contains text, wrapping around.

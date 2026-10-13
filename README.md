@@ -80,7 +80,9 @@ one WAV per pad plus a `samples.json` with each pad's settings. `e` and `R` open
 folder tree as Files (SD card, unit storage or this computer) to choose where to export to
 or which export to restore; `/` types a path instead. Restore then asks which bank to put
 the pads on (the one they came from is chosen; pads that would be replaced are counted and
-need a second Enter).
+need a second Enter). `p` there also makes a pattern: after the restore, every restored pad
+starts together on beat 1 and is held for 2 bars; you choose the pattern slot next (a slot
+that holds a pattern needs a second Enter).
 
 Other commands: `ports`, `status`, `pads`, `ls [path]`. Add `-v` to log the session and
 `-port` to pick a serial port.

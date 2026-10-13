@@ -138,6 +138,37 @@ func RetargetBank(b []byte, fromBank, toBank uint16) int {
 	return changed
 }
 
+// MaxStartBars is the longest pattern StartPattern builds.
+const MaxStartBars = 8
+
+// StartPattern builds a PTNnnnnn.BIN of bars bars of 4/4 in which every one of pads is
+// struck on the first tick and held to the end: the loops of a bank started together.
+//
+// The records follow docs/re/04-patterns.md of SparkyMK2. Every pattern file seen so far
+// was 4 bars long with 4 in the trailer's first byte, so writing bars there is a guess.
+func StartPattern(pads []proto.PadIndex, bars int) ([]byte, error) {
+	if len(pads) == 0 {
+		return nil, errors.New("a pattern needs at least one pad")
+	}
+	if bars < 1 || bars > MaxStartBars {
+		return nil, errors.New("a pattern is 1 to 8 bars long")
+	}
+	length := bars * 4 * PPQ
+	b := make([]byte, 0, (len(pads)+length/255+3)*record)
+	for _, p := range pads {
+		b = append(b, 0, noteFirst+byte(p.Index()%groupSize), byte(p.Index()/groupSize), 0, 127, 64)
+		b = binary.LittleEndian.AppendUint16(b, uint16(length))
+	}
+	// Filler records carry the time to the end, 255 ticks at most each.
+	for left := length; left > 0; {
+		step := min(left, 255)
+		b = append(b, byte(step), 0x80, 0, 0, 0, 0, 0, 0)
+		left -= step
+	}
+	b = append(b, 0, endRecord, 0, 0, 0, 0, 0, 0)
+	return append(b, byte(bars), 0, 0, 0, 0, 0x80, 0x04, 0x01), nil
+}
+
 // PatternPath is the card path of a pattern slot's file in a project (1-based project).
 func PatternPath(project uint8, slot proto.PadIndex) string {
 	return projectDir(project) + "/PTN/PTN" + pad5(int(slot.Index())+1) + ".BIN"

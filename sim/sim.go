@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/proto/fileapi"
 	"github.com/moahbeatlab/404tui/proto/septet"
@@ -396,7 +397,7 @@ func (s *Sim) handleControl(p []byte) {
 	case 0x9E:
 		s.control(s.blocks[pad])
 	case 0xAB:
-		_, exists := s.patterns[pad]
+		_, exists := s.patternPads(pad)
 		padReply(proto.ReplyPatternExists, boolByte(exists))
 	case 0x9D:
 		s.control([]byte{proto.ReplyStop, 0})
@@ -436,10 +437,11 @@ func (s *Sim) handleControl(p []byte) {
 		s.control([]byte{proto.RestoreReloaded, 0, 0, 0, 0})
 	case 0xB7:
 		bitmap := make([]byte, proto.PadCount/8)
-		for _, used := range s.patterns[pad] {
+		pads, _ := s.patternPads(pad)
+		for _, used := range pads {
 			bitmap[used.Index()/8] |= 1 << (used.Index() % 8)
 		}
-		head := []byte{proto.RenderPadsUsedReply, 0, byte(len(s.patterns[pad])), byte(len(bitmap))}
+		head := []byte{proto.RenderPadsUsedReply, 0, byte(len(pads)), byte(len(bitmap))}
 		s.control(append(head, bitmap...))
 	case 0xB8:
 		s.render(p, u16(3), u16(5))
@@ -581,6 +583,31 @@ func (s *Sim) init(mode, option, bank uint16) {
 		}
 	}
 	s.changed()
+}
+
+// patternPads is the pads a pattern slot plays and whether it exists: what SetPattern
+// said, or else what the slot's file in the current project holds.
+func (s *Sim) patternPads(slot uint16) ([]proto.PadIndex, bool) {
+	if pads, ok := s.patterns[slot]; ok {
+		return pads, true
+	}
+	b, ok := s.files[fmt.Sprintf("%s/PTN/PTN%05d.BIN", s.folder(), slot+1)]
+	if !ok {
+		return nil, false
+	}
+	p, err := formats.ParsePattern(b)
+	if err != nil {
+		return nil, false
+	}
+	var pads []proto.PadIndex
+	seen := map[proto.PadIndex]bool{}
+	for _, e := range p.Events {
+		if !e.Control && !seen[e.Pad] {
+			seen[e.Pad] = true
+			pads = append(pads, e.Pad)
+		}
+	}
+	return pads, true
 }
 
 func (s *Sim) folder() string {

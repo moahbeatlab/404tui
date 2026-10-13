@@ -32,7 +32,7 @@ var helpText = [][2]string{
 	{"b, < >, - + (Pads)", "bank tempo and volume: edit in a dialog, or step them"},
 	{"c (Pads)", "copy the pad (or marked pads) to another pad, in any bank"},
 	{"x, then p or s", "pick up a pad's sample, then move or swap it onto another"},
-	{"e / R (Pads)", "export the bank / restore an export"},
+	{"e / R (Pads)", "export the bank / restore an export (p there: also make a pattern)"},
 	{"Enter (Patterns)", "open the pattern; b retargets its pads to another bank"},
 	{"a (Pads)", "file dialog for this pad; it opens where you left it"},
 	{"Enter, a (Files)", "assign the file: picker opens on the target bank's next free pad"},
@@ -1190,6 +1190,9 @@ func (m Model) pickerBox() string {
 func (m Model) restorePickerBox() string {
 	st, p := m.st, m.picker
 	plan := p.restorePlan
+	if p.slots {
+		return m.patternSlotBox()
+	}
 	var strip strings.Builder
 	counts := m.bankCountsForPicker()
 	for b := 0; b < proto.Banks; b++ {
@@ -1235,8 +1238,62 @@ func (m Model) restorePickerBox() string {
 		}
 		line += "\n" + list
 	}
+	pattern, enter := st.dim.Render("[ ] p  also make a pattern that starts the restored pads together"), "Enter restore"
+	if p.withPattern {
+		pattern = st.accent.Render("[x] p  also make a pattern") + st.dim.Render(fmt.Sprintf(": every restored pad on beat 1, held for %d bars", app.StartBars))
+		enter = "Enter choose the pattern slot"
+	}
 	return st.modal.Render(st.bold.Render(title) + "\n" + info + "\n\n" + strip.String() + st.faint.Render("   green: where they came from") +
-		"\n\n" + line + "\n\n" + st.dim.Render("A-J or ←/→ choose the bank  ·  Enter restore  ·  Esc cancel"))
+		"\n\n" + line + "\n\n" + pattern + "\n\n" + st.dim.Render("A-J or ←/→ choose the bank  ·  p pattern  ·  "+enter+"  ·  Esc cancel"))
+}
+
+// patternSlotBox asks which pattern slot the pattern of a restore goes into.
+func (m Model) patternSlotBox() string {
+	st, p := m.st, m.picker
+	var strip strings.Builder
+	for b := 0; b < proto.Banks; b++ {
+		cell := fmt.Sprintf(" %c ", 'A'+b)
+		if b == p.ptnBank {
+			strip.WriteString(lipgloss.NewStyle().Background(st.th.accent).Foreground(st.th.cursorFg).Bold(true).Render(cell))
+		} else {
+			strip.WriteString(st.text.Render(cell))
+		}
+	}
+	title := fmt.Sprintf("Pattern for the %d pads restored onto bank %c: which slot?", len(p.restorePlan.Pads), 'A'+p.bank)
+	info := st.dim.Render(fmt.Sprintf("every pad starts on beat 1 and is held for %d bars", app.StartBars))
+	rows := m.patterns[p.ptnBank]
+	if rows == nil {
+		return st.modal.Render(st.bold.Render(title) + "\n" + info + "\n\n" + strip.String() + "\n\n" + st.dim.Render("reading the patterns of this bank…"))
+	}
+	const w = 14
+	grid := make([]string, 4)
+	for row := 0; row < 4; row++ {
+		var cells []string
+		for col := 0; col < 4; col++ {
+			pos := row*4 + col
+			label := fmt.Sprintf("%2d", pos+1)
+			style := lipgloss.NewStyle().Width(w).Background(st.th.tileEmpty).Foreground(st.th.faint)
+			if rows[pos].Exists {
+				label = fmt.Sprintf("%2d %d pads", pos+1, len(rows[pos].Pads))
+				style = style.Background(st.th.tile).Foreground(st.th.text)
+			}
+			if pos == p.pad {
+				style = style.Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
+			}
+			cells = append(cells, style.Render(" "+label))
+		}
+		grid[row] = strings.Join(cells, " ")
+	}
+	slot := rows[p.pad]
+	line := st.good.Render(fmt.Sprintf("%s is free", slot.Slot))
+	if slot.Exists {
+		line = st.warn.Render(fmt.Sprintf("%s holds a pattern that plays %d pads — it will be replaced", slot.Slot, len(slot.Pads)))
+		if p.confirm {
+			line = st.bad.Render("Press Enter again to replace it")
+		}
+	}
+	return st.modal.Render(st.bold.Render(title) + "\n" + info + "\n\n" + strip.String() + "\n\n" + strings.Join(grid, "\n") + "\n\n" + line +
+		"\n\n" + st.dim.Render("A-J or [ ] bank  ·  hjkl move  ·  Enter restore and make the pattern  ·  Esc back"))
 }
 
 // copyPickerBox is the pad chooser of a copy: where the pad (or the first of several) goes.
