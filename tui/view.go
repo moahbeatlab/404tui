@@ -76,12 +76,14 @@ func (m Model) View() string {
 		main = m.center(m.promptBox(), g.bodyH)
 	case m.picker != nil:
 		main = m.center(m.pickerBox(), g.bodyH)
+	case m.toggles != nil:
+		main = m.center(m.togglesBox(), g.bodyH)
 	case m.palette != nil:
 		main = m.center(m.paletteBox(), g.bodyH)
 	case m.unit == nil:
 		main = m.center(m.waitingBox(), g.bodyH)
 	case m.busy != "":
-		main = m.center(m.st.accent.Render(spinner[m.frame%len(spinner)])+" "+m.st.text.Render(m.busy+"…"), g.bodyH)
+		main = m.center(m.busyBox(), g.bodyH)
 	case m.snap == nil:
 		main = m.center(m.st.dim.Render("no data from the unit; r tries again"), g.bodyH)
 	default:
@@ -255,7 +257,7 @@ func (m Model) statusBar() string {
 	case secPads:
 		chips = []string{chip("Enter", "preview on "+map[bool]string{true: "computer", false: "unit"}[m.previewLocal]), chip("o", "switch"), chip("C", "chromatic"), chip("a", "assign"), chip("v", "mark"), chip("n", "rename"), chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("e", "export"), chip("[ ]", "bank")}
 	case secPatterns:
-		chips = []string{chip("Enter", "open"), chip("b", "retarget"), chip("[ ]", "bank"), chip("Esc", "back")}
+		chips = []string{chip("Enter", "open"), chip("N", "new"), chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("p", "put"), chip("P", "play"), chip("v", "mark"), chip("b", "retarget"), chip("[ ]", "bank"), chip("Esc", "back")}
 	case secFiles:
 		if len(m.fileMarks) > 0 || len(m.clip) > 0 {
 			chips = []string{chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("p", "paste"), chip("n", "rename"), chip("Enter", "assign"), chip("v", "mark"), chip("V", "folder"), chip("J", "junk"), chip("u", "unmark all"), chip("Esc", "clear")}
@@ -263,7 +265,7 @@ func (m Model) statusBar() string {
 		}
 		chips = []string{chip("Enter", "assign"), chip("v", "mark"), chip("J", "junk"), chip("c", "copy"), chip("x", "move"), chip("p", "paste"), chip("d", "delete"), chip("N", "folder"), chip("/", "search"), chip("f", "find folder"), chip("[ ]", "target bank"), chip("Space", "listen"), chip("^A", "autoplay"), chip("v", "mark"), chip("Tab", "open"), chip("n", "rename"), chip("m", "move"), chip("t", "source")}
 	case secProjects:
-		chips = []string{chip("Enter", "select"), chip("n", "rename"), chip("e", "export"), chip("R", "restore")}
+		chips = []string{chip("Enter", "select"), chip("n", "rename"), chip("e", "export"), chip("R", "restore"), chip("X", "erase")}
 	}
 	chips = append(chips, chip(":", "commands"), chip("?", "help"), chip("q", "quit"))
 	line := strings.Join(chips, st.faint.Render("  "))
@@ -439,7 +441,7 @@ func (m Model) padsBody(g geom) string {
 	detail := m.padDetail(g)
 	bar := m.bankBar() + "\n\n"
 	if g.side {
-		return bar + lipgloss.JoinHorizontal(lipgloss.Top, grid, "  ", lipgloss.JoinVertical(lipgloss.Left, detail, m.session(g)))
+		return bar + lipgloss.JoinHorizontal(lipgloss.Top, grid, "  ", m.sideColumn(g, detail))
 	}
 	if g.detailH < 4 {
 		return bar + grid
@@ -485,60 +487,95 @@ func (m Model) padDetail(g geom) string {
 
 	inner := g.detailW - 4
 	res, have := m.facts[factKey{row.Pad, row.Size, row.Name}]
-	kv := func(label, value string) string { return st.dim.Render(label+" ") + st.text.Render(value) }
-	flag := func(label string, on bool) string {
-		if on {
-			return st.good.Render("● ") + st.text.Render(label)
-		}
-		return st.faint.Render("○ " + label)
-	}
 	p := func(name string) int32 { return row.Params[name] }
 	flags := p("mode-flags")
-	sep := st.faint.Render("  ·  ")
+	// Each line is a label and its value, the labels lined up; the sample comes first, then
+	// the settings in groups that sit side by side when there is room.
+	label := func(l string) string { return st.dim.Render(fmt.Sprintf("%-9s", l)) }
+	row2 := func(l, v string) string { return label(l) + st.text.Render(v) }
+	onOff := func(l string, on bool) string {
+		if on {
+			return label(l) + st.good.Render("● on")
+		}
+		return label(l) + st.faint.Render("○ off")
+	}
+	section := func(title string, body ...string) []string {
+		return append([]string{st.accent.Render(strings.ToUpper(title))}, body...)
+	}
 
-	var lines []string
-	// The sample.
+	var sample []string
 	switch {
 	case !have:
-		lines = append(lines, st.faint.Render("reading the sample…"))
+		sample = append(sample, st.faint.Render("reading the sample…"))
 	case res.err != nil:
-		lines = append(lines, st.bad.Render(res.err.Error()))
+		sample = append(sample, st.bad.Render(res.err.Error()))
 	default:
 		f := res.facts
 		channels := "mono"
 		if f.Channels > 1 {
 			channels = "stereo"
 		}
-		line := st.text.Render(fmt.Sprintf("%.2f s", f.Seconds)) + sep + st.text.Render(channels) + sep +
-			st.text.Render(fmt.Sprintf("%.1f KB", float64(row.Size)/1024)) + sep + st.dim.Render(f.File)
-		if row.BPM > 0 && f.Seconds > 0 {
-			line += sep + st.dim.Render(fmt.Sprintf("≈ %.1f bars at %.2f BPM", f.Seconds*row.BPM/60/4, row.BPM))
+		sample = append(sample,
+			row2("Length", fmt.Sprintf("%.2f s  ·  %s  ·  %.1f KB", f.Seconds, channels, float64(row.Size)/1024)),
+			row2("File", f.File))
+		if bar := m.trimBar(row, f, clamp(inner-48, 10, 36)); bar != "" {
+			sample = append(sample, strings.Replace(bar, "Trim  ", label("Trim"), 1))
 		}
-		lines = append(lines, line)
-		lines = append(lines, m.trimBar(row, f, clamp(inner-46, 10, 48)))
+		if row.BPM > 0 {
+			tempo := fmt.Sprintf("%.2f BPM", row.BPM)
+			if f.Seconds > 0 {
+				tempo += fmt.Sprintf("  ≈ %.1f bars", f.Seconds*row.BPM/60/4)
+			}
+			sample = append(sample, row2("Tempo", tempo))
+		}
 	}
-	// Level and pan, then how it plays.
-	lines = append(lines,
-		kv("Level", "")+st.accent.Render(levelBar(12, int(row.Level), 127))+st.text.Render(fmt.Sprintf(" %-3d", row.Level))+
-			"  "+kv("Pan", panText(p("balance")))+"  "+kv("BPM", fmt.Sprintf("%.2f", row.BPM)),
-		kv("Play", playModeName(p("play-mode")))+"   "+flag("Gate", p("gate") != 0)+"  "+flag("Loop", p("loop") != 0)+
-			"  "+flag("One shot", flags&0x20 != 0)+"  "+flag("BPM sync", p("bpm-sync") != 0))
+	if used := strings.TrimPrefix(m.usedIn(row), st.dim.Render("Used in ")); used != "" {
+		sample = append(sample, label("Used in")+used)
+	}
 	if m.playing && m.playingPad == row.Pad && have && res.err == nil && res.facts.Frames > 0 {
 		f := res.facts
 		frac := min(float64(m.playPos)/float64(f.Frames), 1)
-		lines = append(lines, st.hot.Render("▶ ")+st.hot.Render(levelBar(20, int(frac*100), 100))+
+		sample = append(sample, st.hot.Render("▶ ")+st.hot.Render(levelBar(20, int(frac*100), 100))+
 			st.text.Render(fmt.Sprintf("  %.2f / %.2f s", float64(m.playPos)/48000, f.Seconds)))
 	}
-	lines = append(lines, m.usedIn(row))
-	// Settings, as numbers.
-	lines = append(lines,
-		kv("Pitch", fmt.Sprintf("%+d st %+d ct", p("pitch-coarse"), p("pitch-fine")))+"  "+
-			kv("Stretch", fmt.Sprintf("%.0f%%", float64(p("time-stretch"))/100))+"  "+flag("Vinyl", p("vinyl") != 0),
-		kv("Bus FX", busName(p("bus-fx")))+"  "+kv("Mute group", offOr(p("mute-group")))+"  "+
-			kv("Pad link", offOr(p("pad-link")))+"  "+kv("Roll", fmt.Sprint(p("roll"))),
-		kv("Attack", fmt.Sprint(p("attack")))+"  "+kv("Hold", fmt.Sprint(p("hold")))+"  "+kv("Release", fmt.Sprint(p("release"))))
+
+	groups := [][]string{
+		section("Playback",
+			row2("Mode", playModeName(p("play-mode"))),
+			onOff("Gate", p("gate") != 0),
+			onOff("Loop", p("loop") != 0),
+			onOff("One shot", flags&0x20 != 0),
+			onOff("BPM sync", p("bpm-sync") != 0)),
+		section("Sound",
+			label("Level")+st.accent.Render(levelBar(10, int(row.Level), 127))+st.text.Render(fmt.Sprintf(" %d", row.Level)),
+			row2("Pan", panText(p("balance"))),
+			row2("Pitch", fmt.Sprintf("%+d st %+d ct", p("pitch-coarse"), p("pitch-fine"))),
+			row2("Stretch", fmt.Sprintf("%.0f%%", float64(p("time-stretch"))/100)),
+			onOff("Vinyl", p("vinyl") != 0)),
+		section("Routing",
+			row2("Bus FX", busName(p("bus-fx"))),
+			row2("Mute grp", offOr(p("mute-group"))),
+			row2("Pad link", offOr(p("pad-link"))),
+			row2("Roll", fmt.Sprint(p("roll")))),
+		section("Envelope",
+			row2("Attack", fmt.Sprint(p("attack"))),
+			row2("Hold", fmt.Sprint(p("hold"))),
+			row2("Release", fmt.Sprint(p("release")))),
+	}
+	// As many groups per row as fit, each in a column of its own width.
+	const colW = 27
+	perRow := max(min(inner/colW, len(groups)), 1)
+	lines := section("Sample", sample...)
+	for i := 0; i < len(groups); i += perRow {
+		cols := make([]string, 0, perRow)
+		for _, grp := range groups[i:min(i+perRow, len(groups))] {
+			cols = append(cols, lipgloss.NewStyle().Width(colW).Render(strings.Join(grp, "\n")))
+		}
+		lines = append(lines, "", lipgloss.JoinHorizontal(lipgloss.Top, cols...))
+	}
 	lines = append(lines, "", st.faint.Render("S edit settings  ·  , . level  ·  c copy  ·  Enter preview"))
-	return m.box(title, strings.Join(lines, "\n"), g.detailW, height, false)
+	body := strings.Join(lines, "\n")
+	return m.box(title, body, g.detailW, max(height, strings.Count(body, "\n")+3), false)
 }
 
 // usedIn is the line naming the patterns that play a pad.
@@ -727,7 +764,7 @@ func (m Model) patternsBody(g geom) string {
 	}
 	grid := m.grid(g, func(p int) string {
 		row := rows[p]
-		name, state := "", tileState{empty: !row.Exists, cursor: p == m.patternCursor}
+		name, state := "", tileState{empty: !row.Exists, cursor: p == m.patternCursor, marked: m.patMarks[int(row.Slot.Index())], moving: m.patHolding && m.patHeld == row.Slot}
 		if row.Exists {
 			name = fmt.Sprintf("%d pads", len(row.Pads))
 		}
@@ -740,12 +777,12 @@ func (m Model) patternsBody(g geom) string {
 		for i, pad := range cur.Pads {
 			names[i] = pad.String()
 		}
-		lines = []string{m.st.text.Render("Plays " + strings.Join(names, " ")), "", m.st.dim.Render("Enter opens the step grid")}
+		lines = []string{m.st.text.Render("Plays " + strings.Join(names, " ")), "", m.st.dim.Render("Enter opens the step grid"), m.st.dim.Render("d delete  v mark  c copy  x move  p put")}
 	}
 	detail := m.box("Pattern "+cur.Slot.String(), strings.Join(lines, "\n"), g.detailW, max(g.detailH, 5), false)
 	bar := m.bankBar() + "\n\n"
 	if g.side {
-		return bar + lipgloss.JoinHorizontal(lipgloss.Top, grid, "  ", lipgloss.JoinVertical(lipgloss.Left, detail, m.session(g)))
+		return bar + lipgloss.JoinHorizontal(lipgloss.Top, grid, "  ", m.sideColumn(g, detail))
 	}
 	if g.detailH < 4 {
 		return bar + grid
@@ -1109,6 +1146,22 @@ func (m Model) promptBox() string {
 				st.dim.Render("Replaces ") + st.warn.Render(fmt.Sprintf("project %d, %s — everything in it is erased first", plan.Project+1, current)) + "\n" +
 				st.dim.Render("Free     ") + st.text.Render(fmt.Sprintf("%.1f GB on the unit", float64(plan.FreeBytes)/1e9)) +
 				"\n\n" + st.dim.Render("y overwrite   n/Esc keep"))
+	case promptDeletePatterns:
+		names := make([]string, len(p.pads))
+		for i, slot := range p.pads {
+			names[i] = slot.String()
+		}
+		return st.modal.Render(st.bold.Render("Delete pattern "+strings.Join(names, " ")+"?") + "\n\n" + st.dim.Render("y delete   n/Esc keep"))
+	case promptEraseProject:
+		name := m.snap.Projects[p.project]
+		if name == "" {
+			name = "(empty)"
+		}
+		return st.modal.Width(min(m.width-6, 70)).Render(
+			st.bad.Render(fmt.Sprintf("Erase project %d, %s?", p.project+1, name)) + "\n\n" +
+				st.warn.Render("Every sample, pattern and setting in it is lost, and it becomes empty.") + "\n" +
+				st.dim.Render("Export it first (e) if you may want it back.") +
+				"\n\n" + st.dim.Render("y erase   n/Esc keep"))
 	case promptDelete:
 		names := make([]string, len(p.pads))
 		for i, pad := range p.pads {
@@ -1429,4 +1482,67 @@ func (m Model) folderFinderBox(g geom, rows []app.Node, input string, choice int
 		st.dim.Render("Enter jump  ·  ↑↓ choose  ·  then h or Tab collapses it  ·  Esc back"),
 	}
 	return st.modal.Width(width).Render(strings.Join(lines, "\n"))
+}
+
+// busyBox is the spinner and what is being waited for, with a bar under it when the
+// operation reports how far it has come.
+func (m Model) busyBox() string {
+	line := m.st.accent.Render(spinner[m.frame%len(spinner)]) + " " + m.st.text.Render(m.busy+"…")
+	inner := min(max(m.width-14, 24), 64)
+	var rows []string
+	switch bar := m.prog.bar(inner); {
+	case bar != "":
+		rows = []string{line, "", m.st.accent.Render(bar), ""}
+		// The steps done so far, the newest at the bottom, then the one in hand.
+		for _, l := range m.prog.recent(max(min(m.geom().bodyH-12, 10), 1)) {
+			rows = append(rows, m.st.dim.Render(clip(l, inner)))
+		}
+		if cur := m.prog.file(inner); cur != "" {
+			rows = append(rows, m.st.text.Render("▸ "+cur))
+		}
+	case m.prog.sweepBar(inner, m.frame) != "":
+		rows = []string{line, "", m.st.accent.Render(m.prog.sweepBar(inner, m.frame)), ""}
+	default:
+		return line
+	}
+	return m.st.modal.Width(inner + 6).Render(strings.Join(rows, "\n"))
+}
+
+// clip shortens a line to width cells, keeping its end, where the pad or the tempo is.
+func clip(s string, width int) string {
+	if r := []rune(s); len(r) > width && width > 1 {
+		return "…" + string(r[len(r)-width+1:])
+	}
+	return s
+}
+
+// sideColumn stacks the detail panel, the session panel and the log history, which takes
+// the rows that are left.
+func (m Model) sideColumn(g geom, detail string) string {
+	session := m.session(g)
+	column := lipgloss.JoinVertical(lipgloss.Left, detail, session)
+	left := g.bodyH - g.top - lipgloss.Height(column)
+	if left < 5 {
+		return column
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, column, m.historyBox(g, min(left, 14)))
+}
+
+// historyBox lists what has happened, the newest at the bottom.
+func (m Model) historyBox(g geom, height int) string {
+	st := m.st
+	room := height - 2
+	entries := m.history[max(len(m.history)-room, 0):]
+	lines := make([]string, 0, room)
+	for _, e := range entries {
+		text := st.text
+		if strings.Contains(e.text, "failed") || strings.Contains(e.text, "not deleted") || strings.Contains(e.text, "did not") {
+			text = st.bad
+		}
+		lines = append(lines, st.faint.Render(e.at.Format("15:04:05"))+"  "+text.Render(e.text))
+	}
+	if len(lines) == 0 {
+		lines = []string{st.faint.Render("nothing yet")}
+	}
+	return m.box("History", strings.Join(lines, "\n"), g.detailW, height, false)
 }

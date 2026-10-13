@@ -70,6 +70,10 @@ const (
 	// promptConfirmRestore asks whether to overwrite a project with the backup read from
 	// prompt.plan.
 	promptConfirmRestore
+	// promptEraseProject confirms erasing prompt.project.
+	promptEraseProject
+	// promptDeletePatterns confirms deleting the pattern slots in prompt.pads.
+	promptDeletePatterns
 	// promptDeleteFiles confirms deleting prompt.paths from the card; promptMkdir names a new
 	// folder in prompt.path.
 	promptDeleteFiles
@@ -163,14 +167,21 @@ type Model struct {
 	section int
 	help    bool
 	message string
+	// history is every message shown in the status line, with when; lastLogged is the last.
+	history    []logEntry
+	lastLogged string
 	// busy names what the UI is waiting for; keys other than quit wait with it.
-	busy    string
+	busy string
+	// prog is how far the operation named by busy has come, when it can tell.
+	prog    *progress
 	frame   int
 	polling bool
 
 	prompt  *prompt
 	picker  *picker
 	palette *palette
+	// toggles is the menu of on/off settings that t offers for the whole bank.
+	toggles *toggleMenu
 	browser *browser
 	search  *search
 	editor  *editor
@@ -210,7 +221,15 @@ type Model struct {
 
 	patterns      map[int][]app.PatternRow
 	patternCursor int
-	pattern       *app.PatternDetail
+	// patMarks are pattern slots (by slot index) marked for deleting; patHeld is a pattern
+	// picked up to be copied (or, with patCut, moved) into another slot; patConfirm is the
+	// slot index p was pressed on once, where a pattern would be replaced.
+	patMarks   map[int]bool
+	patHeld    proto.PadIndex
+	patHolding bool
+	patCut     bool
+	patConfirm int
+	pattern    *app.PatternDetail
 
 	root   string
 	tree   *app.Tree
@@ -228,8 +247,11 @@ type Model struct {
 	// still being decoded when the sound is stopped or another is asked for must not start.
 	listenGen *atomic.Int64
 	autoplay  bool
-	autoSeq   int
-	audioErr  string
+	// byNumber makes a multi-file assign put each file on the pad its name's number says
+	// (09_… on pad 9) instead of on the free pads in order.
+	byNumber bool
+	autoSeq  int
+	audioErr string
 
 	projectAt int
 
@@ -298,25 +320,28 @@ func New(unit app.Unit, player app.Player, store Store) Model {
 		routed = app.NewRouted(unit)
 	}
 	m := Model{
-		unit:      routed,
-		player:    player,
-		ops:       &sync.Mutex{},
-		st:        newStyles(themes[0]),
-		width:     100,
-		height:    30,
-		busy:      "reading the unit",
-		marked:    map[int]bool{},
-		patterns:  map[int][]app.PatternRow{},
-		root:      app.CardRoot,
-		fileMarks: map[string]bool{},
-		facts:     map[factKey]padFacts{},
-		infos:     map[string]fileInfo{},
-		indexes:   map[string]*app.Index{},
-		listenGen: new(atomic.Int64),
-		padAudio:  &padCache{samples: map[factKey]formats.Sample{}},
-		store:     store,
-		saved:     new([]byte),
-		log:       slog.New(slog.DiscardHandler),
+		unit:       routed,
+		player:     player,
+		ops:        &sync.Mutex{},
+		prog:       &progress{},
+		st:         newStyles(themes[0]),
+		width:      100,
+		height:     30,
+		busy:       "reading the unit",
+		marked:     map[int]bool{},
+		patterns:   map[int][]app.PatternRow{},
+		patMarks:   map[int]bool{},
+		patConfirm: -1,
+		root:       app.CardRoot,
+		fileMarks:  map[string]bool{},
+		facts:      map[factKey]padFacts{},
+		infos:      map[string]fileInfo{},
+		indexes:    map[string]*app.Index{},
+		listenGen:  new(atomic.Int64),
+		padAudio:   &padCache{samples: map[factKey]formats.Sample{}},
+		store:      store,
+		saved:      new([]byte),
+		log:        slog.New(slog.DiscardHandler),
 	}
 	if store != nil {
 		m.mem = store.Load()
@@ -720,6 +745,7 @@ func columns(samples []int16, channels, n int) []int16 {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	model, cmd := m.update(msg)
 	if updated, ok := model.(Model); ok {
+		updated = updated.logMessage()
 		updated.persist()
 		return updated, cmd
 	}
@@ -1051,7 +1077,7 @@ func (m Model) lose() (tea.Model, tea.Cmd) {
 	m.stopListening()
 	m.unit, m.closer, m.snap = nil, nil, nil
 	m.lost, m.busy, m.polling, m.connecting = true, "", false, false
-	m.prompt, m.picker, m.palette, m.browser, m.chromatic = nil, nil, nil, nil, nil
+	m.prompt, m.picker, m.palette, m.browser, m.chromatic, m.toggles = nil, nil, nil, nil, nil, nil
 	m.message = ""
 	return m, nil
 }
@@ -1197,4 +1223,26 @@ func (c *padCache) clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	clear(c.samples)
+}
+
+// logEntry is a line of the history panel.
+type logEntry struct {
+	at   time.Time
+	text string
+}
+
+// maxHistory is how many lines of history are kept.
+const maxHistory = 500
+
+// logMessage adds the status line to the history when it has changed.
+func (m Model) logMessage() Model {
+	if m.message == "" || m.message == m.lastLogged {
+		if m.message == "" {
+			m.lastLogged = ""
+		}
+		return m
+	}
+	m.lastLogged = m.message
+	m.history = append(m.history[max(len(m.history)+1-maxHistory, 0):], logEntry{at: time.Now(), text: m.message})
+	return m
 }

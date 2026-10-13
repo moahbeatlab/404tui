@@ -1,8 +1,12 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"path"
+	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/moahbeatlab/404tui/formats"
@@ -69,6 +73,9 @@ type Placement struct {
 	File string
 	Pad  proto.PadIndex
 	Err  error
+	// Blank is a placeholder file, named EMPTY and holding only silence: its pad was left
+	// empty, so the files after it keep their places.
+	Blank bool
 }
 
 // FreePads lists, from start on, up to count pads that hold no sample, to the end of the
@@ -83,20 +90,42 @@ func FreePads(start proto.PadIndex, count int, taken func(proto.PadIndex) bool) 
 	return pads
 }
 
+// ErrNoFreePad is a file that found no pad to go on.
+var ErrNoFreePad = errors.New("no free pad left")
+
 // AssignMany puts files onto the given pads in order (as many files as pads), calling
 // progress before each one. A file that fails does not stop the rest.
 func AssignMany(u Importer, s Storage, pads []proto.PadIndex, files []string, progress func(i int, file string)) []Placement {
+	return AssignManyReport(u, s, pads, files, progress, nil)
+}
+
+// AssignManyReport is AssignMany that also calls report with each file's outcome as soon
+// as it is known.
+func AssignManyReport(u Importer, s Storage, pads []proto.PadIndex, files []string, progress func(i int, file string), report func(Placement)) []Placement {
 	out := make([]Placement, 0, len(files))
+	add := func(p Placement) {
+		out = append(out, p)
+		if report != nil {
+			report(p)
+		}
+	}
 	for i, file := range files {
 		if i >= len(pads) {
-			out = append(out, Placement{File: file, Err: fmt.Errorf("no free pad left for %s", path.Base(file))})
+			add(Placement{File: file, Err: fmt.Errorf("%w for %s", ErrNoFreePad, path.Base(file))})
 			continue
 		}
 		if progress != nil {
 			progress(i, file)
 		}
-		_, err := Assign(u, s, pads[i], file)
-		out = append(out, Placement{File: file, Pad: pads[i], Err: err})
+		imported, err := LoadSample(s, file)
+		if err == nil && IsBlankPlaceholder(file, imported.Sample) {
+			add(Placement{File: file, Pad: pads[i], Blank: true})
+			continue
+		}
+		if err == nil {
+			_, err = PutSample(u, pads[i], imported.Sample, PadName(file))
+		}
+		add(Placement{File: file, Pad: pads[i], Err: err})
 	}
 	return out
 }
@@ -104,4 +133,66 @@ func AssignMany(u Importer, s Storage, pads []proto.PadIndex, files []string, pr
 // IsAudioName reports whether a file name is one that can be put on a pad.
 func IsAudioName(name string) bool {
 	return formats.IsAudioFile(name)
+}
+
+// silence is the loudest a placeholder may be: dither and rounding noise, not sound.
+const silence = 8
+
+// IsBlankPlaceholder reports whether a file is a placeholder that keeps a position in a
+// kit (named EMPTY, as sample packs do) and really is empty: no frames, or only silence.
+// A file named EMPTY that holds sound is a sample like any other.
+func IsBlankPlaceholder(file string, s formats.Sample) bool {
+	if !strings.Contains(strings.ToUpper(path.Base(file)), "EMPTY") {
+		return false
+	}
+	for _, v := range s.Samples {
+		if v > silence || v < -silence {
+			return false
+		}
+	}
+	return true
+}
+
+var numberPrefix = regexp.MustCompile(`^(\d{1,2})[ _.-]`)
+
+// NumberedPads is where files named "09_Snare.wav" go: the number in front is the pad, 1 to
+// 16, of the given bank (0..=9). It reports false unless every file has such a number, no
+// two share one and none is above 16. A file numbered 0 belongs to no pad: it goes to the
+// first pad of the bank that no other file is numbered for (a file named EMPTY does not
+// count, it only keeps its place) and that taken says holds no sample.
+func NumberedPads(files []string, bank int, taken func(proto.PadIndex) bool) ([]proto.PadIndex, bool) {
+	pads := make([]proto.PadIndex, len(files))
+	numbers := make([]int, len(files))
+	claimed := map[int]bool{}
+	for i, f := range files {
+		m := numberPrefix.FindStringSubmatch(path.Base(f))
+		if m == nil {
+			return nil, false
+		}
+		n, _ := strconv.Atoi(m[1])
+		if n > proto.PadsPerBank || (n > 0 && slices.Contains(numbers[:i], n)) {
+			return nil, false
+		}
+		numbers[i] = n
+		if !strings.Contains(strings.ToUpper(path.Base(f)), "EMPTY") {
+			claimed[n] = true
+		}
+	}
+	for i, n := range numbers {
+		if n == 0 {
+			for c := 1; c <= proto.PadsPerBank; c++ {
+				pad, _ := proto.NewPadIndex(uint16(bank*proto.PadsPerBank + c - 1))
+				if !claimed[c] && !taken(pad) {
+					pads[i], claimed[c] = pad, true
+					break
+				}
+				if c == proto.PadsPerBank {
+					return nil, false
+				}
+			}
+			continue
+		}
+		pads[i], _ = proto.NewPadIndex(uint16(bank*proto.PadsPerBank + n - 1))
+	}
+	return pads, true
 }

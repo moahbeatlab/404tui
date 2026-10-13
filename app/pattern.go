@@ -180,3 +180,45 @@ func StepGlyphs(hits []bool, hit, rest string) string {
 	}
 	return out
 }
+
+// DeletePatterns removes the patterns in slots from the current project. It goes on past
+// one that fails and returns a line for each.
+func DeletePatterns(u PatternFiles, slots []proto.PadIndex) (deleted int, failed []string) {
+	current, err := u.CurrentProject()
+	if err != nil {
+		return 0, []string{err.Error()}
+	}
+	for _, slot := range slots {
+		if err := u.Unlink(formats.PatternPath(current+1, slot)); err != nil {
+			failed = append(failed, fmt.Sprintf("%s (%v)", slot, err))
+			continue
+		}
+		deleted++
+	}
+	return deleted, failed
+}
+
+// CopyPattern puts the pattern in slot from into slot to, replacing what is there. With
+// move, the pattern is gone from its old slot afterwards.
+func CopyPattern(u PatternFiles, from, to proto.PadIndex, move bool) error {
+	if from == to {
+		return fmt.Errorf("%s is the slot itself", from)
+	}
+	current, err := u.CurrentProject()
+	if err != nil {
+		return err
+	}
+	data, err := u.ReadFile(formats.PatternPath(current+1, from))
+	if err != nil {
+		return fmt.Errorf("reading pattern %s: %w", from, err)
+	}
+	if err := u.WriteFile(formats.PatternPath(current+1, to), data); err != nil {
+		return fmt.Errorf("writing pattern %s: %w", to, err)
+	}
+	if move {
+		if err := u.Unlink(formats.PatternPath(current+1, from)); err != nil {
+			return fmt.Errorf("copied to %s, but removing %s failed: %w", to, from, err)
+		}
+	}
+	return nil
+}

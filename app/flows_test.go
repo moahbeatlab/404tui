@@ -359,7 +359,7 @@ func TestProjectExportAndPlannedRestore(t *testing.T) {
 	}
 
 	// Plan from the computer: PADCONF first, then pictures, the chain before patterns, samples.
-	plan, err := app.PlanProjectRestore(router, 3, dir)
+	plan, err := app.PlanProjectRestore(router, 3, dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,7 @@ func TestProjectExportAndPlannedRestore(t *testing.T) {
 	if !slices.Equal(order, want) || plan.Name != "MY BACKUP" || plan.Project != 3 || plan.Total != 0xC0+9 {
 		t.Errorf("plan = %v, name %q, total %d", order, plan.Name, plan.Total)
 	}
-	if _, err := app.PlanProjectRestore(router, 3, filepath.Join(dir, "SMPL")); err == nil || !strings.Contains(err.Error(), "PADCONF.BIN") {
+	if _, err := app.PlanProjectRestore(router, 3, filepath.Join(dir, "SMPL"), nil); err == nil || !strings.Contains(err.Error(), "PADCONF.BIN") {
 		t.Errorf("planning from a folder that is not a backup: %v", err)
 	}
 
@@ -733,5 +733,88 @@ func TestRestoreAnExportOntoAnotherBank(t *testing.T) {
 	}
 	if _, err := app.PlanPadRestore(router, "SD:exports/nothing"); err == nil {
 		t.Error("planning from a folder with no export succeeded")
+	}
+}
+
+func TestBlankPlaceholders(t *testing.T) {
+	quiet := formats.Sample{Channels: 1, Samples: make([]int16, 480)}
+	loud := formats.Sample{Channels: 1, Samples: []int16{0, 900, -900}}
+	for _, c := range []struct {
+		file   string
+		sample formats.Sample
+		want   bool
+	}{
+		{"SD:kit/05_EMPTY.wav", quiet, true},
+		{"SD:kit/05_empty.wav", formats.Sample{Channels: 1}, true},
+		{"SD:kit/05_EMPTY.wav", loud, false},
+		{"SD:kit/03_Loop1.wav", quiet, false},
+	} {
+		if got := app.IsBlankPlaceholder(c.file, c.sample); got != c.want {
+			t.Errorf("%s: %v, want %v", c.file, got, c.want)
+		}
+	}
+}
+
+func TestNumberedPadsFollowTheNumber(t *testing.T) {
+	names := []string{"00_DrumLoop_x.wav", "01_EMPTY.wav", "02_EMPTY.wav", "05_EMPTY.wav", "09_OHat_x.wav", "10_Perc1_x.wav", "14_Kick_x.wav", "16_EMPTY.wav"}
+	var files []string
+	for _, n := range names {
+		files = append(files, "SD:kit/"+n)
+	}
+	pads, ok := app.NumberedPads(files, 0, func(proto.PadIndex) bool { return false })
+	if !ok {
+		t.Fatal("numbered names were not recognised")
+	}
+	want := map[string]string{"09_OHat_x.wav": "A9", "10_Perc1_x.wav": "A10", "14_Kick_x.wav": "A14", "16_EMPTY.wav": "A16", "00_DrumLoop_x.wav": "A1"}
+	for i, n := range names {
+		if w, has := want[n]; has && pads[i].String() != w {
+			t.Errorf("%s on %s, want %s", n, pads[i], w)
+		}
+	}
+	if _, ok := app.NumberedPads([]string{"SD:a/09_x.wav", "SD:a/snare.wav"}, 0, func(proto.PadIndex) bool { return false }); ok {
+		t.Error("a file without a number was taken as numbered")
+	}
+	if pads, _ := app.NumberedPads([]string{"SD:a/03_x.wav"}, 2, func(proto.PadIndex) bool { return false }); pads[0].String() != "C3" {
+		t.Errorf("bank C: %s", pads[0])
+	}
+}
+
+func TestTemposFromNames(t *testing.T) {
+	for name, want := range map[string]float64{
+		"09_OHat_124_HDK_02.wav": 124, "124_Kit02": 124, "loop 90bpm.wav": 90, "Kick_808.wav": 0,
+		"05_Snare.wav": 0, "x_44100.wav": 0, "03_Loop1_124_HDK_02.wav": 124,
+	} {
+		if got, ok := app.TempoFromName(name); got != want || ok != (want != 0) {
+			t.Errorf("%s: %v %v, want %v", name, got, ok, want)
+		}
+	}
+	files := []string{"SD:k/124_Kit02/00_Loop_124_a.wav", "SD:k/124_Kit02/05_EMPTY.wav", "SD:k/124_Kit02/09_OHat_124_a.wav"}
+	plan := app.PlanTempos(files, true)
+	if !plan.HasBank || plan.Bank != 124 || len(plan.Files) != 2 || plan.Steps() != 3 {
+		t.Errorf("plan %+v", plan)
+	}
+	if plan := app.PlanTempos([]string{"SD:k/a_90.wav", "SD:k/b_124.wav"}, true); plan.HasBank {
+		t.Error("files that disagree set a bank tempo")
+	}
+	if plan := app.PlanTempos([]string{"SD:k/90_Kit/01_kick.wav"}, true); !plan.HasBank || plan.Bank != 90 {
+		t.Errorf("the folder name was not used: %+v", plan)
+	}
+}
+
+func TestMixPatternPlacesNotesAtTheirTicks(t *testing.T) {
+	a1, _ := proto.NewPadIndex(0)
+	click := formats.Sample{Channels: 1, Samples: []int16{1000, 1000}}
+	p := formats.Pattern{Length: formats.PPQ, Events: []formats.Event{{Tick: 0, Pad: a1, Velocity: 127}, {Tick: formats.PPQ / 2, Pad: a1, Velocity: 127}}}
+	mix, err := app.MixPattern(p, 120, func(proto.PadIndex) (formats.Sample, error) { return click, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One beat at 120 BPM is half a second; the second note starts a quarter second in.
+	if mix.Channels != 2 || mix.Frames() != 24000+2 && mix.Frames() != 24000 {
+		t.Errorf("%d frames", mix.Frames())
+	}
+	at := 12000
+	if mix.Samples[0] != 1000 || mix.Samples[at*2] != 1000 || mix.Samples[(at-1)*2] != 0 {
+		t.Errorf("notes are not where their ticks put them")
 	}
 }

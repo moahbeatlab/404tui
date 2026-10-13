@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
@@ -46,7 +48,15 @@ var commands = []command{
 	{"s", "Swap the picked-up pad with this one", []int{secPads}},
 	{"e", "Export this bank: choose a folder, get WAV files + samples.json", []int{secPads}},
 	{"R", "Restore pads from an export: choose its folder, then the bank (p there also makes a pattern)", []int{secPads}},
+	{"t", "Set gate, loop, BPM sync, vinyl, one shot, fixed velocity or bus FX on the marked pads (or on the whole bank)", []int{secPads}},
+	{"N", "New pattern in the first free slot: every sample in the bank on beat 1, 2 bars", []int{secPads, secPatterns}},
 	{"enter", "Open pattern", []int{secPatterns}},
+	{"d", "Delete the pattern (or the marked ones)", []int{secPatterns}},
+	{"v", "Mark / unmark a pattern for deleting", []int{secPatterns}},
+	{"c", "Pick up the pattern to copy it (then p puts it in a slot, any bank)", []int{secPatterns}},
+	{"x", "Pick up the pattern to move it (then p puts it in a slot, any bank)", []int{secPatterns}},
+	{"p", "Put the picked-up pattern here (twice to replace one)", []int{secPatterns}},
+	{"P", "Play the pattern on this computer (again stops it; s stops)", []int{secPatterns}},
 	{"b", "Retarget the open pattern to another bank", []int{secPatterns}},
 	{"enter", "Assign this file to a pad", []int{secFiles}},
 	{"[", "Target bank for assigns: previous (Files)", []int{secFiles}},
@@ -67,6 +77,7 @@ var commands = []command{
 	{"n", "Rename project", []int{secProjects}},
 	{"e", "Export this project to the SD card or this computer", []int{secProjects}},
 	{"R", "Restore this project from a backup folder", []int{secProjects}},
+	{"X", "Erase this project: everything in it, leaving it empty", []int{secProjects}},
 	{"[", "Previous bank", []int{secPads, secPatterns}},
 	{"]", "Next bank", []int{secPads, secPatterns}},
 	{"/", "Find a pad or project by name", []int{secPads, secProjects}},
@@ -144,6 +155,8 @@ func (m Model) overlayName() string {
 		return fmt.Sprintf("prompt %d", m.prompt.kind)
 	case m.picker != nil:
 		return "picker"
+	case m.toggles != nil:
+		return "toggles"
 	case m.palette != nil:
 		return "palette"
 	}
@@ -176,6 +189,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.promptKey(key)
 	case m.picker != nil:
 		return m.pickerKey(key)
+	case m.toggles != nil:
+		return m.togglesKey(key)
 	case m.palette != nil:
 		return m.paletteKey(key)
 	}
@@ -400,6 +415,10 @@ func withSamples(rows []app.PadRow) []proto.PadIndex {
 func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 	row := m.padRow()
 	switch name {
+	case "N":
+		return m.newStartPattern()
+	case "t":
+		m.toggles = &toggleMenu{}
 	case "h", "left":
 		m.gridMove(-1, 0)
 	case "l", "right":
@@ -728,10 +747,57 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 		case "r":
 			m.busy = "reading the pattern"
 			return m, m.openPattern(m.pattern.Slot, "refreshed")
+		case "P", "s":
+			return m.playPattern(m.pattern.Slot)
 		}
 		return m, nil
 	}
+	if name != "p" {
+		m.patConfirm = -1
+	}
 	switch name {
+	case "N":
+		return m.newStartPattern()
+	case "P", "s":
+		rows := m.patterns[m.bank]
+		if rows == nil || !rows[m.patternCursor].Exists {
+			if name == "s" && m.player != nil {
+				m.player.Stop()
+				m.listening = ""
+			}
+			m.message = "that pattern slot is empty"
+			break
+		}
+		return m.playPattern(rows[m.patternCursor].Slot)
+	case "v":
+		if rows := m.patterns[m.bank]; rows != nil && rows[m.patternCursor].Exists {
+			slot := int(rows[m.patternCursor].Slot.Index())
+			if m.patMarks[slot] {
+				delete(m.patMarks, slot)
+			} else {
+				m.patMarks[slot] = true
+			}
+			m.patternCursor = clamp(m.patternCursor+1, 0, proto.PadsPerBank-1)
+		}
+	case "u":
+		m.patMarks = map[int]bool{}
+		m.patHolding = false
+	case "d":
+		return m.deletePatterns()
+	case "c", "x":
+		rows := m.patterns[m.bank]
+		if rows == nil || !rows[m.patternCursor].Exists {
+			m.message = "nothing to pick up: that pattern slot is empty"
+			break
+		}
+		m.patHeld, m.patHolding, m.patCut = rows[m.patternCursor].Slot, true, name == "x"
+		verb := "copy"
+		if m.patCut {
+			verb = "move"
+		}
+		m.message = fmt.Sprintf("%s picked up: go to a slot (and bank, [ ]) and press p to %s it there", m.patHeld, verb)
+	case "p":
+		return m.putPattern()
 	case "<", ">", "-", "+", "=", "b":
 		return m.bankKey(name)
 	case "h", "left":
@@ -760,6 +826,382 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 		return m, m.openPattern(rows[m.patternCursor].Slot, "")
 	}
 	return m, nil
+}
+
+// playPattern plays a pattern through this computer's speakers, mixed from the samples on its
+// pads at the bank's tempo; pressing it again while it sounds stops it, and s stops it.
+// This is the pads as stored, not what the unit would play: the unit has no command in this
+// protocol to start its own sequencer.
+func (m Model) playPattern(slot proto.PadIndex) (tea.Model, tea.Cmd) {
+	if m.player == nil {
+		m.message = "no audio output to play on"
+		if m.audioErr != "" {
+			m.message += ": " + m.audioErr
+		}
+		return m, nil
+	}
+	label := "pattern " + slot.String()
+	if m.listening == label && m.player.Playing() {
+		m.player.Stop()
+		m.listening = ""
+		m.message = label + " stopped"
+		return m, nil
+	}
+	m.player.Stop()
+	id := m.listenGen.Add(1)
+	m.listening = label
+	m.message = "mixing " + label + "…"
+	bpm := m.snap.Banks[slot.Bank()].Tempo
+	if m.snap.UsesProjectTempo {
+		bpm = m.snap.ProjectTempo
+	}
+	player, unit, ops, gen, cache := m.player, m.unit, m.ops, m.listenGen, m.padAudio
+	pads := m.snap.Pads
+	return m, func() tea.Msg {
+		ops.Lock()
+		defer ops.Unlock()
+		current, err := unit.CurrentProject()
+		if err != nil {
+			return listenMsg{path: label, err: err}
+		}
+		data, err := unit.ReadFile(formats.PatternPath(current+1, slot))
+		if err != nil {
+			return listenMsg{path: label, err: err}
+		}
+		pattern, err := formats.ParsePattern(data)
+		if err != nil {
+			return listenMsg{path: label, err: err}
+		}
+		mix, err := app.MixPattern(pattern, bpm, func(pad proto.PadIndex) (formats.Sample, error) {
+			row := pads[pad.Index()]
+			if !row.HasSample {
+				return formats.Sample{Channels: 1}, nil
+			}
+			key := factKey{row.Pad, row.Size, row.Name}
+			if sample, ok := cache.get(key); ok {
+				return sample, nil
+			}
+			sample, err := app.PadAudio(unit, row)
+			if err == nil {
+				cache.put(key, sample)
+			}
+			return sample, err
+		})
+		if err != nil {
+			return listenMsg{path: label, err: err}
+		}
+		if gen.Load() != id {
+			return listenMsg{path: label, stale: true}
+		}
+		return listenMsg{path: label, err: player.Play(mix)}
+	}
+}
+
+// deletePatterns asks to delete the marked patterns, or the one in front.
+func (m Model) deletePatterns() (tea.Model, tea.Cmd) {
+	rows := m.patterns[m.bank]
+	if rows == nil {
+		return m, nil
+	}
+	var slots []proto.PadIndex
+	for _, r := range m.patterns[m.bank] {
+		if m.patMarks[int(r.Slot.Index())] && r.Exists {
+			slots = append(slots, r.Slot)
+		}
+	}
+	if len(slots) == 0 {
+		if !rows[m.patternCursor].Exists {
+			m.message = "that pattern slot is empty"
+			return m, nil
+		}
+		slots = []proto.PadIndex{rows[m.patternCursor].Slot}
+	}
+	m.prompt = &prompt{kind: promptDeletePatterns, pads: slots}
+	return m, nil
+}
+
+// putPattern drops the picked-up pattern into the slot in front: a copy, or a move. A slot
+// that holds a pattern is replaced only on a second p.
+func (m Model) putPattern() (tea.Model, tea.Cmd) {
+	rows := m.patterns[m.bank]
+	if !m.patHolding || rows == nil {
+		m.message = "nothing picked up: c copies a pattern, x moves it"
+		return m, nil
+	}
+	from, to := m.patHeld, rows[m.patternCursor].Slot
+	if from == to {
+		m.message = "that is the slot itself"
+		return m, nil
+	}
+	if rows[m.patternCursor].Exists && m.patConfirm != int(to.Index()) {
+		m.patConfirm = int(to.Index())
+		m.message = fmt.Sprintf("%s holds a pattern: p again replaces it", to)
+		return m, nil
+	}
+	cut, unit := m.patCut, m.unit
+	m.patHolding, m.patConfirm = false, -1
+	m.busy = "copying the pattern"
+	if cut {
+		m.busy = "moving the pattern"
+	}
+	return m, m.edit(func() tea.Msg {
+		if err := app.CopyPattern(unit, from, to, cut); err != nil {
+			return doneMsg{message: err.Error(), patterns: true, reload: true}
+		}
+		verb := "copied to"
+		if cut {
+			verb = "moved to"
+		}
+		return doneMsg{message: fmt.Sprintf("pattern %s %s %s", from, verb, to), patterns: true, reload: true}
+	})
+}
+
+// bankToggle is a pad setting that is on or off, and that t switches for a whole bank.
+// A setting kept in one bit of the mode flags has that bit as mask.
+type bankToggle struct {
+	name, label string
+	mask        int32
+	key         string
+	// values is how many values a setting with more than two has (bus FX: off, BUS 1,
+	// BUS 2); 0 for an on/off setting.
+	values int32
+}
+
+var bankToggles = []bankToggle{
+	{"gate", "Gate", 0, "g", 0}, {"loop", "Loop", 0, "l", 0}, {"bpm-sync", "BPM sync", 0, "b", 0}, {"vinyl", "Vinyl", 0, "v", 0},
+	{"mode-flags", "One shot", 1 << 5, "o", 0}, {"mode-flags", "Fixed velocity", 1 << 0, "f", 0},
+	{"bus-fx", "Bus FX", 0, "x", 3},
+}
+
+// isOn says whether the setting is on in a pad's parameters.
+func (t bankToggle) isOn(params map[string]int32) bool {
+	if t.mask != 0 {
+		return params[t.name]&t.mask != 0
+	}
+	return params[t.name] != 0
+}
+
+// with is the parameter's value with the setting turned on or off.
+func (t bankToggle) with(current int32, on bool) int32 {
+	switch {
+	case t.mask == 0 && on:
+		return 1
+	case t.mask == 0:
+		return 0
+	case on:
+		return current | t.mask
+	}
+	return current &^ t.mask
+}
+
+type toggleMenu struct{ cursor int }
+
+// toggleTargets are the pads the menu changes: the marked pads that hold a sample, or when
+// none are marked every pad with a sample in the bank on show.
+func (m Model) toggleTargets() []proto.PadIndex {
+	if len(m.marked) > 0 {
+		return withSamples(m.targets())
+	}
+	var pads []proto.PadIndex
+	for _, pad := range proto.AllPads()[m.bank*proto.PadsPerBank : (m.bank+1)*proto.PadsPerBank] {
+		if m.snap.Pads[pad.Index()].HasSample {
+			pads = append(pads, pad)
+		}
+	}
+	return pads
+}
+
+// toggleState counts the target pads that have the setting on.
+func (m Model) toggleState(t bankToggle) (on, total int) {
+	for _, pad := range m.toggleTargets() {
+		total++
+		if t.isOn(m.snap.Pads[pad.Index()].Params) {
+			on++
+		}
+	}
+	return on, total
+}
+
+// toggleValue is the value every target pad has for a setting with several values, and
+// whether they all have it.
+func (m Model) toggleValue(t bankToggle) (value int32, same bool) {
+	pads := m.toggleTargets()
+	for i, pad := range pads {
+		v := m.snap.Pads[pad.Index()].Params[t.name]
+		if i == 0 {
+			value = v
+		} else if v != value {
+			return value, false
+		}
+	}
+	return value, len(pads) > 0
+}
+
+func (m Model) togglesKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	t := m.toggles
+	bus := bankToggles[len(bankToggles)-1]
+	switch name := key.String(); name {
+	case "esc", "q", "t":
+		m.toggles = nil
+	case "up", "k", "ctrl+p":
+		t.cursor = max(t.cursor-1, 0)
+	case "down", "j", "ctrl+n":
+		t.cursor = min(t.cursor+1, len(bankToggles)-1)
+	case "enter", " ":
+		m.toggles = nil
+		return m.toggleTargetsBy(bankToggles[t.cursor], -1)
+	case "0", "1", "2":
+		// Digits set the bus directly: 0 off, 1 BUS 1, 2 BUS 2.
+		m.toggles = nil
+		return m.toggleTargetsBy(bus, int32(name[0]-'0'))
+	default:
+		// A letter picks a setting: g, l, b, v, o, f, x.
+		for _, b := range bankToggles {
+			if name == b.key {
+				m.toggles = nil
+				return m.toggleTargetsBy(b, -1)
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m Model) togglesBox() string {
+	st := m.st
+	scope := fmt.Sprintf("every pad of bank %c", 'A'+m.bank)
+	if len(m.marked) > 0 {
+		scope = fmt.Sprintf("the %d marked pads", len(m.toggleTargets()))
+	}
+	lines := []string{st.bold.Render("Set for " + scope), ""}
+	for i, t := range bankToggles {
+		on, total := m.toggleState(t)
+		state := fmt.Sprintf("off (0 of %d)", total)
+		switch {
+		case total == 0:
+			state = "no samples"
+		case t.values > 0:
+			if v, same := m.toggleValue(t); same {
+				state = fmt.Sprintf("%s (all %d)", busName(v), total)
+			} else {
+				state = "mixed"
+			}
+		case on == total:
+			state = fmt.Sprintf("on (all %d)", total)
+		case on > 0:
+			state = fmt.Sprintf("mixed (%d of %d on)", on, total)
+		}
+		line := fmt.Sprintf("%-15s %s", t.label, state)
+		if i == m.toggles.cursor {
+			line = lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true).Render(line)
+		}
+		lines = append(lines, line)
+	}
+	lines = append(lines, "",
+		st.dim.Render("Enter switches it: on for all, or off when all are on  ·  g l b v o f x pick"),
+		st.dim.Render("Bus FX: Enter steps through off, BUS 1, BUS 2  ·  0 1 2 set it  ·  Esc closes"),
+		st.dim.Render("One shot can clear gate and loop on the pads it is turned on for."))
+	return st.modal.Width(min(m.width-4, 80)).Render(strings.Join(lines, "\n"))
+}
+
+// toggleTargetsBy changes a setting on the target pads. An on/off setting goes on for all of
+// them, or off when all are on already. A setting with several values (bus FX) takes value,
+// or with -1 goes to the next one.
+func (m Model) toggleTargetsBy(t bankToggle, value int32) (tea.Model, tea.Cmd) {
+	pads := m.toggleTargets()
+	if len(pads) == 0 {
+		m.message = "no pads with a sample to change"
+		return m, nil
+	}
+	info, ok := proto.ParamByName(t.name)
+	if !ok {
+		return m, nil
+	}
+	var turnOn bool
+	var what string
+	if t.values > 0 {
+		if value < 0 {
+			cur, same := m.toggleValue(t)
+			value = 1
+			if same {
+				value = (cur + 1) % t.values
+			}
+		}
+		what = busName(value)
+	} else {
+		on, total := m.toggleState(t)
+		turnOn = on != total
+		what = onOffText(map[bool]int32{true: 1, false: 0}[turnOn])
+	}
+	values := map[proto.PadIndex]int32{}
+	for _, pad := range pads {
+		row := &m.snap.Pads[pad.Index()]
+		if row.Params == nil {
+			row.Params = map[string]int32{}
+		}
+		if t.values > 0 {
+			row.Params[t.name] = value
+		} else {
+			row.Params[t.name] = t.with(row.Params[t.name], turnOn)
+		}
+		values[pad] = row.Params[t.name]
+	}
+	unit, id := m.unit, info.ID
+	scope := fmt.Sprintf("in bank %c", 'A'+m.bank)
+	if len(m.marked) > 0 {
+		scope = "(marked)"
+	}
+	m.marked = map[int]bool{}
+	prog := m.prog
+	prog.begin(len(pads))
+	m.busy = "setting " + strings.ToLower(t.label)
+	return m, m.edit(func() tea.Msg {
+		defer prog.begin(0)
+		for i, pad := range pads {
+			line := t.label + " " + what + " on " + pad.String()
+			prog.step(i, line)
+			prog.logLine(line)
+			if err := unit.SetParam(id, proto.TargetPad(pad), values[pad]); err != nil {
+				return doneMsg{message: fmt.Sprintf("%s on %s: %v", strings.ToLower(t.label), pad, err), reload: true}
+			}
+		}
+		return doneMsg{message: fmt.Sprintf("%s %s on %s %s", strings.ToLower(t.label), what, plural(len(pads), "pad"), scope), reload: true}
+	})
+}
+
+// newStartPattern makes a pattern in the first free slot of the bank on show: every pad of
+// the bank that holds a sample starts on beat 1 and is held for app.StartBars bars.
+func (m Model) newStartPattern() (tea.Model, tea.Cmd) {
+	var pads []proto.PadIndex
+	for _, pad := range proto.AllPads()[m.bank*proto.PadsPerBank : (m.bank+1)*proto.PadsPerBank] {
+		if m.snap.Pads[pad.Index()].HasSample {
+			pads = append(pads, pad)
+		}
+	}
+	if len(pads) == 0 {
+		m.message = fmt.Sprintf("bank %c has no samples to put in a pattern", 'A'+m.bank)
+		return m, nil
+	}
+	unit, bank := m.unit, m.bank
+	m.busy = "making a pattern"
+	return m, m.edit(func() tea.Msg {
+		rows, err := app.LoadPatterns(unit, bank)
+		if err != nil {
+			return doneMsg{message: "reading the patterns failed: " + err.Error()}
+		}
+		free := slices.IndexFunc(rows, func(r app.PatternRow) bool { return !r.Exists })
+		if free < 0 {
+			return doneMsg{message: fmt.Sprintf("every pattern slot of bank %c is taken", 'A'+bank)}
+		}
+		slot := rows[free].Slot
+		if err := app.WriteStartPattern(unit, slot, pads, app.StartBars); err != nil {
+			return doneMsg{message: "the pattern was not made: " + err.Error()}
+		}
+		return doneMsg{
+			message:  fmt.Sprintf("pattern %s made: %d pads on beat 1, %d bars", slot, len(pads), app.StartBars),
+			reload:   true,
+			patterns: true,
+		}
+	})
 }
 
 // ---- Projects ----
@@ -794,6 +1236,8 @@ func (m Model) projectsKey(name string) (tea.Model, tea.Cmd) {
 		})
 	case "n":
 		m.prompt = &prompt{kind: promptRenameProject, project: uint8(m.projectAt), buffer: m.snap.Projects[m.projectAt]}
+	case "X":
+		m.prompt = &prompt{kind: promptEraseProject, project: uint8(m.projectAt)}
 	case "e":
 		return m.openProjectBrowser(browseProjectExport, uint8(m.projectAt))
 	case "R", "i":
@@ -813,8 +1257,11 @@ func (m Model) openProjectBrowser(kind browseKind, project uint8) (tea.Model, te
 func (m Model) planProjectRestore(project uint8, dir string) (tea.Model, tea.Cmd) {
 	unit := m.unit
 	m.busy = "reading the backup"
+	prog := m.prog
+	prog.begin(0)
 	return m, m.edit(func() tea.Msg {
-		plan, err := app.PlanProjectRestore(unit, project, dir)
+		defer prog.begin(0)
+		plan, err := app.PlanProjectRestore(unit, project, dir, prog.stepTotal)
 		return planMsg{plan: plan, err: err}
 	})
 }
@@ -975,22 +1422,95 @@ func (m Model) assign(files []string, start proto.PadIndex) (tea.Model, tea.Cmd)
 	m.fileMarks = map[string]bool{}
 	m.busy = fmt.Sprintf("assigning %d file(s)", len(files))
 	if len(files) == 1 {
+		prog := m.prog
+		plan := app.PlanTempos(files, false)
+		prog.begin(1 + plan.Steps())
 		return m, m.edit(func() tea.Msg {
+			defer prog.begin(0)
+			prog.step(0, app.Base(files[0]))
 			name, err := app.Assign(unit, unit, start, files[0])
 			if err != nil {
 				return doneMsg{message: err.Error()}
 			}
-			return doneMsg{message: fmt.Sprintf("%s: assigned to %s as %q", app.Base(files[0]), start, name), reload: true, focus: &start, assigned: true}
+			message := fmt.Sprintf("%s: assigned to %s as %q", app.Base(files[0]), start, name)
+			prog.logLine(app.Base(files[0]) + " assigned to " + start.String())
+			if bpm, ok := plan.Files[files[0]]; ok {
+				prog.step(1, fmt.Sprintf("tempo %g BPM on %s", bpm, start))
+				if err := app.SetPadTempo(unit, start, bpm); err != nil {
+					message += fmt.Sprintf("; its tempo was not set: %v", err)
+				} else {
+					message += fmt.Sprintf("; tempo %g BPM", bpm)
+				}
+			}
+			return doneMsg{message: message, reload: true, focus: &start, assigned: true}
 		})
 	}
 	taken := func(p proto.PadIndex) bool { return snap.Pads[p.Index()].HasSample }
-	pads := app.FreePads(start, len(files), taken)
+	// Several files fill the free pads of the bank the first one goes to, and no further:
+	// what does not fit is reported, not put in another bank.
+	pads := slices.DeleteFunc(app.FreePads(start, len(files), taken), func(p proto.PadIndex) bool { return p.Bank() != start.Bank() })
+	pads = pads[:min(len(pads), proto.PadsPerBank)]
+	// Files numbered like "09_Snare.wav" go where the number says: 09 is pad 9 of the bank,
+	// whatever pads came before. A file that would land on a pad that holds a sample is left
+	// out (a placeholder named EMPTY quietly), not put over it.
+	numbered := false
+	var held []string
+	orderNote := ""
+	want, ok := app.NumberedPads(files, int(start.Bank()), taken)
+	if m.byNumber && !ok {
+		orderNote = "; not every name starts with a pad number, so the free pads were filled in order"
+	}
+	if m.byNumber && ok {
+		numbered, pads = true, nil
+		kept := files[:0:0]
+		for i, f := range files {
+			if taken(want[i]) {
+				if !strings.Contains(strings.ToUpper(app.Base(f)), "EMPTY") {
+					held = append(held, fmt.Sprintf("%s (pad %s is taken)", app.Base(f), want[i]))
+				}
+				continue
+			}
+			kept = append(kept, f)
+			pads = append(pads, want[i])
+		}
+		files = kept
+	}
+	prog := m.prog
+	// The bar counts the files and then the tempos read from their names: each pad's, and
+	// the bank's when the files agree on one.
+	plan := app.PlanTempos(files, true)
+	prog.begin(len(pads) + plan.Steps())
 	return m, m.edit(func() tea.Msg {
-		placed := app.AssignMany(unit, unit, pads, files, nil)
+		defer prog.begin(0)
+		placed := app.AssignManyReport(unit, unit, pads, files, prog.step, func(p app.Placement) {
+			switch {
+			case p.Blank:
+				prog.logLine(app.Base(p.File) + " is empty: " + p.Pad.String() + " left empty")
+			case errors.Is(p.Err, app.ErrNoFreePad):
+				prog.logLine(app.Base(p.File) + " found no free pad")
+			case p.Err != nil:
+				prog.logLine(app.Base(p.File) + " failed: " + p.Err.Error())
+			default:
+				prog.logLine(app.Base(p.File) + " assigned to " + p.Pad.String())
+			}
+		})
+		tempos := app.ApplyTempos(unit, placed, plan, func(done int, what string) {
+			prog.step(len(pads)+done, what)
+			prog.logLine(what)
+		})
 		ok, failed := 0, []string{}
 		var first *proto.PadIndex
+		noRoom, blank := 0, 0
 		for _, p := range placed {
+			if p.Blank {
+				blank++
+				continue
+			}
 			if p.Err != nil {
+				if errors.Is(p.Err, app.ErrNoFreePad) {
+					noRoom++
+					continue
+				}
 				failed = append(failed, p.Err.Error())
 				continue
 			}
@@ -1001,6 +1521,24 @@ func (m Model) assign(files []string, start proto.PadIndex) (tea.Model, tea.Cmd)
 			ok++
 		}
 		message := fmt.Sprintf("%d files assigned from %s", ok, start)
+		if numbered {
+			message = fmt.Sprintf("%d files assigned to the pads their numbers name", ok)
+			failed = append(failed, held...)
+		}
+		if blank > 0 {
+			message += fmt.Sprintf("; %s left empty", plural(blank, "empty placeholder"))
+		}
+		message += orderNote
+		if tempos.Pads > 0 {
+			message += fmt.Sprintf("; %s given a tempo", plural(tempos.Pads, "pad"))
+		}
+		if tempos.BankSet {
+			message += fmt.Sprintf("; bank %c set to %g BPM", 'A'+int(start.Bank()), plan.Bank)
+		}
+		failed = append(failed, tempos.Failures...)
+		if noRoom > 0 {
+			message += fmt.Sprintf("; %d did not fit: bank %s is full", noRoom, start.String()[:1])
+		}
 		if len(failed) > 0 {
 			message += "; failed: " + strings.Join(failed, "; ")
 		}
@@ -1420,7 +1958,7 @@ func (m Model) promptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if p.kind == promptDelete || p.kind == promptConfirmRestore || p.kind == promptDeleteFiles {
+	if p.kind == promptDelete || p.kind == promptConfirmRestore || p.kind == promptDeleteFiles || p.kind == promptEraseProject || p.kind == promptDeletePatterns {
 		switch name {
 		case "y", "enter":
 			return m.apply()
@@ -1476,8 +2014,11 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 		// What was deleted cannot be pasted.
 		m.clip = slices.DeleteFunc(slices.Clone(m.clip), func(c string) bool { return slices.Contains(paths, c) })
 		m.busy = "deleting"
+		prog := m.prog
+		prog.begin(len(paths))
 		deleteAll := func() string {
-			deleted, failed := app.DeletePaths(unit, paths, nil)
+			defer prog.begin(0)
+			deleted, failed := app.DeletePaths(unit, paths, prog.step)
 			note := fmt.Sprintf("%s deleted", plural(deleted, "item"))
 			if len(failed) > 0 {
 				note += "; not deleted: " + strings.Join(failed, ", ")
@@ -1499,11 +2040,40 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 		cmd := m.afterFilesAt(land, deleteAll)
 		return m, cmd
 	}
+	if p.kind == promptDeletePatterns {
+		slots := p.pads
+		m.patMarks = map[int]bool{}
+		m.busy = "deleting"
+		return m, m.edit(func() tea.Msg {
+			deleted, failed := app.DeletePatterns(unit, slots)
+			message := fmt.Sprintf("%s deleted", plural(deleted, "pattern"))
+			if len(failed) > 0 {
+				message += "; not deleted: " + strings.Join(failed, ", ")
+			}
+			return doneMsg{message: message, patterns: true, reload: true}
+		})
+	}
+	if p.kind == promptEraseProject {
+		project := p.project
+		m.busy = fmt.Sprintf("erasing project %d", project+1)
+		prog := m.prog
+		prog.beginSweep()
+		return m, m.edit(func() tea.Msg {
+			defer prog.begin(0)
+			if err := app.EraseProject(unit, project); err != nil {
+				return doneMsg{message: "erase failed: " + err.Error(), reload: true}
+			}
+			return doneMsg{message: fmt.Sprintf("project %d erased", project+1), reload: true}
+		})
+	}
 	if p.kind == promptConfirmRestore {
 		plan := p.plan
 		m.busy = fmt.Sprintf("restoring project %d", plan.Project+1)
+		prog := m.prog
+		prog.begin(len(plan.Files))
 		return m, m.edit(func() tea.Msg {
-			if err := app.RestoreProject(unit, plan, nil); err != nil {
+			defer prog.begin(0)
+			if err := app.RestoreProject(unit, plan, func(i int, name string) { prog.step(i, name) }); err != nil {
 				return doneMsg{message: "restore failed: " + err.Error(), reload: true}
 			}
 			return doneMsg{message: fmt.Sprintf("project %d restored from %s", plan.Project+1, plan.Dir), reload: true}
@@ -1539,8 +2109,14 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 		}
 		project := p.project
 		m.busy = fmt.Sprintf("exporting project %d", project+1)
+		prog := m.prog
 		return m, m.edit(func() tea.Msg {
-			summary, err := app.ExportProject(unit, project, dir, nil)
+			defer prog.begin(0)
+			prog.begin(0)
+			if n, err := app.ProjectFileCount(unit, project); err == nil {
+				prog.begin(n)
+			}
+			summary, err := app.ExportProject(unit, project, dir, prog.step)
 			if err != nil {
 				return doneMsg{message: "export failed: " + err.Error()}
 			}
@@ -1596,8 +2172,11 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 		}
 		pads := proto.AllPads()[m.bank*proto.PadsPerBank : (m.bank+1)*proto.PadsPerBank]
 		m.busy = "exporting"
+		prog := m.prog
+		prog.begin(0)
 		return m, m.edit(func() tea.Msg {
-			summary, err := app.ExportPads(unit, pads, dir, nil)
+			defer prog.begin(0)
+			summary, err := app.ExportPads(unit, pads, dir, prog.stepTotal)
 			if err != nil {
 				return doneMsg{message: "export failed: " + err.Error()}
 			}
@@ -1654,8 +2233,11 @@ func (m Model) runRestore(plan *app.PadRestore, bank int, slot *proto.PadIndex) 
 	}
 	first := targets[0]
 	m.busy = fmt.Sprintf("restoring %d pads", len(plan.Pads))
+	prog := m.prog
+	prog.begin(0)
 	return m, m.edit(func() tea.Msg {
-		summary, err := app.RestorePadsTo(unit, plan, bank, nil)
+		defer prog.begin(0)
+		summary, err := app.RestorePadsTo(unit, plan, bank, prog.stepTotal)
 		if err != nil {
 			return doneMsg{message: "restore failed: " + err.Error(), reload: true}
 		}

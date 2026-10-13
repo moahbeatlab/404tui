@@ -219,6 +219,32 @@ func (m Model) browserKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.prompt = &prompt{kind: promptRenameFile, path: node.Path, buffer: node.Name, reopen: &pad}
 			return m, nil
 		}
+	case "#":
+		if b.kind == browseAssign {
+			m.byNumber = !m.byNumber
+			if m.byNumber {
+				m.message = "assign by file number: 09_… goes on pad 9 of the bank"
+			} else {
+				m.message = "assign in order: each file takes the next free pad"
+			}
+		}
+	case "V":
+		if b.kind == browseAssign {
+			folder := b.tree.Folder(b.at)
+			n := 0
+			for _, r := range rows {
+				if r.Dir || !strings.HasPrefix(r.Path, folder+"/") || !isAudio(r.Name) || app.IsJunk(r.Name) {
+					continue
+				}
+				b.marks[r.Path] = true
+				n++
+			}
+			if n == 0 {
+				m.message = "no audio files in " + display(folder) + " (open the folder first with Tab)"
+			} else {
+				m.message = fmt.Sprintf("marked %d files in %s; Enter assigns them to the free pads of %s", n, display(folder), "bank "+b.pad.String()[:1])
+			}
+		}
 	case "J":
 		if b.kind == browseAssign {
 			n := 0
@@ -422,7 +448,7 @@ func (m Model) assignBox(g geom) string {
 		}
 	}
 	if n := len(b.marks); n > 0 {
-		target = st.good.Render(fmt.Sprintf("%d files marked — Enter fills free pads from %s on", n, b.pad))
+		target = st.good.Render(fmt.Sprintf("%d files marked — Enter %s", n, m.assignHow(b.pad)))
 	}
 	width := min(m.width-6, 110)
 	leftW := width * 11 / 20
@@ -466,8 +492,9 @@ func (m Model) assignKeys(b *browser, width int) string {
 	keys := [][2]string{
 		{"Enter", "assign"}, {"Space", "listen"},
 		{"Ctrl-A", "autoplay " + onOff(m.autoplay)}, {"v", "mark"},
-		{"J", "mark junk"}, {"d", "delete"},
-		{"n", "rename"}, {"Tab / l", "open folder"},
+		{"V", "mark folder"}, {"J", "mark junk"},
+		{"#", "by number " + onOff(m.byNumber)}, {"d", "delete"}, {"n", "rename"},
+		{"Tab / l", "open folder"},
 		{"S-Tab", "fold all"}, {"t", "source"},
 		{"/", "search"}, {"f", "find folder"},
 		{"p", "type a path"}, {"Esc", "close"},
@@ -481,8 +508,8 @@ func (m Model) assignKeys(b *browser, width int) string {
 		keys = [][2]string{
 			{"d", "delete"}, {"u", "unmark all"},
 			{"Enter", "assign audio"}, {"v", "mark"},
-			{"J", "mark junk"}, {"f", "find folder"},
-			{"Esc", "close"},
+			{"V", "mark folder"}, {"J", "mark junk"},
+			{"#", "by number " + onOff(m.byNumber)}, {"f", "find folder"}, {"Esc", "close"},
 		}
 	}
 	colW := max(width/2, 20)
@@ -527,4 +554,12 @@ func (m Model) browserFind(b *browser, key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// assignHow says where Enter puts the marked files.
+func (m Model) assignHow(pad proto.PadIndex) string {
+	if m.byNumber {
+		return fmt.Sprintf("puts each on the pad its number names (09_ on pad 9 of bank %s)", pad.String()[:1])
+	}
+	return fmt.Sprintf("fills free pads from %s on  ·  # puts each on the pad its number names", pad)
 }

@@ -21,6 +21,7 @@ type Projects interface {
 	ProjectSettings(project uint8) (*proto.ProjectSettings, error)
 	SelectProject(project uint8) error
 	SetProjectName(project uint8, name string) error
+	InitProject(project uint8, scope proto.InitScope) error
 	FreeKb() (uint32, error)
 }
 

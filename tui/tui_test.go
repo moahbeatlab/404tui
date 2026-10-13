@@ -1376,10 +1376,12 @@ func TestPadDetailShowsSampleSettingsUsageAndProgress(t *testing.T) {
 	s.sim.SetPattern(pad(t, "B2"), a5)
 	s.sim.SetPattern(pad(t, "C3"), a5)
 
+	s.send(tea.WindowSizeMsg{Width: 180, Height: 60})
 	s.press("r", "j")
 	s.shows("A5  loop", "2.00 s", "mono", "BANK1-05.SMP", "≈", "Trim", "0.00–2.00 s", "2 chop points", "┃",
-		"Level", "100", "Pan", "R6", "Play reverse", "● Loop", "○ Gate",
-		"Pitch +3 st", "Bus FX BUS 2", "Mute group 4", "Used in B2 · C3", "S edit settings")
+		"SAMPLE", "PLAYBACK", "SOUND", "ROUTING", "ENVELOPE",
+		"Level", "100", "Pan", "R6", "reverse", "Loop     ● on", "Gate     ○ off",
+		"+3 st", "BUS 2", "Mute grp", "Used in  B2 · C3", "S edit settings")
 	s.hides("waveform")
 	// While it sounds on the unit, how far along it is.
 	frames := uint32(48000)
@@ -1446,7 +1448,8 @@ func TestPadSettingsEditor(t *testing.T) {
 		}
 	}
 	// The detail panel shows what changed.
-	s.shows("Play forward", "● Gate", "Pitch +3 st")
+	s.send(tea.WindowSizeMsg{Width: 180, Height: 60})
+	s.shows("forward", "Gate     ● on", "+3 st")
 
 	// With pads marked it changes all of them.
 	s.press("v", "l", "v", "S", "j", "j", "j", "j", "j", "j", "l")
@@ -2660,5 +2663,72 @@ func TestChromaticPlaysAPadAsNotesFromTheKeyboard(t *testing.T) {
 	s.press("l")
 	if s.m().pad != 5 {
 		t.Errorf("the cursor is on pad %d", s.m().pad+1)
+	}
+}
+
+func TestAssignDialogMarksAFolder(t *testing.T) {
+	s := open(t)
+	s.press("a", "tab", "j", "l", "V")
+	s.shows("marked 1 files in SD:IMPORT/pack", "bank A")
+}
+
+func TestNewPatternFromTheBank(t *testing.T) {
+	s := open(t)
+	s.press("N")
+	s.shows("made", "on beat 1, 2 bars")
+}
+
+func TestPatternsCopyMoveDelete(t *testing.T) {
+	s := open(t)
+	s.press("N")
+	s.shows("made")
+	s.press("4")
+	s.press("2")
+	s.press("c", "l", "p")
+	s.shows("pattern A1 copied to A2")
+	s.press("x", "p")
+	s.press("j", "x", "k", "p")
+	s.press("d")
+	s.shows("Delete pattern")
+	s.press("y")
+	s.shows("deleted")
+}
+
+func TestBankToggleMenu(t *testing.T) {
+	s := open(t)
+	s.press("t")
+	s.shows("Set for every pad of bank A", "Gate", "Loop", "One shot", "Fixed velocity")
+	s.press("g")
+	s.shows("gate on")
+	s.press("t", "g")
+	s.shows("gate off")
+}
+
+func TestMenuActsOnMarkedPadsAndSetsTheBus(t *testing.T) {
+	s := open(t)
+	s.press("v", "l", "v", "t")
+	s.shows("Set for the 2 marked pads")
+	s.press("1")
+	s.shows("BUS 1 on 2 pads")
+	for _, name := range []string{"A1", "A2"} {
+		if got := s.m().snap.Pads[pad(t, name).Index()].Params["bus-fx"]; got != 1 {
+			t.Errorf("%s bus-fx %d", name, got)
+		}
+	}
+	if got := s.m().snap.Pads[pad(t, "A3").Index()].Params["bus-fx"]; got == 1 {
+		t.Error("an unmarked pad was changed")
+	}
+}
+
+func TestHistoryKeepsWhatHappened(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 180, Height: 50})
+	s.press("N")
+	s.shows("History", "pattern A")
+	s.press("t", "g")
+	s.press("N")
+	s.shows("gate")
+	if n := len(s.m().history); n < 2 {
+		t.Errorf("history has %d lines", n)
 	}
 }

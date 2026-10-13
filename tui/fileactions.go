@@ -126,8 +126,11 @@ func (m Model) paste() (tea.Model, tea.Cmd) {
 	if cut {
 		m.busy = "moving"
 	}
+	prog := m.prog
+	prog.begin(len(sources))
 	cmd := m.afterFiles(func() string {
-		res := app.CopyPaths(unit, sources, dest, cut, nil)
+		defer prog.begin(0)
+		res := app.CopyPaths(unit, sources, dest, cut, prog.step)
 		verb := "copied"
 		if cut {
 			verb = "moved"

@@ -96,7 +96,7 @@ type RestorePlan struct {
 func PlanProjectRestore(s interface {
 	Storage
 	FreeKb() (uint32, error)
-}, project uint8, dir string) (*RestorePlan, error) {
+}, project uint8, dir string, progress func(done, total int)) (*RestorePlan, error) {
 	dir = strings.TrimRight(dir, "/")
 	padconf, err := s.ReadFile(dir + "/PADCONF.BIN")
 	if err != nil {
@@ -106,31 +106,38 @@ func PlanProjectRestore(s interface {
 	plan.Files = append(plan.Files, device.File{Name: "PADCONF.BIN", Data: padconf})
 	// The official app writes PADCONF first, then pictures, the pattern chain, patterns and
 	// samples.
+	var names []string
 	for _, sub := range []string{"PICTURE", "PTN", "SMPL"} {
 		entries, err := s.ListDir(dir + "/" + sub)
 		if err != nil {
 			continue
 		}
-		var names []string
+		var subNames []string
 		for _, e := range entries {
 			if !e.IsDir() {
-				names = append(names, e.Name)
+				subNames = append(subNames, e.Name)
 			}
 		}
-		sort.SliceStable(names, func(i, j int) bool {
-			ci, cj := strings.HasSuffix(names[i], ".CHN"), strings.HasSuffix(names[j], ".CHN")
+		sort.SliceStable(subNames, func(i, j int) bool {
+			ci, cj := strings.HasSuffix(subNames[i], ".CHN"), strings.HasSuffix(subNames[j], ".CHN")
 			if ci != cj {
 				return ci
 			}
-			return names[i] < names[j]
+			return subNames[i] < subNames[j]
 		})
-		for _, name := range names {
-			data, err := s.ReadFile(dir + "/" + sub + "/" + name)
-			if err != nil {
-				return nil, fmt.Errorf("reading %s/%s: %w", sub, name, err)
-			}
-			plan.Files = append(plan.Files, device.File{Name: sub + "/" + name, Data: data})
+		for _, name := range subNames {
+			names = append(names, sub+"/"+name)
 		}
+	}
+	for i, name := range names {
+		if progress != nil {
+			progress(i+1, len(names)+1)
+		}
+		data, err := s.ReadFile(dir + "/" + name)
+		if err != nil {
+			return nil, fmt.Errorf("reading %s: %w", name, err)
+		}
+		plan.Files = append(plan.Files, device.File{Name: name, Data: data})
 	}
 	for _, f := range plan.Files {
 		plan.Total += int64(len(f.Data))
@@ -178,4 +185,53 @@ func RestoreProject(u Restorer, plan *RestorePlan, progress func(i int, name str
 		}
 	}
 	return u.RestoreProject(plan.Project, plan.Files, progress)
+}
+
+// ProjectFileCount is how many files ExportProject will copy, so a caller can show how far
+// it has come. It lists folders only and reads no file.
+func ProjectFileCount(s Storage, project uint8) (int, error) {
+	var walk func(dir string) (int, error)
+	walk = func(dir string) (int, error) {
+		entries, err := s.ListDir(dir)
+		if err != nil {
+			return 0, fmt.Errorf("listing %s: %w", dir, err)
+		}
+		n := 0
+		for _, e := range entries {
+			if !e.IsDir() {
+				n++
+				continue
+			}
+			sub, err := walk(dir + "/" + e.Name)
+			if err != nil {
+				return 0, err
+			}
+			n += sub
+		}
+		return n, nil
+	}
+	return walk(projectFolder(project))
+}
+
+// Eraser is what erasing a project takes of the unit.
+type Eraser interface {
+	CurrentProject() (uint8, error)
+	SelectProject(project uint8) error
+	InitProject(project uint8, scope proto.InitScope) error
+}
+
+// EraseProject clears everything in a project (0-based): samples, patterns and settings,
+// on the card as well as in memory. The unit only erases the current project, so the
+// target is selected first.
+func EraseProject(u Eraser, project uint8) error {
+	current, err := u.CurrentProject()
+	if err != nil {
+		return err
+	}
+	if current != project {
+		if err := u.SelectProject(project); err != nil {
+			return fmt.Errorf("selecting project %d: %w", project+1, err)
+		}
+	}
+	return u.InitProject(project, proto.InitAll)
 }
