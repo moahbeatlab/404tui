@@ -9,14 +9,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/device"
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/proto/fileapi"
 )
@@ -32,13 +35,16 @@ const (
 
 var sectionNames = [secCount]string{"Pads", "Patterns", "Files", "Projects"}
 
+// previewStopAfter is how long a preview plays before it is stopped; tests shorten it.
+var previewStopAfter = func(d time.Duration) time.Duration { return d }
+
 // tickEvery is how often the UI ticks; tests shorten it.
 var tickEvery = 120 * time.Millisecond
 
 const ( // Ticks between looks at what the unit reports on its own.
 	pollTicks = 4
 	// waveColumns is how many points of a waveform are kept; more than any screen is wide.
-	waveColumns = 96
+	waveColumns = 320
 )
 
 // promptKind is what a text prompt is for.
@@ -64,6 +70,12 @@ const (
 	// promptConfirmRestore asks whether to overwrite a project with the backup read from
 	// prompt.plan.
 	promptConfirmRestore
+	// promptDeleteFiles confirms deleting prompt.paths from the card; promptMkdir names a new
+	// folder in prompt.path.
+	promptDeleteFiles
+	promptMkdir
+	// promptFindFolder jumps to the next folder in the list whose name contains the text.
+	promptFindFolder
 	// promptBank edits a bank's tempo and volume: two fields, Tab moves between them.
 	promptBank
 )
@@ -82,9 +94,16 @@ type prompt struct {
 	suffix bool
 	// plan is the backup a project restore asks about.
 	plan *app.RestorePlan
+	// paths and count are what a file delete is about to remove; reopen is the pad of the assign
+	// dialog the question came from.
+	paths  []string
+	count  app.Count
+	reopen *proto.PadIndex
 	// fields and field are the bank dialog's tempo and volume, and the one being typed.
 	fields [2]string
 	field  int
+	// choice is the folder picked from the matches while one is looked for (f).
+	choice int
 }
 
 // picker is the pad chooser a file is assigned through, or the bank chooser of a
@@ -93,6 +112,8 @@ type picker struct {
 	retarget bool
 	// Assign: the files to put on pads, in order.
 	files []string
+	// restorePlan: an export being put back; the picker chooses the bank it goes onto.
+	restorePlan *app.PadRestore
 	// copyFrom: the pads being copied; the picker chooses where the first one goes.
 	copyFrom []proto.PadIndex
 	// retarget: the pattern slot and the bank its pads are in.
@@ -148,6 +169,8 @@ type Model struct {
 	browser *browser
 	search  *search
 	editor  *editor
+	// chromatic is the dialog that plays a pad as notes from the keyboard.
+	chromatic *chromatic
 	// indexes are the file indexes searches use, one per source, kept until files change.
 	indexes map[string]*app.Index
 
@@ -169,19 +192,36 @@ type Model struct {
 	// playPos is how many frames of it have played.
 	playPos uint32
 
+	// previewSeq numbers the pad previews on the unit, so that the stop timer of an earlier one
+	// does nothing once a later one has started; previewing is the pad playing.
+	previewSeq int
+	previewing *proto.PadIndex
+	// previewLocal plays a pad's sample on this computer, as a file is auditioned, instead of on
+	// the unit; padAudio keeps the samples read for it.
+	previewLocal bool
+	padAudio     *padCache
+	// audioOut names the computer's audio output, to say where listening goes.
+	audioOut string
+
 	patterns      map[int][]app.PatternRow
 	patternCursor int
 	pattern       *app.PatternDetail
 
-	root      string
-	tree      *app.Tree
-	fileAt    int
-	fileMoved string
-	// fileMarks are audio files picked for a multi-file assign.
+	root   string
+	tree   *app.Tree
+	fileAt int
+	// fileMarks are the files and folders marked in the list, for assign, delete, copy and move;
+	// clip is what was copied or cut, kept across a change of source so a paste can land on
+	// the other side.
 	fileMarks map[string]bool
+	clip      []string
+	clipCut   bool
 	// listening is the file being auditioned; autoplay plays a result as the cursor lands on
 	// it, after autoSeq stops changing; audioErr says why there is no audio output.
 	listening string
+	// listenGen numbers the listen requests, shared by every copy of the model: a file that is
+	// still being decoded when the sound is stopped or another is asked for must not start.
+	listenGen *atomic.Int64
 	autoplay  bool
 	autoSeq   int
 	audioErr  string
@@ -211,6 +251,10 @@ type Model struct {
 	connectedFrame int
 	lost           bool
 	waitErr        string
+
+	// log is the debug log (discarding when there is none); logPath says where it goes.
+	log     *slog.Logger
+	logPath string
 
 	// store keeps the state between runs; mem is what it holds and saved the last bytes
 	// written, shared by the copies of the model.
@@ -263,8 +307,11 @@ func New(unit app.Unit, player app.Player, store Store) Model {
 		facts:     map[factKey]padFacts{},
 		infos:     map[string]fileInfo{},
 		indexes:   map[string]*app.Index{},
+		listenGen: new(atomic.Int64),
+		padAudio:  &padCache{samples: map[factKey]formats.Sample{}},
 		store:     store,
 		saved:     new([]byte),
+		log:       slog.New(slog.DiscardHandler),
 	}
 	if store != nil {
 		m.mem = store.Load()
@@ -274,6 +321,7 @@ func New(unit app.Unit, player app.Player, store Store) Model {
 		}
 		m.bank = clamp(m.mem.Bank, 0, proto.Banks-1)
 		m.target = clamp(m.mem.TargetBank, 0, proto.Banks-1)
+		m.previewLocal = m.mem.PreviewLocal
 		if i := m.mem.LastAssigned - 1; i >= 0 {
 			if pad, ok := proto.NewPadIndex(uint16(i)); ok {
 				m.lastAssigned, m.hasLast = pad, true
@@ -290,12 +338,24 @@ func New(unit app.Unit, player app.Player, store Store) Model {
 	return m
 }
 
+// AudioOutputMsg tells the UI the name of the computer's audio output; send it to the
+// program once it is known.
+type AudioOutputMsg string
+
 // WithAudio tells the UI about the audio output: the player, or why there is none.
 func (m Model) WithAudio(player app.Player, err error) Model {
 	m.player = player
 	if err != nil {
 		m.audioErr = err.Error()
 	}
+	return m
+}
+
+// WithLogger turns on the debug log: connections, every operation on the unit with its
+// timing, errors, and the keys pressed. path is shown so it can be found.
+func (m Model) WithLogger(l *slog.Logger, path string) Model {
+	m.log, m.logPath = l, path
+	l.Info("ui ready", "unit connected", m.unit != nil)
 	return m
 }
 
@@ -313,6 +373,7 @@ func (m *Model) persist() {
 		return
 	}
 	m.mem.Theme, m.mem.Bank, m.mem.TargetBank = m.themeAt, m.bank, m.target
+	m.mem.PreviewLocal = m.previewLocal
 	m.mem.LastAssigned = 0
 	if m.hasLast {
 		m.mem.LastAssigned = int(m.lastAssigned.Index()) + 1
@@ -416,15 +477,34 @@ type (
 		entries []fileapi.DirEntry
 		err     error
 	}
+	// padRestoreMsg carries a pad export that was read, to choose where it goes.
+	padRestoreMsg struct {
+		plan *app.PadRestore
+		err  error
+	}
 	// planMsg carries a backup read and checked, to be confirmed before it overwrites a project.
 	planMsg struct {
 		plan *app.RestorePlan
 		err  error
 	}
+	// previewMsg is the outcome of starting a pad previewing on the unit; previewStopMsg fires
+	// when it should stop.
+	previewMsg struct {
+		pad      proto.PadIndex
+		seq      int
+		err      error
+		duration time.Duration
+	}
+	previewStopMsg struct {
+		pad proto.PadIndex
+		seq int
+	}
 	// listenMsg is the outcome of starting a file playing.
 	listenMsg struct {
 		path string
 		err  error
+		// stale: something else was asked for while this one was decoding, so it was dropped.
+		stale bool
 	}
 	// autoplayMsg fires a moment after the cursor stopped on a result.
 	autoplayMsg struct{ seq int }
@@ -456,19 +536,64 @@ func (m Model) tryConnect() tea.Cmd {
 
 // edit runs a change on the unit as a command, apart from the poll of its reports.
 func (m *Model) edit(change func() tea.Msg) tea.Cmd {
-	ops := m.ops
+	ops, log := m.ops, m.log
 	return func() tea.Msg {
 		ops.Lock()
 		defer ops.Unlock()
-		return change()
+		start := time.Now()
+		msg := change()
+		log.Debug("operation on the unit", "took", time.Since(start).Round(time.Millisecond), "result", describe(msg))
+		return msg
 	}
+}
+
+// describe is a message in a few words, for the log.
+func describe(msg tea.Msg) string {
+	switch msg := msg.(type) {
+	case doneMsg:
+		return "done: " + msg.message
+	case noteMsg:
+		return "note: " + string(msg)
+	case patternMsg:
+		if msg.err != nil {
+			return "pattern error: " + msg.err.Error()
+		}
+		return "pattern: " + msg.note
+	case treeMsg:
+		if msg.err != nil {
+			return "tree error: " + msg.err.Error()
+		}
+		return "tree: " + msg.note
+	case padRestoreMsg:
+		if msg.err != nil {
+			return "export read error: " + msg.err.Error()
+		}
+		return fmt.Sprintf("export read: %d pads", len(msg.plan.Pads))
+	case planMsg:
+		if msg.err != nil {
+			return "restore plan error: " + msg.err.Error()
+		}
+		return fmt.Sprintf("restore plan: %d files, %d bytes", len(msg.plan.Files), msg.plan.Total)
+	case indexMsg:
+		if msg.err != nil {
+			return "index error: " + msg.err.Error()
+		}
+		return fmt.Sprintf("index of %s: %d files, truncated %v", display(msg.root), len(msg.ix.Files), msg.ix.Truncated)
+	case deletePlanMsg:
+		return fmt.Sprintf("delete plan: %d files, %d folders, err %v", msg.count.Files, msg.count.Folders, msg.err)
+	case nil:
+		return "nothing"
+	}
+	return fmt.Sprintf("%T", msg)
 }
 
 func (m Model) load(message string) tea.Cmd {
 	return func() tea.Msg {
 		m.ops.Lock()
 		defer m.ops.Unlock()
+		start := time.Now()
 		snap, err := app.Load(m.unit)
+		m.log.Debug("loaded the project", "took", time.Since(start).Round(time.Millisecond), "err", err)
 		return loadedMsg{snap: snap, err: err, message: message}
 	}
 }
@@ -535,7 +660,9 @@ func (m Model) usageCmd(project uint8) tea.Cmd {
 	return func() tea.Msg {
 		m.ops.Lock()
 		defer m.ops.Unlock()
+		start := time.Now()
 		usage, err := app.PatternUsage(m.unit)
+		m.log.Debug("read which patterns play which pads", "took", time.Since(start).Round(time.Millisecond), "pads", len(usage), "err", err)
 		return usageMsg{usage: usage, err: err, project: project}
 	}
 }
@@ -624,6 +751,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.lose()
 		}
 		if msg.err != nil {
+			m.log.Error("reading the unit failed", "err", msg.err)
 			m.message = "reading the unit failed: " + msg.err.Error()
 			break
 		}
@@ -634,6 +762,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.usage, m.usageState = nil, 0
 		}
 		m.facts = map[factKey]padFacts{}
+		m.padAudio.clear()
 		m.snap = msg.snap
 		if m.hasSelected = msg.snap.HasSelected; m.hasSelected {
 			m.selected = msg.snap.Selected
@@ -658,7 +787,36 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.busy = ""
 	case noteMsg:
 		m.message = string(msg)
+	case AudioOutputMsg:
+		m.audioOut = string(msg)
+		m.log.Info("audio output", "device", m.audioOut)
+	case previewMsg:
+		if msg.seq != m.previewSeq {
+			break
+		}
+		if msg.err != nil {
+			m.previewing = nil
+			m.message = fmt.Sprintf("preview %s failed: %v", msg.pad, msg.err)
+			break
+		}
+		pad, seq := msg.pad, msg.seq
+		return m, tea.Tick(previewStopAfter(msg.duration), func(time.Time) tea.Msg { return previewStopMsg{pad: pad, seq: seq} })
+	case previewStopMsg:
+		if msg.seq != m.previewSeq || m.previewing == nil {
+			break
+		}
+		m.previewing = nil
+		unit, pad := m.unit, msg.pad
+		return m, m.edit(func() tea.Msg {
+			_ = app.StopPreview(unit, pad)
+			return nil
+		})
+	case chromaticMsg:
+		return m.chromaticLoaded(msg)
 	case listenMsg:
+		if msg.stale {
+			break
+		}
 		if msg.err != nil {
 			if m.listening == msg.path {
 				m.listening = ""
@@ -666,6 +824,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.message = "listening failed: " + msg.err.Error()
 		} else if m.listening == msg.path {
 			m.message = "♪ playing " + app.Base(msg.path)
+			if m.audioOut != "" {
+				m.message += " on " + m.audioOut
+			}
 		}
 	case autoplayMsg:
 		if m.autoplay && msg.seq == m.autoSeq {
@@ -744,6 +905,34 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, m.wanted()
 		}
+	case padRestoreMsg:
+		m.busy = ""
+		if msg.err != nil {
+			m.message = "restore: " + msg.err.Error()
+			m.log.Warn("could not read the export", "err", msg.err)
+			break
+		}
+		if bank, single := msg.plan.SingleBank(); single {
+			// The pads can go to any bank: ask which.
+			m.picker = &picker{restorePlan: msg.plan, bank: bank, sourceBank: bank}
+			break
+		}
+		// An export that spans banks goes back where each pad came from.
+		return m.runRestore(msg.plan, -1)
+	case deletePlanMsg:
+		m.busy = ""
+		if msg.err != nil {
+			m.message = "delete: " + msg.err.Error()
+			if msg.reopen != nil {
+				return m.openAssign(*msg.reopen)
+			}
+			break
+		}
+		m.prompt = &prompt{kind: promptDeleteFiles, paths: msg.paths, count: msg.count, reopen: msg.reopen}
+	case reopenAssignMsg:
+		m.busy = ""
+		m.message = msg.note
+		return m.openAssign(msg.pad)
 	case planMsg:
 		m.busy = ""
 		if msg.err != nil {
@@ -815,6 +1004,7 @@ func (m Model) connected(msg connectMsg) (tea.Model, tea.Cmd) {
 		m.waitErr = ""
 		if !errors.Is(msg.err, ErrNoUnit) {
 			m.waitErr = msg.err.Error()
+			m.log.Warn("connecting failed", "err", msg.err)
 		}
 		return m, nil
 	case m.unit != nil:
@@ -824,6 +1014,7 @@ func (m Model) connected(msg connectMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	m.log.Info("connected", "port", msg.unit.PortName())
 	m.unit, m.closer = app.NewRouted(msg.unit), msg.closer
 	m.waitErr, m.lost = "", false
 	m.connectedFrame = m.frame
@@ -834,6 +1025,7 @@ func (m Model) connected(msg connectMsg) (tea.Model, tea.Cmd) {
 // lose handles the link to the unit going away: everything on screen is dropped, and the UI
 // goes back to waiting for it.
 func (m Model) lose() (tea.Model, tea.Cmd) {
+	m.log.Warn("the link to the unit is gone", "reconnects", m.connect != nil)
 	if m.connect == nil {
 		m.message = "the connection to the unit was lost"
 		m.busy = ""
@@ -845,7 +1037,7 @@ func (m Model) lose() (tea.Model, tea.Cmd) {
 	m.stopListening()
 	m.unit, m.closer, m.snap = nil, nil, nil
 	m.lost, m.busy, m.polling, m.connecting = true, "", false, false
-	m.prompt, m.picker, m.palette, m.browser = nil, nil, nil, nil
+	m.prompt, m.picker, m.palette, m.browser, m.chromatic = nil, nil, nil, nil, nil
 	m.message = ""
 	return m, nil
 }
@@ -964,4 +1156,31 @@ func display(path string) string {
 
 func isAudio(name string) bool {
 	return strings.Contains(name, ".") && app.IsAudioName(name)
+}
+
+// padCache keeps the samples read from the unit to play a pad on this computer, so that the
+// second press does not read them again. It is shared by every copy of the model and used
+// from commands, hence the lock.
+type padCache struct {
+	mu      sync.Mutex
+	samples map[factKey]formats.Sample
+}
+
+func (c *padCache) get(k factKey) (formats.Sample, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s, ok := c.samples[k]
+	return s, ok
+}
+
+func (c *padCache) put(k factKey, s formats.Sample) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.samples[k] = s
+}
+
+func (c *padCache) clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	clear(c.samples)
 }

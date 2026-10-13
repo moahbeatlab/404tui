@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/moahbeatlab/404tui/proto"
@@ -147,7 +148,10 @@ func padPosition(p int) (col, row int) {
 }
 
 func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if m.unit == nil || m.busy != "" || m.snap == nil || m.help || m.prompt != nil || m.picker != nil || m.palette != nil || m.browser != nil {
+	if msg.Action == tea.MouseActionPress {
+		m.log.Debug("mouse", "x", msg.X, "y", msg.Y, "button", fmt.Sprint(msg.Button), "section", sectionNames[m.section], "busy", m.busy)
+	}
+	if m.unit == nil || m.busy != "" || m.snap == nil || m.help || m.prompt != nil || m.picker != nil || m.palette != nil || m.browser != nil || m.chromatic != nil {
 		return m, nil
 	}
 	wheel := 0
@@ -262,13 +266,11 @@ func (m Model) clickBody(x, y int, g geom) (tea.Model, tea.Cmd) {
 			m.patternCursor = p
 			return m, nil
 		}
-		// A second click on the pad in front does what Enter does.
-		if p == m.pad {
-			return m.padsKey("enter")
-		}
+		// A click selects the pad and plays it, as hitting a pad does.
 		m.pad = p
-		cmd := m.wanted()
-		return m, cmd
+		model, cmd := m.padsKey("enter")
+		next := model.(Model)
+		return next, tea.Batch(cmd, next.wanted())
 	case secFiles:
 		if m.tree == nil || x >= g.listW {
 			return m, nil
@@ -281,8 +283,9 @@ func (m Model) clickBody(x, y int, g geom) (tea.Model, tea.Cmd) {
 				return m.filesKey("tab")
 			}
 			m.fileAt = at
-			cmd := m.wanted()
-			return m, cmd
+			wanted := m.wanted()
+			play := m.scheduleAutoplay()
+			return m, tea.Batch(wanted, play)
 		}
 	case secProjects:
 		if x >= g.listW {

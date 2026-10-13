@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/moahbeatlab/404tui/app"
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/proto"
 )
 
@@ -30,6 +32,9 @@ var commands = []command{
 	{"S", "Edit this pad's settings (or the marked pads')", []int{secPads}},
 	{",", "Pad level down (of the marked pads)", []int{secPads}},
 	{".", "Pad level up (of the marked pads)", []int{secPads}},
+	{"o", "Preview pads on this computer or on the unit (switch; O and 0 work too)", []int{secPads}},
+	{"P", "Play this pad once on this computer", []int{secPads}},
+	{"C", "Chromatic: play this pad as notes from the keyboard, on this computer", []int{secPads}},
 	{"c", "Copy this pad (or the marked ones) to another pad, in any bank", []int{secPads}},
 	{"b", "Edit this bank's tempo and volume", []int{secPads, secPatterns}},
 	{"<", "Bank tempo down 1 BPM", []int{secPads, secPatterns}},
@@ -40,18 +45,22 @@ var commands = []command{
 	{"p", "Move the picked-up pad here (overwrite)", []int{secPads}},
 	{"s", "Swap the picked-up pad with this one", []int{secPads}},
 	{"e", "Export this bank: choose a folder, get WAV files + samples.json", []int{secPads}},
-	{"R", "Restore pads from an export: choose its folder", []int{secPads}},
+	{"R", "Restore pads from an export: choose its folder, then the bank", []int{secPads}},
 	{"enter", "Open pattern", []int{secPatterns}},
 	{"b", "Retarget the open pattern to another bank", []int{secPatterns}},
 	{"enter", "Assign this file to a pad", []int{secFiles}},
 	{"[", "Target bank for assigns: previous (Files)", []int{secFiles}},
 	{"]", "Target bank for assigns: next (Files)", []int{secFiles}},
 	{"space", "Listen to this file", []int{secFiles}},
-	{"v", "Mark file for a multi-file assign", []int{secFiles}},
+	{"v", "Mark a file or folder (V: every file in the folder, J: junk files)", []int{secFiles}},
+	{"J", "Mark macOS and Windows junk files in the open folders (._ files, .DS_Store)", []int{secFiles}},
+	{"d", "Delete the marked files and folders from the SD card", []int{secFiles}},
+	{"c", "Copy the marked files and folders (then p pastes)", []int{secFiles}},
+	{"x", "Cut the marked files and folders to move them (then p pastes)", []int{secFiles}},
+	{"p", "Paste into the folder in front (also from another source: t)", []int{secFiles}},
+	{"N", "New folder in the folder in front", []int{secFiles}},
 	{"tab", "Open / close folder", []int{secFiles}},
 	{"n", "Rename file or folder", []int{secFiles}},
-	{"m", "Mark file or folder to move", []int{secFiles}},
-	{"p", "Move marked entry here", []int{secFiles}},
 	{"R", "Restore pads from this folder", []int{secFiles}},
 	{"t", "Next source: SD card, unit storage, this computer", []int{secFiles}},
 	{"enter", "Select project", []int{secProjects}},
@@ -62,6 +71,11 @@ var commands = []command{
 	{"]", "Next bank", []int{secPads, secPatterns}},
 	{"/", "Find a pad or project by name", []int{secPads, secProjects}},
 	{"/", "Search every audio file in this source by keyword", []int{secFiles}},
+	{"shift+tab", "Fold every folder in the list", []int{secFiles}},
+	{"f", "Find a folder in the list by name, then h or Tab collapses it", []int{secFiles}},
+	{"ctrl+a", "Autoplay: files play as the cursor rests on them", []int{secFiles}},
+	{"}", "Jump to the next folder in the list (Alt-n too)", []int{secFiles}},
+	{"{", "Jump to the previous folder in the list (Alt-p too)", []int{secFiles}},
 	{"1", "Go to Pads", nil},
 	{"2", "Go to Patterns", nil},
 	{"3", "Go to Files", nil},
@@ -96,18 +110,44 @@ func keyFor(name string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyTab}
 	case "space":
 		return tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}}
+	case "ctrl+a":
+		return tea.KeyMsg{Type: tea.KeyCtrlA}
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(name)}
 }
 
 // key handles a key press, then keeps the state that is remembered between runs.
 func (m Model) key(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.log.Debug("key", "key", key.String(), "section", sectionNames[m.section], "overlay", m.overlayName(), "busy", m.busy)
 	model, cmd := m.handleKey(key)
 	if updated, ok := model.(Model); ok {
 		updated.persist()
 		return updated, cmd
 	}
 	return model, cmd
+}
+
+// overlayName names the dialog in front, for the log.
+func (m Model) overlayName() string {
+	switch {
+	case m.help:
+		return "help"
+	case m.search != nil:
+		return "search"
+	case m.editor != nil:
+		return "editor"
+	case m.chromatic != nil:
+		return "chromatic"
+	case m.browser != nil:
+		return "browser"
+	case m.prompt != nil:
+		return fmt.Sprintf("prompt %d", m.prompt.kind)
+	case m.picker != nil:
+		return "picker"
+	case m.palette != nil:
+		return "palette"
+	}
+	return ""
 }
 
 func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -128,6 +168,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.searchKey(key)
 	case m.editor != nil:
 		return m.editorKey(key)
+	case m.chromatic != nil:
+		return m.chromaticKey(key)
 	case m.browser != nil:
 		return m.browserKey(key)
 	case m.prompt != nil:
@@ -176,6 +218,11 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "1", "2", "3", "4":
 		return m.goTo(int(name[0] - '1'))
 	case "shift+tab":
+		if m.section == secFiles && m.tree != nil {
+			m.fileAt = m.tree.CollapseAll(m.fileAt)
+			m.message = "folded everything"
+			return m, m.wanted()
+		}
 		return m.goTo((m.section + secCount - 1) % secCount)
 	case "tab":
 		if m.section != secFiles {
@@ -226,8 +273,8 @@ func (m Model) escape() (tea.Model, tea.Cmd) {
 		m.marked = map[int]bool{}
 	case len(m.fileMarks) > 0:
 		m.fileMarks = map[string]bool{}
-	case m.fileMoved != "":
-		m.fileMoved = ""
+	case len(m.clip) > 0:
+		m.clip = nil
 	case m.listening != "":
 		m.stopListening()
 	default:
@@ -243,10 +290,53 @@ func (m Model) goTo(section int) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) stopListening() {
+	// A file still being decoded must not start once this has been asked for.
+	m.listenGen.Add(1)
 	if m.player != nil {
 		m.player.Stop()
 	}
 	m.listening = ""
+}
+
+// pageStep is how far a paging key moves a list that shows height rows: Ctrl-D and Ctrl-U go
+// half a page down and up, as in vim, Page Down and Page Up a whole page.
+func (m Model) pageStep(key string, height int) int {
+	half := max(height/2, 1)
+	switch key {
+	case "ctrl+d":
+		return half
+	case "ctrl+u":
+		return -half
+	case "pgdown":
+		return max(height-1, 1)
+	}
+	return -max(height-1, 1)
+}
+
+// folderRow is the row of the next folder below row at (step 1) or the previous one above it
+// (step -1), at any depth; ok is false when there is none that way.
+func folderRow(rows []app.Node, at, step int) (row int, ok bool) {
+	for i := at + step; i >= 0 && i < len(rows); i += step {
+		if rows[i].Dir {
+			return i, true
+		}
+	}
+	return at, false
+}
+
+// jumpFolder moves a list cursor to the next or previous folder.
+func jumpFolder(rows []app.Node, at int, key string) (int, string) {
+	step := 1
+	if key == "{" || key == "alt+p" {
+		step = -1
+	}
+	if row, ok := folderRow(rows, at, step); ok {
+		return row, ""
+	}
+	if step > 0 {
+		return at, "no more folders below"
+	}
+	return at, "no more folders above"
 }
 
 func clamp(v, lo, hi int) int {
@@ -345,15 +435,28 @@ func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 			m.message = fmt.Sprintf("%s is empty; a assigns a file to it", row.Pad)
 			break
 		}
-		m.message = fmt.Sprintf("previewing %s", row.Pad)
-		unit := m.unit
-		// Not a wait: a preview holds the note for its whole length.
-		return m, func() tea.Msg {
-			if err := unit.Preview(row.Pad, app.PreviewLength); err != nil {
-				return noteMsg(fmt.Sprintf("preview %s failed: %v", row.Pad, err))
-			}
-			return nil
+		if m.previewLocal {
+			return m.previewPadLocal(row)
 		}
+		return m.previewPad(row)
+	case "P":
+		if !row.HasSample {
+			m.message = fmt.Sprintf("%s is empty; a assigns a file to it", row.Pad)
+			break
+		}
+		return m.previewPadLocal(row)
+	case "C":
+		return m.openChromatic(row)
+	case "o", "O", "0":
+		m.previewLocal = !m.previewLocal
+		where := "the unit"
+		if m.previewLocal {
+			where = "this computer"
+			if m.audioOut != "" {
+				where += " (" + m.audioOut + ")"
+			}
+		}
+		m.message = "pads play on " + where + " when previewed (o switches, P plays once on the computer)"
 	case "n":
 		pads := withSamples(m.targets())
 		switch {
@@ -531,6 +634,84 @@ func (m Model) applyBank() (tea.Model, tea.Cmd) {
 	})
 }
 
+// previewPad plays a pad on the unit. The pad is selected first and checked, because the
+// unit plays the previously selected pad on the first press otherwise; the preview then stops
+// by itself after the sample's length, and pressing again restarts it.
+func (m Model) previewPad(row app.PadRow) (tea.Model, tea.Cmd) {
+	m.previewSeq++
+	seq, pad := m.previewSeq, row.Pad
+	previous := m.previewing
+	m.previewing = &pad
+	m.message = fmt.Sprintf("previewing %s", pad)
+	duration := m.previewLength(row)
+	unit, log := m.unit, m.log
+	return m, m.edit(func() tea.Msg {
+		// Another pad that is still playing is stopped first.
+		if previous != nil && *previous != pad {
+			_ = app.StopPreview(unit, *previous)
+		}
+		err := app.StartPreview(unit, pad, func(msg string, args ...any) { log.Debug(msg, args...) })
+		return previewMsg{pad: pad, seq: seq, err: err, duration: duration}
+	})
+}
+
+// previewPadLocal plays a pad's sample on this computer, the way a file is auditioned: it is
+// read from the unit once, cut to the part the pad plays, and played through the computer's
+// audio output. Pressing again restarts it, and another pad replaces it. This is the sample as
+// stored: the unit's pitch, envelope and effects are not applied.
+func (m Model) previewPadLocal(row app.PadRow) (tea.Model, tea.Cmd) {
+	if !row.HasSample {
+		m.message = fmt.Sprintf("%s is empty; a assigns a file to it", row.Pad)
+		return m, nil
+	}
+	if m.player == nil {
+		m.message = "no audio output to play on"
+		if m.audioErr != "" {
+			m.message += ": " + m.audioErr
+		}
+		return m, nil
+	}
+	// The sound that is playing stops now, and a file still being read must not start later.
+	m.player.Stop()
+	id := m.listenGen.Add(1)
+	label := "pad " + row.Pad.String()
+	m.listening = label
+	m.message = "reading " + row.Pad.String() + " from the unit…"
+	key := factKey{row.Pad, row.Size, row.Name}
+	player, unit, ops, log, gen, cache := m.player, m.unit, m.ops, m.log, m.listenGen, m.padAudio
+	return m, func() tea.Msg {
+		start := time.Now()
+		sample, cached := cache.get(key)
+		if !cached {
+			ops.Lock()
+			var err error
+			sample, err = app.PadAudio(unit, row)
+			ops.Unlock()
+			if err != nil {
+				log.Warn("could not read the pad to play it on this computer", "pad", row.Pad.String(), "err", err)
+				return listenMsg{path: label, err: err}
+			}
+			cache.put(key, sample)
+		}
+		if gen.Load() != id {
+			return listenMsg{path: label, stale: true}
+		}
+		err := player.Play(sample)
+		log.Debug("playing a pad on this computer", "pad", row.Pad.String(), "frames", sample.Frames(),
+			"from the unit", !cached, "took", time.Since(start).Round(time.Millisecond), "err", err)
+		return listenMsg{path: label, err: err}
+	}
+}
+
+// previewLength is how long a preview plays: the sample's length when it is known, at most
+// eight seconds (a looping pad would go on forever).
+func (m Model) previewLength(row app.PadRow) time.Duration {
+	if res, ok := m.facts[factKey{row.Pad, row.Size, row.Name}]; ok && res.err == nil && res.facts.Seconds > 0 {
+		return time.Duration(min(max(res.facts.Seconds, 0.3)+0.25, 8) * float64(time.Second))
+	}
+	return 2 * time.Second
+}
+
 // ---- Patterns ----
 
 func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
@@ -589,17 +770,25 @@ func (m Model) projectsKey(name string) (tea.Model, tea.Cmd) {
 		m.projectAt = clamp(m.projectAt+1, 0, len(m.snap.Projects)-1)
 	case "k", "up":
 		m.projectAt = clamp(m.projectAt-1, 0, len(m.snap.Projects)-1)
+	case "ctrl+d", "ctrl+u", "pgdown", "pgup":
+		m.projectAt = clamp(m.projectAt+m.pageStep(name, m.geom().bodyH-2), 0, len(m.snap.Projects)-1)
 	case "g":
 		m.projectAt = 0
 	case "G":
 		m.projectAt = len(m.snap.Projects) - 1
 	case "enter", " ":
 		project := uint8(m.projectAt)
+		if project == m.snap.Project {
+			m.message = fmt.Sprintf("project %d is already the current project", project+1)
+			break
+		}
 		m.busy = fmt.Sprintf("loading project %d", project+1)
 		unit := m.unit
 		return m, m.edit(func() tea.Msg {
+			// Read the unit again either way: a switch that was reported late or failed may
+			// have happened, and the screen should show where the unit really is.
 			if err := unit.SelectProject(project); err != nil {
-				return doneMsg{message: fmt.Sprintf("project %d: %v", project+1, err)}
+				return doneMsg{message: fmt.Sprintf("project %d: %v", project+1, err), reload: true}
 			}
 			return doneMsg{message: fmt.Sprintf("project %d selected", project+1), reload: true}
 		})
@@ -633,7 +822,10 @@ func (m Model) planProjectRestore(project uint8, dir string) (tea.Model, tea.Cmd
 // ---- Files ----
 
 func (m Model) filesKey(name string) (tea.Model, tea.Cmd) {
+	before := m.fileAt
 	switch name {
+	case "ctrl+a":
+		return m.toggleAutoplay()
 	case "[":
 		m.target = (m.target + proto.Banks - 1) % proto.Banks
 		return m, nil
@@ -642,7 +834,8 @@ func (m Model) filesKey(name string) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "t":
 		m.root = nextRoot(m.root)
-		m.tree, m.fileMoved, m.fileAt = nil, "", 0
+		// The clipboard stays, so that a paste can land on the other side.
+		m.tree, m.fileAt = nil, 0
 		m.fileMarks = map[string]bool{}
 		cmd := m.wanted()
 		return m, cmd
@@ -653,7 +846,7 @@ func (m Model) filesKey(name string) (tea.Model, tea.Cmd) {
 	rows := m.tree.Rows()
 	at := m.fileAt
 	if name == "p" {
-		return m.paste(m.tree.Folder(at))
+		return m.paste()
 	}
 	if len(rows) == 0 {
 		return m, nil
@@ -664,6 +857,10 @@ func (m Model) filesKey(name string) (tea.Model, tea.Cmd) {
 		m.fileAt = clamp(at+1, 0, len(rows)-1)
 	case "k", "up":
 		m.fileAt = clamp(at-1, 0, len(rows)-1)
+	case "ctrl+d", "ctrl+u", "pgdown", "pgup":
+		m.fileAt = clamp(at+m.pageStep(name, m.geom().bodyH-2), 0, len(rows)-1)
+	case "}", "{", "alt+n", "alt+p":
+		m.fileAt, m.message = jumpFolder(rows, at, name)
 	case "g":
 		m.fileAt = 0
 	case "G":
@@ -698,27 +895,33 @@ func (m Model) filesKey(name string) (tea.Model, tea.Cmd) {
 		} else if parent := m.tree.Parent(at); parent >= 0 {
 			m.fileAt = parent
 		}
+	case "f":
+		m.prompt = &prompt{kind: promptFindFolder}
+		return m, nil
 	case "a":
 		if isAudio(node.Name) {
 			return m.startAssign(node)
 		}
 		m.message = "that is not an audio file"
 	case "v":
-		if !isAudio(node.Name) {
-			m.message = "only audio files can be marked for assigning"
-			break
-		}
-		if m.fileMarks[node.Path] {
-			delete(m.fileMarks, node.Path)
-		} else {
-			m.fileMarks[node.Path] = true
-		}
-		m.fileAt = clamp(at+1, 0, len(rows)-1)
+		m = m.toggleMark(node)
+	case "V":
+		m = m.markFolder()
+	case "J":
+		m = m.markJunk()
+	case "u":
+		m.fileMarks = map[string]bool{}
+		m.message = "unmarked everything"
+	case "c":
+		m = m.copyFiles(false)
+	case "x", "m":
+		m = m.copyFiles(true)
+	case "d":
+		return m.deleteFiles()
+	case "N":
+		return m.newFolder()
 	case "n":
 		m.prompt = &prompt{kind: promptRenameFile, path: node.Path, buffer: node.Name}
-	case "m":
-		m.fileMoved = node.Path
-		m.message = fmt.Sprintf("marked %s; p on a folder moves it there", display(node.Path))
 	case "R":
 		return m.openBrowser(browseRestore, m.root, m.tree.Expanded(), node.Path)
 	case " ":
@@ -728,6 +931,10 @@ func (m Model) filesKey(name string) (tea.Model, tea.Cmd) {
 		return m.listen(node.Path)
 	}
 	cmd := m.wanted()
+	// Moving on to another row plays it, if autoplay is on, and stops the old sound at once.
+	if m.fileAt != before {
+		cmd = tea.Batch(cmd, m.scheduleAutoplay())
+	}
 	return m, cmd
 }
 
@@ -748,9 +955,13 @@ func (m Model) startAssign(node app.Node) (tea.Model, tea.Cmd) {
 	if len(m.fileMarks) > 0 {
 		files = files[:0]
 		for _, r := range m.tree.Rows() {
-			if m.fileMarks[r.Path] {
+			if m.fileMarks[r.Path] && !r.Dir && isAudio(r.Name) {
 				files = append(files, r.Path)
 			}
+		}
+		if len(files) == 0 {
+			m.message = "none of the marked items is an audio file"
+			return m, nil
 		}
 	}
 	m.stopListening()
@@ -819,21 +1030,55 @@ func (m Model) playFile(path string) (tea.Model, tea.Cmd) {
 	if m.player == nil {
 		return m.listen(path)
 	}
+	// Whatever is playing stops now, not when the new file has been decoded.
+	m.player.Stop()
+	id := m.listenGen.Add(1)
 	m.listening = path
 	m.message = "decoding " + app.Base(path) + "…"
-	player, unit := m.player, m.unit
+	player, unit, log, gen := m.player, m.unit, m.log, m.listenGen
 	return m, func() tea.Msg {
+		start := time.Now()
 		imported, err := app.LoadSample(unit, path)
 		if err != nil {
+			log.Warn("could not decode the file to listen to it", "path", path, "err", err)
 			return listenMsg{path: path, err: err}
 		}
-		return listenMsg{path: path, err: player.Play(imported.Sample)}
+		if gen.Load() != id {
+			log.Debug("dropped a file that was still decoding when something else was asked for", "path", path)
+			return listenMsg{path: path, stale: true}
+		}
+		err = player.Play(imported.Sample)
+		log.Debug("playing on this computer", "path", path, "decoded in", time.Since(start).Round(time.Millisecond),
+			"seconds", float64(imported.Sample.Frames())/formats.SampleRate, "source rate", imported.SourceRate, "err", err)
+		return listenMsg{path: path, err: err}
 	}
+}
+
+// toggleAutoplay turns autoplay on or off.
+func (m Model) toggleAutoplay() (tea.Model, tea.Cmd) {
+	m.autoplay = !m.autoplay
+	switch {
+	case m.autoplay && m.player == nil:
+		m.autoplay = false
+		m.message = "no audio output to autoplay on"
+		return m, nil
+	case !m.autoplay:
+		m.stopListening()
+		m.message = "autoplay off"
+		return m, nil
+	}
+	m.message = "autoplay on: files play as the cursor rests on them"
+	cmd := m.scheduleAutoplay()
+	return m, cmd
 }
 
 // autoplayPath is the audio file the search or the assign dialog has under the cursor.
 func (m Model) autoplayPath() string {
 	switch {
+	case m.search == nil && m.browser == nil && m.picker == nil && m.prompt == nil && m.section == secFiles:
+		if node, ok := m.fileNode(); ok && !node.Dir && isAudio(node.Name) {
+			return node.Path
+		}
 	case m.search != nil:
 		if f, ok := m.search.current(); ok {
 			return f.Path
@@ -848,40 +1093,30 @@ func (m Model) autoplayPath() string {
 
 // autoplayDelay is how long the cursor has to rest before autoplay plays what it is on, so
 // scrolling through a list does not play every file it passes.
-const autoplayDelay = 250 * time.Millisecond
+var autoplayDelay = 250 * time.Millisecond
 
 // scheduleAutoplay plays the file under the cursor shortly, if autoplay is on.
+//
+// The sound that is playing stops at once, at the first move: waiting for the next file to be
+// decoded would leave the old one playing for most of a second.
 func (m *Model) scheduleAutoplay() tea.Cmd {
 	if !m.autoplay || m.player == nil {
 		return nil
 	}
+	m.stopListening()
 	m.autoSeq++
 	seq := m.autoSeq
 	return tea.Tick(autoplayDelay, func(time.Time) tea.Msg { return autoplayMsg{seq: seq} })
 }
 
-// paste moves the marked path into dir.
-func (m Model) paste(dir string) (tea.Model, tea.Cmd) {
-	if m.fileMoved == "" {
-		m.message = "nothing marked: m marks a file or folder to move"
-		return m, nil
-	}
-	from, unit := m.fileMoved, m.unit
-	m.fileMoved = ""
-	m.busy = "moving"
-	cmd := m.afterFiles(func() string {
-		to, err := app.MoveInto(unit, from, dir)
-		if err != nil {
-			return fmt.Sprintf("moving %s failed: %v", display(from), err)
-		}
-		return fmt.Sprintf("moved to %s", display(to))
-	})
-	return m, cmd
-}
-
 // afterFiles runs a change to the files and then lists the volume again, with the same
 // folders open.
 func (m *Model) afterFiles(change func() string) tea.Cmd {
+	return m.afterFilesAt("", change)
+}
+
+// afterFilesAt is afterFiles, with the cursor put on the row at land afterwards.
+func (m *Model) afterFilesAt(land string, change func() string) tea.Cmd {
 	// What was indexed for searching may have changed.
 	clear(m.indexes)
 	root, unit := m.root, m.unit
@@ -892,7 +1127,7 @@ func (m *Model) afterFiles(change func() string) tea.Cmd {
 	return m.edit(func() tea.Msg {
 		note := change()
 		tree, err := app.LoadTree(unit, root, open)
-		return treeMsg{root: root, tree: tree, err: err, note: note}
+		return treeMsg{root: root, tree: tree, err: err, note: note, at: land}
 	})
 }
 
@@ -940,7 +1175,7 @@ func (m Model) pickerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p.pad = m.pickBankPad(p)
 		return m, nil
 	}
-	if !p.retarget && len(name) == 1 && name[0] >= '0' && name[0] <= '9' {
+	if !p.retarget && p.restorePlan == nil && len(name) == 1 && name[0] >= '0' && name[0] <= '9' {
 		digits := p.digits + name
 		if n := atoi(digits); n < 1 || n > proto.PadsPerBank {
 			digits = name
@@ -965,14 +1200,14 @@ func (m Model) pickerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p.bank, p.confirm = (p.bank+1)%proto.Banks, false
 		p.pad = m.pickBankPad(p)
 	case "h", "left":
-		if p.retarget {
-			p.bank = (p.bank + proto.Banks - 1) % proto.Banks
+		if p.retarget || p.restorePlan != nil {
+			p.bank, p.confirm = (p.bank+proto.Banks-1)%proto.Banks, false
 		} else {
 			step(-1, 0)
 		}
 	case "l", "right":
-		if p.retarget {
-			p.bank = (p.bank + 1) % proto.Banks
+		if p.retarget || p.restorePlan != nil {
+			p.bank, p.confirm = (p.bank+1)%proto.Banks, false
 		} else {
 			step(1, 0)
 		}
@@ -990,7 +1225,7 @@ func (m Model) pickerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 // (for a copy, the first free one).
 func (m Model) pickBankPad(p *picker) int {
 	switch {
-	case p.retarget:
+	case p.retarget || p.restorePlan != nil:
 		return 0
 	case len(p.copyFrom) > 0:
 		return m.freeAfter(p.bank, -1)
@@ -1058,6 +1293,9 @@ func atoi(s string) int {
 
 func (m Model) pickerEnter() (tea.Model, tea.Cmd) {
 	p := m.picker
+	if p.restorePlan != nil {
+		return m.restoreEnter()
+	}
 	if p.retarget {
 		m.picker = nil
 		slot, from, to, unit := p.slot, p.sourceBank, p.bank, m.unit
@@ -1099,16 +1337,32 @@ func (m Model) promptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	name := key.String()
 	if name == "esc" {
 		m.prompt = nil
+		if p.reopen != nil {
+			return m.openAssign(*p.reopen)
+		}
 		return m, nil
 	}
-	if p.kind == promptDelete || p.kind == promptConfirmRestore {
+	if p.kind == promptDelete || p.kind == promptConfirmRestore || p.kind == promptDeleteFiles {
 		switch name {
 		case "y", "enter":
 			return m.apply()
 		case "n", "q":
 			m.prompt = nil
+			if p.reopen != nil {
+				return m.openAssign(*p.reopen)
+			}
 		}
 		return m, nil
+	}
+	if p.kind == promptFindFolder && m.tree != nil {
+		switch name {
+		case "up", "down", "ctrl+n", "ctrl+p", "tab", "shift+tab":
+			p.choice = stepChoice(p.choice, len(folderMatches(m.tree.Rows(), p.buffer)), name)
+			return m, nil
+		}
+		if name != "enter" {
+			p.choice = 0 // typing starts the list over
+		}
 	}
 	switch {
 	case name == "enter":
@@ -1125,7 +1379,7 @@ func (m Model) promptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Type == tea.KeyRunes || key.Type == tea.KeySpace:
 		for _, r := range key.Runes {
 			// The unit only accepts printable ASCII in names; paths and searches can hold more.
-			if r >= ' ' && (r <= '~' || p.kind == promptExport || p.kind == promptRestore || p.kind == promptSearch || p.kind == promptExportName || p.kind == promptAssignFile || p.kind == promptProjectExport || p.kind == promptProjectExportName || p.kind == promptProjectRestore) {
+			if r >= ' ' && (r <= '~' || p.kind == promptExport || p.kind == promptRestore || p.kind == promptSearch || p.kind == promptExportName || p.kind == promptAssignFile || p.kind == promptMkdir || p.kind == promptFindFolder || p.kind == promptProjectExport || p.kind == promptProjectExportName || p.kind == promptProjectRestore) {
 				p.buffer += string(r)
 			}
 		}
@@ -1138,6 +1392,35 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 	p, unit := m.prompt, m.unit
 	m.prompt = nil
 	text := strings.TrimSpace(p.buffer)
+	if p.kind == promptDeleteFiles {
+		paths := p.paths
+		m.fileMarks = map[string]bool{}
+		// What was deleted cannot be pasted.
+		m.clip = slices.DeleteFunc(slices.Clone(m.clip), func(c string) bool { return slices.Contains(paths, c) })
+		m.busy = "deleting"
+		deleteAll := func() string {
+			deleted, failed := app.DeletePaths(unit, paths, nil)
+			note := fmt.Sprintf("%s deleted", plural(deleted, "item"))
+			if len(failed) > 0 {
+				note += "; not deleted: " + strings.Join(failed, ", ")
+			}
+			return note
+		}
+		if pad := p.reopen; pad != nil {
+			// From the assign dialog: its file list is read afresh when it opens again, and
+			// what was indexed for searching may have changed. The cursor stays where it was,
+			// or on the folder that held what is gone.
+			clear(m.indexes)
+			m.mem.AssignAt = survivor(m.mem.AssignAt, paths)
+			return m, m.edit(func() tea.Msg { return reopenAssignMsg{pad: *pad, note: deleteAll()} })
+		}
+		land := ""
+		if n, ok := m.fileNode(); ok {
+			land = survivor(n.Path, paths)
+		}
+		cmd := m.afterFilesAt(land, deleteAll)
+		return m, cmd
+	}
 	if p.kind == promptConfirmRestore {
 		plan := p.plan
 		m.busy = fmt.Sprintf("restoring project %d", plan.Project+1)
@@ -1148,15 +1431,27 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			return doneMsg{message: fmt.Sprintf("project %d restored from %s", plan.Project+1, plan.Dir), reload: true}
 		})
 	}
-	if p.kind != promptDelete && text == "" {
+	if p.kind != promptDelete && p.kind != promptFindFolder && text == "" {
 		m.message = "nothing typed"
 		return m, nil
 	}
 	switch p.kind {
 	case promptSearch:
 		return m.find(text)
+	case promptFindFolder:
+		return m.findFolder(text, p.choice), nil
 	case promptAssignFile:
 		return m.assign([]string{text}, p.pads[0])
+	case promptMkdir:
+		dir := app.Join(p.path, text)
+		m.busy = "creating the folder"
+		cmd := m.afterFiles(func() string {
+			if err := unit.Mkdir(dir); err != nil {
+				return fmt.Sprintf("creating %s failed: %v", display(dir), err)
+			}
+			return "created " + display(dir)
+		})
+		return m, cmd
 	case promptProjectRestore:
 		return m.planProjectRestore(p.project, text)
 	case promptProjectExport, promptProjectExportName:
@@ -1234,29 +1529,85 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 		return m.restoreFrom(text)
 	case promptRenameFile:
 		m.busy = "renaming"
-		cmd := m.afterFiles(func() string {
-			to, err := app.RenamePath(unit, p.path, text)
-			if err != nil {
+		to := app.Join(app.Dir(p.path), text)
+		rename := func() string {
+			if _, err := app.RenamePath(unit, p.path, text); err != nil {
 				return fmt.Sprintf("renaming %s failed: %v", display(p.path), err)
 			}
 			return fmt.Sprintf("renamed to %s", display(to))
-		})
+		}
+		if pad := p.reopen; pad != nil {
+			// From the assign dialog: it opens again on the renamed row, with the folders
+			// that were open (the renamed one under its new name).
+			clear(m.indexes)
+			from := p.path
+			m.mem.AssignAt = to
+			for i, e := range m.mem.AssignExpanded {
+				if e == from || strings.HasPrefix(e, from+"/") {
+					m.mem.AssignExpanded[i] = to + strings.TrimPrefix(e, from)
+				}
+			}
+			return m, m.edit(func() tea.Msg { return reopenAssignMsg{pad: *pad, note: rename()} })
+		}
+		cmd := m.afterFilesAt(to, rename)
 		return m, cmd
 	}
 	return m, nil
 }
 
-// restoreFrom puts the pads of the export in dir back.
+// restoreFrom reads the export in dir; the bank to restore it onto is asked next.
 func (m Model) restoreFrom(dir string) (tea.Model, tea.Cmd) {
 	unit := m.unit
-	m.busy = "restoring"
+	m.busy = "reading the export"
 	return m, m.edit(func() tea.Msg {
-		summary, err := app.RestorePads(unit, dir, nil)
+		plan, err := app.PlanPadRestore(unit, dir)
+		return padRestoreMsg{plan: plan, err: err}
+	})
+}
+
+// runRestore puts an export onto a bank (-1: back where each pad came from).
+func (m Model) runRestore(plan *app.PadRestore, bank int) (tea.Model, tea.Cmd) {
+	unit := m.unit
+	targets, err := plan.Targets(bank)
+	if err != nil {
+		m.message = err.Error()
+		return m, nil
+	}
+	first := targets[0]
+	m.busy = fmt.Sprintf("restoring %d pads", len(plan.Pads))
+	return m, m.edit(func() tea.Msg {
+		summary, err := app.RestorePadsTo(unit, plan, bank, nil)
 		if err != nil {
 			return doneMsg{message: "restore failed: " + err.Error(), reload: true}
 		}
-		return doneMsg{message: summary, reload: true}
+		return doneMsg{message: summary, reload: true, focus: &first}
 	})
+}
+
+// restoreEnter restores the picker's export onto the bank chosen; pads that hold a sample
+// are replaced only on a second Enter.
+func (m Model) restoreEnter() (tea.Model, tea.Cmd) {
+	p := m.picker
+	targets, err := p.restorePlan.Targets(p.bank)
+	if err != nil {
+		m.picker = nil
+		m.message = err.Error()
+		return m, nil
+	}
+	held := func(pad proto.PadIndex) bool { return m.snap.Pads[pad.Index()].HasSample }
+	occupied := 0
+	for _, t := range targets {
+		if held(t) {
+			occupied++
+		}
+	}
+	if occupied > 0 && !p.confirm {
+		p.confirm = true
+		return m, nil
+	}
+	plan, bank := p.restorePlan, p.bank
+	m.picker = nil
+	return m.runRestore(plan, bank)
 }
 
 // find moves the cursor to the next thing whose name contains text, wrapping around.

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/proto"
@@ -427,5 +428,35 @@ func TestSilenceTimesOut(t *testing.T) {
 	replies, err = d.RawExchange(proto.Short(proto.ChannelControl, proto.StatusRequest()), 100_000_000)
 	if err != nil || len(replies) != 1 || replies[0].Payload()[0] != proto.ReplyStatus {
 		t.Errorf("raw status = %+v (%v)", replies, err)
+	}
+}
+
+func TestSelectingAProjectIsRobust(t *testing.T) {
+	d, s := connect(t)
+	// The project that is already current: nothing to wait for.
+	start := time.Now()
+	check(t, d.SelectProject(0))
+	if took := time.Since(start); took > time.Second {
+		t.Errorf("selecting the current project took %v", took)
+	}
+	// A normal switch.
+	check(t, d.SelectProject(2))
+	if current, _ := d.CurrentProject(); current != 2 {
+		t.Errorf("current project %d", current)
+	}
+	// A load whose change notification never comes in time: the unit is on the project, so
+	// that is not reported as a failure.
+	old := device.SelectTimeout
+	device.SelectTimeout = 150 * time.Millisecond
+	defer func() { device.SelectTimeout = old }()
+	s.SilentProjectSwitch = true
+	check(t, d.SelectProject(4))
+	if current, _ := d.CurrentProject(); current != 4 {
+		t.Errorf("current project %d", current)
+	}
+	// A refusal is still a refusal.
+	var refused device.RefusedError
+	if err := d.SelectProject(20); !errors.As(err, &refused) {
+		t.Errorf("selecting project 21: %v", err)
 	}
 }

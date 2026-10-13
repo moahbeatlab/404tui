@@ -22,8 +22,10 @@ import (
 
 const maxEvents = 256
 
-// levelTrace logs every message on the wire.
-const levelTrace = slog.LevelDebug - 4
+// LevelTrace is the log level that includes every message on the wire, as hex.
+const LevelTrace = slog.LevelDebug - 4
+
+const levelTrace = LevelTrace
 
 var (
 	ErrClosed   = errors.New("connection closed")
@@ -167,10 +169,24 @@ func (d *Device) transact(msg proto.Message, what string, timeout time.Duration,
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.drain()
+	start := time.Now()
 	if err := d.send(msg); err != nil {
+		d.log.Warn("tx failed to send", "what", what, "err", err)
 		return proto.Message{}, err
 	}
-	return d.wait(what, timeout, match)
+	m, err := d.wait(what, timeout, match)
+	d.logTx(what, start, err)
+	return m, err
+}
+
+// logTx records a finished transaction and how long it took; the ones that fail are warnings.
+func (d *Device) logTx(what string, start time.Time, err error) {
+	took := time.Since(start).Round(100 * time.Microsecond)
+	if err != nil {
+		d.log.Warn("tx", "what", what, "took", took, "err", err)
+		return
+	}
+	d.log.Debug("tx", "what", what, "took", took)
 }
 
 // wait returns the first incoming message accepted by match. The caller holds mu.
@@ -180,11 +196,35 @@ func (d *Device) wait(what string, timeout time.Duration, match func(*proto.Mess
 		m, err := d.inbox.recv(time.Until(deadline))
 		switch {
 		case err == errNoAnswer:
+			d.log.Warn("timed out waiting for a reply", "what", what, "timeout", timeout)
 			return proto.Message{}, TimeoutError{what}
 		case err != nil:
 			return proto.Message{}, err
 		case match(&m):
 			return m, nil
+		}
+		d.pushEvent(m)
+	}
+}
+
+// AwaitEvent waits up to timeout for an unsolicited message accepted by match and returns it,
+// removing only that message from the events: the others stay for whoever reads them.
+func (d *Device) AwaitEvent(timeout time.Duration, match func(*proto.Message) bool) (proto.Message, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	deadline := time.Now().Add(timeout)
+	for {
+		d.drain()
+		for i := range d.events {
+			if match(&d.events[i]) {
+				m := d.events[i]
+				d.events = append(d.events[:i], d.events[i+1:]...)
+				return m, true
+			}
+		}
+		m, err := d.inbox.recv(time.Until(deadline))
+		if err != nil {
+			return proto.Message{}, false
 		}
 		d.pushEvent(m)
 	}
@@ -216,12 +256,15 @@ func (d *Device) RawExchange(msg proto.Message, wait time.Duration) ([]proto.Mes
 func (d *Device) fire(msg proto.Message) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	d.log.Debug("fire (no reply expected)", "channel", fmt.Sprintf("%02x", byte(msg.Channel)), "payload", hexPreview(msg.Payload()))
 	return d.send(msg)
 }
 
 func (d *Device) readLoop() {
 	defer close(d.done)
 	defer d.inbox.close()
+	defer d.log.Debug("reader stopped", "port", d.portName)
+	d.log.Debug("reader started", "port", d.portName)
 	var dec proto.Decoder
 	buf := make([]byte, 64*1024)
 	for !d.stop.Load() {

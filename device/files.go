@@ -137,9 +137,13 @@ func (d *Device) FreeKb() (uint32, error) {
 }
 
 // Read reads up to count bytes; the device answers in chunks of at most fileapi.Chunk.
-func (d *Device) Read(handle int32, count uint32) ([]byte, error) {
+func (d *Device) Read(handle int32, count uint32) (data []byte, err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	start := time.Now()
+	defer func() {
+		d.log.Debug("read", "handle", handle, "asked", count, "got", len(data), "took", time.Since(start).Round(time.Millisecond), "err", err)
+	}()
 	if err := d.send(proto.Long(proto.ChannelFile, fileapi.Read(handle, count))); err != nil {
 		return nil, err
 	}
@@ -193,9 +197,13 @@ func (d *Device) WriteWith(handle int32, data []byte, progress Progress) error {
 	return nil
 }
 
-func (d *Device) writeBatch(handle int32, part []byte) error {
+func (d *Device) writeBatch(handle int32, part []byte) (err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	start := time.Now()
+	defer func() {
+		d.log.Debug("write batch", "handle", handle, "bytes", len(part), "took", time.Since(start).Round(time.Millisecond), "err", err)
+	}()
 	for at := 0; at < len(part); at += fileapi.Chunk {
 		end := min(at+fileapi.Chunk, len(part))
 		msg := proto.Long(proto.ChannelFile, fileapi.Write(handle, part[at:end], end == len(part)))

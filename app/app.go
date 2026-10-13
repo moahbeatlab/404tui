@@ -31,6 +31,7 @@ type Pads interface {
 	SetSampleName(pad proto.PadIndex, name string) error
 	PadOp(op proto.PadOp, pad proto.PadIndex) error
 	Preview(pad proto.PadIndex, duration time.Duration) error
+	Previewer
 	SetParam(id byte, target proto.Target, value int32) error
 }
 

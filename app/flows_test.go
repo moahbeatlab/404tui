@@ -577,3 +577,128 @@ func TestPadFactsAndPatternUsage(t *testing.T) {
 		t.Errorf("usage = %v", usage)
 	}
 }
+
+func TestStartPreviewSelectsFirstAndSurvivesTheWrongPadQuirk(t *testing.T) {
+	d, s := connect(t)
+	a1, a6 := pad(t, "A1"), pad(t, "A6")
+	s.WrongPadOnFirstPreview = true
+	s.Select(0, 0) // the unit has A1 selected
+
+	var notes []string
+	logf := func(msg string, args ...any) { notes = append(notes, msg) }
+	// Selecting the pad first means the quirk never happens: A6 sounds on the first try.
+	if err := app.StartPreview(d, a6, logf); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(s.PreviewStarts, []uint16{a6.Index()}) || len(s.PreviewStops) != 0 {
+		t.Errorf("starts %v, stops %v (the quirk should not have been triggered)", s.PreviewStarts, s.PreviewStops)
+	}
+	if len(notes) == 0 || !strings.Contains(notes[0], "selecting the pad") {
+		t.Errorf("log = %v", notes)
+	}
+	if bank, p := s.Selected(); bank != 0 || p != 5 {
+		t.Errorf("selected %d %d", bank, p)
+	}
+	// The same pad again needs no selecting.
+	notes = nil
+	s.PreviewStarts = nil
+	if err := app.StartPreview(d, a6, logf); err != nil {
+		t.Fatal(err)
+	}
+	if len(notes) != 0 || len(s.PreviewStarts) != 1 {
+		t.Errorf("log %v, starts %v", notes, s.PreviewStarts)
+	}
+	_ = a1
+}
+
+// If selecting first does not help, the notification that says which pad sounded catches it.
+func TestStartPreviewRetriesWhenTheWrongPadSounded(t *testing.T) {
+	d, s := connect(t)
+	a1, a6 := pad(t, "A1"), pad(t, "A6")
+	s.WrongPadOnFirstPreview = true
+	s.Select(0, 0)
+	// A previewer whose SelectPad does nothing, as if the unit ignored it.
+	p := &blindSelect{Previewer: d}
+	var notes []string
+	if err := app.StartPreview(p, a6, func(msg string, args ...any) { notes = append(notes, msg) }); err != nil {
+		t.Fatal(err)
+	}
+	// The first start made A1 sound; it was stopped and A6 started again.
+	if !slices.Equal(s.PreviewStarts, []uint16{a6.Index(), a6.Index()}) || !slices.Equal(s.PreviewStops, []uint16{a1.Index()}) {
+		t.Errorf("starts %v, stops %v", s.PreviewStarts, s.PreviewStops)
+	}
+	found := false
+	for _, n := range notes {
+		found = found || strings.Contains(n, "another pad than asked for")
+	}
+	if !found {
+		t.Errorf("the retry was not logged: %v", notes)
+	}
+}
+
+type blindSelect struct{ app.Previewer }
+
+func (blindSelect) SelectPad(proto.PadIndex) error { return nil }
+
+func TestRestoreAnExportOntoAnotherBank(t *testing.T) {
+	d, s := connect(t)
+	router := app.NewRouted(d)
+	s.AddFile("SD:IMPORT/kick.wav", wav(480, 3))
+	s.AddFile("SD:IMPORT/hat.wav", wav(240, 9))
+	level, _ := proto.ParamByName("level")
+	c1, c5 := pad(t, "C1"), pad(t, "C5")
+	app.Assign(d, router, c1, "SD:IMPORT/kick.wav")
+	app.Assign(d, router, c5, "SD:IMPORT/hat.wav")
+	d.SetParam(level.ID, proto.TargetPad(c5), 77)
+	if _, err := app.ExportPads(router, proto.AllPads()[32:48], "SD:exports/C-bank", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := app.PlanPadRestore(router, "SD:exports/C-bank")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bank, ok := plan.SingleBank(); !ok || bank != 2 || len(plan.Pads) != 2 || plan.Pads[1].Name != "hat" {
+		t.Fatalf("plan = %+v", plan)
+	}
+	targets, err := plan.Targets(6) // bank G
+	if err != nil || targets[0] != pad(t, "G1") || targets[1] != pad(t, "G5") {
+		t.Fatalf("targets = %v (%v)", targets, err)
+	}
+	summary, err := app.RestorePadsTo(router, plan, 6, nil)
+	if err != nil || summary != "2 pads restored onto bank G from SD:exports/C-bank" {
+		t.Fatalf("restore: %q (%v)", summary, err)
+	}
+	block, _ := d.PadBlock(pad(t, "G5"))
+	if v, _ := block.Param(level.ID); block.Name() != "hat" || v != 77 {
+		t.Errorf("G5: %q, level %d", block.Name(), v)
+	}
+	if s.PadName(pad(t, "G1")) != "kick" || s.PadName(c5) != "hat" {
+		t.Errorf("G1 %q, C5 %q (the original bank is left as it was)", s.PadName(pad(t, "G1")), s.PadName(c5))
+	}
+
+	// -1 puts every pad back where it was.
+	app.DeletePads(d, []proto.PadIndex{c1, c5})
+	if _, err := app.RestorePadsTo(router, plan, -1, nil); err != nil || s.PadName(c1) != "kick" {
+		t.Errorf("restore in place: %v, C1 %q", err, s.PadName(c1))
+	}
+
+	// An export that spans banks can only go back where it was.
+	app.Assign(d, router, pad(t, "A1"), "SD:IMPORT/kick.wav")
+	if _, err := app.ExportPads(router, []proto.PadIndex{pad(t, "A1"), c1}, "SD:exports/two", nil); err != nil {
+		t.Fatal(err)
+	}
+	spans, err := app.PlanPadRestore(router, "SD:exports/two")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, single := spans.SingleBank(); single || len(spans.Banks) != 2 {
+		t.Errorf("banks = %v", spans.Banks)
+	}
+	if _, err := spans.Targets(3); err == nil || !strings.Contains(err.Error(), "spans banks AC") {
+		t.Errorf("remapping a two-bank export: %v", err)
+	}
+	if _, err := app.PlanPadRestore(router, "SD:exports/nothing"); err == nil {
+		t.Error("planning from a folder with no export succeeded")
+	}
+}

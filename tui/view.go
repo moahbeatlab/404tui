@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -19,8 +20,12 @@ var helpText = [][2]string{
 	{"h j k l, arrows", "move (on the pad grid: left, down, up, right)"},
 	{"[ / ]", "previous / next bank"},
 	{"g / G", "first / last"},
+	{"} / {  (Alt-n / Alt-p)", "jump to the next / previous folder in a file list"},
+	{"Ctrl-D / Ctrl-U", "half a page down / up in lists (Page Down / Up: a whole page); in the search box Ctrl-D pages down and Ctrl-U clears the text"},
 	{"/ (Pads, Projects)", "find a pad or project by name"},
-	{"Enter (Pads)", "preview the pad on the unit"},
+	{"Enter (Pads)", "preview the pad: on the unit, or on this computer after O"},
+	{"o, P (Pads)", "o switches where pads preview (unit / this computer; O and 0 work too); P plays the pad once on this computer"},
+	{"C (Pads)", "chromatic: play the pad as notes on this computer (a w s e d f … are piano keys, z / x shift the octave)"},
 	{"n / d (Pads)", "rename / delete the sample"},
 	{"v / V (Pads)", "mark a pad / every pad with a sample"},
 	{"S, , . (Pads)", "edit the pad's settings in a dialog; step its level down/up"},
@@ -36,10 +41,13 @@ var helpText = [][2]string{
 	{"e / R (Projects)", "export the project / restore one from a backup folder"},
 	{"/ (Files, dialog)", "search every audio file in the source by keyword: Enter assigns, Tab shows it in the tree"},
 	{"Space (Files)", "listen to the file on this computer"},
+	{"Ctrl-A (Files, search, dialog)", "autoplay: a file plays as the cursor rests on it; moving stops the old one at once"},
 	{"v (Files)", "mark audio files; Enter then fills free pads in order"},
 	{"Tab / l / h (Files)", "open or close a folder, go to the parent"},
-	{"n, m then p (Files)", "rename; mark then move into the open folder"},
-	{"R (Files)", "restore pads from this folder's export"},
+	{"v, V, J (Files)", "mark a file or folder; every file in the folder; all junk (._ files, .DS_Store)"},
+	{"d, c, x, p (Files)", "delete the marked (SD card only); copy / cut to the clipboard; paste into the folder in front"},
+	{"N, n (Files)", "new folder; rename"},
+	{"R (Files)", "restore pads from this folder's export (asks which bank)"},
 	{"t (Files)", "next source: SD card, unit storage, this computer"},
 	{"Enter, n (Projects)", "select / rename the project"},
 	{"T", "next colour theme"},
@@ -60,6 +68,8 @@ func (m Model) View() string {
 		main = m.center(m.searchBox(g), g.bodyH)
 	case m.editor != nil:
 		main = m.center(m.editorBox(), g.bodyH)
+	case m.chromatic != nil:
+		main = m.center(m.chromaticBox(), g.bodyH)
 	case m.browser != nil:
 		main = m.center(m.browserBox(g), g.bodyH)
 	case m.prompt != nil:
@@ -243,16 +253,26 @@ func (m Model) statusBar() string {
 	var chips []string
 	switch m.section {
 	case secPads:
-		chips = []string{chip("Enter", "preview"), chip("a", "assign"), chip("v", "mark"), chip("n", "rename"), chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("e", "export"), chip("[ ]", "bank")}
+		chips = []string{chip("Enter", "preview on "+map[bool]string{true: "computer", false: "unit"}[m.previewLocal]), chip("o", "switch"), chip("C", "chromatic"), chip("a", "assign"), chip("v", "mark"), chip("n", "rename"), chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("e", "export"), chip("[ ]", "bank")}
 	case secPatterns:
 		chips = []string{chip("Enter", "open"), chip("b", "retarget"), chip("[ ]", "bank"), chip("Esc", "back")}
 	case secFiles:
-		chips = []string{chip("Enter", "assign"), chip("/", "search"), chip("[ ]", "target bank"), chip("Space", "listen"), chip("v", "mark"), chip("Tab", "open"), chip("n", "rename"), chip("m", "move"), chip("t", "source")}
+		if len(m.fileMarks) > 0 || len(m.clip) > 0 {
+			chips = []string{chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("p", "paste"), chip("n", "rename"), chip("Enter", "assign"), chip("v", "mark"), chip("V", "folder"), chip("J", "junk"), chip("u", "unmark all"), chip("Esc", "clear")}
+			break
+		}
+		chips = []string{chip("Enter", "assign"), chip("v", "mark"), chip("J", "junk"), chip("c", "copy"), chip("x", "move"), chip("p", "paste"), chip("d", "delete"), chip("N", "folder"), chip("/", "search"), chip("f", "find folder"), chip("[ ]", "target bank"), chip("Space", "listen"), chip("^A", "autoplay"), chip("v", "mark"), chip("Tab", "open"), chip("n", "rename"), chip("m", "move"), chip("t", "source")}
 	case secProjects:
 		chips = []string{chip("Enter", "select"), chip("n", "rename"), chip("e", "export"), chip("R", "restore")}
 	}
 	chips = append(chips, chip(":", "commands"), chip("?", "help"), chip("q", "quit"))
 	line := strings.Join(chips, st.faint.Render("  "))
+	if m.autoplay {
+		line = st.good.Render("♫ autoplay") + st.faint.Render("  │  ") + line
+	}
+	if m.logPath != "" {
+		line = st.warn.Render("● debug log") + st.faint.Render("  │  ") + line
+	}
 	if m.listening != "" && m.player != nil && m.player.Playing() {
 		line = st.hot.Render("♪ "+ansi.Truncate(app.Base(m.listening), 28, "…")) + st.faint.Render("  │  ") + line
 	}
@@ -625,8 +645,8 @@ func (m Model) session(g geom) string {
 	if m.hasMoving {
 		lines = append(lines, st.warn.Render(fmt.Sprintf("Picked up %s: p moves, s swaps", m.moving)))
 	}
-	if m.fileMoved != "" {
-		lines = append(lines, st.warn.Render("Moving "+app.Base(m.fileMoved)))
+	if len(m.clip) > 0 {
+		lines = append(lines, st.warn.Render(fmt.Sprintf("Clipboard: %s to %s", plural(len(m.clip), "item"), map[bool]string{true: "move", false: "copy"}[m.clipCut])))
 	}
 	return m.box("Session", strings.Join(lines, "\n"), g.detailW, len(lines)+2, false)
 }
@@ -641,26 +661,58 @@ func (m Model) unitLine() string {
 	return "idle"
 }
 
-// bars draws amplitudes (0..32768) as two rows of block characters, scaled to width.
+// waveRows is how many terminal rows the waveform is drawn in.
+const waveRows = 6
+
+// brailleDots are the dot bits of a braille cell, indexed [column][row].
+var brailleDots = [2][4]rune{{0x01, 0x02, 0x04, 0x40}, {0x08, 0x10, 0x20, 0x80}}
+
+// bars draws amplitudes (0..32768) as a mirrored waveform in braille dots: two columns and
+// four rows of resolution per cell, growing out from a centre line. Quiet tails are lifted
+// with a square root so a decay stays visible next to a loud attack.
 func (m Model) bars(amps []int, width int) []string {
-	const blocks = " ▁▂▃▄▅▆▇█"
-	runes := []rune(blocks)
 	peak := 1
 	for _, a := range amps {
 		peak = max(peak, a)
 	}
-	var top, bottom strings.Builder
-	for c := 0; c < width; c++ {
-		lo, hi := c*len(amps)/width, max((c+1)*len(amps)/width, c*len(amps)/width+1)
+	cols := width * 2
+	half := waveRows * 4 / 2
+	heights := make([]int, cols)
+	for c := range heights {
+		lo, hi := c*len(amps)/cols, (c+1)*len(amps)/cols
+		hi = max(hi, lo+1)
 		a := 0
 		for _, v := range amps[lo:min(hi, len(amps))] {
 			a = max(a, v)
 		}
-		level := a * 16 / peak
-		bottom.WriteRune(runes[min(level, 8)])
-		top.WriteRune(runes[max(level-8, 0)])
+		heights[c] = max(1, int(math.Sqrt(float64(a)/float64(peak))*float64(half)+0.5))
 	}
-	return []string{m.st.accent.Render(top.String()), m.st.accent.Render(bottom.String())}
+	rows := make([]string, waveRows)
+	for r := 0; r < waveRows; r++ {
+		var line strings.Builder
+		for c := 0; c < width; c++ {
+			cell := rune(0x2800)
+			for sub := 0; sub < 2; sub++ {
+				h := heights[c*2+sub]
+				for d := 0; d < 4; d++ {
+					dot := r*4 + d // 0 is the top of the picture
+					if dot >= half-h && dot < half+h {
+						cell |= brailleDots[sub][d]
+					}
+				}
+			}
+			line.WriteRune(cell)
+		}
+		rows[r] = m.st.accent.Render(line.String())
+	}
+	return rows
+}
+
+// timeAxis labels the two ends of a waveform that is width cells wide.
+func (m Model) timeAxis(seconds float64, width int) string {
+	end := fmt.Sprintf("%.2f s", seconds)
+	gap := max(width-len("0.00 s")-len(end), 1)
+	return m.st.faint.Render("0.00 s" + strings.Repeat(" ", gap) + end)
 }
 
 // ---- patterns ----
@@ -765,8 +817,8 @@ func (m Model) treeLines(height int) string {
 		switch {
 		case m.fileMarks[n.Path]:
 			return m.st.good.Render("✓")
-		case n.Path == m.fileMoved:
-			return m.st.warn.Render("↗")
+		case m.clipMarker(n.Path) != "":
+			return m.st.warn.Render(m.clipMarker(n.Path))
 		case n.Path == m.listening:
 			return m.st.hot.Render("♪")
 		}
@@ -802,6 +854,8 @@ func (m Model) treeRender(tree *app.Tree, at, height int, markOf func(app.Node) 
 		case node.Dir:
 			name += "/"
 			style = st.accent
+		case app.IsJunk(node.Name):
+			style = st.faint
 		case isAudio(node.Name):
 			style = st.text
 		case node.Name == app.Sidecar:
@@ -825,8 +879,15 @@ func (m Model) fileDetail(height, width int) string {
 	var lines []string
 	free, _ := proto.PadFromBankPad(uint16(m.target), uint16(m.nextFree(m.target)))
 	lines = append(lines, st.dim.Render("Target  ")+st.accent.Render(fmt.Sprintf("bank %c · next free %s", 'A'+m.target, free)), st.dim.Render("[ ] changes it; it follows the last pad you assigned"), "")
-	if m.fileMoved != "" {
-		lines = append(lines, st.warn.Render("Moving: "+m.fileMoved), "")
+	if n := len(m.fileMarks); n > 0 {
+		lines = append(lines, st.good.Render(plural(n, "item")+" marked"), st.dim.Render("d delete  c copy  x move  u unmark all  Enter assigns the audio ones"), "")
+	}
+	if len(m.clip) > 0 {
+		verb := "copy"
+		if m.clipCut {
+			verb = "move"
+		}
+		lines = append(lines, st.warn.Render(fmt.Sprintf("Clipboard: %s to %s", plural(len(m.clip), "item"), verb)), st.dim.Render("p pastes into the folder in front"), "")
 	}
 	node, ok := m.fileNode()
 	if !ok {
@@ -840,10 +901,12 @@ func (m Model) fileDetail(height, width int) string {
 	switch {
 	case isAudio(node.Name):
 		lines = append(lines, m.audioInfo(node, width)...)
+	case app.IsJunk(node.Name):
+		lines = append(lines, st.warn.Render("Junk file, not audio."), st.dim.Render("A macOS or Windows leftover."), st.dim.Render("J marks all of them; d deletes."))
 	case node.Name == app.Sidecar:
-		lines = append(lines, st.good.Render("Pad export"), st.dim.Render("Enter or R restores it onto the pads it lists"))
+		lines = append(lines, st.good.Render("Pad export"), st.dim.Render("Enter or R restores it; you choose the bank"))
 	case node.Dir:
-		lines = append(lines, st.dim.Render("R restores pads from an export in this folder"))
+		lines = append(lines, st.dim.Render("R restores pads from an export here; you choose the bank"))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -871,7 +934,9 @@ func (m Model) audioInfo(node app.Node, width int) []string {
 		amps[i] = int(p)
 	}
 	lines = append(lines, "")
-	lines = append(lines, m.bars(amps, max(width-2, 10))...)
+	waveW := max(width-2, 10)
+	lines = append(lines, m.bars(amps, waveW)...)
+	lines = append(lines, m.timeAxis(seconds, waveW))
 	lines = append(lines, "", st.dim.Render("Enter assigns it to a pad    Space listens"))
 	return lines
 }
@@ -1008,8 +1073,14 @@ func (m Model) promptBox() string {
 		return st.modal.Width(min(m.width-6, 56)).Render(st.bold.Render(fmt.Sprintf("Bank %c", 'A'+m.bank)) + "\n\n" +
 			field(0, "Tempo (40-200 BPM)", p.fields[0]) + "\n" + field(1, "Volume (0-127)", p.fields[1]) +
 			"\n\n" + st.dim.Render("Tab switches field  ·  Enter apply  ·  Esc cancel"))
+	case promptDeleteFiles:
+		return m.deleteBox()
+	case promptMkdir:
+		title = fmt.Sprintf("New folder in %s", display(p.path))
 	case promptSearch:
 		title = "Find by name"
+	case promptFindFolder:
+		title = "Find a folder in the list"
 	case promptAssignFile:
 		title = fmt.Sprintf("Assign the audio file at this path to %s", p.pads[0])
 		hint = "SD:…, a path on the unit, or /path on this computer  ·  "
@@ -1049,12 +1120,18 @@ func (m Model) promptBox() string {
 		}
 		return st.modal.Render(st.bold.Render("Delete "+what+"?") + "\n\n" + st.dim.Render("y delete   n/Esc keep"))
 	}
+	if p.kind == promptFindFolder && m.tree != nil {
+		return m.folderFinderBox(m.geom(), m.tree.Rows(), p.buffer, p.choice, "Find a folder in "+rootName(m.root))
+	}
 	return st.modal.Width(min(m.width-4, 72)).Render(st.bold.Render(title) + "\n\n" + st.accent.Render("> ") + p.buffer + "█" + "\n\n" + st.dim.Render(hint+"Enter apply  ·  Esc cancel"))
 }
 
 // pickerBox is the pad chooser of an assign, or the bank chooser of a retarget.
 func (m Model) pickerBox() string {
 	st, p := m.st, m.picker
+	if p.restorePlan != nil {
+		return m.restorePickerBox()
+	}
 	if p.retarget {
 		var strip strings.Builder
 		for b := 0; b < proto.Banks; b++ {
@@ -1107,6 +1184,59 @@ func (m Model) pickerBox() string {
 	}
 	return st.modal.Render(st.bold.Render(title) + "\n\n" + strip.String() + typed + "\n\n" + grid + "\n\n" + line +
 		"\n\n" + st.dim.Render("A-J bank  ·  1-16 pad  ·  hjkl move  ·  [ ] bank  ·  Enter assign  ·  Esc cancel"))
+}
+
+// restorePickerBox asks which bank an export goes onto.
+func (m Model) restorePickerBox() string {
+	st, p := m.st, m.picker
+	plan := p.restorePlan
+	var strip strings.Builder
+	counts := m.bankCountsForPicker()
+	for b := 0; b < proto.Banks; b++ {
+		cell := fmt.Sprintf(" %c ", 'A'+b)
+		switch {
+		case b == p.bank:
+			strip.WriteString(lipgloss.NewStyle().Background(st.th.accent).Foreground(st.th.cursorFg).Bold(true).Render(cell))
+		case b == p.sourceBank:
+			strip.WriteString(st.good.Render(cell))
+		case counts[b] > 0:
+			strip.WriteString(st.text.Render(cell))
+		default:
+			strip.WriteString(st.faint.Render(cell))
+		}
+	}
+	title := fmt.Sprintf("Restore %d pads from the export in %s onto which bank?", len(plan.Pads), display(plan.Dir))
+	info := st.dim.Render(fmt.Sprintf("exported from bank %c", 'A'+p.sourceBank))
+	if plan.Project != "" {
+		info += st.dim.Render(" of project " + plan.Project)
+	}
+	targets, err := plan.Targets(p.bank)
+	line := ""
+	switch {
+	case err != nil:
+		line = st.bad.Render(err.Error())
+	default:
+		occupied := 0
+		names := make([]string, len(targets))
+		for i, t := range targets {
+			if m.snap.Pads[t.Index()].HasSample {
+				occupied++
+			}
+			names[i] = fmt.Sprintf("%d→%s", plan.Pads[i].From.Pad()+1, t)
+		}
+		list := st.dim.Render(ansi.Truncate(strings.Join(names, "  "), 70, "…"))
+		switch {
+		case occupied > 0 && p.confirm:
+			line = st.bad.Render(fmt.Sprintf("Press Enter again to replace the %d pads that hold samples", occupied))
+		case occupied > 0:
+			line = st.warn.Render(fmt.Sprintf("%d of the %d pads on bank %c hold samples — they will be replaced", occupied, len(targets), 'A'+p.bank))
+		default:
+			line = st.good.Render(fmt.Sprintf("all %d target pads on bank %c are free", len(targets), 'A'+p.bank))
+		}
+		line += "\n" + list
+	}
+	return st.modal.Render(st.bold.Render(title) + "\n" + info + "\n\n" + strip.String() + st.faint.Render("   green: where they came from") +
+		"\n\n" + line + "\n\n" + st.dim.Render("A-J or ←/→ choose the bank  ·  Enter restore  ·  Esc cancel"))
 }
 
 // copyPickerBox is the pad chooser of a copy: where the pad (or the first of several) goes.
@@ -1194,4 +1324,52 @@ func (m Model) pickerGrid() string {
 		rows[row] = strings.Join(cells, " ")
 	}
 	return strings.Join(rows, "\n")
+}
+
+// folderFinderBox is the whole-dialog folder finder, laid out like the file search: the
+// text typed, then the open folders matching it as two columns (name, and the folder it is
+// in) with the chosen one highlighted, and its full path below.
+func (m Model) folderFinderBox(g geom, rows []app.Node, input string, choice int, title string) string {
+	st := m.st
+	width := min(m.width-6, 112)
+	height := max(min(g.bodyH-9, 20), 5)
+	matches := folderMatches(rows, input)
+	choice = clamp(choice, 0, max(len(matches)-1, 0))
+
+	status := st.dim.Render(fmt.Sprintf("%d of %d open folders", len(matches), len(folderMatches(rows, ""))))
+	var list []string
+	from, to := window(len(matches), choice, height-1)
+	nameW := 12
+	for i := from; i < to; i++ {
+		nameW = max(nameW, ansi.StringWidth(rows[matches[i]].Name)+1)
+	}
+	nameW = min(nameW, (width-6)*55/100)
+	dirW := max(width-nameW-8, 6)
+	if to > from {
+		list = append(list, st.faint.Render(" "+padTo("Name", nameW)+"  Folder"))
+	}
+	for i := from; i < to; i++ {
+		r := rows[matches[i]]
+		name := ansi.Truncate(r.Name+"/", nameW, "…")
+		dir := cutStart(display(app.Dir(r.Path)), dirW)
+		if i == choice {
+			list = append(list, lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true).Width(width-4).Render(" "+padTo(name, nameW)+"  "+dir))
+			continue
+		}
+		list = append(list, st.accent.Render(" "+padTo(name, nameW))+"  "+st.dim.Render(dir))
+	}
+	if len(matches) == 0 {
+		list = []string{st.dim.Render(" no open folder matches (open more with Tab)")}
+	}
+	full := ""
+	if len(matches) > 0 {
+		full = st.dim.Render(ansi.Truncate(display(rows[matches[choice]].Path), width-4, "…"))
+	}
+	lines := []string{
+		st.bold.Render(title), "",
+		st.accent.Render("> ") + input + "█", status, "",
+		fit(strings.Join(list, "\n"), height), full,
+		st.dim.Render("Enter jump  ·  ↑↓ choose  ·  then h or Tab collapses it  ·  Esc back"),
+	}
+	return st.modal.Width(width).Render(strings.Join(lines, "\n"))
 }

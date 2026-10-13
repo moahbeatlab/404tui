@@ -14,6 +14,8 @@ import (
 type State struct {
 	Theme int `json:"theme"`
 	Bank  int `json:"bank"`
+	// PreviewLocal plays the pads on this computer instead of on the unit.
+	PreviewLocal bool `json:"previewLocal"`
 	// TargetBank is the bank files are assigned to: the one last assigned to.
 	TargetBank int `json:"targetBank"`
 	// LastAssigned is the last pad a file was assigned to, as its index plus one (0: none).

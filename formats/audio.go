@@ -19,6 +19,10 @@ var AudioExtensions = []string{"wav", "wave", "bwf", "aif", "aiff", "flac", "mp3
 
 // IsAudioFile reports whether a file name has an importable extension.
 func IsAudioFile(name string) bool {
+	// macOS leaves "._name.wav" beside every file it copies to a card: not audio.
+	if strings.HasPrefix(name, "._") {
+		return false
+	}
 	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), ".")
 	for _, e := range AudioExtensions {
 		if e == ext {

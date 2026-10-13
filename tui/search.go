@@ -97,23 +97,26 @@ func (m Model) searchKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case name == "up" || name == "ctrl+p":
 		s.at, s.confirm = clamp(s.at-1, 0, max(len(s.results)-1, 0)), false
-		return m, tea.Batch(m.wanted(), m.scheduleAutoplay())
+		wanted := m.wanted()
+		play := m.scheduleAutoplay()
+		return m, tea.Batch(wanted, play)
 	case name == "down" || name == "ctrl+n":
 		s.at, s.confirm = clamp(s.at+1, 0, max(len(s.results)-1, 0)), false
-		return m, tea.Batch(m.wanted(), m.scheduleAutoplay())
+		wanted := m.wanted()
+		play := m.scheduleAutoplay()
+		return m, tea.Batch(wanted, play)
 	case name == "pgup":
 		s.at, s.confirm = clamp(s.at-10, 0, max(len(s.results)-1, 0)), false
-		return m, tea.Batch(m.wanted(), m.scheduleAutoplay())
-	case name == "pgdown":
+		wanted := m.wanted()
+		play := m.scheduleAutoplay()
+		return m, tea.Batch(wanted, play)
+	case name == "pgdown" || name == "ctrl+d":
 		s.at, s.confirm = clamp(s.at+10, 0, max(len(s.results)-1, 0)), false
-		return m, tea.Batch(m.wanted(), m.scheduleAutoplay())
+		wanted := m.wanted()
+		play := m.scheduleAutoplay()
+		return m, tea.Batch(wanted, play)
 	case name == "ctrl+a":
-		m.autoplay = !m.autoplay
-		if m.autoplay && m.player == nil {
-			m.autoplay = false
-			m.message = "no audio output to autoplay on"
-		}
-		return m, m.scheduleAutoplay()
+		return m.toggleAutoplay()
 	case name == "ctrl+l":
 		if f, ok := s.current(); ok {
 			return m.listen(f.Path)

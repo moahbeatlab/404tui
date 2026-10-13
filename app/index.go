@@ -122,7 +122,7 @@ func (ix *Index) Search(query string, limit int) []IndexedFile {
 		if hits[i].named != hits[j].named {
 			return hits[i].named
 		}
-		return hits[i].file.lower < hits[j].file.lower
+		return NaturalLess(hits[i].file.lower, hits[j].file.lower)
 	})
 	if limit > 0 && len(hits) > limit {
 		hits = hits[:limit]

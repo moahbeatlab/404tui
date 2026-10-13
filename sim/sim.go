@@ -62,6 +62,15 @@ type Sim struct {
 	handles   map[int32]*handle
 	next      int32
 
+	// WrongPadOnFirstPreview reproduces what the unit does: the first preview after the selected
+	// pad changed plays the pad that was selected before, then selects the new one.
+	WrongPadOnFirstPreview bool
+	// SilentProjectSwitch makes selecting a project send the acknowledgement but no change
+	// notification, as a slow load can look to the host.
+	SilentProjectSwitch bool
+	// PreviewStarts and PreviewStops are the pads asked to start and stop previews, in order.
+	PreviewStarts, PreviewStops []uint16
+
 	// Requests holds every control payload the host sent, in order.
 	Requests [][]byte
 	// HostStatuses holds the results the host reported for the device's own file requests.
@@ -134,6 +143,21 @@ func (s *Sim) SetSample(pad proto.PadIndex, name string, size uint32) {
 	binary.LittleEndian.PutUint32(b[3:], size)
 	setName(b, name)
 	s.put(remote(pad.SamplePath(s.project+1)), make([]byte, size))
+}
+
+// SetSMP makes a pad of the current project hold a complete SMP file: the file is stored as it
+// is and the pad block describes it the way the unit would (size, play region from the end
+// of the header to the end of the file).
+func (s *Sim) SetSMP(pad proto.PadIndex, name string, smp []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b := s.blocks[pad.Index()]
+	binary.LittleEndian.PutUint32(b[3:], uint32(len(smp)))
+	binary.LittleEndian.PutUint32(b[7:], uint32(proto.SMPHeaderLen))
+	binary.LittleEndian.PutUint32(b[11:], uint32(len(smp)))
+	binary.LittleEndian.PutUint32(b[3+4*11:], uint32(proto.SMPHeaderLen))
+	setName(b, name)
+	s.put(remote(pad.SamplePath(s.project+1)), smp)
 }
 
 // SetPattern makes a pattern slot exist, playing pads.
@@ -348,11 +372,24 @@ func (s *Sim) handleControl(p []byte) {
 		s.saveProject()
 		s.project = p[1]
 		s.loadProject()
-		s.changed()
+		if !s.SilentProjectSwitch {
+			s.changed()
+		}
 	case 0x8E:
 		padReply(proto.ReplyPreviewStart, 0)
+		s.PreviewStarts = append(s.PreviewStarts, pad)
+		// The unit then says which pad sounded, and moves its selection to the one asked for.
+		sounded, selected := pad, uint16(s.bank)*proto.PadsPerBank+uint16(s.pad)
+		if s.WrongPadOnFirstPreview && selected != pad {
+			sounded = selected
+		}
+		s.control([]byte{proto.ReplyPreviewStart, byte(sounded), byte(sounded >> 8), 0x64})
+		s.bank, s.pad = byte(pad/proto.PadsPerBank), byte(pad%proto.PadsPerBank)
+		s.control([]byte{proto.CmdSetParam, 0, 0, 0xff, 0xff, s.bank, 0, 0, 0})
+		s.control([]byte{proto.CmdSetParam, 1, 0, 0xff, 0xff, s.pad, 0, 0, 0})
 	case 0x8F:
 		padReply(proto.ReplyPreviewStop, 0)
+		s.PreviewStops = append(s.PreviewStops, pad)
 	case 0x95:
 		s.control([]byte{proto.ReplyMoveSample, 0})
 		s.moveSample(pad, u16(3), u16(5))

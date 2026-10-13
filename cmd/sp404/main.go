@@ -9,15 +9,19 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"path/filepath"
+	"runtime"
+	"runtime/debug"
+	"slices"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/device"
+	"github.com/moahbeatlab/404tui/doctor"
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/playback"
-	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/serialport"
 	"github.com/moahbeatlab/404tui/sim"
 	"github.com/moahbeatlab/404tui/tui"
@@ -26,21 +30,38 @@ import (
 const usage = `usage: sp404 [flags] <command>
 
 commands:
-  beep         play a test tone on the computer's audio output
-  play <file>  play an audio file on the computer's audio output
-  menu         full-screen terminal UI (the default when no command is given)
-  ports        list connected SP-404MKII serial ports
-  status       current project, selected pad and project names
-  pads         pads of the current project that hold a sample
-  ls [path]    list a folder (SD:… for the card, otherwise the device's own storage)
+  menu           full-screen terminal UI (the default when no command is given)
+  doctor         read-only checks of this program against the unit; run it first
+                 (add -preview as an argument to also play a pad on the unit)
+  ports          list every serial port, and why each is or is not taken for the unit
+  status         current project, selected pad and project names
+  pads           pads of the current project that hold a sample
+  ls [path]      list a folder (SD:… for the card, otherwise the device's own storage)
+  beep           play a test tone on the computer's audio output
+  play <file>    play an audio file on the computer's audio output
 
 flags:
 `
 
+// options are what the flags say.
+type options struct {
+	port     string
+	simulate bool
+	verbose  bool
+	trace    bool
+	logPath  string
+	// audio is the playback method: oto (the default) or afplay.
+	audio string
+}
+
 func main() {
-	port := flag.String("port", "", "serial port (default: the first SP-404MKII found)")
-	simulate := flag.Bool("sim", false, "talk to a simulated device instead of the hardware")
-	verbose := flag.Bool("v", false, "log the session's diagnostics")
+	var o options
+	flag.StringVar(&o.port, "port", "", "serial port (default: the first SP-404MKII found)")
+	flag.BoolVar(&o.simulate, "sim", false, "talk to a simulated device instead of the hardware")
+	flag.BoolVar(&o.verbose, "v", false, "write a debug log: every transaction with its timing, port discovery, connects and UI actions")
+	flag.BoolVar(&o.trace, "trace", false, "also log every message on the wire, as hex (implies -v)")
+	flag.StringVar(&o.logPath, "log", "", "debug log file (default: the user cache folder for the UI, standard error otherwise)")
+	flag.StringVar(&o.audio, "audio", "", "how files are played on this computer: oto (default) or afplay (macOS's own player)")
 	flag.Usage = func() {
 		fmt.Fprint(os.Stderr, usage)
 		flag.PrintDefaults()
@@ -50,51 +71,129 @@ func main() {
 	if len(args) == 0 {
 		args = []string{"menu"}
 	}
-	if err := run(args, *port, *simulate, *verbose); err != nil {
+	if err := run(args, o); err != nil {
 		fmt.Fprintln(os.Stderr, "sp404:", err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string, port string, simulate, verbose bool) error {
-	if args[0] == "ports" {
-		ports, err := serialport.Find()
-		if err != nil {
-			return err
-		}
-		for _, p := range ports {
-			fmt.Println(p.Name, p.SerialNumber, p.Product)
-		}
-		return nil
+// logging is the debug log: where it goes and a way to close it.
+type logging struct {
+	*slog.Logger
+	path  string
+	close func()
+}
+
+// newLogging sets up the debug log. Without -v or -trace there is none. The terminal UI owns
+// the screen, so its log goes to a file; other commands log to standard error.
+func newLogging(o options, forUI bool) (logging, error) {
+	if !o.verbose && !o.trace {
+		return logging{Logger: slog.New(slog.DiscardHandler), close: func() {}}, nil
 	}
+	level := slog.LevelDebug
+	if o.trace {
+		level = device.LevelTrace
+	}
+	path := o.logPath
+	if path == "" && forUI {
+		if dir, err := os.UserCacheDir(); err == nil {
+			path = filepath.Join(dir, "404tui", "debug.log")
+		} else {
+			path = "404tui-debug.log"
+		}
+	}
+	out, closer := io.Writer(os.Stderr), func() {}
+	if path != "" {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return logging{}, err
+		}
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return logging{}, err
+		}
+		out, closer = f, func() { f.Close() }
+	}
+	handler := slog.NewTextHandler(out, &slog.HandlerOptions{
+		Level: level,
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.LevelKey && a.Value.Any() == device.LevelTrace {
+				a.Value = slog.StringValue("TRACE")
+			}
+			return a
+		},
+	})
+	l := logging{Logger: slog.New(handler), path: path, close: closer}
+	serialport.SetLogger(l.Logger)
+	l.banner(o)
+	return l, nil
+}
+
+// banner writes what is needed to read the rest of a log: the program, the machine, the flags.
+func (l logging) banner(o options) {
+	rev, modified := "unknown", ""
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range info.Settings {
+			switch s.Key {
+			case "vcs.revision":
+				rev = s.Value
+			case "vcs.modified":
+				if s.Value == "true" {
+					modified = " (modified)"
+				}
+			}
+		}
+	}
+	state := "none"
+	if dir, err := os.UserConfigDir(); err == nil {
+		state = filepath.Join(dir, "404tui", "state.json")
+	}
+	l.Info("404tui debug log", "revision", rev+modified, "go", runtime.Version(), "os", runtime.GOOS, "arch", runtime.GOARCH,
+		"args", os.Args[1:], "port", o.port, "sim", o.simulate, "trace", o.trace, "state file", state)
+}
+
+func run(args []string, o options) error {
+	forUI := args[0] == "menu"
+	l, err := newLogging(o, forUI)
+	if err != nil {
+		return err
+	}
+	defer l.close()
+	// A crash leaves its stack in the log as well as on the screen.
+	defer func() {
+		if r := recover(); r != nil {
+			l.Error("panic", "value", r, "stack", string(debug.Stack()))
+			panic(r)
+		}
+	}()
+
 	switch args[0] {
+	case "ports":
+		return listPorts()
 	case "beep":
-		return audioTest("")
+		return audioTest("", o.audio)
 	case "play":
 		if len(args) < 2 {
 			return fmt.Errorf("usage: sp404 play <audio file>")
 		}
-		return audioTest(args[1])
+		return audioTest(args[1], o.audio)
+	case "menu":
+		return runUI(o, l)
 	}
-	if args[0] == "menu" {
-		// The terminal UI starts without a unit: it waits for one, and says when it connects.
-		// Without an audio output the files just cannot be auditioned, and it says why.
-		var player app.Player
-		p, audioErr := playback.Open()
-		if audioErr == nil {
-			player = p
-		}
-		model := tui.NewConnecting(connector(port, simulate, verbose), player, tui.DefaultStore()).WithAudio(player, audioErr)
-		_, err := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
-		return err
-	}
-	dev, err := open(port, simulate, verbose)
+
+	dev, err := open(o, l.Logger)
 	if err != nil {
+		l.Error("could not open the unit", "err", err)
 		return err
 	}
 	defer dev.Close()
-
+	l.Info("unit opened", "port", dev.PortName())
 	switch args[0] {
+	case "doctor":
+		results := doctor.Run(dev, os.Stdout, l.Logger, doctor.Options{Preview: slices.Contains(args[1:], "-preview")})
+		if n := doctor.Failures(results); n > 0 {
+			return fmt.Errorf("%d check(s) failed", n)
+		}
+		return nil
 	case "status":
 		return status(dev)
 	case "pads":
@@ -109,62 +208,113 @@ func run(args []string, port string, simulate, verbose bool) error {
 	return fmt.Errorf("unknown command %q", args[0])
 }
 
-func options(verbose bool) []device.Option {
-	if !verbose {
+// runUI starts the terminal UI, which waits for a unit by itself.
+func runUI(o options, l logging) error {
+	// Without an audio output the files just cannot be auditioned, and it says why.
+	var player app.Player
+	p, audioErr := playback.OpenBackend(o.audio)
+	if audioErr == nil {
+		player = p
+		l.Info("audio output opened", "backend", backendName(o.audio))
+	} else {
+		l.Warn("no audio output", "err", audioErr)
+	}
+	model := tui.NewConnecting(connector(o, l.Logger), player, tui.DefaultStore()).WithAudio(player, audioErr)
+	if l.path != "" {
+		model = model.WithLogger(l.Logger, l.path)
+		fmt.Fprintln(os.Stderr, "debug log:", l.path)
+	}
+	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	// Finding the output's name takes a moment, so it comes later: the UI then says where the
+	// sound of a file goes.
+	if player != nil {
+		go func() {
+			if name := playback.OutputName(); name != "" {
+				program.Send(tui.AudioOutputMsg(name))
+			}
+		}()
+	}
+	_, err := program.Run()
+	return err
+}
+
+// listPorts shows every serial port the system reports and why each is or is not the unit.
+func listPorts() error {
+	ports, err := serialport.All()
+	if err != nil {
+		return err
+	}
+	if len(ports) == 0 {
+		fmt.Println("the system lists no serial ports at all")
 		return nil
 	}
-	return []device.Option{device.WithLogger(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))}
+	for _, p := range ports {
+		verdict := "SP-404MKII"
+		if !p.Matches {
+			verdict = "no: " + p.Reason
+		}
+		id := "-"
+		if p.USB {
+			id = p.VID + ":" + p.PID
+		}
+		fmt.Printf("%-34s %-10s %-22s %s\n", p.Name, id, p.Product, verdict)
+	}
+	return nil
+}
+
+func options2(l *slog.Logger) []device.Option {
+	return []device.Option{device.WithLogger(l)}
 }
 
 // connector opens a link to the unit each time the UI asks.
-func connector(port string, simulate, verbose bool) tui.Connect {
+func connector(o options, l *slog.Logger) tui.Connect {
+	attempt := 0
 	return func() (app.Unit, io.Closer, error) {
-		if !simulate && port == "" {
-			if ports, err := serialport.Find(); err != nil {
+		attempt++
+		if !o.simulate && o.port == "" {
+			ports, err := serialport.Find()
+			if err != nil {
+				l.Warn("looking for the unit failed", "attempt", attempt, "err", err)
 				return nil, nil, err
-			} else if len(ports) == 0 {
+			}
+			if len(ports) == 0 {
+				// Quiet after the first few: it polls about once a second.
+				if attempt <= 3 || attempt%30 == 0 {
+					l.Debug("no unit found yet", "attempt", attempt)
+				}
 				return nil, nil, tui.ErrNoUnit
 			}
 		}
-		dev, err := open(port, simulate, verbose)
+		dev, err := open(o, l)
 		if err != nil {
+			l.Warn("could not open the unit", "attempt", attempt, "err", err)
 			if errors.Is(err, serialport.ErrNotFound) {
 				return nil, nil, tui.ErrNoUnit
 			}
 			return nil, nil, err
 		}
+		l.Info("unit opened", "port", dev.PortName(), "attempt", attempt)
 		return dev, dev, nil
 	}
 }
 
-func open(port string, simulate, verbose bool) (*device.Device, error) {
-	opts := options(verbose)
-	if simulate {
-		return device.New(demo(), "sim", opts...), nil
+func open(o options, l *slog.Logger) (*device.Device, error) {
+	opts := options2(l)
+	if o.simulate {
+		return device.New(sim.Demo(), "sim", opts...), nil
 	}
-	if port == "" {
+	if o.port == "" {
 		p, name, err := serialport.OpenFirst()
 		if err != nil {
 			return nil, err
 		}
 		return device.New(p, name, opts...), nil
 	}
-	p, err := serialport.Open(port)
+	p, err := serialport.Open(o.port)
 	if err != nil {
 		return nil, err
 	}
-	return device.New(p, port, opts...), nil
-}
-
-// demo is a simulated device with a little content on it.
-func demo() *sim.Sim {
-	s := sim.New()
-	for i, name := range []string{"kick", "snare", "hat"} {
-		pad, _ := proto.NewPadIndex(uint16(i))
-		s.SetSample(pad, name, 48_000)
-	}
-	s.AddFile("SD:IMPORT/pack/break.wav", make([]byte, 1024))
-	return s
+	return device.New(p, o.port, opts...), nil
 }
 
 func status(dev *device.Device) error {
@@ -220,14 +370,17 @@ func list(dev *device.Device, path string) error {
 	return nil
 }
 
-// audioTest plays a tone, or a file, and says what it is doing, so that silence in the UI
-// can be told apart from a problem with the computer's audio output.
-func audioTest(file string) error {
-	p, err := playback.Open()
-	if err != nil {
-		return fmt.Errorf("opening the audio output failed: %w", err)
+func backendName(name string) string {
+	if name == "" {
+		return playback.BackendDefault
 	}
-	fmt.Println("audio output opened")
+	return name
+}
+
+// audioTest plays a tone, or a file, with each playback method in turn (or the one asked
+// for), saying which is playing, so that silence in the UI can be told apart from a problem
+// with the computer's audio output.
+func audioTest(file, only string) error {
 	sample := formats.Sample{Channels: 1, Samples: make([]int16, 48000)}
 	switch {
 	case file != "":
@@ -241,14 +394,42 @@ func audioTest(file string) error {
 		for i := range sample.Samples {
 			sample.Samples[i] = int16(math.Sin(2*math.Pi*440*float64(i)/formats.SampleRate) * 12000)
 		}
-		fmt.Println("playing a 1 second 440 Hz tone; if you hear nothing, check which output the system uses")
 	}
-	if err := p.Play(sample); err != nil {
-		return err
+	if name := playback.OutputName(); name != "" {
+		fmt.Println("the system's default output is:", name)
 	}
-	for p.Playing() {
-		time.Sleep(50 * time.Millisecond)
+	backends := []string{playback.BackendOto, playback.BackendAfplay}
+	if only != "" {
+		backends = []string{only}
 	}
-	fmt.Println("done")
+	heard := 0
+	for _, name := range backends {
+		p, err := playback.OpenBackend(name)
+		if err != nil {
+			fmt.Printf("[%s] not available: %v\n", name, err)
+			continue
+		}
+		heard++
+		fmt.Printf("[%s] playing", name)
+		if file == "" {
+			fmt.Print(" a 1 second 440 Hz tone")
+		}
+		fmt.Println(" …")
+		if err := p.Play(sample); err != nil {
+			return fmt.Errorf("[%s] %w", name, err)
+		}
+		for p.Playing() {
+			time.Sleep(50 * time.Millisecond)
+		}
+		time.Sleep(400 * time.Millisecond)
+	}
+	if heard == 0 {
+		return fmt.Errorf("no audio output could be opened")
+	}
+	if len(backends) > 1 {
+		fmt.Println("\nWhich did you hear: both, only the first (oto), only the second (afplay), or neither?")
+		fmt.Println("only afplay -> run the UI with: sp404 -audio afplay")
+		fmt.Println("neither     -> the system output is the problem (see the device named above)")
+	}
 	return nil
 }

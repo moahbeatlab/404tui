@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -43,6 +44,12 @@ type browser struct {
 	confirm bool
 	// project is the project (0-based) a project export or restore is for.
 	project uint8
+	// finding is set while a folder name is being typed (f); findText is what is typed and
+	// findNote says what the last search did.
+	finding  bool
+	findText string
+	findAt   int
+	findNote string
 }
 
 // openBrowser opens the chooser on root with the given folders open, and the cursor on
@@ -99,15 +106,13 @@ func (m Model) browserKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	b := m.browser
 	name := key.String()
 	m.remember(b)
+	if b.finding {
+		return m.browserFind(b, key)
+	}
 	switch name {
 	case "ctrl+a":
 		if b.kind == browseAssign {
-			m.autoplay = !m.autoplay
-			if m.autoplay && m.player == nil {
-				m.autoplay = false
-				m.message = "no audio output to autoplay on"
-			}
-			return m, m.scheduleAutoplay()
+			return m.toggleAutoplay()
 		}
 	case "esc", "q":
 		m.browser = nil
@@ -157,6 +162,20 @@ func (m Model) browserKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		b.at = clamp(b.at+1, 0, len(rows)-1)
 	case "k", "up":
 		b.at = clamp(b.at-1, 0, len(rows)-1)
+	case "ctrl+d", "ctrl+u", "pgdown", "pgup":
+		height := max(min(m.geom().bodyH-10, 20), 5)
+		if b.kind == browseAssign {
+			height = max(min(m.geom().bodyH-10, 22), 6)
+		}
+		b.at = clamp(b.at+m.pageStep(name, height), 0, len(rows)-1)
+	case "}", "{", "alt+n", "alt+p":
+		b.at, m.message = jumpFolder(rows, b.at, name)
+	case "shift+tab":
+		b.at = b.tree.CollapseAll(b.at)
+		moved = false
+	case "f":
+		b.finding, b.findText, b.findAt, b.findNote = true, "", 0, ""
+		moved = false
 	case "g":
 		b.at = 0
 	case "G":
@@ -178,13 +197,46 @@ func (m Model) browserKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			b.at = parent
 		}
 	case "v":
-		if b.kind == browseAssign && isAudio(node.Name) {
+		if b.kind == browseAssign {
+			// Anything can be marked: Enter assigns the audio files among them, d deletes them.
 			if b.marks[node.Path] {
 				delete(b.marks, node.Path)
 			} else {
 				b.marks[node.Path] = true
 			}
 			b.at = clamp(b.at+1, 0, len(rows)-1)
+		}
+	case "u":
+		if b.kind == browseAssign && len(b.marks) > 0 {
+			b.marks = map[string]bool{}
+			m.message = "unmarked everything"
+		}
+	case "n":
+		if b.kind == browseAssign {
+			pad := b.pad
+			m.browser = nil
+			m.stopListening()
+			m.prompt = &prompt{kind: promptRenameFile, path: node.Path, buffer: node.Name, reopen: &pad}
+			return m, nil
+		}
+	case "J":
+		if b.kind == browseAssign {
+			n := 0
+			for _, r := range rows {
+				if app.IsJunk(r.Name) {
+					b.marks[r.Path] = true
+					n++
+				}
+			}
+			if n == 0 {
+				m.message = "no junk files in the open folders (open more folders with Tab)"
+			} else {
+				m.message = fmt.Sprintf("marked %d junk files; d deletes them", n)
+			}
+		}
+	case "d":
+		if b.kind == browseAssign {
+			return m.dialogDelete(b, node)
 		}
 	case " ":
 		if b.kind == browseAssign && isAudio(node.Name) {
@@ -201,7 +253,9 @@ func (m Model) browserKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if moved {
 		b.confirm = false
-		return m, tea.Batch(m.wanted(), m.scheduleAutoplay())
+		wanted := m.wanted()
+		play := m.scheduleAutoplay()
+		return m, tea.Batch(wanted, play)
 	}
 	return m, m.wanted()
 }
@@ -221,9 +275,13 @@ func (m Model) assignChosen(b *browser, node app.Node) (tea.Model, tea.Cmd) {
 	if len(b.marks) > 0 {
 		files = files[:0]
 		for _, r := range b.tree.Rows() {
-			if b.marks[r.Path] {
+			if b.marks[r.Path] && !r.Dir && isAudio(r.Name) {
 				files = append(files, r.Path)
 			}
+		}
+		if len(files) == 0 {
+			m.message = "none of the marked items is an audio file"
+			return m, nil
 		}
 	} else if !isAudio(node.Name) {
 		m.message = "that is not an audio file"
@@ -239,6 +297,33 @@ func (m Model) assignChosen(b *browser, node app.Node) (tea.Model, tea.Cmd) {
 	m.browser = nil
 	m.stopListening()
 	return m.assign(files, pad)
+}
+
+// dialogDelete asks to delete the marked items of the assign dialog (or the one in front):
+// the dialog closes for the question and opens again, where it was, afterwards.
+func (m Model) dialogDelete(b *browser, node app.Node) (tea.Model, tea.Cmd) {
+	targets := []string{node.Path}
+	if len(b.marks) > 0 {
+		targets = targets[:0]
+		for p := range b.marks {
+			targets = append(targets, p)
+		}
+		sort.Strings(targets)
+	}
+	for _, p := range targets {
+		if app.VolumeOf(p) != app.VolumeCard {
+			m.message = "only files on the SD card are deleted from here"
+			return m, nil
+		}
+	}
+	pad, unit := b.pad, m.unit
+	m.browser = nil
+	m.stopListening()
+	m.busy = "counting"
+	return m, m.edit(func() tea.Msg {
+		count, err := app.CountPaths(unit, targets)
+		return deletePlanMsg{paths: targets, count: count, err: err, reopen: &pad}
+	})
 }
 
 // chosen carries out the choice of a folder: a restore starts at once; an export asks what
@@ -268,6 +353,9 @@ func (m Model) chosen(b *browser, dir string) (tea.Model, tea.Cmd) {
 
 func (m Model) browserBox(g geom) string {
 	st, b := m.st, m.browser
+	if b.finding && b.tree != nil {
+		return m.folderFinderBox(g, b.tree.Rows(), b.findText, b.findAt, "Find a folder in "+rootName(b.root))
+	}
 	if b.kind == browseAssign {
 		return m.assignBox(g)
 	}
@@ -362,12 +450,81 @@ func (m Model) assignBox(g geom) string {
 		}
 		right = strings.Join(lines, "\n")
 	}
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, " ", lipgloss.NewStyle().Width(width-leftW-4).Render(right))
-	lines := []string{
-		st.bold.Render(fmt.Sprintf("Assign a file to %s", b.pad)), target, "",
-		m.sourceTabs(b.root), "",
-		body, "",
-		st.dim.Render("Enter assign  ·  Space listen  ·  Ctrl-A autoplay " + onOff(m.autoplay) + "  ·  v mark  ·  Tab/l open  ·  t source  ·  / search  ·  p type a path  ·  Esc"),
+	rightW := width - leftW - 4
+	right += "\n\n" + m.assignKeys(b, rightW)
+	body := lipgloss.JoinHorizontal(lipgloss.Top, left, " ", lipgloss.NewStyle().Width(rightW).Render(right))
+	lines := []string{m.sourceTabs(b.root), "", body}
+	// The title and what the pad holds sit above the frame, so the frame is all file list.
+	header := st.bold.Render(fmt.Sprintf("Assign a file to %s", b.pad)) + "\n" + target
+	return lipgloss.JoinVertical(lipgloss.Left, header, st.modal.Width(width).Render(strings.Join(lines, "\n")))
+}
+
+// assignKeys lists the dialog's keys in two columns under the file details, where there is
+// room; with files marked it leads with how many and offers what can be done to them.
+func (m Model) assignKeys(b *browser, width int) string {
+	st := m.st
+	keys := [][2]string{
+		{"Enter", "assign"}, {"Space", "listen"},
+		{"Ctrl-A", "autoplay " + onOff(m.autoplay)}, {"v", "mark"},
+		{"J", "mark junk"}, {"d", "delete"},
+		{"n", "rename"}, {"Tab / l", "open folder"},
+		{"S-Tab", "fold all"}, {"t", "source"},
+		{"/", "search"}, {"f", "find folder"},
+		{"p", "type a path"}, {"Esc", "close"},
 	}
-	return st.modal.Width(width).Render(strings.Join(lines, "\n"))
+	var out []string
+	if b.findNote != "" {
+		out = append(out, st.warn.Render(b.findNote))
+	}
+	if n := len(b.marks); n > 0 {
+		out = append(out, st.good.Render(plural(n, "item")+" marked"))
+		keys = [][2]string{
+			{"d", "delete"}, {"u", "unmark all"},
+			{"Enter", "assign audio"}, {"v", "mark"},
+			{"J", "mark junk"}, {"f", "find folder"},
+			{"Esc", "close"},
+		}
+	}
+	colW := max(width/2, 20)
+	for i := 0; i < len(keys); i += 2 {
+		row := ""
+		for _, k := range keys[i:min(i+2, len(keys))] {
+			cell := st.accent.Render(fmt.Sprintf("%-8s", k[0])) + st.dim.Render(k[1])
+			row += lipgloss.NewStyle().Width(colW).Render(cell)
+		}
+		out = append(out, row)
+	}
+	return strings.Join(out, "\n")
+}
+
+// browserFind takes the keys while a folder name is typed: the matching open folders are
+// listed as it grows, up and down choose one, Enter moves the cursor there, Esc gives up.
+func (m Model) browserFind(b *browser, key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	name := key.String()
+	switch name {
+	case "esc":
+		b.finding = false
+	case "up", "down", "ctrl+n", "ctrl+p", "tab", "shift+tab":
+		b.findAt = stepChoice(b.findAt, len(folderMatches(b.tree.Rows(), b.findText)), name)
+	case "backspace":
+		if r := []rune(b.findText); len(r) > 0 {
+			b.findText, b.findAt = string(r[:len(r)-1]), 0
+		}
+	case "enter":
+		b.finding = false
+		rows := b.tree.Rows()
+		matches := folderMatches(rows, b.findText)
+		if len(matches) == 0 {
+			b.findNote = fmt.Sprintf("no open folder named like %q", b.findText)
+			break
+		}
+		b.at = matches[clamp(b.findAt, 0, len(matches)-1)]
+		b.findNote = rows[b.at].Name + ": h or Tab collapses it"
+	default:
+		if key.Type == tea.KeyRunes || key.Type == tea.KeySpace {
+			b.findText += string(key.Runes)
+			b.findAt = 0
+		}
+	}
+	return m, nil
 }

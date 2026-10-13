@@ -65,6 +65,33 @@ func (t *Tree) Collapse(i int) {
 	t.nodes = append(t.nodes[:i+1], t.nodes[end:]...)
 }
 
+// CollapseAll closes every folder, leaving the top level. It returns the row to put a cursor
+// on that was on row i: the outermost folder holding it, or the row itself when it was on the
+// top level.
+func (t *Tree) CollapseAll(i int) int {
+	top := i
+	for top >= 0 && top < len(t.nodes) && t.nodes[top].Depth > 0 {
+		top = t.Parent(top)
+	}
+	if top < 0 {
+		top = 0
+	}
+	kept := t.nodes[:0]
+	moved := 0
+	for j, n := range t.nodes {
+		if n.Depth > 0 {
+			continue
+		}
+		if j == top {
+			moved = len(kept)
+		}
+		n.Expanded = false
+		kept = append(kept, n)
+	}
+	t.nodes = kept
+	return moved
+}
+
 // Parent is the row of the folder that holds row i, or -1 at the top level.
 func (t *Tree) Parent(i int) int {
 	if i < 0 || i >= len(t.nodes) {
@@ -99,7 +126,7 @@ func children(dir string, depth int, entries []fileapi.DirEntry) []Node {
 		if nodes[a].Dir != nodes[b].Dir {
 			return nodes[a].Dir
 		}
-		return strings.ToLower(nodes[a].Name) < strings.ToLower(nodes[b].Name)
+		return NaturalLess(strings.ToLower(nodes[a].Name), strings.ToLower(nodes[b].Name))
 	})
 	return nodes
 }

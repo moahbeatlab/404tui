@@ -2,7 +2,13 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"log/slog"
+	"math"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +23,11 @@ import (
 	"github.com/moahbeatlab/404tui/sim"
 )
 
-func init() { tickEvery = time.Millisecond }
+func init() {
+	tickEvery = time.Millisecond
+	autoplayDelay = time.Millisecond
+	previewStopAfter = func(time.Duration) time.Duration { return time.Millisecond }
+}
 
 func ansiStrip(s string) string { return ansi.Strip(s) }
 
@@ -375,7 +385,7 @@ func TestFilesBrowseMoveRenameAndSearch(t *testing.T) {
 	s.shows("▸ IMPORT/")
 	s.hides("kick.wav")
 	s.press("tab", "j", "j", "m")
-	s.shows("marked SD:IMPORT/kick.wav")
+	s.shows("1 item to move")
 	s.press("k", "p")
 	s.shows("moved to SD:IMPORT/pack/kick.wav")
 	if _, ok := s.sim.File("SD:IMPORT/pack/kick.wav"); !ok {
@@ -407,7 +417,7 @@ func TestFilesBrowseMoveRenameAndSearch(t *testing.T) {
 	s.press("h", "h")
 	s.hides("snare.wav")
 	s.press("p")
-	s.shows("nothing marked")
+	s.shows("nothing on the clipboard")
 
 	s.press("t")
 	s.shows("Unit storage", "▸ ROLAND/")
@@ -847,7 +857,10 @@ func TestExportAndRestoreThroughTheFolderBrowser(t *testing.T) {
 	s.press("j", "j")
 	s.shows("Folder  SD:IMPORT/PROJECT_01-A")
 	s.press("enter")
-	s.shows("3 pads restored from SD:IMPORT/PROJECT_01-A")
+	// The bank to restore onto is asked; the pads are free, so Enter goes ahead.
+	s.shows("Restore 3 pads from the export in SD:IMPORT/PROJECT_01-A onto which bank?", "exported from bank A", "all 3 target pads on bank A are free")
+	s.press("enter")
+	s.shows("3 pads restored onto bank A from SD:IMPORT/PROJECT_01-A")
 	if s.padName("A2") != "A2" {
 		t.Errorf("A2 is %q", s.padName("A2"))
 	}
@@ -865,7 +878,12 @@ func TestExportAndRestoreThroughTheFolderBrowser(t *testing.T) {
 	s.press("ctrl+u")
 	s.typeText("SD:IMPORT/PROJECT_01-A")
 	s.press("enter")
-	s.shows("3 pads restored")
+	// They hold samples now, so replacing them takes a second Enter.
+	s.shows("onto which bank?", "3 of the 3 pads on bank A hold samples")
+	s.press("enter")
+	s.shows("Press Enter again to replace")
+	s.press("enter")
+	s.shows("3 pads restored onto bank A")
 	s.press("e", "/")
 	s.shows("Export bank A to the folder")
 	s.press("esc")
@@ -877,7 +895,9 @@ func TestExportAndRestoreThroughTheFolderBrowser(t *testing.T) {
 	s.press("esc", "j", "j", "j", "j")
 	s.shows("Pad export")
 	s.press("enter")
-	s.shows("3 pads restored from SD:IMPORT/PROJECT_01-A")
+	s.shows("onto which bank?")
+	s.press("enter", "enter")
+	s.shows("3 pads restored onto bank A from SD:IMPORT/PROJECT_01-A")
 }
 
 func TestThemesAndNarrowScreens(t *testing.T) {
@@ -1297,7 +1317,7 @@ func TestAutoplayInTheSearchPlaysWhereTheCursorRests(t *testing.T) {
 	s.typeText("wav")
 	s.shows("Ctrl-A autoplay off")
 	s.press("ctrl+a")
-	s.shows("Ctrl-A autoplay on")
+	s.shows("autoplay on")
 	before := len(s.player.played)
 	s.press("down")
 	if len(s.player.played) != before+1 {
@@ -1323,7 +1343,7 @@ func TestAutoplayInTheAssignDialog(t *testing.T) {
 	if len(s.player.played) == 0 {
 		t.Fatal("autoplay in the dialog played nothing")
 	}
-	s.shows("Ctrl-A autoplay on")
+	s.shows("autoplay on")
 	s.press("esc")
 	if s.player.stopped == 0 {
 		t.Error("closing the dialog left it playing")
@@ -1442,4 +1462,1130 @@ func TestPadSettingsEditor(t *testing.T) {
 	// An empty pad has nothing to edit.
 	s.press("G", "S")
 	s.shows("nothing to edit")
+}
+
+func TestDebugLogFollowsWhatTheUIDoes(t *testing.T) {
+	var buf strings.Builder
+	l := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	s := open(t)
+	s.model = s.m().WithLogger(l, "/tmp/debug.log")
+	s.press("v", "n")
+	s.typeText("x")
+	s.press("enter")
+	s.press("r")
+	s.shows("● debug log")
+	log := buf.String()
+	for _, want := range []string{
+		"msg=\"ui ready\"", "msg=key", "key=v", "section=Pads", "overlay=\"prompt", "msg=\"operation on the unit\"",
+		"result=\"done: ", "msg=\"loaded the project\"", "took=",
+	} {
+		if !strings.Contains(log, want) {
+			t.Errorf("the log lacks %q:\n%s", want, log)
+		}
+	}
+}
+
+func TestOneClickSelectsAndPlaysThePad(t *testing.T) {
+	s := open(t)
+	g := s.m().geom()
+	x, y := g.bodyX+(g.tileW+1)+2, rowBody+g.top+1 // pad 2
+	s.click(x, y)
+	if s.m().pad != 1 {
+		t.Errorf("clicked pad 2, got pad %d", s.m().pad)
+	}
+	s.shows("previewing A2")
+	if !slices.Equal(s.sim.PreviewStarts, []uint16{1}) {
+		t.Errorf("the unit was asked to start %v after one click", s.sim.PreviewStarts)
+	}
+	// It stops by itself, after the sample's length.
+	if !slices.Equal(s.sim.PreviewStops, []uint16{1}) {
+		t.Errorf("stops %v", s.sim.PreviewStops)
+	}
+	// A click on an empty pad selects it and says so instead of playing.
+	s.click(g.bodyX+(3*(g.tileW+1))+2, rowBody+g.top+1) // pad 4 holds nothing
+	s.shows("A4 is empty")
+}
+
+func TestPreviewSelectsThePadFirstSoTheRightOneSounds(t *testing.T) {
+	s := open(t)
+	// The unit plays the previously selected pad on the first press after the selection
+	// moved, unless the pad is selected first.
+	s.sim.WrongPadOnFirstPreview = true
+	s.sim.Select(0, 0)
+	s.press("l", "enter")
+	s.shows("previewing A2")
+	if !slices.Equal(s.sim.PreviewStarts, []uint16{1}) {
+		t.Errorf("starts %v: the first press should play A2 and nothing else", s.sim.PreviewStarts)
+	}
+	for _, p := range s.sim.PreviewStops {
+		if p != 1 {
+			t.Errorf("stopped %d, a pad that was never meant to play", p)
+		}
+	}
+	// Moving on to another pad and pressing again plays that one at once, too.
+	s.press("l", "enter")
+	if got := s.sim.PreviewStarts[len(s.sim.PreviewStarts)-1]; got != 2 {
+		t.Errorf("the next preview started pad %d, want 2 (A3)", got)
+	}
+	if n := len(s.sim.PreviewStarts); n != 2 {
+		t.Errorf("%d starts for two presses: %v", n, s.sim.PreviewStarts)
+	}
+}
+
+func TestAnOldStopTimerDoesNotCutALaterPreview(t *testing.T) {
+	s := open(t)
+	s.press("enter")
+	stops := len(s.sim.PreviewStops)
+	m := s.m()
+	// The timer of the first press fires after the second press started: it must do nothing.
+	s.send(previewStopMsg{pad: pad(t, "A1"), seq: m.previewSeq - 1})
+	if len(s.sim.PreviewStops) != stops {
+		t.Error("a stop timer that was overtaken stopped the pad")
+	}
+}
+
+func TestListeningSaysWhereTheSoundGoes(t *testing.T) {
+	s := open(t)
+	s.send(AudioOutputMsg("WH-1000XM3"))
+	s.press("3", "tab", "j", "j", "space")
+	s.shows("♪ playing kick.wav on WH-1000XM3")
+}
+
+func TestRestoreAsksWhichBankToRestoreOnto(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	for _, name := range []string{"A1", "A2"} {
+		s.sim.AddFile("SD:IMPORT/"+name+".wav", wav(480))
+		if _, err := app.Assign(m.unit, m.unit, pad(t, name), "SD:IMPORT/"+name+".wav"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := app.ExportPads(m.unit, proto.AllPads()[:2], "SD:exports/A-bank", nil); err != nil {
+		t.Fatal(err)
+	}
+	s.press("r")
+
+	// Restore asks for the bank, with the one the export came from chosen.
+	s.press("R", "/")
+	s.press("ctrl+u")
+	s.typeText("SD:exports/A-bank")
+	s.press("enter")
+	s.shows("Restore 2 pads from the export in SD:exports/A-bank onto which bank?", "exported from bank A of project PROJECT_01",
+		"green: where they came from", "1→A1  2→A2")
+	// Another bank: the pads keep their positions, and nothing is replaced there.
+	s.press("G")
+	s.shows("1→G1  2→G2", "all 2 target pads on bank G are free")
+	s.press("enter")
+	s.shows("2 pads restored onto bank G from SD:exports/A-bank")
+	if s.padName("G1") != "A1" || s.padName("G2") != "A2" {
+		t.Errorf("G1 %q, G2 %q", s.padName("G1"), s.padName("G2"))
+	}
+	if m := s.m(); m.bank != 6 || m.pad != 0 {
+		t.Errorf("the cursor is on bank %d pad %d, want G1", m.bank, m.pad)
+	}
+
+	// The original bank holds samples, so choosing it asks twice, and Esc leaves it alone.
+	s.press("R", "/")
+	s.press("ctrl+u")
+	s.typeText("SD:exports/A-bank")
+	s.press("enter")
+	s.shows("2 of the 2 pads on bank A hold samples")
+	s.press("enter")
+	s.shows("Press Enter again to replace the 2 pads that hold samples")
+	s.press("esc")
+	s.hides("onto which bank?")
+	// h and l move the bank too; a bank letter resets the warning.
+	s.press("R", "/")
+	s.press("ctrl+u")
+	s.typeText("SD:exports/A-bank")
+	s.press("enter", "l", "l")
+	s.shows("all 2 target pads on bank C are free")
+	s.press("esc")
+}
+
+func TestRestoreOfAnExportAcrossBanksGoesBackWhereItWas(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	s.sim.AddFile("SD:IMPORT/x.wav", wav(480))
+	for _, name := range []string{"A1", "C1"} {
+		if _, err := app.Assign(m.unit, m.unit, pad(t, name), "SD:IMPORT/x.wav"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := app.ExportPads(m.unit, []proto.PadIndex{pad(t, "A1"), pad(t, "C1")}, "SD:exports/two", nil); err != nil {
+		t.Fatal(err)
+	}
+	app.DeletePads(m.unit, []proto.PadIndex{pad(t, "A1"), pad(t, "C1")})
+	s.press("r", "R", "/")
+	s.press("ctrl+u")
+	s.typeText("SD:exports/two")
+	s.press("enter")
+	// Two banks: no question to ask, each pad goes back where it was.
+	s.shows("2 pads restored back where they were")
+	if s.padName("A1") != "x" || s.padName("C1") != "x" {
+		t.Errorf("A1 %q, C1 %q", s.padName("A1"), s.padName("C1"))
+	}
+}
+
+func TestSelectingTheCurrentProjectSaysSo(t *testing.T) {
+	s := open(t)
+	s.press("4", "enter")
+	s.shows("project 1 is already the current project")
+	// And a switch the unit is slow to announce still ends with the screen on that project.
+	s.sim.SilentProjectSwitch = true
+	old := device.SelectTimeout
+	device.SelectTimeout = 100 * time.Millisecond
+	defer func() { device.SelectTimeout = old }()
+	s.press("j", "j", "enter")
+	s.shows("project 3 selected")
+	if s.m().snap.Project != 2 {
+		t.Errorf("the screen shows project %d", s.m().snap.Project+1)
+	}
+}
+
+// keyMsg is a key press as the terminal sends it.
+func keyMsg(name string) tea.KeyMsg {
+	if name == "ctrl+a" {
+		return tea.KeyMsg{Type: tea.KeyCtrlA}
+	}
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(name)}
+}
+
+func TestAutoplayInFilesStopsTheOldSoundAtOnce(t *testing.T) {
+	s := open(t)
+	s.sim.AddFile("SD:IMPORT/zlong.wav", wav(96000))
+	// IMPORT is open: rows are pack/, kick.wav, zlong.wav. Turn autoplay on at kick.wav.
+	s.press("3", "tab", "j", "j", "ctrl+a")
+	s.shows("♫ autoplay")
+	if len(s.player.played) != 1 || !s.player.playing || s.m().listening != "SD:IMPORT/kick.wav" {
+		t.Fatalf("autoplay did not play the file it was turned on at: %d plays, playing %v, listening %q",
+			len(s.player.played), s.player.playing, s.m().listening)
+	}
+
+	// Move on without running what the move schedules: the old sound is already stopped.
+	stops := s.player.stopped
+	model, cmd := s.model.Update(keyMsg("j"))
+	if s.player.stopped == stops || s.player.playing {
+		t.Error("the old sound was still playing after the cursor moved")
+	}
+	if model.(Model).listening != "" {
+		t.Errorf("still listening to %q", model.(Model).listening)
+	}
+	// Then the file the cursor rests on plays.
+	s.model = model
+	s.run(cmd)
+	if len(s.player.played) != 2 || !s.player.playing || s.m().listening != "SD:IMPORT/zlong.wav" {
+		t.Errorf("the new file did not play: %d plays, listening %q", len(s.player.played), s.m().listening)
+	}
+
+	// Moving onto a folder stops the sound and plays nothing.
+	model, cmd = s.model.Update(keyMsg("k"))
+	model, cmd2 := model.Update(keyMsg("k"))
+	s.model = model
+	s.run(cmd)
+	s.run(cmd2)
+	if s.player.playing {
+		t.Error("something is playing on a folder")
+	}
+}
+
+func TestAMoveWhileAFileIsDecodingDropsIt(t *testing.T) {
+	s := open(t)
+	s.press("3", "tab", "j", "j")
+	m := s.m()
+	// A file is asked for, and the cursor moves on while it is still being decoded.
+	_, cmd := m.playFile("SD:IMPORT/kick.wav")
+	m.stopListening()
+	msg := cmd()
+	listened, ok := msg.(listenMsg)
+	if !ok || !listened.stale {
+		t.Fatalf("the late file was not dropped: %#v", msg)
+	}
+	if len(s.player.played) != 0 {
+		t.Error("a file that was overtaken still played")
+	}
+	// Dropped means silent: no message either.
+	s.send(msg)
+	s.hides("playing kick.wav")
+}
+
+func TestMovingWithAutoplayOffLeavesASoundAlone(t *testing.T) {
+	s := open(t)
+	s.press("3", "tab", "j", "j", "space")
+	if !s.player.playing {
+		t.Fatal("not playing")
+	}
+	s.press("k")
+	if !s.player.playing {
+		t.Error("moving stopped a sound that was started by hand, with autoplay off")
+	}
+	// Autoplay on and off again: turning it off stops the sound.
+	s.press("ctrl+a")
+	s.shows("autoplay on")
+	s.press("ctrl+a")
+	s.shows("autoplay off")
+	if s.player.playing {
+		t.Error("turning autoplay off left the sound playing")
+	}
+	s.hides("♫ autoplay")
+}
+
+func TestAutoplayInTheSearchStopsTheOldSoundAtOnce(t *testing.T) {
+	s := open(t)
+	s.press("3", "/")
+	s.typeText("wav")
+	s.press("ctrl+a")
+	if !s.player.playing {
+		t.Fatal("autoplay did not play the first result")
+	}
+	stops := s.player.stopped
+	model, _ := s.model.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if s.player.playing || s.player.stopped == stops {
+		t.Error("the old sound kept playing after moving to the next result")
+	}
+	_ = model
+}
+
+func TestCtrlDAndCtrlUPageThroughLists(t *testing.T) {
+	s := open(t)
+	// Projects: 16 rows; the list is about 27 rows tall here, so half a page is 13 rows.
+	s.press("4")
+	ctrlD, ctrlU := tea.KeyMsg{Type: tea.KeyCtrlD}, tea.KeyMsg{Type: tea.KeyCtrlU}
+	s.send(ctrlD)
+	if got := s.m().projectAt; got < 5 {
+		t.Errorf("Ctrl-D moved to project %d", got+1)
+	}
+	s.send(ctrlD)
+	s.send(ctrlD)
+	if s.m().projectAt != 15 {
+		t.Errorf("paging down stops at the last project, got %d", s.m().projectAt+1)
+	}
+	s.send(ctrlU)
+	if got := s.m().projectAt; got >= 15 || got < 1 {
+		t.Errorf("Ctrl-U moved to project %d", got+1)
+	}
+	s.send(tea.KeyMsg{Type: tea.KeyPgUp})
+	s.send(tea.KeyMsg{Type: tea.KeyPgUp})
+	if s.m().projectAt != 0 {
+		t.Errorf("Page Up twice should reach the top, got %d", s.m().projectAt+1)
+	}
+
+	// Files: a long folder.
+	for i := 0; i < 60; i++ {
+		s.sim.AddFile(fmt.Sprintf("SD:LONG/file%02d.wav", i), wav(480))
+	}
+	s.press("r", "3")
+	m := s.m()
+	rows := len(m.tree.Rows())
+	s.send(ctrlD)
+	half := s.m().fileAt
+	if half < 1 || half >= rows {
+		t.Fatalf("Ctrl-D in Files moved to %d of %d", half, rows)
+	}
+	s.press("tab")
+	s.press("G")
+	s.send(ctrlU)
+	if got := s.m().fileAt; got >= len(s.m().tree.Rows())-1 {
+		t.Errorf("Ctrl-U from the bottom stayed at %d", got)
+	}
+
+	// The search box: Ctrl-D pages through results, Ctrl-U still clears the text.
+	s.press("/")
+	s.typeText("file")
+	s.send(ctrlD)
+	if s.m().search.at == 0 {
+		t.Error("Ctrl-D did not move through the search results")
+	}
+	s.send(ctrlU)
+	if s.m().search.input != "" {
+		t.Errorf("Ctrl-U should clear the search text, left %q", s.m().search.input)
+	}
+}
+
+// cursorOn puts the cursor of the Files list on the row with that name or path.
+func (s *screen) cursorOn(nameOrPath string) {
+	s.t.Helper()
+	m := s.m()
+	for i, r := range m.tree.Rows() {
+		if r.Path == nameOrPath || (r.Name == nameOrPath && !strings.Contains(nameOrPath, "/")) {
+			m.fileAt = i
+			s.model = m
+			return
+		}
+	}
+	s.t.Fatalf("no row %q in the file list", nameOrPath)
+}
+
+// expand opens a folder of the Files list, if it is not open.
+func (s *screen) expand(nameOrPath string) {
+	s.t.Helper()
+	s.cursorOn(nameOrPath)
+	m := s.m()
+	if node, _ := m.fileNode(); !node.Expanded {
+		s.press("tab")
+	}
+}
+
+// junkCard puts the leftovers macOS makes beside real files on the card.
+func junkCard(s *screen) {
+	for _, f := range []string{
+		"SD:Loops/E_126.wav", "SD:Loops/._E_126.wav", "SD:Loops/C_126.wav", "SD:Loops/._C_126.wav",
+		"SD:Loops/more/G_126.wav", "SD:Loops/more/._G_126.wav", "SD:Loops/.DS_Store",
+	} {
+		s.sim.AddFile(f, wav(480))
+	}
+	s.press("r", "3")
+}
+
+func TestJunkIsDimmedNotAudioAndMarkedWithJ(t *testing.T) {
+	s := open(t)
+	junkCard(s)
+	s.expand("Loops")
+	s.shows("._E_126.wav", "E_126.wav", ".DS_Store")
+	// A ._ file is not audio: no assign, no listening, and it says what it is.
+	s.cursorOn("SD:Loops/._E_126.wav")
+	s.shows("Junk file, not audio.")
+	s.press("enter")
+	s.hides("Assign ._E_126.wav")
+	s.press("space")
+	if len(s.player.played) != 0 || s.m().picker != nil {
+		t.Error("a ._ file was played or assigned")
+	}
+
+	// J marks every junk file in the open folders, and only those.
+	s.press("J")
+	s.shows("marked 3 junk files", "d deletes them")
+	for p := range s.m().fileMarks {
+		if !app.IsJunk(app.Base(p)) {
+			t.Errorf("marked %s, which is not junk", p)
+		}
+	}
+	if n := len(s.m().fileMarks); n != 3 {
+		t.Errorf("%d marked: %v", n, s.m().fileMarks)
+	}
+	// Open the other folder and press J again: its leftover joins.
+	s.expand("more")
+	s.press("J")
+	s.shows("marked 4 junk files")
+	if n := len(s.m().fileMarks); n != 4 {
+		t.Errorf("%d marked", n)
+	}
+	// Nothing to find in a clean folder.
+	s.press("esc")
+	s.cursorOn("Loops")
+	s.press("tab") // closes it: its junk is no longer in the open folders
+	s.press("J")
+	s.shows("no junk files in the open folders")
+}
+
+func TestDeleteMarkedFilesAsksFirstAndRemovesWholeFolders(t *testing.T) {
+	s := open(t)
+	junkCard(s)
+	s.expand("Loops")
+	s.press("J", "d")
+	s.shows("Delete 3 items from the SD card?", "._E_126.wav", "3 files, with everything in them; this cannot be undone.")
+	// Declining deletes nothing.
+	s.press("n")
+	if _, ok := s.sim.File("SD:Loops/._E_126.wav"); !ok {
+		t.Fatal("declining deleted a file")
+	}
+	s.press("d", "y")
+	s.shows("3 items deleted")
+	for _, gone := range []string{"SD:Loops/._E_126.wav", "SD:Loops/._C_126.wav", "SD:Loops/.DS_Store"} {
+		if _, ok := s.sim.File(gone); ok {
+			t.Errorf("%s is still there", gone)
+		}
+	}
+	for _, kept := range []string{"SD:Loops/E_126.wav", "SD:Loops/C_126.wav", "SD:Loops/more/G_126.wav", "SD:Loops/more/._G_126.wav"} {
+		if _, ok := s.sim.File(kept); !ok {
+			t.Errorf("%s was deleted", kept)
+		}
+	}
+	if len(s.m().fileMarks) != 0 {
+		t.Error("marks survived the delete")
+	}
+
+	// A folder goes with everything in it, and the question counts what that is.
+	s.cursorOn("Loops")
+	s.press("d")
+	s.shows("Delete 1 item from the SD card?", "Loops", "4 files and 2 folders")
+	s.press("y")
+	s.shows("1 item deleted")
+	if _, ok := s.sim.File("SD:Loops/more/G_126.wav"); ok {
+		t.Error("the folder's contents were not deleted")
+	}
+}
+
+func TestDeleteIsRefusedOutsideTheCard(t *testing.T) {
+	s := open(t)
+	s.press("3", "t")
+	s.shows("Unit storage")
+	s.press("d")
+	s.shows("holds your projects")
+	if s.m().prompt != nil {
+		t.Error("a delete was offered on the unit's storage")
+	}
+	s.press("t")
+	s.shows("This computer")
+	s.press("d")
+	s.shows("not deleted from here")
+	if s.m().prompt != nil {
+		t.Error("a delete was offered on this computer")
+	}
+}
+
+func TestCopyAndMoveMarkedFilesWithTheClipboard(t *testing.T) {
+	s := open(t)
+	for _, f := range []string{"SD:Src/a.wav", "SD:Src/b.wav", "SD:Src/sub/c.wav", "SD:Dst/keep.wav"} {
+		s.sim.AddFile(f, wav(480))
+	}
+	s.press("r", "3")
+	s.expand("Src")
+	s.expand("sub")
+	s.expand("Dst")
+
+	// V marks the files of the folder in front; c copies them.
+	s.cursorOn("Src")
+	s.press("V")
+	s.shows("marked 3 files in SD:Src")
+	s.press("c")
+	s.shows("3 items to copy", "⧉")
+	s.cursorOn("Dst")
+	s.press("p")
+	s.shows("3 copied into SD:Dst")
+	for _, f := range []string{"SD:Dst/a.wav", "SD:Dst/b.wav", "SD:Dst/c.wav", "SD:Src/a.wav", "SD:Src/sub/c.wav"} {
+		if _, ok := s.sim.File(f); !ok {
+			t.Errorf("%s is missing after the copy", f)
+		}
+	}
+	// Pasting again does not overwrite what is there, and says so.
+	s.cursorOn("SD:Src/a.wav")
+	s.press("c")
+	s.cursorOn("Dst")
+	s.press("p")
+	s.shows("nothing copied", "that name is taken")
+
+	// A new folder, then a cut moves the file: the original is gone and the clipboard is spent.
+	s.cursorOn("Dst")
+	s.press("N")
+	s.shows("New folder in SD:Dst")
+	s.typeText("moved")
+	s.press("enter")
+	s.shows("created SD:Dst/moved")
+	s.cursorOn("SD:Src/b.wav")
+	s.press("x")
+	s.shows("1 item to move", "↗")
+	s.cursorOn("SD:Dst/moved")
+	s.press("p")
+	s.shows("moved to SD:Dst/moved/b.wav")
+	if _, ok := s.sim.File("SD:Src/b.wav"); ok {
+		t.Error("a move left the original")
+	}
+	if _, ok := s.sim.File("SD:Dst/moved/b.wav"); !ok {
+		t.Error("a move did not arrive")
+	}
+	if len(s.m().clip) != 0 {
+		t.Error("the clipboard was not emptied after a move")
+	}
+
+	// Esc drops the clipboard; with nothing on it there is nothing to paste.
+	s.cursorOn("SD:Src/a.wav")
+	s.press("c")
+	if len(s.m().clip) == 0 {
+		t.Fatal("nothing on the clipboard")
+	}
+	s.press("esc")
+	if len(s.m().clip) != 0 {
+		t.Error("Esc left the clipboard")
+	}
+	s.press("p")
+	s.shows("nothing on the clipboard")
+	// The unit's own storage is never a destination.
+	s.cursorOn("SD:Src/a.wav")
+	s.press("c", "t")
+	s.shows("Unit storage")
+	s.press("p")
+	s.shows("holds your projects")
+}
+
+func TestTheClipboardCrossesToThisComputer(t *testing.T) {
+	s := open(t)
+	dir := t.TempDir()
+	s.sim.AddFile("SD:Packs/kick.wav", wav(480))
+	s.press("r", "3")
+	s.expand("Packs")
+	s.cursorOn("SD:Packs/kick.wav")
+	s.press("c")
+	// Switch to this computer; the clipboard comes along. The tree is pointed at a temporary
+	// folder, so that nothing is written to the real home folder.
+	s.press("t", "t")
+	s.shows("This computer")
+	if len(s.m().clip) != 1 {
+		t.Fatalf("the clipboard did not survive the change of source: %v", s.m().clip)
+	}
+	m := s.m()
+	m.root, m.tree = dir, nil
+	s.model = m
+	s.run(m.wanted())
+	s.press("p")
+	if _, err := os.Stat(filepath.Join(dir, "kick.wav")); err != nil {
+		t.Errorf("the file did not arrive on this computer: %v", err)
+	}
+	if _, ok := s.sim.File("SD:Packs/kick.wav"); !ok {
+		t.Error("a copy removed the original")
+	}
+}
+
+func TestPadsCanPlayOnThisComputerLikeAFilePreview(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	// A real sample is needed on the pad: 4800 frames, so 0.1 s.
+	s.sim.AddFile("SD:IMPORT/loop.wav", wav(4800))
+	a5 := pad(t, "A5")
+	if _, err := app.Assign(m.unit, m.unit, a5, "SD:IMPORT/loop.wav"); err != nil {
+		t.Fatal(err)
+	}
+	s.press("r")
+	s.send(AudioOutputMsg("MacBook Pro Speakers"))
+	s.press("j") // pad 5 is under pad 1
+
+	// By default a pad plays on the unit.
+	s.press("enter")
+	s.shows("previewing A5")
+	if !slices.Equal(s.sim.PreviewStarts, []uint16{4}) || len(s.player.played) != 0 {
+		t.Fatalf("unit starts %v, computer plays %d", s.sim.PreviewStarts, len(s.player.played))
+	}
+
+	// o switches to this computer: the unit is not asked, the sample is played here.
+	s.press("o")
+	s.shows("pads play on this computer (MacBook Pro Speakers)")
+	s.sim.PreviewStarts = nil
+	s.press("enter")
+	if len(s.sim.PreviewStarts) != 0 {
+		t.Errorf("the unit was asked to play %v", s.sim.PreviewStarts)
+	}
+	if len(s.player.played) != 1 || s.player.played[0].Frames() != 4800 {
+		t.Fatalf("the computer played %d samples", len(s.player.played))
+	}
+	s.shows("♪ playing pad A5 on MacBook Pro Speakers", "Enter preview on computer")
+	// The sample is read once; the second press plays from memory and restarts it.
+	reads := countReads(s.sim.Requests, 0x9E)
+	s.press("enter")
+	if len(s.player.played) != 2 {
+		t.Errorf("a second press played %d times in all", len(s.player.played))
+	}
+	_ = reads
+
+	// Another pad replaces it at once, an empty pad says so, and P plays on the computer even
+	// with the setting back on the unit.
+	s.press("k")
+	s.shows("")
+	stops := s.player.stopped
+	s.press("l", "l", "l", "l")
+	s.press("enter")
+	s.shows("is empty")
+	if s.player.stopped == stops {
+		t.Log("an empty pad leaves what is playing alone")
+	}
+	s.press("0")
+	s.shows("pads play on the unit")
+	s.press("O")
+	s.shows("pads play on this computer")
+	s.press("o")
+	s.shows("pads play on the unit")
+	s.press("G")
+	s.press("g", "j", "P")
+	if len(s.player.played) != 3 {
+		t.Errorf("P played %d in all, want 3", len(s.player.played))
+	}
+
+	// The choice is remembered between runs.
+	s.press("o")
+	if !s.store.state.PreviewLocal {
+		t.Error("the setting was not saved")
+	}
+	s = s.restart()
+	if !s.m().previewLocal {
+		t.Error("the setting did not come back after a restart")
+	}
+}
+
+func countReads(requests [][]byte, cmd byte) int {
+	n := 0
+	for _, r := range requests {
+		if len(r) > 0 && r[0] == cmd {
+			n++
+		}
+	}
+	return n
+}
+
+func TestPadPlayedOnTheComputerStopsWhenTheCursorMovesWithAutoplayOff(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	s.sim.AddFile("SD:IMPORT/loop.wav", wav(4800))
+	if _, err := app.Assign(m.unit, m.unit, pad(t, "A5"), "SD:IMPORT/loop.wav"); err != nil {
+		t.Fatal(err)
+	}
+	s.press("r", "j", "P")
+	if !s.player.playing {
+		t.Fatal("not playing")
+	}
+	// An empty pad says so and leaves the sound alone.
+	s.press("j", "P")
+	s.shows("A9 is empty")
+	// A pad whose file cannot be read says so, instead of failing silently: break the file
+	// behind its back and clear what was kept.
+	s.sim.AddFile(pad(t, "A5").SamplePath(1), []byte("broken"))
+	s.press("k")
+	s.m().padAudio.clear()
+	s.press("P")
+	s.shows("listening failed")
+}
+
+func TestJumpToTheNextAndPreviousFolder(t *testing.T) {
+	s := open(t)
+	for _, f := range []string{"SD:A/x.wav", "SD:A/sub/y.wav", "SD:B/z.wav", "SD:C/w.wav"} {
+		s.sim.AddFile(f, wav(480))
+	}
+	s.press("r", "3")
+	s.expand("A")
+	s.expand("sub")
+	// Rows: A/ sub/ y.wav x.wav B/ C/ IMPORT/ ... in folder-first order; jump over the files.
+	name := func() string { m := s.m(); n, _ := m.fileNode(); return n.Name }
+	s.cursorOn("A")
+	var seen []string
+	for i := 0; i < 8; i++ {
+		s.press("}")
+		seen = append(seen, name())
+		if !s.m().tree.Rows()[s.m().fileAt].Dir {
+			t.Fatalf("} landed on a file: %q", name())
+		}
+	}
+	if seen[0] != "sub" {
+		t.Errorf("after A the next folder is sub, got %v", seen)
+	}
+	// It stops at the last folder and says so.
+	s.shows("no more folders below")
+	last := name()
+	s.press("}")
+	if name() != last {
+		t.Error("jumped past the last folder")
+	}
+	// And back up, skipping the files between folders.
+	s.press("{")
+	if name() == last || !s.m().tree.Rows()[s.m().fileAt].Dir {
+		t.Errorf("{ did not go to the previous folder: %q", name())
+	}
+	s.cursorOn("A")
+	s.press("{")
+	s.shows("no more folders above")
+	// Alt-n and Alt-p do the same.
+	s.send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n"), Alt: true})
+	if name() != "sub" {
+		t.Errorf("Alt-n went to %q", name())
+	}
+	s.send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p"), Alt: true})
+	if name() != "A" {
+		t.Errorf("Alt-p went to %q", name())
+	}
+	// The same keys work in the assign dialog's tree.
+	s.press("1", "a", "tab", "}")
+	if m := s.m(); m.browser == nil || !m.browser.tree.Rows()[m.browser.at].Dir {
+		t.Error("} in the dialog did not land on a folder")
+	}
+	s.press("esc")
+}
+
+func TestTheAssignDialogMarksAnythingAndDeletesJunk(t *testing.T) {
+	s := open(t)
+	for _, f := range []string{"SD:Loops/E_126.wav", "SD:Loops/._E_126.wav", "SD:Loops/C_126.wav", "SD:Loops/._C_126.wav", "SD:Loops/.DS_Store"} {
+		s.sim.AddFile(f, wav(480))
+	}
+	s.press("a", "tab")
+	cursorOnDialog := func(path string) {
+		m := s.m()
+		for i, r := range m.browser.tree.Rows() {
+			if r.Path == path {
+				m.browser.at = i
+				return
+			}
+		}
+		t.Fatalf("no row %s in the dialog", path)
+	}
+	// Open Loops in the dialog, then mark a ._ file with v: before, this was ignored.
+	m := s.m()
+	for i, r := range m.browser.tree.Rows() {
+		if r.Name == "Loops" {
+			m.browser.at = i
+		}
+	}
+	s.press("tab")
+	cursorOnDialog("SD:Loops/._E_126.wav")
+	s.press("v")
+	if !s.m().browser.marks["SD:Loops/._E_126.wav"] {
+		t.Fatal("a ._ file could not be marked in the dialog")
+	}
+	// J marks all the junk in the open folders; Enter does not assign the junk.
+	s.press("J")
+	s.shows("marked 3 junk files")
+	s.press("enter")
+	s.shows("none of the marked items is an audio file")
+	// d asks first, then the dialog opens again where it was.
+	s.press("d")
+	s.shows("Delete 3 items from the SD card?", "._E_126.wav", "3 files")
+	s.press("n")
+	s.shows("Assign a file to A1")
+	if _, ok := s.sim.File("SD:Loops/._E_126.wav"); !ok {
+		t.Fatal("declining deleted a file")
+	}
+	// The marks are gone with the old dialog, so mark again and delete.
+	s.press("J")
+	s.press("d", "y")
+	s.shows("Assign a file to A1", "3 items deleted")
+	for _, gone := range []string{"SD:Loops/._E_126.wav", "SD:Loops/._C_126.wav", "SD:Loops/.DS_Store"} {
+		if _, ok := s.sim.File(gone); ok {
+			t.Errorf("%s is still there", gone)
+		}
+	}
+	for _, kept := range []string{"SD:Loops/E_126.wav", "SD:Loops/C_126.wav"} {
+		if _, ok := s.sim.File(kept); !ok {
+			t.Errorf("%s was deleted", kept)
+		}
+	}
+	s.hides("._E_126.wav")
+	s.shows("E_126.wav")
+}
+
+func TestMarkedFilesShowTheirActionsAndUnmarkAll(t *testing.T) {
+	s := open(t)
+	for _, f := range []string{"SD:Loops/a.wav", "SD:Loops/._a.wav"} {
+		s.sim.AddFile(f, wav(480))
+	}
+	s.press("a", "tab")
+	m := s.m()
+	for i, r := range m.browser.tree.Rows() {
+		if r.Name == "Loops" {
+			m.browser.at = i
+		}
+	}
+	s.press("tab")
+	s.hides("unmark all")
+	s.press("J")
+	s.shows("marked", "delete", "unmark all")
+	s.press("u")
+	s.shows("unmarked everything")
+	s.hides("unmark all")
+}
+
+func TestFindAFolderByNameThenCollapseIt(t *testing.T) {
+	s := open(t)
+	for _, f := range []string{"SD:Drums/a.wav", "SD:Drums/Claps/c.wav", "SD:Bass/b.wav"} {
+		s.sim.AddFile(f, wav(480))
+	}
+	s.press("r", "3")
+	s.expand("Drums")
+	s.expand("Claps")
+	s.cursorOn("Bass")
+	s.press("f")
+	s.typeText("clap")
+	s.press("enter")
+	m := s.m()
+	if n, _ := m.fileNode(); n.Name != "Claps" {
+		t.Fatalf("found %q, want Claps", n.Name)
+	}
+	s.shows("Tab or h collapses it")
+	s.press("h")
+	s.hides("c.wav")
+	// A name that nothing matches says so and leaves the cursor alone.
+	s.press("f")
+	s.typeText("zzz")
+	s.press("enter")
+	s.shows("no open folder named like")
+}
+
+func TestFindAFolderInTheAssignDialog(t *testing.T) {
+	s := open(t)
+	for _, f := range []string{"SD:Drums/a.wav", "SD:Drums/Claps/c.wav", "SD:Bass/b.wav"} {
+		s.sim.AddFile(f, wav(480))
+	}
+	s.press("a", "tab")
+	open := func(name string) {
+		m := s.m()
+		for i, r := range m.browser.tree.Rows() {
+			if r.Name == name {
+				m.browser.at = i
+			}
+		}
+		s.press("tab")
+	}
+	open("Drums")
+	open("Claps")
+	s.press("g", "f")
+	s.shows("Find a folder")
+	s.typeText("clap")
+	s.press("enter")
+	m := s.m()
+	if n := m.browser.tree.Rows()[m.browser.at]; n.Name != "Claps" {
+		t.Fatalf("found %q, want Claps", n.Name)
+	}
+	s.shows("h or Tab collapses it")
+	s.press("h")
+	s.hides("c.wav")
+	s.press("f")
+	s.typeText("zzz")
+	s.press("enter")
+	s.shows("no open folder named like")
+	// Esc while typing cancels the find and keeps the dialog open.
+	s.press("f", "esc")
+	s.shows("Assign a file to")
+}
+
+func TestFindingAFolderListsMatchesWhileTyping(t *testing.T) {
+	s := open(t)
+	for _, f := range []string{"SD:Kit1/a.wav", "SD:Kit2/b.wav", "SD:Bass/c.wav"} {
+		s.sim.AddFile(f, wav(480))
+	}
+	s.press("r", "3")
+	s.cursorOn("Bass")
+	s.press("f")
+	// Before anything is typed, every open folder is listed.
+	s.shows("Kit1/", "Kit2/", "Bass/")
+	s.typeText("kit")
+	s.shows("Kit1/", "Kit2/")
+	s.hides("Bass/")
+	// Down chooses the second match, and Enter goes there.
+	s.press("down", "enter")
+	m := s.m()
+	if n, _ := m.fileNode(); n.Name != "Kit2" {
+		t.Fatalf("chose %q, want Kit2", n.Name)
+	}
+
+	// The same in the assign dialog.
+	s.press("1", "a")
+	s.press("f")
+	s.shows("Find a folder")
+	s.typeText("kit")
+	s.shows("Kit1/", "Kit2/")
+	s.press("down", "enter")
+	m = s.m()
+	if n := m.browser.tree.Rows()[m.browser.at]; n.Name != "Kit2" {
+		t.Fatalf("dialog chose %q, want Kit2", n.Name)
+	}
+}
+
+func TestTheCursorStaysPutAfterDeleting(t *testing.T) {
+	s := open(t)
+	for _, f := range []string{"SD:Aaa/x.wav", "SD:Loops/._a.wav", "SD:Loops/b.wav", "SD:Zzz/y.wav"} {
+		s.sim.AddFile(f, wav(480))
+	}
+	s.press("r", "3")
+	s.expand("Loops")
+	name := func() string { m := s.m(); n, _ := m.fileNode(); return n.Name }
+
+	// Deleting the file under the cursor leaves it on the folder that held it.
+	s.cursorOn("._a.wav")
+	s.press("d", "y")
+	s.shows("1 item deleted")
+	if got := name(); got != "Loops" {
+		t.Fatalf("after deleting a file the cursor is on %q, want Loops", got)
+	}
+
+	// Deleting something marked elsewhere keeps the cursor on its own row.
+	s.cursorOn("Zzz")
+	s.press("v")
+	s.cursorOn("Aaa")
+	s.press("d", "y")
+	s.shows("1 item deleted")
+	if got := name(); got != "Aaa" {
+		t.Errorf("cursor jumped to %q, want Aaa", got)
+	}
+
+	// In the assign dialog the cursor comes back on the folder too.
+	s.press("1", "a")
+	dialogOn := func(name string) {
+		m := s.m()
+		for i, r := range m.browser.tree.Rows() {
+			if r.Name == name {
+				m.browser.at = i
+			}
+		}
+	}
+	dialogOn("Loops")
+	s.press("tab")
+	dialogOn("b.wav")
+	s.press("v", "d")
+	s.press("y")
+	m := s.m()
+	if m.browser == nil {
+		t.Fatal("the dialog did not open again")
+	}
+	if n := m.browser.tree.Rows()[m.browser.at]; n.Name != "Loops" {
+		t.Errorf("the dialog cursor is on %q, want Loops", n.Name)
+	}
+}
+
+func TestRenameWhateverIsHighlighted(t *testing.T) {
+	s := open(t)
+	for _, f := range []string{"SD:Loops/old.wav", "SD:Loops/z.wav"} {
+		s.sim.AddFile(f, wav(480))
+	}
+	// In Files, the cursor follows the renamed file.
+	s.press("r", "3")
+	s.expand("Loops")
+	s.cursorOn("old.wav")
+	s.press("n")
+	s.shows("Rename old.wav")
+	for range "old.wav" {
+		s.press("backspace")
+	}
+	s.typeText("new.wav")
+	s.press("enter")
+	s.shows("renamed to")
+	if _, ok := s.sim.File("SD:Loops/new.wav"); !ok {
+		t.Fatal("the file was not renamed")
+	}
+	m := s.m()
+	if n, _ := m.fileNode(); n.Name != "new.wav" {
+		t.Errorf("the cursor is on %q, want new.wav", n.Name)
+	}
+
+	// In the assign dialog a folder or file can be renamed too, and the dialog comes back
+	// on it.
+	s.press("1", "a")
+	dialogOn := func(name string) {
+		m := s.m()
+		for i, r := range m.browser.tree.Rows() {
+			if r.Name == name {
+				m.browser.at = i
+			}
+		}
+	}
+	dialogOn("Loops")
+	s.press("n")
+	s.shows("Rename Loops")
+	for range "Loops" {
+		s.press("backspace")
+	}
+	s.typeText("Beats")
+	s.press("enter")
+	m = s.m()
+	if m.browser == nil {
+		t.Fatal("the dialog did not open again")
+	}
+	if _, ok := s.sim.File("SD:Beats/new.wav"); !ok {
+		t.Fatal("the folder was not renamed")
+	}
+	if n := m.browser.tree.Rows()[m.browser.at]; n.Name != "Beats" {
+		t.Errorf("the dialog cursor is on %q, want Beats", n.Name)
+	}
+	// Esc leaves the name alone and brings the dialog back.
+	s.press("n", "esc")
+	s.shows("Assign a file to")
+}
+
+func TestShiftTabFoldsEverything(t *testing.T) {
+	s := open(t)
+	for _, f := range []string{"SD:A/sub/y.wav", "SD:A/x.wav", "SD:B/z.wav"} {
+		s.sim.AddFile(f, wav(480))
+	}
+	s.press("r", "3")
+	s.expand("A")
+	s.expand("sub")
+	s.expand("B")
+	s.cursorOn("y.wav")
+	s.shows("y.wav", "z.wav")
+	s.press("shift+tab")
+	s.hides("y.wav")
+	s.hides("z.wav")
+	s.hides("x.wav")
+	m := s.m()
+	if n, _ := m.fileNode(); n.Name != "A" {
+		t.Errorf("the cursor is on %q, want the folder that held it, A", n.Name)
+	}
+	if m.section != secFiles {
+		t.Error("shift+tab left the Files section")
+	}
+
+	// The same in the assign dialog.
+	s.press("1", "a")
+	dialogOn := func(name string) {
+		m := s.m()
+		for i, r := range m.browser.tree.Rows() {
+			if r.Name == name {
+				m.browser.at = i
+			}
+		}
+	}
+	dialogOn("A")
+	s.press("tab")
+	s.shows("x.wav")
+	s.press("shift+tab")
+	s.hides("x.wav")
+	s.shows("Assign a file to")
+}
+
+func TestTheDialogListsItsRenameAndFoldKeys(t *testing.T) {
+	s := open(t)
+	s.press("a")
+	s.shows("rename", "fold all", "find folder")
+}
+
+func TestChromaticPlaysAPadAsNotesFromTheKeyboard(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	// 4800 frames on A5; the first three pads of the simulated unit have no file behind them.
+	s.sim.AddFile("SD:IMPORT/loop.wav", wav(4800))
+	if _, err := app.Assign(m.unit, m.unit, pad(t, "A5"), "SD:IMPORT/loop.wav"); err != nil {
+		t.Fatal(err)
+	}
+	s.press("r", "j", "j", "C")
+	s.shows("A9 is empty")
+	s.press("k", "C")
+	s.shows("Chromatic  ·  A5", "octave +0", "z / x octave")
+	frames := func() []int {
+		var out []int
+		for _, p := range s.player.played {
+			out = append(out, p.Frames())
+		}
+		return out
+	}
+	// a is the sample as it is, k an octave above it, and x moves the keys up an octave. The
+	// unit is not asked to play anything.
+	s.press("a", "k", "x", "a", "A")
+	if got := frames(); !slices.Equal(got, []int{4800, 2400, 2400}) {
+		t.Fatalf("played %v", got)
+	}
+	s.shows("octave +1", "last note +12 semitones", "♪ pad A5")
+	if len(s.sim.PreviewStarts) != 0 {
+		t.Errorf("the unit was asked to play %v", s.sim.PreviewStarts)
+	}
+	// A key held down comes again and again, and plays once; pressed again later it plays again.
+	s.press("a", "a")
+	if n := len(s.player.played); n != 3 {
+		t.Fatalf("a held key played %d notes in all", n)
+	}
+	s.m().chromatic.at = time.Now().Add(-time.Second)
+	s.press("a")
+	// Down two octaves, w is a semitone above the lowest note: 11 below the sample, so longer.
+	s.press("z", "z", "w", "enter")
+	want := int(4800 / math.Pow(2, -11.0/12))
+	if got := frames(); len(got) != 6 || got[4] != want || got[5] != want {
+		t.Fatalf("played %v, want %d twice at the end", got, want)
+	}
+	s.shows("octave -1", "last note -11 semitones")
+	// Space stops the sound and Esc closes the dialog; the keys are the pads' own again.
+	stops := s.player.stopped
+	s.press("space")
+	if s.player.stopped != stops+1 || s.player.playing {
+		t.Error("Space did not stop the note")
+	}
+	s.press("esc")
+	if s.m().chromatic != nil || s.m().section != secPads {
+		t.Fatal("Esc did not close the dialog")
+	}
+	s.press("l")
+	if s.m().pad != 5 {
+		t.Errorf("the cursor is on pad %d", s.m().pad+1)
+	}
 }

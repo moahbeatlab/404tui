@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/moahbeatlab/404tui/formats"
@@ -222,39 +223,134 @@ type RestoreUnit interface {
 	Pads
 }
 
-// RestorePads puts an export back: each sound on the pad its sidecar names, then that
-// pad's settings. Pads the export does not mention are left alone. It returns a one-line
-// summary.
-func RestorePads(u RestoreUnit, dir string, progress func(done, total int)) (string, error) {
+// RestorePad is one pad of an export: where it was exported from, its name and file.
+type RestorePad struct {
+	// From is the pad the sound was exported from.
+	From  proto.PadIndex
+	Name  string
+	File  string
+	saved savedPad
+}
+
+// PadRestore is an export read and ready to be put back, with the choice of where.
+type PadRestore struct {
+	Dir     string
+	Project string
+	Pads    []RestorePad
+	// Banks are the banks (0..9) the pads were exported from, in order. When there is one,
+	// the export can go to any bank; with several, each pad goes back where it was.
+	Banks []int
+}
+
+// PlanPadRestore reads the sidecar of an export in dir. It changes nothing on the unit.
+func PlanPadRestore(s Storage, dir string) (*PadRestore, error) {
 	dir = strings.TrimRight(dir, "/")
-	b, err := u.ReadFile(dir + "/" + Sidecar)
+	b, err := s.ReadFile(dir + "/" + Sidecar)
 	if err != nil {
-		return "", fmt.Errorf("reading %s: %w", Sidecar, err)
+		return nil, fmt.Errorf("reading %s in %s: %w (choose the folder of a pad export)", Sidecar, dir, err)
 	}
 	sheet, err := parseSidecar(b)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	for i, saved := range sheet.Pads {
-		if progress != nil {
-			progress(i, len(sheet.Pads))
-		}
+	plan := &PadRestore{Dir: dir, Project: sheet.Project}
+	seen := map[int]bool{}
+	for _, saved := range sheet.Pads {
 		pad, ok := padOf(saved.Pad)
 		if !ok {
-			return "", fmt.Errorf("%q is not a pad", saved.Pad)
+			return nil, fmt.Errorf("%q is not a pad", saved.Pad)
 		}
-		imported, err := LoadSample(u, dir+"/"+saved.File)
+		plan.Pads = append(plan.Pads, RestorePad{From: pad, Name: saved.Name, File: saved.File, saved: saved})
+		if bank := int(pad.Bank()); !seen[bank] {
+			seen[bank] = true
+			plan.Banks = append(plan.Banks, bank)
+		}
+	}
+	if len(plan.Pads) == 0 {
+		return nil, fmt.Errorf("the export in %s lists no pads", dir)
+	}
+	slices.Sort(plan.Banks)
+	return plan, nil
+}
+
+// SingleBank reports whether the export came from one bank, and which.
+func (p *PadRestore) SingleBank() (int, bool) {
+	if len(p.Banks) == 1 {
+		return p.Banks[0], true
+	}
+	return 0, false
+}
+
+// Targets lists where each pad goes. A bank of -1 puts every pad back where it was; any
+// other bank puts the pads of a one-bank export onto the same positions in that bank, so
+// pad 5 of the export becomes pad 5 of the bank.
+func (p *PadRestore) Targets(bank int) ([]proto.PadIndex, error) {
+	out := make([]proto.PadIndex, len(p.Pads))
+	for i, rp := range p.Pads {
+		if bank < 0 {
+			out[i] = rp.From
+			continue
+		}
+		if _, single := p.SingleBank(); !single {
+			return nil, fmt.Errorf("this export spans banks %s, so its pads can only go back where they were", bankLetters(p.Banks))
+		}
+		to, ok := proto.PadFromBankPad(uint16(bank), rp.From.Pad())
+		if !ok {
+			return nil, fmt.Errorf("no bank %d", bank)
+		}
+		out[i] = to
+	}
+	return out, nil
+}
+
+func bankLetters(banks []int) string {
+	var b strings.Builder
+	for _, bank := range banks {
+		b.WriteByte(byte('A' + bank))
+	}
+	return b.String()
+}
+
+// RestorePadsTo puts an export onto a bank (-1: back where each pad came from): each sound
+// goes on its target pad, then that pad's settings. Pads the export does not mention are
+// left alone. It returns a one-line summary.
+func RestorePadsTo(u RestoreUnit, plan *PadRestore, bank int, progress func(done, total int)) (string, error) {
+	targets, err := plan.Targets(bank)
+	if err != nil {
+		return "", err
+	}
+	for i, rp := range plan.Pads {
+		if progress != nil {
+			progress(i, len(plan.Pads))
+		}
+		imported, err := LoadSample(u, plan.Dir+"/"+rp.File)
 		if err != nil {
 			return "", err
 		}
-		if _, err := PutSample(u, pad, imported.Sample, saved.Name); err != nil {
+		if _, err := PutSample(u, targets[i], imported.Sample, rp.Name); err != nil {
 			return "", err
 		}
-		if err := applySaved(u, pad, saved); err != nil {
-			return "", fmt.Errorf("%s settings: %w", pad, err)
+		if err := applySaved(u, targets[i], rp.saved); err != nil {
+			return "", fmt.Errorf("%s settings: %w", targets[i], err)
 		}
 	}
-	return fmt.Sprintf("%d pads restored from %s", len(sheet.Pads), dir), nil
+	where := "back where they were"
+	if bank >= 0 {
+		where = fmt.Sprintf("onto bank %c", 'A'+bank)
+	}
+	return fmt.Sprintf("%d pads restored %s from %s", len(plan.Pads), where, plan.Dir), nil
+}
+
+// RestorePads puts an export back where each pad came from.
+func RestorePads(u RestoreUnit, dir string, progress func(done, total int)) (string, error) {
+	plan, err := PlanPadRestore(u, dir)
+	if err != nil {
+		return "", err
+	}
+	if _, err := RestorePadsTo(u, plan, -1, progress); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%d pads restored from %s", len(plan.Pads), plan.Dir), nil
 }
 
 // applySaved writes a pad's saved settings back.

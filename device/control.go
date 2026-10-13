@@ -14,6 +14,9 @@ import (
 
 // Parameters, pad blocks and pad operations (channel 5).
 
+// SelectTimeout is how long selecting a project waits for the unit to finish loading it.
+var SelectTimeout = 30 * time.Second
+
 const (
 	controlTimeout = 3 * time.Second
 	// Projects is the number of project slots.
@@ -187,8 +190,16 @@ func protoResult[T any](v T, err error) (T, error) {
 // has loaded it: settings requested before its 1A proj notification can still describe
 // the old project.
 func (d *Device) SelectProject(project uint8) error {
+	// Selecting the project that is already current changes nothing, so the unit sends no
+	// notification: waiting for one would only time out.
+	if current, err := d.CurrentProject(); err == nil && current == project {
+		d.log.Debug("select project: already the current project", "project", project+1)
+		return nil
+	}
 	var refusal byte
-	_, err := d.transact(short(proto.SelectProject(project)), "select project", 10*time.Second,
+	acked := false
+	start := time.Now()
+	_, err := d.transact(short(proto.SelectProject(project)), "select project", SelectTimeout,
 		func(m *proto.Message) bool {
 			p := m.Payload()
 			if !isControl(m) || len(p) < 2 || p[0] != proto.ReplyChanged {
@@ -196,15 +207,28 @@ func (d *Device) SelectProject(project uint8) error {
 			}
 			// Acknowledgement 1A status.
 			if len(p) == 2 {
+				acked = true
+				d.log.Debug("select project: acknowledged", "project", project+1, "status", p[1], "after", time.Since(start).Round(time.Millisecond))
 				if p[1] != 0 {
 					refusal = p[1]
 				}
 				return refusal != 0
 			}
 			// Notification 1A proj 00 00 00.
+			d.log.Debug("select project: notification", "project", p[1]+1, "wanted", project+1, "after", time.Since(start).Round(time.Millisecond))
 			return p[1] == project
 		})
+	var timeout TimeoutError
+	if errors.As(err, &timeout) && refusal == 0 {
+		// A big project can take longer to load than we wait. The unit switches anyway, so
+		// look at where it is rather than report a failure that did not happen.
+		if current, cerr := d.CurrentProject(); cerr == nil && current == project {
+			d.log.Warn("select project: no notification in time, but the unit is on the project", "project", project+1, "acked", acked, "waited", time.Since(start).Round(time.Millisecond))
+			return nil
+		}
+	}
 	if err != nil {
+		d.log.Warn("select project failed", "project", project+1, "acked", acked, "err", err)
 		return err
 	}
 	if refusal != 0 {

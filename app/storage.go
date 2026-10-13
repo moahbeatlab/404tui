@@ -19,6 +19,9 @@ type Storage interface {
 	WriteFile(path string, data []byte) error
 	Stat(path string) (st fileapi.FileStat, exists bool, err error)
 	Mkdir(path string) error
+	// Unlink deletes a file and Rmdir an empty folder.
+	Unlink(path string) error
+	Rmdir(path string) error
 	ReadPrefix(path string, n uint32) (data []byte, exists bool, err error)
 }
 
@@ -50,6 +53,8 @@ func (r Router) Rename(from, to string) error                  { return r.pick(f
 func (r Router) ReadFile(p string) ([]byte, error)             { return r.pick(p).ReadFile(p) }
 func (r Router) WriteFile(p string, d []byte) error            { return r.pick(p).WriteFile(p, d) }
 func (r Router) Mkdir(p string) error                          { return r.pick(p).Mkdir(p) }
+func (r Router) Unlink(p string) error                         { return r.pick(p).Unlink(p) }
+func (r Router) Rmdir(p string) error                          { return r.pick(p).Rmdir(p) }
 func (r Router) Stat(p string) (fileapi.FileStat, bool, error) { return r.pick(p).Stat(p) }
 func (r Router) ReadPrefix(p string, n uint32) ([]byte, bool, error) {
 	return r.pick(p).ReadPrefix(p, n)
@@ -85,7 +90,7 @@ func (Local) ListDir(path string) ([]fileapi.DirEntry, error) {
 		}
 		out = append(out, fileapi.DirEntry{Name: e.Name(), Kind: kind})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	sort.Slice(out, func(i, j int) bool { return NaturalLess(out[i].Name, out[j].Name) })
 	return out, nil
 }
 
@@ -103,6 +108,11 @@ func (Local) WriteFile(path string, data []byte) error {
 }
 
 func (Local) Mkdir(path string) error { return os.Mkdir(expand(path), 0o755) }
+
+func (Local) Unlink(path string) error { return os.Remove(expand(path)) }
+
+// Rmdir removes an empty folder; os.Remove refuses a full one.
+func (Local) Rmdir(path string) error { return os.Remove(expand(path)) }
 
 func (Local) Stat(path string) (fileapi.FileStat, bool, error) {
 	info, err := os.Stat(expand(path))
@@ -191,6 +201,8 @@ func (r *Routed) Rename(from, to string) error                  { return r.files
 func (r *Routed) ReadFile(p string) ([]byte, error)             { return r.files.ReadFile(p) }
 func (r *Routed) WriteFile(p string, d []byte) error            { return r.files.WriteFile(p, d) }
 func (r *Routed) Mkdir(p string) error                          { return r.files.Mkdir(p) }
+func (r *Routed) Unlink(p string) error                         { return r.files.Unlink(p) }
+func (r *Routed) Rmdir(p string) error                          { return r.files.Rmdir(p) }
 func (r *Routed) Stat(p string) (fileapi.FileStat, bool, error) { return r.files.Stat(p) }
 func (r *Routed) ReadPrefix(p string, n uint32) ([]byte, bool, error) {
 	return r.files.ReadPrefix(p, n)
