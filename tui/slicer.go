@@ -52,6 +52,7 @@ type slicer struct {
 	zoomed bool
 	// snap makes a moved start settle on a zero crossing, so the cut does not click.
 	snap   bool
+	coarse bool
 	sens   int
 	equal  int
 	rounds int
@@ -207,20 +208,33 @@ func (s *slicer) view() (from, to int) {
 // slicerCols is how many dots wide the waveform is.
 func (m Model) slicerCells() int { return max(min(m.width-8, 240), 30) }
 
-// nudge moves the start of the slice in front by dots on the screen (a dot is half a cell).
-func (m Model) slicerNudge(dots int) {
+// slicerNudge moves the start of the slice in front, or its end, by dots on the screen (a dot
+// is half a cell; eight when coarse is on).
+func (m Model) slicerNudge(end bool, dots int) {
 	s := m.slicer
 	from, to := s.view()
 	per := max((to-from)/(m.slicerCells()*2), 1)
+	if s.coarse {
+		dots *= 8
+	}
 	delta := dots * per
-	start := s.cur1().Start
-	target := start + delta
+	edge := s.cur1().Start
+	if end {
+		edge = s.cur1().End
+	}
+	target := edge + delta
 	if s.snap {
-		if zc := s.src.ZeroCrossing(target, max(per/2, 1)); (zc-start)*delta > 0 {
+		if zc := s.src.ZeroCrossing(target, max(per/2, 1)); (zc-edge)*delta > 0 {
 			target = zc
 		}
 	}
-	m.slicerChange(func(sl *formats.Slicing) { sl.SetStart(s.at, target) })
+	m.slicerChange(func(sl *formats.Slicing) {
+		if end {
+			sl.SetEnd(s.at, target)
+		} else {
+			sl.SetStart(s.at, target)
+		}
+	})
 }
 
 func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -327,26 +341,33 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "G":
 		s.at = n - 1
 	case "[", "H":
-		m.slicerNudge(-1)
+		m.slicerNudge(false, -1)
 	case "]", "L":
-		m.slicerNudge(1)
+		m.slicerNudge(false, 1)
 	case "{":
-		m.slicerNudge(-8)
+		m.slicerNudge(true, -1)
 	case "}":
-		m.slicerNudge(8)
+		m.slicerNudge(true, 1)
+	case "f":
+		s.coarse = !s.coarse
+		if s.coarse {
+			m.message = "coarse: a nudge moves eight dots"
+		} else {
+			m.message = "fine: a nudge moves one dot"
+		}
 	case "c":
 		mid := s.cur1().Start + s.sl.Length(s.at)/2
 		if s.snap {
 			mid = s.src.ZeroCrossing(mid, 256)
 		}
 		cut := -1
-		m.slicerChange(func(sl *formats.Slicing) { cut = sl.Split(mid) })
+		m.slicerChange(func(sl *formats.Slicing) { cut = sl.Split(s.at, mid) })
 		if cut < 0 {
 			m.slicerUndoLast()
 			m.message = "that slice is too short to cut"
 		} else {
 			s.at = cut
-			m.message = fmt.Sprintf("cut: slice %d is new; [ ] move its start", cut+1)
+			m.message = fmt.Sprintf("cut: slice %d is new; [ ] move its start, { } its end", cut+1)
 		}
 	case "d":
 		removed := false
@@ -730,8 +751,22 @@ type cellStyle struct {
 	kind cellKind
 	// slice is the slice the cell belongs to, -1 outside all of them.
 	slice int
-	// selected and playing are the states of that slice.
-	selected, playing bool
+	// selected and playing are the states of that slice; end marks the end edge of a slice.
+	selected, playing, end bool
+}
+
+// edgeInfo is a slice's edge at a dot of the waveform: slice is its number, 0 for none. Where
+// two meet, the edge of the slice in front shows, then a start before an end.
+type edgeInfo struct {
+	slice int
+	end   bool
+}
+
+func (e *edgeInfo) put(n edgeInfo, front int) {
+	switch {
+	case e.slice == 0, n.slice == front+1 && e.slice != front+1, e.slice != front+1 && e.end && !n.end:
+		*e = n
+	}
 }
 
 func (m Model) slicerStyle(c cellStyle) lipgloss.Style {
@@ -740,6 +775,9 @@ func (m Model) slicerStyle(c cellStyle) lipgloss.Style {
 	case cellHead:
 		return lipgloss.NewStyle().Foreground(st.th.text).Bold(true)
 	case cellEdge:
+		if c.selected && c.end {
+			return lipgloss.NewStyle().Foreground(st.th.warn).Bold(true)
+		}
 		if c.selected {
 			return lipgloss.NewStyle().Foreground(st.th.hot).Bold(true)
 		}
@@ -786,18 +824,26 @@ func (m Model) slicerBox() string {
 	// What is not the waveform takes 15 lines with the border; the waveform gets the rest.
 	rows := clamp(m.geom().bodyH-15-len(help), 3, 10)
 
-	slicePlaying := func(i int) bool { return headSlice == i }
+	// Slices can overlap: the one in front, or the one sounding, shows where they do.
 	styleOf := func(frame int) cellStyle {
-		i := sl.SliceAt(frame)
-		return cellStyle{kind: cellSlice, slice: i, selected: i == s.at, playing: slicePlaying(i)}
+		i := -1
+		for k, x := range sl.Slices {
+			if frame >= x.Start && frame < x.End && (i < 0 || k == s.at || (k == headSlice && i != s.at)) {
+				i = k
+			}
+		}
+		return cellStyle{kind: cellSlice, slice: i, selected: i == s.at, playing: headSlice == i}
 	}
 	colOf := func(frame int) int { return int(int64(frame-from) * int64(cols) / int64(span)) }
 
 	// Where the slices start and where the playhead is, in dots.
-	edge := make([]int, cols+1) // slice number + 1 at that dot
+	edge := make([]edgeInfo, cols+1)
 	for i, x := range sl.Slices {
 		if x.Start >= from && x.Start < to {
-			edge[min(colOf(x.Start), cols-1)] = i + 1
+			edge[min(colOf(x.Start), cols-1)].put(edgeInfo{slice: i + 1}, s.at)
+		}
+		if x.End > from && x.End <= to {
+			edge[min(colOf(x.End), cols-1)].put(edgeInfo{slice: i + 1, end: true}, s.at)
 		}
 	}
 	headCol := -1
@@ -811,7 +857,7 @@ func (m Model) slicerBox() string {
 	heights := make([]int, cols)
 	for c, a := range amps {
 		heights[c] = min(max(1, int(math.Sqrt(float64(a)/float64(s.peak))*float64(half)+0.5)), half)
-		if edge[c] > 0 || c == headCol {
+		if edge[c].slice > 0 || c == headCol {
 			heights[c] = half
 		}
 	}
@@ -835,9 +881,10 @@ func (m Model) slicerBox() string {
 			switch {
 			case headCol == c*2 || headCol == c*2+1:
 				styles[c] = cellStyle{kind: cellHead}
-			case edge[c*2] > 0 || edge[c*2+1] > 0:
-				n := max(edge[c*2], edge[c*2+1]) - 1
-				styles[c] = cellStyle{kind: cellEdge, slice: n, selected: n == s.at}
+			case edge[c*2].slice > 0 || edge[c*2+1].slice > 0:
+				e := edge[c*2]
+				e.put(edge[c*2+1], s.at)
+				styles[c] = cellStyle{kind: cellEdge, slice: e.slice - 1, selected: e.slice-1 == s.at, end: e.end}
 			}
 		}
 		wave[r] = m.slicerRuns(text, styles)
@@ -863,10 +910,25 @@ func (m Model) slicerBox() string {
 		}
 	}
 
+	if x := sl.Slices[s.at]; x.End > from && x.End <= to {
+		c := min(colOf(x.End)/2, cells-1)
+		if numText[c] == ' ' {
+			numText[c] = '◂'
+			numStyle[c] = cellStyle{kind: cellEdge, slice: s.at, selected: true, end: true}
+		}
+	}
+
 	// Under it, a bar with a block per slice, with what is set on it.
 	barText := []rune(strings.Repeat(" ", cells))
 	barKind := make([]int, cells) // slice index + 1; 0 outside
+	barOrder := make([]int, 0, len(sl.Slices))
 	for i := range sl.Slices {
+		if i != s.at {
+			barOrder = append(barOrder, i)
+		}
+	}
+	barOrder = append(barOrder, s.at) // the one in front is drawn last, over the others
+	for _, i := range barOrder {
 		a, b := max(sl.Slices[i].Start, from), min(sl.End(i), to)
 		if b <= a {
 			continue
@@ -926,7 +988,7 @@ func (m Model) slicerBox() string {
 
 // slicerHelp are the keys the dialog lists under itself.
 var slicerHelp = []string{
-	"h l slice", "[ ] nudge start", "{ } coarse", "c cut", "d delete", "e equal slices", "t onsets", "i I zoom", "u undo",
+	"h l slice", "[ ] nudge start", "{ } nudge end", "f coarse", "c cut", "d delete", "e equal slices", "t onsets", "i I zoom", "u undo",
 	"r reverse", "m mute", "( ) chance", "< > pitch", "- + gain", "X plain",
 	"M mode", "S new seed", "T grid", ", . tempo", "n bounce rounds", "z snap", "Tab order lane",
 	"Space play", "Enter hear slice", "b bounce to pad", "Esc close",
@@ -1034,6 +1096,7 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 	}
 	first := st.bold.Render(fmt.Sprintf("Slice %d/%d", s.at+1, len(s.sl.Slices))) + "   " +
 		st.dim.Render("start ") + st.text.Render(seconds(x.Start)) + st.faint.Render(fmt.Sprintf(" (%d)", x.Start)) + "   " +
+		st.dim.Render("end ") + st.text.Render(seconds(x.End)) + st.faint.Render(fmt.Sprintf(" (%d)", x.End)) + "   " +
 		st.dim.Render("length ") + st.text.Render(seconds(s.sl.Length(s.at)))
 	second := st.dim.Render("chance ") + st.accent.Render(chance) + "   " +
 		st.dim.Render("gain ") + st.accent.Render(fmt.Sprintf("%d%%", x.Gain)) + "   " +
@@ -1044,7 +1107,12 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 	if s.sl.Division > 0 {
 		grid = fmt.Sprintf("grid 1/%d at %g BPM", s.sl.Division, s.sl.BPM)
 	}
-	third := st.faint.Render(fmt.Sprintf("a nudge moves one dot, %.2f ms  ·  snap %s  ·  %s  ·  seed %d  ·  a bounce holds %s",
+	step := "one dot"
+	if s.coarse {
+		step = "eight dots"
+		dot *= 8
+	}
+	third := st.faint.Render(fmt.Sprintf("a nudge moves "+step+", %.2f ms  ·  snap %s  ·  %s  ·  seed %d  ·  a bounce holds %s",
 		dot, onOff(s.snap), grid, s.sl.Seed, plural(s.rounds, "round")))
 	return []string{first, second, third}
 }

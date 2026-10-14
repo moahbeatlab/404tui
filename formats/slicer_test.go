@@ -32,27 +32,33 @@ func TestDivideCoversSample(t *testing.T) {
 	}
 }
 
-func TestMoveStartStopsAtNeighbours(t *testing.T) {
-	s := NewSlicing(4000, 4) // starts 0 1000 2000 3000
+func TestEdgesAreIndependent(t *testing.T) {
+	s := NewSlicing(4000, 4) // 0-1000 1000-2000 2000-3000 3000-4000
 	if got := s.MoveStart(1, 300); got != 1300 {
 		t.Fatalf("moved to %d", got)
 	}
-	if s.End(0) != 1300 || s.Length(1) != 700 {
-		t.Errorf("the slice before did not follow: ends %d, next is %d long", s.End(0), s.Length(1))
+	if s.Slices[0].End != 1000 || s.Slices[1].End != 2000 {
+		t.Errorf("a neighbour followed: %+v", s.Slices[:2])
 	}
-	if got := s.MoveStart(1, 5000); got != 2000-MinSliceFrames {
-		t.Errorf("pushed onto the next slice: %d", got)
+	// A start can go past a neighbour's, so slices overlap, and leave a gap behind it.
+	if got := s.MoveStart(1, -5000); got != 0 {
+		t.Errorf("start went before the sample: %d", got)
 	}
-	if got := s.MoveStart(1, -5000); got != MinSliceFrames {
-		t.Errorf("pushed onto the one before: %d", got)
+	if got := s.MoveEnd(0, -400); got != 600 {
+		t.Errorf("end %d", got)
 	}
-	// The first slice can leave out what is before it.
-	s = NewSlicing(4000, 4)
-	if got := s.MoveStart(0, 100); got != 100 {
-		t.Errorf("first start %d", got)
+	if s.Slices[1].Start != 0 || s.Length(0) != 600 {
+		t.Errorf("slices %+v", s.Slices[:2])
 	}
-	if got := s.MoveStart(0, -500); got != 0 {
-		t.Errorf("first start went before the sample: %d", got)
+	// Stopped at the slice's own other edge.
+	if got := s.MoveStart(2, 9000); got != 3000-MinSliceFrames {
+		t.Errorf("start passed the end: %d", got)
+	}
+	if got := s.MoveEnd(2, -9000); got != s.Slices[2].Start+MinSliceFrames {
+		t.Errorf("end passed the start: %d", got)
+	}
+	if got := s.MoveEnd(3, 9000); got != 4000 {
+		t.Errorf("end went past the sample: %d", got)
 	}
 }
 
@@ -60,8 +66,8 @@ func TestSplitKeepsOrderSounding(t *testing.T) {
 	s := NewSlicing(4000, 4)
 	s.Order = []int{3, 1, 1, 0}
 	s.Slices[1].Reverse = true
-	n := s.Split(1500)
-	if n != 2 || len(s.Slices) != 5 || s.Slices[2].Start != 1500 {
+	n := s.Split(1, 1500)
+	if n != 2 || len(s.Slices) != 5 || s.Slices[2].Start != 1500 || s.Slices[2].End != 2000 || s.Slices[1].End != 1500 {
 		t.Fatalf("split gave %d, slices %+v", n, s.Slices)
 	}
 	if !s.Slices[2].Reverse {
@@ -71,8 +77,8 @@ func TestSplitKeepsOrderSounding(t *testing.T) {
 	if want := []int{4, 1, 2, 1, 2, 0}; !slices.Equal(s.Order, want) {
 		t.Errorf("order %v, want %v", s.Order, want)
 	}
-	if s.Split(1500+10) != -1 || s.Split(0) != -1 {
-		t.Error("a cut leaving a piece that is too short was made")
+	if s.Split(1, 1500+10) != -1 || s.Split(1, 1000) != -1 || s.Split(1, 3500) != -1 || s.Split(9, 10) != -1 {
+		t.Error("a cut leaving a piece that is too short, or outside the slice, was made")
 	}
 }
 
@@ -82,8 +88,9 @@ func TestRemove(t *testing.T) {
 	if !s.Remove(1) {
 		t.Fatal("not removed")
 	}
-	if len(s.Slices) != 3 || s.End(0) != 2000 {
-		t.Errorf("the slice before did not grow: %+v", s.Slices)
+	// Nothing grows over the gap.
+	if len(s.Slices) != 3 || s.Slices[0].End != 1000 || s.Slices[1].Start != 2000 {
+		t.Errorf("slices %+v", s.Slices)
 	}
 	if want := []int{2, 1, 0}; !slices.Equal(s.Order, want) {
 		t.Errorf("order %v, want %v", s.Order, want)
@@ -94,40 +101,50 @@ func TestRemove(t *testing.T) {
 	}
 }
 
-func TestSetStartsAndSliceAt(t *testing.T) {
+func TestSetStarts(t *testing.T) {
 	s := &Slicing{Frames: 10000}
 	s.SetStarts([]int{5000, 100, 5010, 20000, -4, 2500})
-	var starts []int
+	var got [][2]int
 	for _, sl := range s.Slices {
-		starts = append(starts, sl.Start)
+		got = append(got, [2]int{sl.Start, sl.End})
 	}
-	if want := []int{0, 100, 2500, 5000}; !slices.Equal(starts, want) {
-		t.Fatalf("starts %v, want %v", starts, want)
-	}
-	for frame, want := range map[int]int{0: 0, 99: 0, 100: 1, 4999: 2, 5000: 3, 9999: 3} {
-		if got := s.SliceAt(frame); got != want {
-			t.Errorf("SliceAt(%d) = %d, want %d", frame, got, want)
-		}
+	want := [][2]int{{0, 100}, {100, 2500}, {2500, 5000}, {5000, 10000}}
+	if !slices.Equal(got, want) {
+		t.Fatalf("slices %v, want %v", got, want)
 	}
 }
 
 func TestValidateMendsAFile(t *testing.T) {
-	s := &Slicing{Frames: 1000, Order: []int{9, -1},
-		Slices: []Slice{{Start: 500, Chance: 900, Gain: -4, Pitch: 99}, {Start: 5000}, {Start: 0}, {Start: 3}}}
+	s := &Slicing{Frames: 1000, Order: []int{9, -1, 3},
+		Slices: []Slice{{Start: 100, End: 5000, Chance: 900, Gain: -4, Pitch: 99}, {Start: 5000, End: 6000}, {Start: 0, End: 3}, {Start: 200, End: 500}}}
 	if err := s.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if len(s.Slices) != 2 || s.Slices[0].Start != 0 || s.Slices[1].Start != 500 {
+	// The slice past the sample and the one that is too short are dropped; order follows.
+	if len(s.Slices) != 2 || s.Slices[0].Start != 100 || s.Slices[0].End != 1000 || s.Slices[1].Start != 200 {
 		t.Fatalf("slices %+v", s.Slices)
 	}
-	if got := s.Slices[1]; got.Chance != 100 || got.Gain != 0 || got.Pitch != 24 {
+	if got := s.Slices[0]; got.Chance != 100 || got.Gain != 0 || got.Pitch != 24 {
 		t.Errorf("not clamped: %+v", got)
 	}
-	if !slices.Equal(s.Order, []int{0, 1}) {
+	if !slices.Equal(s.Order, []int{1}) {
 		t.Errorf("order %v", s.Order)
 	}
 	if (&Slicing{}).Validate() == nil {
 		t.Error("a slicing with no frames is fine")
+	}
+}
+
+func TestValidateReadsASlicingWithoutEnds(t *testing.T) {
+	s := &Slicing{Frames: 3000, Order: []int{1, 0},
+		Slices: []Slice{{Start: 1000, Chance: 100, Gain: 100}, {Start: 0, Chance: 100, Gain: 100}, {Start: 2000, Chance: 100, Gain: 100}}}
+	if err := s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range [][2]int{{0, 1000}, {1000, 2000}, {2000, 3000}} {
+		if got := [2]int{s.Slices[i].Start, s.Slices[i].End}; got != want {
+			t.Errorf("slice %d is %v, want %v", i, got, want)
+		}
 	}
 }
 

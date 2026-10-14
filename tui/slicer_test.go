@@ -74,25 +74,53 @@ func TestSlicerEveryLineFitsTheScreen(t *testing.T) {
 	}
 }
 
-func TestSlicerNudgeMovesTheStartAndTheEndBefore(t *testing.T) {
+func TestSlicerEachSliceHasItsOwnStartAndEnd(t *testing.T) {
 	s := slicerOpen(t)
 	s.press("l")
-	before := s.slicing().Slices[1].Start
+	start, end := s.slicing().Slices[1].Start, s.slicing().Slices[1].End
 	s.press("]", "]", "]")
-	after := s.slicing().Slices[1].Start
-	if after <= before {
-		t.Fatalf("start %d did not move later than %d", after, before)
+	if got := s.slicing().Slices[1]; got.Start <= start || got.End != end {
+		t.Fatalf("start %d (was %d), end %d (was %d)", got.Start, start, got.End, end)
 	}
-	if s.slicing().End(0) != after {
-		t.Errorf("slice 1 ends at %d, slice 2 starts at %d", s.slicing().End(0), after)
+	// Nothing else moved: the slice before still ends where it did.
+	if s.slicing().Slices[0].End != start {
+		t.Errorf("slice 1 ends at %d, it did at %d", s.slicing().Slices[0].End, start)
 	}
-	s.press("[", "[", "[", "[", "[", "[")
-	if s.slicing().Slices[1].Start >= before {
-		t.Errorf("start did not move earlier: %d", s.slicing().Slices[1].Start)
+	s.press("{", "{", "{")
+	if got := s.slicing().Slices[1]; got.End >= end {
+		t.Errorf("end %d did not move earlier than %d", got.End, end)
 	}
-	s.press("u", "u", "u", "u", "u", "u", "u", "u", "u")
-	if s.slicing().Slices[1].Start != before {
-		t.Errorf("undo left the start at %d, want %d", s.slicing().Slices[1].Start, before)
+	s.shows("end ")
+	// The end can go past the next slice's start: slices overlap.
+	s.press("f")
+	for i := 0; i < 12; i++ {
+		s.press("}")
+	}
+	if got := s.slicing().Slices[1]; got.End <= s.slicing().Slices[2].Start {
+		t.Errorf("end %d did not go over slice 3, which starts at %d", got.End, s.slicing().Slices[2].Start)
+	}
+	s.shows("eight dots")
+	for i := 0; i < 20; i++ {
+		s.press("u")
+	}
+	if got := s.slicing().Slices[1]; got.Start != start || got.End != end {
+		t.Errorf("undo left %d-%d, want %d-%d", got.Start, got.End, start, end)
+	}
+}
+
+func TestSlicerLeavesGapsOutOfTheRender(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("l")
+	for i := 0; i < 6; i++ {
+		s.press("{") // shorten slice 2 by a few dots
+	}
+	short := s.slicing().Length(1)
+	if short >= 6000 {
+		t.Fatalf("slice 2 is %d frames", short)
+	}
+	s.press("enter")
+	if got := s.player.played[len(s.player.played)-1].Frames(); got != short {
+		t.Errorf("the slice played %d frames, it is %d long", got, short)
 	}
 }
 

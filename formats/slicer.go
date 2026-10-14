@@ -13,9 +13,9 @@ import (
 // at random. It is the whole model of the slicer, with no I/O; everything is in sample frames
 // of the source, so it can be saved and played again on the same sample.
 //
-// A slice runs from its Start to the Start of the next one, the last to the end of the sample,
-// so the slices always cover the sample from the first one's start and never overlap. The
-// slices are kept in the order they lie in the sample; the order they are played in is Order.
+// Each slice has its own Start and End, independent of the others: slices can leave gaps between
+// them, overlap, or repeat a part of the sample. Slices are numbered as they were made; the order
+// they are played in is Order.
 type Slicing struct {
 	// Frames is the length of the sample that is sliced.
 	Frames int     `json:"frames"`
@@ -46,7 +46,9 @@ func (s *Slicing) StepFrames() int {
 
 // Slice is where one slice starts and how it sounds.
 type Slice struct {
+	// Start is the first frame of the slice and End the frame after its last one.
 	Start int `json:"start"`
+	End   int `json:"end"`
 	// Chance is 0..100. In Order mode it is the chance that the slice plays when its turn
 	// comes (otherwise the time is left silent); in the random modes it is the weight the
 	// slice is picked with, so 0 never plays.
@@ -88,7 +90,7 @@ func (m PlayMode) Next() PlayMode { return (m + 1) % PlayMode(len(modeNames)) }
 const MinSliceFrames = 64
 
 // DefaultSlice is a slice that plays as it is.
-func DefaultSlice(start int) Slice { return Slice{Start: start, Chance: 100, Gain: 100} }
+func DefaultSlice(start, end int) Slice { return Slice{Start: start, End: end, Chance: 100, Gain: 100} }
 
 // ErrNoSlices is a slicing with nothing to play.
 var ErrNoSlices = errors.New("no slices")
@@ -105,26 +107,34 @@ func (s *Slicing) Divide(n int) {
 	n = max(1, min(n, max(s.Frames/MinSliceFrames, 1)))
 	s.Slices = s.Slices[:0]
 	for i := 0; i < n; i++ {
-		s.Slices = append(s.Slices, DefaultSlice(i*s.Frames/n))
+		s.Slices = append(s.Slices, DefaultSlice(i*s.Frames/n, (i+1)*s.Frames/n))
 	}
 	s.ResetOrder()
 }
 
-// SetStarts replaces the slices by ones starting at the given frames (any order, duplicates
-// and starts too close are dropped), and the order by their sequence. A start at 0 is added
-// when none is, so the whole sample is covered.
+// SetStarts replaces the slices by ones starting at the given frames, each running to the start
+// of the next (any order; duplicates and starts too close are dropped), and the order by their
+// sequence. A start at 0 is added when none is, so the whole sample is covered.
 func (s *Slicing) SetStarts(starts []int) {
 	starts = append([]int{0}, starts...)
 	sort.Ints(starts)
-	s.Slices = s.Slices[:0]
+	var kept []int
 	for _, f := range starts {
 		if f < 0 || f >= s.Frames {
 			continue
 		}
-		if n := len(s.Slices); n > 0 && f-s.Slices[n-1].Start < MinSliceFrames {
+		if n := len(kept); n > 0 && f-kept[n-1] < MinSliceFrames {
 			continue
 		}
-		s.Slices = append(s.Slices, DefaultSlice(f))
+		kept = append(kept, f)
+	}
+	s.Slices = s.Slices[:0]
+	for i, f := range kept {
+		end := s.Frames
+		if i+1 < len(kept) {
+			end = kept[i+1]
+		}
+		s.Slices = append(s.Slices, DefaultSlice(f, end))
 	}
 	s.ResetOrder()
 }
@@ -138,54 +148,41 @@ func (s *Slicing) ResetOrder() {
 }
 
 // End is the frame after the last one of slice i.
-func (s *Slicing) End(i int) int {
-	if i+1 < len(s.Slices) {
-		return s.Slices[i+1].Start
-	}
-	return s.Frames
-}
+func (s *Slicing) End(i int) int { return s.Slices[i].End }
 
 // Length is how many frames slice i has.
-func (s *Slicing) Length(i int) int { return s.End(i) - s.Slices[i].Start }
+func (s *Slicing) Length(i int) int { return s.Slices[i].End - s.Slices[i].Start }
 
-// SliceAt is the slice that holds a frame, -1 before the first one.
-func (s *Slicing) SliceAt(frame int) int {
-	return sort.Search(len(s.Slices), func(i int) bool { return s.Slices[i].Start > frame }) - 1
-}
-
-// MoveStart moves slice i's start by delta frames. It stops at the neighbours (leaving each at
-// least MinSliceFrames) and reports where the start is now. Moving a start moves the end of
-// the slice before it, as the slices butt against each other.
-func (s *Slicing) MoveStart(i, delta int) int {
-	return s.SetStart(i, s.Slices[i].Start+delta)
-}
-
-// SetStart puts slice i's start at a frame, held between its neighbours. The first slice may
-// start anywhere before the second; what lies before it is left out.
+// SetStart puts slice i's start at a frame, at least MinSliceFrames before its end. Nothing else
+// moves.
 func (s *Slicing) SetStart(i, frame int) int {
-	lo := 0
-	if i > 0 {
-		lo = s.Slices[i-1].Start + MinSliceFrames
-	}
-	hi := s.End(i) - MinSliceFrames
-	if hi < lo {
-		return s.Slices[i].Start
-	}
-	s.Slices[i].Start = min(max(frame, lo), hi)
+	s.Slices[i].Start = min(max(frame, 0), s.Slices[i].End-MinSliceFrames)
 	return s.Slices[i].Start
 }
 
-// Split cuts the slice that holds a frame in two, the new slice starting there, with the
-// settings of the one it was cut from. It plays right after the old one wherever that is in
-// the order. It returns the new slice's index, or -1 when the cut would leave a piece that is
-// too short.
-func (s *Slicing) Split(frame int) int {
-	i := s.SliceAt(frame)
-	if i < 0 || frame-s.Slices[i].Start < MinSliceFrames || s.End(i)-frame < MinSliceFrames {
+// SetEnd puts slice i's end at a frame, at least MinSliceFrames after its start.
+func (s *Slicing) SetEnd(i, frame int) int {
+	s.Slices[i].End = min(max(frame, s.Slices[i].Start+MinSliceFrames), s.Frames)
+	return s.Slices[i].End
+}
+
+// MoveStart moves slice i's start by delta frames and reports where it is now.
+func (s *Slicing) MoveStart(i, delta int) int { return s.SetStart(i, s.Slices[i].Start+delta) }
+
+// MoveEnd moves slice i's end by delta frames and reports where it is now.
+func (s *Slicing) MoveEnd(i, delta int) int { return s.SetEnd(i, s.Slices[i].End+delta) }
+
+// Split cuts slice i in two at a frame: i now ends there and a new slice, with the same settings,
+// runs from there to where i ended. The new one plays right after i wherever that is in the
+// order. It returns the new slice's index, or -1 when the frame is not inside the slice or
+// would leave a piece that is too short.
+func (s *Slicing) Split(i, frame int) int {
+	if i < 0 || i >= len(s.Slices) || frame-s.Slices[i].Start < MinSliceFrames || s.Slices[i].End-frame < MinSliceFrames {
 		return -1
 	}
 	n := s.Slices[i]
 	n.Start = frame
+	s.Slices[i].End = frame
 	s.Slices = slices.Insert(s.Slices, i+1, n)
 	var order []int
 	for _, o := range s.Order {
@@ -202,8 +199,7 @@ func (s *Slicing) Split(frame int) int {
 	return i + 1
 }
 
-// Remove takes slice i out: the one before it grows over its part of the sample (the first
-// one leaves its part out), and it is dropped from the order. The last slice cannot be removed.
+// Remove takes slice i out, and drops it from the order. The last slice cannot be removed.
 func (s *Slicing) Remove(i int) bool {
 	if len(s.Slices) < 2 || i < 0 || i >= len(s.Slices) {
 		return false
@@ -237,24 +233,35 @@ func (s *Slicing) Clone() *Slicing {
 }
 
 // Validate puts right what a file that was edited or came from another sample can get wrong:
-// starts out of range or out of order, an order pointing at slices that are not there, a gain
-// or a chance out of range.
+// edges out of range, an order pointing at slices that are not there, a gain or a chance out of
+// range. A file from before slices had an end of their own has none: each ends where the next
+// starts.
 func (s *Slicing) Validate() error {
 	if s.Frames <= 0 {
 		return errors.New("the sample has no frames")
 	}
-	slices.SortFunc(s.Slices, func(a, b Slice) int { return a.Start - b.Start })
-	kept := s.Slices[:0]
-	for _, sl := range s.Slices {
-		if sl.Start < 0 || sl.Start >= s.Frames {
-			continue
+	legacy := slices.ContainsFunc(s.Slices, func(sl Slice) bool { return sl.End == 0 })
+	if legacy {
+		// The old slices were always in the order they lay in the sample.
+		slices.SortFunc(s.Slices, func(a, b Slice) int { return a.Start - b.Start })
+		for i := range s.Slices {
+			s.Slices[i].End = s.Frames
+			if i+1 < len(s.Slices) {
+				s.Slices[i].End = s.Slices[i+1].Start
+			}
 		}
-		if n := len(kept); n > 0 && sl.Start-kept[n-1].Start < MinSliceFrames {
+	}
+	kept := s.Slices[:0]
+	remap := map[int]int{}
+	for i, sl := range s.Slices {
+		sl.End = min(sl.End, s.Frames)
+		if sl.Start < 0 || sl.End-sl.Start < MinSliceFrames {
 			continue
 		}
 		sl.Chance = min(max(sl.Chance, 0), 100)
 		sl.Gain = min(max(sl.Gain, 0), 400)
 		sl.Pitch = min(max(sl.Pitch, -24), 24)
+		remap[i] = len(kept)
 		kept = append(kept, sl)
 	}
 	s.Slices = kept
@@ -263,8 +270,8 @@ func (s *Slicing) Validate() error {
 	}
 	order := s.Order[:0]
 	for _, o := range s.Order {
-		if o >= 0 && o < len(s.Slices) {
-			order = append(order, o)
+		if n, ok := remap[o]; ok {
+			order = append(order, n)
 		}
 	}
 	s.Order = order

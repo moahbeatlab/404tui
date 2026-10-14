@@ -83,9 +83,11 @@ you left it.
 
 - **Slices:** the sample opens in 8 equal slices. `e` cuts it in 16, 32, 4, 8… equal ones, `t`
   slices at the onsets it finds (again for a different sensitivity), `c` cuts the slice in
-  front in two and `d` removes it. `h l` choose a slice and `[ ]` move its start (one dot of
-  the waveform at a time, `{ }` eight), the end of the slice before follows. `i` zooms to the
-  slice, so a dot is a millisecond or less; `I` zooms out. Starts settle on a zero crossing, so
+  front in two and `d` removes it. `h l` choose a slice.
+- **Start and end:** every slice has a start and an end of its own, and moving one moves nothing
+  else: slices can leave gaps between them or overlap. `[ ]` move the start of the slice in front
+  and `{ }` its end, one dot of the waveform at a time (`f` makes it eight). `i` zooms to the
+  slice, so a dot is a millisecond or less; `I` zooms out. Edges settle on a zero crossing, so
   the cut does not click (`z` turns that off). `u` undoes.
 - **Per slice:** `r` reverse, `m` mute, `( )` chance, `< >` pitch in semitones, `- +` gain,
   `X` back to plain. Enter plays the slice once.
