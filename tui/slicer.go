@@ -820,7 +820,7 @@ func (m Model) slicerBox() string {
 	from, to := s.view()
 	span := max(to-from, 1)
 	head, headSlice := s.playhead()
-	help := wrapItems(slicerHelp, cells)
+	help := m.slicerHelpLines(cells)
 	// What is not the waveform takes 15 lines with the border; the waveform gets the rest.
 	rows := clamp(m.geom().bodyH-15-len(help), 3, 10)
 
@@ -975,10 +975,8 @@ func (m Model) slicerBox() string {
 	lines = append(lines, m.sliceInfo(from, to, cols)...)
 	lines = append(lines, "", m.orderLane(cells, head >= 0))
 	lines = append(lines, m.roundLine(cells))
-	lines = append(lines, "")
-	for _, l := range help {
-		lines = append(lines, st.dim.Render(l))
-	}
+	lines = append(lines, st.faint.Render(strings.Repeat("─", cells)))
+	lines = append(lines, help...)
 	// Whatever is wider than the waveform is cut, so the box never outgrows the screen.
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, cells, "…")
@@ -986,31 +984,60 @@ func (m Model) slicerBox() string {
 	return st.modal.Render(strings.Join(lines, "\n"))
 }
 
-// slicerHelp are the keys the dialog lists under itself.
-var slicerHelp = []string{
-	"h l slice", "[ ] nudge start", "{ } nudge end", "f coarse", "c cut", "d delete", "e equal slices", "t onsets", "i I zoom", "u undo",
-	"r reverse", "m mute", "( ) chance", "< > pitch", "- + gain", "X plain",
-	"M mode", "S new seed", "T grid", ", . tempo", "n bounce rounds", "z snap", "Tab order lane",
-	"Space play", "Enter hear slice", "b bounce to pad", "Esc close",
+// helpKey is a key and what it does, as the keys of the other panels are listed.
+type helpKey struct{ key, what string }
+
+// helpGroup is a row of keys under a heading.
+type helpGroup struct {
+	name string
+	keys []helpKey
 }
 
-// wrapItems joins items with a dot between them into lines of at most width cells.
-func wrapItems(items []string, width int) []string {
-	const sep = "  ·  "
-	var lines []string
-	line := ""
-	for _, it := range items {
-		switch {
-		case line == "":
-			line = it
-		case ansi.StringWidth(line)+len(sep)+ansi.StringWidth(it) > width:
-			lines = append(lines, line)
-			line = it
-		default:
-			line += sep + it
+// slicerHelp are the keys the dialog lists under itself, in groups; the order lane's keys take
+// the place of the first two while the cursor is in the lane.
+func (s *slicer) slicerHelp() []helpGroup {
+	groups := []helpGroup{
+		{"slices", []helpKey{{"h l", "select"}, {"c", "cut"}, {"d", "delete"}, {"e", "equal slices"}, {"t", "onsets"}, {"u", "undo"}}},
+		{"edges", []helpKey{{"[ ]", "start"}, {"{ }", "end"}, {"f", "coarse"}, {"z", "snap"}, {"i I", "zoom"}}},
+	}
+	if s.focusLane {
+		groups = []helpGroup{
+			{"order", []helpKey{{"h l", "move"}, {"H L", "carry step"}, {"j k", "other slice"}, {"a", "repeat"}, {"d", "drop"}, {"R", "shuffle"}, {"o", "reset"}}},
 		}
 	}
-	return append(lines, line)
+	return append(groups,
+		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"X", "plain"}}},
+		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"M", "mode"}, {"T", "grid"}, {", .", "tempo"}, {"S", "seed"}, {"Tab", "order lane"}}},
+		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"n", "rounds"}, {"Esc", "close"}}},
+	)
+}
+
+// helpLines draws the groups: a heading, then the keys as the status bar shows them, an accent
+// key and a dim word, wrapped under the heading when a row is too long.
+func (m Model) slicerHelpLines(width int) []string {
+	st := m.st
+	const head = 8
+	var lines []string
+	for _, g := range m.slicer.slicerHelp() {
+		line := st.faint.Render(fmt.Sprintf("%-*s", head, g.name))
+		used := head
+		for i, k := range g.keys {
+			chip := st.accent.Render(k.key) + st.dim.Render(" "+k.what)
+			w := ansi.StringWidth(k.key) + 1 + ansi.StringWidth(k.what)
+			if i > 0 && used+2+w > width {
+				lines = append(lines, line)
+				line, used = strings.Repeat(" ", head), head
+			}
+			if used > head {
+				line += "  "
+				used += 2
+			}
+			line += chip
+			used += w
+		}
+		lines = append(lines, line)
+	}
+	return lines
 }
 
 // sliceLabel is what the bar shows on slice i: its number and as much of its settings as fit.
@@ -1152,8 +1179,6 @@ func (m Model) orderLane(width int, playing bool) string {
 	}
 	hint := ""
 	switch {
-	case s.focusLane:
-		hint = st.dim.Render("   h l move  ·  H L carry  ·  j k other slice  ·  a again  ·  d drop  ·  R shuffle  ·  o reset")
 	case unused:
 		hint = st.faint.Render("   not used in " + s.sl.Mode.String() + " mode")
 	}
