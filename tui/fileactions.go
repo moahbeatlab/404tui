@@ -238,19 +238,21 @@ func (m Model) clipMarker(path string) string {
 type folderChoice struct {
 	Path, Name string
 	Open       bool
+	// Fav is set for a folder the user favourited: it is listed first.
+	Fav bool
 }
 
 // folderChoices lists the folders whose path contains every word of text, the ones whose own
 // name does first, then by path. They are the open folders of the list and, when the source
 // has a search index, every indexed folder. Empty text lists them all.
-func folderChoices(rows []app.Node, ix *app.Index, text string) []folderChoice {
+func folderChoices(rows []app.Node, ix *app.Index, tags *app.TagIndex, text string) []folderChoice {
 	words := strings.Fields(strings.ToLower(text))
 	seen := map[string]bool{}
 	var all []folderChoice
 	add := func(path, name string, open bool) {
 		if !seen[path] {
 			seen[path] = true
-			all = append(all, folderChoice{path, name, open})
+			all = append(all, folderChoice{path, name, open, tags.HasUserTag(path, app.FavouriteTag)})
 		}
 	}
 	for _, r := range rows {
@@ -263,7 +265,24 @@ func folderChoices(rows []app.Node, ix *app.Index, text string) []folderChoice {
 			add(dir, app.Base(dir), false)
 		}
 	}
-	var named, other []folderChoice
+	// Favourite folders are offered even when the list and the index do not hold them (yet),
+	// as long as they are in this source.
+	var volume app.Volume
+	known := true
+	switch {
+	case ix != nil:
+		volume = app.VolumeOf(ix.Root)
+	case len(rows) > 0:
+		volume = app.VolumeOf(rows[0].Path)
+	default:
+		known = false
+	}
+	for path := range tags.FolderTagged(app.FavouriteTag) {
+		if !known || app.VolumeOf(path) == volume {
+			add(path, app.Base(path), false)
+		}
+	}
+	var favs, named, other []folderChoice
 	for _, c := range all {
 		path, name := strings.ToLower(c.Path), strings.ToLower(c.Name)
 		inPath, inName := true, true
@@ -278,13 +297,18 @@ func folderChoices(rows []app.Node, ix *app.Index, text string) []folderChoice {
 		}
 		switch {
 		case !inPath:
+		case c.Fav:
+			favs = append(favs, c)
 		case inName:
 			named = append(named, c)
 		default:
 			other = append(other, c)
 		}
 	}
-	return append(named, other...)
+	sort.SliceStable(favs, func(i, j int) bool {
+		return app.NaturalLess(strings.ToLower(favs[i].Path), strings.ToLower(favs[j].Path))
+	})
+	return append(append(favs, named...), other...)
 }
 
 // stepChoice moves a choice in a list of n by the key's direction, wrapping round.
@@ -304,7 +328,7 @@ func stepChoice(choice, n int, key string) int {
 // findFolder moves the file cursor to the chosen one of the folders matching text. A folder
 // that is not open yet is opened: the folders above it are listed and the cursor lands on it.
 func (m Model) findFolder(text string, choice int) (Model, tea.Cmd) {
-	matches := folderChoices(m.tree.Rows(), m.indexes[m.root], text)
+	matches := folderChoices(m.tree.Rows(), m.indexes[m.root], m.tags, text)
 	if len(matches) == 0 {
 		m.message = fmt.Sprintf("no folder named like %q", text)
 		return m, nil

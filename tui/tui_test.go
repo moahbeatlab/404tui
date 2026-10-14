@@ -210,19 +210,19 @@ func (s *screen) padName(name string) string { return s.sim.PadName(pad(s.t, nam
 
 func TestEverySectionRenders(t *testing.T) {
 	s := open(t)
-	s.shows("404tui", "PROJECT_01", "1 Pads", "4 Projects", "BANKS", "kick", "snare", "hat", "A1  kick")
-	s.press("2")
+	s.shows("404tui", "PROJECT_01", "1 Pads", "3 Projects", "BANKS", "kick", "snare", "hat", "A1  kick")
+	s.press("tab")
 	s.shows("Pattern A1", "Empty slot.")
 	s.press("]")
 	s.shows("Pattern B1")
-	s.press("3")
+	s.press("2")
 	s.shows("SOURCE", "SD card", "▸ IMPORT/", "Details", "Folder")
-	s.press("4")
+	s.press("3")
 	s.shows("PROJECT_01", "Project 1", "● current", "3 of 160 pads")
-	s.press("shift+tab")
+	s.press("2")
 	s.shows("▸ IMPORT/")
-	// The bank chosen on Patterns carries over, so go back to A.
-	s.press("2", "[", "1")
+	// The bank chosen on the patterns carries over, so go back to A.
+	s.press("1", "[")
 	s.shows("kick")
 }
 
@@ -230,7 +230,7 @@ func TestHelpAndPalette(t *testing.T) {
 	s := open(t)
 	s.press("?")
 	s.shows("Keybindings")
-	s.press("3")
+	s.press("2")
 	s.shows("Keybindings")
 	s.press("?")
 	s.hides("Keybindings")
@@ -365,14 +365,14 @@ func (s *screen) pollResult() tea.Msg {
 
 func TestSelectAndRenameAProject(t *testing.T) {
 	s := open(t)
-	s.press("4", "j", "j", "enter")
+	s.press("3", "j", "j", "enter")
 	s.shows("project 3 selected", "PROJECT_03")
 	// The pads on screen are now the new project's.
 	s.press("1")
 	s.hides("kick")
 
 	// The unit keeps a name only for a project with something saved in it.
-	s.press("4", "n")
+	s.press("3", "n")
 	s.shows("Rename project 3")
 	s.typeText("!")
 	s.press("enter")
@@ -386,10 +386,10 @@ func TestSelectAndRenameAProject(t *testing.T) {
 
 func TestFilesBrowseMoveRenameAndSearch(t *testing.T) {
 	s := open(t)
-	s.press("3")
+	s.press("2")
 	s.shows("▸ IMPORT/")
 	s.press("tab")
-	s.shows("▾ IMPORT/", "▸ pack/", "kick.wav", "Files"[:0]+"3 Files")
+	s.shows("▾ IMPORT/", "▸ pack/", "kick.wav", "2 Files")
 	s.press("tab")
 	s.shows("▸ IMPORT/")
 	s.hides("kick.wav")
@@ -436,7 +436,7 @@ func TestFilesBrowseMoveRenameAndSearch(t *testing.T) {
 
 func TestAssignAFileThroughThePicker(t *testing.T) {
 	s := open(t)
-	s.press("3", "tab", "j", "j")
+	s.press("2", "tab", "j", "j")
 	m := s.m()
 	if node, _ := m.fileNode(); node.Name != "kick.wav" {
 		t.Fatalf("cursor on %q", node.Name)
@@ -462,7 +462,7 @@ func TestAssignAFileThroughThePicker(t *testing.T) {
 	}
 
 	// The next file goes to the pad after it, in the same bank.
-	s.press("3", "enter")
+	s.press("2", "enter")
 	s.shows("C8 is empty")
 	// Two digits make pad 12.
 	s.press("1", "2")
@@ -472,7 +472,7 @@ func TestAssignAFileThroughThePicker(t *testing.T) {
 
 func TestTargetBankInFiles(t *testing.T) {
 	s := open(t)
-	s.press("3")
+	s.press("2")
 	s.shows("SOURCE", "TARGET BANK")
 	s.press("]", "]")
 	s.shows("bank C · next free C1")
@@ -495,14 +495,14 @@ func TestTargetBankInFiles(t *testing.T) {
 
 func TestPickerOpensOnTheLastBankAssignedTo(t *testing.T) {
 	s := open(t)
-	s.press("3", "tab", "j", "j", "enter", "J", "enter")
+	s.press("2", "tab", "j", "j", "enter", "J", "enter")
 	s.shows("assigned to J1")
 	// Browsing other banks on Pads does not change where files go.
 	s.press("1", "[", "[", "[")
 	if s.m().bank == 9 {
 		t.Fatal("test setup: still on bank J")
 	}
-	s.press("3", "enter")
+	s.press("2", "enter")
 	s.shows("J2 is empty")
 	s.press("esc")
 	// Looking at a bank in the picker and cancelling does not change it either.
@@ -511,13 +511,13 @@ func TestPickerOpensOnTheLastBankAssignedTo(t *testing.T) {
 	s.press("esc")
 	// It is remembered between runs.
 	s = s.restart()
-	s.press("3", "enter")
+	s.press("2", "enter")
 	s.shows("J2 is empty")
 }
 
 func TestAssignReplacingAPadAsksTwice(t *testing.T) {
 	s := open(t)
-	s.press("3", "tab", "j", "j", "enter", "A", "1")
+	s.press("2", "tab", "j", "j", "enter", "A", "1")
 	s.shows("A1 holds")
 	s.press("enter")
 	s.shows("Press Enter again to replace it")
@@ -618,7 +618,7 @@ func TestAssignDialogListensAndTakesATypedPath(t *testing.T) {
 func TestStateIsRememberedBetweenRuns(t *testing.T) {
 	s := open(t)
 	s.press("T", "]", "]")
-	s.press("3", "tab", "j", "l")
+	s.press("2", "tab", "j", "l")
 	if st := s.store.state; st.Theme != 1 || st.Bank != 2 || st.FilesRoot != "SD:" || len(st.FilesExpanded) != 2 {
 		t.Fatalf("remembered %+v", st)
 	}
@@ -626,13 +626,13 @@ func TestStateIsRememberedBetweenRuns(t *testing.T) {
 	if m := s.m(); m.themeAt != 1 || m.bank != 2 {
 		t.Errorf("theme %d, bank %d after a restart", m.themeAt, m.bank)
 	}
-	s.press("3")
+	s.press("2")
 	s.shows("▾ IMPORT/", "▾ pack/", "snare.wav")
 }
 
 func TestListenToAFile(t *testing.T) {
 	s := open(t)
-	s.press("3", "tab", "j", "j", "space")
+	s.press("2", "tab", "j", "j", "space")
 	if len(s.player.played) != 1 || s.player.played[0].Frames() != 4800 {
 		t.Fatalf("played %+v", s.player.played)
 	}
@@ -735,7 +735,7 @@ func TestPatternsOpenAndRetarget(t *testing.T) {
 	}
 	s.sim.AddFile(formats.PatternPath(1, pad(t, "B2")), file)
 
-	s.press("2", "]")
+	s.press("tab", "]")
 	s.shows("2 pads"[:0] + "1 pads")
 	s.press("enter")
 	s.shows("That pattern"[:0] + "that pattern slot is empty")
@@ -810,7 +810,7 @@ func TestMouse(t *testing.T) {
 	s.wheel(false)
 
 	// Files: a click selects a row, a second click on it opens the folder.
-	s.press("3")
+	s.press("2")
 	s.click(g.bodyX+5, rowBody+1)
 	s.shows("▾ IMPORT/")
 	s.wheel(true)
@@ -824,7 +824,7 @@ func TestMouse(t *testing.T) {
 	// Sources, on the rail.
 	s.click(3, s.railRow(railRoot, 1))
 	s.shows("▸ ROLAND/")
-	s.press("4")
+	s.press("3")
 	s.click(g.bodyX+5, rowBody+1+3)
 	if s.m().projectAt != 3 {
 		t.Errorf("clicked project 4, got %d", s.m().projectAt)
@@ -899,7 +899,7 @@ func TestExportAndRestoreThroughTheFolderBrowser(t *testing.T) {
 
 	// From Files: R opens the browser where the tree is, and Enter on samples.json restores
 	// the folder it is in.
-	s.press("3", "tab", "j", "j", "tab", "R")
+	s.press("2", "tab", "j", "j", "tab", "R")
 	s.shows("Restore pads from the export in…", "▾ PROJECT_01-A/", "samples.json")
 	s.press("esc", "j", "j", "j", "j")
 	s.shows("Pad export")
@@ -917,7 +917,7 @@ func TestThemesAndNarrowScreens(t *testing.T) {
 	s.shows("theme: Hardware")
 	for _, size := range [][2]int{{80, 24}, {60, 20}, {140, 40}, {200, 50}, {100, 14}} {
 		s.send(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
-		for _, section := range []string{"1", "2", "3", "4"} {
+		for _, section := range []string{"1", "tab", "2", "3"} {
 			s.press(section)
 			lines := strings.Split(s.model.View(), "\n")
 			if len(lines) != size[1] {
@@ -961,7 +961,7 @@ func TestProjectExportToTheCardAndRestoreFromIt(t *testing.T) {
 	s := open(t)
 	backup(s.sim, "ROLAND/SP-404MKII/PROJECT_01", "LIVE SET")
 
-	s.press("4")
+	s.press("3")
 	s.shows("e export", "R restore")
 	s.press("e")
 	s.shows("Export project 1 into…", "SD card", "▸ IMPORT/")
@@ -999,7 +999,7 @@ func TestProjectExportToTheCardAndRestoreFromIt(t *testing.T) {
 
 func TestProjectExportAndRestoreRefuse(t *testing.T) {
 	s := open(t)
-	s.press("4", "e", "enter", "enter")
+	s.press("3", "e", "enter", "enter")
 	s.shows("project 1 is empty")
 	// A folder without PADCONF.BIN is not a backup, and a typed path works too.
 	s.press("R", "enter")
@@ -1120,7 +1120,7 @@ func TestBankTempoAndVolumeFromThePads(t *testing.T) {
 	s.press("b", "esc")
 	s.hides("Tempo (40-200 BPM)")
 	// The same keys work on Patterns, where the bank's tempo matters.
-	s.press("2")
+	s.press("tab")
 	s.shows("Bank A", "Tempo 98.50 BPM")
 	s.press("]", ">")
 	s.shows("Bank B", "Tempo 121.00 BPM")
@@ -1139,7 +1139,7 @@ func TestSearchFindsAudioAnywhereOnTheCard(t *testing.T) {
 	for _, f := range []string{"SD:IMPORT/Drums/808 Kick.wav", "SD:IMPORT/Drums/Snare.wav", "SD:IMPORT/Kicks/deep.wav", "SD:EXPORT/old kick take 2.wav"} {
 		s.sim.AddFile(f, wav(480))
 	}
-	s.press("3", "/", "ctrl+u")
+	s.press("2", "/", "ctrl+u")
 	s.shows("Search SD card", "audio files indexed")
 	s.typeText("kick")
 	// The file's own name matches come first, then ones that only match a folder.
@@ -1177,7 +1177,7 @@ func TestSearchFindsAudioAnywhereOnTheCard(t *testing.T) {
 
 func TestSearchListensAndMovesThroughResults(t *testing.T) {
 	s := open(t)
-	s.press("3", "/", "ctrl+u")
+	s.press("2", "/", "ctrl+u")
 	s.typeText("wav")
 	s.press("down", "ctrl+l")
 	if len(s.player.played) != 1 {
@@ -1195,7 +1195,7 @@ func TestSearchListensAndMovesThroughResults(t *testing.T) {
 
 func TestSearchIsCachedUntilFilesChange(t *testing.T) {
 	s := open(t)
-	s.press("3", "/", "ctrl+u")
+	s.press("2", "/", "ctrl+u")
 	s.typeText("fresh")
 	s.shows("nothing matches")
 	s.press("esc")
@@ -1204,7 +1204,7 @@ func TestSearchIsCachedUntilFilesChange(t *testing.T) {
 	s.press("/", "ctrl+u")
 	s.typeText("fresh")
 	s.shows("nothing matches")
-	s.press("esc", "r", "3", "/", "ctrl+u")
+	s.press("esc", "r", "2", "/", "ctrl+u")
 	s.typeText("fresh")
 	s.shows("fresh start.wav")
 	s.press("esc")
@@ -1255,7 +1255,7 @@ func TestSearchResultsAreInAlignedColumns(t *testing.T) {
 	s.sim.AddFile("SD:Loops/Deep House/Basslines/hdhkb_bassloop01_f_124bpm.wav", wav(480))
 	s.sim.AddFile("SD:Loops/Deep House/Basslines/a.wav", wav(480))
 	s.sim.AddFile("SD:Loops/another very long folder name/with subfolders/that go on/and on/x.wav", wav(480))
-	s.press("3", "/", "ctrl+u")
+	s.press("2", "/", "ctrl+u")
 	s.typeText(".wav")
 	// The folder column starts at the column of its header in every row, whatever the name.
 	lines := strings.Split(ansiStrip(s.model.View()), "\n")
@@ -1289,7 +1289,7 @@ func TestSearchResultsAreInAlignedColumns(t *testing.T) {
 
 func TestListenPlaysAgainOnceItHasFinished(t *testing.T) {
 	s := open(t)
-	s.press("3", "tab", "j", "j", "space")
+	s.press("2", "tab", "j", "j", "space")
 	s.shows("♪ playing kick.wav")
 	// While it sounds, the same key stops it.
 	s.press("space")
@@ -1312,7 +1312,7 @@ func TestNoAudioOutputSaysWhy(t *testing.T) {
 	s := open(t)
 	m := s.m().WithAudio(nil, errors.New("no output device"))
 	s.model = m
-	s.press("3", "tab", "j", "j", "space")
+	s.press("2", "tab", "j", "j", "space")
 	s.shows("no audio output to listen on: no output device")
 	s.press("/", "ctrl+u")
 	s.typeText("kick")
@@ -1322,7 +1322,7 @@ func TestNoAudioOutputSaysWhy(t *testing.T) {
 
 func TestAutoplayInTheSearchPlaysWhereTheCursorRests(t *testing.T) {
 	s := open(t)
-	s.press("3", "/", "ctrl+u")
+	s.press("2", "/", "ctrl+u")
 	s.typeText("wav")
 	s.shows("Ctrl-A autoplay off")
 	s.press("ctrl+a")
@@ -1559,7 +1559,7 @@ func TestAnOldStopTimerDoesNotCutALaterPreview(t *testing.T) {
 func TestListeningSaysWhereTheSoundGoes(t *testing.T) {
 	s := open(t)
 	s.send(AudioOutputMsg("WH-1000XM3"))
-	s.press("3", "tab", "j", "j", "space")
+	s.press("2", "tab", "j", "j", "space")
 	s.shows("♪ playing kick.wav on WH-1000XM3")
 }
 
@@ -1714,7 +1714,7 @@ func TestRestoreOfAnExportAcrossBanksGoesBackWhereItWas(t *testing.T) {
 
 func TestSelectingTheCurrentProjectSaysSo(t *testing.T) {
 	s := open(t)
-	s.press("4", "enter")
+	s.press("3", "enter")
 	s.shows("project 1 is already the current project")
 	// And a switch the unit is slow to announce still ends with the screen on that project.
 	s.sim.SilentProjectSwitch = true
@@ -1740,7 +1740,7 @@ func TestAutoplayInFilesStopsTheOldSoundAtOnce(t *testing.T) {
 	s := open(t)
 	s.sim.AddFile("SD:IMPORT/zlong.wav", wav(96000))
 	// IMPORT is open: rows are pack/, kick.wav, zlong.wav. Turn autoplay on at kick.wav.
-	s.press("3", "tab", "j", "j", "ctrl+a")
+	s.press("2", "tab", "j", "j", "ctrl+a")
 	s.shows("♫ autoplay")
 	if len(s.player.played) != 1 || !s.player.playing || s.m().listening != "SD:IMPORT/kick.wav" {
 		t.Fatalf("autoplay did not play the file it was turned on at: %d plays, playing %v, listening %q",
@@ -1776,7 +1776,7 @@ func TestAutoplayInFilesStopsTheOldSoundAtOnce(t *testing.T) {
 
 func TestAMoveWhileAFileIsDecodingDropsIt(t *testing.T) {
 	s := open(t)
-	s.press("3", "tab", "j", "j")
+	s.press("2", "tab", "j", "j")
 	m := s.m()
 	// A file is asked for, and the cursor moves on while it is still being decoded.
 	_, cmd := m.playFile("SD:IMPORT/kick.wav")
@@ -1796,7 +1796,7 @@ func TestAMoveWhileAFileIsDecodingDropsIt(t *testing.T) {
 
 func TestMovingWithAutoplayOffLeavesASoundAlone(t *testing.T) {
 	s := open(t)
-	s.press("3", "tab", "j", "j", "space")
+	s.press("2", "tab", "j", "j", "space")
 	if !s.player.playing {
 		t.Fatal("not playing")
 	}
@@ -1817,7 +1817,7 @@ func TestMovingWithAutoplayOffLeavesASoundAlone(t *testing.T) {
 
 func TestAutoplayInTheSearchStopsTheOldSoundAtOnce(t *testing.T) {
 	s := open(t)
-	s.press("3", "/", "ctrl+u")
+	s.press("2", "/", "ctrl+u")
 	s.typeText("wav")
 	s.press("ctrl+a")
 	if !s.player.playing {
@@ -1834,7 +1834,7 @@ func TestAutoplayInTheSearchStopsTheOldSoundAtOnce(t *testing.T) {
 func TestCtrlDAndCtrlUPageThroughLists(t *testing.T) {
 	s := open(t)
 	// Projects: 16 rows; the list is about 27 rows tall here, so half a page is 13 rows.
-	s.press("4")
+	s.press("3")
 	ctrlD, ctrlU := tea.KeyMsg{Type: tea.KeyCtrlD}, tea.KeyMsg{Type: tea.KeyCtrlU}
 	s.send(ctrlD)
 	if got := s.m().projectAt; got < 5 {
@@ -1859,7 +1859,7 @@ func TestCtrlDAndCtrlUPageThroughLists(t *testing.T) {
 	for i := 0; i < 60; i++ {
 		s.sim.AddFile(fmt.Sprintf("SD:LONG/file%02d.wav", i), wav(480))
 	}
-	s.press("r", "3")
+	s.press("r", "2")
 	m := s.m()
 	rows := len(m.tree.Rows())
 	s.send(ctrlD)
@@ -1919,7 +1919,7 @@ func junkCard(s *screen) {
 	} {
 		s.sim.AddFile(f, wav(480))
 	}
-	s.press("r", "3")
+	s.press("r", "2")
 }
 
 func TestJunkIsDimmedNotAudioAndMarkedWithJ(t *testing.T) {
@@ -2003,7 +2003,7 @@ func TestDeleteMarkedFilesAsksFirstAndRemovesWholeFolders(t *testing.T) {
 
 func TestDeleteIsRefusedOutsideTheCard(t *testing.T) {
 	s := open(t)
-	s.press("3", "t")
+	s.press("2", "t")
 	s.shows("Unit storage")
 	s.press("d")
 	s.shows("holds your projects")
@@ -2024,7 +2024,7 @@ func TestCopyAndMoveMarkedFilesWithTheClipboard(t *testing.T) {
 	for _, f := range []string{"SD:Src/a.wav", "SD:Src/b.wav", "SD:Src/sub/c.wav", "SD:Dst/keep.wav"} {
 		s.sim.AddFile(f, wav(480))
 	}
-	s.press("r", "3")
+	s.press("r", "2")
 	s.expand("Src")
 	s.expand("sub")
 	s.expand("Dst")
@@ -2097,7 +2097,7 @@ func TestTheClipboardCrossesToThisComputer(t *testing.T) {
 	s := open(t)
 	dir := t.TempDir()
 	s.sim.AddFile("SD:Packs/kick.wav", wav(480))
-	s.press("r", "3")
+	s.press("r", "2")
 	s.expand("Packs")
 	s.cursorOn("SD:Packs/kick.wav")
 	s.press("c")
@@ -2233,7 +2233,7 @@ func TestJumpToTheNextAndPreviousFolder(t *testing.T) {
 	for _, f := range []string{"SD:A/x.wav", "SD:A/sub/y.wav", "SD:B/z.wav", "SD:C/w.wav"} {
 		s.sim.AddFile(f, wav(480))
 	}
-	s.press("r", "3")
+	s.press("r", "2")
 	s.expand("A")
 	s.expand("sub")
 	// Rows: A/ sub/ y.wav x.wav B/ C/ IMPORT/ ... in folder-first order; jump over the files.
@@ -2368,7 +2368,7 @@ func TestFindAFolderByNameThenCollapseIt(t *testing.T) {
 	for _, f := range []string{"SD:Drums/a.wav", "SD:Drums/Claps/c.wav", "SD:Bass/b.wav"} {
 		s.sim.AddFile(f, wav(480))
 	}
-	s.press("r", "3")
+	s.press("r", "2")
 	s.expand("Drums")
 	s.expand("Claps")
 	s.cursorOn("Bass")
@@ -2431,7 +2431,7 @@ func TestFindingAFolderListsMatchesWhileTyping(t *testing.T) {
 	for _, f := range []string{"SD:Kit1/a.wav", "SD:Kit2/b.wav", "SD:Bass/c.wav"} {
 		s.sim.AddFile(f, wav(480))
 	}
-	s.press("r", "3")
+	s.press("r", "2")
 	s.cursorOn("Bass")
 	s.press("f")
 	// Before anything is typed, every open folder is listed.
@@ -2464,7 +2464,7 @@ func TestTheCursorStaysPutAfterDeleting(t *testing.T) {
 	for _, f := range []string{"SD:Aaa/x.wav", "SD:Loops/._a.wav", "SD:Loops/b.wav", "SD:Zzz/y.wav"} {
 		s.sim.AddFile(f, wav(480))
 	}
-	s.press("r", "3")
+	s.press("r", "2")
 	s.expand("Loops")
 	name := func() string { m := s.m(); n, _ := m.fileNode(); return n.Name }
 
@@ -2516,7 +2516,7 @@ func TestRenameWhateverIsHighlighted(t *testing.T) {
 		s.sim.AddFile(f, wav(480))
 	}
 	// In Files, the cursor follows the renamed file.
-	s.press("r", "3")
+	s.press("r", "2")
 	s.expand("Loops")
 	s.cursorOn("old.wav")
 	s.press("n")
@@ -2574,7 +2574,7 @@ func TestShiftTabFoldsEverything(t *testing.T) {
 	for _, f := range []string{"SD:A/sub/y.wav", "SD:A/x.wav", "SD:B/z.wav"} {
 		s.sim.AddFile(f, wav(480))
 	}
-	s.press("r", "3")
+	s.press("r", "2")
 	s.expand("A")
 	s.expand("sub")
 	s.expand("B")
@@ -2691,8 +2691,7 @@ func TestPatternsCopyMoveDelete(t *testing.T) {
 	s := open(t)
 	s.press("N")
 	s.shows("made")
-	s.press("4")
-	s.press("2")
+	s.press("tab")
 	s.press("c", "l", "p")
 	s.shows("pattern A1 copied to A2")
 	s.press("x", "p")
@@ -2745,7 +2744,7 @@ func TestHistoryKeepsWhatHappened(t *testing.T) {
 func TestIndexAFolderInTheBackground(t *testing.T) {
 	s := open(t)
 	s.sim.AddFile("SD:IMPORT/pack/124_bass_wobble.wav", wav(2400))
-	s.press("3", "tab", "i")
+	s.press("2", "tab", "i")
 	s.shows("indexed", "files in SD:IMPORT", "404tui-index.json.gz")
 	data, ok := s.sim.File("SD:404tui-index.json.gz")
 	if !ok {
@@ -2787,7 +2786,7 @@ func TestSearchOnlyTheTags(t *testing.T) {
 	s := open(t)
 	s.sim.AddFile("SD:IMPORT/pack/124_bass_wobble.wav", wav(2400))
 	s.sim.AddFile("SD:OTHER/124_bass_unindexed.wav", wav(2400))
-	s.press("3", "tab", "i")
+	s.press("2", "tab", "i")
 	s.shows("indexed")
 	s.send(tea.WindowSizeMsg{Width: 180, Height: 50})
 	s.press("s")
@@ -2809,7 +2808,7 @@ func TestSearchOnlyTheTags(t *testing.T) {
 func TestSearchIndexBuildsInTheBackgroundAndShowsItsProgress(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 180, Height: 50})
-	s.press("3")
+	s.press("2")
 	// Nothing is walked by itself: with no saved index the panel says how to make one.
 	s.shows("No search index yet", "i indexes the folder in front")
 	s.press("tab", "i")
@@ -2841,7 +2840,7 @@ func TestSearchIndexBuildsInTheBackgroundAndShowsItsProgress(t *testing.T) {
 func TestFindAFolderThatIsNotOpenFromTheSavedIndex(t *testing.T) {
 	s := open(t)
 	s.sim.AddFile("SD:IMPORT/pack/deep/down/x.wav", wav(2400))
-	s.press("3", "tab", "i")
+	s.press("2", "tab", "i")
 	s.shows("indexed")
 	s.press("r")
 	s.press("f")
@@ -2855,7 +2854,7 @@ func TestSearchRemembersTheQueryAndTheFileAndTabSwitchesKind(t *testing.T) {
 	s := open(t)
 	s.sim.AddFile("SD:IMPORT/pack/124_bass_wobble.wav", wav(2400))
 	s.sim.AddFile("SD:IMPORT/pack/124_bass_other.wav", wav(2400))
-	s.press("3", "tab", "i")
+	s.press("2", "tab", "i")
 	s.shows("indexed")
 	s.send(tea.WindowSizeMsg{Width: 180, Height: 50})
 	s.press("/")
@@ -2896,7 +2895,7 @@ func TestAPatternPlaysInALoopUntilStopped(t *testing.T) {
 	if _, err := app.Assign(m.unit, m.unit, pad(t, "C1"), "SD:IMPORT/kick.wav"); err != nil {
 		t.Fatal(err)
 	}
-	s.press("r", "]", "]", "N", "2")
+	s.press("r", "]", "]", "N", "tab")
 	s.press("P")
 	if len(s.player.looped) != 1 || len(s.player.played) != 0 {
 		t.Fatalf("looped %d, played %d: %s", len(s.player.looped), len(s.player.played), s.m().message)
@@ -2910,7 +2909,7 @@ func TestAPatternPlaysInALoopUntilStopped(t *testing.T) {
 func TestFavouriteAndTagFilesAndFindThemByTheirTags(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 180, Height: 50})
-	s.press("3", "tab", "i")
+	s.press("2", "tab", "i")
 	s.shows("indexed")
 	// The cursor is on IMPORT; kick.wav is two rows down (pack/ is closed).
 	s.press("j", "j")
@@ -2960,7 +2959,7 @@ func TestTaggingSeveralFilesWhileTheScreenIsDrawnIsSafe(t *testing.T) {
 	for i := 0; i < 60; i++ {
 		s.sim.AddFile(fmt.Sprintf("SD:IMPORT/many/s%02d.wav", i), wav(480))
 	}
-	s.press("3", "tab", "i")
+	s.press("2", "tab", "i")
 	s.shows("indexed")
 	// Open the folder with the many files, mark all of them, then tag them all.
 	s.press("j", "tab", "V")
@@ -2991,7 +2990,7 @@ func TestFavouriteSeveralMarkedFilesInTheFilesViewAndTheDialog(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		s.sim.AddFile(fmt.Sprintf("SD:IMPORT/many/s%d.wav", i), wav(480))
 	}
-	s.press("3", "tab", "i")
+	s.press("2", "tab", "i")
 	s.shows("indexed")
 	// Mark three files with v, and tag them: it must not crash, and it tags exactly those.
 	s.press("j", "tab", "j", "v", "v", "v")
@@ -3038,7 +3037,7 @@ func TestTaggingWithNothingToTagSaysSoAndNeverCrashes(t *testing.T) {
 	s := open(t)
 	s.sim.AddFile("SD:IMPORT/notes.txt", []byte("x"))
 	// A text file in front is neither audio nor a folder: nothing to tag, and no crash.
-	s.press("3", "tab", "j", "j", "j")
+	s.press("2", "tab", "j", "j", "j")
 	m := s.m()
 	if node, _ := m.fileNode(); node.Name != "notes.txt" {
 		t.Fatalf("cursor on %q", node.Name)
@@ -3057,7 +3056,7 @@ func TestFavouriteAFolderAndEveryFileInItHasTheTag(t *testing.T) {
 	s.sim.AddFile("SD:IMPORT/gems/deep/a_bass.wav", wav(480))
 	s.sim.AddFile("SD:IMPORT/gems/b_synth.wav", wav(480))
 	s.sim.AddFile("SD:IMPORT/other/c_pad.wav", wav(480))
-	s.press("3", "tab", "i")
+	s.press("2", "tab", "i")
 	s.shows("indexed")
 	// The cursor is on IMPORT; gems/ is the next row.
 	s.press("j")
@@ -3094,13 +3093,91 @@ func TestPatternsOfTheBankShowUnderThePadsAndPickOutTheOnesThatPlayThePad(t *tes
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 48})
 	s.press("N")
 	// They are read quietly, without holding the screen, and listed under the pads.
-	s.shows("Patterns · bank A", "1 ■3", "2 ·", "16 ·")
+	s.shows("Pads · bank A", "Patterns · bank A", "3 pads")
 	if s.m().busy != "" {
 		t.Errorf("the screen was held: %q", s.m().busy)
 	}
 	// The pad in front is played by pattern 1, which is picked out in the title.
-	s.shows("play this pad")
+	s.shows("with this pad")
 	// On a bank without patterns the slots are empty.
 	s.press("]")
 	s.shows("Patterns · bank B")
+}
+
+func TestAssignKeepsWhereTheSampleCameFromAndShowsItOnThePad(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 180, Height: 56})
+	s.sim.AddFile("SD:IMPORT/Great Collection/Kit 7/09_OHat_124.wav", wav(2400))
+	// Open the folders down to the file and assign it to the empty pad A16.
+	s.press("G", "a", "/", "ctrl+u")
+	s.typeText("09_OHat")
+	s.press("enter")
+	s.shows("assigned to A16", "from SD:IMPORT/Great Collection/Kit 7")
+	// The origin is on the card, apart from the tags, and shows in the pad's details.
+	data, ok := s.sim.File("SD:404tui-origins.json")
+	if !ok || !strings.Contains(string(data), "Great Collection/Kit 7/09_OHat_124.wav") {
+		t.Fatalf("the notes on the card: %v %s", ok, data)
+	}
+	s.press("G")
+	s.shows("From", "Great Collection/Kit 7/09_OHat_124.wav", "assigned 20")
+	// Deleting the sample takes its note with it.
+	s.press("d", "y")
+	data, _ = s.sim.File("SD:404tui-origins.json")
+	if strings.Contains(string(data), "09_OHat") {
+		t.Errorf("the note stayed after the sample was deleted: %s", data)
+	}
+}
+
+func TestTabMovesBetweenThePadsAndThePatternsPanelAndTheRailHasNoPatterns(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 180, Height: 56})
+	s.shows("1 Pads", "2 Files", "3 Projects")
+	s.hides("2 Patterns")
+	if s.m().section != secPads {
+		t.Fatal("not on the pads")
+	}
+	// Tab moves the focus into the patterns under the pads: the same screen, with the
+	// pattern keys, and the rail still shows Pads.
+	s.press("tab")
+	s.shows("Pads · bank A", "Patterns · bank A", "Pattern A1")
+	if s.m().section != secPatterns {
+		t.Fatal("the focus did not move to the patterns")
+	}
+	s.press("N")
+	s.shows("pattern A")
+	// Esc comes back to the pads without leaving the program.
+	s.press("esc")
+	if s.m().section != secPads {
+		t.Errorf("Esc left the patterns for %d", s.m().section)
+	}
+	s.press("tab", "tab")
+	if s.m().section != secPads {
+		t.Errorf("a second Tab did not come back: %d", s.m().section)
+	}
+}
+
+func TestTheFolderFinderListsTheFavouriteFoldersFirst(t *testing.T) {
+	s := open(t)
+	s.sim.AddFile("SD:IMPORT/alpha/a.wav", wav(480))
+	s.sim.AddFile("SD:IMPORT/zeta/deep/z.wav", wav(480))
+	s.press("2", "tab", "i")
+	s.shows("indexed")
+	// Favourite zeta/deep: it is the first the finder offers, with a star, though it sorts last.
+	s.press("f")
+	s.typeText("deep")
+	s.press("enter")
+	s.press("*")
+	s.shows("+favourite")
+	s.press("f")
+	s.shows("★ deep/")
+	m := s.m()
+	choices := folderChoices(m.tree.Rows(), m.indexes[m.root], m.tags, "")
+	if len(choices) == 0 || !choices[0].Fav || choices[0].Name != "deep" {
+		t.Fatalf("first choices %+v", choices[:min(3, len(choices))])
+	}
+	// Enter jumps to it.
+	s.press("enter")
+	if node, _ := m.fileNode(); node.Name == "" {
+		t.Error("no row in front")
+	}
 }

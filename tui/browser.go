@@ -556,14 +556,14 @@ func (m Model) browserFind(b *browser, key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		b.finding = false
 	case "up", "down", "ctrl+n", "ctrl+p", "tab", "shift+tab":
-		b.findAt = stepChoice(b.findAt, len(folderChoices(b.tree.Rows(), m.indexes[b.root], b.findText)), name)
+		b.findAt = stepChoice(b.findAt, len(folderChoices(b.tree.Rows(), m.indexes[b.root], m.tags, b.findText)), name)
 	case "backspace":
 		if r := []rune(b.findText); len(r) > 0 {
 			b.findText, b.findAt = string(r[:len(r)-1]), 0
 		}
 	case "enter":
 		b.finding = false
-		matches := folderChoices(b.tree.Rows(), m.indexes[b.root], b.findText)
+		matches := folderChoices(b.tree.Rows(), m.indexes[b.root], m.tags, b.findText)
 		if len(matches) == 0 {
 			b.findNote = fmt.Sprintf("no folder named like %q", b.findText)
 			break

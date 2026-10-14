@@ -833,3 +833,17 @@ func (t *TagIndex) UseUserTagsOf(from *TagIndex) {
 	}
 	t.applyUser()
 }
+
+// FolderTagged are the folders the user gave the tag.
+func (t *TagIndex) FolderTagged(tag string) map[string]bool {
+	out := map[string]bool{}
+	if t == nil {
+		return out
+	}
+	for dir, mine := range t.UserFolders {
+		if slices.Contains(mine, tag) {
+			out[dir] = true
+		}
+	}
+	return out
+}

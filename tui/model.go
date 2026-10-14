@@ -273,8 +273,12 @@ type Model struct {
 	// stripBusy is set while the patterns of the bank are read in the background, for the strip
 	// under the pads.
 	stripBusy bool
-	infos     map[string]fileInfo
-	infoBusy  bool
+	// origins say where the samples on the pads came from; originsBusy is set while they are
+	// read from the card.
+	origins     *app.Origins
+	originsBusy bool
+	infos       map[string]fileInfo
+	infoBusy    bool
 
 	// lastAssigned is the pad a file last went onto; a file goes to the next free one.
 	lastAssigned proto.PadIndex
@@ -453,6 +457,8 @@ type (
 		assigned bool
 		// patterns marks that a pattern was written: what is known of them is read again.
 		patterns bool
+		// origins are the notes of where samples came from, after an assign or a delete.
+		origins *app.Origins
 	}
 	patternsMsg struct {
 		bank int
@@ -826,6 +832,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.wanted()
 	case doneMsg:
 		m.message = msg.message
+		if msg.origins != nil {
+			m.origins = msg.origins
+		}
 		if msg.focus != nil {
 			m.section, m.bank, m.pad = secPads, int(msg.focus.Bank()), int(msg.focus.Pad())
 			if msg.assigned {
@@ -870,6 +879,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 	case chromaticMsg:
 		return m.chromaticLoaded(msg)
+	case originsMsg:
+		m.originsBusy = false
+		if msg.err == nil && m.origins == nil {
+			m.origins = msg.origins
+		}
+		return m, m.wanted()
 	case tagsSavedMsg:
 		return m.tagsWritten(msg)
 	case askTagsMsg:
@@ -1169,6 +1184,10 @@ func (m *Model) wanted() tea.Cmd {
 			m.usageState = 1
 			return m.usageCmd(m.snap.Project)
 		}
+		if m.origins == nil && !m.originsBusy {
+			m.originsBusy = true
+			return m.loadOrigins()
+		}
 		// The strip of patterns under the pads: read quietly, the pads stay in use.
 		if m.patterns[m.bank] == nil && !m.stripBusy {
 			m.stripBusy = true
@@ -1298,4 +1317,20 @@ func (m Model) logMessage() Model {
 	m.lastLogged = m.message
 	m.history = append(m.history[max(len(m.history)+1-maxHistory, 0):], logEntry{at: time.Now(), text: m.message})
 	return m
+}
+
+// originsMsg is the notes of where samples came from, read from the card.
+type originsMsg struct {
+	origins *app.Origins
+	err     error
+}
+
+// loadOrigins reads the notes from the card, without holding the screen.
+func (m Model) loadOrigins() tea.Cmd {
+	return func() tea.Msg {
+		m.ops.Lock()
+		defer m.ops.Unlock()
+		o, err := app.LoadOrigins(m.unit)
+		return originsMsg{origins: o, err: err}
+	}
 }

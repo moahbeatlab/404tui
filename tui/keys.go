@@ -50,6 +50,7 @@ var commands = []command{
 	{"R", "Restore pads from an export: choose its folder, then the bank (p there also makes a pattern)", []int{secPads}},
 	{"t", "Set gate, loop, BPM sync, vinyl, one shot, fixed velocity or bus FX on the marked pads (or on the whole bank)", []int{secPads}},
 	{"N", "New pattern in the first free slot: every sample in the bank on beat 1, 2 bars", []int{secPads, secPatterns}},
+	{"tab", "Move between the pads and the patterns panel under them", []int{secPads, secPatterns}},
 	{"enter", "Open pattern", []int{secPatterns}},
 	{"d", "Delete the pattern (or the marked ones)", []int{secPatterns}},
 	{"v", "Mark / unmark a pattern for deleting", []int{secPatterns}},
@@ -234,18 +235,23 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "esc":
 		return m.escape()
-	case "1", "2", "3", "4":
-		return m.goTo(int(name[0] - '1'))
-	case "shift+tab":
-		if m.section == secFiles && m.tree != nil {
-			m.fileAt = m.tree.CollapseAll(m.fileAt)
-			m.message = "folded everything"
-			return m, m.wanted()
-		}
-		return m.goTo((m.section + secCount - 1) % secCount)
-	case "tab":
-		if m.section != secFiles {
-			return m.goTo((m.section + 1) % secCount)
+	case "1", "2", "3":
+		return m.goTo(railSections[int(name[0]-'1')])
+	case "shift+tab", "tab":
+		switch m.section {
+		case secPads:
+			// The patterns of the bank are the panel under the pads: Tab moves into it.
+			return m.goTo(secPatterns)
+		case secPatterns:
+			return m.goTo(secPads)
+		case secFiles:
+			if name == "shift+tab" && m.tree != nil {
+				m.fileAt = m.tree.CollapseAll(m.fileAt)
+				m.message = "folded everything"
+				return m, m.wanted()
+			}
+		default:
+			return m.goTo(secPads)
 		}
 	case "T":
 		m.themeAt = (m.themeAt + 1) % len(themes)
@@ -290,6 +296,13 @@ func (m Model) escape() (tea.Model, tea.Cmd) {
 	switch {
 	case m.pattern != nil && m.section == secPatterns:
 		m.pattern = nil
+	case m.section == secPatterns && m.patHolding:
+		m.patHolding = false
+	case m.section == secPatterns && len(m.patMarks) > 0:
+		m.patMarks = map[int]bool{}
+	case m.section == secPatterns:
+		// Esc leaves the patterns panel for the pads.
+		m.section = secPads
 	case m.hasMoving:
 		m.hasMoving = false
 	case len(m.marked) > 0:
@@ -1451,8 +1464,13 @@ func (m Model) assign(files []string, start proto.PadIndex) (tea.Model, tea.Cmd)
 			if err != nil {
 				return doneMsg{message: err.Error()}
 			}
-			message := fmt.Sprintf("%s: assigned to %s as %q", app.Base(files[0]), start, name)
+			message := fmt.Sprintf("%s: assigned to %s as %q, from %s", app.Base(files[0]), start, name, display(app.Dir(files[0])))
 			prog.logLine(app.Base(files[0]) + " assigned to " + start.String())
+			// Where it came from is kept on the card: the pad's name has no room for it.
+			origins, oerr := app.RecordOrigins(unit, snap.Project, []app.OriginRecord{{Pad: start, Path: files[0], Name: name}})
+			if oerr != nil {
+				message += fmt.Sprintf("; its origin was not saved: %v", oerr)
+			}
 			if bpm, ok := plan.Files[files[0]]; ok {
 				prog.step(1, fmt.Sprintf("tempo %g BPM on %s", bpm, start))
 				if err := app.SetPadTempo(unit, start, bpm); err != nil {
@@ -1461,7 +1479,7 @@ func (m Model) assign(files []string, start proto.PadIndex) (tea.Model, tea.Cmd)
 					message += fmt.Sprintf("; tempo %g BPM", bpm)
 				}
 			}
-			return doneMsg{message: message, reload: true, focus: &start, assigned: true}
+			return doneMsg{message: message, reload: true, focus: &start, assigned: true, origins: origins}
 		})
 	}
 	taken := func(p proto.PadIndex) bool { return snap.Pads[p.Index()].HasSample }
@@ -1561,7 +1579,20 @@ func (m Model) assign(files []string, start proto.PadIndex) (tea.Model, tea.Cmd)
 		if len(failed) > 0 {
 			message += "; failed: " + strings.Join(failed, "; ")
 		}
-		return doneMsg{message: message, reload: true, focus: first, assigned: first != nil}
+		var records []app.OriginRecord
+		for _, p := range placed {
+			if p.Err == nil && !p.Blank {
+				records = append(records, app.OriginRecord{Pad: p.Pad, Path: p.File, Name: app.PadName(p.File)})
+			}
+		}
+		var origins *app.Origins
+		if len(records) > 0 {
+			var oerr error
+			if origins, oerr = app.RecordOrigins(unit, snap.Project, records); oerr != nil {
+				message += fmt.Sprintf("; the origins were not saved: %v", oerr)
+			}
+		}
+		return doneMsg{message: message, reload: true, focus: first, assigned: first != nil, origins: origins}
 	})
 }
 
@@ -1992,7 +2023,7 @@ func (m Model) promptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.kind == promptFindFolder && m.tree != nil {
 		switch name {
 		case "up", "down", "ctrl+n", "ctrl+p", "tab", "shift+tab":
-			p.choice = stepChoice(p.choice, len(folderChoices(m.tree.Rows(), m.indexes[m.root], p.buffer)), name)
+			p.choice = stepChoice(p.choice, len(folderChoices(m.tree.Rows(), m.indexes[m.root], m.tags, p.buffer)), name)
 			return m, nil
 		}
 		if name != "enter" {
@@ -2173,8 +2204,11 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 	case promptDelete:
 		m.marked = map[int]bool{}
 		m.busy = "deleting"
+		project := m.snap.Project
 		return m, m.edit(func() tea.Msg {
 			failed := app.DeletePads(unit, p.pads)
+			// What was noted of where these samples came from goes with them.
+			origins, _ := app.ForgetOrigins(unit, project, p.pads)
 			message := fmt.Sprintf("%d pads deleted", len(p.pads))
 			switch {
 			case len(failed) > 0:
@@ -2182,7 +2216,7 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			case len(p.pads) == 1:
 				message = fmt.Sprintf("%s: sample deleted", p.pads[0])
 			}
-			return doneMsg{message: message, reload: true}
+			return doneMsg{message: message, reload: true, origins: origins}
 		})
 	case promptExport, promptExportName:
 		dir := text

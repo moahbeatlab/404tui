@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -129,8 +130,8 @@ func (m Model) railView(g geom) string {
 		text, active, base := "", false, st.text
 		switch it.kind {
 		case railSection:
-			text = fmt.Sprintf(" %d %s", it.index+1, sectionNames[it.index])
-			active = it.index == m.section
+			text = fmt.Sprintf(" %d %s", slices.Index(railSections, it.index)+1, sectionNames[it.index])
+			active = it.index == m.section || it.index == secPads && m.section == secPatterns
 		case railBank:
 			n := counts[it.index]
 			left, right := fmt.Sprintf(" %c", 'A'+it.index), countLabel(n)+" "
@@ -261,7 +262,7 @@ func (m Model) statusBar() string {
 	// in the Details panel.
 	switch m.section {
 	case secPads:
-		chips = []string{chip("Enter", "preview on "+map[bool]string{true: "computer", false: "unit"}[m.previewLocal]), chip("a", "assign"), chip("v", "mark"), chip("t", "set"), chip("c", "copy"), chip("d", "delete"), chip("[ ]", "bank")}
+		chips = []string{chip("Enter", "preview on "+map[bool]string{true: "computer", false: "unit"}[m.previewLocal]), chip("a", "assign"), chip("v", "mark"), chip("t", "set"), chip("c", "copy"), chip("d", "delete"), chip("Tab", "patterns"), chip("[ ]", "bank")}
 	case secPatterns:
 		chips = []string{chip("Enter", "open"), chip("N", "new"), chip("P", "play"), chip("d", "delete"), chip("c", "copy"), chip("[ ]", "bank")}
 	case secFiles:
@@ -437,26 +438,76 @@ func (m Model) padsBody(g geom) string {
 		row := bank[p]
 		return m.tile(g.tileW, g.tileH, fmt.Sprint(p+1), row.Name, row.Level, tileState{
 			empty:    !row.HasSample,
-			cursor:   p == m.pad,
+			cursor:   p == m.pad && m.section == secPads,
 			marked:   m.marked[p],
 			playing:  m.playing && m.playingPad == row.Pad,
 			selected: m.hasSelected && m.selected == row.Pad,
 			moving:   m.hasMoving && m.moving == row.Pad,
 		})
 	})
+	onPatterns := m.section == secPatterns
 	detail := m.padDetail(g)
+	if onPatterns {
+		detail = m.patternSlotDetail(g)
+	}
 	bar := m.bankBar() + "\n\n"
 	if g.side {
-		// The patterns of the bank sit under the pads, when there is room for them.
-		if strip := m.patternStrip(g); strip != "" && g.bodyH-g.top-lipgloss.Height(grid) >= lipgloss.Height(strip)+1 {
-			grid = lipgloss.JoinVertical(lipgloss.Left, grid, "", strip)
+		// The pads sit in a panel, and the patterns of the bank in another under it, as the
+		// same kind of grid, when there is room for both.
+		pads := m.box(fmt.Sprintf("Pads · bank %c", 'A'+m.bank), grid, g.gridW+2, lipgloss.Height(grid)+2, !onPatterns)
+		left := pads
+		if panel := m.patternPanel(g); panel != "" && g.bodyH-g.top-lipgloss.Height(pads) >= lipgloss.Height(panel) {
+			left = lipgloss.JoinVertical(lipgloss.Left, pads, panel)
+		} else if strip := m.patternStrip(g); strip != "" && g.bodyH-g.top-lipgloss.Height(pads) >= lipgloss.Height(strip) {
+			// Not enough rows for the grid: the slots as a few short lines.
+			left = lipgloss.JoinVertical(lipgloss.Left, pads, strip)
 		}
-		return bar + lipgloss.JoinHorizontal(lipgloss.Top, grid, "  ", m.sideColumn(g, detail))
+		return bar + lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", m.sideColumn(g, detail))
 	}
 	if g.detailH < 4 {
 		return bar + grid
 	}
 	return bar + grid + "\n\n" + detail
+}
+
+// patternPanel is the patterns of the bank on show as tiles, like the Patterns view's grid
+// but not as tall, in a panel under the pads: a slot with how many pads its pattern plays,
+// and the ones that play the pad in front marked. Until the patterns are read it is empty.
+func (m Model) patternPanel(g geom) string {
+	rows := m.patterns[m.bank]
+	title := fmt.Sprintf("Patterns · bank %c", 'A'+m.bank)
+	const tileH = 2
+	if g.gridW < 40 {
+		return ""
+	}
+	height := 4*tileH + 3 + 2
+	if rows == nil {
+		return m.box(title, m.st.faint.Render(" reading patterns…"), g.gridW+2, height, false)
+	}
+	used := map[proto.PadIndex]bool{}
+	if m.usageState == 2 {
+		for _, slot := range m.usage[m.padRow().Pad] {
+			used[slot] = true
+		}
+	}
+	grid := m.grid(g, func(p int) string {
+		row := rows[p]
+		name := ""
+		if row.Exists {
+			name = fmt.Sprintf("%d pads", len(row.Pads))
+		}
+		state := tileState{empty: !row.Exists, marked: used[row.Slot]}
+		if m.section == secPatterns {
+			// The patterns have the focus: the cursor is here, and what is marked for deleting
+			// or picked up shows as in the Patterns view.
+			state = tileState{empty: !row.Exists, cursor: p == m.patternCursor, marked: m.patMarks[int(row.Slot.Index())], moving: m.patHolding && m.patHeld == row.Slot}
+		}
+		return m.tile(g.tileW, tileH, fmt.Sprint(p+1), name, 0, state)
+	})
+	if n := len(used); n > 0 {
+		title += fmt.Sprintf(" · %s with this pad", plural(n, "pattern"))
+	}
+	return m.box(title, grid, g.gridW+2, height, m.section == secPatterns)
 }
 
 // patternStrip shows the 16 pattern slots of the bank on show under the pads: a slot that
@@ -574,6 +625,9 @@ func (m Model) padDetail(g geom) string {
 		sample = append(sample,
 			row2("Length", fmt.Sprintf("%.2f s  ·  %s  ·  %.1f KB", f.Seconds, channels, float64(row.Size)/1024)),
 			row2("File", f.File))
+		if o, ok := m.origins.Of(m.snap.Project, row.Pad, row.Name); ok {
+			sample = append(sample, label("From")+st.text.Render(cutStart(display(o.Path), max(inner-12, 20))), label("")+st.faint.Render("assigned "+o.At))
+		}
 		if bar := m.trimBar(row, f, clamp(inner-48, 10, 36)); bar != "" {
 			sample = append(sample, strings.Replace(bar, "Trim  ", label("Trim"), 1))
 		}
@@ -814,6 +868,10 @@ func (m Model) patternsBody(g geom) string {
 	if m.pattern != nil {
 		return m.patternDetail(g)
 	}
+	// With room beside it the patterns are the panel under the pads, with the focus on it.
+	if g.side {
+		return m.padsBody(g)
+	}
 	rows := m.patterns[m.bank]
 	if rows == nil {
 		return "  " + m.st.dim.Render("reading patterns…")
@@ -826,24 +884,31 @@ func (m Model) patternsBody(g geom) string {
 		}
 		return m.tile(g.tileW, g.tileH, fmt.Sprint(p+1), name, 0, state)
 	})
+	detail := m.patternSlotDetail(g)
+	bar := m.bankBar() + "\n\n"
+	if g.detailH < 4 {
+		return bar + grid
+	}
+	return bar + grid + "\n\n" + detail
+}
+
+// patternSlotDetail is the panel about the pattern slot in front: the pads it plays and what
+// can be done to it.
+func (m Model) patternSlotDetail(g geom) string {
+	rows := m.patterns[m.bank]
+	if rows == nil {
+		return m.box("Pattern", m.st.faint.Render("reading patterns…"), g.detailW, max(g.detailH, 5), false)
+	}
 	cur := rows[m.patternCursor]
-	lines := []string{m.st.dim.Render("Empty slot.")}
+	lines := []string{m.st.dim.Render("Empty slot."), "", m.st.dim.Render("N makes a pattern of the bank's samples in the first free slot")}
 	if cur.Exists {
 		names := make([]string, len(cur.Pads))
 		for i, pad := range cur.Pads {
 			names[i] = pad.String()
 		}
-		lines = []string{m.st.text.Render("Plays " + strings.Join(names, " ")), "", m.st.dim.Render("Enter opens the step grid"), m.st.dim.Render("d delete  v mark  c copy  x move  p put")}
+		lines = []string{m.st.text.Render("Plays " + strings.Join(names, " ")), "", m.st.dim.Render("Enter opens the step grid  ·  P plays it in a loop"), m.st.dim.Render("d delete  v mark  c copy  x move  p put")}
 	}
-	detail := m.box("Pattern "+cur.Slot.String(), strings.Join(lines, "\n"), g.detailW, max(g.detailH, 5), false)
-	bar := m.bankBar() + "\n\n"
-	if g.side {
-		return bar + lipgloss.JoinHorizontal(lipgloss.Top, grid, "  ", m.sideColumn(g, detail))
-	}
-	if g.detailH < 4 {
-		return bar + grid
-	}
-	return bar + grid + "\n\n" + detail
+	return m.box("Pattern "+cur.Slot.String(), strings.Join(lines, "\n"), g.detailW, max(g.detailH, 5), false)
 }
 
 // patternDetail is an opened pattern: its step grid, one row per pad it plays.
@@ -1511,10 +1576,10 @@ func (m Model) folderFinderBox(g geom, rows []app.Node, ix *app.Index, input str
 	st := m.st
 	width := min(m.width-6, 112)
 	height := max(min(g.bodyH-9, 20), 5)
-	matches := folderChoices(rows, ix, input)
+	matches := folderChoices(rows, ix, m.tags, input)
 	choice = clamp(choice, 0, max(len(matches)-1, 0))
 
-	status := st.dim.Render(fmt.Sprintf("%d of %d folders", len(matches), len(folderChoices(rows, ix, ""))))
+	status := st.dim.Render(fmt.Sprintf("%d of %d folders", len(matches), len(folderChoices(rows, ix, m.tags, ""))))
 	if ix == nil {
 		status += st.faint.Render("  · only the open ones: i indexes folders so that all are found")
 	}
@@ -1522,7 +1587,7 @@ func (m Model) folderFinderBox(g geom, rows []app.Node, ix *app.Index, input str
 	from, to := window(len(matches), choice, height-1)
 	nameW := 12
 	for i := from; i < to; i++ {
-		nameW = max(nameW, ansi.StringWidth(matches[i].Name)+1)
+		nameW = max(nameW, ansi.StringWidth(matches[i].Name)+3)
 	}
 	nameW = min(nameW, (width-6)*55/100)
 	dirW := max(width-nameW-8, 6)
@@ -1531,7 +1596,11 @@ func (m Model) folderFinderBox(g geom, rows []app.Node, ix *app.Index, input str
 	}
 	for i := from; i < to; i++ {
 		r := matches[i]
-		name := ansi.Truncate(r.Name+"/", nameW, "…")
+		label := r.Name + "/"
+		if r.Fav {
+			label = "★ " + label
+		}
+		name := ansi.Truncate(label, nameW, "…")
 		dir := cutStart(display(app.Dir(r.Path)), dirW)
 		if i == choice {
 			list = append(list, lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true).Width(width-4).Render(" "+padTo(name, nameW)+"  "+dir))

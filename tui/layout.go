@@ -66,6 +66,10 @@ func (m Model) geom() geom {
 	g.gridH = 4*g.tileH + 3
 	if g.side {
 		g.detailW = g.bodyW - g.gridW - 2
+		if m.section == secPads || m.section == secPatterns {
+			// The pads sit in a box of their own, two columns wider than the grid.
+			g.detailW -= 2
+		}
 		g.detailH = min(g.bodyH-g.top, 13)
 	} else {
 		g.detailW = g.bodyW
@@ -74,6 +78,10 @@ func (m Model) geom() geom {
 	g.listW = clamp(g.bodyW*55/100, 28, 90)
 	return g
 }
+
+// railSections are the sections the rail lists, in order. The patterns are not one of them:
+// they are the panel under the pads, reached with Tab.
+var railSections = []int{secPads, secFiles, secProjects}
 
 // railKind is what a row of the rail stands for.
 type railKind int
@@ -97,7 +105,7 @@ type railItem struct {
 // the mouse reads it.
 func (m Model) rail(height int) []railItem {
 	items := make([]railItem, 0, height)
-	for s := 0; s < secCount; s++ {
+	for _, s := range railSections {
 		items = append(items, railItem{railSection, s})
 	}
 	banks := func() []railItem {
