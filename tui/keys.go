@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -31,7 +32,7 @@ var commands = []command{
 	{"a", "Assign a file to this pad (opens the file dialog)", []int{secPads}},
 	{"n", "Rename pad (prefix/suffix when pads are marked)", []int{secPads}},
 	{"v", "Mark / unmark pad", []int{secPads}},
-	{"V", "Mark every pad with a sample in the bank", []int{secPads}},
+	{"V", "Mark every pad with a sample in the bank (again, or Esc, unmarks them)", []int{secPads}},
 	{"d", "Delete sample (of every marked pad)", []int{secPads}},
 	{"S", "Edit this pad's settings (or the marked pads')", []int{secPads}},
 	{",", "Pad level down (of the marked pads)", []int{secPads}},
@@ -74,7 +75,7 @@ var commands = []command{
 	{"s", "Search tags only (set by i): bass 124, synth house", []int{secFiles}},
 	{"*", "Favourite: tag the marked files (or the one in front) favourite; again takes it off", []int{secFiles}},
 	{"+", "Tag the marked files with words you type; a word with - in front takes the tag off", []int{secFiles}},
-	{"i", "Index the folder in front in the background: tags from file and folder names, saved to SD:404tui-index.json (again stops it)", []int{secFiles}},
+	{"i", "Index the folder in front in the background: tags from file and folder names, saved to SD:404tui-index.json.gz (again stops it)", []int{secFiles}},
 	{"d", "Delete the marked files and folders from the SD card", []int{secFiles}},
 	{"c", "Copy the marked files and folders (then p pastes)", []int{secFiles}},
 	{"x", "Cut the marked files and folders to move them (then p pastes)", []int{secFiles}},
@@ -99,9 +100,9 @@ var commands = []command{
 	{"}", "Jump to the next folder in the list (Alt-n too)", []int{secFiles}},
 	{"{", "Jump to the previous folder in the list (Alt-p too)", []int{secFiles}},
 	{"1", "Go to Pads", nil},
-	{"2", "Go to Patterns", nil},
-	{"3", "Go to Files", nil},
-	{"4", "Go to Projects", nil},
+	{"2", "Go to Files", nil},
+	{"3", "Go to Projects", nil},
+	{"U", "Working offline: leave offline mode and connect to the unit once it is plugged in", nil},
 	{"T", "Next colour theme", nil},
 	{"r", "Refresh from the unit", nil},
 	{"?", "Keybindings", nil},
@@ -210,6 +211,10 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch name {
 		case "q", "esc":
 			return m.askQuit()
+		case "o":
+			if m.openOffline != nil {
+				return m.chooseOffline()
+			}
 		case "?":
 			m.help = true
 		case "T":
@@ -221,6 +226,13 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if name == "?" {
 		m.help = true
 		return m, nil
+	}
+	if name == "U" && m.offline != "" {
+		if !m.unitBack {
+			m.message = "no SP-404MKII is plugged in yet: still offline"
+			return m, nil
+		}
+		return m.leaveOffline()
 	}
 	if name == "q" {
 		return m.askQuit()
@@ -322,6 +334,17 @@ func (m Model) escape() (tea.Model, tea.Cmd) {
 		return m.askQuit()
 	}
 	return m, nil
+}
+
+// chooseOffline asks which folder of projects on this computer to work on without a unit,
+// starting at the one used last time.
+func (m Model) chooseOffline() (tea.Model, tea.Cmd) {
+	var expanded []string
+	at := m.mem.OfflineDir
+	for dir := filepath.Dir(at); at != "" && dir != "/" && dir != "."; dir = filepath.Dir(dir) {
+		expanded = append([]string{dir}, expanded...)
+	}
+	return m.openBrowser(browseOffline, localRoot(), expanded, at)
 }
 
 // askQuit asks whether to leave the app; y, Enter or q again quits.
@@ -482,11 +505,22 @@ func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 			m.marked[m.pad] = true
 		}
 	case "V":
+		// Again, with every pad already marked, it unmarks them (Esc does too).
+		all := true
+		for i, r := range m.snap.Bank(m.bank) {
+			all = all && (!r.HasSample || m.marked[i])
+		}
+		if all && len(m.marked) > 0 {
+			m.marked = map[int]bool{}
+			m.message = "unmarked every pad"
+			break
+		}
 		for i, r := range m.snap.Bank(m.bank) {
 			if r.HasSample {
 				m.marked[i] = true
 			}
 		}
+		m.message = fmt.Sprintf("marked %s: V again or Esc unmarks them", plural(len(m.marked), "pad"))
 	case "enter", " ":
 		if !row.HasSample {
 			m.message = fmt.Sprintf("%s is empty; a assigns a file to it", row.Pad)

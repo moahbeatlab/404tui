@@ -3,6 +3,7 @@ package tui
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -329,7 +330,8 @@ func TestBulkRenameAndDelete(t *testing.T) {
 	s.shows("Delete the samples on 3 pads (A1 A2 A3)?")
 	s.press("n")
 	s.shows("kick_x")
-	s.press("V", "d", "y")
+	// The marks stay after a "no", so d asks again about the same pads.
+	s.press("d", "y")
 	s.shows("3 pads deleted")
 	if s.padName("A1") != "" || s.padName("A3") != "" {
 		t.Errorf("after delete: A1 %q, A3 %q", s.padName("A1"), s.padName("A3"))
@@ -3727,5 +3729,100 @@ func TestMuteAndSoloChangeWhatThisComputerPlays(t *testing.T) {
 	// The pattern it came from is untouched.
 	if from, _ := app.OpenPattern(s.m().unit, pad(t, "C1")); from == nil || len(from.PadsUsed) != 2 {
 		t.Errorf("the pattern it came from changed: %v", from)
+	}
+}
+
+// TestWorkingOffline works on a folder of projects with no unit, then switches to the unit
+// once it is plugged in.
+func TestWorkingOffline(t *testing.T) {
+	lib := t.TempDir()
+	conf := formats.NewPadconf(nil, "AT WORK")
+	smp := sim.Tone(220, 0.3).SMP()
+	block := conf.Blocks[0]
+	binary.LittleEndian.PutUint32(block[3:], uint32(len(smp)))
+	binary.LittleEndian.PutUint32(block[7:], uint32(proto.SMPHeaderLen))
+	binary.LittleEndian.PutUint32(block[11:], uint32(len(smp)))
+	copy(block[175:], "office kick")
+	for path, data := range map[string][]byte{"Beat/PADCONF.BIN": conf.Bytes(), "Beat/SMPL/BANK1-01.SMP": smp} {
+		local := filepath.Join(lib, path)
+		if err := os.MkdirAll(filepath.Dir(local), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(local, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	sm := sim.New()
+	pad1, _ := proto.NewPadIndex(0)
+	sm.SetSample(pad1, "home kick", 48_000)
+	plugged := false
+	connect := func() (app.Unit, io.Closer, error) {
+		if !plugged {
+			return nil, nil, ErrNoUnit
+		}
+		d := device.New(sm, "sim")
+		return d, d, nil
+	}
+	openOffline := func(dir string) (app.Unit, io.Closer, string, error) {
+		s, _, err := sim.OpenFolder(dir)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		d := device.New(s, "offline")
+		return d, d, "1 project found", nil
+	}
+	sc := &screen{t: t, sim: sm, player: &fakePlayer{}, store: &memStore{}}
+	sc.model = NewConnecting(connect, sc.player, nil).WithOffline(openOffline, func() bool { return plugged }, "")
+	sc.run(sc.model.Init())
+	ticks := func(n int) {
+		for i := 0; i < n; i++ {
+			sc.send(tickMsg{})
+		}
+	}
+
+	// The waiting screen offers to work offline, and o asks for the folder on this computer.
+	sc.shows("Waiting for an SP-404MKII", "works offline on a folder of projects")
+	sc.press("o")
+	sc.shows("Work offline on the projects in", "This computer")
+	sc.press("esc")
+	sc.hides("Work offline on the projects in")
+
+	// The folder chosen, the projects in it are worked on, and it says so in the header.
+	sc.run(sc.m().goOffline(lib))
+	sc.shows("◌ OFFLINE", "AT WORK", "office kick", "Working offline on", "saving to "+filepath.Base(lib))
+	if !sc.m().previewLocal {
+		t.Error("offline, pads should play on this computer")
+	}
+	if got := sc.m().mem.OfflineDir; got != lib {
+		t.Errorf("the folder is not remembered: %q", got)
+	}
+	sc.press("U")
+	sc.shows("still offline")
+
+	// The unit is plugged in: it is announced, and U switches to it.
+	plugged = true
+	ticks(probeTicks)
+	sc.shows("unit plugged in: U connects", "An SP-404MKII is plugged in")
+	sc.press("U")
+	sc.shows("● CONNECTED  sim", "home kick")
+	sc.hides("OFFLINE")
+	sc.hides("office kick")
+}
+
+func TestVMarksAndUnmarksTheBank(t *testing.T) {
+	s := open(t)
+	s.press("V")
+	if len(s.m().marked) != 3 {
+		t.Fatalf("V marked %d pads, want the 3 with samples", len(s.m().marked))
+	}
+	s.shows("marked 3 pads")
+	s.press("V")
+	if len(s.m().marked) != 0 {
+		t.Errorf("V again left %d marked", len(s.m().marked))
+	}
+	s.press("V", "esc")
+	if len(s.m().marked) != 0 {
+		t.Errorf("Esc left %d marked", len(s.m().marked))
 	}
 }

@@ -156,6 +156,13 @@ var ErrNoUnit = errors.New("no unit")
 // again after the link is lost.
 type Connect func() (app.Unit, io.Closer, error)
 
+// OpenOffline opens a folder of projects on this computer as a unit, to work without one. The
+// note says what was found there.
+type OpenOffline func(dir string) (unit app.Unit, closer io.Closer, note string, err error)
+
+// probeTicks is how many ticks pass between looks for a unit while working offline.
+const probeTicks = connectTicks * 4
+
 // connectTicks is how many ticks pass between attempts to find a unit.
 const connectTicks = 8
 
@@ -309,8 +316,19 @@ type Model struct {
 	target int
 
 	// connect finds a unit when there is none; closer closes the one in use.
-	connect        Connect
-	closer         io.Closer
+	connect Connect
+	closer  io.Closer
+	// offline is the folder of projects on this computer worked on in place of a unit, ""
+	// when connected to one. openOffline opens such a folder; probe says whether a unit is
+	// plugged in, and unitBack that it was found while working offline.
+	offline      string
+	openOffline  OpenOffline
+	probe        func() bool
+	probing      bool
+	unitBack     bool
+	startOffline string
+	// previewWas is where pads played before going offline, which plays them on this computer.
+	previewWas     bool
 	connecting     bool
 	connectedFrame int
 	lost           bool
@@ -438,6 +456,14 @@ func NewConnecting(connect Connect, player app.Player, store Store) Model {
 	return m
 }
 
+// WithOffline lets the UI work on a folder of projects when no unit is plugged in: o on the
+// waiting screen chooses the folder, and start (when set) opens one at once. probe, when
+// set, tells it a unit was plugged in meanwhile.
+func (m Model) WithOffline(open OpenOffline, probe func() bool, start string) Model {
+	m.openOffline, m.probe, m.startOffline = open, probe, start
+	return m
+}
+
 // persist writes the state if it changed since it was last written.
 func (m *Model) persist() {
 	if m.store == nil {
@@ -526,8 +552,12 @@ type (
 		unit   app.Unit
 		closer io.Closer
 		err    error
+		// offline is the folder opened in place of a unit, and note what was found in it.
+		offline, note string
 	}
-	factsMsg struct {
+	// unitSeenMsg says whether a unit is plugged in, looked for while working offline.
+	unitSeenMsg bool
+	factsMsg    struct {
 		key   factKey
 		facts app.PadFacts
 		err   error
@@ -597,6 +627,9 @@ func tick() tea.Cmd {
 }
 
 func (m Model) Init() tea.Cmd {
+	if m.unit == nil && m.startOffline != "" && m.openOffline != nil {
+		return tea.Batch(m.goOffline(m.startOffline), tick())
+	}
 	if m.unit == nil {
 		return tea.Batch(m.tryConnect(), tick())
 	}
@@ -827,6 +860,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tick()
 		}
+		if m.offline != "" && m.probe != nil && !m.unitBack && !m.probing && m.frame%probeTicks == 0 {
+			m.probing = true
+			probe := m.probe
+			return m, tea.Batch(tick(), func() tea.Msg { return unitSeenMsg(probe()) })
+		}
 		if m.frame%pollTicks == 0 && m.busy == "" && !m.polling {
 			m.polling = true
 			return m, tea.Batch(tick(), m.poll())
@@ -836,6 +874,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.polled(msg)
 	case connectMsg:
 		return m.connected(msg)
+	case unitSeenMsg:
+		m.probing = false
+		if bool(msg) && m.offline != "" && !m.unitBack {
+			m.unitBack = true
+			m.message = "An SP-404MKII is plugged in: U leaves offline mode and connects to it (your offline work is saved)"
+		}
+		return m, nil
 	case indexMsg:
 		return m.indexed(msg)
 	case loadedMsg:
@@ -1173,12 +1218,49 @@ func (m Model) connected(msg connectMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	m.log.Info("connected", "port", msg.unit.PortName())
+	m.log.Info("connected", "port", msg.unit.PortName(), "offline", msg.offline)
 	m.unit, m.closer = app.NewRouted(msg.unit), msg.closer
 	m.waitErr, m.lost = "", false
 	m.connectedFrame = m.frame
 	m.busy = "reading the unit"
+	if msg.offline != "" {
+		// The pads have no unit to sound on: they play on this computer.
+		m.offline, m.unitBack = msg.offline, false
+		m.mem.OfflineDir = msg.offline
+		m.previewWas, m.previewLocal = m.previewLocal, true
+		return m, m.load(fmt.Sprintf("◌ Working offline on %s: %s", display(msg.offline), msg.note))
+	}
 	return m, m.load(fmt.Sprintf("● Connected to the SP-404MKII on %s", msg.unit.PortName()))
+}
+
+// goOffline opens a folder of projects on this computer in place of a unit.
+func (m Model) goOffline(dir string) tea.Cmd {
+	open := m.openOffline
+	return func() tea.Msg {
+		unit, closer, note, err := open(dir)
+		if err != nil {
+			return connectMsg{err: fmt.Errorf("working offline on %s: %w", dir, err)}
+		}
+		return connectMsg{unit: unit, closer: closer, offline: dir, note: note}
+	}
+}
+
+// leaveOffline saves and closes the folder worked on offline, and connects to the unit.
+func (m Model) leaveOffline() (tea.Model, tea.Cmd) {
+	m.log.Info("leaving offline mode", "folder", m.offline)
+	if m.closer != nil {
+		m.closer.Close()
+	}
+	m.stopListening()
+	m.unit, m.closer, m.snap = nil, nil, nil
+	m.offline, m.unitBack, m.previewLocal = "", false, m.previewWas
+	m.busy, m.polling, m.connecting = "", false, true
+	m.prompt, m.picker, m.palette, m.browser, m.chromatic, m.toggles = nil, nil, nil, nil, nil, nil
+	m.pattern, m.patterns, m.patPreview = nil, map[int][]app.PatternRow{}, map[proto.PadIndex]*app.PatternDetail{}
+	m.tree, m.infos = nil, map[string]fileInfo{}
+	clear(m.indexes)
+	m.message = "left offline mode; connecting to the unit"
+	return m, m.tryConnect()
 }
 
 // lose handles the link to the unit going away: everything on screen is dropped, and the UI

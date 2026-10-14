@@ -29,6 +29,9 @@ type State struct {
 	// kind and source ("files|SD:", "tags|SD:"): the search opens on it again.
 	Searches map[string]SearchMemory `json:"searches,omitempty"`
 
+	// OfflineDir is the folder of projects last worked on offline.
+	OfflineDir string `json:"offlineDir,omitempty"`
+
 	AssignRoot     string   `json:"assignRoot"`
 	AssignExpanded []string `json:"assignExpanded"`
 	AssignAt       string   `json:"assignAt"`

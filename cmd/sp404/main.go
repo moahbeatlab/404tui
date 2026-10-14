@@ -53,11 +53,14 @@ type options struct {
 	logPath  string
 	// audio is the playback method: oto (the default) or afplay.
 	audio string
+	// offline is a folder of projects on this computer to work on without the unit.
+	offline string
 }
 
 func main() {
 	var o options
 	flag.StringVar(&o.port, "port", "", "serial port (default: the first SP-404MKII found)")
+	flag.StringVar(&o.offline, "offline", "", "work offline on a folder of projects on this computer (exported projects, each a folder with PADCONF.BIN)")
 	flag.BoolVar(&o.simulate, "sim", false, "talk to a simulated device instead of the hardware")
 	flag.BoolVar(&o.verbose, "v", false, "write a debug log: every transaction with its timing, port discovery, connects and UI actions")
 	flag.BoolVar(&o.trace, "trace", false, "also log every message on the wire, as hex (implies -v)")
@@ -225,7 +228,8 @@ func runUI(o options, l logging) error {
 	} else {
 		l.Warn("no audio output", "err", audioErr)
 	}
-	model := tui.NewConnecting(connector(o, l.Logger), player, tui.DefaultStore()).WithAudio(player, audioErr)
+	model := tui.NewConnecting(connector(o, l.Logger), player, tui.DefaultStore()).WithAudio(player, audioErr).
+		WithOffline(offlineOpener(l.Logger), unitPresent(o), o.offline)
 	if l.path != "" {
 		model = model.WithLogger(l.Logger, l.path)
 		fmt.Fprintln(os.Stderr, "debug log:", l.path)
@@ -301,6 +305,37 @@ func connector(o options, l *slog.Logger) tui.Connect {
 		}
 		l.Info("unit opened", "port", dev.PortName(), "attempt", attempt)
 		return dev, dev, nil
+	}
+}
+
+// offlineOpener opens a folder of projects as a simulated unit, to work without the real one.
+func offlineOpener(l *slog.Logger) tui.OpenOffline {
+	return func(dir string) (app.Unit, io.Closer, string, error) {
+		s, f, err := sim.OpenFolder(dir)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		l.Info("working offline", "folder", f.Dir, "projects", len(f.Projects), "template", f.Template)
+		dev := device.New(s, "offline", options2(l)...)
+		note := fmt.Sprintf("%d projects found", len(f.Projects))
+		if len(f.Projects) == 1 {
+			note = "1 project found"
+		}
+		if !f.Template {
+			note += "; no project from the unit here, so new projects get default settings (export one from the unit to copy its settings)"
+		}
+		return dev, dev, note, nil
+	}
+}
+
+// unitPresent says whether a unit is plugged in, without opening it; nil for the simulation.
+func unitPresent(o options) func() bool {
+	if o.simulate {
+		return nil
+	}
+	return func() bool {
+		ports, err := serialport.Find()
+		return err == nil && len(ports) > 0
 	}
 }
 

@@ -62,6 +62,8 @@ type Sim struct {
 	dirs      map[string]bool
 	handles   map[int32]*handle
 	next      int32
+	// disk is set when the projects are folders on this computer (OpenFolder).
+	disk *folder
 
 	// WrongPadOnFirstPreview reproduces what the unit does: the first preview after the selected
 	// pad changed plays the pad that was selected before, then selects the new one.
@@ -122,7 +124,7 @@ func (s *Sim) AddFile(path string, data []byte) {
 }
 
 func (s *Sim) put(remote string, data []byte) {
-	s.files[remote] = data
+	s.setFile(remote, data)
 	for dir := parent(remote); dir != "" && !s.dirs[dir]; dir = parent(dir) {
 		s.dirs[dir] = true
 	}
@@ -132,8 +134,8 @@ func (s *Sim) put(remote string, data []byte) {
 func (s *Sim) File(path string) ([]byte, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	data, ok := s.files[remote(path)]
-	return data, ok
+	_, ok := s.files[remote(path)]
+	return s.content(remote(path)), ok
 }
 
 // SetSample makes a pad of the current project hold a sample of size bytes.
@@ -276,6 +278,7 @@ func (s *Sim) Write(p []byte) (int, error) {
 			s.handleFile(m.Payload())
 		}
 	}
+	s.flush()
 	s.signal()
 	return len(p), nil
 }
@@ -293,6 +296,8 @@ func (s *Sim) Reopen() {
 func (s *Sim) Close() error {
 	s.mu.Lock()
 	s.closed = true
+	s.handles = map[int32]*handle{}
+	s.flush()
 	s.mu.Unlock()
 	s.signal()
 	return nil
@@ -371,6 +376,7 @@ func (s *Sim) handleControl(p []byte) {
 		}
 		s.control([]byte{proto.ReplyChanged, 0})
 		s.saveProject()
+		s.flushPadconf()
 		s.project = p[1]
 		s.loadProject()
 		if !s.SilentProjectSwitch {
@@ -462,6 +468,10 @@ func (s *Sim) settings(project byte) []byte {
 		words[12+b] = s.bankTempo[b] << 1
 		words[23+b/2] |= s.bankVol[b] << (16 * (b % 2))
 	}
+	if s.disk != nil && int(project) < len(s.disk.words) {
+		w := s.wordsOf(int(project))
+		words = w[:]
+	}
 	p := []byte{proto.ReplyProjectSettings, project, 0}
 	for _, w := range words {
 		p = binary.LittleEndian.AppendUint32(p, w)
@@ -484,7 +494,9 @@ func (s *Sim) samplePath(pad uint16) string {
 
 func (s *Sim) clearPad(pad uint16) {
 	s.blocks[pad] = emptyBlock(pad)
-	delete(s.files, s.samplePath(pad))
+	if _, ok := s.files[s.samplePath(pad)]; ok {
+		s.remove(s.samplePath(pad))
+	}
 }
 
 func (s *Sim) padEdit(pad uint16, reply byte, remove bool) {
@@ -505,14 +517,14 @@ func (s *Sim) moveSample(from, to, mode uint16) {
 		return
 	}
 	a, b := s.blocks[from], s.blocks[to]
-	fa, fb := s.files[s.samplePath(from)], s.files[s.samplePath(to)]
+	fa, fb := s.content(s.samplePath(from)), s.content(s.samplePath(to))
 	hadB := s.hasSample(to)
 	s.clearPad(from)
 	s.clearPad(to)
 	place := func(pad uint16, block, file []byte) {
 		binary.LittleEndian.PutUint16(block[1:], pad)
 		s.blocks[pad] = block
-		s.files[s.samplePath(pad)] = file
+		s.setFile(s.samplePath(pad), file)
 	}
 	place(to, a, fa)
 	if mode == uint16(proto.MoveExchange) && hadB {
@@ -591,7 +603,9 @@ func (s *Sim) patternPads(slot uint16) ([]proto.PadIndex, bool) {
 	if pads, ok := s.patterns[slot]; ok {
 		return pads, true
 	}
-	b, ok := s.files[fmt.Sprintf("%s/PTN/PTN%05d.BIN", s.folder(), slot+1)]
+	path := fmt.Sprintf("%s/PTN/PTN%05d.BIN", s.folder(), slot+1)
+	_, ok := s.files[path]
+	b := s.content(path)
 	if !ok {
 		return nil, false
 	}
@@ -618,7 +632,7 @@ func (s *Sim) eraseFolder() {
 	prefix := s.folder() + "/"
 	for path := range s.files {
 		if strings.HasPrefix(path, prefix) {
-			delete(s.files, path)
+			s.remove(path)
 		}
 	}
 }
@@ -630,7 +644,13 @@ func (s *Sim) saveProject() {
 }
 
 func (s *Sim) loadProject() {
+	if s.disk != nil {
+		s.useWords(int(s.project))
+	}
 	saved := s.files[s.folder()+"/.sim-blocks"]
+	if len(saved) == 0 && s.blocksFromPadconf() {
+		return
+	}
 	for i := range s.blocks {
 		if len(saved) >= (i+1)*blockLen {
 			s.blocks[i] = bytes.Clone(saved[i*blockLen : (i+1)*blockLen])
@@ -743,7 +763,7 @@ func (s *Sim) handleFile(p []byte) {
 			s.status(-1, 9)
 			return
 		}
-		file := s.files[h.path]
+		file := s.content(h.path)
 		chunk := file[min(h.pos, len(file)):min(h.pos+int(second.Uint32()), len(file))]
 		h.pos += len(chunk)
 		for len(chunk) > fileapi.Chunk {
@@ -760,12 +780,12 @@ func (s *Sim) handleFile(p []byte) {
 		if n > len(tail) {
 			return
 		}
-		file := s.files[h.path]
+		file := s.content(h.path)
 		if grow := h.pos + n - len(file); grow > 0 {
 			file = append(file, make([]byte, grow)...)
 		}
 		copy(file[h.pos:], tail[:n])
-		s.files[h.path] = file
+		s.setFile(h.path, file)
 		h.pos += n
 		h.batch += n
 		if second.IsLast() {
@@ -785,13 +805,14 @@ func (s *Sim) handleFile(p []byte) {
 			return
 		}
 		s.dirs[path] = true
+		s.dirChanged(path)
 		s.status(0, 0)
 	case fileapi.OpUnlink:
 		if _, ok := s.files[path]; !ok {
 			s.status(-1, 2)
 			return
 		}
-		delete(s.files, path)
+		s.remove(path)
 		s.status(0, 0)
 	case fileapi.OpRmdir:
 		if !s.dirs[path] || len(s.children(path)) > 0 {
@@ -799,6 +820,7 @@ func (s *Sim) handleFile(p []byte) {
 			return
 		}
 		delete(s.dirs, path)
+		s.dirChanged(path)
 		s.status(0, 0)
 	case fileapi.OpOpenDir:
 		if !s.dirs[path] && path != "" {
@@ -826,10 +848,10 @@ func (s *Sim) handleFile(p []byte) {
 		s.data(first.Int32(), h.entries[h.pos], true)
 		h.pos++
 	case fileapi.OpStat:
-		file, isFile := s.files[path]
+		_, isFile := s.files[path]
 		switch {
 		case isFile:
-			s.data(0, stat(fileapi.ModeFile, len(file)), true)
+			s.data(0, stat(fileapi.ModeFile, s.size(path)), true)
 		case s.dirs[path] || path == "":
 			s.data(0, stat(fileapi.ModeDir, 0), true)
 		default:
@@ -840,7 +862,7 @@ func (s *Sim) handleFile(p []byte) {
 			s.status(-1, 9)
 			return
 		}
-		s.data(first.Int32(), stat(fileapi.ModeFile, len(s.files[h.path])), true)
+		s.data(first.Int32(), stat(fileapi.ModeFile, s.size(h.path)), true)
 	case fileapi.OpRename:
 		if len(tail) < 400 {
 			return
@@ -894,24 +916,34 @@ func (s *Sim) rename(from, to string) {
 		s.status(-1, 2)
 		return
 	}
-	if data, ok := s.files[from]; ok {
-		delete(s.files, from)
+	if _, ok := s.files[from]; ok {
+		data := s.content(from)
+		s.remove(from)
 		s.put(to, data)
 	} else {
-		for path, data := range s.files {
-			if rest, ok := strings.CutPrefix(path, from+"/"); ok {
-				delete(s.files, path)
-				s.files[to+"/"+rest] = data
+		var moving []string
+		for path := range s.files {
+			if strings.HasPrefix(path, from+"/") {
+				moving = append(moving, path)
 			}
+		}
+		for _, path := range moving {
+			data := s.content(path)
+			s.remove(path)
+			s.setFile(to+"/"+strings.TrimPrefix(path, from+"/"), data)
 		}
 		for path := range s.dirs {
 			if rest, ok := strings.CutPrefix(path, from+"/"); ok {
 				delete(s.dirs, path)
 				s.dirs[to+"/"+rest] = true
+				s.dirChanged(path)
+				s.dirChanged(to + "/" + rest)
 			}
 		}
 		delete(s.dirs, from)
 		s.dirs[to] = true
+		s.dirChanged(from)
+		s.dirChanged(to)
 	}
 	s.status(0, 0)
 }

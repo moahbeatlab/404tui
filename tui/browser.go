@@ -26,6 +26,8 @@ const (
 	// the backup folder it is restored from.
 	browseProjectExport
 	browseProjectRestore
+	// browseOffline chooses the folder of projects on this computer to work on offline.
+	browseOffline
 )
 
 // browser is the dialog built on the same tree as the Files section, over the SD card, the
@@ -55,6 +57,13 @@ type browser struct {
 // openBrowser opens the chooser on root with the given folders open, and the cursor on
 // selectPath when that is on screen.
 func (m Model) openBrowser(kind browseKind, root string, expanded []string, selectPath string) (tea.Model, tea.Cmd) {
+	// On this computer, root at the filesystem but open down to the home folder and land there,
+	// so the default is unchanged while /Volumes and the rest of the disk are a step up.
+	if root == localRoot() && len(expanded) == 0 && selectPath == "" {
+		expanded = app.Ancestors(root, localHome())
+		expanded = append(expanded, localHome())
+		selectPath = localHome()
+	}
 	m.browser = &browser{kind: kind, root: root, loading: true, marks: map[string]bool{}}
 	return m, m.loadBrowser(root, expanded, selectPath)
 }
@@ -71,7 +80,11 @@ func (m Model) openAssign(pad proto.PadIndex) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) loadBrowser(root string, expanded []string, at string) tea.Cmd {
-	unit := m.unit
+	var unit app.Storage = m.unit
+	if m.unit == nil {
+		// No unit yet (choosing a folder to work offline on): this computer only.
+		unit = app.Local{}
+	}
 	return func() tea.Msg {
 		m.ops.Lock()
 		defer m.ops.Unlock()
@@ -81,7 +94,10 @@ func (m Model) loadBrowser(root string, expanded []string, at string) tea.Cmd {
 }
 
 func (m Model) loadBrowserDir(root, path string, row int) tea.Cmd {
-	unit := m.unit
+	var unit app.Storage = m.unit
+	if m.unit == nil {
+		unit = app.Local{}
+	}
 	return func() tea.Msg {
 		m.ops.Lock()
 		defer m.ops.Unlock()
@@ -119,6 +135,9 @@ func (m Model) browserKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.stopListening()
 		return m, nil
 	case "t":
+		if m.unit == nil {
+			return m, nil // only this computer without a unit
+		}
 		b.root = nextRoot(b.root)
 		b.tree, b.at, b.loading, b.confirm = nil, 0, true, false
 		return m, m.loadBrowser(b.root, nil, "")
@@ -381,6 +400,9 @@ func (m Model) chosen(b *browser, dir string) (tea.Model, tea.Cmd) {
 		return m.restoreFrom(dir)
 	case browseProjectRestore:
 		return m.planProjectRestore(b.project, dir)
+	case browseOffline:
+		m.message = "opening " + display(dir) + " to work offline"
+		return m, m.goOffline(dir)
 	case browseProjectExport:
 		name := fmt.Sprintf("PROJECT_%02d", b.project+1)
 		if n := app.SanitizeName(m.snap.Projects[b.project]); m.snap.Projects[b.project] != "" {
@@ -419,6 +441,9 @@ func (m Model) browserBox(g geom) string {
 	case browseProjectRestore:
 		title = fmt.Sprintf("Restore project %d from the backup folder…", b.project+1)
 		enter = "Enter reads the backup in the folder in front (the one holding PADCONF.BIN)"
+	case browseOffline:
+		title = "Work offline on the projects in…"
+		enter = "Enter opens the folder in front: one holding exported projects (each a folder with PADCONF.BIN), or one project.\nAn empty folder works too: new projects are made in it."
 	}
 	height := max(min(g.bodyH-10, 20), 5)
 	tree := m.treeRender(b.tree, b.at, height, func(app.Node) string { return " " })

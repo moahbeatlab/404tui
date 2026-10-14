@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"math"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -228,13 +229,24 @@ func (m Model) header() string {
 		label = "  " + m.snap.ProjectName
 	}
 	left := badge + st.bold.Render(label)
-	free := float64(m.snap.FreeKb) / 1024 / 1024
-	left += st.dim.Render(fmt.Sprintf("   %.1f GB free", free))
+	if m.offline == "" {
+		free := float64(m.snap.FreeKb) / 1024 / 1024
+		left += st.dim.Render(fmt.Sprintf("   %.1f GB free", free))
+	}
 
 	// For a few seconds after connecting, say so loudly.
 	right := st.good.Render("●") + " " + st.dim.Render(m.snap.Port)
 	if m.connect != nil && m.frame-m.connectedFrame < 50 {
 		right = st.good.Render("● CONNECTED  " + m.snap.Port)
+	}
+	if m.offline != "" {
+		// Offline is never easy to miss: a badge in the header for as long as it lasts.
+		offline := lipgloss.NewStyle().Background(st.th.warn).Foreground(st.th.cursorFg).Bold(true).Render(" ◌ OFFLINE ")
+		left = badge + " " + offline + st.bold.Render(label)
+		right = st.warn.Render("no unit · saving to " + ansi.Truncate(filepath.Base(m.offline), 24, "…"))
+		if m.unitBack {
+			right = st.hot.Render("unit plugged in: U connects")
+		}
 	}
 	if m.playing {
 		right = st.hot.Render(fmt.Sprintf("▶ %s  ", m.playingPad)) + right
@@ -1329,8 +1341,12 @@ func (m Model) projectsBody(g geom) string {
 			}
 		}
 		card = append(card, st.good.Render("● current"),
-			st.dim.Render("Samples  ")+st.text.Render(fmt.Sprintf("%d of %d pads", samples, len(m.snap.Pads))),
-			st.dim.Render("Free     ")+st.text.Render(fmt.Sprintf("%.1f GB", float64(m.snap.FreeKb)/1024/1024)))
+			st.dim.Render("Samples  ")+st.text.Render(fmt.Sprintf("%d of %d pads", samples, len(m.snap.Pads))))
+		if m.offline == "" {
+			card = append(card, st.dim.Render("Free     ")+st.text.Render(fmt.Sprintf("%.1f GB", float64(m.snap.FreeKb)/1024/1024)))
+		} else {
+			card = append(card, st.dim.Render("Folder   ")+st.warn.Render(display(m.offline)))
+		}
 	} else {
 		card = append(card, st.dim.Render("Not loaded."), st.dim.Render("Enter loads this project."))
 	}
@@ -1353,6 +1369,9 @@ func (m Model) waitingBox() string {
 	}
 	if m.waitErr != "" {
 		lines = append(lines, "", st.warn.Render(m.waitErr))
+	}
+	if m.openOffline != nil {
+		lines = append(lines, "", st.text.Render("Not at the unit? ")+st.accent.Render("o")+st.text.Render(" works offline on a folder of projects on this computer."))
 	}
 	lines = append(lines, "", st.dim.Render("q quit  ·  ? help"))
 	return st.modal.Render(strings.Join(lines, "\n"))

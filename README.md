@@ -1,6 +1,6 @@
 # 404tui
 
-A command-line tool and (in progress) terminal UI for the Roland SP-404MKII, talking to
+A command-line tool and terminal UI for the Roland SP-404MKII, talking to
 the unit over its USB serial link: projects, pads, samples and the files on its storage
 and SD card.
 
@@ -19,73 +19,140 @@ checks sequencing and data handling, not the unit's actual behaviour.
 
     go run ./cmd/sp404                 # the terminal UI (same as `menu`)
     go run ./cmd/sp404 -sim            # the terminal UI against the simulated device
+    go run ./cmd/sp404 -version        # print the version (0.1-alpha)
 
-The UI is laid out after the unit itself:
+The header says `404tui by moahbeatlab` with the version at the top right. A rail down the
+left lists the three sections, **Pads** (`1`), **Files** (`2`) and **Projects** (`3`), and
+under them the banks or file sources of the section you are in. Dialogs open over the
+screen. A History panel on the right keeps what happened, with times.
 
-- Navigation is a rail down the left: the four sections, and under them the banks or the
-  file sources of the section you are in.
-- **Pads** is a 4×4 grid in the unit's own arrangement (pad 1 at the top left), with the
-  selected pad's details beside or below it: length, trim and chop points, its settings,
-  which patterns play it, and a progress bar while it sounds on the unit. `S` edits its
-  settings (or the marked pads') in a dialog, and `,` `.` step its level. The cursor
-  follows pads you hit on the unit, and a sounding pad lights up.
-- **Connecting:** the UI starts even with no unit, shows a waiting screen, connects by itself
-  when you plug it in (the header shows `● CONNECTED` and the port), and goes back to waiting
-  and reconnects if the cable is pulled.
-- **Bank tempo and volume** sit in a bar above the pad grid (and on Patterns): `< >` step the
-  tempo by 1 BPM, `- +` the volume by 5, and `b` opens a dialog to type both.
+### Connecting
+
+The UI starts even with no unit, shows a waiting screen, connects by itself when you plug
+it in (the header shows `● CONNECTED` and the port), and goes back to waiting and
+reconnects if the cable is pulled. Long operations (restore, export, erase, copies) show a
+progress bar with a line per step.
+
+### Pads
+
+- A 4×4 grid in the unit's own arrangement (pad 1 at the top left). Tiles grow taller when
+  there is room. The detail panel beside the grid shows the selected pad: length, trim and
+  chop points, its settings, which patterns play it, where its sample came from, and a
+  progress bar while it sounds on the unit. The cursor follows pads you hit on the unit.
+- Each tile shows flag letters, lit when a setting is on: `G` gate, `L` loop, `O` one shot,
+  `R` reverse, `S` BPM sync, `V` vinyl, plus `~` for ping-pong and `M1`… for a mute group.
+  The detail panel explains them. Pads going to
+  BUS 1 are marked in blue, BUS 2 in red, and the bank bar counts them.
+- `S` edits a pad's settings (or the marked pads') in a dialog, `,` `.` step its level, and
+  `t` sets gate, loop, BPM sync, vinyl, one shot, fixed velocity or bus FX on the marked pads
+  (or the whole bank) at once.
+- **Bank tempo and volume** sit in a bar above the grid: `< >` step the tempo by 1 BPM,
+  `- +` the volume, and `b` opens a dialog to type both.
 - **Copying pads:** `c` copies the selected pad (or the marked ones, which keep their layout)
-  to any pad in any bank, through the same bank-letter and pad-number picker. The unit has
-  no copy command, so the sample is read and written onto the other pad together with its
-  settings and chop points. Pads that already hold a sample are replaced only after a second
-  Enter.
-- **Patterns** shows the 16 pattern slots the same way; Enter opens a step grid, and `b`
-  moves a pattern's pads to another bank.
-- **Files** browses the SD card, the unit's storage or this computer. The rail shows the
-  **target bank**; `[` `]` change it. Enter on an audio file opens a pad picker on that
-  bank's next free pad, so Enter, Enter assigns it. Type a bank letter and a pad number
-  (`C`, `7`) to go elsewhere. `v` marks several files to fill free pads in order, and Space
-  listens first. `Ctrl-A` turns on autoplay in the file list, the search and the `a` dialog: a file plays as the cursor rests on it, and moving on stops the old sound at once. `/` searches every audio file in the source by keyword (words narrow it,
-  folders count, the first search indexes the source and later ones are instant): Enter
-  assigns, Tab shows the file in the tree, Ctrl-L listens.
-- **Assigning from Pads:** `a` opens a file dialog for the selected pad, with the file tree,
-  file details and Space to listen. It reopens exactly where you left it (source, open
-  folders, highlighted file), also after restarting; that and the Files tree position,
-  bank and theme are kept in `state.json` in your config folder.
-- **Working with files:** `v` marks a file or folder, `V` every file in the folder, and `J` all
-  the junk macOS and Windows leave on a card (`._` files, `.DS_Store`, `Thumbs.db`). On the
-  marked files (or the one in front): `d` deletes (SD card only, after a question that counts
-  what is in them), `c` copies and `x` cuts to the clipboard, and `p` pastes into the folder in
-  front. The clipboard survives `t`, so you can copy from the card to this computer and back.
-  Nothing is overwritten. `N` makes a folder. `Ctrl-D`/`Ctrl-U` move half a page and `}`/`{`
-  (or `Alt-n`/`Alt-p`) jump to the next or previous folder.
-- **Pads on this computer:** `o` switches where Enter and a click play a pad: on the unit (the
-  default) or through this computer's speakers like a file preview (the sample is read from the
-  unit, cut to the part the pad plays; no pitch, envelope or effects). `P` plays once on the computer.
-- **Chromatic:** `C` on a pad turns the keyboard into a piano that plays its sample on this
-  computer: `a s d f g h j k l ; '` are the white keys and `w e t y u o p` the black ones, `a`
-  being the sample as it is and each key after it a semitone higher. `z`/`x` shift an octave
-  down or up, Enter plays the last note again, Space stops it. The pitch changes with the speed,
-  as on the unit, so a higher note is shorter; one note sounds at a time and plays to its end
-  (a terminal does not report a key being let go).
-- **Projects** switches and renames projects. `e` exports the project (all its files) to the
-  SD card or this computer, and `R` restores a backup folder (the one holding `PADCONF.BIN`)
-  over the project: it reads and checks the backup, shows what will be erased, and asks
-  before it writes anything.
+  to any pad in any bank. The unit has no copy command, so the sample is read and written
+  onto the other pad together with its settings and chop points. Pads that already hold a
+  sample are replaced only after a second Enter. `x` picks a pad up, `p` moves it, `s` swaps.
+- **Assigning:** `a` opens a file dialog for the selected pad, with the file tree, file
+  details and Space to listen. It reopens where you left it, also after restarting (that,
+  the Files position, bank and theme are kept in `state.json` in your config folder). Marked
+  files fill free pads in order; `#` instead puts each file on the pad its name starts with
+  (`09_…` goes on pad 9), and a tempo in the name (`…_124_…`) sets the pad's BPM. `EMPTY`
+  placeholder files are skipped.
+- **Where samples came from:** a pad's name holds only 16 characters, so the file it was
+  assigned from is noted in `SD:404tui-origins.json` and shown as **From** in the detail
+  panel. `F` finds it for pads with no note, by matching names and lengths against the tag
+  index, and comparing the audio when several files fit.
+- **On this computer:** `o` switches where Enter plays a pad: on the unit (the default) or
+  through this computer's speakers (the sample is read from the unit and cut to the part the
+  pad plays). `P` plays once on the computer.
+- **Chromatic:** `C` turns the keyboard into a piano that plays the pad's sample on this
+  computer: `a s d f g h j k l ; '` are the white keys and `w e t y u o p` the black ones,
+  `a` being the sample as it is. `z`/`x` shift an octave. The pitch changes with the speed,
+  as on the unit; one note sounds at a time.
+- `e` exports the bank (one WAV per pad plus a `samples.json` with each pad's settings), and
+  `R` restores an export onto a bank you choose. `p` there also makes a pattern: every
+  restored pad starts together on beat 1 and is held for 2 bars.
 
-Keys are vim-style (`h j k l`, `g`/`G`, `[`/`]` for banks, `1`-`4` for sections); `:`
-opens a command palette, `?` lists every key, `/` finds by name, `T` changes the colour
-theme, and the mouse works for tabs, banks, pads, rows and the wheel. Bank export writes
-one WAV per pad plus a `samples.json` with each pad's settings. `e` and `R` open the same
-folder tree as Files (SD card, unit storage or this computer) to choose where to export to
-or which export to restore; `/` types a path instead. Restore then asks which bank to put
-the pads on (the one they came from is chosen; pads that would be replaced are counted and
-need a second Enter). `p` there also makes a pattern: after the restore, every restored pad
-starts together on beat 1 and is held for 2 bars; you choose the pattern slot next (a slot
-that holds a pattern needs a second Enter).
+### Patterns
 
-Other commands: `ports`, `status`, `pads`, `ls [path]`. Add `-v` to log the session and
-`-port` to pick a serial port.
+The bank's 16 pattern slots are a panel under the pads; `Tab` moves between the two, and
+the highlighted pattern is previewed on the right.
+
+- `N` makes a pattern in the first free slot: every sample of the bank on beat 1, 2 bars.
+  `c` or `x` pick a pattern up and `p` puts it in a slot of any bank (a second `p` replaces
+  one), `v` marks and `d` deletes.
+- `P` or Space plays the pattern **on this computer**, in a loop, with a playhead over the
+  steps. Each pad is played with its level, pan, pitch, reverse, gate and loop; the unit's
+  envelope, effects, vinyl and time stretch are not reproduced. A change to a pad or a note
+  is heard at once.
+- Enter opens the step editor. Notes are blocks as tall as their velocity and as wide as
+  they last. `h j k l` move, Enter puts a note in or takes it out, `,` `.` change the
+  velocity by 1 and `<` `>` by 10, `*` sets it to 127, `+` `-` make a note a step longer or
+  shorter, and `u` undoes. `b` moves the pattern's pads to another bank.
+- **Mute and solo:** `m` mutes a pad and `s` solos it (in Pads and in the editor). They only
+  change what this computer plays: muted rows show a red `MUTE`, soloed ones a green `SOLO`,
+  and pads you do not hear are greyed. `S` in the editor saves the pattern **as you hear it**
+  into a slot you choose, without the muted pads (or with only the soloed ones), so the unit
+  plays that version too.
+
+### Files
+
+- Browses the SD card, the unit's storage or this computer (`t` switches). The rail shows
+  the **target bank**; `[` `]` change it. Enter on an audio file opens a pad picker on that
+  bank's next free pad, so Enter, Enter assigns it; type a bank letter and a pad number
+  (`C`, `7`) to go elsewhere. Space listens, and `Ctrl-A` turns on autoplay.
+- `v` marks a file or folder, `V` every file in the folder, and `J` the junk macOS and
+  Windows leave on a card. On the marked files: `d` deletes (SD card only, after a question),
+  `c` copies and `x` cuts, `p` pastes (also into another source), `n` renames and `N` makes
+  a folder. `Ctrl-D`/`Ctrl-U` page, `}`/`{` jump between folders, `Shift-Tab` folds all.
+- **Tags:** `i` indexes the folder in front in the background: words from file and folder
+  names become tags, saved on the card in `SD:404tui-index.json.gz`, so the index is built
+  once and kept up to date, not rebuilt at every start. `*` favourites the marked files or
+  folders, and `+` adds your own tags (a word with `-` in front takes one off). The same keys
+  work in the `a` dialog.
+- **Finding:** `/` searches every audio file of the source by keyword, and `s` searches tags
+  only, with the tags listed in a sidebar (`Tab` switches between the two). Enter assigns,
+  `Ctrl-O` shows the file in the tree. `f` finds a folder by name; favourite folders come
+  first.
+
+### Projects
+
+Switch (Enter) and rename (`n`) projects. `e` exports a project (all its files) to the SD
+card or this computer, `R` restores a backup folder (the one holding `PADCONF.BIN`) after
+showing what will be erased, and `X` erases a project, leaving it empty. Each asks first.
+
+### Offline
+
+Away from the unit, keep working on your projects on this computer:
+
+1. At home, export the projects you want (Projects, `e`, "This computer") into one folder,
+   for example `~/404-projects`. Each export is a project folder as the unit keeps it
+   (`PADCONF.BIN`, `SMPL/`, `PTN/`).
+2. Without the unit, the waiting screen offers `o`: choose that folder (or one project
+   folder in it), or start with `sp404 -offline ~/404-projects`. A yellow **◌ OFFLINE**
+   badge stays in the header for as long as you work this way.
+3. Everything works as usual on those projects: assign, pad settings, patterns, playback on
+   this computer. Each project folder is a project slot, in the order of the folder names,
+   and an empty slot becomes a new folder (`PROJECT_02`, …) once you put something in it.
+   Every change is saved to the folders as you make it. Samples to assign can be anywhere
+   on this computer; the `SD/` folder next to the projects stands in for the SD card.
+4. Back at the unit, plug it in: the header says so, and `U` leaves offline mode and
+   connects. Then restore a project from its folder with Projects, `R`.
+
+A new project copies the settings of a project exported from the unit when the folder has
+one; otherwise it gets the documented defaults, some of which are guesses, so export at
+least one project from the unit into the folder first.
+
+### Everywhere
+
+Keys are vim-style (`h j k l`, `g`/`G`, `[`/`]` for banks). `?` lists every key, `:` opens a
+command palette, `r` reads everything from the unit again, `T` steps through the colour
+themes (Hardware, Ocean, Paper; the choice is kept), and the mouse works for tabs, banks,
+pads, rows and the wheel. `q` asks before quitting; `Ctrl-C` quits at once.
+
+Other commands: `ports`, `status`, `pads`, `ls [path]`, `doctor`, `beep`, `play <file>`.
+Add `-v` to log the session, `-port` to pick a serial port and `-offline <folder>` to work
+without the unit.
 
 ## Layout
 
@@ -94,14 +161,14 @@ Other commands: `ports`, `status`, `pads`, `ls [path]`. Add `-v` to log the sess
 | `proto`, `proto/septet`, `proto/fileapi` | Wire format, with no I/O |
 | `device` | Session with the unit over a `Port`: transactions, events, files, import, render |
 | `serialport` | Finds and opens the unit's USB serial port |
-| `sim` | In-memory SP-404MKII, for tests and for working without the hardware |
-| `formats` | SMP, WAV, AIFF, FLAC, MP3 decoding with resampling to 48 kHz, patterns |
+| `sim` | In-memory SP-404MKII, for tests, and over folders of projects for offline work |
+| `formats` | SMP, WAV, AIFF, FLAC, MP3 decoding with resampling to 48 kHz, patterns, `PADCONF.BIN` |
 | `app` | What the tool does with a unit, apart from how it is shown: assign, export/restore, patterns, file tree |
 | `playback` | Plays samples on this computer's speakers |
 | `tui` | The Bubble Tea UI |
 | `cmd/sp404` | The command |
 
-Tests: `go test ./...`
+Tests: `go test -race ./...`
 
 ## Licence
 
