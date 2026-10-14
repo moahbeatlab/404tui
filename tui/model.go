@@ -77,6 +77,8 @@ const (
 	// promptDeleteFiles confirms deleting prompt.paths from the card; promptMkdir names a new
 	// folder in prompt.path.
 	promptDeleteFiles
+	// promptTags asks which tags to add to prompt.paths.
+	promptTags
 	promptMkdir
 	// promptFindFolder jumps to the next folder in the list whose name contains the text.
 	promptFindFolder
@@ -100,9 +102,10 @@ type prompt struct {
 	plan *app.RestorePlan
 	// paths and count are what a file delete is about to remove; reopen is the pad of the assign
 	// dialog the question came from.
-	paths  []string
-	count  app.Count
-	reopen *proto.PadIndex
+	paths   []string
+	folders []string // promptTags: folders to tag next to the files in paths
+	count   app.Count
+	reopen  *proto.PadIndex
 	// fields and field are the bank dialog's tempo and volume, and the one being typed.
 	fields [2]string
 	field  int
@@ -189,6 +192,12 @@ type Model struct {
 	chromatic *chromatic
 	// indexes are the file indexes searches use, one per source, kept until files change.
 	indexes map[string]*app.Index
+	// tags is the tag index kept at the root of the SD card, once it has been read; tagJob is
+	// the indexing run in the background, if one has started.
+	tags   *app.TagIndex
+	tagJob *tagJob
+	// searchJobs are the builds of the search indexes in the background, by source.
+	searchJobs map[string]*tagJob
 
 	snap *app.Snapshot
 	// bank is the bank in front on Pads and Patterns; pad is the cursor within a bank.
@@ -261,8 +270,11 @@ type Model struct {
 	factsBusy  bool
 	usage      map[proto.PadIndex][]proto.PadIndex
 	usageState int // 0: not read, 1: reading, 2: in hand
-	infos      map[string]fileInfo
-	infoBusy   bool
+	// stripBusy is set while the patterns of the bank are read in the background, for the strip
+	// under the pads.
+	stripBusy bool
+	infos     map[string]fileInfo
+	infoBusy  bool
 
 	// lastAssigned is the pad a file last went onto; a file goes to the next free one.
 	lastAssigned proto.PadIndex
@@ -332,6 +344,7 @@ func New(unit app.Unit, player app.Player, store Store) Model {
 		patterns:   map[int][]app.PatternRow{},
 		patMarks:   map[int]bool{},
 		patConfirm: -1,
+		searchJobs: map[string]*tagJob{},
 		root:       app.CardRoot,
 		fileMarks:  map[string]bool{},
 		facts:      map[factKey]padFacts{},
@@ -445,6 +458,8 @@ type (
 		bank int
 		rows []app.PatternRow
 		err  error
+		// quiet is set for patterns read for the strip under the pads, not waited for.
+		quiet bool
 	}
 	patternMsg struct {
 		detail *app.PatternDetail
@@ -746,7 +761,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	model, cmd := m.update(msg)
 	if updated, ok := model.(Model); ok {
 		updated = updated.logMessage()
+		var start tea.Cmd
+		updated, start = updated.autoIndex(nil)
 		updated.persist()
+		if start != nil {
+			return updated, tea.Batch(cmd, start)
+		}
 		return updated, cmd
 	}
 	return model, cmd
@@ -850,6 +870,16 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 	case chromaticMsg:
 		return m.chromaticLoaded(msg)
+	case tagsSavedMsg:
+		return m.tagsWritten(msg)
+	case askTagsMsg:
+		return m.tagsRead(msg)
+	case userTagsMsg:
+		return m.userTagged(msg)
+	case tagsLoadedMsg:
+		return m.tagsLoaded(msg)
+	case tagIndexMsg:
+		return m.tagIndexed(msg)
 	case listenMsg:
 		if msg.stale {
 			break
@@ -872,6 +902,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case patternsMsg:
+		if msg.quiet {
+			m.stripBusy = false
+			if msg.err == nil {
+				m.patterns[msg.bank] = msg.rows
+			}
+			return m, m.wanted()
+		}
 		m.busy = ""
 		if msg.err != nil {
 			m.message = "reading patterns failed: " + msg.err.Error()
@@ -995,7 +1032,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.usageState = 0
 		}
-		return m, nil
+		return m, m.wanted()
 	case infoMsg:
 		m.infoBusy = false
 		m.infos[msg.path] = msg.info
@@ -1132,8 +1169,24 @@ func (m *Model) wanted() tea.Cmd {
 			m.usageState = 1
 			return m.usageCmd(m.snap.Project)
 		}
+		// The strip of patterns under the pads: read quietly, the pads stay in use.
+		if m.patterns[m.bank] == nil && !m.stripBusy {
+			m.stripBusy = true
+			return m.loadPatternsQuietly(m.bank)
+		}
 	}
 	return nil
+}
+
+// loadPatternsQuietly reads the patterns of a bank without holding the screen: the answer is
+// not about something the user waits for.
+func (m Model) loadPatternsQuietly(bank int) tea.Cmd {
+	return func() tea.Msg {
+		m.ops.Lock()
+		defer m.ops.Unlock()
+		rows, err := app.LoadPatterns(m.unit, bank)
+		return patternsMsg{bank: bank, rows: rows, err: err, quiet: true}
+	}
 }
 
 // loadFilesTree lists the files root with the folders that were open last time open again,

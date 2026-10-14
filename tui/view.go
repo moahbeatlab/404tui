@@ -89,7 +89,11 @@ func (m Model) View() string {
 	default:
 		main = m.withRail(g, fit(m.body(g), g.bodyH))
 	}
-	screen := strings.Join([]string{m.header(), m.rule(), fit(main, g.bodyH), m.statusBar()}, "\n")
+	parts := []string{m.header(), m.rule(), fit(main, g.bodyH)}
+	if m.tagJob.active() {
+		parts = append(parts, m.indexBar())
+	}
+	screen := strings.Join(append(parts, m.statusBar()), "\n")
 	return lipgloss.NewStyle().MaxWidth(m.width).Render(screen)
 }
 
@@ -253,21 +257,23 @@ func (m Model) statusBar() string {
 	st := m.st
 	chip := func(key, what string) string { return st.accent.Render(key) + st.dim.Render(" "+what) }
 	var chips []string
+	// The bar holds the few keys used most; the rest is under ? and, in the Files view, grouped
+	// in the Details panel.
 	switch m.section {
 	case secPads:
-		chips = []string{chip("Enter", "preview on "+map[bool]string{true: "computer", false: "unit"}[m.previewLocal]), chip("o", "switch"), chip("C", "chromatic"), chip("a", "assign"), chip("v", "mark"), chip("n", "rename"), chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("e", "export"), chip("[ ]", "bank")}
+		chips = []string{chip("Enter", "preview on "+map[bool]string{true: "computer", false: "unit"}[m.previewLocal]), chip("a", "assign"), chip("v", "mark"), chip("t", "set"), chip("c", "copy"), chip("d", "delete"), chip("[ ]", "bank")}
 	case secPatterns:
-		chips = []string{chip("Enter", "open"), chip("N", "new"), chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("p", "put"), chip("P", "play"), chip("v", "mark"), chip("b", "retarget"), chip("[ ]", "bank"), chip("Esc", "back")}
+		chips = []string{chip("Enter", "open"), chip("N", "new"), chip("P", "play"), chip("d", "delete"), chip("c", "copy"), chip("[ ]", "bank")}
 	case secFiles:
 		if len(m.fileMarks) > 0 || len(m.clip) > 0 {
-			chips = []string{chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("p", "paste"), chip("n", "rename"), chip("Enter", "assign"), chip("v", "mark"), chip("V", "folder"), chip("J", "junk"), chip("u", "unmark all"), chip("Esc", "clear")}
+			chips = []string{chip("Enter", "assign"), chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("p", "paste"), chip("u", "unmark"), chip("Esc", "clear")}
 			break
 		}
-		chips = []string{chip("Enter", "assign"), chip("v", "mark"), chip("J", "junk"), chip("c", "copy"), chip("x", "move"), chip("p", "paste"), chip("d", "delete"), chip("N", "folder"), chip("/", "search"), chip("f", "find folder"), chip("[ ]", "target bank"), chip("Space", "listen"), chip("^A", "autoplay"), chip("v", "mark"), chip("Tab", "open"), chip("n", "rename"), chip("m", "move"), chip("t", "source")}
+		chips = []string{chip("Enter", "assign"), chip("v", "mark"), chip("*", "favourite"), chip("/", "search"), chip("s", "tags"), chip("f", "folder"), chip("i", "index"), chip("Space", "listen")}
 	case secProjects:
 		chips = []string{chip("Enter", "select"), chip("n", "rename"), chip("e", "export"), chip("R", "restore"), chip("X", "erase")}
 	}
-	chips = append(chips, chip(":", "commands"), chip("?", "help"), chip("q", "quit"))
+	chips = append(chips, chip("?", "all keys"), chip("q", "quit"))
 	line := strings.Join(chips, st.faint.Render("  "))
 	if m.autoplay {
 		line = st.good.Render("♫ autoplay") + st.faint.Render("  │  ") + line
@@ -441,12 +447,62 @@ func (m Model) padsBody(g geom) string {
 	detail := m.padDetail(g)
 	bar := m.bankBar() + "\n\n"
 	if g.side {
+		// The patterns of the bank sit under the pads, when there is room for them.
+		if strip := m.patternStrip(g); strip != "" && g.bodyH-g.top-lipgloss.Height(grid) >= lipgloss.Height(strip)+1 {
+			grid = lipgloss.JoinVertical(lipgloss.Left, grid, "", strip)
+		}
 		return bar + lipgloss.JoinHorizontal(lipgloss.Top, grid, "  ", m.sideColumn(g, detail))
 	}
 	if g.detailH < 4 {
 		return bar + grid
 	}
 	return bar + grid + "\n\n" + detail
+}
+
+// patternStrip shows the 16 pattern slots of the bank on show under the pads: a slot that
+// holds a pattern with how many pads it plays, and the ones that play the pad in front picked
+// out. It is empty until the patterns are read.
+func (m Model) patternStrip(g geom) string {
+	rows := m.patterns[m.bank]
+	if rows == nil || g.gridW < 40 {
+		return ""
+	}
+	st := m.st
+	used := map[proto.PadIndex]bool{}
+	if m.usageState == 2 {
+		for _, slot := range m.usage[m.padRow().Pad] {
+			used[slot] = true
+		}
+	}
+	const perRow = 8
+	cell := max((g.gridW-4)/perRow, 7)
+	var lines []string
+	for start := 0; start < len(rows); start += perRow {
+		var line string
+		for _, r := range rows[start:min(start+perRow, len(rows))] {
+			num := fmt.Sprint(int(r.Slot.Index())%proto.PadsPerBank + 1)
+			text := fmt.Sprintf("%2s ·", num)
+			style := st.faint
+			if r.Exists {
+				text = fmt.Sprintf("%2s ■%d", num, len(r.Pads))
+				style = st.text
+				if used[r.Slot] {
+					style = st.warn
+				}
+			}
+			line += style.Render(padTo(text, cell))
+		}
+		lines = append(lines, line)
+	}
+	title := fmt.Sprintf("Patterns · bank %c", 'A'+m.bank)
+	if n := len(used); n > 0 {
+		verb := "play"
+		if n == 1 {
+			verb = "plays"
+		}
+		title += fmt.Sprintf(" · %s %s this pad", plural(n, "pattern"), verb)
+	}
+	return m.box(title, strings.Join(lines, "\n"), g.gridW, len(lines)+2, false)
 }
 
 // bankBar is the line above the grids: the bank's tempo and volume, and how to change them.
@@ -845,7 +901,7 @@ func (m Model) filesBody(g geom) string {
 	}
 	detailW := g.bodyW - g.listW - 1
 	list := m.box(title, m.treeLines(g.bodyH-2), g.listW, g.bodyH, true)
-	detail := m.box("Details", m.fileDetail(g.bodyH-2, detailW-2), detailW, g.bodyH, false)
+	detail := m.box("Details", m.withKeyGuide(m.fileDetail(g.bodyH-2, detailW-2), filesKeyGuide, g.bodyH-2, detailW-2), detailW, g.bodyH, false)
 	return lipgloss.JoinHorizontal(lipgloss.Top, list, " ", detail)
 }
 
@@ -858,6 +914,8 @@ func (m Model) treeLines(height int) string {
 			return m.st.warn.Render(m.clipMarker(n.Path))
 		case n.Path == m.listening:
 			return m.st.hot.Render("♪")
+		case m.favouriteMark(n.Path) != "":
+			return m.favouriteMark(n.Path)
 		}
 		return " "
 	})
@@ -913,7 +971,7 @@ func (m Model) treeRender(tree *app.Tree, at, height int, markOf func(app.Node) 
 
 func (m Model) fileDetail(height, width int) string {
 	st := m.st
-	var lines []string
+	lines := m.indexLines(width)
 	free, _ := proto.PadFromBankPad(uint16(m.target), uint16(m.nextFree(m.target)))
 	lines = append(lines, st.dim.Render("Target  ")+st.accent.Render(fmt.Sprintf("bank %c · next free %s", 'A'+m.target, free)), st.dim.Render("[ ] changes it; it follows the last pad you assigned"), "")
 	if n := len(m.fileMarks); n > 0 {
@@ -934,7 +992,11 @@ func (m Model) fileDetail(height, width int) string {
 	if node.Dir {
 		kind = "Folder"
 	}
-	lines = append(lines, st.accent.Render(node.Name), st.dim.Render(kind+" · "+display(node.Path)), "")
+	lines = append(lines, st.accent.Render(node.Name), st.dim.Render(kind+" · "+display(node.Path)))
+	if tags := m.tags.Tags(node.Path); len(tags) > 0 && !node.Dir {
+		lines = append(lines, st.dim.Render("tags ")+st.good.Render(ansi.Truncate(strings.Join(tags, " "), width-6, "…")))
+	}
+	lines = append(lines, "")
 	switch {
 	case isAudio(node.Name):
 		lines = append(lines, m.audioInfo(node, width)...)
@@ -1082,6 +1144,9 @@ func (m Model) promptBox() string {
 		title = fmt.Sprintf("Rename %s", p.pads[0])
 	case promptRenameProject:
 		title = fmt.Sprintf("Rename project %d", p.project+1)
+	case promptTags:
+		title = fmt.Sprintf("Tag %s", plural(len(p.paths), "file"))
+		hint = "words add tags, -word takes one off  ·  "
 	case promptRenameFile:
 		title = fmt.Sprintf("Rename %s", app.Base(p.path))
 	case promptBulkRename:
@@ -1173,8 +1238,11 @@ func (m Model) promptBox() string {
 		}
 		return st.modal.Render(st.bold.Render("Delete "+what+"?") + "\n\n" + st.dim.Render("y delete   n/Esc keep"))
 	}
+	if p.kind == promptTags {
+		return m.tagsPromptBox(p)
+	}
 	if p.kind == promptFindFolder && m.tree != nil {
-		return m.folderFinderBox(m.geom(), m.tree.Rows(), p.buffer, p.choice, "Find a folder in "+rootName(m.root))
+		return m.folderFinderBox(m.geom(), m.tree.Rows(), m.indexes[m.root], p.buffer, p.choice, "Find a folder in "+rootName(m.root))
 	}
 	return st.modal.Width(min(m.width-4, 72)).Render(st.bold.Render(title) + "\n\n" + st.accent.Render("> ") + p.buffer + "█" + "\n\n" + st.dim.Render(hint+"Enter apply  ·  Esc cancel"))
 }
@@ -1439,19 +1507,22 @@ func (m Model) pickerGrid() string {
 // folderFinderBox is the whole-dialog folder finder, laid out like the file search: the
 // text typed, then the open folders matching it as two columns (name, and the folder it is
 // in) with the chosen one highlighted, and its full path below.
-func (m Model) folderFinderBox(g geom, rows []app.Node, input string, choice int, title string) string {
+func (m Model) folderFinderBox(g geom, rows []app.Node, ix *app.Index, input string, choice int, title string) string {
 	st := m.st
 	width := min(m.width-6, 112)
 	height := max(min(g.bodyH-9, 20), 5)
-	matches := folderMatches(rows, input)
+	matches := folderChoices(rows, ix, input)
 	choice = clamp(choice, 0, max(len(matches)-1, 0))
 
-	status := st.dim.Render(fmt.Sprintf("%d of %d open folders", len(matches), len(folderMatches(rows, ""))))
+	status := st.dim.Render(fmt.Sprintf("%d of %d folders", len(matches), len(folderChoices(rows, ix, ""))))
+	if ix == nil {
+		status += st.faint.Render("  · only the open ones: i indexes folders so that all are found")
+	}
 	var list []string
 	from, to := window(len(matches), choice, height-1)
 	nameW := 12
 	for i := from; i < to; i++ {
-		nameW = max(nameW, ansi.StringWidth(rows[matches[i]].Name)+1)
+		nameW = max(nameW, ansi.StringWidth(matches[i].Name)+1)
 	}
 	nameW = min(nameW, (width-6)*55/100)
 	dirW := max(width-nameW-8, 6)
@@ -1459,7 +1530,7 @@ func (m Model) folderFinderBox(g geom, rows []app.Node, input string, choice int
 		list = append(list, st.faint.Render(" "+padTo("Name", nameW)+"  Folder"))
 	}
 	for i := from; i < to; i++ {
-		r := rows[matches[i]]
+		r := matches[i]
 		name := ansi.Truncate(r.Name+"/", nameW, "…")
 		dir := cutStart(display(app.Dir(r.Path)), dirW)
 		if i == choice {
@@ -1469,11 +1540,11 @@ func (m Model) folderFinderBox(g geom, rows []app.Node, input string, choice int
 		list = append(list, st.accent.Render(" "+padTo(name, nameW))+"  "+st.dim.Render(dir))
 	}
 	if len(matches) == 0 {
-		list = []string{st.dim.Render(" no open folder matches (open more with Tab)")}
+		list = []string{st.dim.Render(" no folder matches")}
 	}
 	full := ""
 	if len(matches) > 0 {
-		full = st.dim.Render(ansi.Truncate(display(rows[matches[choice]].Path), width-4, "…"))
+		full = st.dim.Render(ansi.Truncate(display(matches[choice].Path), width-4, "…"))
 	}
 	lines := []string{
 		st.bold.Render(title), "",
@@ -1545,4 +1616,55 @@ func (m Model) historyBox(g geom, height int) string {
 		lines = []string{st.faint.Render("nothing yet")}
 	}
 	return m.box("History", strings.Join(lines, "\n"), g.detailW, height, false)
+}
+
+// keyGroup is a line of keys in a guide: what they are for, and the keys with what each does.
+type keyGroup struct {
+	label string
+	keys  [][2]string
+}
+
+// filesKeyGuide groups the keys of the Files view by what they are for.
+var filesKeyGuide = []keyGroup{
+	{"Assign", [][2]string{{"Enter", "assign"}, {"v", "mark"}, {"V", "mark folder"}, {"J", "mark junk"}, {"u", "unmark"}}},
+	{"Edit", [][2]string{{"c", "copy"}, {"x", "move"}, {"p", "paste"}, {"d", "delete"}, {"n", "rename"}, {"N", "new folder"}}},
+	{"Tag", [][2]string{{"*", "favourite"}, {"+", "add tags (-word removes)"}}},
+	{"Find", [][2]string{{"/", "names"}, {"s", "tags"}, {"f", "folder"}, {"i", "index folder"}, {"r", "refresh"}}},
+	{"View", [][2]string{{"Space", "listen"}, {"^A", "autoplay"}, {"[ ]", "target bank"}, {"t", "source"}, {"Tab", "open"}, {"h", "close"}}},
+}
+
+// withKeyGuide puts a guide of the keys at the bottom of a panel that is height rows tall
+// and width wide, when there is room left under the text.
+func (m Model) withKeyGuide(text string, groups []keyGroup, height, width int) string {
+	st := m.st
+	var guide []string
+	for _, grp := range groups {
+		line := ""
+		first := true
+		emit := func() {
+			label := strings.Repeat(" ", 8)
+			if first {
+				label = padTo(grp.label, 8)
+			}
+			guide = append(guide, st.faint.Render(label)+line)
+			line, first = "", false
+		}
+		for _, k := range grp.keys {
+			item := st.accent.Render(k[0]) + st.dim.Render(" "+k[1])
+			if line != "" && ansi.StringWidth(line)+ansi.StringWidth(item)+2 > width-8 {
+				emit()
+			}
+			if line != "" {
+				line += "  "
+			}
+			line += item
+		}
+		emit()
+	}
+	used := strings.Count(text, "\n") + 1
+	if used+len(guide)+1 > height {
+		return text
+	}
+	blank := strings.Repeat("\n", height-used-len(guide))
+	return text + blank + strings.Join(guide, "\n")
 }

@@ -3,8 +3,10 @@ package app
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/moahbeatlab/404tui/formats"
+	"github.com/moahbeatlab/404tui/proto/fileapi"
 )
 
 // IndexLimits bound how much of a source is walked, so a huge folder cannot hang the search.
@@ -39,30 +41,74 @@ type Index struct {
 	// Truncated is set when a limit stopped the walk early.
 	Truncated bool
 	Folders   int
+	// Unreadable are folders the unit would not list, even after trying again: what is in
+	// them is missing from the index.
+	Unreadable []string
+	// Saved is when the saved index this was made from was written; empty for a walk of the
+	// card made now.
+	Saved   string
+	folders []string
+}
+
+// ListDirRetry reads a folder, and tries twice more after a short wait when the unit
+// answers with an error: it can be busy for a moment, for example just after another
+// program let go of it.
+func ListDirRetry(list func(string) ([]fileapi.DirEntry, error), dir string) ([]fileapi.DirEntry, error) {
+	entries, err := list(dir)
+	for try := 0; err != nil && try < 2; try++ {
+		time.Sleep(time.Duration(150*(try+1)) * time.Millisecond)
+		entries, err = list(dir)
+	}
+	return entries, err
+}
+
+// IndexProgress is how far a walk has come: Queued folders are known and still to read, so
+// the share done is Folders/(Folders+Queued).
+type IndexProgress struct {
+	Folders, Queued, Files, Unreadable int
+	Current                            string
 }
 
 // BuildIndex walks root breadth first and lists its audio files. A folder that cannot be
 // read is skipped.
 func BuildIndex(s Storage, root string, lim IndexLimits) (*Index, error) {
-	ix := &Index{Root: root}
+	ix, _, err := BuildIndexWith(s.ListDir, root, lim, nil, nil)
+	return ix, err
+}
+
+// BuildIndexWith is BuildIndex with the folder reading, the progress and a way to stop in
+// the caller's hands: list reads one folder (a caller can take a lock in it, or wait, so
+// that other work on the unit goes on), progress is told after each folder, and the walk
+// ends when cancel returns true, giving what it found so far with completed false.
+func BuildIndexWith(list func(string) ([]fileapi.DirEntry, error), root string, lim IndexLimits,
+	progress func(IndexProgress), cancel func() bool) (ix *Index, completed bool, err error) {
+	ix = &Index{Root: root}
 	type item struct {
 		path  string
 		depth int
 	}
 	queue := []item{{root, 0}}
 	first := true
+	prog := IndexProgress{}
+	completed = true
 	for len(queue) > 0 {
+		if cancel != nil && cancel() {
+			completed = false
+			break
+		}
 		cur := queue[0]
 		queue = queue[1:]
 		if ix.Folders >= lim.MaxFolders {
 			ix.Truncated = true
 			break
 		}
-		entries, err := s.ListDir(cur.path)
-		if err != nil {
+		entries, lerr := ListDirRetry(list, cur.path)
+		if lerr != nil {
 			if first {
-				return nil, err
+				return nil, false, lerr
 			}
+			ix.Unreadable = append(ix.Unreadable, cur.path)
+			prog.Unreadable++
 			continue
 		}
 		first = false
@@ -85,8 +131,12 @@ func BuildIndex(s Storage, root string, lim IndexLimits) (*Index, error) {
 				ix.Files = append(ix.Files, IndexedFile{Path: path, Rel: rel, lower: strings.ToLower(rel)})
 			}
 		}
+		if progress != nil {
+			prog.Folders, prog.Queued, prog.Files, prog.Current = ix.Folders, len(queue), len(ix.Files), cur.path
+			progress(prog)
+		}
 	}
-	return ix, nil
+	return ix, completed, nil
 }
 
 // Search lists the files whose path (folders included) contains every word of query, case
@@ -140,5 +190,26 @@ func Ancestors(root, path string) []string {
 	for dir := Dir(path); dir != root && dir != "" && dir != "/" && dir != CardRoot; dir = Dir(dir) {
 		out = append([]string{dir}, out...)
 	}
+	return out
+}
+
+// FolderPaths lists every folder that holds an indexed file, and the folders above them
+// down to the root, sorted. It is worked out once.
+func (ix *Index) FolderPaths() []string {
+	if ix.folders != nil {
+		return ix.folders
+	}
+	seen := map[string]bool{}
+	for _, f := range ix.Files {
+		for dir := Dir(f.Path); dir != ix.Root && dir != "" && dir != "/" && dir != CardRoot && !seen[dir]; dir = Dir(dir) {
+			seen[dir] = true
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for dir := range seen {
+		out = append(out, dir)
+	}
+	sort.Slice(out, func(i, j int) bool { return NaturalLess(strings.ToLower(out[i]), strings.ToLower(out[j])) })
+	ix.folders = out
 	return out
 }

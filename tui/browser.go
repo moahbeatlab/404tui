@@ -128,6 +128,9 @@ func (m Model) browserKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	rows := b.tree.Rows()
 	here := b.tree.Folder(b.at)
+	if name == "s" && b.kind == browseAssign {
+		return m.openTagSearch(b.root, true, b.pad)
+	}
 	if name == "/" && b.kind == browseAssign {
 		return m.openSearch(b.root, true, b.pad)
 	}
@@ -227,6 +230,23 @@ func (m Model) browserKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else {
 				m.message = "assign in order: each file takes the next free pad"
 			}
+		}
+	case "*":
+		if b.kind == browseAssign {
+			// The dialog stays open, with its marks and cursor: nothing to reopen.
+			return m.toggleFavourite(m.dialogFilesToTag(b), nil)
+		}
+	case "+":
+		if b.kind == browseAssign {
+			pad := b.pad
+			files := m.dialogFilesToTag(b)
+			m.browser = nil
+			m.stopListening()
+			return m.askTags(files, &pad)
+		}
+	case "i":
+		if b.kind == browseAssign {
+			return m.startTagIndex(b.tree.Folder(b.at))
 		}
 	case "V":
 		if b.kind == browseAssign {
@@ -380,7 +400,7 @@ func (m Model) chosen(b *browser, dir string) (tea.Model, tea.Cmd) {
 func (m Model) browserBox(g geom) string {
 	st, b := m.st, m.browser
 	if b.finding && b.tree != nil {
-		return m.folderFinderBox(g, b.tree.Rows(), b.findText, b.findAt, "Find a folder in "+rootName(b.root))
+		return m.folderFinderBox(g, b.tree.Rows(), m.indexes[b.root], b.findText, b.findAt, "Find a folder in "+rootName(b.root))
 	}
 	if b.kind == browseAssign {
 		return m.assignBox(g)
@@ -459,6 +479,8 @@ func (m Model) assignBox(g geom) string {
 			return st.good.Render("✓")
 		case n.Path == m.listening:
 			return st.hot.Render("♪")
+		case m.favouriteMark(n.Path) != "":
+			return m.favouriteMark(n.Path)
 		}
 		return " "
 	}
@@ -493,10 +515,11 @@ func (m Model) assignKeys(b *browser, width int) string {
 		{"Enter", "assign"}, {"Space", "listen"},
 		{"Ctrl-A", "autoplay " + onOff(m.autoplay)}, {"v", "mark"},
 		{"V", "mark folder"}, {"J", "mark junk"},
-		{"#", "by number " + onOff(m.byNumber)}, {"d", "delete"}, {"n", "rename"},
+		{"*", "favourite"}, {"+", "add tags"},
+		{"i", "index folder"}, {"#", "by number " + onOff(m.byNumber)}, {"d", "delete"}, {"n", "rename"},
 		{"Tab / l", "open folder"},
 		{"S-Tab", "fold all"}, {"t", "source"},
-		{"/", "search"}, {"f", "find folder"},
+		{"/", "search"}, {"s", "search tags"}, {"f", "find folder"},
 		{"p", "type a path"}, {"Esc", "close"},
 	}
 	var out []string
@@ -509,6 +532,7 @@ func (m Model) assignKeys(b *browser, width int) string {
 			{"d", "delete"}, {"u", "unmark all"},
 			{"Enter", "assign audio"}, {"v", "mark"},
 			{"V", "mark folder"}, {"J", "mark junk"},
+			{"*", "favourite"}, {"+", "add tags"},
 			{"#", "by number " + onOff(m.byNumber)}, {"f", "find folder"}, {"Esc", "close"},
 		}
 	}
@@ -532,21 +556,29 @@ func (m Model) browserFind(b *browser, key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		b.finding = false
 	case "up", "down", "ctrl+n", "ctrl+p", "tab", "shift+tab":
-		b.findAt = stepChoice(b.findAt, len(folderMatches(b.tree.Rows(), b.findText)), name)
+		b.findAt = stepChoice(b.findAt, len(folderChoices(b.tree.Rows(), m.indexes[b.root], b.findText)), name)
 	case "backspace":
 		if r := []rune(b.findText); len(r) > 0 {
 			b.findText, b.findAt = string(r[:len(r)-1]), 0
 		}
 	case "enter":
 		b.finding = false
-		rows := b.tree.Rows()
-		matches := folderMatches(rows, b.findText)
+		matches := folderChoices(b.tree.Rows(), m.indexes[b.root], b.findText)
 		if len(matches) == 0 {
-			b.findNote = fmt.Sprintf("no open folder named like %q", b.findText)
+			b.findNote = fmt.Sprintf("no folder named like %q", b.findText)
 			break
 		}
-		b.at = matches[clamp(b.findAt, 0, len(matches)-1)]
-		b.findNote = rows[b.at].Name + ": h or Tab collapses it"
+		c := matches[clamp(b.findAt, 0, len(matches)-1)]
+		for i, r := range b.tree.Rows() {
+			if r.Path == c.Path {
+				b.at = i
+				b.findNote = c.Name + ": h or Tab collapses it"
+				return m, nil
+			}
+		}
+		// Not open yet: the folders above it are listed and the cursor lands on it.
+		b.tree, b.loading, b.confirm = nil, true, false
+		return m, m.loadBrowser(b.root, append(app.Ancestors(b.root, c.Path), c.Path), c.Path)
 	default:
 		if key.Type == tea.KeyRunes || key.Type == tea.KeySpace {
 			b.findText += string(key.Runes)

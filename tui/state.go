@@ -25,9 +25,20 @@ type State struct {
 	FilesExpanded []string `json:"filesExpanded"`
 	FilesAt       string   `json:"filesAt"`
 
+	// Searches is what was last typed in each search, and the file that was in front, by
+	// kind and source ("files|SD:", "tags|SD:"): the search opens on it again.
+	Searches map[string]SearchMemory `json:"searches,omitempty"`
+
 	AssignRoot     string   `json:"assignRoot"`
 	AssignExpanded []string `json:"assignExpanded"`
 	AssignAt       string   `json:"assignAt"`
+}
+
+// SearchMemory is one remembered search.
+type SearchMemory struct {
+	Query string `json:"query"`
+	// At is the path of the result that was in front.
+	At string `json:"at,omitempty"`
 }
 
 // Store keeps the State. Saving is best effort: losing it costs only a remembered position.

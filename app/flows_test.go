@@ -2,6 +2,8 @@ package app_test
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +13,7 @@ import (
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/proto"
+	"github.com/moahbeatlab/404tui/proto/fileapi"
 )
 
 func wav(frames int, seed int16) []byte {
@@ -816,5 +819,350 @@ func TestMixPatternPlacesNotesAtTheirTicks(t *testing.T) {
 	at := 12000
 	if mix.Samples[0] != 1000 || mix.Samples[at*2] != 1000 || mix.Samples[(at-1)*2] != 0 {
 		t.Errorf("notes are not where their ticks put them")
+	}
+}
+
+func TestTagsFromNamesAndFolders(t *testing.T) {
+	got := app.TagsFor("SD:Samples/Synth/House/124_Bass_Wobble1.wav", "SD:Samples")
+	want := []string{"synth", "house", "124", "bass", "wobble1", "wobble"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("tags %v, want %v", got, want)
+	}
+	got = app.TagsFor("SD:Kits/124_Kit05/09_CHat_124_HDK_05.wav", "SD:")
+	for _, w := range []string{"124", "chat", "hat"} {
+		if !slices.Contains(got, w) {
+			t.Errorf("%v lacks %q", got, w)
+		}
+	}
+	if slices.Contains(got, "09") || slices.Contains(got, "05") {
+		t.Errorf("counting numbers kept: %v", got)
+	}
+	if slices.Contains(app.TagsFor("SD:a/Cmin_pad.wav", "SD:"), "cmin") == false || !app.IsKeyTag("f#m") {
+		t.Error("keys are not tagged")
+	}
+}
+
+func TestTagsAreCleanedUp(t *testing.T) {
+	has := func(path string, want ...string) {
+		t.Helper()
+		got := app.TagsFor(path, "SD:")
+		for _, w := range want {
+			if !slices.Contains(got, w) {
+				t.Errorf("%s: %v lacks %q", path, got, w)
+			}
+		}
+	}
+	lacks := func(path string, not ...string) {
+		t.Helper()
+		got := app.TagsFor(path, "SD:")
+		for _, w := range not {
+			if slices.Contains(got, w) {
+				t.Errorf("%s: %v has %q", path, got, w)
+			}
+		}
+	}
+	has("SD:IMPORT/09 tech house/h2-house-chords-2/Chord One Shots/Fs_035.wav", "oneshot", "f#", "chords", "tech", "house")
+	lacks("SD:IMPORT/09 tech house/h2-house-chords-2/Chord One Shots/Fs_035.wav", "import", "h2", "one", "shots", "fs")
+	has("SD:IMPORT/_collections/bass_loops/x.wav", "loop", "bass")
+	lacks("SD:IMPORT/_collections/bass_loops/x.wav", "loops", "collections")
+	has("SD:IMPORT/h/Hits/crash_09.wav", "oneshot", "crash")
+	lacks("SD:IMPORT/x/h2-core_series_vol2/128_Kit01.wav", "h2", "vol2", "kit01")
+	has("SD:IMPORT/x/h2-core_series_vol2/128_Kit01.wav", "128", "core", "series")
+	// A song's name is an artist and a title: only its folders are tags.
+	has("SD:IMPORT/Songs/Defected/Daft Punk -- One More Time.mp3", "songs", "defected")
+	lacks("SD:IMPORT/Songs/Defected/Daft Punk -- One More Time.mp3", "daft", "punk", "time")
+}
+
+func TestIndexTagsWalksAFolderAndKeepsTheRest(t *testing.T) {
+	tree := map[string][]fileapi.DirEntry{
+		"SD:Packs":       {{Name: "House", Kind: fileapi.DtDir}, {Name: "readme.txt"}},
+		"SD:Packs/House": {{Name: "124_bass_a.wav"}, {Name: "snare.wav"}},
+	}
+	list := func(dir string) ([]fileapi.DirEntry, error) { return tree[dir], nil }
+	ix := app.NewTagIndex()
+	ix.Files["SD:Other/old.wav"] = "old"
+	ix.Files["SD:Packs/House/gone.wav"] = "stale"
+	var last app.TagProgress
+	n, done, err := app.IndexTags(list, "SD:Packs", ix, app.DefaultLimits, func(p app.TagProgress) { last = p }, nil)
+	if err != nil || !done || n != 2 {
+		t.Fatalf("%d files, done %v, %v", n, done, err)
+	}
+	if last.Folders != 2 || last.Queued != 0 {
+		t.Errorf("progress %+v", last)
+	}
+	if _, stale := ix.Files["SD:Packs/House/gone.wav"]; stale {
+		t.Error("a file that is gone stayed in the index")
+	}
+	if ix.Files["SD:Other/old.wav"] != "old" {
+		t.Error("a folder that was not walked lost its entries")
+	}
+	if hits := ix.Search("bass 124"); len(hits) != 1 || hits[0] != "SD:Packs/House/124_bass_a.wav" {
+		t.Errorf("search %v", hits)
+	}
+	if len(ix.Folders) != 1 || ix.Folders[0] != "SD:Packs" {
+		t.Errorf("folders %v", ix.Folders)
+	}
+}
+
+func TestAFolderTheUnitFailsOnIsTriedAgainAndNeverEmptiesTheIndex(t *testing.T) {
+	calls := map[string]int{}
+	list := func(dir string) ([]fileapi.DirEntry, error) {
+		calls[dir]++
+		switch dir {
+		case "SD:Packs":
+			return []fileapi.DirEntry{{Name: "Flaky", Kind: fileapi.DtDir}, {Name: "Dead", Kind: fileapi.DtDir}}, nil
+		case "SD:Packs/Flaky":
+			if calls[dir] < 3 {
+				return nil, errors.New("media busy")
+			}
+			return []fileapi.DirEntry{{Name: "a.wav"}}, nil
+		}
+		return nil, errors.New("media busy")
+	}
+	ix := app.NewTagIndex()
+	ix.Files["SD:Packs/Dead/old.wav"] = "old"
+	var last app.TagProgress
+	n, done, err := app.IndexTags(list, "SD:Packs", ix, app.DefaultLimits, func(p app.TagProgress) { last = p }, nil)
+	if err != nil || !done || n != 1 {
+		t.Fatalf("%d files, done %v, %v", n, done, err)
+	}
+	if calls["SD:Packs/Flaky"] != 3 {
+		t.Errorf("the flaky folder was read %d times", calls["SD:Packs/Flaky"])
+	}
+	if last.Unreadable != 1 {
+		t.Errorf("unreadable %d", last.Unreadable)
+	}
+	if ix.Files["SD:Packs/Dead/old.wav"] != "old" {
+		t.Error("what was known of a folder that failed was dropped")
+	}
+}
+
+func TestTagsAreWorkedOutAgainWhenTheIndexIsLoaded(t *testing.T) {
+	ix := app.NewTagIndex()
+	ix.Folders = []string{"SD:IMPORT"}
+	ix.Files["SD:IMPORT/Kit/_Loops/128_Bass.wav"] = "old tags from an old version"
+	ix.Files["SD:IMPORT/Kit/05_EMPTY.wav"] = "empty"
+	ix.Files["SD:ELSEWHERE/a.wav"] = "kept as it is"
+	ix.Retag()
+	if got := ix.Files["SD:IMPORT/Kit/_Loops/128_Bass.wav"]; got != "kit loops loop 128 bass" && got != "loop 128 bass kit" && !strings.Contains(got, "128") {
+		t.Errorf("tags %q", got)
+	}
+	if strings.Contains(ix.Files["SD:IMPORT/Kit/_Loops/128_Bass.wav"], "old") {
+		t.Error("the old tags stayed")
+	}
+	if _, ok := ix.Files["SD:IMPORT/Kit/05_EMPTY.wav"]; ok {
+		t.Error("a placeholder stayed in the index")
+	}
+	if ix.Files["SD:ELSEWHERE/a.wav"] != "kept as it is" {
+		t.Error("a file outside the indexed folders was changed")
+	}
+}
+
+func TestSavedIndexIsSmallAndGivesTheSearchIndexBack(t *testing.T) {
+	s := &memStorage{files: map[string][]byte{}}
+	ix := app.NewTagIndex()
+	ix.Folders = []string{"SD:Packs"}
+	for i := 0; i < 500; i++ {
+		ix.Files[fmt.Sprintf("SD:Packs/House/124_Kit%03d/%02d_bass_loop_124.wav", i/20, i%20)] = "x"
+	}
+	if err := ix.Save(s); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(s.files[app.TagIndexPath]); n == 0 || n > 6000 {
+		t.Errorf("the saved index is %d bytes for 500 files", n)
+	}
+	back, err := app.LoadTagIndex(s)
+	if err != nil || len(back.Files) != 500 || back.Updated == "" {
+		t.Fatalf("%d files back, updated %q, %v", len(back.Files), back.Updated, err)
+	}
+	if hits := app.IndexFromTags(back, "SD:Packs").Search("bass 124", 10); len(hits) != 10 {
+		t.Errorf("search found %d", len(hits))
+	}
+	if got := app.IndexFromTags(back, "SD:Packs"); got.Saved != back.Updated || got.Folders != 25 {
+		t.Errorf("saved %q, folders %d", got.Saved, got.Folders)
+	}
+}
+
+// memStorage is a card in memory, enough for the index file.
+type memStorage struct{ files map[string][]byte }
+
+func (m *memStorage) ListDir(string) ([]fileapi.DirEntry, error) { return nil, nil }
+func (m *memStorage) Rename(from, to string) error {
+	m.files[to] = m.files[from]
+	delete(m.files, from)
+	return nil
+}
+func (m *memStorage) ReadFile(p string) ([]byte, error)  { return m.files[p], nil }
+func (m *memStorage) WriteFile(p string, d []byte) error { m.files[p] = d; return nil }
+func (m *memStorage) Mkdir(string) error                 { return nil }
+func (m *memStorage) Unlink(p string) error              { delete(m.files, p); return nil }
+func (m *memStorage) Rmdir(string) error                 { return nil }
+func (m *memStorage) Stat(p string) (fileapi.FileStat, bool, error) {
+	_, ok := m.files[p]
+	return fileapi.FileStat{}, ok, nil
+}
+func (m *memStorage) ReadPrefix(p string, n uint32) ([]byte, bool, error) {
+	d, ok := m.files[p]
+	return d[:min(len(d), int(n))], ok, nil
+}
+
+func TestUserTagsAreKeptApartAndSurviveIndexing(t *testing.T) {
+	ix := app.NewTagIndex()
+	ix.Folders = []string{"SD:Packs"}
+	ix.Files["SD:Packs/a/kick.wav"] = "a kick"
+	ix.Files["SD:Packs/a/snare.wav"] = "a snare"
+	if n := ix.AddUserTags([]string{"SD:Packs/a/kick.wav", "SD:Elsewhere/wow.wav"}, []string{"Favourite", "very punchy"}); n != 2 {
+		t.Fatalf("%d files changed", n)
+	}
+	if got := ix.Files["SD:Packs/a/kick.wav"]; !strings.Contains(got, "favourite") || !strings.Contains(got, "very-punchy") || !strings.Contains(got, "kick") {
+		t.Errorf("tags %q", got)
+	}
+	// A file outside the indexed folders can be found by what was given it.
+	if hits := ix.Search("favourite"); len(hits) != 2 {
+		t.Errorf("found %v", hits)
+	}
+	// Indexing again works the names out again and keeps what the user added.
+	list := func(dir string) ([]fileapi.DirEntry, error) {
+		if dir == "SD:Packs" {
+			return []fileapi.DirEntry{{Name: "a", Kind: fileapi.DtDir}}, nil
+		}
+		return []fileapi.DirEntry{{Name: "kick.wav"}, {Name: "snare.wav"}}, nil
+	}
+	if _, _, err := app.IndexTags(list, "SD:Packs", ix, app.DefaultLimits, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !ix.HasUserTag("SD:Packs/a/kick.wav", "favourite") || !strings.Contains(ix.Files["SD:Packs/a/kick.wav"], "favourite") {
+		t.Errorf("a tag was lost by indexing: %q", ix.Files["SD:Packs/a/kick.wav"])
+	}
+	// They are saved and read back, and removing one takes it off the file.
+	s := &memStorage{files: map[string][]byte{}}
+	if err := ix.Save(s); err != nil {
+		t.Fatal(err)
+	}
+	back, err := app.LoadTagIndex(s)
+	if err != nil || !back.HasUserTag("SD:Elsewhere/wow.wav", "favourite") {
+		t.Fatalf("not read back: %v", err)
+	}
+	if n := back.RemoveUserTags([]string{"SD:Packs/a/kick.wav"}, []string{"favourite"}); n != 1 {
+		t.Errorf("%d removed", n)
+	}
+	if got := back.Files["SD:Packs/a/kick.wav"]; strings.Contains(got, "favourite") || !strings.Contains(got, "very-punchy") || !strings.Contains(got, "kick") {
+		t.Errorf("after removing: %q", got)
+	}
+	if app.CleanTag("  Fav Sound! ") != "fav-sound" {
+		t.Errorf("clean tag %q", app.CleanTag("  Fav Sound! "))
+	}
+}
+
+func TestCloneSharesNothingWithTheIndexOnShow(t *testing.T) {
+	ix := app.NewTagIndex()
+	ix.Folders = []string{"SD:Packs"}
+	ix.Files["SD:Packs/a.wav"] = "a"
+	ix.AddUserTags([]string{"SD:Packs/a.wav"}, []string{"favourite"})
+	c := ix.Clone()
+	c.AddUserTags([]string{"SD:Packs/a.wav"}, []string{"loopy"})
+	c.RemoveUserTags([]string{"SD:Packs/a.wav"}, []string{"favourite"})
+	c.Files["SD:Packs/new.wav"] = "new"
+	c.Folders[0] = "SD:Changed"
+	if !ix.HasUserTag("SD:Packs/a.wav", "favourite") || ix.HasUserTag("SD:Packs/a.wav", "loopy") {
+		t.Errorf("the original was changed through the copy: %v", ix.User)
+	}
+	if _, ok := ix.Files["SD:Packs/new.wav"]; ok || ix.Folders[0] != "SD:Packs" {
+		t.Error("the original's files or folders were changed through the copy")
+	}
+}
+
+func TestTaggingManyFilesAtOnceKeepsEachFilesOwnTags(t *testing.T) {
+	ix := app.NewTagIndex()
+	ix.Folders = []string{"SD:Packs"}
+	var paths []string
+	for i := 0; i < 200; i++ {
+		p := fmt.Sprintf("SD:Packs/kit/%03d_loop_124.wav", i)
+		paths = append(paths, p)
+		ix.Files[p] = "kit loop 124"
+	}
+	if n := ix.AddUserTags(paths, []string{"favourite", "favourite", "", "Wobbly Bass"}); n != 200 {
+		t.Fatalf("%d changed", n)
+	}
+	// The same words again change nothing; a file already tagged is not counted.
+	if n := ix.AddUserTags(paths, []string{"favourite"}); n != 0 {
+		t.Errorf("%d changed the second time", n)
+	}
+	for _, p := range paths {
+		got := ix.Files[p]
+		if !strings.Contains(got, "kit loop 124") || !strings.Contains(got, "favourite") || !strings.Contains(got, "wobbly-bass") {
+			t.Fatalf("%s: %q", p, got)
+		}
+	}
+	if n := ix.RemoveUserTags(paths[:100], []string{"favourite"}); n != 100 {
+		t.Errorf("%d removed", n)
+	}
+	if got := ix.UserTagCounts(); len(got) != 2 || got[0].Count != 200 && got[1].Count != 200 {
+		t.Errorf("counts %v", got)
+	}
+	// Removing a tag a file never had, or from files the index does not know, is harmless.
+	if n := ix.RemoveUserTags([]string{"SD:Nowhere/x.wav"}, []string{"favourite"}); n != 0 {
+		t.Errorf("%d removed from an unknown file", n)
+	}
+}
+
+func TestAWalkKeepsTheTagsGivenWhileItRan(t *testing.T) {
+	walked := app.NewTagIndex()
+	walked.Folders = []string{"SD:Packs"}
+	walked.Files["SD:Packs/a.wav"] = "a"
+	newest := walked.Clone()
+	newest.AddUserTags([]string{"SD:Packs/a.wav"}, []string{"favourite"})
+	walked.UseUserTagsOf(newest)
+	if !walked.HasUserTag("SD:Packs/a.wav", "favourite") || !strings.Contains(walked.Files["SD:Packs/a.wav"], "favourite") {
+		t.Errorf("the tag given meanwhile was lost: %v %q", walked.User, walked.Files["SD:Packs/a.wav"])
+	}
+	// Taking one off meanwhile counts too.
+	newest.RemoveUserTags([]string{"SD:Packs/a.wav"}, []string{"favourite"})
+	walked.UseUserTagsOf(newest)
+	if walked.HasUserTag("SD:Packs/a.wav", "favourite") || strings.Contains(walked.Files["SD:Packs/a.wav"], "favourite") {
+		t.Errorf("a tag taken off meanwhile came back: %q", walked.Files["SD:Packs/a.wav"])
+	}
+}
+
+func TestFolderTagsReachEveryFileBelowAndGoWhenTakenOff(t *testing.T) {
+	ix := app.NewTagIndex()
+	ix.Folders = []string{"SD:Packs"}
+	for _, p := range []string{"SD:Packs/a/x/1.wav", "SD:Packs/a/2.wav", "SD:Packs/b/3.wav"} {
+		ix.Files[p] = "own"
+	}
+	if n := ix.AddFolderTags([]string{"SD:Packs/a"}, []string{"Best Of"}); n != 1 {
+		t.Fatalf("%d changed", n)
+	}
+	if hits := ix.Search("best-of"); len(hits) != 2 {
+		t.Errorf("found %v", hits)
+	}
+	if !ix.HasUserTag("SD:Packs/a", "best-of") || ix.HasUserTag("SD:Packs/b", "best-of") {
+		t.Error("the folder marker is wrong")
+	}
+	// Written and read back, the folder's tag still reaches its files (and a new file there).
+	s := &memStorage{files: map[string][]byte{}}
+	if err := ix.Save(s); err != nil {
+		t.Fatal(err)
+	}
+	back, err := app.LoadTagIndex(s)
+	if err != nil || len(back.Search("best-of")) != 2 {
+		t.Fatalf("read back: %v %v", err, back.Search("best-of"))
+	}
+	back.Files["SD:Packs/a/new.wav"] = "new"
+	back.Retag()
+	if len(back.Search("best-of")) != 3 {
+		t.Errorf("a file added later has no tag: %v", back.Search("best-of"))
+	}
+	if n := back.RemoveFolderTags([]string{"SD:Packs/a"}, []string{"best-of"}); n != 1 {
+		t.Errorf("%d removed", n)
+	}
+	if hits := back.Search("best-of"); len(hits) != 0 {
+		t.Errorf("still found %v", hits)
+	}
+	// A clone keeps folder tags apart too.
+	c := ix.Clone()
+	c.RemoveFolderTags([]string{"SD:Packs/a"}, []string{"best-of"})
+	if len(ix.Search("best-of")) != 2 {
+		t.Error("the original lost the folder tag through its copy")
 	}
 }

@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"bytes"
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -52,12 +54,18 @@ func (m *memStore) Save(s State) { m.state = s; m.saves++ }
 
 type fakePlayer struct {
 	played  []formats.Sample
+	looped  []formats.Sample
 	stopped int
 	playing bool
 }
 
 func (f *fakePlayer) Play(s formats.Sample) error {
 	f.played = append(f.played, s)
+	f.playing = true
+	return nil
+}
+func (f *fakePlayer) Loop(s formats.Sample) error {
+	f.looped = append(f.looped, s)
 	f.playing = true
 	return nil
 }
@@ -139,6 +147,7 @@ func (s *screen) press(keys ...string) {
 		"ctrl+u":    {Type: tea.KeyCtrlU},
 		"space":     {Type: tea.KeySpace, Runes: []rune{' '}},
 		"ctrl+l":    {Type: tea.KeyCtrlL},
+		"ctrl+o":    {Type: tea.KeyCtrlO},
 		"up":        {Type: tea.KeyUp},
 		"down":      {Type: tea.KeyDown},
 	}
@@ -405,10 +414,10 @@ func TestFilesBrowseMoveRenameAndSearch(t *testing.T) {
 		t.Error("the file was not renamed on the unit")
 	}
 
-	s.press("g", "/")
-	s.shows("Search SD card for audio files")
+	s.press("g", "/", "ctrl+u")
+	s.shows("Search SD card", "Files", "Tags")
 	s.typeText("snare")
-	s.press("tab")
+	s.press("ctrl+o")
 	m := s.m()
 	if node, _ := m.fileNode(); node.Name != "snare.wav" {
 		t.Errorf("search landed on %q", node.Name)
@@ -1130,8 +1139,8 @@ func TestSearchFindsAudioAnywhereOnTheCard(t *testing.T) {
 	for _, f := range []string{"SD:IMPORT/Drums/808 Kick.wav", "SD:IMPORT/Drums/Snare.wav", "SD:IMPORT/Kicks/deep.wav", "SD:EXPORT/old kick take 2.wav"} {
 		s.sim.AddFile(f, wav(480))
 	}
-	s.press("3", "/")
-	s.shows("Search SD card for audio files", "audio files indexed")
+	s.press("3", "/", "ctrl+u")
+	s.shows("Search SD card", "audio files indexed")
 	s.typeText("kick")
 	// The file's own name matches come first, then ones that only match a folder.
 	s.shows("808 Kick.wav", "kick.wav", "old kick take 2.wav", "deep.wav")
@@ -1149,15 +1158,15 @@ func TestSearchFindsAudioAnywhereOnTheCard(t *testing.T) {
 	s.press("esc")
 
 	// Tab shows the file in the tree, with its folders open.
-	s.press("/")
+	s.press("/", "ctrl+u")
 	s.typeText("deep")
-	s.press("tab")
+	s.press("ctrl+o")
 	s.shows("▾ IMPORT/", "▾ Kicks/", "deep.wav")
 	m = s.m()
 	if node, _ := m.fileNode(); node.Name != "deep.wav" {
 		t.Errorf("revealed %q", node.Name)
 	}
-	s.press("/")
+	s.press("/", "ctrl+u")
 	s.typeText("nothing at all")
 	s.shows("nothing matches")
 	s.press("ctrl+u")
@@ -1168,7 +1177,7 @@ func TestSearchFindsAudioAnywhereOnTheCard(t *testing.T) {
 
 func TestSearchListensAndMovesThroughResults(t *testing.T) {
 	s := open(t)
-	s.press("3", "/")
+	s.press("3", "/", "ctrl+u")
 	s.typeText("wav")
 	s.press("down", "ctrl+l")
 	if len(s.player.played) != 1 {
@@ -1186,16 +1195,16 @@ func TestSearchListensAndMovesThroughResults(t *testing.T) {
 
 func TestSearchIsCachedUntilFilesChange(t *testing.T) {
 	s := open(t)
-	s.press("3", "/")
+	s.press("3", "/", "ctrl+u")
 	s.typeText("fresh")
 	s.shows("nothing matches")
 	s.press("esc")
 	s.sim.AddFile("SD:IMPORT/fresh start.wav", wav(480))
 	// The index was built before the file was there, and is kept.
-	s.press("/")
+	s.press("/", "ctrl+u")
 	s.typeText("fresh")
 	s.shows("nothing matches")
-	s.press("esc", "r", "3", "/")
+	s.press("esc", "r", "3", "/", "ctrl+u")
 	s.typeText("fresh")
 	s.shows("fresh start.wav")
 	s.press("esc")
@@ -1204,7 +1213,7 @@ func TestSearchIsCachedUntilFilesChange(t *testing.T) {
 	s.press("ctrl+u")
 	s.typeText("renamed.wav")
 	s.press("enter")
-	s.press("/")
+	s.press("/", "ctrl+u")
 	s.typeText("renamed")
 	s.shows("renamed.wav")
 }
@@ -1212,8 +1221,8 @@ func TestSearchIsCachedUntilFilesChange(t *testing.T) {
 func TestSearchFromTheAssignDialog(t *testing.T) {
 	s := open(t)
 	// Pad 16 is empty: Enter on a result puts the file straight on it.
-	s.press("G", "a", "/")
-	s.shows("Search SD card for audio files for A16")
+	s.press("G", "a", "/", "ctrl+u")
+	s.shows("Search SD card for A16")
 	s.typeText("snare")
 	s.shows("snare.wav")
 	s.press("enter")
@@ -1223,7 +1232,7 @@ func TestSearchFromTheAssignDialog(t *testing.T) {
 	}
 
 	// A pad that holds a sample asks for a second Enter.
-	s.press("g", "a", "/")
+	s.press("g", "a", "/", "ctrl+u")
 	s.typeText("kick")
 	s.shows("A1 holds \"kick\" — it will be replaced")
 	s.press("enter")
@@ -1231,9 +1240,9 @@ func TestSearchFromTheAssignDialog(t *testing.T) {
 	s.press("esc")
 	s.shows("Assign a file to A1")
 	// Tab shows the result in the dialog's own tree.
-	s.press("/")
+	s.press("/", "ctrl+u")
 	s.typeText("snare")
-	s.press("tab")
+	s.press("ctrl+o")
 	s.shows("▾ IMPORT/", "▾ pack/", "Assign a file to A1")
 	m := s.m()
 	if node := m.browser.tree.Rows()[m.browser.at]; node.Name != "snare.wav" {
@@ -1246,7 +1255,7 @@ func TestSearchResultsAreInAlignedColumns(t *testing.T) {
 	s.sim.AddFile("SD:Loops/Deep House/Basslines/hdhkb_bassloop01_f_124bpm.wav", wav(480))
 	s.sim.AddFile("SD:Loops/Deep House/Basslines/a.wav", wav(480))
 	s.sim.AddFile("SD:Loops/another very long folder name/with subfolders/that go on/and on/x.wav", wav(480))
-	s.press("3", "/")
+	s.press("3", "/", "ctrl+u")
 	s.typeText(".wav")
 	// The folder column starts at the column of its header in every row, whatever the name.
 	lines := strings.Split(ansiStrip(s.model.View()), "\n")
@@ -1305,7 +1314,7 @@ func TestNoAudioOutputSaysWhy(t *testing.T) {
 	s.model = m
 	s.press("3", "tab", "j", "j", "space")
 	s.shows("no audio output to listen on: no output device")
-	s.press("/")
+	s.press("/", "ctrl+u")
 	s.typeText("kick")
 	s.press("ctrl+a")
 	s.shows("no audio output to autoplay on")
@@ -1313,7 +1322,7 @@ func TestNoAudioOutputSaysWhy(t *testing.T) {
 
 func TestAutoplayInTheSearchPlaysWhereTheCursorRests(t *testing.T) {
 	s := open(t)
-	s.press("3", "/")
+	s.press("3", "/", "ctrl+u")
 	s.typeText("wav")
 	s.shows("Ctrl-A autoplay off")
 	s.press("ctrl+a")
@@ -1808,7 +1817,7 @@ func TestMovingWithAutoplayOffLeavesASoundAlone(t *testing.T) {
 
 func TestAutoplayInTheSearchStopsTheOldSoundAtOnce(t *testing.T) {
 	s := open(t)
-	s.press("3", "/")
+	s.press("3", "/", "ctrl+u")
 	s.typeText("wav")
 	s.press("ctrl+a")
 	if !s.player.playing {
@@ -1866,7 +1875,7 @@ func TestCtrlDAndCtrlUPageThroughLists(t *testing.T) {
 	}
 
 	// The search box: Ctrl-D pages through results, Ctrl-U still clears the text.
-	s.press("/")
+	s.press("/", "ctrl+u")
 	s.typeText("file")
 	s.send(ctrlD)
 	if s.m().search.at == 0 {
@@ -2377,7 +2386,7 @@ func TestFindAFolderByNameThenCollapseIt(t *testing.T) {
 	s.press("f")
 	s.typeText("zzz")
 	s.press("enter")
-	s.shows("no open folder named like")
+	s.shows("no folder named like")
 }
 
 func TestFindAFolderInTheAssignDialog(t *testing.T) {
@@ -2411,7 +2420,7 @@ func TestFindAFolderInTheAssignDialog(t *testing.T) {
 	s.press("f")
 	s.typeText("zzz")
 	s.press("enter")
-	s.shows("no open folder named like")
+	s.shows("no folder named like")
 	// Esc while typing cancels the find and keeps the dialog open.
 	s.press("f", "esc")
 	s.shows("Assign a file to")
@@ -2731,4 +2740,367 @@ func TestHistoryKeepsWhatHappened(t *testing.T) {
 	if n := len(s.m().history); n < 2 {
 		t.Errorf("history has %d lines", n)
 	}
+}
+
+func TestIndexAFolderInTheBackground(t *testing.T) {
+	s := open(t)
+	s.sim.AddFile("SD:IMPORT/pack/124_bass_wobble.wav", wav(2400))
+	s.press("3", "tab", "i")
+	s.shows("indexed", "files in SD:IMPORT", "404tui-index.json.gz")
+	data, ok := s.sim.File("SD:404tui-index.json.gz")
+	if !ok {
+		t.Fatal("no index on the card")
+	}
+	zr, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, _ := io.ReadAll(zr)
+	if !strings.Contains(string(plain), "124_bass_wobble.wav") {
+		t.Fatalf("the index on the card: %s", plain)
+	}
+	if hits := s.m().tags.Search("bass 124"); len(hits) != 1 {
+		t.Errorf("tag search found %v", hits)
+	}
+}
+
+func TestIndexBarShowsHowFarARunHasCome(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	job := &tagJob{folder: "SD:Samples"}
+	job.folders.Store(3)
+	job.queued.Store(3)
+	job.files.Store(12)
+	m.tagJob = job
+	out := ansi.Strip(m.View())
+	for _, want := range []string{"indexing SD:Samples", "3/6 folders", "12 files", "i stops", "█", "░"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the bottom bar lacks %q:\n%s", want, out)
+		}
+	}
+	if lines := strings.Split(out, "\n"); len(lines) > m.height {
+		t.Errorf("%d lines on a %d row screen", len(lines), m.height)
+	}
+}
+
+func TestSearchOnlyTheTags(t *testing.T) {
+	s := open(t)
+	s.sim.AddFile("SD:IMPORT/pack/124_bass_wobble.wav", wav(2400))
+	s.sim.AddFile("SD:OTHER/124_bass_unindexed.wav", wav(2400))
+	s.press("3", "tab", "i")
+	s.shows("indexed")
+	s.send(tea.WindowSizeMsg{Width: 180, Height: 50})
+	s.press("s")
+	s.shows("Search SD card", "tagged files", "Tags", "bass (1)", "wobble (1)")
+	s.typeText("bass")
+	s.shows("Narrow by", "124 (1)", "wobble (1)")
+	s.hides("bass (1)")
+	s.typeText(" 124")
+	s.shows("124_bass_wobble.wav", "tags")
+	s.hides("124_bass_unindexed.wav")
+	s.press("ctrl+u")
+	s.typeText("kick")
+	s.shows("kick.wav")
+	s.press("ctrl+u")
+	s.typeText("zzz")
+	s.shows("nothing matches")
+}
+
+func TestSearchIndexBuildsInTheBackgroundAndShowsItsProgress(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 180, Height: 50})
+	s.press("3")
+	// Nothing is walked by itself: with no saved index the panel says how to make one.
+	s.shows("No search index yet", "i indexes the folder in front")
+	s.press("tab", "i")
+	// Once it is saved, the search index comes from it, and says so.
+	s.shows("indexed")
+	s.press("r")
+	s.shows("Search index", "saved", "i indexes again")
+	// A build that is going on shows in the Details panel, and in the dialog if one opens.
+	m := s.m()
+	delete(m.indexes, "SD:")
+	job := &tagJob{folder: "SD:"}
+	job.folders.Store(3)
+	job.queued.Store(3)
+	job.files.Store(12)
+	m.searchJobs["SD:"] = job
+	out := ansi.Strip(m.View())
+	for _, want := range []string{"Indexing SD card for search", "3/6 folders", "12 files"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the Details panel lacks %q:\n%s", want, out)
+		}
+	}
+	m.search = &search{root: "SD:", building: true}
+	out = ansi.Strip(m.View())
+	if !strings.Contains(out, "3/6 folders") || !strings.Contains(out, "it goes on") {
+		t.Errorf("the dialog shows no progress:\n%s", out)
+	}
+}
+
+func TestFindAFolderThatIsNotOpenFromTheSavedIndex(t *testing.T) {
+	s := open(t)
+	s.sim.AddFile("SD:IMPORT/pack/deep/down/x.wav", wav(2400))
+	s.press("3", "tab", "i")
+	s.shows("indexed")
+	s.press("r")
+	s.press("f")
+	s.typeText("down")
+	s.shows("down/", "folders")
+	s.press("enter")
+	s.shows("x.wav")
+}
+
+func TestSearchRemembersTheQueryAndTheFileAndTabSwitchesKind(t *testing.T) {
+	s := open(t)
+	s.sim.AddFile("SD:IMPORT/pack/124_bass_wobble.wav", wav(2400))
+	s.sim.AddFile("SD:IMPORT/pack/124_bass_other.wav", wav(2400))
+	s.press("3", "tab", "i")
+	s.shows("indexed")
+	s.send(tea.WindowSizeMsg{Width: 180, Height: 50})
+	s.press("/")
+	s.typeText("bass")
+	s.press("down")
+	s.shows("Files", "124_bass_other.wav")
+	front := func() string {
+		f, _ := s.m().search.current()
+		return f.Name()
+	}
+	chosen := front()
+	s.press("esc")
+	s.hides("Tags")
+	// Opened again, the search comes back with its query and the file that was in front.
+	s.press("/")
+	s.shows("> bass")
+	if got := front(); got != chosen {
+		t.Errorf("the cursor is on %q, was on %q", got, chosen)
+	}
+	// Tab goes to the tags, which have a query of their own, and back.
+	s.press("tab")
+	s.shows("tagged files")
+	s.typeText("wobble")
+	s.shows("Narrow by")
+	s.press("tab")
+	s.shows("> bass")
+	s.press("tab")
+	s.shows("> wobble")
+	// Assigning from the search keeps it too.
+	s.press("esc", "/")
+	s.shows("> bass")
+}
+
+func TestAPatternPlaysInALoopUntilStopped(t *testing.T) {
+	s := open(t)
+	// Bank C has real samples (the simulator's fixture pads have none the player could read).
+	m := s.m()
+	if _, err := app.Assign(m.unit, m.unit, pad(t, "C1"), "SD:IMPORT/kick.wav"); err != nil {
+		t.Fatal(err)
+	}
+	s.press("r", "]", "]", "N", "2")
+	s.press("P")
+	if len(s.player.looped) != 1 || len(s.player.played) != 0 {
+		t.Fatalf("looped %d, played %d: %s", len(s.player.looped), len(s.player.played), s.m().message)
+	}
+	s.press("P")
+	if s.player.playing {
+		t.Error("the second P did not stop the loop")
+	}
+}
+
+func TestFavouriteAndTagFilesAndFindThemByTheirTags(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 180, Height: 50})
+	s.press("3", "tab", "i")
+	s.shows("indexed")
+	// The cursor is on IMPORT; kick.wav is two rows down (pack/ is closed).
+	s.press("j", "j")
+	m := s.m()
+	if node, _ := m.fileNode(); node.Name != "kick.wav" {
+		t.Fatalf("cursor on %q", node.Name)
+	}
+	s.press("*")
+	s.shows("tagged 1 file", "+favourite", "★")
+	s.press("+")
+	// The question lists what the file has: the tag just given, and the ones from its name.
+	s.shows("Tag kick.wav", "Your tags", "favourite", "From name", "kick", "Used before", "favourite (1)")
+	s.typeText("punchy, dry")
+	s.press("enter")
+	s.shows("+punchy", "+dry")
+	s.shows("tags", "favourite", "punchy")
+	// They are in the saved index, and the tag search finds the file by them.
+	s.press("s")
+	s.typeText("favourite punchy")
+	s.shows("kick.wav")
+	s.press("esc")
+	// Taking it off: a second * when all have it, or a word with - in front.
+	s.press("*")
+	s.shows("-favourite")
+	s.hides("★")
+	s.press("+")
+	s.typeText("-dry")
+	s.press("enter")
+	s.shows("-dry")
+}
+
+func TestFavouriteFromTheAssignDialogKeepsItOpen(t *testing.T) {
+	s := open(t)
+	s.press("a", "tab", "j", "j")
+	s.press("*")
+	s.shows("Assign a file to", "tagged 1 file", "★")
+	s.press("+")
+	s.typeText("loopy")
+	s.press("enter")
+	s.shows("Assign a file to", "+loopy")
+}
+
+// Tagging runs on another goroutine while the screen is drawn from the same tag index: it must
+// not change what the screen reads. Run with -race to see a failure.
+func TestTaggingSeveralFilesWhileTheScreenIsDrawnIsSafe(t *testing.T) {
+	s := open(t)
+	for i := 0; i < 60; i++ {
+		s.sim.AddFile(fmt.Sprintf("SD:IMPORT/many/s%02d.wav", i), wav(480))
+	}
+	s.press("3", "tab", "i")
+	s.shows("indexed")
+	// Open the folder with the many files, mark all of them, then tag them all.
+	s.press("j", "tab", "V")
+	m := s.m()
+	paths := m.filesToTag()
+	if len(paths.files) < 60 {
+		t.Fatalf("only %d files marked", len(paths.files))
+	}
+	cmd := m.tagFiles(paths, []string{"favourite", "loopy"}, nil, nil)
+	done := make(chan tea.Msg)
+	go func() { done <- cmd() }()
+	for drawing := true; drawing; {
+		select {
+		case msg := <-done:
+			s.send(msg)
+			drawing = false
+		default:
+			_ = m.View()
+		}
+	}
+	if !strings.Contains(s.m().message, "tagged 60 files") {
+		t.Errorf("message %q", s.m().message)
+	}
+}
+
+func TestFavouriteSeveralMarkedFilesInTheFilesViewAndTheDialog(t *testing.T) {
+	s := open(t)
+	for i := 0; i < 5; i++ {
+		s.sim.AddFile(fmt.Sprintf("SD:IMPORT/many/s%d.wav", i), wav(480))
+	}
+	s.press("3", "tab", "i")
+	s.shows("indexed")
+	// Mark three files with v, and tag them: it must not crash, and it tags exactly those.
+	s.press("j", "tab", "j", "v", "v", "v")
+	if n := len(s.m().fileMarks); n != 3 {
+		t.Fatalf("%d marked", n)
+	}
+	s.press("*")
+	s.shows("tagged 3 files", "+favourite")
+	m := s.m()
+	if got := len(m.tags.UserTagCounts()); got != 1 || m.tags.UserTagCounts()[0].Count != 3 {
+		t.Errorf("counts %v", m.tags.UserTagCounts())
+	}
+	// Mark several again, one that already has it among them: the star goes on for all of them.
+	s.press("g", "j", "tab", "j", "v", "v", "v", "v")
+	s.press("*")
+	m = s.m()
+	if got := m.tags.UserTagCounts(); len(got) != 1 || got[0].Count < 4 {
+		t.Errorf("counts after the second round %v", got)
+	}
+}
+
+func TestTagSeveralMarkedFilesInTheAssignDialog(t *testing.T) {
+	s := open(t)
+	for i := 0; i < 5; i++ {
+		s.sim.AddFile(fmt.Sprintf("SD:IMPORT/many/s%d.wav", i), wav(480))
+	}
+	// Rows: IMPORT, many/, pack/, kick.wav; open many/ and mark its first three files.
+	s.press("a", "tab", "j", "tab", "j", "v", "v", "v")
+	s.shows("3 items marked")
+	s.press("*")
+	s.shows("Assign a file to", "tagged 3 files", "+favourite")
+	s.press("+")
+	s.shows("Your tags", "favourite (3 of 3)")
+	s.typeText("alpha beta")
+	s.press("enter")
+	s.shows("Assign a file to", "+alpha", "+beta")
+	m := s.m()
+	if counts := m.tags.UserTagCounts(); len(counts) != 3 {
+		t.Errorf("counts %v", counts)
+	}
+}
+
+func TestTaggingWithNothingToTagSaysSoAndNeverCrashes(t *testing.T) {
+	s := open(t)
+	s.sim.AddFile("SD:IMPORT/notes.txt", []byte("x"))
+	// A text file in front is neither audio nor a folder: nothing to tag, and no crash.
+	s.press("3", "tab", "j", "j", "j")
+	m := s.m()
+	if node, _ := m.fileNode(); node.Name != "notes.txt" {
+		t.Fatalf("cursor on %q", node.Name)
+	}
+	s.press("*")
+	s.shows("no audio file or folder to tag")
+	s.press("+")
+	s.shows("no audio file or folder to tag")
+	// Marked, it is still skipped.
+	s.press("v", "*")
+	s.shows("no audio file or folder to tag")
+}
+
+func TestFavouriteAFolderAndEveryFileInItHasTheTag(t *testing.T) {
+	s := open(t)
+	s.sim.AddFile("SD:IMPORT/gems/deep/a_bass.wav", wav(480))
+	s.sim.AddFile("SD:IMPORT/gems/b_synth.wav", wav(480))
+	s.sim.AddFile("SD:IMPORT/other/c_pad.wav", wav(480))
+	s.press("3", "tab", "i")
+	s.shows("indexed")
+	// The cursor is on IMPORT; gems/ is the next row.
+	s.press("j")
+	m := s.m()
+	node, _ := m.fileNode()
+	if node.Name != "gems" {
+		t.Fatalf("cursor on %q", node.Name)
+	}
+	s.press("*")
+	s.shows("tagged 1 file", "+favourite", "★")
+	// Every file below has the tag, the ones in a deeper folder too, and the others do not.
+	m = s.m()
+	for path, want := range map[string]bool{
+		"SD:IMPORT/gems/deep/a_bass.wav": true, "SD:IMPORT/gems/b_synth.wav": true, "SD:IMPORT/other/c_pad.wav": false,
+	} {
+		if got := slices.Contains(m.tags.Tags(path), "favourite"); got != want {
+			t.Errorf("%s favourite: %v, want %v", path, got, want)
+		}
+	}
+	if hits := m.tags.Search("favourite"); len(hits) != 2 {
+		t.Errorf("found %v", hits)
+	}
+	// A second * takes it off the folder, and the files lose it.
+	s.press("*")
+	s.hides("★")
+	m = s.m()
+	if hits := m.tags.Search("favourite"); len(hits) != 0 {
+		t.Errorf("found %v after taking it off", hits)
+	}
+}
+
+func TestPatternsOfTheBankShowUnderThePadsAndPickOutTheOnesThatPlayThePad(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 48})
+	s.press("N")
+	// They are read quietly, without holding the screen, and listed under the pads.
+	s.shows("Patterns · bank A", "1 ■3", "2 ·", "16 ·")
+	if s.m().busy != "" {
+		t.Errorf("the screen was held: %q", s.m().busy)
+	}
+	// The pad in front is played by pattern 1, which is picked out in the title.
+	s.shows("play this pad")
+	// On a bank without patterns the slots are empty.
+	s.press("]")
+	s.shows("Patterns · bank B")
 }

@@ -233,17 +233,58 @@ func (m Model) clipMarker(path string) string {
 	return "⧉"
 }
 
-// folderMatches is the rows of the open folders whose name contains text, in list order;
-// empty text matches them all.
-func folderMatches(rows []app.Node, text string) []int {
-	want := strings.ToLower(strings.TrimSpace(text))
-	var out []int
-	for i, r := range rows {
-		if r.Dir && strings.Contains(strings.ToLower(r.Name), want) {
-			out = append(out, i)
+// folderChoice is a folder the finder offers: one that is open in the list, or one that is in
+// the saved index and not open yet.
+type folderChoice struct {
+	Path, Name string
+	Open       bool
+}
+
+// folderChoices lists the folders whose path contains every word of text, the ones whose own
+// name does first, then by path. They are the open folders of the list and, when the source
+// has a search index, every indexed folder. Empty text lists them all.
+func folderChoices(rows []app.Node, ix *app.Index, text string) []folderChoice {
+	words := strings.Fields(strings.ToLower(text))
+	seen := map[string]bool{}
+	var all []folderChoice
+	add := func(path, name string, open bool) {
+		if !seen[path] {
+			seen[path] = true
+			all = append(all, folderChoice{path, name, open})
 		}
 	}
-	return out
+	for _, r := range rows {
+		if r.Dir {
+			add(r.Path, r.Name, true)
+		}
+	}
+	if ix != nil {
+		for _, dir := range ix.FolderPaths() {
+			add(dir, app.Base(dir), false)
+		}
+	}
+	var named, other []folderChoice
+	for _, c := range all {
+		path, name := strings.ToLower(c.Path), strings.ToLower(c.Name)
+		inPath, inName := true, true
+		for _, w := range words {
+			if !strings.Contains(path, w) {
+				inPath = false
+				break
+			}
+			if !strings.Contains(name, w) {
+				inName = false
+			}
+		}
+		switch {
+		case !inPath:
+		case inName:
+			named = append(named, c)
+		default:
+			other = append(other, c)
+		}
+	}
+	return append(named, other...)
 }
 
 // stepChoice moves a choice in a list of n by the key's direction, wrapping round.
@@ -260,18 +301,31 @@ func stepChoice(choice, n int, key string) int {
 	return clamp(choice, 0, n-1)
 }
 
-// findFolder moves the file cursor to the chosen one of the folders matching text.
-func (m Model) findFolder(text string, choice int) Model {
-	rows := m.tree.Rows()
-	matches := folderMatches(rows, text)
+// findFolder moves the file cursor to the chosen one of the folders matching text. A folder
+// that is not open yet is opened: the folders above it are listed and the cursor lands on it.
+func (m Model) findFolder(text string, choice int) (Model, tea.Cmd) {
+	matches := folderChoices(m.tree.Rows(), m.indexes[m.root], text)
 	if len(matches) == 0 {
-		m.message = fmt.Sprintf("no open folder named like %q (open more with Tab)", text)
-		return m
+		m.message = fmt.Sprintf("no folder named like %q", text)
+		return m, nil
 	}
-	at := matches[clamp(choice, 0, len(matches)-1)]
-	m.fileAt = at
-	m.message = rows[at].Name + ": Tab or h collapses it"
-	return m
+	c := matches[clamp(choice, 0, len(matches)-1)]
+	for i, r := range m.tree.Rows() {
+		if r.Path == c.Path {
+			m.fileAt = i
+			m.message = c.Name + ": Tab or h collapses it"
+			return m, nil
+		}
+	}
+	m.busy = "opening " + c.Name
+	unit, ops, root, path := m.unit, m.ops, m.root, c.Path
+	open := append(app.Ancestors(root, path), path)
+	return m, func() tea.Msg {
+		ops.Lock()
+		defer ops.Unlock()
+		tree, err := app.LoadTree(unit, root, open)
+		return treeMsg{root: root, tree: tree, err: err, at: path}
+	}
 }
 
 // survivor is where a cursor on path should land once deleted is gone: the path itself, or

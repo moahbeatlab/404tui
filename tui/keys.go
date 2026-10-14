@@ -64,6 +64,10 @@ var commands = []command{
 	{"space", "Listen to this file", []int{secFiles}},
 	{"v", "Mark a file or folder (V: every file in the folder, J: junk files)", []int{secFiles}},
 	{"J", "Mark macOS and Windows junk files in the open folders (._ files, .DS_Store)", []int{secFiles}},
+	{"s", "Search tags only (set by i): bass 124, synth house", []int{secFiles}},
+	{"*", "Favourite: tag the marked files (or the one in front) favourite; again takes it off", []int{secFiles}},
+	{"+", "Tag the marked files with words you type; a word with - in front takes the tag off", []int{secFiles}},
+	{"i", "Index the folder in front in the background: tags from file and folder names, saved to SD:404tui-index.json (again stops it)", []int{secFiles}},
 	{"d", "Delete the marked files and folders from the SD card", []int{secFiles}},
 	{"c", "Copy the marked files and folders (then p pastes)", []int{secFiles}},
 	{"x", "Cut the marked files and folders to move them (then p pastes)", []int{secFiles}},
@@ -83,7 +87,7 @@ var commands = []command{
 	{"/", "Find a pad or project by name", []int{secPads, secProjects}},
 	{"/", "Search every audio file in this source by keyword", []int{secFiles}},
 	{"shift+tab", "Fold every folder in the list", []int{secFiles}},
-	{"f", "Find a folder in the list by name, then h or Tab collapses it", []int{secFiles}},
+	{"f", "Find a folder by name, in every indexed folder and the open ones; it is opened for you (h or Tab collapses it)", []int{secFiles}},
 	{"ctrl+a", "Autoplay: files play as the cursor rests on them", []int{secFiles}},
 	{"}", "Jump to the next folder in the list (Alt-n too)", []int{secFiles}},
 	{"{", "Jump to the previous folder in the list (Alt-p too)", []int{secFiles}},
@@ -257,6 +261,10 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.pattern = nil
 		m.busy = "reading the unit"
 		return m, m.load("refreshed")
+	case "s":
+		if m.section == secFiles {
+			return m.openTagSearch(m.root, false, proto.PadIndex{})
+		}
 	case "/":
 		switch m.section {
 		case secFiles:
@@ -829,7 +837,7 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 }
 
 // playPattern plays a pattern through this computer's speakers, mixed from the samples on its
-// pads at the bank's tempo; pressing it again while it sounds stops it, and s stops it.
+// pads at the bank's tempo, over and over; pressing it again while it sounds stops it, and s stops it.
 // This is the pads as stored, not what the unit would play: the unit has no command in this
 // protocol to start its own sequencer.
 func (m Model) playPattern(slot proto.PadIndex) (tea.Model, tea.Cmd) {
@@ -892,6 +900,11 @@ func (m Model) playPattern(slot proto.PadIndex) (tea.Model, tea.Cmd) {
 		}
 		if gen.Load() != id {
 			return listenMsg{path: label, stale: true}
+		}
+		// A pattern repeats until it is stopped, so that it can be listened to while the
+		// samples of its pads are changed; a player that cannot loop plays it once.
+		if looper, ok := player.(app.Looper); ok {
+			return listenMsg{path: label, err: looper.Loop(mix)}
 		}
 		return listenMsg{path: label, err: player.Play(mix)}
 	}
@@ -1354,6 +1367,12 @@ func (m Model) filesKey(name string) (tea.Model, tea.Cmd) {
 		m = m.toggleMark(node)
 	case "V":
 		m = m.markFolder()
+	case "*":
+		return m.toggleFavourite(m.filesToTag(), nil)
+	case "+":
+		return m.askTags(m.filesToTag(), nil)
+	case "i":
+		return m.startTagIndex(m.tree.Folder(m.fileAt))
 	case "J":
 		m = m.markJunk()
 	case "u":
@@ -1973,7 +1992,7 @@ func (m Model) promptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.kind == promptFindFolder && m.tree != nil {
 		switch name {
 		case "up", "down", "ctrl+n", "ctrl+p", "tab", "shift+tab":
-			p.choice = stepChoice(p.choice, len(folderMatches(m.tree.Rows(), p.buffer)), name)
+			p.choice = stepChoice(p.choice, len(folderChoices(m.tree.Rows(), m.indexes[m.root], p.buffer)), name)
 			return m, nil
 		}
 		if name != "enter" {
@@ -2087,7 +2106,7 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 	case promptSearch:
 		return m.find(text)
 	case promptFindFolder:
-		return m.findFolder(text, p.choice), nil
+		return m.findFolder(text, p.choice)
 	case promptAssignFile:
 		return m.assign([]string{text}, p.pads[0])
 	case promptMkdir:
@@ -2184,6 +2203,8 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 		})
 	case promptRestore:
 		return m.restoreFrom(text)
+	case promptTags:
+		return m.tagsAnswered(p, text)
 	case promptRenameFile:
 		m.busy = "renaming"
 		to := app.Join(app.Dir(p.path), text)

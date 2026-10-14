@@ -38,7 +38,11 @@ type geom struct {
 }
 
 func (m Model) geom() geom {
-	g := geom{railW: 16, bodyH: max(m.height-chrome, 4)}
+	rows := chrome
+	if m.tagJob.active() {
+		rows++
+	}
+	g := geom{railW: 16, bodyH: max(m.height-rows, 4)}
 	if m.width < 80 {
 		g.railW = 12
 	}

@@ -52,6 +52,9 @@ type Afplay struct {
 	cmd  *exec.Cmd
 	file string
 	done chan struct{}
+	// stop ends a loop: it is closed by Stop, and the loop's goroutine checks it before each
+	// round.
+	stop chan struct{}
 }
 
 // OpenAfplay finds afplay; it fails where there is none.
@@ -92,13 +95,65 @@ func (a *Afplay) Play(s formats.Sample) error {
 	return nil
 }
 
+// Loop plays the sound again and again until Stop. afplay plays it once, so it is started
+// again each time it ends; there is a short gap between rounds that the oto player does not
+// have.
+func (a *Afplay) Loop(s formats.Sample) error {
+	a.Stop()
+	f, err := os.CreateTemp("", "404tui-*.wav")
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(s.WAV()); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return err
+	}
+	f.Close()
+	stop, done := make(chan struct{}), make(chan struct{})
+	a.mu.Lock()
+	a.stop, a.done, a.file = stop, done, f.Name()
+	a.mu.Unlock()
+	go func() {
+		defer close(done)
+		defer os.Remove(f.Name())
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			cmd := exec.Command(a.path, f.Name())
+			if err := cmd.Start(); err != nil {
+				return
+			}
+			a.mu.Lock()
+			if a.stop != stop {
+				a.mu.Unlock()
+				_ = cmd.Process.Kill()
+				_ = cmd.Wait()
+				return
+			}
+			a.cmd = cmd
+			a.mu.Unlock()
+			_ = cmd.Wait()
+		}
+	}()
+	return nil
+}
+
 func (a *Afplay) Stop() {
 	a.mu.Lock()
-	cmd, done := a.cmd, a.done
-	a.cmd, a.done = nil, nil
+	cmd, done, stop := a.cmd, a.done, a.stop
+	a.cmd, a.done, a.stop = nil, nil, nil
 	a.mu.Unlock()
+	if stop != nil {
+		close(stop)
+	}
 	if cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Kill()
+	}
+	if done != nil && (cmd != nil || stop != nil) {
 		<-done
 	}
 }

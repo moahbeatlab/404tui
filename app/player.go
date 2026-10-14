@@ -11,3 +11,9 @@ type Player interface {
 	// Playing reports whether a sound is still sounding.
 	Playing() bool
 }
+
+// Looper is a Player that can also repeat a sample, without a gap that the ear would hear,
+// until it is stopped.
+type Looper interface {
+	Loop(formats.Sample) error
+}
