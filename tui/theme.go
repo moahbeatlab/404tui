@@ -13,6 +13,8 @@ type theme struct {
 	tile, tileEmpty, cursorBg, markedBg lipgloss.Color
 	// cursorFg is the text on the cursor tile.
 	cursorFg lipgloss.Color
+	// bus1 and bus2 colour the pads that go to BUS 1 (blue) and BUS 2 (red).
+	bus1, bus2 lipgloss.Color
 }
 
 var themes = []theme{
@@ -21,18 +23,21 @@ var themes = []theme{
 		text: "252", dim: "245", faint: "240",
 		accent: "214", hot: "203", good: "114", warn: "221", bad: "203",
 		tile: "237", tileEmpty: "235", cursorBg: "214", markedBg: "65", cursorFg: "232",
+		bus1: "75", bus2: "196",
 	},
 	{
 		name: "Ocean",
 		text: "252", dim: "245", faint: "240",
 		accent: "80", hot: "212", good: "114", warn: "221", bad: "203",
 		tile: "236", tileEmpty: "234", cursorBg: "80", markedBg: "65", cursorFg: "232",
+		bus1: "69", bus2: "196",
 	},
 	{
 		name: "Paper",
 		text: "236", dim: "243", faint: "250",
 		accent: "25", hot: "160", good: "28", warn: "130", bad: "160",
 		tile: "254", tileEmpty: "255", cursorBg: "25", markedBg: "151", cursorFg: "255",
+		bus1: "27", bus2: "124",
 	},
 }
 
@@ -59,4 +64,27 @@ func newStyles(th theme) styles {
 		modal: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
 			BorderForeground(th.accent).Padding(0, 1),
 	}
+}
+
+// busColour is the colour of the pads that go to a bus: blue for BUS 1, red for BUS 2, none
+// for the others.
+func (th theme) busColour(bus int32) (lipgloss.Color, bool) {
+	switch bus {
+	case 1:
+		return th.bus1, true
+	case 2:
+		return th.bus2, true
+	}
+	return "", false
+}
+
+// busBadge is the small mark for a bus, a shape that tells them apart without colour.
+func busBadge(bus int32) string {
+	switch bus {
+	case 1:
+		return "¹"
+	case 2:
+		return "²"
+	}
+	return ""
 }

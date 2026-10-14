@@ -5,12 +5,14 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/proto"
+	"github.com/moahbeatlab/404tui/version"
 )
 
 var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -61,30 +63,38 @@ var helpText = [][2]string{
 // the help, a prompt, a picker, the palette or a wait is drawn over the body.
 func (m Model) View() string {
 	g := m.geom()
+	// A dialog is drawn in the middle of the screen it belongs to, over it, not instead of it.
+	dialog := func(box string) string {
+		base := ""
+		if m.unit != nil && m.snap != nil {
+			base = m.withRail(g, fit(m.body(g), g.bodyH))
+		}
+		return overlay(base, box, m.width, g.bodyH)
+	}
 	var main string
 	switch {
 	case m.help:
-		main = m.center(m.helpBox(), g.bodyH)
+		main = dialog(m.helpBox())
 	case m.search != nil:
-		main = m.center(m.searchBox(g), g.bodyH)
+		main = dialog(m.searchBox(g))
 	case m.editor != nil:
-		main = m.center(m.editorBox(), g.bodyH)
+		main = dialog(m.editorBox())
 	case m.chromatic != nil:
-		main = m.center(m.chromaticBox(), g.bodyH)
+		main = dialog(m.chromaticBox())
 	case m.browser != nil:
-		main = m.center(m.browserBox(g), g.bodyH)
+		main = dialog(m.browserBox(g))
 	case m.prompt != nil:
-		main = m.center(m.promptBox(), g.bodyH)
+		main = dialog(m.promptBox())
 	case m.picker != nil:
-		main = m.center(m.pickerBox(), g.bodyH)
+		main = dialog(m.pickerBox())
 	case m.toggles != nil:
-		main = m.center(m.togglesBox(), g.bodyH)
+		main = dialog(m.togglesBox())
 	case m.palette != nil:
-		main = m.center(m.paletteBox(), g.bodyH)
+		main = dialog(m.paletteBox())
 	case m.unit == nil:
 		main = m.center(m.waitingBox(), g.bodyH)
 	case m.busy != "":
-		main = m.center(m.busyBox(), g.bodyH)
+		main = dialog(m.busyBox())
 	case m.snap == nil:
 		main = m.center(m.st.dim.Render("no data from the unit; r tries again"), g.bodyH)
 	default:
@@ -96,6 +106,35 @@ func (m Model) View() string {
 	}
 	screen := strings.Join(append(parts, m.statusBar()), "\n")
 	return lipgloss.NewStyle().MaxWidth(m.width).Render(screen)
+}
+
+// overlay draws box in the middle of base, a screen of width by height cells, over what is
+// there: the lines of the box replace the same cells of the lines of the screen, and the rest
+// of the screen stays as it was.
+func overlay(base, box string, width, height int) string {
+	lines := strings.Split(base, "\n")
+	for len(lines) < height {
+		lines = append(lines, "")
+	}
+	boxLines := strings.Split(box, "\n")
+	boxW := 0
+	for _, l := range boxLines {
+		boxW = max(boxW, ansi.StringWidth(l))
+	}
+	top, left := max((height-len(boxLines))/2, 0), max((width-boxW)/2, 0)
+	for i, l := range boxLines {
+		y := top + i
+		if y >= len(lines) {
+			break
+		}
+		line := lines[y]
+		if w := ansi.StringWidth(line); w < width {
+			line += strings.Repeat(" ", width-w)
+		}
+		l += strings.Repeat(" ", boxW-ansi.StringWidth(l))
+		lines[y] = ansi.Truncate(line, left, "") + l + ansi.TruncateLeft(line, left+boxW, "")
+	}
+	return strings.Join(lines, "\n")
 }
 
 // withRail puts the navigation rail to the left of the body, with a rule between them.
@@ -175,12 +214,14 @@ func (m Model) body(g geom) string {
 
 func (m Model) header() string {
 	st := m.st
-	badge := lipgloss.NewStyle().Background(st.th.accent).Foreground(st.th.cursorFg).Bold(true).Render(" 404tui ")
+	badge := lipgloss.NewStyle().Background(st.th.accent).Foreground(st.th.cursorFg).Bold(true).Render(" 404tui by moahbeatlab ")
+	// The version is in the top right corner, whatever else the header says.
+	ver := st.faint.Render("v" + version.Version)
 	if m.unit == nil {
-		return spaceBetween(badge, st.warn.Render("○ no unit")+" ", m.width)
+		return spaceBetween(badge, st.warn.Render("○ no unit")+"  "+ver+" ", m.width)
 	}
 	if m.snap == nil {
-		return badge
+		return spaceBetween(badge, ver+" ", m.width)
 	}
 	label := fmt.Sprintf("  PROJECT %d", m.snap.Project+1)
 	if m.snap.ProjectName != "" {
@@ -200,7 +241,7 @@ func (m Model) header() string {
 	} else if m.hasSelected {
 		right = st.dim.Render(fmt.Sprintf("◆ %s  ", m.selected)) + right
 	}
-	return spaceBetween(left, right+" ", m.width)
+	return spaceBetween(left, right+"  "+ver+" ", m.width)
 }
 
 func spaceBetween(left, right string, width int) string {
@@ -344,6 +385,12 @@ func (m Model) box(title, body string, width, height int, focused bool) string {
 
 type tileState struct {
 	empty, cursor, marked, playing, selected, moving bool
+	// bus is the bus the pad goes to (1 or 2); 0 for none.
+	bus int32
+	// flags are the pad's settings as tiny letters, each lit when it is on (see padFlags).
+	flags []padFlag
+	// muted and solo are the pad's state in the mix played on this computer.
+	muted, solo bool
 }
 
 // tile draws one pad of the grid: its number, name and level, on a background that says
@@ -375,29 +422,141 @@ func (m Model) tile(w, h int, num, name string, level int32, ts tileState) strin
 	case ts.selected:
 		flags = "◆"
 	}
-	numLine := " " + num
-	if flags != "" {
-		numLine = " " + num + strings.Repeat(" ", max(w-2-ansi.StringWidth(num)-ansi.StringWidth(flags), 1)) + flags
+	// A pad on a bus gets its colour on the bar under the name and a small badge in the corner.
+	// The pieces of a line are styled without the tile's width, which would pad each of them.
+	piece := lipgloss.NewStyle().Background(bg).Foreground(fg)
+	pieceBold := piece.Bold(true)
+	busStyle, badge := pieceBold, ""
+	busColour, onBus := th.busColour(ts.bus)
+	if onBus && !ts.empty {
+		busStyle = pieceBold.Foreground(busColour)
+		if ts.cursor || ts.playing {
+			// On the bright tiles the colour would be lost: the badge keeps the dark text.
+			busStyle = pieceBold
+		}
+		badge = busBadge(ts.bus)
+	}
+	// Muted or soloed in the mix on this computer: a mark before the others.
+	mixMark := ""
+	switch {
+	case ts.muted:
+		mixMark = "×"
+	case ts.solo:
+		mixMark = "S"
+	}
+	right := badge
+	if badge != "" && flags != "" {
+		right += " "
+	}
+	right += flags
+	if mixMark != "" && !ts.empty {
+		right = mixMark + " " + right
+	} else {
+		mixMark = ""
+	}
+	// line puts text at the left and the corner marks at the right, to exactly the tile's width.
+	// A setting that is on is lit, one that is off is faint, so the letters are always there.
+	onStyle := lipgloss.NewStyle().Background(bg).Foreground(th.good).Bold(true)
+	offStyle := lipgloss.NewStyle().Background(bg).Foreground(th.faint)
+	if ts.cursor || ts.playing {
+		onStyle, offStyle = pieceBold, piece.Faint(true)
+	}
+	line := func(left string) string {
+		// The pad's settings sit after the number, as many as there is room for.
+		extra, extraW := "", 0
+		if len(ts.flags) > 0 && !ts.empty && h < 4 {
+			room := w - ansi.StringWidth(left) - ansi.StringWidth(right) - 3
+			for i, f := range ts.flags {
+				sep := " "
+				if i == 0 {
+					sep = "  "
+				}
+				if extraW+len(sep)+ansi.StringWidth(f.letter) > room {
+					break
+				}
+				style := offStyle
+				if f.on {
+					style = onStyle
+				}
+				extra += piece.Render(sep) + style.Render(f.letter)
+				extraW += len(sep) + ansi.StringWidth(f.letter)
+			}
+		}
+		gap := max(w-ansi.StringWidth(left)-extraW-ansi.StringWidth(right)-1, 1)
+		out := pieceBold.Render(left) + extra + piece.Render(strings.Repeat(" ", gap))
+		if mixMark != "" {
+			markStyle := lipgloss.NewStyle().Background(bg).Foreground(th.bad).Bold(true)
+			if ts.solo {
+				markStyle = markStyle.Foreground(th.good)
+			}
+			if ts.cursor || ts.playing {
+				markStyle = pieceBold
+			}
+			out += markStyle.Render(mixMark) + piece.Render(" ")
+		}
+		if badge != "" {
+			out += busStyle.Render(badge)
+			if flags != "" {
+				out += piece.Render(" ")
+			}
+		}
+		if flags != "" {
+			out += pieceBold.Render(flags)
+		}
+		return out + piece.Render(" ")
+	}
+	numLine := line(" " + num)
+	if right == "" && (len(ts.flags) == 0 || h >= 4) {
+		numLine = bold.Render(" " + num)
 	}
 	nameLine := " " + ansi.Truncate(name, w-2, "…")
 	if ts.empty {
 		nameLine = ""
 	}
-	bar := ""
+	bar := style.Render("")
 	if !ts.empty {
-		bar = " " + levelBar(w-2, int(level), 127)
+		fill := piece.Render(" ")
+		barText := levelBar(w-2, int(level), 127)
+		if onBus && !ts.cursor && !ts.playing {
+			bar = fill + lipgloss.NewStyle().Background(bg).Foreground(busColour).Render(barText) + fill
+		} else {
+			bar = style.Render(" " + barText)
+		}
 	}
 	if h == 2 {
 		first := numLine
 		if !ts.empty {
-			first = " " + num + " " + ansi.Truncate(name, max(w-3-ansi.StringWidth(num), 1), "…")
-			if flags != "" {
-				first = ansi.Truncate(first, w-2, "") + " " + flags
+			first = line(" " + num + " " + ansi.Truncate(name, max(w-3-ansi.StringWidth(num)-ansi.StringWidth(right)-1, 1), "…"))
+			if right == "" {
+				first = bold.Render(" " + num + " " + ansi.Truncate(name, max(w-3-ansi.StringWidth(num), 1), "…"))
 			}
 		}
-		return bold.Render(first) + "\n" + style.Render(bar)
+		return first + "\n" + bar
 	}
-	return bold.Render(numLine) + "\n" + style.Render(nameLine) + "\n" + style.Render(bar)
+	if h >= 4 {
+		// A row of its own for the settings, under the name.
+		flagLine, used := piece.Render(" "), 1
+		if !ts.empty {
+			for i, f := range ts.flags {
+				sep := ""
+				if i > 0 {
+					sep = " "
+				}
+				if used+len(sep)+ansi.StringWidth(f.letter) > w-1 {
+					break
+				}
+				style := offStyle
+				if f.on {
+					style = onStyle
+				}
+				flagLine += piece.Render(sep) + style.Render(f.letter)
+				used += len(sep) + ansi.StringWidth(f.letter)
+			}
+		}
+		flagLine += piece.Render(strings.Repeat(" ", max(w-used, 0)))
+		return numLine + "\n" + style.Render(nameLine) + "\n" + flagLine + "\n" + bar
+	}
+	return numLine + "\n" + style.Render(nameLine) + "\n" + bar
 }
 
 // levelBar draws value out of max as a bar of width cells.
@@ -438,6 +597,10 @@ func (m Model) padsBody(g geom) string {
 		row := bank[p]
 		return m.tile(g.tileW, g.tileH, fmt.Sprint(p+1), row.Name, row.Level, tileState{
 			empty:    !row.HasSample,
+			bus:      row.Params["bus-fx"],
+			flags:    padFlags(row),
+			muted:    m.muted[row.Pad],
+			solo:     m.soloed[row.Pad],
 			cursor:   p == m.pad && m.section == secPads,
 			marked:   m.marked[p],
 			playing:  m.playing && m.playingPad == row.Pad,
@@ -567,6 +730,7 @@ func (m Model) bankBar() string {
 	return st.accent.Render(fmt.Sprintf("Bank %c", 'A'+m.bank)) +
 		st.dim.Render("   Tempo ") + tempo +
 		st.dim.Render("   Volume ") + st.accent.Render(levelBar(12, info.Volume, 127)) + st.text.Render(fmt.Sprintf(" %d", info.Volume)) +
+		m.busLegend() +
 		st.faint.Render("    b edit  < > tempo  - + volume")
 }
 
@@ -600,6 +764,8 @@ func (m Model) padDetail(g geom) string {
 	// the settings in groups that sit side by side when there is room.
 	label := func(l string) string { return st.dim.Render(fmt.Sprintf("%-9s", l)) }
 	row2 := func(l, v string) string { return label(l) + st.text.Render(v) }
+	// key is the letter a setting has on the pad tiles, in a column of its own.
+	key := func(letter string) string { return st.accent.Render(fmt.Sprintf("%-3s", letter)) }
 	onOff := func(l string, on bool) string {
 		if on {
 			return label(l) + st.good.Render("● on")
@@ -626,7 +792,7 @@ func (m Model) padDetail(g geom) string {
 			row2("Length", fmt.Sprintf("%.2f s  ·  %s  ·  %.1f KB", f.Seconds, channels, float64(row.Size)/1024)),
 			row2("File", f.File))
 		if o, ok := m.origins.Of(m.snap.Project, row.Pad, row.Name); ok {
-			sample = append(sample, label("From")+st.text.Render(cutStart(display(o.Path), max(inner-12, 20))), label("")+st.faint.Render("assigned "+o.At))
+			sample = append(sample, label("From")+st.text.Render(cutStart(display(o.Path), max(inner-12, 20))), label("")+st.faint.Render(originWhen(o)))
 		}
 		if bar := m.trimBar(row, f, clamp(inner-48, 10, 36)); bar != "" {
 			sample = append(sample, strings.Replace(bar, "Trim  ", label("Trim"), 1))
@@ -650,30 +816,32 @@ func (m Model) padDetail(g geom) string {
 	}
 
 	groups := [][]string{
+		// The letters the pad tiles use for these settings stand in front of them, so this
+		// panel is also the key to the tiles.
 		section("Playback",
-			row2("Mode", playModeName(p("play-mode"))),
-			onOff("Gate", p("gate") != 0),
-			onOff("Loop", p("loop") != 0),
-			onOff("One shot", flags&0x20 != 0),
-			onOff("BPM sync", p("bpm-sync") != 0)),
+			key("R~")+row2("Mode", playModeName(p("play-mode"))),
+			key("G")+onOff("Gate", p("gate") != 0),
+			key("L")+onOff("Loop", p("loop") != 0),
+			key("O")+onOff("One shot", flags&0x20 != 0),
+			key("S")+onOff("BPM sync", p("bpm-sync") != 0)),
 		section("Sound",
-			label("Level")+st.accent.Render(levelBar(10, int(row.Level), 127))+st.text.Render(fmt.Sprintf(" %d", row.Level)),
-			row2("Pan", panText(p("balance"))),
-			row2("Pitch", fmt.Sprintf("%+d st %+d ct", p("pitch-coarse"), p("pitch-fine"))),
-			row2("Stretch", fmt.Sprintf("%.0f%%", float64(p("time-stretch"))/100)),
-			onOff("Vinyl", p("vinyl") != 0)),
+			key("")+label("Level")+st.accent.Render(levelBar(10, int(row.Level), 127))+st.text.Render(fmt.Sprintf(" %d", row.Level)),
+			key("")+row2("Pan", panText(p("balance"))),
+			key("")+row2("Pitch", fmt.Sprintf("%+d st %+d ct", p("pitch-coarse"), p("pitch-fine"))),
+			key("")+row2("Stretch", fmt.Sprintf("%.0f%%", float64(p("time-stretch"))/100)),
+			key("V")+onOff("Vinyl", p("vinyl") != 0)),
 		section("Routing",
-			row2("Bus FX", busName(p("bus-fx"))),
-			row2("Mute grp", offOr(p("mute-group"))),
-			row2("Pad link", offOr(p("pad-link"))),
-			row2("Roll", fmt.Sprint(p("roll")))),
+			key("")+row2("Bus FX", busName(p("bus-fx"))),
+			key("M")+row2("Mute grp", offOr(p("mute-group"))),
+			key("")+row2("Pad link", offOr(p("pad-link"))),
+			key("")+row2("Roll", fmt.Sprint(p("roll")))),
 		section("Envelope",
 			row2("Attack", fmt.Sprint(p("attack"))),
 			row2("Hold", fmt.Sprint(p("hold"))),
 			row2("Release", fmt.Sprint(p("release")))),
 	}
 	// As many groups per row as fit, each in a column of its own width.
-	const colW = 27
+	const colW = 30
 	perRow := max(min(inner/colW, len(groups)), 1)
 	lines := section("Sample", sample...)
 	for i := 0; i < len(groups); i += perRow {
@@ -779,23 +947,20 @@ func offOr(v int32) string {
 	return fmt.Sprint(v)
 }
 
-// session is a small panel for wide screens: the unit, its card, and what is picked up.
-func (m Model) session(g geom) string {
+// heldBox is a small panel for wide screens: the unit, its card, and what is picked up.
+func (m Model) heldBox(g geom) string {
 	st := m.st
-	total := 1.0
-	free := float64(m.snap.FreeKb) / 1024 / 1024
-	lines := []string{
-		st.dim.Render("Project  ") + st.text.Render(fmt.Sprintf("%d  %s", m.snap.Project+1, m.snap.ProjectName)),
-		st.dim.Render("Free     ") + st.accent.Render(levelBar(12, int(free*100), int(max(free, total)*100))) + st.text.Render(fmt.Sprintf(" %.1f GB", free)),
-		st.dim.Render("Unit     ") + st.text.Render(m.unitLine()),
-	}
+	var lines []string
 	if m.hasMoving {
 		lines = append(lines, st.warn.Render(fmt.Sprintf("Picked up %s: p moves, s swaps", m.moving)))
 	}
 	if len(m.clip) > 0 {
 		lines = append(lines, st.warn.Render(fmt.Sprintf("Clipboard: %s to %s", plural(len(m.clip), "item"), map[bool]string{true: "move", false: "copy"}[m.clipCut])))
 	}
-	return m.box("Session", strings.Join(lines, "\n"), g.detailW, len(lines)+2, false)
+	if len(lines) == 0 {
+		return ""
+	}
+	return m.box("Held", strings.Join(lines, "\n"), g.detailW, len(lines)+2, false)
 }
 
 func (m Model) unitLine() string {
@@ -900,15 +1065,30 @@ func (m Model) patternSlotDetail(g geom) string {
 		return m.box("Pattern", m.st.faint.Render("reading patterns…"), g.detailW, max(g.detailH, 5), false)
 	}
 	cur := rows[m.patternCursor]
-	lines := []string{m.st.dim.Render("Empty slot."), "", m.st.dim.Render("N makes a pattern of the bank's samples in the first free slot")}
+	st := m.st
+	lines := []string{st.dim.Render("Empty slot."), "", st.dim.Render("N makes a pattern of the bank's samples in the first free slot")}
 	if cur.Exists {
-		names := make([]string, len(cur.Pads))
-		for i, pad := range cur.Pads {
-			names[i] = pad.String()
+		lines = []string{st.faint.Render("reading the pattern…")}
+		// The pattern in front is shown as its step grid, as Enter opens it.
+		if d := m.patPreview[cur.Slot]; d != nil {
+			info := fmt.Sprintf("%.2f BPM  ·  %d/4  ·  %d ticks  ·  %s", d.BankTempo, d.Beats, d.Length, plural(len(d.PadsUsed), "pad"))
+			lines = []string{st.dim.Render(info), "", m.stepRuler(d)}
+			if line := m.playhead(d); line != "" {
+				lines = append(lines, line)
+			}
+			if len(d.Grid.Rows) == 0 {
+				lines = append(lines, st.dim.Render("  (no notes)"))
+			}
+			for _, row := range d.Grid.Rows {
+				name := m.snap.Pads[row.Pad.Index()].Name
+				label := fmt.Sprintf("%-4s %-14s", row.Pad, ansi.Truncate(name, 14, "…"))
+				lines = append(lines, m.rowLabel(row.Pad, label, st.bold)+" "+m.noteRow(d, row.Pad, false)+m.mixBadge(row.Pad))
+			}
 		}
-		lines = []string{m.st.text.Render("Plays " + strings.Join(names, " ")), "", m.st.dim.Render("Enter opens the step grid  ·  P plays it in a loop"), m.st.dim.Render("d delete  v mark  c copy  x move  p put")}
+		lines = append(lines, "", st.dim.Render("Enter edits the steps  ·  P or Space plays it in a loop"), st.dim.Render("d delete  v mark  c copy  x move  p put"))
 	}
-	return m.box("Pattern "+cur.Slot.String(), strings.Join(lines, "\n"), g.detailW, max(g.detailH, 5), false)
+	body := strings.Join(lines, "\n")
+	return m.box("Pattern "+cur.Slot.String(), body, g.detailW, max(g.detailH, 5, strings.Count(body, "\n")+3), false)
 }
 
 // patternDetail is an opened pattern: its step grid, one row per pad it plays.
@@ -916,42 +1096,49 @@ func (m Model) patternDetail(g geom) string {
 	st, d := m.st, m.pattern
 	info := fmt.Sprintf("%.2f BPM  ·  %d/4  ·  %d ticks  ·  %d pads", d.BankTempo, d.Beats, d.Length, len(d.PadsUsed))
 	lines := []string{st.dim.Render(info), ""}
-	ruler := strings.Repeat(" ", 20)
-	for i := 0; i < d.Grid.Steps; i++ {
-		if i > 0 && i%4 == 0 {
-			ruler += "  "
-		}
-		if i%4 == 0 {
-			ruler += st.faint.Render(fmt.Sprint(i/4 + 1))
-		} else {
-			ruler += " "
-		}
-		ruler += " "
-	}
+	ruler := m.stepRuler(d)
 	lines = append(lines, ruler)
+	if line := m.playhead(d); line != "" {
+		lines = append(lines, line)
+	}
 	if len(d.Grid.Rows) == 0 {
 		lines = append(lines, st.dim.Render("  (no notes)"))
 	}
-	for _, row := range d.Grid.Rows {
+	// Each note is a block as tall as its velocity and as wide as it lasts, as the unit draws
+	// them; the cursor is the step that is lit.
+	for r, row := range d.Grid.Rows {
 		name := m.snap.Pads[row.Pad.Index()].Name
 		label := fmt.Sprintf("%-4s %-14s", row.Pad, ansi.Truncate(name, 14, "…"))
-		var cells strings.Builder
-		for i, hit := range row.Hits {
-			if i > 0 && i%4 == 0 {
-				cells.WriteString("  ")
-			}
-			if hit {
-				cells.WriteString(st.accent.Render("■"))
-			} else {
-				cells.WriteString(st.faint.Render("·"))
-			}
-			cells.WriteString(" ")
+		labelStyle := st.bold
+		if !slices.Contains(row.Hits, true) {
+			// A pad of the bank with no note in the pattern: there to be given one.
+			labelStyle = st.dim
 		}
-		lines = append(lines, st.bold.Render(label)+" "+cells.String())
+		lines = append(lines, m.rowLabel(row.Pad, label, labelStyle)+" "+m.noteRow(d, row.Pad, r == m.patRow)+m.mixBadge(row.Pad))
 	}
-	hint := "b retargets its pads to another bank   Esc back"
-	if !d.HasSourceBank {
-		hint = "its pads span more than one bank, so it cannot be retargeted   Esc back"
+	if pad, notes, ok := m.cellOfPattern(); ok {
+		here := fmt.Sprintf("%s  step %d  ·  no note", pad, m.patCol+1)
+		if len(notes) > 0 {
+			loudest := 0
+			here = fmt.Sprintf("%s  step %d  ·  velocity", pad, m.patCol+1)
+			for _, n := range notes {
+				here += fmt.Sprintf(" %d", n.Velocity)
+				loudest = max(loudest, int(n.Velocity))
+			}
+			length := float64(notes[0].Length) / float64(max(d.StepTicks(), 1))
+			here = st.text.Render(here+"  ") + st.accent.Render(levelBar(24, loudest, 127)) +
+				st.text.Render(fmt.Sprintf("  ·  lasts %g steps", math.Round(length*10)/10))
+		} else {
+			here = st.text.Render(here)
+		}
+		lines = append(lines, "", here)
+	}
+	hint := "h j k l move  ·  Enter note on/off  ·  u undo  ·  Space or P play  ·  Esc back\n" +
+		"velocity:  , . by 1  ·  < > by 10  ·  * 127, the pad's own level  ·  length:  + -  by a step  ·  m mute  s solo  ·  S save as heard"
+	if d.HasSourceBank {
+		hint += "\n" + "b retargets its pads to another bank"
+	} else {
+		hint += "\n" + "its pads span more than one bank, so it cannot be retargeted"
 	}
 	lines = append(lines, "", st.dim.Render(hint))
 	return m.box("Pattern "+d.Slot.String(), strings.Join(lines, "\n"), g.bodyW, g.bodyH, true)
@@ -1205,6 +1392,8 @@ func (m Model) promptBox() string {
 	st, p := m.st, m.prompt
 	var title, hint string
 	switch p.kind {
+	case promptQuit:
+		return st.modal.Render(st.bold.Render("Quit 404tui?") + "\n\n" + st.dim.Render("y/Enter/q quit   n/Esc stay"))
 	case promptRenamePad:
 		title = fmt.Sprintf("Rename %s", p.pads[0])
 	case promptRenameProject:
@@ -1315,6 +1504,9 @@ func (m Model) promptBox() string {
 // pickerBox is the pad chooser of an assign, or the bank chooser of a retarget.
 func (m Model) pickerBox() string {
 	st, p := m.st, m.picker
+	if p.slots {
+		return m.patternSlotBox()
+	}
 	if p.restorePlan != nil {
 		return m.restorePickerBox()
 	}
@@ -1445,8 +1637,16 @@ func (m Model) patternSlotBox() string {
 			strip.WriteString(st.text.Render(cell))
 		}
 	}
-	title := fmt.Sprintf("Pattern for the %d pads restored onto bank %c: which slot?", len(p.restorePlan.Pads), 'A'+p.bank)
-	info := st.dim.Render(fmt.Sprintf("every pad starts on beat 1 and is held for %d bars", app.StartBars))
+	var title, info, enter string
+	if p.saveFrom != nil {
+		title = fmt.Sprintf("Save pattern %s as you hear it: into which slot?", *p.saveFrom)
+		info = st.dim.Render("muted pads are left out (with solo on, every pad but the soloed ones)")
+		enter = "Enter save"
+	} else {
+		title = fmt.Sprintf("Pattern for the %d pads restored onto bank %c: which slot?", len(p.restorePlan.Pads), 'A'+p.bank)
+		info = st.dim.Render(fmt.Sprintf("every pad starts on beat 1 and is held for %d bars", app.StartBars))
+		enter = "Enter restore and make the pattern"
+	}
 	rows := m.patterns[p.ptnBank]
 	if rows == nil {
 		return st.modal.Render(st.bold.Render(title) + "\n" + info + "\n\n" + strip.String() + "\n\n" + st.dim.Render("reading the patterns of this bank…"))
@@ -1463,6 +1663,10 @@ func (m Model) patternSlotBox() string {
 				label = fmt.Sprintf("%2d %d pads", pos+1, len(rows[pos].Pads))
 				style = style.Background(st.th.tile).Foreground(st.th.text)
 			}
+			if p.saveFrom != nil && rows[pos].Slot == *p.saveFrom {
+				label = fmt.Sprintf("%2d this one", pos+1)
+				style = style.Foreground(st.th.good)
+			}
 			if pos == p.pad {
 				style = style.Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
 			}
@@ -1472,14 +1676,17 @@ func (m Model) patternSlotBox() string {
 	}
 	slot := rows[p.pad]
 	line := st.good.Render(fmt.Sprintf("%s is free", slot.Slot))
-	if slot.Exists {
+	switch {
+	case p.saveFrom != nil && slot.Slot == *p.saveFrom:
+		line = st.warn.Render("that is the pattern being saved: choose another slot")
+	case slot.Exists:
 		line = st.warn.Render(fmt.Sprintf("%s holds a pattern that plays %d pads — it will be replaced", slot.Slot, len(slot.Pads)))
 		if p.confirm {
 			line = st.bad.Render("Press Enter again to replace it")
 		}
 	}
 	return st.modal.Render(st.bold.Render(title) + "\n" + info + "\n\n" + strip.String() + "\n\n" + strings.Join(grid, "\n") + "\n\n" + line +
-		"\n\n" + st.dim.Render("A-J or [ ] bank  ·  hjkl move  ·  Enter restore and make the pattern  ·  Esc back"))
+		"\n\n" + st.dim.Render("A-J or [ ] bank  ·  hjkl move  ·  "+enter+"  ·  Esc back"))
 }
 
 // copyPickerBox is the pad chooser of a copy: where the pad (or the first of several) goes.
@@ -1659,13 +1866,16 @@ func clip(s string, width int) string {
 // sideColumn stacks the detail panel, the session panel and the log history, which takes
 // the rows that are left.
 func (m Model) sideColumn(g geom, detail string) string {
-	session := m.session(g)
-	column := lipgloss.JoinVertical(lipgloss.Left, detail, session)
+	column := detail
+	// What is picked up or on the clipboard is told under the details, while it is.
+	if notes := m.heldBox(g); notes != "" {
+		column = lipgloss.JoinVertical(lipgloss.Left, column, notes)
+	}
 	left := g.bodyH - g.top - lipgloss.Height(column)
 	if left < 5 {
 		return column
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, column, m.historyBox(g, min(left, 14)))
+	return lipgloss.JoinVertical(lipgloss.Left, column, m.historyBox(g, left))
 }
 
 // historyBox lists what has happened, the newest at the bottom.
@@ -1736,4 +1946,227 @@ func (m Model) withKeyGuide(text string, groups []keyGroup, height, width int) s
 	}
 	blank := strings.Repeat("\n", height-used-len(guide))
 	return text + blank + strings.Join(guide, "\n")
+}
+
+// busLegend says how many pads of the bank go to each bus, in the colours of the tiles: blue
+// for BUS 1, red for BUS 2. It is empty when no pad goes to a bus.
+func (m Model) busLegend() string {
+	var n [3]int
+	for _, row := range m.snap.Bank(m.bank) {
+		if row.HasSample {
+			if bus := row.Params["bus-fx"]; bus == 1 || bus == 2 {
+				n[bus]++
+			}
+		}
+	}
+	out := ""
+	for bus := int32(1); bus <= 2; bus++ {
+		if n[bus] == 0 {
+			continue
+		}
+		colour, _ := m.st.th.busColour(bus)
+		out += "   " + lipgloss.NewStyle().Foreground(colour).Bold(true).Render(fmt.Sprintf("%s BUS %d ×%d", busBadge(bus), bus, n[bus]))
+	}
+	return out
+}
+
+// originWhen says when a pad's origin was noted, and whether it was found afterwards.
+func originWhen(o app.Origin) string {
+	if o.Matched {
+		return "found by scan " + o.At
+	}
+	return "assigned " + o.At
+}
+
+// padFlag is one setting of a pad as a tiny letter, and whether it is on.
+type padFlag struct {
+	letter string
+	on     bool
+}
+
+// padFlags are a pad's settings as tiny letters for the tile, each marked on or off: G gate,
+// L loop, O one shot, R reverse, S BPM sync, V vinyl, and when it has one, M and the number of
+// its mute group. Ping-pong (both ways) shows as ~ when it is on.
+func padFlags(row app.PadRow) []padFlag {
+	if !row.HasSample {
+		return nil
+	}
+	p := row.Params
+	mode := p["play-mode"]
+	flags := []padFlag{
+		{"G", p["gate"] != 0},
+		{"L", p["loop"] != 0},
+		{"O", p["mode-flags"]&0x20 != 0},
+		{"R", mode == 1 || mode == 3},
+		{"S", p["bpm-sync"] != 0},
+		{"V", p["vinyl"] != 0},
+	}
+	if mode == 2 || mode == 3 {
+		flags = append(flags, padFlag{"~", true})
+	}
+	if g := p["mute-group"]; g > 0 {
+		flags = append(flags, padFlag{fmt.Sprintf("M%d", g), true})
+	}
+	return flags
+}
+
+// onLetters are the letters of the flags that are on, for tests and messages.
+func onLetters(flags []padFlag) string {
+	var on []string
+	for _, f := range flags {
+		if f.on {
+			on = append(on, f.letter)
+		}
+	}
+	return strings.Join(on, " ")
+}
+
+// noteBlocks are the heights a note's block can have, by velocity.
+var noteBlocks = []rune("▁▂▃▄▅▆▇█")
+
+// noteBlock is the block for a velocity, 1 to 127.
+func noteBlock(velocity int) string {
+	return string(noteBlocks[clamp((velocity-1)*len(noteBlocks)/127, 0, len(noteBlocks)-1)])
+}
+
+// noteRow draws one pad's notes across the steps: a step is two cells wide, a note covers the
+// steps it lasts, joined, at a height that is its velocity. A step without a note is a dot.
+// onCursorRow lights the step with the cursor.
+func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow bool) string {
+	st := m.st
+	steps := d.Grid.Steps
+	// cover is the velocity sounding at each step (0: none), and from which note it is.
+	cover, owner := make([]int, steps), make([]int, steps)
+	for i := range owner {
+		owner[i] = -1
+	}
+	for i, n := range d.Notes {
+		if n.Pad != pad || d.Length == 0 {
+			continue
+		}
+		start := min(int(uint64(n.Tick)*uint64(steps)/uint64(d.Length)), steps-1)
+		end := n.Tick + uint32(n.Length)
+		for c := start; c < steps; c++ {
+			if c > start && d.StepTick(c) >= end {
+				break
+			}
+			if int(n.Velocity) >= cover[c] {
+				cover[c], owner[c] = int(n.Velocity), i
+			}
+		}
+	}
+	// A pad that is not heard in the mix on this computer has its notes greyed out.
+	noteStyle := st.accent
+	if !heard(pad, m.muted, m.soloed) {
+		noteStyle = st.faint
+	}
+	var b strings.Builder
+	for c := 0; c < steps; c++ {
+		joined := c+1 < steps && owner[c] >= 0 && owner[c] == owner[c+1]
+		cell, style := "· ", st.faint
+		if cover[c] > 0 {
+			block := noteBlock(cover[c])
+			cell, style = block+block, noteStyle
+		}
+		if onCursorRow && c == m.patCol {
+			style = lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
+			if cover[c] == 0 {
+				cell = "··"
+			}
+		}
+		b.WriteString(style.Render(cell))
+		// Between two steps: the block goes on when one note covers both.
+		gap := " "
+		if c%4 == 3 {
+			gap = "  "
+		}
+		if joined {
+			b.WriteString(noteStyle.Render(strings.Repeat(noteBlock(cover[c]), len(gap))))
+		} else {
+			b.WriteString(gap)
+		}
+	}
+	return b.String()
+}
+
+// loopAt is where the looping pattern is in its round, from 0 to 1, and how long is left of
+// the round; false when the pattern on show is not looping.
+func (m Model) loopAt(slot proto.PadIndex) (float64, time.Duration, bool) {
+	if m.loopSlot == nil || *m.loopSlot != slot || m.loopRound <= 0 || m.player == nil || !m.player.Playing() ||
+		m.listening != "pattern "+slot.String() || m.loopStart.IsZero() {
+		return 0, 0, false
+	}
+	in := time.Since(m.loopStart) % m.loopRound
+	return float64(in) / float64(m.loopRound), m.loopRound - in, true
+}
+
+// playhead is a line under the step numbers that follows the looping pattern: done is solid,
+// the step that sounds is lit, what is still to come is dashed, and the label says how long
+// until the round starts again. It is empty when the pattern is not playing.
+func (m Model) playhead(d *app.PatternDetail) string {
+	frac, left, ok := m.loopAt(d.Slot)
+	if !ok {
+		return ""
+	}
+	st := m.st
+	steps := d.Grid.Steps
+	now := min(int(frac*float64(steps)), steps-1)
+	var b strings.Builder
+	b.WriteString(st.hot.Render(fmt.Sprintf("%-20s", fmt.Sprintf("▶ %.1f s to go", left.Seconds()))))
+	for c := 0; c < steps; c++ {
+		gap := " "
+		if c%4 == 3 {
+			gap = "  "
+		}
+		switch {
+		case c < now:
+			b.WriteString(st.accent.Render("━━" + strings.Repeat("━", len(gap))))
+		case c == now:
+			b.WriteString(st.hot.Render("██") + st.faint.Render(strings.Repeat("┄", len(gap))))
+		default:
+			b.WriteString(st.faint.Render("┄┄" + strings.Repeat("┄", len(gap))))
+		}
+	}
+	return b.String()
+}
+
+// stepRuler is the line of beat numbers over a pattern's steps, lined up with noteRow.
+func (m Model) stepRuler(d *app.PatternDetail) string {
+	ruler := strings.Repeat(" ", 20)
+	for i := 0; i < d.Grid.Steps; i++ {
+		if i > 0 && i%4 == 0 {
+			ruler += " "
+		}
+		if i%4 == 0 {
+			ruler += m.st.faint.Render(fmt.Sprintf("%-3d", i/4+1))
+		} else {
+			ruler += "   "
+		}
+	}
+	return ruler
+}
+
+// mixBadge is a pad's state in the mix played on this computer, shown after its row in a
+// pattern: a red MUTE, a green SOLO, or nothing.
+func (m Model) mixBadge(pad proto.PadIndex) string {
+	badge := lipgloss.NewStyle().Bold(true).Foreground(m.st.th.cursorFg)
+	switch {
+	case m.muted[pad]:
+		return "  " + badge.Background(m.st.th.bad).Render(" MUTE ")
+	case m.soloed[pad]:
+		return "  " + badge.Background(m.st.th.good).Render(" SOLO ")
+	}
+	return ""
+}
+
+// rowLabel is a pad's label in a pattern: greyed out, and struck through when muted, when the
+// pad is not heard in the mix on this computer.
+func (m Model) rowLabel(pad proto.PadIndex, label string, style lipgloss.Style) string {
+	switch {
+	case m.muted[pad]:
+		style = m.st.faint.Strikethrough(true)
+	case !heard(pad, m.muted, m.soloed):
+		style = m.st.faint
+	}
+	return style.Render(label)
 }

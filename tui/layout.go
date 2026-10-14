@@ -54,10 +54,15 @@ func (m Model) geom() geom {
 	g.side = g.bodyW >= 100
 	avail := g.bodyW
 	if g.side {
-		avail = g.bodyW * 42 / 100
+		avail = g.bodyW * 52 / 100
 	}
 	g.tileW = clamp((avail-3)/4, 8, 24)
 	g.tileH = 3
+	// With rows to spare the pads are a row taller, which gives their settings a line of their
+	// own: the pads' panel (4 rows of 4 and their gaps, a frame) and the patterns' under it.
+	if g.side && (m.section == secPads || m.section == secPatterns) && g.bodyH-g.top >= 4*4+3+2+13 {
+		g.tileH = 4
+	}
 	// The detail panel wants about 13 rows under the grid; below that the tiles shrink.
 	if (g.side && g.bodyH-g.top < 15) || (!g.side && g.bodyH-g.top < 27) {
 		g.tileH = 2

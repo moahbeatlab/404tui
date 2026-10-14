@@ -25,6 +25,7 @@ import (
 	"github.com/moahbeatlab/404tui/serialport"
 	"github.com/moahbeatlab/404tui/sim"
 	"github.com/moahbeatlab/404tui/tui"
+	"github.com/moahbeatlab/404tui/version"
 )
 
 const usage = `usage: sp404 [flags] <command>
@@ -62,11 +63,16 @@ func main() {
 	flag.BoolVar(&o.trace, "trace", false, "also log every message on the wire, as hex (implies -v)")
 	flag.StringVar(&o.logPath, "log", "", "debug log file (default: the user cache folder for the UI, standard error otherwise)")
 	flag.StringVar(&o.audio, "audio", "", "how files are played on this computer: oto (default) or afplay (macOS's own player)")
+	showVersion := flag.Bool("version", false, "print the version and stop")
 	flag.Usage = func() {
 		fmt.Fprint(os.Stderr, usage)
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("404tui " + version.Version)
+		return
+	}
 	args := flag.Args()
 	if len(args) == 0 {
 		args = []string{"menu"}
@@ -147,7 +153,7 @@ func (l logging) banner(o options) {
 	if dir, err := os.UserConfigDir(); err == nil {
 		state = filepath.Join(dir, "404tui", "state.json")
 	}
-	l.Info("404tui debug log", "revision", rev+modified, "go", runtime.Version(), "os", runtime.GOOS, "arch", runtime.GOARCH,
+	l.Info("404tui debug log", "version", version.Version, "revision", rev+modified, "go", runtime.Version(), "os", runtime.GOOS, "arch", runtime.GOARCH,
 		"args", os.Args[1:], "port", o.port, "sim", o.simulate, "trace", o.trace, "state file", state)
 }
 

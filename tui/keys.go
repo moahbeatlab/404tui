@@ -3,6 +3,8 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -45,11 +47,15 @@ var commands = []command{
 	{"+", "Bank volume up", []int{secPads, secPatterns}},
 	{"x", "Pick up pad to move it", []int{secPads}},
 	{"p", "Move the picked-up pad here (overwrite)", []int{secPads}},
-	{"s", "Swap the picked-up pad with this one", []int{secPads}},
+	{"s", "Swap the picked-up pad with this one; with none picked up, solo this pad", []int{secPads}},
 	{"e", "Export this bank: choose a folder, get WAV files + samples.json", []int{secPads}},
 	{"R", "Restore pads from an export: choose its folder, then the bank (p there also makes a pattern)", []int{secPads}},
 	{"t", "Set gate, loop, BPM sync, vinyl, one shot, fixed velocity or bus FX on the marked pads (or on the whole bank)", []int{secPads}},
+	{"m", "Mute this pad in the pattern playing on this computer (again unmutes)", []int{secPads, secPatterns}},
+	{"M", "Solo this pad in the pattern playing on this computer: only the soloed pads sound (again unsolos); s does the same", []int{secPads, secPatterns}},
+	{"S", "In an open pattern: save it as you hear it into a slot you choose, without the muted pads (or with only the soloed ones)", []int{secPatterns}},
 	{"N", "New pattern in the first free slot: every sample in the bank on beat 1, 2 bars", []int{secPads, secPatterns}},
+	{"F", "Find where the samples on the pads came from, for the pads with no origin noted: names and lengths are matched against the index", []int{secPads}},
 	{"tab", "Move between the pads and the patterns panel under them", []int{secPads, secPatterns}},
 	{"enter", "Open pattern", []int{secPatterns}},
 	{"d", "Delete the pattern (or the marked ones)", []int{secPatterns}},
@@ -203,7 +209,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Nothing to work on until a unit is connected.
 		switch name {
 		case "q", "esc":
-			return m, tea.Quit
+			return m.askQuit()
 		case "?":
 			m.help = true
 		case "T":
@@ -217,13 +223,11 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if name == "q" {
-		m.stopListening()
-		return m, tea.Quit
+		return m.askQuit()
 	}
 	if m.busy != "" || m.snap == nil {
 		if name == "esc" {
-			m.stopListening()
-			return m, tea.Quit
+			return m.askQuit()
 		}
 		return m, nil
 	}
@@ -260,6 +264,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "r":
 		m.patterns = map[int][]app.PatternRow{}
+		m.patPreview = map[proto.PadIndex]*app.PatternDetail{}
 		m.usage, m.usageState = nil, 0
 		clear(m.indexes)
 		m.tree = nil
@@ -314,8 +319,14 @@ func (m Model) escape() (tea.Model, tea.Cmd) {
 	case m.listening != "":
 		m.stopListening()
 	default:
-		return m, tea.Quit
+		return m.askQuit()
 	}
+	return m, nil
+}
+
+// askQuit asks whether to leave the app; y, Enter or q again quits.
+func (m Model) askQuit() (tea.Model, tea.Cmd) {
+	m.prompt = &prompt{kind: promptQuit}
 	return m, nil
 }
 
@@ -438,6 +449,12 @@ func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 	switch name {
 	case "N":
 		return m.newStartPattern()
+	case "F":
+		return m.scanOrigins()
+	case "m":
+		return m.toggleMute(row.Pad)
+	case "M":
+		return m.toggleSolo(row.Pad)
 	case "t":
 		m.toggles = &toggleMenu{}
 	case "h", "left":
@@ -545,6 +562,10 @@ func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 		}
 	case "p", "s":
 		if !m.hasMoving {
+			if name == "s" {
+				// With nothing picked up to swap, s solos the pad.
+				return m.toggleSolo(row.Pad)
+			}
 			m.message = "nothing picked up: x picks up a pad's sample"
 			break
 		}
@@ -756,9 +777,10 @@ func (m Model) previewLength(row app.PadRow) time.Duration {
 
 func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 	if m.pattern != nil {
+		d := m.pattern
+		rows := d.Grid.Rows
 		switch name {
 		case "b":
-			d := m.pattern
 			if !d.HasSourceBank {
 				m.message = "its pads span more than one bank; retargeting needs one bank"
 				break
@@ -768,8 +790,39 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 		case "r":
 			m.busy = "reading the pattern"
 			return m, m.openPattern(m.pattern.Slot, "refreshed")
-		case "P", "s":
+		case "P":
 			return m.playPattern(m.pattern.Slot)
+		case "h", "left":
+			m.patCol = clamp(m.patCol-1, 0, d.Grid.Steps-1)
+		case "l", "right":
+			m.patCol = clamp(m.patCol+1, 0, d.Grid.Steps-1)
+		case "j", "down":
+			m.patRow = clamp(m.patRow+1, 0, max(len(rows)-1, 0))
+		case "k", "up":
+			m.patRow = clamp(m.patRow-1, 0, max(len(rows)-1, 0))
+		case "g":
+			m.patCol = 0
+		case "G":
+			m.patCol = d.Grid.Steps - 1
+		case "enter", "x":
+			return m.toggleNote()
+		case " ":
+			return m.playPattern(m.pattern.Slot)
+		case "u":
+			return m.undoPatternEdit()
+		case ",", ".", "<", ">", "*":
+			return m.changeVelocity(name)
+		case "m", "M", "s":
+			if pad, _, ok := m.cellOfPattern(); ok {
+				if name == "m" {
+					return m.toggleMute(pad)
+				}
+				return m.toggleSolo(pad)
+			}
+		case "+", "=", "-":
+			return m.changeLength(name != "-")
+		case "S":
+			return m.chooseHeardSlot()
 		}
 		return m, nil
 	}
@@ -871,43 +924,11 @@ func (m Model) playPattern(slot proto.PadIndex) (tea.Model, tea.Cmd) {
 	m.player.Stop()
 	id := m.listenGen.Add(1)
 	m.listening = label
+	m.loopSlot = &slot
 	m.message = "mixing " + label + "…"
-	bpm := m.snap.Banks[slot.Bank()].Tempo
-	if m.snap.UsesProjectTempo {
-		bpm = m.snap.ProjectTempo
-	}
-	player, unit, ops, gen, cache := m.player, m.unit, m.ops, m.listenGen, m.padAudio
-	pads := m.snap.Pads
+	player, gen, mix := m.player, m.listenGen, m.patternMixer(slot)
 	return m, func() tea.Msg {
-		ops.Lock()
-		defer ops.Unlock()
-		current, err := unit.CurrentProject()
-		if err != nil {
-			return listenMsg{path: label, err: err}
-		}
-		data, err := unit.ReadFile(formats.PatternPath(current+1, slot))
-		if err != nil {
-			return listenMsg{path: label, err: err}
-		}
-		pattern, err := formats.ParsePattern(data)
-		if err != nil {
-			return listenMsg{path: label, err: err}
-		}
-		mix, err := app.MixPattern(pattern, bpm, func(pad proto.PadIndex) (formats.Sample, error) {
-			row := pads[pad.Index()]
-			if !row.HasSample {
-				return formats.Sample{Channels: 1}, nil
-			}
-			key := factKey{row.Pad, row.Size, row.Name}
-			if sample, ok := cache.get(key); ok {
-				return sample, nil
-			}
-			sample, err := app.PadAudio(unit, row)
-			if err == nil {
-				cache.put(key, sample)
-			}
-			return sample, err
-		})
+		sample, err := mix()
 		if err != nil {
 			return listenMsg{path: label, err: err}
 		}
@@ -916,10 +937,89 @@ func (m Model) playPattern(slot proto.PadIndex) (tea.Model, tea.Cmd) {
 		}
 		// A pattern repeats until it is stopped, so that it can be listened to while the
 		// samples of its pads are changed; a player that cannot loop plays it once.
+		round := time.Duration(sample.Frames()) * time.Second / formats.SampleRate
 		if looper, ok := player.(app.Looper); ok {
-			return listenMsg{path: label, err: looper.Loop(mix)}
+			return listenMsg{path: label, err: looper.Loop(sample), round: round}
 		}
-		return listenMsg{path: label, err: player.Play(mix)}
+		return listenMsg{path: label, err: player.Play(sample)}
+	}
+}
+
+// patternMixer reads a pattern from the unit and mixes it, at the tempo of its bank and with
+// each pad at its level, as things are now: the pads are copied, so the mix is not changed by
+// what happens on the screen while it is made.
+func (m Model) patternMixer(slot proto.PadIndex) func() (formats.Sample, error) {
+	bpm := m.snap.Banks[slot.Bank()].Tempo
+	if m.snap.UsesProjectTempo {
+		bpm = m.snap.ProjectTempo
+	}
+	unit, ops, cache := m.unit, m.ops, m.padAudio
+	muted, soloed := maps.Clone(m.muted), maps.Clone(m.soloed)
+	// The pads are copied with their settings: the screen changes those while the mix is made.
+	pads := slices.Clone(m.snap.Pads)
+	for i := range pads {
+		pads[i].Params = maps.Clone(pads[i].Params)
+	}
+	return func() (formats.Sample, error) {
+		ops.Lock()
+		defer ops.Unlock()
+		current, err := unit.CurrentProject()
+		if err != nil {
+			return formats.Sample{}, err
+		}
+		data, err := unit.ReadFile(formats.PatternPath(current+1, slot))
+		if err != nil {
+			return formats.Sample{}, err
+		}
+		pattern, err := formats.ParsePattern(data)
+		if err != nil {
+			return formats.Sample{}, err
+		}
+		return app.MixPatternVoices(pattern, bpm, func(pad proto.PadIndex) (app.Voice, error) {
+			row := pads[pad.Index()]
+			if !row.HasSample || !heard(pad, muted, soloed) {
+				return app.Voice{Sample: formats.Sample{Channels: 2}}, nil
+			}
+			key := factKey{row.Pad, row.Size, row.Name}
+			sample, ok := cache.get(key)
+			if !ok {
+				if sample, err = app.PadAudio(unit, row); err != nil {
+					return app.Voice{}, err
+				}
+				cache.put(key, sample)
+			}
+			// The pad as its settings say: level, pan, pitch, direction, gate and loop.
+			return app.PadVoice(sample, row.Level, row.Params), nil
+		})
+	}
+}
+
+// loopQueuedMsg ends the mixing of a pattern again after a change while it loops.
+type loopQueuedMsg struct{ err error }
+
+// requeueLoop mixes the looping pattern again, so that a change is heard at once:
+// a note on or off, a velocity, a pad's level. It does nothing when no pattern loops.
+func (m Model) requeueLoop() tea.Cmd {
+	if m.loopSlot == nil || m.player == nil || !m.player.Playing() || m.listening != "pattern "+m.loopSlot.String() || m.snap == nil {
+		return nil
+	}
+	player, mix := m.player, m.patternMixer(*m.loopSlot)
+	return func() tea.Msg {
+		sample, err := mix()
+		if err != nil {
+			return loopQueuedMsg{err: err}
+		}
+		// At once, from the place the loop has reached; else from its next round.
+		if replacer, ok := player.(app.LoopReplacer); ok {
+			return loopQueuedMsg{err: replacer.ReplaceLoop(sample)}
+		}
+		if swapper, ok := player.(app.LoopSwapper); ok {
+			return loopQueuedMsg{err: swapper.NextLoop(sample)}
+		}
+		if looper, ok := player.(app.Looper); ok {
+			return loopQueuedMsg{err: looper.Loop(sample)}
+		}
+		return loopQueuedMsg{}
 	}
 }
 
@@ -1834,6 +1934,11 @@ func (m Model) patternSlotKey(name string) (tea.Model, tea.Cmd) {
 	}
 	switch name {
 	case "esc", "q":
+		if p.saveFrom != nil {
+			// Saving a pattern has no step before this one.
+			m.picker = nil
+			break
+		}
 		p.slots, p.confirm, p.pad = false, false, 0
 	case "[", "H":
 		return bank(p.ptnBank - 1)
@@ -1852,10 +1957,19 @@ func (m Model) patternSlotKey(name string) (tea.Model, tea.Cmd) {
 		if rows == nil {
 			return m.patternSlots()
 		}
+		if p.saveFrom != nil && rows[p.pad].Slot == *p.saveFrom {
+			m.message = "that is the pattern itself: choose another slot"
+			return m, nil
+		}
 		// A slot that holds a pattern is replaced only on a second Enter.
 		if rows[p.pad].Exists && !p.confirm {
 			p.confirm = true
 			return m, nil
+		}
+		if p.saveFrom != nil {
+			from, to := *p.saveFrom, rows[p.pad].Slot
+			m.picker = nil
+			return m.saveHeardPattern(from, to)
 		}
 		plan, to, slot := p.restorePlan, p.bank, rows[p.pad].Slot
 		m.picker = nil
@@ -2001,6 +2115,14 @@ func (m Model) promptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.bankPromptKey(key)
 	}
 	name := key.String()
+	if p.kind == promptQuit {
+		m.prompt = nil
+		if name == "y" || name == "enter" || name == "q" {
+			m.stopListening()
+			return m, tea.Quit
+		}
+		return m, nil
+	}
 	if name == "esc" {
 		m.prompt = nil
 		if p.reopen != nil {
@@ -2375,4 +2497,245 @@ func (m Model) find(text string) (tea.Model, tea.Cmd) {
 	}
 	m.message = fmt.Sprintf("nothing matches %q", text)
 	return m, nil
+}
+
+// cellOfPattern is the pad and the notes under the cursor of the open pattern.
+func (m Model) cellOfPattern() (proto.PadIndex, []formats.NoteRecord, bool) {
+	d := m.pattern
+	if d == nil || len(d.Grid.Rows) == 0 {
+		return proto.PadIndex{}, nil, false
+	}
+	pad := d.Grid.Rows[clamp(m.patRow, 0, len(d.Grid.Rows)-1)].Pad
+	return pad, d.NotesAt(pad, clamp(m.patCol, 0, d.Grid.Steps-1)), true
+}
+
+// editPatternBytes changes the open pattern's file on the unit with edit, then reads it again
+// so that the grid shows what was written; note is what is said afterwards.
+func (m Model) editPatternBytes(edit func(b []byte) ([]byte, error), note string) (tea.Model, tea.Cmd) {
+	unit, ops, slot := m.unit, m.ops, m.pattern.Slot
+	return m, func() tea.Msg {
+		ops.Lock()
+		defer ops.Unlock()
+		before, err := app.EditPattern(unit, slot, edit)
+		if err != nil {
+			return patternMsg{err: err}
+		}
+		detail, err := app.OpenPattern(unit, slot)
+		return patternMsg{detail: detail, err: err, note: note, undo: before}
+	}
+}
+
+// toggleNote puts a note at the cursor, a whole step long and at full velocity, or takes the
+// notes there out.
+func (m Model) toggleNote() (tea.Model, tea.Cmd) {
+	pad, _, ok := m.cellOfPattern()
+	if !ok {
+		return m, nil
+	}
+	d := m.pattern
+	// Only the notes that start at the step are taken out; under a longer note from before, a
+	// new one is put.
+	notes := d.CellNotes(pad, m.patCol)
+	if len(notes) > 0 {
+		offsets := make([]int, len(notes))
+		for i, n := range notes {
+			offsets[i] = n.Offset
+		}
+		return m.editPatternBytes(func(b []byte) ([]byte, error) {
+			for _, at := range offsets {
+				if err := formats.RemoveNote(b, at); err != nil {
+					return nil, err
+				}
+			}
+			return b, nil
+		}, fmt.Sprintf("%s step %d: %s taken out", d.Slot, m.patCol+1, plural(len(notes), "note")))
+	}
+	tick, length := d.StepTick(m.patCol), uint16(min(d.StepTicks(), 65535))
+	return m.editPatternBytes(func(b []byte) ([]byte, error) {
+		return formats.InsertNote(b, tick, pad, 127, length)
+	}, fmt.Sprintf("%s step %d: note on %s at velocity 127", d.Slot, m.patCol+1, pad))
+}
+
+// changeVelocity sets the velocity of the notes at the cursor: , and . by 1, < and > by 10,
+// * to 127, where the note plays at the pad's own level.
+func (m Model) changeVelocity(key string) (tea.Model, tea.Cmd) {
+	pad, notes, ok := m.cellOfPattern()
+	if !ok {
+		return m, nil
+	}
+	if len(notes) == 0 {
+		m.message = "no note here: Enter puts one"
+		return m, nil
+	}
+	loudest := 0
+	offsets := make([]int, len(notes))
+	for i, n := range notes {
+		offsets[i] = n.Offset
+		loudest = max(loudest, int(n.Velocity))
+	}
+	next := loudest
+	switch key {
+	case ",":
+		next--
+	case ".":
+		next++
+	case "<":
+		next -= 10
+	case ">":
+		next += 10
+	case "*":
+		next = 127
+	}
+	next = clamp(next, 1, 127)
+	if next == loudest {
+		m.message = fmt.Sprintf("velocity is %d already", loudest)
+		return m, nil
+	}
+	return m.editPatternBytes(func(b []byte) ([]byte, error) {
+		for _, at := range offsets {
+			if err := formats.SetVelocity(b, at, uint8(next)); err != nil {
+				return nil, err
+			}
+		}
+		return b, nil
+	}, fmt.Sprintf("%s: velocity of %s step %d is %d", m.pattern.Slot, pad, m.patCol+1, next))
+}
+
+// undoPatternEdit puts the open pattern back as it was before the last edit; pressing it again
+// brings the edit back.
+func (m Model) undoPatternEdit() (tea.Model, tea.Cmd) {
+	u := m.patUndo
+	if u == nil || m.pattern == nil || u.slot != m.pattern.Slot {
+		m.message = "nothing to undo in this pattern"
+		return m, nil
+	}
+	saved := u.before
+	return m.editPatternBytes(func([]byte) ([]byte, error) { return saved, nil }, fmt.Sprintf("%s: the last edit is undone (u again redoes it)", u.slot))
+}
+
+// changeLength makes the notes at the cursor a step longer or shorter: no shorter than a step,
+// no longer than to the end of the pattern.
+func (m Model) changeLength(longer bool) (tea.Model, tea.Cmd) {
+	pad, notes, ok := m.cellOfPattern()
+	if !ok {
+		return m, nil
+	}
+	if len(notes) == 0 {
+		m.message = "no note here: Enter puts one"
+		return m, nil
+	}
+	d := m.pattern
+	step := max(d.StepTicks(), 1)
+	type change struct {
+		offset int
+		length uint16
+	}
+	var changes []change
+	for _, n := range notes {
+		length := uint32(n.Length)
+		if longer {
+			length = min(length+step, d.Length-n.Tick, 65535)
+		} else {
+			length = max(length-min(length, step), min(step, uint32(n.Length)))
+		}
+		if length != uint32(n.Length) {
+			changes = append(changes, change{n.Offset, uint16(length)})
+		}
+	}
+	if len(changes) == 0 {
+		if longer {
+			m.message = "the note lasts to the end of the pattern already"
+		} else {
+			m.message = "the note is one step long already"
+		}
+		return m, nil
+	}
+	steps := float64(changes[0].length) / float64(step)
+	return m.editPatternBytes(func(b []byte) ([]byte, error) {
+		for _, c := range changes {
+			if err := formats.SetLength(b, c.offset, c.length); err != nil {
+				return nil, err
+			}
+		}
+		return b, nil
+	}, fmt.Sprintf("%s: the note of %s lasts %g steps", d.Slot, pad, math.Round(steps*10)/10))
+}
+
+// toggleMute silences a pad in the mix this computer plays, or lets it sound again. The unit is
+// not told: its own mute is on its pads.
+func (m Model) toggleMute(pad proto.PadIndex) (tea.Model, tea.Cmd) {
+	if m.muted[pad] {
+		delete(m.muted, pad)
+		m.message = pad.String() + " sounds again in the mix on this computer"
+	} else {
+		m.muted[pad] = true
+		m.message = pad.String() + " is muted in the mix on this computer (m again unmutes)"
+	}
+	m.loopDirty = true
+	return m, nil
+}
+
+// toggleSolo makes a pad one of the few that sound in the mix this computer plays, or takes
+// it out of them; with none soloed, every pad sounds.
+func (m Model) toggleSolo(pad proto.PadIndex) (tea.Model, tea.Cmd) {
+	if m.soloed[pad] {
+		delete(m.soloed, pad)
+		m.message = pad.String() + " is no longer soloed"
+	} else {
+		m.soloed[pad] = true
+		m.message = pad.String() + " is soloed: only the soloed pads sound on this computer (M again unsolos)"
+	}
+	m.loopDirty = true
+	return m, nil
+}
+
+// chooseHeardSlot asks which slot the open pattern is saved into as it is heard; the chooser
+// rests on the first free slot of its bank.
+func (m Model) chooseHeardSlot() (tea.Model, tea.Cmd) {
+	d := m.pattern
+	if len(d.PadsUsed) > 0 && !slices.ContainsFunc(d.PadsUsed, func(pad proto.PadIndex) bool { return heard(pad, m.muted, m.soloed) }) {
+		m.message = "every pad of the pattern is muted: nothing to save"
+		return m, nil
+	}
+	from := d.Slot
+	m.picker = &picker{slots: true, ptnBank: int(from.Index()) / proto.PadsPerBank, saveFrom: &from}
+	return m.patternSlots()
+}
+
+// saveHeardPattern copies pattern from into slot to with only the notes of the pads heard in
+// the mix on this computer: muted pads, and the pads not soloed when some are, are left out.
+// The new pattern plays the same on the unit.
+func (m Model) saveHeardPattern(from, to proto.PadIndex) (tea.Model, tea.Cmd) {
+	var left []string
+	if d := m.pattern; d != nil && d.Slot == from {
+		for _, pad := range d.PadsUsed {
+			if !heard(pad, m.muted, m.soloed) {
+				left = append(left, pad.String())
+			}
+		}
+	}
+	unit := m.unit
+	muted, soloed := maps.Clone(m.muted), maps.Clone(m.soloed)
+	m.busy = "saving what you hear as " + to.String()
+	return m, m.edit(func() tea.Msg {
+		dropped, err := app.CopyPatternKeeping(unit, from, to, func(pad proto.PadIndex) bool { return heard(pad, muted, soloed) })
+		if err != nil {
+			return doneMsg{message: "the pattern was not saved: " + err.Error(), patterns: true}
+		}
+		message := fmt.Sprintf("%s saved as %s, as you hear it", from, to)
+		if len(left) > 0 {
+			message += fmt.Sprintf(": without %s (%s left out)", strings.Join(left, " "), plural(dropped, "note"))
+		} else {
+			message += ": nothing muted, so a full copy"
+		}
+		return doneMsg{message: message, patterns: true}
+	})
+}
+
+// heard says whether a pad sounds in the mix on this computer: not muted, and soloed when any is.
+func heard(pad proto.PadIndex, muted, soloed map[proto.PadIndex]bool) bool {
+	if muted[pad] {
+		return false
+	}
+	return len(soloed) == 0 || soloed[pad]
 }

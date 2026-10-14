@@ -137,3 +137,87 @@ func indexBarLines(st styles, job *tagJob, width int) []string {
 	}
 	return []string{bar, st.dim.Render(counts)}
 }
+
+// scanOrigins looks for the files the samples of this project came from, for the pads that
+// have no origin noted, by matching their names and lengths against the search index of the
+// card; what is certain is noted and saved. Pads that fit several files, or none, are told.
+func (m Model) scanOrigins() (tea.Model, tea.Cmd) {
+	ix := m.indexes[app.CardRoot]
+	rows, project, unit := m.snap.Pads, m.snap.Project, m.unit
+	withSample := 0
+	for _, r := range rows {
+		if r.HasSample {
+			withSample++
+		}
+	}
+	prog := m.prog
+	prog.begin(withSample)
+	m.busy = "finding where the samples came from"
+	return m, m.edit(func() tea.Msg {
+		defer prog.begin(0)
+		if ix == nil {
+			// The index is not in hand (it is made when the Files view is shown): the saved one is read.
+			saved, err := app.LoadTagIndex(unit)
+			if err != nil {
+				return doneMsg{message: "reading the saved index failed: " + err.Error()}
+			}
+			ix = app.IndexFromTags(saved, app.CardRoot)
+		}
+		if len(ix.Files) == 0 {
+			return doneMsg{message: "no index to look in: open the Files view and press i on the folders your samples are in"}
+		}
+		have, err := app.LoadOrigins(unit)
+		if err != nil {
+			return doneMsg{message: "reading the origins failed: " + err.Error()}
+		}
+		lengths := map[string]float64{}
+		seconds := func(path string) (float64, bool) {
+			if s, ok := lengths[path]; ok {
+				return s, s > 0
+			}
+			head, exists, err := unit.ReadPrefix(path, 512)
+			s := 0.0
+			if err == nil && exists {
+				s, _ = app.WAVSeconds(head)
+			}
+			lengths[path] = s
+			return s, s > 0
+		}
+		padSeconds := func(row app.PadRow) (float64, bool) {
+			facts, err := app.ReadPadFacts(unit, row)
+			return facts.Seconds, err == nil && facts.Seconds > 0
+		}
+		scan := app.ScanOrigins(rows, project, have, ix.Files, seconds, padSeconds, func(row app.PadRow, cands []string) []string {
+			prog.step(int(row.Pad.Index()), "comparing the audio of "+row.Pad.String()+" with "+plural(len(cands), "file"))
+			return app.MatchByContent(unit, row, cands)
+		}, func(done, total int, line string) {
+			prog.step(done, line)
+			prog.logLine(line)
+		})
+		message := fmt.Sprintf("origins: %s found", plural(len(scan.Found), "pad"))
+		if scan.Known > 0 {
+			message += fmt.Sprintf(", %d already known", scan.Known)
+		}
+		if n := len(scan.Ambiguous); n > 0 {
+			var which []string
+			for _, a := range scan.Ambiguous[:min(n, 4)] {
+				which = append(which, fmt.Sprintf("%s (%d files)", a.Pad, len(a.Candidates)))
+			}
+			message += fmt.Sprintf("; %d fit several files and are left: %s", n, strings.Join(which, ", "))
+			if n > 4 {
+				message += ", …"
+			}
+		}
+		if n := len(scan.Unknown); n > 0 {
+			message += fmt.Sprintf("; %d are not in the index", n)
+		}
+		if len(scan.Found) == 0 {
+			return doneMsg{message: message}
+		}
+		origins, err := app.RecordOrigins(unit, project, scan.Found)
+		if err != nil {
+			return doneMsg{message: message + "; saving them failed: " + err.Error()}
+		}
+		return doneMsg{message: message, origins: origins}
+	})
+}

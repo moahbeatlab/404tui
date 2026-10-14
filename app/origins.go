@@ -22,8 +22,11 @@ type Origin struct {
 	Path string `json:"path"`
 	// Name is the name the pad was given. The note is only shown while the pad still has it.
 	Name string `json:"name"`
-	// At is when it was assigned.
+	// At is when it was assigned, or found.
 	At string `json:"at"`
+	// Matched is set when the origin was found afterwards by matching the pad's name to the
+	// files of the index, not noted when the file was assigned.
+	Matched bool `json:"matched,omitempty"`
 }
 
 // Origins are the notes, by project and pad ("1/B9").
@@ -86,6 +89,8 @@ type OriginRecord struct {
 	Pad  proto.PadIndex
 	Path string
 	Name string
+	// Matched marks a record found by a scan, not made by an assign.
+	Matched bool
 }
 
 // RecordOrigins notes where the samples just assigned came from, and writes the notes. It
@@ -97,7 +102,7 @@ func RecordOrigins(s Storage, project uint8, records []OriginRecord) (*Origins, 
 	}
 	at := time.Now().Format("2006-01-02 15:04")
 	for _, r := range records {
-		o.Pads[originKey(project, r.Pad)] = Origin{Path: r.Path, Name: r.Name, At: at}
+		o.Pads[originKey(project, r.Pad)] = Origin{Path: r.Path, Name: r.Name, At: at, Matched: r.Matched}
 	}
 	return o, o.Save(s)
 }

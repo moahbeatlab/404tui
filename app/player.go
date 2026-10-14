@@ -17,3 +17,15 @@ type Player interface {
 type Looper interface {
 	Loop(formats.Sample) error
 }
+
+// LoopSwapper is a Looper that can change what it loops without a break: the new sample takes
+// over when the one playing comes round to its end. Starting a loop when none plays.
+type LoopSwapper interface {
+	NextLoop(formats.Sample) error
+}
+
+// LoopReplacer is a Looper that can change what it loops at once, at the place it has
+// reached, instead of at the end of the round.
+type LoopReplacer interface {
+	ReplaceLoop(formats.Sample) error
+}

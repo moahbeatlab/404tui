@@ -16,13 +16,16 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/sim"
+	"github.com/moahbeatlab/404tui/version"
 )
 
 func init() {
@@ -53,10 +56,13 @@ func (m *memStore) Load() State  { return m.state }
 func (m *memStore) Save(s State) { m.state = s; m.saves++ }
 
 type fakePlayer struct {
-	played  []formats.Sample
-	looped  []formats.Sample
-	stopped int
-	playing bool
+	played []formats.Sample
+	looped []formats.Sample
+	queued []formats.Sample
+	// replaced are loops changed at once, where they had got to.
+	replaced []formats.Sample
+	stopped  int
+	playing  bool
 }
 
 func (f *fakePlayer) Play(s formats.Sample) error {
@@ -66,6 +72,16 @@ func (f *fakePlayer) Play(s formats.Sample) error {
 }
 func (f *fakePlayer) Loop(s formats.Sample) error {
 	f.looped = append(f.looped, s)
+	f.playing = true
+	return nil
+}
+func (f *fakePlayer) ReplaceLoop(s formats.Sample) error {
+	f.replaced = append(f.replaced, s)
+	f.playing = true
+	return nil
+}
+func (f *fakePlayer) NextLoop(s formats.Sample) error {
+	f.queued = append(f.queued, s)
 	f.playing = true
 	return nil
 }
@@ -210,7 +226,7 @@ func (s *screen) padName(name string) string { return s.sim.PadName(pad(s.t, nam
 
 func TestEverySectionRenders(t *testing.T) {
 	s := open(t)
-	s.shows("404tui", "PROJECT_01", "1 Pads", "3 Projects", "BANKS", "kick", "snare", "hat", "A1  kick")
+	s.shows("404tui by moahbeatlab", "PROJECT_01", "1 Pads", "3 Projects", "BANKS", "kick", "snare", "hat", "A1  kick")
 	s.press("tab")
 	s.shows("Pattern A1", "Empty slot.")
 	s.press("]")
@@ -741,7 +757,11 @@ func TestPatternsOpenAndRetarget(t *testing.T) {
 	s.shows("That pattern"[:0] + "that pattern slot is empty")
 	// Slot 2 is one right of slot 1, which is top left.
 	s.press("l", "enter")
-	s.shows("Pattern B2", "120.00 BPM", "A1   kick", "A2   snare", "■")
+	s.shows("Pattern B2", "120.00 BPM", "A1   kick", "A2   snare")
+	// A hit is a bar as tall as its velocity.
+	if !strings.ContainsAny(ansi.Strip(s.m().View()), "▁▂▃▄▅▆▇█") {
+		t.Error("no hit is drawn")
+	}
 	s.press("b")
 	s.shows("move its pads from bank A to bank", "B")
 	s.press("]", "]")
@@ -941,9 +961,31 @@ func TestKeysWaitWhileBusy(t *testing.T) {
 	if view := model.View(); !strings.Contains(view, "reading the unit") {
 		t.Errorf("screen while loading:\n%s", view)
 	}
-	if _, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")}); cmd == nil {
-		t.Error("q did not quit while busy")
+	// q asks first, even while busy; a second q quits.
+	model, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if cmd != nil || !strings.Contains(model.View(), "Quit 404tui?") {
+		t.Fatalf("q did not ask before quitting:\n%s", model.View())
 	}
+	if _, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")}); cmd == nil {
+		t.Error("q twice did not quit while busy")
+	}
+}
+
+func TestQuitAsksFirst(t *testing.T) {
+	s := open(t)
+	s.press("q")
+	s.shows("Quit 404tui?")
+	// n keeps the app open.
+	s.press("n")
+	s.hides("Quit 404tui?")
+	if s.m().prompt != nil {
+		t.Error("n left the question open")
+	}
+	// Esc with nothing to back out of asks too, and Esc again stays.
+	s.press("esc")
+	s.shows("Quit 404tui?")
+	s.press("esc")
+	s.hides("Quit 404tui?")
 }
 
 // backup puts a small project backup on the unit under folder.
@@ -1037,7 +1079,7 @@ func TestConnectingAnnouncesAndReconnects(t *testing.T) {
 	}
 
 	// Nothing plugged in: it says it is waiting, keeps looking, and keys do nothing but quit.
-	sc.shows("404tui", "○ no unit", "Waiting for an SP-404MKII", "USB 0582:02e7")
+	sc.shows("404tui by moahbeatlab", "○ no unit", "Waiting for an SP-404MKII", "USB 0582:02e7")
 	before := attempts
 	ticks(connectTicks * 3)
 	if attempts < before+3 {
@@ -3179,5 +3221,511 @@ func TestTheFolderFinderListsTheFavouriteFoldersFirst(t *testing.T) {
 	s.press("enter")
 	if node, _ := m.fileNode(); node.Name == "" {
 		t.Error("no row in front")
+	}
+}
+
+func TestTheVersionIsInTheTopRightCorner(t *testing.T) {
+	s := open(t)
+	first := strings.Split(ansi.Strip(s.m().View()), "\n")[0]
+	want := "v" + version.Version
+	if !strings.HasSuffix(strings.TrimRight(first, " "), want) {
+		t.Errorf("the first line does not end with %q: %q", want, first)
+	}
+	// Also while waiting for a unit.
+	m := NewConnecting(func() (app.Unit, io.Closer, error) { return nil, nil, ErrNoUnit }, &fakePlayer{}, &memStore{})
+	m.width, m.height = 100, 30
+	if first := strings.Split(ansi.Strip(m.View()), "\n")[0]; !strings.Contains(first, want) {
+		t.Errorf("no version while waiting: %q", first)
+	}
+}
+
+func TestPadsOnABusShowItsColourBadgeAndCount(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	bus, _ := proto.ParamByName("bus-fx")
+	m := s.m()
+	for name, v := range map[string]int32{"A2": 1, "A3": 2} {
+		if err := m.unit.SetParam(bus.ID, proto.TargetPad(pad(t, name)), v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.press("r")
+	out := ansi.Strip(s.m().View())
+	for _, want := range []string{"¹ BUS 1 ×1", "² BUS 2 ×1"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the legend lacks %q", want)
+		}
+	}
+	// The badge is on the tile of the pad, beside its name; the pad on no bus has none.
+	lines := strings.Split(out, "\n")
+	found := map[string]bool{}
+	for _, l := range lines {
+		if strings.Contains(l, "snare") {
+			found["1"] = strings.Contains(l, "¹")
+		}
+		if strings.Contains(l, " 3 ") && strings.Contains(l, "hat") {
+			found["2"] = strings.Contains(l, "²")
+		}
+	}
+	_ = found
+	// The tile is drawn in the colour of the bus (blue / red): the raw output has the colour
+	// codes for them, and a tile on no bus has neither.
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(prev)
+	raw := s.m().View()
+	th := s.m().st.th
+	if !strings.Contains(raw, "38;5;"+string(th.bus1)) || !strings.Contains(raw, "38;5;"+string(th.bus2)) {
+		t.Error("the bus colours are not in the screen")
+	}
+	// Every tile line keeps the tile's width, so the grid does not slip.
+	for i, l := range lines {
+		if strings.Contains(l, "│") && ansi.StringWidth(l) > 170 {
+			t.Errorf("line %d is %d wide", i, ansi.StringWidth(l))
+		}
+	}
+}
+
+func TestOverlayDrawsABoxInTheMiddleOverTheScreen(t *testing.T) {
+	base := strings.Join([]string{"aaaaaaaaaaaa", "bbbbbbbbbbbb", "cccccccccccc", "dddddddddddd", "eeeeeeeeeeee"}, "\n")
+	got := strings.Split(overlay(base, "XX\nYY", 12, 5), "\n")
+	want := []string{"aaaaaaaaaaaa", "bbbbbbbbbbbb", "cccccXXccccc", "ddddd" + "YY" + "ddddd", "eeeeeeeeeeee"}
+	// A box of two lines goes at the second and third line of five, the middle.
+	want = []string{"aaaaaaaaaaaa", "bbbbbXXbbbbb", "ccccc" + "YY" + "ccccc", "dddddddddddd", "eeeeeeeeeeee"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d: %q, want %q", i, got[i], want[i])
+		}
+	}
+	// A screen shorter than the dialog's place is padded, a short line is padded to the width.
+	if got := overlay("a", "XX", 6, 3); !strings.Contains(got, "  XX") {
+		t.Errorf("padded %q", got)
+	}
+}
+
+func TestADialogIsDrawnOverTheScreenAndNotInsteadOfIt(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("S")
+	s.shows("Settings", "Level")
+	// The rail, the pads and the panels are still there around the dialog.
+	s.shows("1 Pads", "BANKS", "Pads · bank A")
+}
+
+func TestFindTheOriginsOfPadsWhenTheNoteIsMissing(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	// Without an index there is nothing to look in, and it says how to make one.
+	s.press("F")
+	s.shows("no index to look in")
+	s.sim.AddFile("SD:IMPORT/Great Kit/Loop 9.wav", wav(2400))
+	s.press("2", "tab", "i")
+	s.shows("indexed")
+	s.press("r", "1")
+	// A pad assigned without the app (no note), whose name is the file's name.
+	m := s.m()
+	if _, err := app.Assign(m.unit, m.unit, pad(t, "A16"), "SD:IMPORT/Great Kit/Loop 9.wav"); err != nil {
+		t.Fatal(err)
+	}
+	s.press("r", "G", "F")
+	s.shows("origins:", "found")
+	data, ok := s.sim.File("SD:404tui-origins.json")
+	if !ok || !strings.Contains(string(data), "Great Kit/Loop 9.wav") || !strings.Contains(string(data), `"matched": true`) {
+		t.Fatalf("the notes: %v %s", ok, data)
+	}
+	s.shows("From", "Great Kit/Loop 9.wav", "found by scan")
+}
+
+func TestPadFlagsAreTinyLettersForWhatIsOn(t *testing.T) {
+	row := app.PadRow{HasSample: true, Params: map[string]int32{"gate": 1, "loop": 1, "mode-flags": 0x20, "play-mode": 3, "bpm-sync": 1, "mute-group": 4}}
+	if got := onLetters(padFlags(row)); got != "G L O R S ~ M4" {
+		t.Errorf("flags %q", got)
+	}
+	if got := onLetters(padFlags(app.PadRow{HasSample: true, Params: map[string]int32{"play-mode": 1}})); got != "R" {
+		t.Errorf("reverse %q", got)
+	}
+	// Nothing on: the letters are still there, all off.
+	if got := padFlags(app.PadRow{HasSample: true, Params: map[string]int32{}}); len(got) != 6 || onLetters(got) != "" {
+		t.Errorf("a pad with nothing on has %v", got)
+	}
+	if got := padFlags(app.PadRow{Params: map[string]int32{"gate": 1}}); got != nil {
+		t.Errorf("an empty pad has %v", got)
+	}
+}
+
+func TestTheTileShowsTheFlagsBesideItsNumberAndKeepsItsWidth(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	gate, _ := proto.ParamByName("gate")
+	loop, _ := proto.ParamByName("loop")
+	m := s.m()
+	for _, id := range []byte{gate.ID, loop.ID} {
+		if err := m.unit.SetParam(id, proto.TargetPad(pad(t, "A2")), 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.press("r")
+	// With room the pads are a row taller, and the letters have a line of their own.
+	if g := s.m().geom(); g.tileH != 4 {
+		t.Fatalf("tiles are %d rows on a tall screen", g.tileH)
+	}
+	s.shows("snare", " G L O R S V ")
+	s.hides("2  G L")
+	// On a shorter screen they sit beside the number again.
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 34})
+	if g := s.m().geom(); g.tileH != 3 {
+		t.Fatalf("tiles are %d rows on a short screen", g.tileH)
+	}
+	s.shows("2  G L O R S V")
+	// A pad with nothing on shows the letters too, unlit.
+	s.shows("3  G L O R S V")
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	out := ansi.Strip(s.m().View())
+	for i, l := range strings.Split(out, "\n") {
+		if ansi.StringWidth(l) > 170 {
+			t.Errorf("line %d is %d wide", i, ansi.StringWidth(l))
+		}
+	}
+}
+
+func TestEditTheNotesOfAPattern(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	// A pattern with every pad of bank A on beat 1, then open it.
+	s.press("N", "tab", "enter")
+	s.shows("Pattern A1", "velocity 127", "Enter note on/off")
+	notesOf := func() []formats.NoteRecord {
+		t.Helper()
+		data, ok := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+		if !ok {
+			t.Fatal("no pattern file")
+		}
+		notes, err := formats.NoteRecords(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return notes
+	}
+	first := s.m().pattern.Grid.Rows[0].Pad
+	velocityOf := func(pad proto.PadIndex, tick uint32) int {
+		for _, n := range notesOf() {
+			if n.Pad == pad && n.Tick == tick {
+				return int(n.Velocity)
+			}
+		}
+		return -1
+	}
+	// Velocity: down by 10, down by 1, then back to full.
+	s.press("<")
+	s.shows("velocity 117")
+	if v := velocityOf(first, 0); v != 117 {
+		t.Fatalf("the file has %d", v)
+	}
+	s.press(",")
+	if v := velocityOf(first, 0); v != 116 {
+		t.Errorf("after , the file has %d", v)
+	}
+	s.press("*")
+	if v := velocityOf(first, 0); v != 127 {
+		t.Errorf("after * the file has %d", v)
+	}
+	// A note on an empty step, then off again; the pattern keeps its length.
+	before := len(notesOf())
+	s.press("l", "l", "enter")
+	s.shows("note on")
+	tick := s.m().pattern.StepTick(2)
+	if v := velocityOf(first, tick); v != 127 || len(notesOf()) != before+1 {
+		t.Fatalf("no note at step 3: %d, %d notes", v, len(notesOf()))
+	}
+	s.press("enter")
+	s.shows("taken out")
+	if len(notesOf()) != before {
+		t.Errorf("%d notes after taking it out, want %d", len(notesOf()), before)
+	}
+	if s.m().pattern.Length != 3840 {
+		t.Errorf("the pattern is %d ticks long now", s.m().pattern.Length)
+	}
+}
+
+func TestAPadKeepsItsRowSpaceDoesNotEditAndUUndoes(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "tab", "enter")
+	s.shows("Pattern A1")
+	countNotes := func() int {
+		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+		notes, err := formats.NoteRecords(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(notes)
+	}
+	before, rows := countNotes(), len(s.m().pattern.Grid.Rows)
+	// Space plays the pattern: the file is not touched.
+	s.press(" ")
+	if countNotes() != before {
+		t.Fatal("Space changed the pattern")
+	}
+	// Taking out the only note of the first pad keeps its row, to put a note back on.
+	first := s.m().pattern.Grid.Rows[0].Pad
+	s.press("enter")
+	s.shows("taken out")
+	if countNotes() != before-1 || len(s.m().pattern.Grid.Rows) != rows || s.m().pattern.Grid.Rows[0].Pad != first {
+		t.Fatalf("%d notes, %d rows (was %d, %d)", countNotes(), len(s.m().pattern.Grid.Rows), before, rows)
+	}
+	// u brings it back, and u again takes it out again.
+	s.press("u")
+	s.shows("undone")
+	if countNotes() != before {
+		t.Errorf("after undo %d notes, want %d", countNotes(), before)
+	}
+	s.press("u")
+	if countNotes() != before-1 {
+		t.Errorf("after redo %d notes, want %d", countNotes(), before-1)
+	}
+	// A pad of the bank with a sample and no note has a row too: the fixture has kick, snare,
+	// hat on A1-A3, all in the pattern; a sample put on A5 gets an empty row to put notes on.
+	m := s.m()
+	s.sim.AddFile("SD:IMPORT/loop.wav", wav(4800))
+	if _, err := app.Assign(m.unit, m.unit, pad(t, "A5"), "SD:IMPORT/loop.wav"); err != nil {
+		t.Fatal(err)
+	}
+	s.press("esc", "esc", "r", "tab", "enter")
+	found := false
+	for _, r := range s.m().pattern.Grid.Rows {
+		found = found || r.Pad == pad(t, "A5")
+	}
+	if !found {
+		t.Error("a pad of the bank with a sample has no row")
+	}
+}
+
+func TestNotesAreBlocksAsTallAsTheirVelocityAndAsWideAsTheyLast(t *testing.T) {
+	// The heights by velocity: full at 127, the lowest at the bottom.
+	for v, want := range map[int]string{127: "█", 1: "▁", 64: "▄", 47: "▃"} {
+		if got := noteBlock(v); got != want {
+			t.Errorf("velocity %d: %q, want %q", v, got, want)
+		}
+	}
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "tab", "enter")
+	m := s.m()
+	// The pattern N makes holds every pad for the whole pattern: one block across all steps.
+	row := strings.TrimRight(ansi.Strip(m.noteRow(m.pattern, m.pattern.Grid.Rows[1].Pad, false)), " ")
+	if strings.ContainsAny(row, "·┄ ") || !strings.HasPrefix(row, "█") {
+		t.Errorf("a note held to the end is not one block: %q", row)
+	}
+	// Quieter, the block is lower, all along.
+	s.press("j", "<", "<", "<", "<", "<", "<", "<", "<")
+	m = s.m()
+	row = ansi.Strip(m.noteRow(m.pattern, m.pattern.Grid.Rows[1].Pad, false))
+	if !strings.HasPrefix(row, "▃▃") || strings.Contains(row, "█") {
+		t.Errorf("velocity 47 is drawn %q", row)
+	}
+	// A short note covers its step only; the rest of the row is dots.
+	s.press("enter", "l", "l", "l", "l", "enter")
+	m = s.m()
+	row = ansi.Strip(m.noteRow(m.pattern, m.pattern.Grid.Rows[1].Pad, false))
+	if !strings.HasPrefix(row, "· ") || !strings.Contains(row, "██") || strings.Count(row, "█") != 2 {
+		t.Errorf("a one-step note is drawn %q", row)
+	}
+}
+
+func TestAChangeIsHeardAtOnceInALoopingPattern(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	// Bank C has real samples (the simulator's fixture pads have none the player could read).
+	m := s.m()
+	level, _ := proto.ParamByName("level")
+	for _, p := range []string{"C1", "C2"} {
+		if _, err := app.Assign(m.unit, m.unit, pad(t, p), "SD:IMPORT/kick.wav"); err != nil {
+			t.Fatal(err)
+		}
+		// The simulator starts pads at level 0; the unit at 127.
+		if err := m.unit.SetParam(level.ID, proto.TargetPad(pad(t, p)), 127); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.press("r", "]", "]", "N", "tab", "enter")
+	s.press("P")
+	if len(s.player.looped) != 1 {
+		t.Fatalf("looped %d: %s", len(s.player.looped), s.m().message)
+	}
+	first := s.player.looped[0]
+	// While it loops, a line under the step numbers shows where it is and how long is left.
+	s.shows("s to go", "██")
+	if frac, left, ok := s.m().loopAt(s.m().pattern.Slot); !ok || frac < 0 || frac >= 1 || left <= 0 {
+		t.Errorf("loop at %v, %v left, %v", frac, left, ok)
+	}
+	// Taking a note out: the loop goes on with the new mix at once, from where it is, not restarted.
+	s.press("enter")
+	if len(s.player.replaced) != 1 || len(s.player.looped) != 1 {
+		t.Fatalf("queued %d, looped %d after an edit", len(s.player.replaced), len(s.player.looped))
+	}
+	if peak(s.player.replaced[0]) >= peak(first) {
+		t.Errorf("the mix without a note is not quieter: %d, %d", peak(s.player.replaced[0]), peak(first))
+	}
+	// A velocity: mixed again.
+	s.press("u", "<")
+	if len(s.player.replaced) < 3 {
+		t.Errorf("queued %d after undo and a velocity", len(s.player.replaced))
+	}
+	// A pad setting: its level, in the Pads view, while the pattern plays.
+	s.press("esc", "esc")
+	n := len(s.player.replaced)
+	s.press(",")
+	if len(s.player.replaced) != n+1 {
+		t.Errorf("a pad level change was not mixed in: %d, was %d", len(s.player.replaced), n)
+	}
+	s.press("tab", "enter")
+	// Stopped, nothing is mixed again, and the line is gone.
+	s.press("P")
+	s.hides("s to go")
+	before := len(s.player.replaced)
+	s.press(">")
+	if len(s.player.replaced) != before {
+		t.Error("a stopped pattern was mixed again")
+	}
+}
+
+func peak(s formats.Sample) int {
+	top := 0
+	for _, v := range s.Samples {
+		top = max(top, int(v), -int(v))
+	}
+	return top
+}
+
+func TestTheLengthOfANoteChangesByAStep(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "tab", "enter")
+	notesOf := func() []formats.NoteRecord {
+		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+		notes, _ := formats.NoteRecords(data)
+		return notes
+	}
+	pad := s.m().pattern.Grid.Rows[0].Pad
+	lengthAt := func(tick uint32) int {
+		for _, n := range notesOf() {
+			if n.Pad == pad && n.Tick == tick {
+				return int(n.Length)
+			}
+		}
+		return -1
+	}
+	step := int(s.m().pattern.StepTicks())
+	// The notes N makes last the whole pattern: longer does nothing, shorter takes a step off.
+	s.press("+")
+	s.shows("lasts to the end")
+	s.press("-")
+	if got := lengthAt(0); got != 3840-step {
+		t.Fatalf("after - the note lasts %d ticks, want %d", got, 3840-step)
+	}
+	// On a step the note covers (not its first), the keys work on it too.
+	s.press("l", "l", "-")
+	if got := lengthAt(0); got != 3840-2*step {
+		t.Errorf("after - on a later step it lasts %d, want %d", got, 3840-2*step)
+	}
+	s.shows("lasts 14 steps")
+	// A one-step note: shorter stops at a step, longer adds one.
+	s.press("l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l")
+	s.press("enter")
+	tick := s.m().pattern.StepTick(15)
+	if got := lengthAt(tick); got != step {
+		t.Fatalf("a new note lasts %d, want %d", got, step)
+	}
+	s.press("-")
+	s.shows("one step long already")
+	s.press("h", "h", "h", "enter", "+")
+	if got := lengthAt(s.m().pattern.StepTick(12)); got != 2*step {
+		t.Errorf("after + a new note lasts %d, want %d", got, 2*step)
+	}
+}
+
+func TestThePatternInFrontShowsItsStepsBesideAndSessionIsGone(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 180, Height: 56})
+	s.hides("Session")
+	s.press("N", "tab")
+	// Without Enter: the panel beside shows the steps of the pattern in front.
+	s.shows("Pattern A1", "120.00 BPM", "A1   kick", "Enter edits the steps")
+	if s.m().patPreview[s.m().patterns[0][0].Slot] == nil {
+		t.Error("the pattern in front was not read")
+	}
+	if s.m().pattern != nil {
+		t.Error("the pattern was opened, not only shown")
+	}
+	// Moving to an empty slot shows that it is empty.
+	s.press("l")
+	s.shows("Empty slot.")
+}
+
+func TestMuteAndSoloChangeWhatThisComputerPlays(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	m := s.m()
+	level, _ := proto.ParamByName("level")
+	for _, p := range []string{"C1", "C2"} {
+		if _, err := app.Assign(m.unit, m.unit, pad(t, p), "SD:IMPORT/kick.wav"); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.unit.SetParam(level.ID, proto.TargetPad(pad(t, p)), 127); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.press("r", "]", "]", "N", "tab", "P")
+	if len(s.player.looped) != 1 {
+		t.Fatalf("not looping: %s", s.m().message)
+	}
+	both := peak(s.player.looped[0])
+	// Mute C1 in the Pads view: the loop goes on without it, at once.
+	s.press("esc", "g", "m")
+	s.shows("C1 is muted", "×")
+	if len(s.player.replaced) != 1 || peak(s.player.replaced[0]) >= both {
+		t.Fatalf("muting did not take C1 out: %d mixes", len(s.player.replaced))
+	}
+	one := peak(s.player.replaced[0])
+	// Unmuted, solo C2: only C2, as loud as one pad.
+	s.press("m", "l", "s")
+	s.shows("C2 is soloed")
+	last := s.player.replaced[len(s.player.replaced)-1]
+	if peak(last) != one {
+		t.Errorf("solo of C2 peaks at %d, one pad at %d", peak(last), one)
+	}
+	// In the open pattern the same keys work on the row's pad, and the rows are marked.
+	s.press("tab", "enter")
+	s.shows("Pattern C1")
+	s.press("j", "s")
+	if len(s.m().soloed) != 0 {
+		t.Errorf("M on C2's row did not unsolo it: %v", s.m().soloed)
+	}
+	s.press("m")
+	if !s.m().muted[pad(t, "C2")] {
+		t.Error("m on C2's row did not mute it")
+	}
+	s.shows("MUTE")
+	// * still sets the velocity to 127.
+	s.press("<", "*")
+	s.shows("velocity of C2 step 1 is 127")
+	// S keeps what is heard as a new pattern: C2 is muted, so only C1 plays in it.
+	s.press("S")
+	s.shows("Save pattern C1 as you hear it", "this one", "C2 is free")
+	// The pattern itself cannot be chosen; Enter on the free slot saves.
+	s.press("h", "enter")
+	s.shows("that is the pattern itself")
+	s.press("l", "enter")
+	s.shows("C1 saved as C2, as you hear it: without C2")
+	saved, err := app.OpenPattern(s.m().unit, pad(t, "C2"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved.PadsUsed) != 1 || saved.PadsUsed[0] != pad(t, "C1") {
+		t.Errorf("the saved pattern plays %v, want only C1", saved.PadsUsed)
+	}
+	// The pattern it came from is untouched.
+	if from, _ := app.OpenPattern(s.m().unit, pad(t, "C1")); from == nil || len(from.PadsUsed) != 2 {
+		t.Errorf("the pattern it came from changed: %v", from)
 	}
 }

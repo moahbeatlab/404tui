@@ -53,8 +53,9 @@ type Afplay struct {
 	file string
 	done chan struct{}
 	// stop ends a loop: it is closed by Stop, and the loop's goroutine checks it before each
-	// round.
-	stop chan struct{}
+	// round. loopFile is the file the loop plays now; file is the newest, for the next round.
+	stop     chan struct{}
+	loopFile string
 }
 
 // OpenAfplay finds afplay; it fails where there is none.
@@ -100,30 +101,38 @@ func (a *Afplay) Play(s formats.Sample) error {
 // have.
 func (a *Afplay) Loop(s formats.Sample) error {
 	a.Stop()
-	f, err := os.CreateTemp("", "404tui-*.wav")
+	name, err := tempWAV(s)
 	if err != nil {
 		return err
 	}
-	if _, err := f.Write(s.WAV()); err != nil {
-		f.Close()
-		os.Remove(f.Name())
-		return err
-	}
-	f.Close()
 	stop, done := make(chan struct{}), make(chan struct{})
 	a.mu.Lock()
-	a.stop, a.done, a.file = stop, done, f.Name()
+	a.stop, a.done, a.file = stop, done, name
 	a.mu.Unlock()
 	go func() {
 		defer close(done)
-		defer os.Remove(f.Name())
 		for {
 			select {
 			case <-stop:
+				a.mu.Lock()
+				os.Remove(a.loopFile)
+				a.loopFile = ""
+				a.mu.Unlock()
 				return
 			default:
 			}
-			cmd := exec.Command(a.path, f.Name())
+			// Each round plays the file that is newest: NextLoop may have put another one.
+			a.mu.Lock()
+			if a.stop != stop {
+				a.mu.Unlock()
+				return
+			}
+			if a.file != a.loopFile {
+				os.Remove(a.loopFile)
+				a.loopFile = a.file
+			}
+			cmd := exec.Command(a.path, a.loopFile)
+			a.mu.Unlock()
 			if err := cmd.Start(); err != nil {
 				return
 			}
@@ -140,6 +149,47 @@ func (a *Afplay) Loop(s formats.Sample) error {
 		}
 	}()
 	return nil
+}
+
+// NextLoop has the loop playing go on with s from its next round; with no loop playing it
+// starts one.
+func (a *Afplay) NextLoop(s formats.Sample) error {
+	a.mu.Lock()
+	looping := a.stop != nil
+	a.mu.Unlock()
+	if !looping {
+		return a.Loop(s)
+	}
+	name, err := tempWAV(s)
+	if err != nil {
+		return err
+	}
+	a.mu.Lock()
+	old := a.file
+	a.file = name
+	a.mu.Unlock()
+	// A file that was waiting and never played is not needed any more.
+	a.mu.Lock()
+	if old != a.loopFile {
+		os.Remove(old)
+	}
+	a.mu.Unlock()
+	return nil
+}
+
+// tempWAV writes a sample to a temporary WAV file for afplay.
+func tempWAV(s formats.Sample) (string, error) {
+	f, err := os.CreateTemp("", "404tui-*.wav")
+	if err != nil {
+		return "", err
+	}
+	if _, err := f.Write(s.WAV()); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", err
+	}
+	f.Close()
+	return f.Name(), nil
 }
 
 func (a *Afplay) Stop() {

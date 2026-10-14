@@ -84,6 +84,8 @@ const (
 	promptFindFolder
 	// promptBank edits a bank's tempo and volume: two fields, Tab moves between them.
 	promptBank
+	// promptQuit asks before leaving the app, as q is easy to press by accident.
+	promptQuit
 )
 
 // prompt is a question in front of the section: a name or path to type, or a delete to
@@ -126,6 +128,8 @@ type picker struct {
 	withPattern bool
 	slots       bool
 	ptnBank     int
+	// saveFrom: the slot chooser saves this open pattern, as it is heard, into the slot chosen.
+	saveFrom *proto.PadIndex
 	// copyFrom: the pads being copied; the picker chooses where the first one goes.
 	copyFrom []proto.PadIndex
 	// retarget: the pattern slot and the bank its pads are in.
@@ -230,6 +234,23 @@ type Model struct {
 
 	patterns      map[int][]app.PatternRow
 	patternCursor int
+	// patRow and patCol are the cursor in the open pattern's step grid; patUndo is what the
+	// pattern was before the last edit.
+	patRow, patCol int
+	patUndo        *patternUndo
+	// loopSlot is the pattern that was last started looping; loopDirty asks for it to be mixed
+	// again, because something it plays changed.
+	// patPreview are the patterns read to show the one in front of the cursor in the patterns
+	// panel, by slot; previewBusy is set while one is read.
+	patPreview  map[proto.PadIndex]*app.PatternDetail
+	previewBusy bool
+	loopSlot    *proto.PadIndex
+	loopDirty   bool
+	// muted and soloed are pads silenced, or alone to sound, in the mix played on this computer.
+	muted, soloed map[proto.PadIndex]bool
+	// loopStart is when the looping pattern started, and loopRound how long a round lasts.
+	loopStart time.Time
+	loopRound time.Duration
 	// patMarks are pattern slots (by slot index) marked for deleting; patHeld is a pattern
 	// picked up to be copied (or, with patCut, moved) into another slot; patConfirm is the
 	// slot index p was pressed on once, where a pattern would be replaced.
@@ -349,6 +370,9 @@ func New(unit app.Unit, player app.Player, store Store) Model {
 		patMarks:   map[int]bool{},
 		patConfirm: -1,
 		searchJobs: map[string]*tagJob{},
+		patPreview: map[proto.PadIndex]*app.PatternDetail{},
+		muted:      map[proto.PadIndex]bool{},
+		soloed:     map[proto.PadIndex]bool{},
 		root:       app.CardRoot,
 		fileMarks:  map[string]bool{},
 		facts:      map[factKey]padFacts{},
@@ -471,6 +495,8 @@ type (
 		detail *app.PatternDetail
 		err    error
 		note   string
+		// undo is the pattern's bytes before an edit, when the message comes from one.
+		undo []byte
 	}
 	dirMsg struct {
 		root    string
@@ -558,6 +584,8 @@ type (
 		err  error
 		// stale: something else was asked for while this one was decoding, so it was dropped.
 		stale bool
+		// round is how long one round of a looping pattern lasts; 0 for anything else.
+		round time.Duration
 	}
 	// autoplayMsg fires a moment after the cursor stopped on a result.
 	autoplayMsg struct{ seq int }
@@ -767,6 +795,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	model, cmd := m.update(msg)
 	if updated, ok := model.(Model); ok {
 		updated = updated.logMessage()
+		if updated.loopDirty {
+			updated.loopDirty = false
+			if again := updated.requeueLoop(); again != nil {
+				cmd = tea.Batch(cmd, again)
+			}
+		}
 		var start tea.Cmd
 		updated, start = updated.autoIndex(nil)
 		updated.persist()
@@ -806,6 +840,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.indexed(msg)
 	case loadedMsg:
 		m.busy = ""
+		// The pads were read again: what a looping pattern plays may have changed.
+		m.loopDirty = true
 		if msg.err != nil && errors.Is(msg.err, device.ErrClosed) {
 			return m.lose()
 		}
@@ -817,6 +853,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Another project's patterns and waveforms are not this one's.
 		if m.snap == nil || m.snap.Project != msg.snap.Project {
 			m.patterns = map[int][]app.PatternRow{}
+			m.patPreview = map[proto.PadIndex]*app.PatternDetail{}
 			m.pattern = nil
 			m.usage, m.usageState = nil, 0
 		}
@@ -844,6 +881,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.patterns {
 			m.patterns = map[int][]app.PatternRow{}
+			m.patPreview = map[proto.PadIndex]*app.PatternDetail{}
 			m.usage, m.usageState = nil, 0
 		}
 		if msg.reload {
@@ -853,6 +891,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.busy = ""
 	case noteMsg:
 		m.message = string(msg)
+		// A pad setting changed (the level, say): a looping pattern is mixed again.
+		m.loopDirty = true
 	case AudioOutputMsg:
 		m.audioOut = string(msg)
 		m.log.Info("audio output", "device", m.audioOut)
@@ -885,6 +925,17 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.origins = msg.origins
 		}
 		return m, m.wanted()
+	case patPreviewMsg:
+		m.previewBusy = false
+		if msg.err == nil && msg.detail != nil {
+			m.patPreview[msg.detail.Slot] = msg.detail
+		}
+		return m, m.wanted()
+	case loopQueuedMsg:
+		if msg.err != nil {
+			m.message = "the change is not in the loop: " + msg.err.Error()
+		}
+		return m, nil
 	case tagsSavedMsg:
 		return m.tagsWritten(msg)
 	case askTagsMsg:
@@ -905,6 +956,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.message = "listening failed: " + msg.err.Error()
 		} else if m.listening == msg.path {
+			if msg.round > 0 {
+				// Where the loop is, from when it started: the line under the steps follows it.
+				m.loopStart, m.loopRound = time.Now(), msg.round
+			}
 			m.message = "♪ playing " + app.Base(msg.path)
 			if m.audioOut != "" {
 				m.message += " on " + m.audioOut
@@ -940,6 +995,18 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		m.pattern = msg.detail
+		if m.pattern != nil {
+			// Every pad of the bank with a sample has a row, notes or not.
+			m.pattern.WithRowsFor(m.patternBankPads(m.pattern))
+			if msg.undo != nil {
+				m.patUndo = &patternUndo{slot: m.pattern.Slot, before: msg.undo}
+				m.loopDirty = true
+			}
+			// What is shown of it beside the patterns is this, now.
+			m.patPreview[m.pattern.Slot] = m.pattern
+			m.patRow = clamp(m.patRow, 0, max(len(m.pattern.Grid.Rows)-1, 0))
+			m.patCol = clamp(m.patCol, 0, max(m.pattern.Grid.Steps-1, 0))
+		}
 		if msg.note != "" {
 			m.message = msg.note
 			// A retarget changes which pads the patterns play.
@@ -1161,6 +1228,13 @@ func (m *Model) wanted() tea.Cmd {
 			m.busy = "reading patterns"
 			return m.loadPatterns(m.bank)
 		}
+		// The pattern in front is read to be shown in the panel beside, quietly.
+		if rows := m.patterns[m.bank]; m.pattern == nil && !m.previewBusy && m.patternCursor < len(rows) {
+			if cur := rows[m.patternCursor]; cur.Exists && m.patPreview[cur.Slot] == nil {
+				m.previewBusy = true
+				return m.loadPreview(cur.Slot)
+			}
+		}
 	case secFiles:
 		if m.tree == nil {
 			m.busy = "listing files"
@@ -1332,5 +1406,46 @@ func (m Model) loadOrigins() tea.Cmd {
 		defer m.ops.Unlock()
 		o, err := app.LoadOrigins(m.unit)
 		return originsMsg{origins: o, err: err}
+	}
+}
+
+// patternUndo is a pattern's bytes before the last edit of it.
+type patternUndo struct {
+	slot   proto.PadIndex
+	before []byte
+}
+
+// patternBankPads are the pads with a sample in the bank a pattern plays (or, when its pads
+// span banks or it has none, the bank of its slot): the rows its grid offers.
+func (m Model) patternBankPads(d *app.PatternDetail) []proto.PadIndex {
+	if m.snap == nil {
+		return nil
+	}
+	bank := int(d.Slot.Bank())
+	if d.HasSourceBank {
+		bank = d.SourceBank
+	}
+	var pads []proto.PadIndex
+	for _, row := range m.snap.Bank(bank) {
+		if row.HasSample {
+			pads = append(pads, row.Pad)
+		}
+	}
+	return pads
+}
+
+// patPreviewMsg is a pattern read for the panel beside the patterns.
+type patPreviewMsg struct {
+	detail *app.PatternDetail
+	err    error
+}
+
+// loadPreview reads a pattern to show it beside the patterns, without holding the screen.
+func (m Model) loadPreview(slot proto.PadIndex) tea.Cmd {
+	return func() tea.Msg {
+		m.ops.Lock()
+		defer m.ops.Unlock()
+		d, err := app.OpenPattern(m.unit, slot)
+		return patPreviewMsg{detail: d, err: err}
 	}
 }

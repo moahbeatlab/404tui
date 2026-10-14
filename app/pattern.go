@@ -85,6 +85,32 @@ type PatternDetail struct {
 	// span several.
 	SourceBank    int
 	HasSourceBank bool
+	// Notes are the pattern's notes with their places in the file, for editing.
+	Notes []formats.NoteRecord
+}
+
+// StepTick is the tick a column of the grid starts at.
+func (d *PatternDetail) StepTick(col int) uint32 {
+	return uint32(uint64(col) * uint64(d.Length) / uint64(max(d.Grid.Steps, 1)))
+}
+
+// StepTicks is how many ticks a column of the grid spans.
+func (d *PatternDetail) StepTicks() uint32 {
+	return d.Length / uint32(max(d.Grid.Steps, 1))
+}
+
+// CellNotes are the notes of a pad that fall in a column of the grid.
+func (d *PatternDetail) CellNotes(pad proto.PadIndex, col int) []formats.NoteRecord {
+	var out []formats.NoteRecord
+	for _, n := range d.Notes {
+		if n.Pad != pad || d.Length == 0 {
+			continue
+		}
+		if min(int(uint64(n.Tick)*uint64(d.Grid.Steps)/uint64(d.Length)), d.Grid.Steps-1) == col {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // OpenPattern reads a pattern slot of the current project.
@@ -105,7 +131,12 @@ func OpenPattern(u PatternFiles, slot proto.PadIndex) (*PatternDetail, error) {
 	if err != nil {
 		return nil, err
 	}
+	notes, err := formats.NoteRecords(b)
+	if err != nil {
+		return nil, fmt.Errorf("%s: unreadable pattern (%w)", slot, err)
+	}
 	detail := &PatternDetail{
+		Notes:     notes,
 		Slot:      slot,
 		BankTempo: float64(settings.Bank(int(slot.Bank())).Tempo) / 100,
 		Beats:     pattern.BeatsPerBar(),
@@ -221,4 +252,97 @@ func CopyPattern(u PatternFiles, from, to proto.PadIndex, move bool) error {
 		}
 	}
 	return nil
+}
+
+// CopyPatternKeeping puts the pattern in slot from into slot to, with only the notes of the
+// pads keep says yes to: the others are taken out, the timing of the rest unchanged. It says
+// how many notes were left out.
+func CopyPatternKeeping(u PatternFiles, from, to proto.PadIndex, keep func(proto.PadIndex) bool) (dropped int, err error) {
+	if from == to {
+		return 0, fmt.Errorf("%s is the slot itself", from)
+	}
+	current, err := u.CurrentProject()
+	if err != nil {
+		return 0, err
+	}
+	data, err := u.ReadFile(formats.PatternPath(current+1, from))
+	if err != nil {
+		return 0, fmt.Errorf("reading pattern %s: %w", from, err)
+	}
+	notes, err := formats.NoteRecords(data)
+	if err != nil {
+		return 0, err
+	}
+	for _, n := range notes {
+		if keep(n.Pad) {
+			continue
+		}
+		if err := formats.RemoveNote(data, n.Offset); err != nil {
+			return 0, err
+		}
+		dropped++
+	}
+	if dropped == len(notes) && len(notes) > 0 {
+		return 0, fmt.Errorf("no note of %s would be left", from)
+	}
+	if err := u.WriteFile(formats.PatternPath(current+1, to), data); err != nil {
+		return 0, fmt.Errorf("writing pattern %s: %w", to, err)
+	}
+	return dropped, nil
+}
+
+// EditPattern reads the pattern of a slot of the current project, lets edit change its bytes
+// (it may return new ones), and writes it back. Nothing is written when edit fails. It returns
+// the bytes the pattern had before, so that the change can be undone.
+func EditPattern(u PatternFiles, slot proto.PadIndex, edit func(b []byte) ([]byte, error)) (before []byte, err error) {
+	current, err := u.CurrentProject()
+	if err != nil {
+		return nil, err
+	}
+	path := formats.PatternPath(current+1, slot)
+	before, err = u.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("%s: read failed (%w)", slot, err)
+	}
+	after, err := edit(append([]byte(nil), before...))
+	if err != nil {
+		return nil, err
+	}
+	if err := u.WriteFile(path, after); err != nil {
+		return nil, fmt.Errorf("%s: write failed (%w)", slot, err)
+	}
+	return before, nil
+}
+
+// WithRowsFor adds an empty row to the grid for each of pads that has none, in pad order, so
+// that a pad keeps its row when its last note is taken out, and a pad with no note yet can be
+// given one.
+func (d *PatternDetail) WithRowsFor(pads []proto.PadIndex) {
+	have := map[proto.PadIndex]bool{}
+	for _, r := range d.Grid.Rows {
+		have[r.Pad] = true
+	}
+	for _, p := range pads {
+		if !have[p] {
+			d.Grid.Rows = append(d.Grid.Rows, GridRow{Pad: p, Hits: make([]bool, d.Grid.Steps)})
+			have[p] = true
+		}
+	}
+	sort.Slice(d.Grid.Rows, func(i, j int) bool { return d.Grid.Rows[i].Pad.Index() < d.Grid.Rows[j].Pad.Index() })
+}
+
+// NotesAt are the notes of a pad that sound at a column of the grid: the ones that start
+// there, or else the ones that started before and still last.
+func (d *PatternDetail) NotesAt(pad proto.PadIndex, col int) []formats.NoteRecord {
+	if starting := d.CellNotes(pad, col); len(starting) > 0 {
+		return starting
+	}
+	at := d.StepTick(col)
+	var out []formats.NoteRecord
+	for _, n := range d.Notes {
+		if n.Pad == pad && n.Tick < at && at < n.Tick+uint32(n.Length) {
+			out = append(out, n)
+		}
+	}
+	return out
 }

@@ -813,7 +813,7 @@ func TestMixPatternPlacesNotesAtTheirTicks(t *testing.T) {
 		t.Fatal(err)
 	}
 	// One beat at 120 BPM is half a second; the second note starts a quarter second in.
-	if mix.Channels != 2 || mix.Frames() != 24000+2 && mix.Frames() != 24000 {
+	if mix.Channels != 2 || mix.Frames() != 24000 {
 		t.Errorf("%d frames", mix.Frames())
 	}
 	at := 12000
@@ -1164,5 +1164,203 @@ func TestFolderTagsReachEveryFileBelowAndGoWhenTakenOff(t *testing.T) {
 	c.RemoveFolderTags([]string{"SD:Packs/a"}, []string{"best-of"})
 	if len(ix.Search("best-of")) != 2 {
 		t.Error("the original lost the folder tag through its copy")
+	}
+}
+
+func TestWAVSecondsReadsTheLengthFromTheFirstBytes(t *testing.T) {
+	s := formats.Sample{Channels: 2, Samples: make([]int16, 2*48000)}
+	got, ok := app.WAVSeconds(s.WAV()[:256])
+	if !ok || got < 0.999 || got > 1.001 {
+		t.Errorf("%v %v", got, ok)
+	}
+	if _, ok := app.WAVSeconds([]byte("ID3 not a wav at all")); ok {
+		t.Error("something that is not a WAV had a length")
+	}
+}
+
+func TestScanOriginsMatchesNamesThenLengths(t *testing.T) {
+	pad := func(name string) proto.PadIndex { p, _ := proto.ParsePad(name); return p }
+	files := []app.IndexedFile{}
+	for _, p := range []string{
+		"SD:Kits/One/09_OHat_124_HDK_01.wav", "SD:Kits/Two/09_OHat_124_HDK_02.wav", // the same pad name
+		"SD:Kits/One/14_Kick.wav", "SD:Other/unrelated.wav",
+	} {
+		files = append(files, app.IndexedFile{Path: p})
+	}
+	rows := []app.PadRow{
+		{Pad: pad("A1"), HasSample: true, Name: app.PadName("09_OHat_124_HDK_01.wav")},
+		{Pad: pad("A2"), HasSample: true, Name: "14_Kick"},
+		{Pad: pad("A3"), HasSample: true, Name: "nothing like it"},
+		{Pad: pad("A4"), HasSample: true, Name: "14_Kick"},
+		{Pad: pad("A5")},
+	}
+	have := &app.Origins{Pads: map[string]app.Origin{}}
+	have.Pads["1/A4"] = app.Origin{Path: "SD:Kits/One/14_Kick.wav", Name: "14_Kick"}
+	lengths := map[string]float64{"SD:Kits/One/09_OHat_124_HDK_01.wav": 7.74, "SD:Kits/Two/09_OHat_124_HDK_02.wav": 3.0}
+	seconds := func(p string) (float64, bool) { s, ok := lengths[p]; return s, ok }
+	padSeconds := func(r app.PadRow) (float64, bool) { return 7.74, true }
+	var lines []string
+	scan := app.ScanOrigins(rows, 0, have, files, seconds, padSeconds, nil, func(done, total int, line string) { lines = append(lines, line) })
+	// A1: two files have its name, and only one has its length. A2: one file has the name.
+	// A3: nothing. A4: already known. A5: no sample.
+	if len(scan.Found) != 2 || scan.Found[0].Path != "SD:Kits/One/09_OHat_124_HDK_01.wav" || scan.Found[1].Path != "SD:Kits/One/14_Kick.wav" || !scan.Found[0].Matched {
+		t.Errorf("found %+v", scan.Found)
+	}
+	if len(scan.Unknown) != 1 || scan.Unknown[0] != pad("A3") || scan.Known != 1 || len(scan.Ambiguous) != 0 {
+		t.Errorf("unknown %v known %d ambiguous %v", scan.Unknown, scan.Known, scan.Ambiguous)
+	}
+	if len(lines) != 3 {
+		t.Errorf("%d progress lines: %v", len(lines), lines)
+	}
+	// Two files of one name and one length cannot be told apart: the pad is left, with both.
+	lengths["SD:Kits/Two/09_OHat_124_HDK_02.wav"] = 7.74
+	rows[0].Name = app.PadName("09_OHat_124_HDK_02.wav")
+	scan = app.ScanOrigins(rows[:1], 0, have, files, seconds, padSeconds, nil, nil)
+	if len(scan.Found) != 0 || len(scan.Ambiguous) != 1 || len(scan.Ambiguous[0].Candidates) != 2 {
+		t.Errorf("ambiguous %+v found %+v", scan.Ambiguous, scan.Found)
+	}
+}
+
+// cardWithProject is a card in memory that also answers for the current project, enough for
+// the functions that read a pad's sample and files by their paths.
+type cardWithProject struct{ *memStorage }
+
+func (cardWithProject) CurrentProject() (uint8, error) { return 0, nil }
+
+func TestMatchByContentTellsFilesOfTheSameNameApart(t *testing.T) {
+	noise := func(seed int) formats.Sample {
+		s := formats.Sample{Channels: 2, Samples: make([]int16, 2*20000)}
+		x := uint32(seed)*2654435761 + 1
+		for i := range s.Samples {
+			x ^= x << 13
+			x ^= x >> 17
+			x ^= x << 5
+			s.Samples[i] = int16(x>>16) / 4
+		}
+		return s
+	}
+	card := cardWithProject{&memStorage{files: map[string][]byte{}}}
+	candidates := []string{"SD:Kits/One/Loop.wav", "SD:Kits/Two/Loop.wav", "SD:Kits/Three/Loop.wav"}
+	for i, c := range candidates {
+		card.files[c] = noise(i + 1).WAV()
+	}
+	pad, _ := proto.ParsePad("A3")
+	row := app.PadRow{Pad: pad, HasSample: true, Name: "Loop"}
+	// The pad holds the second file, as an assign makes it: converted, and written as an SMP.
+	imported, err := formats.DecodeAudio(card.files[candidates[1]], ".wav")
+	if err != nil {
+		t.Fatal(err)
+	}
+	card.files[pad.SamplePath(1)] = imported.Sample.SMP()
+	got := app.MatchByContent(card, row, candidates)
+	if len(got) != 1 || got[0] != candidates[1] {
+		t.Errorf("matched %v, want %v", got, candidates[1])
+	}
+	// A pad that holds something else (edited on the unit) leaves every candidate standing.
+	card.files[pad.SamplePath(1)] = noise(99).SMP()
+	if got := app.MatchByContent(card, row, candidates); len(got) != 3 {
+		t.Errorf("an unknown sample narrowed to %v", got)
+	}
+	// A silent start cannot be told apart either.
+	card.files[pad.SamplePath(1)] = formats.Sample{Channels: 2, Samples: make([]int16, 2*20000)}.SMP()
+	if got := app.MatchByContent(card, row, candidates); len(got) != 3 {
+		t.Errorf("silence narrowed to %v", got)
+	}
+	// Through the scan: three files of one name, one length, settled by what they hold.
+	card.files[pad.SamplePath(1)] = imported.Sample.SMP()
+	var files []app.IndexedFile
+	for _, c := range candidates {
+		files = append(files, app.IndexedFile{Path: c})
+	}
+	scan := app.ScanOrigins([]app.PadRow{row}, 0, &app.Origins{Pads: map[string]app.Origin{}}, files, nil, nil,
+		func(r app.PadRow, c []string) []string { return app.MatchByContent(card, r, c) }, nil)
+	if len(scan.Found) != 1 || scan.Found[0].Path != candidates[1] || len(scan.Ambiguous) != 0 {
+		t.Errorf("scan %+v", scan)
+	}
+}
+
+func TestAMixIsExactlyOneRoundAndTailsWrapToTheStart(t *testing.T) {
+	a1, _ := proto.NewPadIndex(0)
+	long := formats.Sample{Channels: 1, Samples: make([]int16, 20000)}
+	for i := range long.Samples {
+		long.Samples[i] = 1000
+	}
+	// One beat at 120 BPM is 24000 frames; a note half way rings on past the end.
+	p := formats.Pattern{Length: formats.PPQ, Events: []formats.Event{{Tick: formats.PPQ / 2, Pad: a1, Velocity: 127}}}
+	mix, err := app.MixPattern(p, 120, func(proto.PadIndex) (formats.Sample, error) { return long, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mix.Frames() != 24000 {
+		t.Fatalf("%d frames, want one round of 24000", mix.Frames())
+	}
+	// 20000 frames from 12000: to the end of the round, and its last 8000 frames at the start.
+	at := func(f int) int16 { return mix.Samples[2*f] }
+	if at(0) != 1000 || at(7999) != 1000 || at(8000) != 0 || at(11999) != 0 || at(12000) != 1000 || at(23999) != 1000 {
+		t.Errorf("the tail did not wrap: %d %d %d %d %d %d", at(0), at(7999), at(8000), at(11999), at(12000), at(23999))
+	}
+}
+
+func TestAPadVoiceFollowsThePadsSettings(t *testing.T) {
+	ramp := formats.Sample{Channels: 1, Samples: make([]int16, 1000)}
+	for i := range ramp.Samples {
+		ramp.Samples[i] = int16(i * 10)
+	}
+	// As it is: stereo, the same both sides, at full level.
+	v := app.PadVoice(ramp, 127, map[string]int32{"balance": 64})
+	if v.Sample.Channels != 2 || v.Sample.Frames() != 1000 || v.Sample.Samples[2*500] != 5000 || v.Sample.Samples[2*500+1] != 5000 {
+		t.Fatalf("plain voice: %d channels, %d frames, %d/%d", v.Sample.Channels, v.Sample.Frames(), v.Sample.Samples[1000], v.Sample.Samples[1001])
+	}
+	// Level halves it.
+	if v := app.PadVoice(ramp, 64, nil); v.Sample.Samples[2*500] > 2600 || v.Sample.Samples[2*500] < 2400 {
+		t.Errorf("at level 64: %d", v.Sample.Samples[2*500])
+	}
+	// Panned hard left, the right side is silent.
+	v = app.PadVoice(ramp, 127, map[string]int32{"balance": 13})
+	if v.Sample.Samples[2*500] != 5000 || v.Sample.Samples[2*500+1] != 0 {
+		t.Errorf("panned left: %d/%d", v.Sample.Samples[1000], v.Sample.Samples[1001])
+	}
+	// Reverse: the last frame comes first.
+	v = app.PadVoice(ramp, 127, map[string]int32{"play-mode": 1})
+	if v.Sample.Samples[0] != 9990 || v.Sample.Samples[2*999] != 0 {
+		t.Errorf("reversed: first %d last %d", v.Sample.Samples[0], v.Sample.Samples[2*999])
+	}
+	// An octave up is half as long; an octave down twice.
+	if v := app.PadVoice(ramp, 127, map[string]int32{"pitch-coarse": 12}); v.Sample.Frames() != 500 {
+		t.Errorf("an octave up has %d frames", v.Sample.Frames())
+	}
+	if v := app.PadVoice(ramp, 127, map[string]int32{"pitch-coarse": -12}); v.Sample.Frames() != 2000 {
+		t.Errorf("an octave down has %d frames", v.Sample.Frames())
+	}
+	if v := app.PadVoice(ramp, 127, map[string]int32{"gate": 1, "loop": 1}); !v.Gate || !v.Loop {
+		t.Error("gate and loop did not come along")
+	}
+}
+
+func TestGatedPadsStopAndLoopingPadsRepeatForTheNote(t *testing.T) {
+	a1, _ := proto.NewPadIndex(0)
+	short := formats.Sample{Channels: 2, Samples: make([]int16, 2*6000)}
+	for i := range short.Samples {
+		short.Samples[i] = 1000
+	}
+	// One beat at 120 BPM is 24000 frames; the note lasts a quarter of it, 6000 frames... of a
+	// 12000 frame sample for the gate, and the 6000 frame sample repeated over a half for the loop.
+	long := formats.Sample{Channels: 2, Samples: make([]int16, 2*12000)}
+	for i := range long.Samples {
+		long.Samples[i] = 1000
+	}
+	p := formats.Pattern{Length: formats.PPQ, Events: []formats.Event{{Tick: 0, Pad: a1, Velocity: 127, Length: formats.PPQ / 4}}}
+	gated, _ := app.MixPatternVoices(p, 120, func(proto.PadIndex) (app.Voice, error) { return app.Voice{Sample: long, Gate: true}, nil })
+	if gated.Samples[2*5999] != 1000 || gated.Samples[2*6000] != 0 {
+		t.Errorf("gated: %d then %d", gated.Samples[2*5999], gated.Samples[2*6000])
+	}
+	p.Events[0].Length = formats.PPQ / 2
+	looped, _ := app.MixPatternVoices(p, 120, func(proto.PadIndex) (app.Voice, error) { return app.Voice{Sample: short, Loop: true}, nil })
+	if looped.Samples[2*11999] != 1000 || looped.Samples[2*12000] != 0 {
+		t.Errorf("looped: %d then %d", looped.Samples[2*11999], looped.Samples[2*12000])
+	}
+	free, _ := app.MixPatternVoices(p, 120, func(proto.PadIndex) (app.Voice, error) { return app.Voice{Sample: long}, nil })
+	if free.Samples[2*11999] != 1000 {
+		t.Error("a pad that is neither gated nor looping was cut")
 	}
 }

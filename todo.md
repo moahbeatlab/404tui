@@ -55,3 +55,12 @@ Goal: review the layers and keep them honest. The layering is `cmd/sp404` → `t
   while the screen reads it. Make the rule explicit (work on a copy, swap the pointer on
   the UI goroutine) and run the tests with `-race` in CI.
 - [ ] Add `go vet`, `staticcheck` and `go test -race ./...` to a CI workflow.
+
+## Add a Makefile
+
+- [ ] Targets for the everyday steps: `build` (the `sp404` binary), `test`
+  (`go test -race ./...`), `vet`, `fmt` (gofmt check), `run` and `sim` (`./sp404 -sim`),
+  `clean`.
+- [ ] A `release` target that sets the version with
+  `-ldflags "-X github.com/moahbeatlab/404tui/version.Version=…"`, and builds for macOS,
+  Linux and Windows.

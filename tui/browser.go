@@ -460,7 +460,7 @@ func (m Model) sourceTabs(root string) string {
 func (m Model) assignBox(g geom) string {
 	st, b := m.st, m.browser
 	held := m.snap.Pads[b.pad.Index()]
-	target := st.dim.Render(fmt.Sprintf("%s is empty", b.pad))
+	target := st.good.Render(fmt.Sprintf("%s is empty", b.pad))
 	if held.HasSample {
 		target = st.warn.Render(fmt.Sprintf("%s holds %q — it will be replaced", b.pad, held.Name))
 		if b.confirm {
@@ -501,10 +501,14 @@ func (m Model) assignBox(g geom) string {
 	rightW := width - leftW - 4
 	right += "\n\n" + m.assignKeys(b, rightW)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, " ", lipgloss.NewStyle().Width(rightW).Render(right))
-	lines := []string{m.sourceTabs(b.root), "", body}
-	// The title and what the pad holds sit above the frame, so the frame is all file list.
-	header := st.bold.Render(fmt.Sprintf("Assign a file to %s", b.pad)) + "\n" + target
-	return lipgloss.JoinVertical(lipgloss.Left, header, st.modal.Width(width).Render(strings.Join(lines, "\n")))
+	// The title is a bar in the accent colour with the pad in a lighter block, at the top of the
+	// frame above the sources: it says where the files go, and it should not be missed.
+	th := st.th
+	bar := lipgloss.NewStyle().Background(th.accent).Foreground(th.cursorFg).Bold(true)
+	padBlock := lipgloss.NewStyle().Background(th.text).Foreground(th.cursorFg).Bold(true)
+	title := bar.Render(" Assign a file to ") + padBlock.Render(b.pad.String()+" ")
+	lines := []string{title, target, "", m.sourceTabs(b.root), "", body}
+	return st.modal.Width(width).Render(strings.Join(lines, "\n"))
 }
 
 // assignKeys lists the dialog's keys in two columns under the file details, where there is
