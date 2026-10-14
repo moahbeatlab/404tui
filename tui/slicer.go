@@ -326,9 +326,9 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		s.at = 0
 	case "G":
 		s.at = n - 1
-	case "H":
+	case "[", "H":
 		m.slicerNudge(-1)
-	case "L":
+	case "]", "L":
 		m.slicerNudge(1)
 	case "{":
 		m.slicerNudge(-8)
@@ -346,7 +346,7 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.message = "that slice is too short to cut"
 		} else {
 			s.at = cut
-			m.message = fmt.Sprintf("cut: slice %d is new; H L move its start", cut+1)
+			m.message = fmt.Sprintf("cut: slice %d is new; [ ] move its start", cut+1)
 		}
 	case "d":
 		removed := false
@@ -382,9 +382,9 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 				sl.Slices[s.at].Chance = 0
 			}
 		})
-	case "[":
+	case "(":
 		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Chance = max(sl.Slices[s.at].Chance-10, 0) })
-	case "]":
+	case ")":
 		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Chance = min(sl.Slices[s.at].Chance+10, 100) })
 	case "<":
 		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Pitch = max(sl.Slices[s.at].Pitch-1, -24) })
@@ -926,8 +926,8 @@ func (m Model) slicerBox() string {
 
 // slicerHelp are the keys the dialog lists under itself.
 var slicerHelp = []string{
-	"h l slice", "H L nudge start", "{ } coarse", "c cut", "d delete", "e equal slices", "t onsets", "i I zoom", "u undo",
-	"r reverse", "m mute", "[ ] chance", "< > pitch", "- + gain", "X plain",
+	"h l slice", "[ ] nudge start", "{ } coarse", "c cut", "d delete", "e equal slices", "t onsets", "i I zoom", "u undo",
+	"r reverse", "m mute", "( ) chance", "< > pitch", "- + gain", "X plain",
 	"M mode", "S new seed", "T grid", ", . tempo", "n bounce rounds", "z snap", "Tab order lane",
 	"Space play", "Enter hear slice", "b bounce to pad", "Esc close",
 }

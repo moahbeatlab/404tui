@@ -78,7 +78,7 @@ func TestSlicerNudgeMovesTheStartAndTheEndBefore(t *testing.T) {
 	s := slicerOpen(t)
 	s.press("l")
 	before := s.slicing().Slices[1].Start
-	s.press("L", "L", "L")
+	s.press("]", "]", "]")
 	after := s.slicing().Slices[1].Start
 	if after <= before {
 		t.Fatalf("start %d did not move later than %d", after, before)
@@ -86,7 +86,7 @@ func TestSlicerNudgeMovesTheStartAndTheEndBefore(t *testing.T) {
 	if s.slicing().End(0) != after {
 		t.Errorf("slice 1 ends at %d, slice 2 starts at %d", s.slicing().End(0), after)
 	}
-	s.press("H", "H", "H", "H", "H", "H")
+	s.press("[", "[", "[", "[", "[", "[")
 	if s.slicing().Slices[1].Start >= before {
 		t.Errorf("start did not move earlier: %d", s.slicing().Slices[1].Start)
 	}
@@ -138,7 +138,7 @@ func TestSlicerOnsetsFindTheDrumHits(t *testing.T) {
 
 func TestSlicerSliceSettings(t *testing.T) {
 	s := slicerOpen(t)
-	s.press("l", "r", "[", "[", ">", ">", ">", "-")
+	s.press("l", "r", "(", "(", ">", ">", ">", "-")
 	x := s.slicing().Slices[1]
 	if !x.Reverse || x.Chance != 80 || x.Pitch != 3 || x.Gain != 90 {
 		t.Fatalf("slice 2 is %+v", x)
@@ -271,7 +271,7 @@ func TestSlicerAuditionPlaysTheSliceOnce(t *testing.T) {
 
 func TestSlicerRememberedBetweenOpens(t *testing.T) {
 	s := slicerOpen(t)
-	s.press("l", "r", "[", "c")
+	s.press("l", "r", "(", "c")
 	want := len(s.slicing().Slices)
 	s.press("esc", "Z")
 	if s.m().slicer == nil {
