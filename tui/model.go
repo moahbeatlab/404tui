@@ -148,6 +148,36 @@ type palette struct {
 	cursor int
 }
 
+// patToolKind is one of the groove tools that reshape the whole open pattern.
+type patToolKind int
+
+const (
+	toolSwing patToolKind = iota
+	toolQuantize
+	toolShift
+	toolReverse
+	toolHumanize
+	// toolDouble and toolHalve change the pattern's length: always the whole pattern.
+	toolDouble
+	toolHalve
+)
+
+// patTool is the little menu over the open pattern: a tool is chosen with j/k, its amount set
+// with h/l (or +/-), and Enter applies it. Reverse has no amount.
+type patTool struct {
+	kind patToolKind
+	// pad, when set, scopes the tools to that one pad's track; nil applies to the whole pattern.
+	pad *proto.PadIndex
+	// swing is the swing percentage 50..75; quantStrength 0..100; shift the number of steps
+	// (can be negative); human the timing/velocity amount 0..100. Each tool keeps its own.
+	swing         int
+	quantStrength int
+	shift         int
+	human         int
+	// eighths swings/quantizes on eighth notes instead of sixteenths.
+	eighths bool
+}
+
 // ErrNoUnit is what a Connect returns when no unit is plugged in yet; the UI keeps waiting
 // quietly instead of reporting it.
 var ErrNoUnit = errors.New("no unit")
@@ -196,9 +226,13 @@ type Model struct {
 	palette *palette
 	// toggles is the menu of on/off settings that t offers for the whole bank.
 	toggles *toggleMenu
-	browser *browser
-	search  *search
-	editor  *editor
+	// tmplPicker is the "new pattern" template list (N); laneMap is the lane->pad confirm dialog
+	// a genre template opens before it is written. Both are nil when closed.
+	tmplPicker *templatePicker
+	laneMap    *laneAssign
+	browser    *browser
+	search     *search
+	editor     *editor
 	// chromatic is the dialog that plays a pad as notes from the keyboard.
 	chromatic *chromatic
 	// indexes are the file indexes searches use, one per source, kept until files change.
@@ -241,10 +275,25 @@ type Model struct {
 
 	patterns      map[int][]app.PatternRow
 	patternCursor int
-	// patRow and patCol are the cursor in the open pattern's step grid; patUndo is what the
-	// pattern was before the last edit.
+	// patRow and patCol are the cursor in the open pattern's step grid; patHist is the undo and
+	// redo stacks of edits to it.
 	patRow, patCol int
-	patUndo        *patternUndo
+	patHist        *patternHistory
+	// patFocus expands the track on the cursor row into a big step lane; the others stay
+	// one-line strips. Esc collapses it again.
+	patFocus bool
+	// projectBack is set once the project last open on this source has been gone back to (or
+	// there was none to go back to), after connecting; until then the project is not recorded.
+	projectBack bool
+	// loopTry is a file heard in place of a pad's sample in the pattern that loops, while the
+	// assign dialog for that pad is open: nothing is written until it is assigned.
+	loopTry *loopTry
+	// patRange limits the open pattern to some of its bars: only those are shown, edited and
+	// looped. nil is the whole pattern. rangePick is the list v opens to choose it.
+	patRange  *barRange
+	rangePick *rangePicker
+	// patTool is the groove-tools menu over the open pattern, nil when it is closed.
+	patTool *patTool
 	// loopSlot is the pattern that was last started looping; loopDirty asks for it to be mixed
 	// again, because something it plays changed.
 	// patPreview are the patterns read to show the one in front of the cursor in the patterns
@@ -464,6 +513,40 @@ func (m Model) WithOffline(open OpenOffline, probe func() bool, start string) Mo
 	return m
 }
 
+// projectSource names where the projects come from, for remembering which one was open: the
+// folder worked on offline, or the unit.
+func (m Model) projectSource() string {
+	if m.offline != "" {
+		return m.offline
+	}
+	return "unit"
+}
+
+// rememberProject records the project open now as the one to come back to on this source. The
+// first time after connecting to a folder offline, it goes back to the project that was open
+// there last time instead (a folder opens on its first project; a unit keeps its own).
+func (m *Model) rememberProject() tea.Cmd {
+	src, now := m.projectSource(), int(m.snap.Project)
+	if !m.projectBack {
+		m.projectBack = true
+		if last := m.mem.Projects[src] - 1; m.offline != "" && last >= 0 && last != now && last < len(m.snap.Projects) {
+			unit, project := m.unit, uint8(last)
+			m.busy = fmt.Sprintf("opening project %d again", last+1)
+			return m.edit(func() tea.Msg {
+				if err := unit.SelectProject(project); err != nil {
+					return doneMsg{message: fmt.Sprintf("project %d, open last time: %v", project+1, err), reload: true}
+				}
+				return doneMsg{message: fmt.Sprintf("project %d, as last time", project+1), reload: true}
+			})
+		}
+	}
+	if m.mem.Projects == nil {
+		m.mem.Projects = map[string]int{}
+	}
+	m.mem.Projects[src] = now + 1
+	return nil
+}
+
 // persist writes the state if it changed since it was last written.
 func (m *Model) persist() {
 	if m.store == nil {
@@ -523,6 +606,9 @@ type (
 		note   string
 		// undo is the pattern's bytes before an edit, when the message comes from one.
 		undo []byte
+		// op says how the edit touches the history: a normal edit pushes undo and clears redo;
+		// an undo or redo moves bytes between the two stacks instead.
+		op patEditOp
 	}
 	dirMsg struct {
 		root    string
@@ -885,8 +971,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.indexed(msg)
 	case loadedMsg:
 		m.busy = ""
-		// The pads were read again: what a looping pattern plays may have changed.
+		// The pads were read again: what a looping pattern plays may have changed. A file being
+		// tried in the loop has been assigned (or given up) by now: the pad's own sound plays.
 		m.loopDirty = true
+		m.loopTry = nil
 		if msg.err != nil && errors.Is(msg.err, device.ErrClosed) {
 			return m.lose()
 		}
@@ -899,7 +987,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.snap == nil || m.snap.Project != msg.snap.Project {
 			m.patterns = map[int][]app.PatternRow{}
 			m.patPreview = map[proto.PadIndex]*app.PatternDetail{}
-			m.pattern = nil
+			m.pattern, m.patFocus, m.patRange = nil, false, nil
 			m.usage, m.usageState = nil, 0
 		}
 		m.facts = map[factKey]padFacts{}
@@ -910,6 +998,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.message != "" {
 			m.message = msg.message
+		}
+		if cmd := m.rememberProject(); cmd != nil {
+			return m, cmd
 		}
 		return m, m.wanted()
 	case doneMsg:
@@ -1044,13 +1135,31 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Every pad of the bank with a sample has a row, notes or not.
 			m.pattern.WithRowsFor(m.patternBankPads(m.pattern))
 			if msg.undo != nil {
-				m.patUndo = &patternUndo{slot: m.pattern.Slot, before: msg.undo}
+				if m.patHist == nil || m.patHist.slot != m.pattern.Slot {
+					m.patHist = &patternHistory{slot: m.pattern.Slot}
+				}
+				// msg.undo is the state this edit replaced on disk. A normal edit records it on
+				// the undo stack and drops any redo future; an undo/redo moves it to the other
+				// stack (the key handler already popped the snapshot it applied).
+				switch msg.op {
+				case editUndo:
+					m.patHist.push(&m.patHist.redo, msg.undo)
+				case editRedo:
+					m.patHist.push(&m.patHist.undo, msg.undo)
+				default:
+					m.patHist.push(&m.patHist.undo, msg.undo)
+					m.patHist.redo = nil
+				}
 				m.loopDirty = true
 			}
 			// What is shown of it beside the patterns is this, now.
 			m.patPreview[m.pattern.Slot] = m.pattern
 			m.patRow = clamp(m.patRow, 0, max(len(m.pattern.Grid.Rows)-1, 0))
 			m.patCol = clamp(m.patCol, 0, max(m.pattern.Grid.Steps-1, 0))
+			// A range of another pattern, or past the end of this one (halved), is let go.
+			if r := m.patRange; r != nil && (r.slot != m.pattern.Slot || r.last >= m.pattern.Bars()) {
+				m.patRange = nil
+			}
 		}
 		if msg.note != "" {
 			m.message = msg.note
@@ -1220,6 +1329,7 @@ func (m Model) connected(msg connectMsg) (tea.Model, tea.Cmd) {
 	}
 	m.log.Info("connected", "port", msg.unit.PortName(), "offline", msg.offline)
 	m.unit, m.closer = app.NewRouted(msg.unit), msg.closer
+	m.projectBack = false
 	m.waitErr, m.lost = "", false
 	m.connectedFrame = m.frame
 	m.busy = "reading the unit"
@@ -1491,14 +1601,78 @@ func (m Model) loadOrigins() tea.Cmd {
 	}
 }
 
-// patternUndo is a pattern's bytes before the last edit of it.
-type patternUndo struct {
-	slot   proto.PadIndex
-	before []byte
+// barRange is some bars of a pattern, first to last (0-based, both in), of the pattern in slot.
+type barRange struct {
+	slot        proto.PadIndex
+	first, last int
+}
+
+// bars is how many bars the range holds.
+func (r barRange) bars() int { return r.last - r.first + 1 }
+
+// label names the range as the header and the list do: "Bar 3" or "Bars 3–4".
+func (r barRange) label() string {
+	if r.first == r.last {
+		return fmt.Sprintf("Bar %d", r.first+1)
+	}
+	return fmt.Sprintf("Bars %d–%d", r.first+1, r.last+1)
+}
+
+// rangePicker is the list of ranges v offers: the whole pattern, each bar, each two bars.
+type rangePicker struct {
+	cursor int
+	items  []barRange // first -1: the whole pattern
+}
+
+// loopTry is an audio file standing in for a pad's sample in the looping pattern.
+type loopTry struct {
+	pad  proto.PadIndex
+	path string
+}
+
+// patternHistory is the undo and redo stacks for the open pattern: each entry is the pattern's
+// bytes at one point. undo grows as edits are made (newest last), redo grows as edits are
+// undone. Both are capped at patHistoryMax.
+type patternHistory struct {
+	slot proto.PadIndex
+	undo [][]byte
+	redo [][]byte
+}
+
+// patHistoryMax is how many edits back the open pattern can be undone.
+const patHistoryMax = 10
+
+// patEditOp says how a finished pattern edit touches the history.
+type patEditOp int
+
+const (
+	// editNormal is an ordinary edit: push the before-bytes onto undo and drop the redo stack.
+	editNormal patEditOp = iota
+	// editUndo and editRedo are the result of stepping through the history; they do not change
+	// the stacks (the key handler already moved the bytes between them).
+	editUndo
+	editRedo
+)
+
+// push appends a snapshot to a stack, keeping at most patHistoryMax (dropping the oldest).
+func (h *patternHistory) push(stack *[][]byte, snap []byte) {
+	*stack = append(*stack, snap)
+	if len(*stack) > patHistoryMax {
+		*stack = (*stack)[len(*stack)-patHistoryMax:]
+	}
 }
 
 // patternBankPads are the pads with a sample in the bank a pattern plays (or, when its pads
 // span banks or it has none, the bank of its slot): the rows its grid offers.
+// patPage is which bar (0-based) of the open pattern the cursor is on; the pattern view shows
+// one bar per page.
+func (m Model) patPage() int {
+	if m.pattern == nil {
+		return 0
+	}
+	return m.patCol / m.pattern.StepsPerPage()
+}
+
 func (m Model) patternBankPads(d *app.PatternDetail) []proto.PadIndex {
 	if m.snap == nil {
 		return nil

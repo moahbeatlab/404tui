@@ -247,6 +247,48 @@ func TestWriteStartPatternMakesAPatternTheUnitLists(t *testing.T) {
 	}
 }
 
+func TestPatternGridHasSixteenStepsPerBar(t *testing.T) {
+	d, _ := connect(t)
+	c3, a1 := pad(t, "C3"), pad(t, "A1")
+	// A 2-bar pattern with an A1 note on the first beat of each bar (tick 0 and tick 1920).
+	file, err := formats.BlankPattern(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file, err = formats.InsertNote(file, 0, a1, 127, 120); err != nil {
+		t.Fatal(err)
+	}
+	if file, err = formats.InsertNote(file, 1920, a1, 127, 120); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.WriteFile(formats.PatternPath(1, c3), file); err != nil {
+		t.Fatal(err)
+	}
+	detail, err := app.OpenPattern(d, c3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Bars() != 2 {
+		t.Errorf("Bars() = %d, want 2", detail.Bars())
+	}
+	if detail.Grid.Steps != 2*app.GridStepsPerBar {
+		t.Errorf("Grid.Steps = %d, want %d", detail.Grid.Steps, 2*app.GridStepsPerBar)
+	}
+	if got := detail.StepTick(16); got != 1920 {
+		t.Errorf("StepTick(16) = %d, want 1920 (start of bar 2)", got)
+	}
+	if got := detail.StepTicks(); got != 120 {
+		t.Errorf("StepTicks() = %d, want 120 (a 16th)", got)
+	}
+	// The two A1 hits land on col 0 and col 16: one per bar.
+	if len(detail.Grid.Rows) != 1 {
+		t.Fatalf("grid rows = %d, want 1", len(detail.Grid.Rows))
+	}
+	if hits := detail.Grid.Rows[0].Hits; !hits[0] || !hits[16] {
+		t.Errorf("A1 hits = %v, want col 0 and col 16 set", hits)
+	}
+}
+
 func TestPatternDetailAndRetarget(t *testing.T) {
 	d, s := connect(t)
 	a1, a2, b2 := pad(t, "A1"), pad(t, "A2"), pad(t, "B2")
@@ -1362,5 +1404,19 @@ func TestGatedPadsStopAndLoopingPadsRepeatForTheNote(t *testing.T) {
 	free, _ := app.MixPatternVoices(p, 120, func(proto.PadIndex) (app.Voice, error) { return app.Voice{Sample: long}, nil })
 	if free.Samples[2*11999] != 1000 {
 		t.Error("a pad that is neither gated nor looping was cut")
+	}
+}
+
+func TestGridOffsetIsTheDistanceToTheNearestStep(t *testing.T) {
+	// A 2-bar pattern at 16ths: a step is 120 ticks.
+	d := &app.PatternDetail{Length: 3840, Beats: 4, BankTempo: 120, Grid: app.Grid{Steps: 32}}
+	for tick, want := range map[uint32]int{0: 0, 24: 24, 100: -20, 1920 + 60: 60, 3839: -1} {
+		if got := d.GridOffset(tick); got != want {
+			t.Errorf("GridOffset(%d) = %d, want %d", tick, got, want)
+		}
+	}
+	// A 16th at 120 BPM is 125 ms.
+	if got := d.TicksToMillis(120); got != 125 {
+		t.Errorf("TicksToMillis(120) = %v, want 125", got)
 	}
 }

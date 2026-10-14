@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"math/rand"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -51,11 +52,12 @@ var commands = []command{
 	{"s", "Swap the picked-up pad with this one; with none picked up, solo this pad", []int{secPads}},
 	{"e", "Export this bank: choose a folder, get WAV files + samples.json", []int{secPads}},
 	{"R", "Restore pads from an export: choose its folder, then the bank (p there also makes a pattern)", []int{secPads}},
-	{"t", "Set gate, loop, BPM sync, vinyl, one shot, fixed velocity or bus FX on the marked pads (or on the whole bank)", []int{secPads}},
+	{"t", "Set gate, loop, BPM sync, vinyl, one shot, fixed velocity or bus FX on the highlighted pad", []int{secPads}},
+	{"T", "Set those pad settings on every pad of the bank at once", []int{secPads}},
 	{"m", "Mute this pad in the pattern playing on this computer (again unmutes)", []int{secPads, secPatterns}},
 	{"M", "Solo this pad in the pattern playing on this computer: only the soloed pads sound (again unsolos); s does the same", []int{secPads, secPatterns}},
 	{"S", "In an open pattern: save it as you hear it into a slot you choose, without the muted pads (or with only the soloed ones)", []int{secPatterns}},
-	{"N", "New pattern in the first free slot: every sample in the bank on beat 1, 2 bars", []int{secPads, secPatterns}},
+	{"N", "New pattern: pick a template (all pads held, blank, or a genre groove)", []int{secPads, secPatterns}},
 	{"F", "Find where the samples on the pads came from, for the pads with no origin noted: names and lengths are matched against the index", []int{secPads}},
 	{"tab", "Move between the pads and the patterns panel under them", []int{secPads, secPatterns}},
 	{"enter", "Open pattern", []int{secPatterns}},
@@ -66,6 +68,13 @@ var commands = []command{
 	{"p", "Put the picked-up pattern here (twice to replace one)", []int{secPatterns}},
 	{"P", "Play the pattern on this computer (again stops it; s stops)", []int{secPatterns}},
 	{"b", "Retarget the open pattern to another bank", []int{secPatterns}},
+	{"{ }", "In an open pattern: turn to the previous / next page of bars (up to two bars a page)", []int{secPatterns}},
+	{"enter", "In an open pattern: expand the track into a big 16-step lane (Esc collapses it); inside it, note on/off", []int{secPatterns}},
+	{"x", "In an open pattern: note on/off at the cursor", []int{secPatterns}},
+	{"v", "In an open pattern: show, edit and loop only some bars (a bar, or two) — v again for the whole pattern", []int{secPatterns}},
+	{"H L", "In an open pattern: nudge the note at the cursor 5 ticks earlier / later (off the grid)", []int{secPatterns}},
+	{"( )", "In an open pattern: nudge the note at the cursor 1 tick earlier / later", []int{secPatterns}},
+	{"0", "In an open pattern: put the note at the cursor back on the nearest grid step", []int{secPatterns}},
 	{"enter", "Assign this file to a pad", []int{secFiles}},
 	{"[", "Target bank for assigns: previous (Files)", []int{secFiles}},
 	{"]", "Target bank for assigns: next (Files)", []int{secFiles}},
@@ -103,7 +112,7 @@ var commands = []command{
 	{"2", "Go to Files", nil},
 	{"3", "Go to Projects", nil},
 	{"U", "Working offline: leave offline mode and connect to the unit once it is plugged in", nil},
-	{"T", "Next colour theme", nil},
+	{"ctrl+t", "Next colour theme", nil},
 	{"r", "Refresh from the unit", nil},
 	{"?", "Keybindings", nil},
 	{"q", "Quit", nil},
@@ -203,8 +212,17 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.pickerKey(key)
 	case m.toggles != nil:
 		return m.togglesKey(key)
+	case m.tmplPicker != nil:
+		return m.templatePickerKey(name)
+	case m.rangePick != nil:
+		return m.rangePickerKey(name)
+	case m.laneMap != nil:
+		return m.laneAssignKey(name)
 	case m.palette != nil:
 		return m.paletteKey(key)
+	case m.patTool != nil:
+		// The groove-tools menu over an open pattern is modal: it takes every key.
+		return m.patToolKey(name)
 	}
 	if m.unit == nil {
 		// Nothing to work on until a unit is connected.
@@ -217,7 +235,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "?":
 			m.help = true
-		case "T":
+		case "ctrl+t":
 			m.themeAt = (m.themeAt + 1) % len(themes)
 			m.st = newStyles(themes[m.themeAt])
 		}
@@ -269,7 +287,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		default:
 			return m.goTo(secPads)
 		}
-	case "T":
+	case "ctrl+t":
 		m.themeAt = (m.themeAt + 1) % len(themes)
 		m.st = newStyles(themes[m.themeAt])
 		m.message = "theme: " + themes[m.themeAt].name
@@ -281,7 +299,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		clear(m.indexes)
 		m.tree = nil
 		m.infos = map[string]fileInfo{}
-		m.pattern = nil
+		m.pattern, m.patFocus, m.patRange = nil, false, nil
 		m.busy = "reading the unit"
 		return m, m.load("refreshed")
 	case "s":
@@ -311,8 +329,11 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 // escape backs out of the innermost thing: a pattern, a pick-up, marks; else it quits.
 func (m Model) escape() (tea.Model, tea.Cmd) {
 	switch {
+	case m.pattern != nil && m.section == secPatterns && m.patFocus:
+		// An expanded track collapses back into the grid first.
+		m.patFocus = false
 	case m.pattern != nil && m.section == secPatterns:
-		m.pattern = nil
+		m.pattern, m.patRange = nil, nil
 	case m.section == secPatterns && m.patHolding:
 		m.patHolding = false
 	case m.section == secPatterns && len(m.patMarks) > 0:
@@ -362,10 +383,55 @@ func (m Model) goTo(section int) (tea.Model, tea.Cmd) {
 func (m *Model) stopListening() {
 	// A file still being decoded must not start once this has been asked for.
 	m.listenGen.Add(1)
+	switch {
+	case m.inLoopAssign():
+		// Choosing a sample for a pad of the pattern that loops: the loop goes on, the next file
+		// is swapped into it when it is chosen.
+		return
+	case m.loopTry != nil:
+		// The assign dialog closed without keeping the file: the pad's own sound comes back and
+		// the loop goes on.
+		m.loopTry, m.loopDirty = nil, true
+		return
+	}
 	if m.player != nil {
 		m.player.Stop()
 	}
 	m.listening = ""
+}
+
+// looping reports whether a pattern loops on this computer now.
+func (m Model) looping() bool {
+	return m.loopSlot != nil && m.player != nil && m.player.Playing() && m.listening == "pattern "+m.loopSlot.String()
+}
+
+// assignPad is the pad a file is being chosen for: the assign dialog's, or that of a search
+// opened from it.
+func (m Model) assignPad() (proto.PadIndex, bool) {
+	switch {
+	case m.search != nil && m.search.forPad:
+		return m.search.pad, true
+	case m.browser != nil && m.browser.kind == browseAssign:
+		return m.browser.pad, true
+	}
+	return proto.PadIndex{}, false
+}
+
+// inLoopAssign reports whether a file is being chosen for a pad while a pattern loops: then the
+// files listened to are tried in the loop, on that pad, instead of played on their own.
+func (m Model) inLoopAssign() bool {
+	_, ok := m.assignPad()
+	return ok && m.looping()
+}
+
+// tryInLoop puts a file in place of the dialog pad's sample in the looping pattern, so it is
+// heard in the groove before it is assigned; nothing is written to the unit.
+func (m Model) tryInLoop(path string) (tea.Model, tea.Cmd) {
+	m.listenGen.Add(1)
+	pad, _ := m.assignPad()
+	m.loopTry, m.loopDirty = &loopTry{pad: pad, path: path}, true
+	m.message = fmt.Sprintf("%s on %s in the playing pattern: Enter assigns it, Esc puts the pad's own sound back", app.Base(path), pad)
+	return m, nil
 }
 
 // pageStep is how far a paging key moves a list that shows height rows: Ctrl-D and Ctrl-U go
@@ -471,7 +537,7 @@ func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 	row := m.padRow()
 	switch name {
 	case "N":
-		return m.newStartPattern()
+		return m.openTemplatePicker()
 	case "F":
 		return m.scanOrigins()
 	case "m":
@@ -479,6 +545,11 @@ func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 	case "M":
 		return m.toggleSolo(row.Pad)
 	case "t":
+		// Scope the pad-settings dialog to the highlighted pad.
+		p := row.Pad
+		m.toggles = &toggleMenu{pad: &p}
+	case "T":
+		// Scope the pad-settings dialog to every pad of the bank.
 		m.toggles = &toggleMenu{}
 	case "h", "left":
 		m.gridMove(-1, 0)
@@ -827,23 +898,69 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 		case "P":
 			return m.playPattern(m.pattern.Slot)
 		case "h", "left":
-			m.patCol = clamp(m.patCol-1, 0, d.Grid.Steps-1)
+			lo, hi := m.colBounds(d)
+			m.patCol = clamp(m.patCol-1, lo, hi-1)
 		case "l", "right":
-			m.patCol = clamp(m.patCol+1, 0, d.Grid.Steps-1)
+			lo, hi := m.colBounds(d)
+			m.patCol = clamp(m.patCol+1, lo, hi-1)
+		case "v":
+			return m.openRangePicker()
 		case "j", "down":
 			m.patRow = clamp(m.patRow+1, 0, max(len(rows)-1, 0))
 		case "k", "up":
 			m.patRow = clamp(m.patRow-1, 0, max(len(rows)-1, 0))
 		case "g":
-			m.patCol = 0
+			// Start of the current bar.
+			m.patCol = m.patPage() * d.StepsPerPage()
 		case "G":
-			m.patCol = d.Grid.Steps - 1
-		case "enter", "x":
+			// End of the current bar (or the pattern, whichever comes first).
+			m.patCol = min(m.patPage()*d.StepsPerPage()+d.StepsPerPage()-1, d.Grid.Steps-1)
+		case "{", "[":
+			if _, ok := m.rangeOf(d); ok {
+				return m.slideRange(-1)
+			}
+			// The page before (the bars shown at once), keeping the step's place in it.
+			m.patCol = clamp(m.patCol-m.pageSteps(d), 0, d.Grid.Steps-1)
+		case "}", "]":
+			if _, ok := m.rangeOf(d); ok {
+				return m.slideRange(+1)
+			}
+			// The next page.
+			m.patCol = clamp(m.patCol+m.pageSteps(d), 0, d.Grid.Steps-1)
+		case "enter":
+			// The first Enter expands the track into its step lane; inside it, Enter sets notes.
+			if !m.patFocus {
+				if len(rows) > 0 {
+					m.patFocus = true
+				}
+				break
+			}
 			return m.toggleNote()
+		case "x":
+			return m.toggleNote()
+		case "H", "L", "(", ")":
+			// Nudge the note off (or back toward) the grid: H L by 5 ticks, ( ) by 1.
+			by := map[string]int{"H": -5, "L": 5, "(": -1, ")": 1}[name]
+			return m.nudgeNote(by, false)
+		case "0":
+			return m.nudgeNote(0, true)
 		case " ":
 			return m.playPattern(m.pattern.Slot)
 		case "u":
 			return m.undoPatternEdit()
+		case "R":
+			return m.redoPatternEdit()
+		case "t":
+			// Scope the tools to the pad the cursor is on.
+			if pad, _, ok := m.cellOfPattern(); ok {
+				p := pad
+				m.patTool = newPatTool(&p)
+				m.message = ""
+			}
+		case "T":
+			// Scope the tools to the whole pattern (every track together).
+			m.patTool = newPatTool(nil)
+			m.message = ""
 		case ",", ".", "<", ">", "*":
 			return m.changeVelocity(name)
 		case "m", "M", "s":
@@ -865,7 +982,7 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 	}
 	switch name {
 	case "N":
-		return m.newStartPattern()
+		return m.openTemplatePicker()
 	case "P", "s":
 		rows := m.patterns[m.bank]
 		if rows == nil || !rows[m.patternCursor].Exists {
@@ -955,6 +1072,13 @@ func (m Model) playPattern(slot proto.PadIndex) (tea.Model, tea.Cmd) {
 		m.message = label + " stopped"
 		return m, nil
 	}
+	return m.startLoop(slot)
+}
+
+// startLoop mixes a pattern (only its range, when one is set) and loops it from the top,
+// whatever played before: a new range is a loop of another length.
+func (m Model) startLoop(slot proto.PadIndex) (tea.Model, tea.Cmd) {
+	label := "pattern " + slot.String()
 	m.player.Stop()
 	id := m.listenGen.Add(1)
 	m.listening = label
@@ -994,6 +1118,16 @@ func (m Model) patternMixer(slot proto.PadIndex) func() (formats.Sample, error) 
 	for i := range pads {
 		pads[i].Params = maps.Clone(pads[i].Params)
 	}
+	var try loopTry
+	if m.loopTry != nil {
+		try = *m.loopTry
+	}
+	// With a range set on this pattern, only its bars are mixed: the loop is that long.
+	var rng barRange
+	ranged := false
+	if m.pattern != nil && m.pattern.Slot == slot {
+		rng, ranged = m.rangeOf(m.pattern)
+	}
 	return func() (formats.Sample, error) {
 		ops.Lock()
 		defer ops.Unlock()
@@ -1009,8 +1143,24 @@ func (m Model) patternMixer(slot proto.PadIndex) func() (formats.Sample, error) 
 		if err != nil {
 			return formats.Sample{}, err
 		}
+		if ranged {
+			bar := uint32(pattern.BeatsPerBar()) * formats.PPQ
+			pattern = pattern.Slice(uint32(rng.first)*bar, min(uint32(rng.last+1)*bar, pattern.Length))
+		}
+		// A file tried on a pad plays in its place, the whole file, at the pad's settings.
+		var tried *formats.Sample
+		if try.path != "" {
+			imported, err := app.LoadSample(unit, try.path)
+			if err != nil {
+				return formats.Sample{}, err
+			}
+			tried = &imported.Sample
+		}
 		return app.MixPatternVoices(pattern, bpm, func(pad proto.PadIndex) (app.Voice, error) {
 			row := pads[pad.Index()]
+			if tried != nil && pad == try.pad && heard(pad, muted, soloed) {
+				return app.PadVoice(*tried, row.Level, row.Params), nil
+			}
 			if !row.HasSample || !heard(pad, muted, soloed) {
 				return app.Voice{Sample: formats.Sample{Channels: 2}}, nil
 			}
@@ -1154,13 +1304,21 @@ func (t bankToggle) with(current int32, on bool) int32 {
 	return current &^ t.mask
 }
 
-type toggleMenu struct{ cursor int }
+// toggleMenu is the pad-settings dialog. pad, when set, scopes it to that one pad; otherwise it
+// changes every pad with a sample in the bank.
+type toggleMenu struct {
+	cursor int
+	pad    *proto.PadIndex
+}
 
-// toggleTargets are the pads the menu changes: the marked pads that hold a sample, or when
-// none are marked every pad with a sample in the bank on show.
+// toggleTargets are the pads the menu changes: one pad when scoped to it, else every pad with a
+// sample in the bank on show.
 func (m Model) toggleTargets() []proto.PadIndex {
-	if len(m.marked) > 0 {
-		return withSamples(m.targets())
+	if t := m.toggles; t != nil && t.pad != nil {
+		if m.snap.Pads[t.pad.Index()].HasSample {
+			return []proto.PadIndex{*t.pad}
+		}
+		return nil
 	}
 	var pads []proto.PadIndex
 	for _, pad := range proto.AllPads()[m.bank*proto.PadsPerBank : (m.bank+1)*proto.PadsPerBank] {
@@ -1208,17 +1366,14 @@ func (m Model) togglesKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j", "ctrl+n":
 		t.cursor = min(t.cursor+1, len(bankToggles)-1)
 	case "enter", " ":
-		m.toggles = nil
 		return m.toggleTargetsBy(bankToggles[t.cursor], -1)
 	case "0", "1", "2":
 		// Digits set the bus directly: 0 off, 1 BUS 1, 2 BUS 2.
-		m.toggles = nil
 		return m.toggleTargetsBy(bus, int32(name[0]-'0'))
 	default:
 		// A letter picks a setting: g, l, b, v, o, f, x.
 		for _, b := range bankToggles {
 			if name == b.key {
-				m.toggles = nil
 				return m.toggleTargetsBy(b, -1)
 			}
 		}
@@ -1229,8 +1384,8 @@ func (m Model) togglesKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) togglesBox() string {
 	st := m.st
 	scope := fmt.Sprintf("every pad of bank %c", 'A'+m.bank)
-	if len(m.marked) > 0 {
-		scope = fmt.Sprintf("the %d marked pads", len(m.toggleTargets()))
+	if t := m.toggles; t != nil && t.pad != nil {
+		scope = "pad " + t.pad.String()
 	}
 	lines := []string{st.bold.Render("Set for " + scope), ""}
 	for i, t := range bankToggles {
@@ -1268,7 +1423,9 @@ func (m Model) togglesBox() string {
 // or with -1 goes to the next one.
 func (m Model) toggleTargetsBy(t bankToggle, value int32) (tea.Model, tea.Cmd) {
 	pads := m.toggleTargets()
+	padScope := m.toggles != nil && m.toggles.pad != nil
 	if len(pads) == 0 {
+		m.toggles = nil
 		m.message = "no pads with a sample to change"
 		return m, nil
 	}
@@ -1307,9 +1464,10 @@ func (m Model) toggleTargetsBy(t bankToggle, value int32) (tea.Model, tea.Cmd) {
 	}
 	unit, id := m.unit, info.ID
 	scope := fmt.Sprintf("in bank %c", 'A'+m.bank)
-	if len(m.marked) > 0 {
-		scope = "(marked)"
+	if padScope && len(pads) == 1 {
+		scope = "on " + pads[0].String()
 	}
+	m.toggles = nil
 	m.marked = map[int]bool{}
 	prog := m.prog
 	prog.begin(len(pads))
@@ -1325,6 +1483,303 @@ func (m Model) toggleTargetsBy(t bankToggle, value int32) (tea.Model, tea.Cmd) {
 			}
 		}
 		return doneMsg{message: fmt.Sprintf("%s %s on %s %s", strings.ToLower(t.label), what, plural(len(pads), "pad"), scope), reload: true}
+	})
+}
+
+// ---- New pattern: templates ----
+
+// templatePicker is the list N opens: pick the shape of the new pattern. The first two entries
+// are special (all pads held, and a blank pattern); the rest are the genre grooves from
+// formats.GrooveTemplates, in order.
+type templatePicker struct {
+	cursor int
+}
+
+// templateItems are the picker's rows: the two built-ins first, then one per genre groove.
+func templateItems() []string {
+	items := []string{"All pads held", "Blank"}
+	for _, g := range formats.GrooveTemplates() {
+		items = append(items, fmt.Sprintf("%-16s %s  ·  %s", g.Name, plural(g.Bars(), "bar"), g.Tempo))
+	}
+	return items
+}
+
+// grooveAt is the genre groove a picker row stands for, and whether the row is a groove at all
+// (the first two rows are the built-ins and return ok false).
+func grooveAt(row int) (formats.GrooveTemplate, bool) {
+	grooves := formats.GrooveTemplates()
+	i := row - 2
+	if i < 0 || i >= len(grooves) {
+		return formats.GrooveTemplate{}, false
+	}
+	return grooves[i], true
+}
+
+// openTemplatePicker opens the new-pattern template list, when the bank has a free slot and, for
+// the genre grooves, some samples to play.
+func (m Model) openTemplatePicker() (tea.Model, tea.Cmd) {
+	m.tmplPicker = &templatePicker{}
+	return m, nil
+}
+
+func (m Model) templatePickerKey(name string) (tea.Model, tea.Cmd) {
+	p := m.tmplPicker
+	items := templateItems()
+	switch name {
+	case "esc", "q", "N":
+		m.tmplPicker = nil
+	case "up", "k", "ctrl+p":
+		p.cursor = max(p.cursor-1, 0)
+	case "down", "j", "ctrl+n":
+		p.cursor = min(p.cursor+1, len(items)-1)
+	case "g":
+		p.cursor = 0
+	case "G":
+		p.cursor = len(items) - 1
+	case "enter", " ":
+		return m.chooseTemplate(p.cursor)
+	}
+	return m, nil
+}
+
+// chooseTemplate acts on the picked row: "All pads held" and "Blank" write at once; a genre
+// groove opens the lane confirm dialog.
+func (m Model) chooseTemplate(row int) (tea.Model, tea.Cmd) {
+	m.tmplPicker = nil
+	switch row {
+	case 0:
+		return m.newStartPattern()
+	case 1:
+		return m.newBlankPattern()
+	}
+	g, ok := grooveAt(row)
+	if !ok {
+		return m, nil
+	}
+	return m.openLaneAssign(g)
+}
+
+// bankSampledPads are the pads of the bank on show that hold a sample, in pad order.
+func (m Model) bankSampledPads() []proto.PadIndex {
+	var pads []proto.PadIndex
+	for _, pad := range proto.AllPads()[m.bank*proto.PadsPerBank : (m.bank+1)*proto.PadsPerBank] {
+		if m.snap.Pads[pad.Index()].HasSample {
+			pads = append(pads, pad)
+		}
+	}
+	return pads
+}
+
+// newBlankPattern writes an empty pattern into the first free slot of the bank on show, to be
+// programmed by hand.
+func (m Model) newBlankPattern() (tea.Model, tea.Cmd) {
+	unit, bank := m.unit, m.bank
+	m.busy = "making a pattern"
+	return m, m.edit(func() tea.Msg {
+		slot, err := firstFreePatternSlot(unit, bank)
+		if err != nil {
+			return doneMsg{message: err.Error()}
+		}
+		built, err := formats.BlankPattern(app.StartBars)
+		if err != nil {
+			return doneMsg{message: "the pattern was not made: " + err.Error()}
+		}
+		if err := app.WriteGroove(unit, slot, built); err != nil {
+			return doneMsg{message: "the pattern was not made: " + err.Error()}
+		}
+		return doneMsg{
+			message:  fmt.Sprintf("pattern %s made: blank, %d bars", slot, app.StartBars),
+			reload:   true,
+			patterns: true,
+		}
+	})
+}
+
+// firstFreePatternSlot is the first empty pattern slot of a bank, or an error naming why there
+// is none (reading failed, or every slot is taken).
+func firstFreePatternSlot(unit app.Unit, bank int) (proto.PadIndex, error) {
+	rows, err := app.LoadPatterns(unit, bank)
+	if err != nil {
+		return proto.PadIndex{}, fmt.Errorf("reading the patterns failed: %s", err)
+	}
+	free := slices.IndexFunc(rows, func(r app.PatternRow) bool { return !r.Exists })
+	if free < 0 {
+		return proto.PadIndex{}, fmt.Errorf("every pattern slot of bank %c is taken", 'A'+bank)
+	}
+	return rows[free].Slot, nil
+}
+
+// laneAssign is the dialog that confirms which pad plays each lane of a genre groove before it is
+// written. cursor is the lane row in front; lane maps each of the template's lanes to the pad
+// chosen for it (nil = skip the lane); pads are the bank's sampled pads the h/l keys cycle
+// through, with a "skip" past the end. When choosing is true the dialog is in its pad chooser:
+// chooseAt is the row of the chooser (0..len(pads) is skip) picking the pad for the lane cursor
+// is on.
+type laneAssign struct {
+	tmpl     formats.GrooveTemplate
+	cursor   int
+	lane     map[formats.Lane]*proto.PadIndex
+	pads     []proto.PadIndex
+	choosing bool
+	chooseAt int
+}
+
+// openLaneAssign opens the lane confirm dialog for a genre groove, pre-filled by guessing the
+// roles from the bank's sample names.
+func (m Model) openLaneAssign(g formats.GrooveTemplate) (tea.Model, tea.Cmd) {
+	pads := m.bankSampledPads()
+	if len(pads) == 0 {
+		m.message = fmt.Sprintf("bank %c has no samples to put in a pattern", 'A'+m.bank)
+		return m, nil
+	}
+	// Guess roles over just this bank's rows.
+	var rows []app.PadRow
+	for _, pad := range pads {
+		rows = append(rows, m.snap.Pads[pad.Index()])
+	}
+	guess := app.GuessRoles(rows)
+	lane := map[formats.Lane]*proto.PadIndex{}
+	for _, l := range g.Lanes {
+		if p, ok := guess[l]; ok {
+			pp := p
+			lane[l] = &pp
+		} else {
+			lane[l] = nil
+		}
+	}
+	m.laneMap = &laneAssign{tmpl: g, lane: lane, pads: pads}
+	return m, nil
+}
+
+func (m Model) laneAssignKey(name string) (tea.Model, tea.Cmd) {
+	a := m.laneMap
+	lanes := a.tmpl.Lanes
+	if a.choosing {
+		return m.laneChooseKey(name)
+	}
+	switch name {
+	case "esc", "q":
+		m.laneMap = nil
+	case "up", "k", "ctrl+p":
+		a.cursor = max(a.cursor-1, 0)
+	case "down", "j", "ctrl+n":
+		a.cursor = min(a.cursor+1, len(lanes)-1)
+	case "left", "h":
+		a.cycleLane(lanes[a.cursor], -1)
+	case "right", "l", "tab":
+		a.cycleLane(lanes[a.cursor], +1)
+	case "enter", " ":
+		// Open the pad chooser for the lane in front, starting on its current choice.
+		a.choosing = true
+		a.chooseAt = a.choiceIndex(lanes[a.cursor])
+	case "w":
+		return m.writeGroovePattern()
+	}
+	return m, nil
+}
+
+// laneChooseKey handles keys while the lane dialog is in its pad chooser: a list of the bank's
+// sampled pads with "skip" at the top. Enter sets the lane to the picked pad and comes back to
+// the lane list; Esc comes back without changing it.
+func (m Model) laneChooseKey(name string) (tea.Model, tea.Cmd) {
+	a := m.laneMap
+	lane := a.tmpl.Lanes[a.cursor]
+	last := len(a.pads) // the chooser has len(pads)+1 rows: skip, then each pad
+	switch name {
+	case "esc", "q":
+		a.choosing = false
+	case "up", "k", "ctrl+p":
+		a.chooseAt = max(a.chooseAt-1, 0)
+	case "down", "j", "ctrl+n":
+		a.chooseAt = min(a.chooseAt+1, last)
+	case "g":
+		a.chooseAt = 0
+	case "G":
+		a.chooseAt = last
+	case "enter", " ":
+		if a.chooseAt == last {
+			a.lane[lane] = nil
+		} else {
+			pp := a.pads[a.chooseAt]
+			a.lane[lane] = &pp
+		}
+		a.choosing = false
+	}
+	return m, nil
+}
+
+// choiceIndex is the chooser row the lane's current pad sits on: len(pads) (the skip row) when
+// the lane is skipped, else the pad's position among the bank's sampled pads.
+func (a *laneAssign) choiceIndex(lane formats.Lane) int {
+	if p := a.lane[lane]; p != nil {
+		for i, pad := range a.pads {
+			if pad == *p {
+				return i
+			}
+		}
+	}
+	return len(a.pads)
+}
+
+// cycleLane steps the pad a lane plays through the bank's sampled pads and a "skip" past the end:
+// the choices are pads[0..n-1] then nil (skip), wrapping. dir is +1 or -1.
+func (a *laneAssign) cycleLane(lane formats.Lane, dir int) {
+	// Current index in [0, len(pads)]: len(pads) means skip (nil).
+	cur := len(a.pads)
+	if p := a.lane[lane]; p != nil {
+		for i, pad := range a.pads {
+			if pad == *p {
+				cur = i
+				break
+			}
+		}
+	}
+	n := len(a.pads) + 1
+	next := ((cur+dir)%n + n) % n
+	if next == len(a.pads) {
+		a.lane[lane] = nil
+		return
+	}
+	pp := a.pads[next]
+	a.lane[lane] = &pp
+}
+
+// writeGroovePattern builds the confirmed groove and writes it into the first free slot of the
+// bank on show.
+func (m Model) writeGroovePattern() (tea.Model, tea.Cmd) {
+	a := m.laneMap
+	pads := map[formats.Lane]proto.PadIndex{}
+	for lane, p := range a.lane {
+		if p != nil {
+			pads[lane] = *p
+		}
+	}
+	if len(pads) == 0 {
+		m.message = "assign at least one lane to a pad first"
+		return m, nil
+	}
+	g := a.tmpl
+	m.laneMap = nil
+	unit, bank := m.unit, m.bank
+	m.busy = "making a pattern"
+	return m, m.edit(func() tea.Msg {
+		slot, err := firstFreePatternSlot(unit, bank)
+		if err != nil {
+			return doneMsg{message: err.Error()}
+		}
+		// A groove is as long as its phrase: a 4-bar one keeps its fill at the end of bar 4.
+		built, err := g.BuildGroove(pads, 0)
+		if err != nil {
+			return doneMsg{message: "the pattern was not made: " + err.Error()}
+		}
+		if err := app.WriteGroove(unit, slot, built); err != nil {
+			return doneMsg{message: "the pattern was not made: " + err.Error()}
+		}
+		return doneMsg{
+			message:  fmt.Sprintf("pattern %s made: %s, %d lanes, %d bars", slot, g.Name, len(pads), app.StartBars),
+			reload:   true,
+			patterns: true,
+		}
 	})
 }
 
@@ -1751,6 +2206,10 @@ func (m Model) listen(path string) (tea.Model, tea.Cmd) {
 func (m Model) playFile(path string) (tea.Model, tea.Cmd) {
 	if m.player == nil {
 		return m.listen(path)
+	}
+	if m.inLoopAssign() {
+		// A pattern loops: the file is heard on the pad, in the pattern, not on its own.
+		return m.tryInLoop(path)
 	}
 	// Whatever is playing stops now, not when the new file has been decoded.
 	m.player.Stop()
@@ -2543,6 +3002,124 @@ func (m Model) cellOfPattern() (proto.PadIndex, []formats.NoteRecord, bool) {
 	return pad, d.NotesAt(pad, clamp(m.patCol, 0, d.Grid.Steps-1)), true
 }
 
+// rangeOf is the range set on d, when there is one that fits it.
+func (m Model) rangeOf(d *app.PatternDetail) (barRange, bool) {
+	if r := m.patRange; r != nil && d != nil && r.slot == d.Slot && r.last < d.Bars() {
+		return *r, true
+	}
+	return barRange{}, false
+}
+
+// colBounds are the columns of the open pattern the cursor may be on: [lo, hi), the range's
+// bars when one is set, else the whole pattern.
+func (m Model) colBounds(d *app.PatternDetail) (lo, hi int) {
+	if r, ok := m.rangeOf(d); ok {
+		spp := d.StepsPerPage()
+		return r.first * spp, min((r.last+1)*spp, d.Grid.Steps)
+	}
+	return 0, d.Grid.Steps
+}
+
+// openRangePicker opens the list of ranges for the open pattern, on the range set now (or the
+// bar the cursor is on).
+func (m Model) openRangePicker() (tea.Model, tea.Cmd) {
+	d := m.pattern
+	items := []barRange{{slot: d.Slot, first: -1, last: -1}}
+	for b := range d.Bars() {
+		items = append(items, barRange{slot: d.Slot, first: b, last: b})
+	}
+	for b := 0; b+1 < d.Bars(); b++ {
+		items = append(items, barRange{slot: d.Slot, first: b, last: b + 1})
+	}
+	cursor := 0
+	if r, ok := m.rangeOf(d); ok {
+		for i, it := range items {
+			if it == r {
+				cursor = i
+			}
+		}
+	}
+	m.rangePick = &rangePicker{cursor: cursor, items: items}
+	return m, nil
+}
+
+// rangePickerKey drives the range list: j/k move, Enter sets the range, Esc closes.
+func (m Model) rangePickerKey(name string) (tea.Model, tea.Cmd) {
+	p := m.rangePick
+	switch name {
+	case "esc", "q":
+		m.rangePick = nil
+	case "j", "down":
+		p.cursor = clamp(p.cursor+1, 0, len(p.items)-1)
+	case "k", "up":
+		p.cursor = clamp(p.cursor-1, 0, len(p.items)-1)
+	case "g":
+		p.cursor = 0
+	case "G":
+		p.cursor = len(p.items) - 1
+	case "enter":
+		r := p.items[p.cursor]
+		m.rangePick = nil
+		if r.first < 0 {
+			return m.setRange(nil)
+		}
+		return m.setRange(&r)
+	}
+	return m, nil
+}
+
+// setRange limits the open pattern to r (nil: the whole pattern again): the cursor moves into
+// it, and a loop of this pattern starts over on it.
+func (m Model) setRange(r *barRange) (tea.Model, tea.Cmd) {
+	d := m.pattern
+	m.patRange = r
+	lo, hi := m.colBounds(d)
+	if m.patCol < lo || m.patCol >= hi {
+		// Into the range, on the same step of the bar.
+		m.patCol = lo + m.patCol%d.StepsPerPage()
+		m.patCol = clamp(m.patCol, lo, hi-1)
+	}
+	m.message = "the whole pattern is shown and played"
+	if r != nil {
+		m.message = r.label() + " only: shown, edited and looped  ·  { } move it  ·  v changes it"
+	}
+	if m.looping() && *m.loopSlot == d.Slot {
+		model, cmd := m.startLoop(d.Slot)
+		mm := model.(Model)
+		mm.message = m.message
+		return mm, cmd
+	}
+	return m, nil
+}
+
+// slideRange moves the range by its own length, earlier (dir -1) or later, staying inside the
+// pattern; the cursor goes with it.
+func (m Model) slideRange(dir int) (tea.Model, tea.Cmd) {
+	d := m.pattern
+	r, _ := m.rangeOf(d)
+	n := r.bars()
+	first := clamp(r.first+dir*n, 0, d.Bars()-n)
+	if first == r.first {
+		m.message = "the range is at the " + map[int]string{-1: "start", 1: "end"}[dir] + " of the pattern"
+		return m, nil
+	}
+	m.patCol = clamp(m.patCol+(first-r.first)*d.StepsPerPage(), 0, d.Grid.Steps-1)
+	return m.setRange(&barRange{slot: d.Slot, first: first, last: first + n - 1})
+}
+
+// pageSteps is how many steps one page of the open pattern's grid shows: the bars that fit the
+// body (at most two), so { and } turn the page the header says comes next.
+func (m Model) pageSteps(d *app.PatternDetail) int {
+	sp := m.patSpan(d, m.geom().bodyW-2)
+	return max(sp.hi-sp.lo, d.StepsPerPage())
+}
+
+// patStepLabel names the cursor's place as "bar N step M", where M is the 16th within the bar.
+func (m Model) patStepLabel() string {
+	spp := m.pattern.StepsPerPage()
+	return fmt.Sprintf("bar %d step %d", m.patCol/spp+1, m.patCol%spp+1)
+}
+
 // editPatternBytes changes the open pattern's file on the unit with edit, then reads it again
 // so that the grid shows what was written; note is what is said afterwards.
 func (m Model) editPatternBytes(edit func(b []byte) ([]byte, error), note string) (tea.Model, tea.Cmd) {
@@ -2582,12 +3159,55 @@ func (m Model) toggleNote() (tea.Model, tea.Cmd) {
 				}
 			}
 			return b, nil
-		}, fmt.Sprintf("%s step %d: %s taken out", d.Slot, m.patCol+1, plural(len(notes), "note")))
+		}, fmt.Sprintf("%s %s: %s taken out", d.Slot, m.patStepLabel(), plural(len(notes), "note")))
 	}
 	tick, length := d.StepTick(m.patCol), uint16(min(d.StepTicks(), 65535))
 	return m.editPatternBytes(func(b []byte) ([]byte, error) {
 		return formats.InsertNote(b, tick, pad, 127, length)
-	}, fmt.Sprintf("%s step %d: note on %s at velocity 127", d.Slot, m.patCol+1, pad))
+	}, fmt.Sprintf("%s %s: note on %s at velocity 127", d.Slot, m.patStepLabel(), pad))
+}
+
+// nudgeNote moves the note at the cursor by a number of ticks, or onto the nearest grid step
+// when snap is set, keeping everything else about it. The cursor follows the note into the step
+// it lands in, so the offset shown beside it stays the one of the note just moved.
+func (m Model) nudgeNote(by int, snap bool) (tea.Model, tea.Cmd) {
+	pad, notes, ok := m.cellOfPattern()
+	if !ok {
+		return m, nil
+	}
+	if len(notes) == 0 {
+		m.message = "no note here to move"
+		return m, nil
+	}
+	d := m.pattern
+	from := notes[0].Tick
+	if snap {
+		if by = -d.GridOffset(from); by == 0 {
+			m.message = "that note is on the grid already"
+			return m, nil
+		}
+	}
+	to := clamp(int(from)+by, 0, int(d.Length)-1)
+	if to == int(from) {
+		m.message = "the note cannot move further that way"
+		return m, nil
+	}
+	m.patCol = clamp(int(uint64(to)*uint64(d.Grid.Steps)/uint64(max(d.Length, 1))), 0, d.Grid.Steps-1)
+	note := fmt.Sprintf("%s: the note of %s moved %+d ticks, now %s", d.Slot, pad, to-int(from), offsetText(d, uint32(to)))
+	return m.editPatternBytes(func(b []byte) ([]byte, error) {
+		return formats.MoveNote(b, pad, from, by)
+	}, note)
+}
+
+// offsetText says how far a tick is off the grid in words: "on the grid", "24 ticks late".
+func offsetText(d *app.PatternDetail, tick uint32) string {
+	switch off := d.GridOffset(tick); {
+	case off > 0:
+		return fmt.Sprintf("%d ticks late", off)
+	case off < 0:
+		return fmt.Sprintf("%d ticks early", -off)
+	}
+	return "on the grid"
 }
 
 // changeVelocity sets the velocity of the notes at the cursor: , and . by 1, < and > by 10,
@@ -2632,23 +3252,175 @@ func (m Model) changeVelocity(key string) (tea.Model, tea.Cmd) {
 			}
 		}
 		return b, nil
-	}, fmt.Sprintf("%s: velocity of %s step %d is %d", m.pattern.Slot, pad, m.patCol+1, next))
+	}, fmt.Sprintf("%s: velocity of %s %s is %d", m.pattern.Slot, pad, m.patStepLabel(), next))
 }
 
-// undoPatternEdit puts the open pattern back as it was before the last edit; pressing it again
-// brings the edit back.
+// undoPatternEdit puts the open pattern back one edit, moving the state it replaces onto the
+// redo stack so redoPatternEdit can bring it back. Up to patHistoryMax edits are kept.
 func (m Model) undoPatternEdit() (tea.Model, tea.Cmd) {
-	u := m.patUndo
-	if u == nil || m.pattern == nil || u.slot != m.pattern.Slot {
+	h := m.patHist
+	if h == nil || m.pattern == nil || h.slot != m.pattern.Slot || len(h.undo) == 0 {
 		m.message = "nothing to undo in this pattern"
 		return m, nil
 	}
-	saved := u.before
-	return m.editPatternBytes(func([]byte) ([]byte, error) { return saved, nil }, fmt.Sprintf("%s: the last edit is undone (u again redoes it)", u.slot))
+	// Pop the newest undo snapshot and write it back; the handler pushes the replaced bytes onto
+	// the redo stack.
+	snap := h.undo[len(h.undo)-1]
+	h.undo = h.undo[:len(h.undo)-1]
+	note := fmt.Sprintf("undo (%d left, R redoes)", len(h.undo))
+	return m.applyPatternSnapshot(snap, note, editUndo)
 }
 
-// changeLength makes the notes at the cursor a step longer or shorter: no shorter than a step,
-// no longer than to the end of the pattern.
+// redoPatternEdit brings back an edit undone with undoPatternEdit, moving the state it replaces
+// back onto the undo stack.
+func (m Model) redoPatternEdit() (tea.Model, tea.Cmd) {
+	h := m.patHist
+	if h == nil || m.pattern == nil || h.slot != m.pattern.Slot || len(h.redo) == 0 {
+		m.message = "nothing to redo in this pattern"
+		return m, nil
+	}
+	snap := h.redo[len(h.redo)-1]
+	h.redo = h.redo[:len(h.redo)-1]
+	note := fmt.Sprintf("redo (%d left, u undoes)", len(h.redo))
+	return m.applyPatternSnapshot(snap, note, editRedo)
+}
+
+// applyPatternSnapshot writes a saved pattern back to the unit. op marks it as an undo or redo so
+// the message handler moves the replaced bytes to the other stack instead of recording a fresh
+// edit.
+func (m Model) applyPatternSnapshot(snap []byte, note string, op patEditOp) (tea.Model, tea.Cmd) {
+	unit, ops, slot := m.unit, m.ops, m.pattern.Slot
+	saved := append([]byte(nil), snap...)
+	return m, func() tea.Msg {
+		ops.Lock()
+		defer ops.Unlock()
+		before, err := app.EditPattern(unit, slot, func([]byte) ([]byte, error) { return saved, nil })
+		if err != nil {
+			return patternMsg{err: err}
+		}
+		detail, err := app.OpenPattern(unit, slot)
+		return patternMsg{detail: detail, err: err, note: note, undo: before, op: op}
+	}
+}
+
+// patToolCount is how many groove tools the menu offers.
+const patToolCount = 7
+
+// newPatTool starts the groove-tools menu with sensible amounts. pad scopes it to one track; nil
+// is the whole pattern.
+func newPatTool(pad *proto.PadIndex) *patTool {
+	return &patTool{pad: pad, swing: 54, quantStrength: 100, shift: 1, human: 20}
+}
+
+// toolScope is the formats scope the tools run with: one pad, or the whole pattern.
+func (t *patTool) toolScope() formats.Scope {
+	if t.pad != nil {
+		return formats.OnlyPad(*t.pad)
+	}
+	return formats.WholePattern
+}
+
+// patToolKey drives the groove-tools menu over the open pattern: j/k pick a tool, h/l (or -/+)
+// change its amount, e toggles the eighth/sixteenth grid, Enter applies it to the whole pattern,
+// Esc closes the menu.
+func (m Model) patToolKey(name string) (tea.Model, tea.Cmd) {
+	t := m.patTool
+	switch name {
+	case "esc":
+		m.patTool = nil
+	case "j", "down":
+		t.kind = patToolKind((int(t.kind) + 1) % patToolCount)
+	case "k", "up":
+		t.kind = patToolKind((int(t.kind) + patToolCount - 1) % patToolCount)
+	case "e":
+		t.eighths = !t.eighths
+	case "l", "right", "+", "=":
+		t.adjust(+1)
+	case "h", "left", "-":
+		t.adjust(-1)
+	case "enter":
+		return m.applyPatTool()
+	}
+	return m, nil
+}
+
+// adjust nudges the amount of the chosen tool, keeping it in range.
+func (t *patTool) adjust(dir int) {
+	switch t.kind {
+	case toolSwing:
+		t.swing = clamp(t.swing+dir*2, 50, 75)
+	case toolQuantize:
+		t.quantStrength = clamp(t.quantStrength+dir*10, 0, 100)
+	case toolShift:
+		t.shift = clamp(t.shift+dir, -16, 16)
+	case toolHumanize:
+		t.human = clamp(t.human+dir*5, 0, 100)
+	}
+}
+
+// toolGrid is the resolution the swing/quantize/shift tools work on: an eighth note or a
+// sixteenth.
+func (t *patTool) toolGrid() uint32 {
+	if t.eighths {
+		return formats.PPQ / 2
+	}
+	return formats.PPQ / 4
+}
+
+// applyPatTool runs the chosen tool over its scope (one pad or the whole pattern) and writes the
+// result back, pushing the edit onto the undo stack. Swing is MPC-style (off-beats pushed).
+func (m Model) applyPatTool() (tea.Model, tea.Cmd) {
+	t := *m.patTool
+	grid := t.toolGrid()
+	scope := t.toolScope()
+	res := "16ths"
+	if t.eighths {
+		res = "8ths"
+	}
+	where := "all pads"
+	if t.pad != nil {
+		where = t.pad.String()
+	}
+	var edit func(b []byte) ([]byte, error)
+	var note string
+	switch t.kind {
+	case toolSwing:
+		edit = func(b []byte) ([]byte, error) { return formats.Swing(b, grid, float64(t.swing), scope) }
+		note = fmt.Sprintf("swing %d%% on %s", t.swing, res)
+	case toolQuantize:
+		edit = func(b []byte) ([]byte, error) {
+			return formats.Quantize(b, grid, float64(t.quantStrength)/100, scope)
+		}
+		note = fmt.Sprintf("quantize %d%% to %s", t.quantStrength, res)
+	case toolShift:
+		edit = func(b []byte) ([]byte, error) { return formats.Shift(b, grid, t.shift, scope) }
+		note = fmt.Sprintf("shift %+d %s", t.shift, res)
+	case toolReverse:
+		edit = func(b []byte) ([]byte, error) { return formats.Reverse(b, scope) }
+		note = "reverse"
+	case toolHumanize:
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		amt := t.human
+		edit = func(b []byte) ([]byte, error) {
+			return formats.Humanize(b, uint32(amt), uint8(amt), nil, scope, rng)
+		}
+		note = fmt.Sprintf("humanize %d", t.human)
+	case toolDouble, toolHalve:
+		// A pattern is one length for all its tracks, so these work on all of it.
+		d := m.pattern
+		edit, where = formats.DoublePattern, "all pads"
+		note = fmt.Sprintf("doubled: %s → %s", plural(d.Bars(), "bar"), plural(d.Bars()*2, "bar"))
+		if t.kind == toolHalve {
+			edit = formats.HalvePattern
+			note = fmt.Sprintf("halved: %s → %s, the second half gone", plural(d.Bars(), "bar"), plural(max(d.Bars()/2, 1), "bar"))
+		}
+	default:
+		return m, nil
+	}
+	m.patTool = nil
+	return m.editPatternBytes(edit, note+"  ·  "+where)
+}
+
 func (m Model) changeLength(longer bool) (tea.Model, tea.Cmd) {
 	pad, notes, ok := m.cellOfPattern()
 	if !ok {

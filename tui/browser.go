@@ -360,7 +360,13 @@ func (m Model) assignChosen(b *browser, node app.Node) (tea.Model, tea.Cmd) {
 	}
 	pad := b.pad
 	m.browser = nil
-	m.stopListening()
+	if m.looping() {
+		// The pattern plays on: the file tried in it stays until the pad is read again with the
+		// sample written to it, and the loop takes that up.
+		m.listenGen.Add(1)
+	} else {
+		m.stopListening()
+	}
 	return m.assign(files, pad)
 }
 

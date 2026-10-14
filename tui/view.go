@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moahbeatlab/404tui/app"
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/version"
 )
@@ -90,6 +91,12 @@ func (m Model) View() string {
 		main = dialog(m.pickerBox())
 	case m.toggles != nil:
 		main = dialog(m.togglesBox())
+	case m.tmplPicker != nil:
+		main = dialog(m.templatePickerBox())
+	case m.rangePick != nil:
+		main = dialog(m.rangePickerBox())
+	case m.laneMap != nil:
+		main = dialog(m.laneAssignBox())
 	case m.palette != nil:
 		main = dialog(m.paletteBox())
 	case m.unit == nil:
@@ -403,6 +410,10 @@ type tileState struct {
 	flags []padFlag
 	// muted and solo are the pad's state in the mix played on this computer.
 	muted, solo bool
+	// noLevel leaves out the level bar under the name: a pattern slot has no level. progress,
+	// from 0 to 1, draws how far through its round it is instead; below 0 there is none.
+	noLevel  bool
+	progress float64
 }
 
 // tile draws one pad of the grid: its number, name and level, on a background that says
@@ -526,7 +537,12 @@ func (m Model) tile(w, h int, num, name string, level int32, ts tileState) strin
 		nameLine = ""
 	}
 	bar := style.Render("")
-	if !ts.empty {
+	switch {
+	case ts.empty:
+	case ts.noLevel && ts.progress >= 0:
+		bar = style.Render(" " + levelBar(w-2, int(ts.progress*1000), 1000))
+	case ts.noLevel:
+	default:
 		fill := piece.Render(" ")
 		barText := levelBar(w-2, int(level), 127)
 		if onBus && !ts.cursor && !ts.playing {
@@ -677,6 +693,11 @@ func (m Model) patternPanel(g geom) string {
 			// or picked up shows as in the Patterns view.
 			state = tileState{empty: !row.Exists, cursor: p == m.patternCursor, marked: m.patMarks[int(row.Slot.Index())], moving: m.patHolding && m.patHeld == row.Slot}
 		}
+		// No level under a pattern; the one that plays is lit, with how far through its round it is.
+		state.noLevel, state.progress = true, -1
+		if frac, _, ok := m.loopAt(row.Slot); ok {
+			state.playing, state.progress = true, frac
+		}
 		return m.tile(g.tileW, tileH, fmt.Sprint(p+1), name, 0, state)
 	})
 	if n := len(used); n > 0 {
@@ -714,6 +735,9 @@ func (m Model) patternStrip(g geom) string {
 				style = st.text
 				if used[r.Slot] {
 					style = st.warn
+				}
+				if _, _, ok := m.loopAt(r.Slot); ok {
+					text, style = fmt.Sprintf("%2s ▶%d", num, len(r.Pads)), st.hot
 				}
 			}
 			line += style.Render(padTo(text, cell))
@@ -1084,8 +1108,9 @@ func (m Model) patternSlotDetail(g geom) string {
 		// The pattern in front is shown as its step grid, as Enter opens it.
 		if d := m.patPreview[cur.Slot]; d != nil {
 			info := fmt.Sprintf("%.2f BPM  ·  %d/4  ·  %d ticks  ·  %s", d.BankTempo, d.Beats, d.Length, plural(len(d.PadsUsed), "pad"))
-			lines = []string{st.dim.Render(info), "", m.stepRuler(d)}
-			if line := m.playhead(d); line != "" {
+			sp := m.patSpan(d, g.detailW-2)
+			lines = []string{st.dim.Render(info), m.spanHeader(d, sp), "", m.stepRuler(d, sp)}
+			if line := m.playhead(d, sp); line != "" {
 				lines = append(lines, line)
 			}
 			if len(d.Grid.Rows) == 0 {
@@ -1094,7 +1119,7 @@ func (m Model) patternSlotDetail(g geom) string {
 			for _, row := range d.Grid.Rows {
 				name := m.snap.Pads[row.Pad.Index()].Name
 				label := fmt.Sprintf("%-4s %-14s", row.Pad, ansi.Truncate(name, 14, "…"))
-				lines = append(lines, m.rowLabel(row.Pad, label, st.bold)+" "+m.noteRow(d, row.Pad, false)+m.mixBadge(row.Pad))
+				lines = append(lines, m.rowLabel(row.Pad, label, st.bold)+" "+m.noteRow(d, row.Pad, false, sp)+m.mixBadge(row.Pad))
 			}
 		}
 		lines = append(lines, "", st.dim.Render("Enter edits the steps  ·  P or Space plays it in a loop"), st.dim.Render("d delete  v mark  c copy  x move  p put"))
@@ -1107,10 +1132,12 @@ func (m Model) patternSlotDetail(g geom) string {
 func (m Model) patternDetail(g geom) string {
 	st, d := m.st, m.pattern
 	info := fmt.Sprintf("%.2f BPM  ·  %d/4  ·  %d ticks  ·  %d pads", d.BankTempo, d.Beats, d.Length, len(d.PadsUsed))
-	lines := []string{st.dim.Render(info), ""}
-	ruler := m.stepRuler(d)
-	lines = append(lines, ruler)
-	if line := m.playhead(d); line != "" {
+	// As many whole bars as the box is wide are on show; while it plays they follow the music.
+	width := g.bodyW - 2
+	sp := m.patSpan(d, width)
+	lines := []string{st.dim.Render(info), m.spanHeader(d, sp), ""}
+	lines = append(lines, m.stepRuler(d, sp))
+	if line := m.playhead(d, sp); line != "" {
 		lines = append(lines, line)
 	}
 	if len(d.Grid.Rows) == 0 {
@@ -1126,34 +1153,130 @@ func (m Model) patternDetail(g geom) string {
 			// A pad of the bank with no note in the pattern: there to be given one.
 			labelStyle = st.dim
 		}
-		lines = append(lines, m.rowLabel(row.Pad, label, labelStyle)+" "+m.noteRow(d, row.Pad, r == m.patRow)+m.mixBadge(row.Pad))
+		if m.patFocus && r == m.patRow {
+			// The expanded track: a lit label with a marker, three lines of steps on the grid's own
+			// places, set off by a rule above and below; the other tracks fade (noteRow).
+			lane := m.focusLane(d, row.Pad, sp)
+			focused := fmt.Sprintf("▶ %-4s %-12s", row.Pad, ansi.Truncate(name, 12, "…"))
+			lit := lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
+			pad := strings.Repeat(" ", 20)
+			rule := st.accent.Render(strings.Repeat("─", lipgloss.Width(lane[1])))
+			// The name sits on the rule over the lane, like a heading for it.
+			lines = append(lines, m.rowLabel(row.Pad, focused, lit)+" "+rule+m.mixBadge(row.Pad),
+				pad+lane[0],
+				pad+lane[1],
+				pad+lane[2], pad+rule)
+			continue
+		}
+		if !m.patFocus && r == m.patRow {
+			// The track the cursor is on, the one Enter expands.
+			labelStyle = st.accent.Bold(true)
+		} else if m.patFocus {
+			labelStyle = st.faint
+		}
+		lines = append(lines, m.rowLabel(row.Pad, label, labelStyle)+" "+m.noteRow(d, row.Pad, !m.patFocus && r == m.patRow, sp)+m.mixBadge(row.Pad))
 	}
 	if pad, notes, ok := m.cellOfPattern(); ok {
-		here := fmt.Sprintf("%s  step %d  ·  no note", pad, m.patCol+1)
+		where := st.bold.Render(fmt.Sprintf("[%s · %s]", pad, m.patStepLabel()))
 		if len(notes) > 0 {
 			loudest := 0
-			here = fmt.Sprintf("%s  step %d  ·  velocity", pad, m.patCol+1)
 			for _, n := range notes {
-				here += fmt.Sprintf(" %d", n.Velocity)
 				loudest = max(loudest, int(n.Velocity))
 			}
 			length := float64(notes[0].Length) / float64(max(d.StepTicks(), 1))
-			here = st.text.Render(here+"  ") + st.accent.Render(levelBar(24, loudest, 127)) +
-				st.text.Render(fmt.Sprintf("  ·  lasts %g steps", math.Round(length*10)/10))
+			here := where + st.text.Render(fmt.Sprintf("  vel %d  ", loudest)) +
+				st.accent.Render(levelBar(16, loudest, 127)) +
+				st.text.Render(fmt.Sprintf("  ·  %s  ·  ", plural(int(math.Round(length)), "step"))) +
+				m.offsetLabel(d, notes[0].Tick)
+			lines = append(lines, "", here)
 		} else {
-			here = st.text.Render(here)
+			lines = append(lines, "", where+st.dim.Render("  no note  ·  Enter puts one"))
 		}
-		lines = append(lines, "", here)
 	}
-	hint := "h j k l move  ·  Enter note on/off  ·  u undo  ·  Space or P play  ·  Esc back\n" +
-		"velocity:  , . by 1  ·  < > by 10  ·  * 127, the pad's own level  ·  length:  + -  by a step  ·  m mute  s solo  ·  S save as heard"
+	if m.patTool != nil {
+		lines = append(lines, "", m.patToolMenu())
+		hint := "tools:  j k pick  ·  h l amount  ·  e 8th/16th grid  ·  Enter apply  ·  Esc close"
+		lines = append(lines, "", st.dim.Render(hint))
+		return m.box("Pattern "+d.Slot.String(), strings.Join(lines, "\n"), g.bodyW, g.bodyH, true)
+	}
+	hint := "move:  h j k l  ·  { } turn page  ·  v show/loop bars  ·  Enter open track  ·  x note on/off  ·  t tools (this pad)  ·  T tools (all)  ·  Space or P play  ·  Esc back\n"
+	if m.patFocus {
+		hint = "track:  h l step  ·  j k other track  ·  { } turn page  ·  Enter or x note on/off  ·  Space or P play  ·  Esc collapse\n"
+	}
+	hint +=
+		"velocity:  , . by 1  ·  < > by 10  ·  * to the pad's own level\n" +
+			"length:  + - by a step  ·  timing:  H L nudge 5 ticks  ·  ( ) 1 tick  ·  0 back on the grid\n" +
+			"pad:  m mute  ·  s solo  ·  S save as heard\n" +
+			"history:  u undo  ·  R redo  ·  " + m.patHistoryLabel()
 	if d.HasSourceBank {
-		hint += "\n" + "b retargets its pads to another bank"
-	} else {
-		hint += "\n" + "its pads span more than one bank, so it cannot be retargeted"
+		hint += "  ·  b retarget bank"
 	}
 	lines = append(lines, "", st.dim.Render(hint))
 	return m.box("Pattern "+d.Slot.String(), strings.Join(lines, "\n"), g.bodyW, g.bodyH, true)
+}
+
+// offsetLabel says how far a note at tick is off the grid, as swing, shift or humanize leave
+// it: "on the grid", or e.g. "+24 ticks late (20% of a step, 23 ms)".
+func (m Model) offsetLabel(d *app.PatternDetail, tick uint32) string {
+	off := d.GridOffset(tick)
+	if off == 0 {
+		return m.st.dim.Render("on the grid")
+	}
+	word := "late"
+	if off < 0 {
+		word = "early"
+	}
+	pct := math.Abs(float64(off)) * 100 / float64(max(d.StepTicks(), 1))
+	return m.st.hot.Render(fmt.Sprintf("%+d ticks %s", off, word)) +
+		m.st.dim.Render(fmt.Sprintf(" (%.0f%% of a step, %.0f ms)", pct, math.Abs(d.TicksToMillis(off))))
+}
+
+// patHistoryLabel is how far the open pattern can be undone and redone, e.g. "2 undo · 1 redo".
+func (m Model) patHistoryLabel() string {
+	var u, r int
+	if h := m.patHist; h != nil && m.pattern != nil && h.slot == m.pattern.Slot {
+		u, r = len(h.undo), len(h.redo)
+	}
+	return fmt.Sprintf("%d undo · %d redo", u, r)
+}
+
+// patToolMenu draws the groove-tools menu over the open pattern: the five tools in a column with
+// the chosen one lit and its amount shown.
+func (m Model) patToolMenu() string {
+	st, t := m.st, m.patTool
+	res := "16ths"
+	if t.eighths {
+		res = "8ths"
+	}
+	rows := []struct {
+		kind   patToolKind
+		label  string
+		amount string
+	}{
+		{toolSwing, "SWING", fmt.Sprintf("%d%%  (%s)", t.swing, res)},
+		{toolQuantize, "QUANT", fmt.Sprintf("%d%%  (%s)", t.quantStrength, res)},
+		{toolShift, "SHIFT", fmt.Sprintf("%+d  (%s)", t.shift, res)},
+		{toolReverse, "REVERSE", "—"},
+		{toolHumanize, "HUMANIZE", fmt.Sprintf("%d", t.human)},
+		{toolDouble, "DOUBLE", fmt.Sprintf("%s → %s, played again", plural(m.pattern.Bars(), "bar"), plural(m.pattern.Bars()*2, "bar"))},
+		{toolHalve, "HALF", fmt.Sprintf("%s → %s, first half kept", plural(m.pattern.Bars(), "bar"), plural(max(m.pattern.Bars()/2, 1), "bar"))},
+	}
+	var out []string
+	for _, r := range rows {
+		marker, name := "  ", st.text.Render(fmt.Sprintf("%-9s", r.label))
+		amount := st.dim.Render(r.amount)
+		if r.kind == t.kind {
+			marker = st.accent.Render("▶ ")
+			name = st.bold.Render(fmt.Sprintf("%-9s", r.label))
+			amount = st.accent.Render(r.amount)
+		}
+		out = append(out, marker+name+" "+amount)
+	}
+	where := "whole pattern"
+	if t.pad != nil {
+		where = "pad " + t.pad.String()
+	}
+	return st.bold.Render("Groove tools  ("+where+")") + "\n" + strings.Join(out, "\n")
 }
 
 // ---- files ----
@@ -1385,6 +1508,122 @@ func (m Model) helpBox() string {
 		lines = append(lines, m.st.accent.Render(fmt.Sprintf("%-22s", row[0]))+" "+m.st.text.Render(row[1]))
 	}
 	return m.st.modal.Render(strings.Join(lines, "\n"))
+}
+
+// rangePickerBox draws the list of ranges v opens over a pattern.
+func (m Model) rangePickerBox() string {
+	st, p := m.st, m.rangePick
+	lines := []string{st.bold.Render("Show and loop"), ""}
+	for i, r := range p.items {
+		label, note := r.label(), ""
+		if r.first < 0 {
+			label, note = "Whole pattern", "every bar"
+		} else if r.bars() > 1 {
+			note = "two bars"
+		}
+		line := fmt.Sprintf("%-16s %s", label, st.dim.Render(note))
+		if i == p.cursor {
+			line = lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true).Render(fmt.Sprintf("%-16s %s", label, note))
+		}
+		lines = append(lines, line)
+	}
+	lines = append(lines, "", st.dim.Render("only the bars chosen are shown, edited and played"),
+		st.dim.Render("↑↓ choose  ·  Enter set  ·  Esc close"))
+	return st.modal.Width(min(m.width-4, 60)).Render(strings.Join(lines, "\n"))
+}
+
+// templatePickerBox draws the new-pattern template list N opens.
+func (m Model) templatePickerBox() string {
+	st := m.st
+	items := templateItems()
+	lines := []string{st.bold.Render("New pattern"), ""}
+	for i, it := range items {
+		note := ""
+		switch i {
+		case 0:
+			note = "every sampled pad held for the whole pattern"
+		case 1:
+			note = "an empty pattern to program by hand"
+		default:
+			// A groove names the voices it plays, so the kit it wants is plain.
+			if g, ok := grooveAt(i); ok {
+				var names []string
+				for _, l := range g.Lanes {
+					names = append(names, strings.ToLower(l.LaneName()))
+				}
+				note = strings.Join(names, ", ")
+			}
+		}
+		line := fmt.Sprintf("%-38s %s", it, st.dim.Render(note))
+		if i == m.tmplPicker.cursor {
+			line = lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true).Render(fmt.Sprintf("%-38s %s", it, note))
+		}
+		lines = append(lines, line)
+	}
+	lines = append(lines, "", st.dim.Render("↑↓ navigate  ·  Enter choose  ·  Esc close"))
+	return st.modal.Width(min(m.width-4, 110)).Render(strings.Join(lines, "\n"))
+}
+
+// laneAssignBox draws the lane->pad confirm dialog for a genre groove, or its pad chooser when a
+// lane is being reassigned.
+func (m Model) laneAssignBox() string {
+	st, a := m.st, m.laneMap
+	if a.choosing {
+		return m.laneChooseBox()
+	}
+	// padLabel is a lane's chosen pad as "I12  clap_011", or "— skip".
+	padLabel := func(lane formats.Lane) string {
+		p := a.lane[lane]
+		if p == nil {
+			return "— skip"
+		}
+		name := m.snap.Pads[p.Index()].Name
+		if name == "" {
+			name = "no name"
+		}
+		return fmt.Sprintf("%s  %s", p.String(), name)
+	}
+	lines := []string{st.bold.Render(a.tmpl.Name + " — pads for each voice"), ""}
+	for i, lane := range a.tmpl.Lanes {
+		label := padLabel(lane)
+		line := fmt.Sprintf("%-11s %s", lane.LaneName(), st.dim.Render(label))
+		if i == a.cursor {
+			line = lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true).Render(fmt.Sprintf("%-11s %s", lane.LaneName(), label))
+		}
+		lines = append(lines, line)
+	}
+	lines = append(lines, "",
+		st.dim.Render("↑↓ pick a voice  ·  Enter choose its pad  ·  ←→ quick change  ·  w write  ·  Esc back"))
+	return st.modal.Width(min(m.width-4, 72)).Render(strings.Join(lines, "\n"))
+}
+
+// laneChooseBox draws the pad chooser for one lane: "skip" and then every sampled pad of the
+// bank, with the one in front highlighted.
+func (m Model) laneChooseBox() string {
+	st, a := m.st, m.laneMap
+	lane := a.tmpl.Lanes[a.cursor]
+	lines := []string{st.bold.Render(a.tmpl.Name + " — pad for " + strings.ToLower(lane.LaneName())), ""}
+	rows := []string{"— skip"}
+	for _, pad := range a.pads {
+		name := m.snap.Pads[pad.Index()].Name
+		if name == "" {
+			name = "no name"
+		}
+		rows = append(rows, fmt.Sprintf("%s  %s", pad.String(), name))
+	}
+	// The chooser rows run pads first then skip in the key handler (skip is last); show skip
+	// last here too to match.
+	rows = append(rows[1:], rows[0])
+	for i, r := range rows {
+		line := st.dim.Render(r)
+		if i == a.chooseAt {
+			line = lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true).Render(r)
+		}
+		lines = append(lines, line)
+	}
+	lines = append(lines, "",
+		st.dim.Render("↑↓ pick a pad  ·  Enter set  ·  Esc back to the voices"))
+	return st.modal.Width(min(m.width-4, 72)).Render(strings.Join(lines, "\n"))
 }
 
 func (m Model) paletteBox() string {
@@ -2048,14 +2287,227 @@ func noteBlock(velocity int) string {
 	return string(noteBlocks[clamp((velocity-1)*len(noteBlocks)/127, 0, len(noteBlocks)-1)])
 }
 
-// noteRow draws one pad's notes across the steps: a step is two cells wide, a note covers the
-// steps it lasts, joined, at a height that is its velocity. A step without a note is a dot.
-// onCursorRow lights the step with the cursor.
-func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow bool) string {
+// noteGlyphs are the four marks a note can have, softest to loudest.
+var noteGlyphs = []string{"○", "◌", "◉", "●"}
+
+// noteGlyph is the mark for a note at a velocity, 1 to 127: brighter and fuller as it is louder,
+// so a lane shows its dynamics at a glance. The style tracks the glyph so brightness reads too.
+func (m Model) noteGlyph(velocity int) (string, lipgloss.Style) {
+	bucket := clamp(velocity*len(noteGlyphs)/128, 0, len(noteGlyphs)-1)
+	styles := []lipgloss.Style{m.st.faint, m.st.dim, m.st.accent, m.st.hot}
+	return noteGlyphs[bucket], styles[bucket]
+}
+
+// noteRow draws one pad's notes across the bars of sp: each step is one glyph whose brightness
+// is the note's velocity (a dot when empty); a note longer than a step trails dashes through the
+// steps it covers, reading as ◉───; a bar line parts the bars. onCursorRow shows the cursor as a
+// reverse-video step. cover/owner span the whole pattern so a note sustaining in from a bar not
+// on show still shows.
+func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow bool, sp stepSpan) string {
 	st := m.st
+	cover, owner := laneCover(d, pad)
+	// A pad that is not heard in the mix on this computer has its notes greyed out, and so do the
+	// tracks around one that is expanded, so the eye stays on it.
+	dimmed := !heard(pad, m.muted, m.soloed)
+	if m.patFocus && d == m.pattern && len(d.Grid.Rows) > 0 && d.Grid.Rows[clamp(m.patRow, 0, len(d.Grid.Rows)-1)].Pad != pad {
+		dimmed = true
+	}
+	cursorStyle := lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
+	lo, hi := sp.lo, sp.hi
+	var b strings.Builder
+	w := max(sp.w, 1)
+	for c := lo; c < hi; c++ {
+		// sustained is a step a note from before carries into: it draws a dash, not a fresh mark;
+		// carries is a note going on into the next step, which dashes run on to.
+		sustained := cover[c] > 0 && c > 0 && owner[c] >= 0 && owner[c] == owner[c-1]
+		carries := c+1 < len(owner) && owner[c] >= 0 && owner[c] == owner[c+1] && !dimmed
+		mark, style := "·", st.faint
+		switch {
+		case sustained:
+			mark, style = "─", st.accent
+		case cover[c] > 0:
+			mark, style = m.noteGlyph(cover[c])
+		}
+		// A step is w cells: its mark, then dashes when the note goes on, else spaces.
+		rest := " "
+		if carries {
+			rest = "─"
+		}
+		if dimmed && cover[c] > 0 {
+			style = st.faint
+		}
+		if onCursorRow && c == m.patCol {
+			b.WriteString(cursorStyle.Render(mark + strings.Repeat(rest, w-1)))
+		} else {
+			b.WriteString(style.Render(mark) + st.accent.Render(strings.Repeat(rest, w-1)))
+		}
+		if c+1 == hi {
+			break
+		}
+		// The gap between steps is wider every 4th (the beat), a bar line after a bar. A note
+		// carrying into the next step fills the gap with dashes so it reads as one held note.
+		gap := sp.gap(c - lo)
+		switch {
+		case carries:
+			b.WriteString(m.fillGap(gap, "─", st.accent))
+		case strings.Contains(gap, "│"):
+			b.WriteString(st.faint.Render(gap))
+		default:
+			b.WriteString(gap)
+		}
+	}
+	return b.String()
+}
+
+// stepSpan is the columns of a pattern's grid on show: [lo, hi), always whole bars, each step w
+// cells wide, and extra cells shared out over the gaps so the bars fill the room they are given.
+type stepSpan struct{ lo, hi, w, extra int }
+
+// gap is what goes after step i of the span (i counted from its start): barGap, widened by its
+// share of the span's extra cells. A bar line stays in the middle of its gap.
+func (sp stepSpan) gap(i int) string {
+	base := barGap(i)
+	gaps := sp.hi - sp.lo - 1
+	if gaps <= 0 || sp.extra <= 0 {
+		return base
+	}
+	// Every gap gets the same share, the gaps after a beat what is left of it split evenly; what
+	// does not split evenly is left out, so the steps stay regular.
+	add := sp.extra / gaps
+	if (i+1)%4 == 0 {
+		if beats := gaps / 4; beats > 0 {
+			add += sp.extra % gaps / beats
+		}
+	}
+	if strings.Contains(base, "│") {
+		return strings.Repeat(" ", 1+add/2) + "│" + strings.Repeat(" ", 1+add-add/2)
+	}
+	return base + strings.Repeat(" ", add)
+}
+
+// fillGap draws a gap with line in place of its spaces, in style, keeping a bar line faint.
+func (m Model) fillGap(gap, line string, style lipgloss.Style) string {
+	var b strings.Builder
+	for _, r := range gap {
+		if r == '│' {
+			b.WriteString(m.st.faint.Render("│"))
+		} else {
+			b.WriteString(style.Render(line))
+		}
+	}
+	return b.String()
+}
+
+// barGap is what goes after step i of a span (i counted from the span's start) in the compact
+// grid: a bar line after the last step of a bar, two spaces after a beat, else one.
+func barGap(i int) string {
+	switch {
+	case (i+1)%app.GridStepsPerBar == 0:
+		return " │ "
+	case (i+1)%4 == 0:
+		return "  "
+	}
+	return " "
+}
+
+// spanFor is the bars of d to show in width cells, after the 20-cell label column and a little
+// room for a MUTE or SOLO badge: as many whole bars as fit with steps minW cells wide (at least
+// one bar), then the steps made as wide as the room allows, up to maxW. A bar is 16 steps and
+// gapW cells of gaps. The bars start at a multiple of their count, so the bar page is among them.
+func spanFor(d *app.PatternDetail, page, width, minW, maxW, gapW int) stepSpan {
+	room := width - 20 - 2
+	n := clamp(room/(16*minW+gapW), 1, min(d.Bars(), maxBarsOnShow))
+	return spanBars(d, page/n*n, n, width, minW, maxW, gapW)
+}
+
+// spanBars is the span of n bars of d from bar start, its steps as wide as width allows (see
+// spanFor).
+func spanBars(d *app.PatternDetail, start, n, width, minW, maxW, gapW int) stepSpan {
+	room := width - 20 - 2
+	w := clamp((room/n-gapW)/16, minW, maxW)
+	sp := stepSpan{lo: start * d.StepsPerPage(), hi: min((start+n)*d.StepsPerPage(), d.Grid.Steps), w: w}
+	// What the steps and their gaps take (the last bar line is not drawn); the rest of the room
+	// goes into the gaps, at most doubling each.
+	steps := sp.hi - sp.lo
+	used := steps*w + (steps/16)*gapW - 3
+	sp.extra = clamp(room-used, 0, (steps-1)*(w+1))
+	return sp
+}
+
+// maxBarsOnShow is the most bars the grid shows at once: more than two squeezes the steps, so
+// longer patterns turn pages of two instead.
+const maxBarsOnShow = 2
+
+// The gaps in one bar of the compact grid: 12 single, 3 beat pairs, the bar line.
+const (
+	gridGapW = 12 + 3*2 + 3
+)
+
+// patSpan is the span of a pattern's compact grid in a body width cells wide.
+func (m Model) patSpan(d *app.PatternDetail, width int) stepSpan {
+	if len(m.muted) > 0 || len(m.soloed) > 0 {
+		// Room for a MUTE or SOLO badge after the rows.
+		width -= 7
+	}
+	if r, ok := m.rangeOf(d); ok {
+		// A range is shown whole, however few bars, stretched over the width.
+		return spanBars(d, r.first, r.bars(), width, 1, 4, gridGapW)
+	}
+	return spanFor(d, m.viewPage(d), width, 1, 4, gridGapW)
+}
+
+// centered puts s (one cell wide) in the middle of w cells of fill.
+func centered(s string, w int, fill string) string {
+	left := (w - 1) / 2
+	return strings.Repeat(fill, left) + s + strings.Repeat(fill, w-1-left)
+}
+
+// spanLabel names the bars a span shows, e.g. "Bar 2 / 4" or "Bars 1–2 / 2".
+func spanLabel(d *app.PatternDetail, sp stepSpan) string {
+	first, last := sp.lo/d.StepsPerPage()+1, (sp.hi-1)/d.StepsPerPage()+1
+	if first == last {
+		return fmt.Sprintf("Bar %d / %d", first, d.Bars())
+	}
+	return fmt.Sprintf("Bars %d–%d / %d", first, last, d.Bars())
+}
+
+// spanHeader is spanLabel with, when the pattern is longer than what is on show, a dot per page
+// (the one on show lit) and the bars the next page holds, so it is plain there is more.
+func (m Model) spanHeader(d *app.PatternDetail, sp stepSpan) string {
+	st := m.st
+	head := st.bold.Render(spanLabel(d, sp))
+	if r, ok := m.rangeOf(d); ok {
+		return head + "   " + st.accent.Render("⟲ "+r.label()+" only") + "   " + st.dim.Render("{ } move it  ·  v whole pattern")
+	}
+	spp := d.StepsPerPage()
+	perPage := max((sp.hi-sp.lo)/spp, 1)
+	pages := (d.Bars() + perPage - 1) / perPage
+	if pages < 2 {
+		return head
+	}
+	at := sp.lo / spp / perPage
+	var dots []string
+	for p := range pages {
+		if p == at {
+			dots = append(dots, st.accent.Render("●"))
+		} else {
+			dots = append(dots, st.faint.Render("○"))
+		}
+	}
+	next := (at + 1) % pages
+	first, last := next*perPage+1, min((next+1)*perPage, d.Bars())
+	bars := fmt.Sprintf("bar %d", first)
+	if last > first {
+		bars = fmt.Sprintf("bars %d–%d", first, last)
+	}
+	return head + "   " + strings.Join(dots, " ") + "   " + st.dim.Render("next: "+bars+"  }")
+}
+
+// laneCover is, for each step of the whole pattern, the velocity a pad sounds there (0: none) and
+// which of d.Notes it comes from (-1: none); a note covers every step it lasts into.
+func laneCover(d *app.PatternDetail, pad proto.PadIndex) (cover, owner []int) {
 	steps := d.Grid.Steps
-	// cover is the velocity sounding at each step (0: none), and from which note it is.
-	cover, owner := make([]int, steps), make([]int, steps)
+	cover, owner = make([]int, steps), make([]int, steps)
 	for i := range owner {
 		owner[i] = -1
 	}
@@ -2074,38 +2526,69 @@ func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow boo
 			}
 		}
 	}
-	// A pad that is not heard in the mix on this computer has its notes greyed out.
-	noteStyle := st.accent
-	if !heard(pad, m.muted, m.soloed) {
-		noteStyle = st.faint
-	}
-	var b strings.Builder
-	for c := 0; c < steps; c++ {
-		joined := c+1 < steps && owner[c] >= 0 && owner[c] == owner[c+1]
-		cell, style := "· ", st.faint
-		if cover[c] > 0 {
-			block := noteBlock(cover[c])
-			cell, style = block+block, noteStyle
+	return cover, owner
+}
+
+// focusLane draws the expanded track over the same bars and step places as the compact rows
+// (sp), so its notes sit right under theirs, as three lines: the step numbers within the bar,
+// the notes (with the cursor), and a bar as tall as each note's velocity. A step here is the
+// compact step and the gap after it, the mark at its left like a compact row's. The lines are
+// meant to sit right of the 20-cell label column.
+func (m Model) focusLane(d *app.PatternDetail, pad proto.PadIndex, sp stepSpan) []string {
+	st := m.st
+	cover, owner := laneCover(d, pad)
+	cursorStyle := lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
+	w := max(sp.w, 1) + 1
+	var nums, notes, vels strings.Builder
+	for c := sp.lo; c < sp.hi; c++ {
+		i := c - sp.lo
+		num := st.faint
+		if i%4 == 0 {
+			num = st.bold
 		}
-		if onCursorRow && c == m.patCol {
-			style = lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
-			if cover[c] == 0 {
-				cell = "··"
+		n := fmt.Sprint(i%d.StepsPerPage() + 1)
+		if len(n) >= w && i%4 != 0 {
+			// Too narrow for every two-digit number to stand apart: those off the beat are ticks.
+			n = "·"
+		}
+		nums.WriteString(num.Render(n + strings.Repeat(" ", max(w-len([]rune(n)), 0))))
+		// A note from before that carries into this step is a dash; a note starting here its mark,
+		// running on in dashes when it lasts into the next step.
+		sustained := cover[c] > 0 && c > 0 && owner[c] >= 0 && owner[c] == owner[c-1]
+		carries := c+1 < len(owner) && owner[c] >= 0 && owner[c] == owner[c+1]
+		tail := " "
+		if carries {
+			tail = "─"
+		}
+		mark, style, vel := "·", st.faint, strings.Repeat(" ", w)
+		switch {
+		case sustained:
+			mark, style = "─", st.accent
+		case cover[c] > 0:
+			mark, style = m.noteGlyph(cover[c])
+			vel = st.accent.Render(noteBlock(cover[c]) + strings.Repeat(" ", w-1))
+		}
+		if c == m.patCol {
+			notes.WriteString(cursorStyle.Render(mark + strings.Repeat(tail, w-1)))
+		} else {
+			notes.WriteString(style.Render(mark) + st.accent.Render(strings.Repeat(tail, w-1)))
+		}
+		vels.WriteString(vel)
+		if c+1 < sp.hi {
+			// What the compact row has after a step beyond the one space the lane's step already
+			// takes, so the two line up.
+			gap := strings.TrimPrefix(sp.gap(i), " ")
+			g := st.faint.Render(gap)
+			nums.WriteString(g)
+			vels.WriteString(g)
+			if carries {
+				notes.WriteString(m.fillGap(gap, "─", st.accent))
+			} else {
+				notes.WriteString(g)
 			}
 		}
-		b.WriteString(style.Render(cell))
-		// Between two steps: the block goes on when one note covers both.
-		gap := " "
-		if c%4 == 3 {
-			gap = "  "
-		}
-		if joined {
-			b.WriteString(noteStyle.Render(strings.Repeat(noteBlock(cover[c]), len(gap))))
-		} else {
-			b.WriteString(gap)
-		}
 	}
-	return b.String()
+	return []string{nums.String(), notes.String(), vels.String()}
 }
 
 // loopAt is where the looping pattern is in its round, from 0 to 1, and how long is left of
@@ -2122,47 +2605,74 @@ func (m Model) loopAt(slot proto.PadIndex) (float64, time.Duration, bool) {
 // playhead is a line under the step numbers that follows the looping pattern: done is solid,
 // the step that sounds is lit, what is still to come is dashed, and the label says how long
 // until the round starts again. It is empty when the pattern is not playing.
-func (m Model) playhead(d *app.PatternDetail) string {
+func (m Model) playhead(d *app.PatternDetail, sp stepSpan) string {
 	frac, left, ok := m.loopAt(d.Slot)
 	if !ok {
 		return ""
 	}
 	st := m.st
-	steps := d.Grid.Steps
-	now := min(int(frac*float64(steps)), steps-1)
+	now := m.loopStep(d, frac)
+	// fill draws a gap in a line's style, keeping the bar line where there is one.
+	fill := m.fillGap
 	var b strings.Builder
 	b.WriteString(st.hot.Render(fmt.Sprintf("%-20s", fmt.Sprintf("▶ %.1f s to go", left.Seconds()))))
-	for c := 0; c < steps; c++ {
-		gap := " "
-		if c%4 == 3 {
-			gap = "  "
+	for c := sp.lo; c < sp.hi; c++ {
+		gap := ""
+		if c+1 < sp.hi {
+			gap = sp.gap(c - sp.lo)
 		}
+		w := max(sp.w, 1)
 		switch {
 		case c < now:
-			b.WriteString(st.accent.Render("━━" + strings.Repeat("━", len(gap))))
+			b.WriteString(st.accent.Render(strings.Repeat("━", w)) + fill(gap, "━", st.accent))
 		case c == now:
-			b.WriteString(st.hot.Render("██") + st.faint.Render(strings.Repeat("┄", len(gap))))
+			b.WriteString(st.hot.Render(strings.Repeat("█", w)) + fill(gap, "┄", st.faint))
 		default:
-			b.WriteString(st.faint.Render("┄┄" + strings.Repeat("┄", len(gap))))
+			b.WriteString(st.faint.Render(strings.Repeat("┄", w)) + fill(gap, "┄", st.faint))
 		}
 	}
 	return b.String()
 }
 
-// stepRuler is the line of beat numbers over a pattern's steps, lined up with noteRow.
-func (m Model) stepRuler(d *app.PatternDetail) string {
+// stepRuler is the line of beat numbers over the bars of sp, lined up with noteRow: the first
+// step of each of a bar's four beats is numbered 1-4, the three steps between are dim ticks.
+func (m Model) stepRuler(d *app.PatternDetail, sp stepSpan) string {
 	ruler := strings.Repeat(" ", 20)
-	for i := 0; i < d.Grid.Steps; i++ {
-		if i > 0 && i%4 == 0 {
-			ruler += " "
-		}
+	for c := sp.lo; c < sp.hi; c++ {
+		i := c - sp.lo
 		if i%4 == 0 {
-			ruler += m.st.faint.Render(fmt.Sprintf("%-3d", i/4+1))
+			ruler += m.st.dim.Render(fmt.Sprintf("%d", i%d.StepsPerPage()/4+1))
 		} else {
-			ruler += "   "
+			ruler += m.st.faint.Render("·")
+		}
+		ruler += strings.Repeat(" ", max(sp.w, 1)-1)
+		if c+1 < sp.hi {
+			ruler += m.st.faint.Render(sp.gap(i))
 		}
 	}
 	return ruler
+}
+
+// loopStep is the step of d a loop frac (0 to 1) of the way through its round is on: within the
+// range when one is set, since only that loops.
+func (m Model) loopStep(d *app.PatternDetail, frac float64) int {
+	lo, n := 0, d.Grid.Steps
+	if r, ok := m.rangeOf(d); ok {
+		lo, n = r.first*d.StepsPerPage(), r.bars()*d.StepsPerPage()
+	}
+	return lo + min(int(frac*float64(n)), n-1)
+}
+
+// viewPage is the bar of d to keep on show: while d loops, the bar the playhead is in, so the
+// pages turn with the music; else, for the open pattern, the bar the cursor is on.
+func (m Model) viewPage(d *app.PatternDetail) int {
+	if frac, _, ok := m.loopAt(d.Slot); ok {
+		return m.loopStep(d, frac) / d.StepsPerPage()
+	}
+	if d == m.pattern {
+		return m.patPage()
+	}
+	return 0
 }
 
 // mixBadge is a pad's state in the mix played on this computer, shown after its row in a

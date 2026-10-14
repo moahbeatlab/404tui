@@ -8,8 +8,10 @@ import (
 	"github.com/moahbeatlab/404tui/proto"
 )
 
-// GridSteps is how many columns a pattern's length is quantized into for display.
-const GridSteps = 16
+// GridStepsPerBar is how many columns one bar is quantized into for display: a 16th-note grid.
+// The whole pattern's grid has this many columns per bar; the view pages through it one bar at a
+// time.
+const GridStepsPerBar = 16
 
 // PatternFiles is what reading and rewriting a pattern needs of the unit.
 type PatternFiles interface {
@@ -99,6 +101,41 @@ func (d *PatternDetail) StepTicks() uint32 {
 	return d.Length / uint32(max(d.Grid.Steps, 1))
 }
 
+// Bars is how many bars long the pattern is, rounded up and at least 1.
+func (d *PatternDetail) Bars() int {
+	barTicks := uint32(max(d.Beats, 1)) * formats.PPQ
+	bars := int((d.Length + barTicks - 1) / barTicks)
+	return max(bars, 1)
+}
+
+// GridOffset is how far a tick is from the nearest step of the grid, in ticks: positive when it
+// is late (after the step), negative when early, 0 on the grid. A note swung, shifted or
+// humanized off its step shows here by how much.
+func (d *PatternDetail) GridOffset(tick uint32) int {
+	step := int(d.StepTicks())
+	if step == 0 {
+		return 0
+	}
+	off := int(tick) % step
+	if off*2 > step {
+		off -= step
+	}
+	return off
+}
+
+// TicksToMillis is how long a number of ticks lasts at the bank's tempo.
+func (d *PatternDetail) TicksToMillis(ticks int) float64 {
+	if d.BankTempo <= 0 {
+		return 0
+	}
+	return float64(ticks) * 60000 / (d.BankTempo * formats.PPQ)
+}
+
+// StepsPerPage is how many columns one page (one bar) of the grid shows.
+func (d *PatternDetail) StepsPerPage() int {
+	return GridStepsPerBar
+}
+
 // CellNotes are the notes of a pad that fall in a column of the grid.
 func (d *PatternDetail) CellNotes(pad proto.PadIndex, col int) []formats.NoteRecord {
 	var out []formats.NoteRecord
@@ -141,8 +178,8 @@ func OpenPattern(u PatternFiles, slot proto.PadIndex) (*PatternDetail, error) {
 		BankTempo: float64(settings.Bank(int(slot.Bank())).Tempo) / 100,
 		Beats:     pattern.BeatsPerBar(),
 		Length:    pattern.Length,
-		Grid:      BuildGrid(pattern.Events, pattern.Length, GridSteps),
 	}
+	detail.Grid = BuildGrid(pattern.Events, pattern.Length, detail.Bars()*GridStepsPerBar)
 	for _, row := range detail.Grid.Rows {
 		detail.PadsUsed = append(detail.PadsUsed, row.Pad)
 	}
@@ -191,6 +228,20 @@ func WriteStartPattern(u PatternFiles, slot proto.PadIndex, pads []proto.PadInde
 		return err
 	}
 	if err := u.WriteFile(formats.PatternPath(current+1, slot), b); err != nil {
+		return fmt.Errorf("pattern %s: write failed: %w", slot, err)
+	}
+	return nil
+}
+
+// WriteGroove writes already-built pattern bytes into slot of the current project, replacing
+// whatever the slot held. The bytes come from formats.GrooveTemplate.BuildGroove or
+// formats.BlankPattern; this just resolves the slot's path and writes it.
+func WriteGroove(u PatternFiles, slot proto.PadIndex, built []byte) error {
+	current, err := u.CurrentProject()
+	if err != nil {
+		return err
+	}
+	if err := u.WriteFile(formats.PatternPath(current+1, slot), built); err != nil {
 		return fmt.Errorf("pattern %s: write failed: %w", slot, err)
 	}
 	return nil

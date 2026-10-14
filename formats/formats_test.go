@@ -305,3 +305,11 @@ func TestRetargetBankLeavesTheRest(t *testing.T) {
 		t.Errorf("path = %s", got)
 	}
 }
+
+func TestSliceIsAPartOfThePatternFromZero(t *testing.T) {
+	p := Pattern{Length: 7680, Events: []Event{{Tick: 0}, {Tick: 1920}, {Tick: 3900}, {Tick: 5760}}}
+	part := p.Slice(3840, 5760)
+	if part.Length != 1920 || len(part.Events) != 1 || part.Events[0].Tick != 60 {
+		t.Errorf("slice of bar 3 = length %d, events %+v; want 1920 and one event at 60", part.Length, part.Events)
+	}
+}

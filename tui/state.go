@@ -31,6 +31,9 @@ type State struct {
 
 	// OfflineDir is the folder of projects last worked on offline.
 	OfflineDir string `json:"offlineDir,omitempty"`
+	// Projects is the project last open on each source, by source ("unit", or the folder worked
+	// on offline), as its number from 1: a folder opened offline goes back to it.
+	Projects map[string]int `json:"projects,omitempty"`
 
 	AssignRoot     string   `json:"assignRoot"`
 	AssignExpanded []string `json:"assignExpanded"`

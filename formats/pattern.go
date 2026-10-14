@@ -90,6 +90,20 @@ func notePad(r []byte) (proto.PadIndex, bool) {
 	return proto.NewPadIndex(index)
 }
 
+// Slice is the part of the pattern from tick from up to tick to, as a pattern of its own: the
+// events in it moved to start at 0, and that part's length. A note begun before from is left
+// out, even if it sounds on into the part.
+func (p Pattern) Slice(from, to uint32) Pattern {
+	out := Pattern{Length: to - from, Trailer: p.Trailer}
+	for _, e := range p.Events {
+		if e.Tick >= from && e.Tick < to {
+			e.Tick -= from
+			out.Events = append(out.Events, e)
+		}
+	}
+	return out
+}
+
 // BeatsPerBar is the beats per bar from the trailer (the denominator is always 4); 4 when
 // the pattern has no trailer.
 func (p Pattern) BeatsPerBar() int {

@@ -165,6 +165,7 @@ func (s *screen) press(keys ...string) {
 		"space":     {Type: tea.KeySpace, Runes: []rune{' '}},
 		"ctrl+l":    {Type: tea.KeyCtrlL},
 		"ctrl+o":    {Type: tea.KeyCtrlO},
+		"ctrl+t":    {Type: tea.KeyCtrlT},
 		"up":        {Type: tea.KeyUp},
 		"down":      {Type: tea.KeyDown},
 	}
@@ -635,7 +636,7 @@ func TestAssignDialogListensAndTakesATypedPath(t *testing.T) {
 
 func TestStateIsRememberedBetweenRuns(t *testing.T) {
 	s := open(t)
-	s.press("T", "]", "]")
+	s.press("ctrl+t", "]", "]")
 	s.press("2", "tab", "j", "l")
 	if st := s.store.state; st.Theme != 1 || st.Bank != 2 || st.FilesRoot != "SD:" || len(st.FilesExpanded) != 2 {
 		t.Fatalf("remembered %+v", st)
@@ -760,8 +761,8 @@ func TestPatternsOpenAndRetarget(t *testing.T) {
 	// Slot 2 is one right of slot 1, which is top left.
 	s.press("l", "enter")
 	s.shows("Pattern B2", "120.00 BPM", "A1   kick", "A2   snare")
-	// A hit is a bar as tall as its velocity.
-	if !strings.ContainsAny(ansi.Strip(s.m().View()), "▁▂▃▄▅▆▇█") {
+	// A hit is a mark as bright as its velocity.
+	if !strings.ContainsAny(ansi.Strip(s.m().View()), "○◌◉●") {
 		t.Error("no hit is drawn")
 	}
 	s.press("b")
@@ -933,9 +934,9 @@ func TestExportAndRestoreThroughTheFolderBrowser(t *testing.T) {
 
 func TestThemesAndNarrowScreens(t *testing.T) {
 	s := open(t)
-	s.press("T")
+	s.press("ctrl+t")
 	s.shows("theme: Ocean")
-	s.press("T", "T")
+	s.press("ctrl+t", "ctrl+t")
 	s.shows("theme: Hardware")
 	for _, size := range [][2]int{{80, 24}, {60, 20}, {140, 40}, {200, 50}, {100, 14}} {
 		s.send(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
@@ -1089,7 +1090,7 @@ func TestConnectingAnnouncesAndReconnects(t *testing.T) {
 	}
 	sc.press("3", "a", "d")
 	sc.shows("Waiting for an SP-404MKII")
-	sc.press("T")
+	sc.press("ctrl+t")
 	sc.press("?")
 	sc.shows("Keybindings")
 	sc.press("esc")
@@ -2727,13 +2728,149 @@ func TestAssignDialogMarksAFolder(t *testing.T) {
 
 func TestNewPatternFromTheBank(t *testing.T) {
 	s := open(t)
-	s.press("N")
+	s.press("N", "enter")
 	s.shows("made", "on beat 1, 2 bars")
+}
+
+func TestNewPatternTemplatePickerOffersTheTemplates(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N")
+	s.shows("New pattern", "All pads held", "Blank", "House", "Tech house", "Hip-hop")
+	// Esc closes it without making anything.
+	s.press("esc")
+	if _, ok := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN"); ok {
+		t.Fatal("Esc on the picker still wrote a pattern")
+	}
+}
+
+func TestNewPatternBlankTemplateWritesAnEmptyPattern(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	// All pads held, Blank: pick the second row.
+	s.press("N", "j", "enter")
+	s.shows("made", "blank")
+	data, ok := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+	if !ok {
+		t.Fatal("no pattern file")
+	}
+	p, err := formats.ParsePattern(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Length != 3840 {
+		t.Errorf("length %d, want 3840", p.Length)
+	}
+	for _, e := range p.Events {
+		if !e.Control {
+			t.Errorf("the blank pattern has a note on %s", e.Pad)
+		}
+	}
+}
+
+func TestNewPatternHipHopGrooveConfirmsLanesThenWrites(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	// The fixture pads are A1=kick, A2=snare, A3=hat; Hip-hop uses all three.
+	// Picker rows: All pads held, Blank, House, Tech house, Hip-hop -> 4 downs to Hip-hop.
+	s.press("N", "j", "j", "j", "j", "j", "j", "j", "enter")
+	s.shows("Hip-hop", "Kick", "Snare", "Closed hat")
+	// The lanes are pre-filled by guessing from the names.
+	s.shows("A1", "A2", "A3")
+	s.press("w")
+	s.shows("made", "Hip-hop")
+	data, ok := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+	if !ok {
+		t.Fatal("no pattern file")
+	}
+	p, err := formats.ParsePattern(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a1, _ := proto.ParsePad("A1")
+	a2, _ := proto.ParsePad("A2")
+	// Kick on beat 1 (tick 0) and the "& of 3" (tick 1200) of bar 1.
+	var kick, snare []uint32
+	for _, e := range p.Events {
+		if e.Control {
+			continue
+		}
+		switch e.Pad {
+		case a1:
+			kick = append(kick, e.Tick)
+		case a2:
+			snare = append(snare, e.Tick)
+		}
+	}
+	if len(kick) == 0 || kick[0] != 0 {
+		t.Errorf("kick hits %v, want one on tick 0", kick)
+	}
+	// Snare on beats 2 and 4 of bar 1: ticks 480 and 1440.
+	wantSnare := map[uint32]bool{480: true, 1440: true}
+	for _, tk := range snare[:min(2, len(snare))] {
+		if !wantSnare[tk] {
+			t.Errorf("snare on %d, want it on beats 2 and 4 (480, 1440)", tk)
+		}
+	}
+}
+
+func TestNewPatternLaneReassignedThroughTheChooser(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	// House: kick/clap/open hat/closed hat. The fixture has kick, snare, hat; "hat" guesses as
+	// the closed hat, so the open hat starts skipped. Row order: Kick, Clap, Open hat, Closed hat.
+	s.press("N", "j", "j", "enter") // All pads held, Blank, House
+	s.shows("House", "Open hat", "Closed hat")
+	// Move to the Open hat row (down twice from Kick) and open its chooser.
+	s.press("j", "j", "enter")
+	s.shows("pad for open hat", "A1", "A2", "A3", "skip")
+	// Pick the first pad (A1) for the open hat.
+	s.press("g", "enter")
+	s.shows("Open hat")
+	s.press("w")
+	s.shows("made", "House")
+	data, ok := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+	if !ok {
+		t.Fatal("no pattern file")
+	}
+	p, _ := formats.ParsePattern(data)
+	a1, _ := proto.ParsePad("A1")
+	// A1 now plays the open-hat off-beats (tick 240 among them), not only the kick beats.
+	has240 := false
+	for _, e := range p.Events {
+		if !e.Control && e.Pad == a1 && e.Tick == 240 {
+			has240 = true
+		}
+	}
+	if !has240 {
+		t.Error("after assigning A1 to the open hat, it has no off-beat hit at tick 240")
+	}
+}
+
+func TestNewPatternLaneCanBeSkipped(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	// Hip-hop, then on the kick row cycle its pad left until it reads "skip".
+	s.press("N", "j", "j", "j", "j", "j", "j", "j", "enter")
+	s.shows("Hip-hop")
+	// Kick is the first lane (cursor 0). Left past A1 wraps to "skip".
+	s.press("h")
+	s.shows("skip")
+	s.press("w")
+	s.shows("made", "Hip-hop")
+	data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+	p, _ := formats.ParsePattern(data)
+	a1, _ := proto.ParsePad("A1")
+	for _, e := range p.Events {
+		if !e.Control && e.Pad == a1 {
+			t.Error("the kick lane was skipped but A1 still plays")
+		}
+	}
 }
 
 func TestPatternsCopyMoveDelete(t *testing.T) {
 	s := open(t)
-	s.press("N")
+	s.press("N", "enter")
 	s.shows("made")
 	s.press("tab")
 	s.press("c", "l", "p")
@@ -2748,37 +2885,51 @@ func TestPatternsCopyMoveDelete(t *testing.T) {
 
 func TestBankToggleMenu(t *testing.T) {
 	s := open(t)
-	s.press("t")
+	// T sets the pad settings for every pad of the bank at once.
+	s.press("T")
 	s.shows("Set for every pad of bank A", "Gate", "Loop", "One shot", "Fixed velocity")
 	s.press("g")
 	s.shows("gate on")
-	s.press("t", "g")
+	s.press("T", "g")
 	s.shows("gate off")
 }
 
-func TestMenuActsOnMarkedPadsAndSetsTheBus(t *testing.T) {
+func TestPadToggleMenuScopesToTheHighlightedPad(t *testing.T) {
 	s := open(t)
-	s.press("v", "l", "v", "t")
-	s.shows("Set for the 2 marked pads")
-	s.press("1")
-	s.shows("BUS 1 on 2 pads")
-	for _, name := range []string{"A1", "A2"} {
-		if got := s.m().snap.Pads[pad(t, name).Index()].Params["bus-fx"]; got != 1 {
-			t.Errorf("%s bus-fx %d", name, got)
-		}
+	// t scopes the dialog to the pad the cursor is on, A1 at the start.
+	s.press("t")
+	s.shows("Set for pad A1", "Gate")
+	s.press("g")
+	s.shows("gate on")
+	if got := s.m().snap.Pads[pad(t, "A1").Index()].Params["gate"]; got != 1 {
+		t.Errorf("A1 gate %d, want on", got)
 	}
-	if got := s.m().snap.Pads[pad(t, "A3").Index()].Params["bus-fx"]; got == 1 {
-		t.Error("an unmarked pad was changed")
+	// A neighbouring pad with a sample is untouched by the single-pad scope.
+	if got := s.m().snap.Pads[pad(t, "A2").Index()].Params["gate"]; got == 1 {
+		t.Error("A2 gate was changed by a pad-scoped toggle")
+	}
+}
+
+func TestWholeBankToggleSetsTheBusOnEveryPad(t *testing.T) {
+	s := open(t)
+	// T opens the whole-bank dialog; the bus steps through off, BUS 1, BUS 2 for every pad.
+	s.press("T")
+	s.shows("Set for every pad of bank A")
+	s.press("1")
+	for _, name := range []string{"A1", "A2", "A3"} {
+		if got := s.m().snap.Pads[pad(t, name).Index()].Params["bus-fx"]; got != 1 {
+			t.Errorf("%s bus-fx %d, want 1", name, got)
+		}
 	}
 }
 
 func TestHistoryKeepsWhatHappened(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 180, Height: 50})
-	s.press("N")
+	s.press("N", "enter")
 	s.shows("History", "pattern A")
 	s.press("t", "g")
-	s.press("N")
+	s.press("N", "enter")
 	s.shows("gate")
 	if n := len(s.m().history); n < 2 {
 		t.Errorf("history has %d lines", n)
@@ -2939,7 +3090,7 @@ func TestAPatternPlaysInALoopUntilStopped(t *testing.T) {
 	if _, err := app.Assign(m.unit, m.unit, pad(t, "C1"), "SD:IMPORT/kick.wav"); err != nil {
 		t.Fatal(err)
 	}
-	s.press("r", "]", "]", "N", "tab")
+	s.press("r", "]", "]", "N", "enter", "tab")
 	s.press("P")
 	if len(s.player.looped) != 1 || len(s.player.played) != 0 {
 		t.Fatalf("looped %d, played %d: %s", len(s.player.looped), len(s.player.played), s.m().message)
@@ -3135,7 +3286,7 @@ func TestFavouriteAFolderAndEveryFileInItHasTheTag(t *testing.T) {
 func TestPatternsOfTheBankShowUnderThePadsAndPickOutTheOnesThatPlayThePad(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 48})
-	s.press("N")
+	s.press("N", "enter")
 	// They are read quietly, without holding the screen, and listed under the pads.
 	s.shows("Pads · bank A", "Patterns · bank A", "3 pads")
 	if s.m().busy != "" {
@@ -3187,7 +3338,7 @@ func TestTabMovesBetweenThePadsAndThePatternsPanelAndTheRailHasNoPatterns(t *tes
 	if s.m().section != secPatterns {
 		t.Fatal("the focus did not move to the patterns")
 	}
-	s.press("N")
+	s.press("N", "enter")
 	s.shows("pattern A")
 	// Esc comes back to the pads without leaving the program.
 	s.press("esc")
@@ -3394,8 +3545,8 @@ func TestEditTheNotesOfAPattern(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	// A pattern with every pad of bank A on beat 1, then open it.
-	s.press("N", "tab", "enter")
-	s.shows("Pattern A1", "velocity 127", "Enter note on/off")
+	s.press("N", "enter", "tab", "enter")
+	s.shows("Pattern A1", "vel 127", "on the grid", "x note on/off")
 	notesOf := func() []formats.NoteRecord {
 		t.Helper()
 		data, ok := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
@@ -3419,7 +3570,7 @@ func TestEditTheNotesOfAPattern(t *testing.T) {
 	}
 	// Velocity: down by 10, down by 1, then back to full.
 	s.press("<")
-	s.shows("velocity 117")
+	s.shows("vel 117")
 	if v := velocityOf(first, 0); v != 117 {
 		t.Fatalf("the file has %d", v)
 	}
@@ -3433,13 +3584,13 @@ func TestEditTheNotesOfAPattern(t *testing.T) {
 	}
 	// A note on an empty step, then off again; the pattern keeps its length.
 	before := len(notesOf())
-	s.press("l", "l", "enter")
+	s.press("l", "l", "x")
 	s.shows("note on")
 	tick := s.m().pattern.StepTick(2)
 	if v := velocityOf(first, tick); v != 127 || len(notesOf()) != before+1 {
 		t.Fatalf("no note at step 3: %d, %d notes", v, len(notesOf()))
 	}
-	s.press("enter")
+	s.press("x")
 	s.shows("taken out")
 	if len(notesOf()) != before {
 		t.Errorf("%d notes after taking it out, want %d", len(notesOf()), before)
@@ -3452,7 +3603,7 @@ func TestEditTheNotesOfAPattern(t *testing.T) {
 func TestAPadKeepsItsRowSpaceDoesNotEditAndUUndoes(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("N", "tab", "enter")
+	s.press("N", "enter", "tab", "enter")
 	s.shows("Pattern A1")
 	countNotes := func() int {
 		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
@@ -3470,18 +3621,19 @@ func TestAPadKeepsItsRowSpaceDoesNotEditAndUUndoes(t *testing.T) {
 	}
 	// Taking out the only note of the first pad keeps its row, to put a note back on.
 	first := s.m().pattern.Grid.Rows[0].Pad
-	s.press("enter")
+	s.press("x")
 	s.shows("taken out")
 	if countNotes() != before-1 || len(s.m().pattern.Grid.Rows) != rows || s.m().pattern.Grid.Rows[0].Pad != first {
 		t.Fatalf("%d notes, %d rows (was %d, %d)", countNotes(), len(s.m().pattern.Grid.Rows), before, rows)
 	}
-	// u brings it back, and u again takes it out again.
+	// u brings it back; R redoes (takes it out again).
 	s.press("u")
-	s.shows("undone")
+	s.shows("undo")
 	if countNotes() != before {
 		t.Errorf("after undo %d notes, want %d", countNotes(), before)
 	}
-	s.press("u")
+	s.press("R")
+	s.shows("redo")
 	if countNotes() != before-1 {
 		t.Errorf("after redo %d notes, want %d", countNotes(), before-1)
 	}
@@ -3502,35 +3654,204 @@ func TestAPadKeepsItsRowSpaceDoesNotEditAndUUndoes(t *testing.T) {
 	}
 }
 
-func TestNotesAreBlocksAsTallAsTheirVelocityAndAsWideAsTheyLast(t *testing.T) {
-	// The heights by velocity: full at 127, the lowest at the bottom.
-	for v, want := range map[int]string{127: "█", 1: "▁", 64: "▄", 47: "▃"} {
-		if got := noteBlock(v); got != want {
+func TestUndoRedoStackGoesManyStepsBack(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "enter", "tab", "enter")
+	s.shows("Pattern A1")
+	countNotes := func() int {
+		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+		notes, err := formats.NoteRecords(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(notes)
+	}
+	start := countNotes()
+	// Toggle three different pads off: three edits onto the undo stack.
+	s.press("x", "j", "x", "j", "x")
+	if countNotes() != start-3 {
+		t.Fatalf("after three edits %d notes, want %d", countNotes(), start-3)
+	}
+	s.shows("3 undo · 0 redo")
+	// Undo all three, one at a time.
+	s.press("u", "u", "u")
+	if countNotes() != start {
+		t.Fatalf("after undoing all three %d notes, want %d", countNotes(), start)
+	}
+	s.shows("0 undo · 3 redo")
+	// Nothing left to undo.
+	s.press("u")
+	s.shows("nothing to undo")
+	// Redo two of the three.
+	s.press("R", "R")
+	if countNotes() != start-2 {
+		t.Fatalf("after redoing two %d notes, want %d", countNotes(), start-2)
+	}
+	s.shows("2 undo · 1 redo")
+	// A fresh edit drops the redo future.
+	s.press("j", "x")
+	s.shows("3 undo · 0 redo")
+	s.press("R")
+	s.shows("nothing to redo")
+}
+
+func TestPatternToolsMenuSwingsTheWholePattern(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "enter", "tab", "enter")
+	s.shows("Pattern A1")
+	ticksBefore := func() []uint32 {
+		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+		notes, _ := formats.NoteRecords(data)
+		var out []uint32
+		for _, n := range notes {
+			out = append(out, n.Tick)
+		}
+		return out
+	}
+	before := ticksBefore()
+	// T opens the whole-pattern groove tools; the menu names them and says the scope.
+	s.press("T")
+	s.shows("Groove tools", "whole pattern", "SWING", "QUANT", "SHIFT", "REVERSE", "HUMANIZE")
+	// Reverse has a clear, deterministic effect: Enter applies it to the whole pattern.
+	s.press("j", "j", "j") // SWING -> QUANT -> SHIFT -> REVERSE
+	s.press("enter")
+	s.shows("reverse", "all pads")
+	after := ticksBefore()
+	if len(after) != len(before) {
+		t.Fatalf("reverse changed the note count %d -> %d", len(before), len(after))
+	}
+	// Reverse is on the undo stack now.
+	s.shows("1 undo")
+	s.press("u")
+	if got := ticksBefore(); len(got) != len(before) {
+		t.Errorf("undo after reverse changed the note count: %d, want %d", len(got), len(before))
+	}
+	// t (lowercase) scopes the tools to the pad the cursor is on, not the theme.
+	s.press("t")
+	s.shows("Groove tools", "pad A1")
+	s.press("esc")
+	s.hides("Groove tools")
+}
+
+func TestNotesAreGlyphsAsBrightAsTheirVelocityAndDashedAsLongAsTheyLast(t *testing.T) {
+	// The glyphs by velocity: ghost, soft, mid, loud.
+	m0 := open(t).m()
+	for v, want := range map[int]string{1: "○", 47: "◌", 64: "◉", 127: "●"} {
+		if got, _ := m0.noteGlyph(v); got != want {
 			t.Errorf("velocity %d: %q, want %q", v, got, want)
 		}
 	}
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("N", "tab", "enter")
+	s.press("N", "enter", "tab", "enter")
 	m := s.m()
-	// The pattern N makes holds every pad for the whole pattern: one block across all steps.
-	row := strings.TrimRight(ansi.Strip(m.noteRow(m.pattern, m.pattern.Grid.Rows[1].Pad, false)), " ")
-	if strings.ContainsAny(row, "·┄ ") || !strings.HasPrefix(row, "█") {
-		t.Errorf("a note held to the end is not one block: %q", row)
+	// The pattern N makes holds every pad for the whole pattern: a loud mark, then dashes on.
+	row := strings.TrimRight(ansi.Strip(m.noteRow(m.pattern, m.pattern.Grid.Rows[1].Pad, false, m.patSpan(m.pattern, 60))), " ")
+	if strings.Contains(row, "·") || !strings.HasPrefix(row, "●─") {
+		t.Errorf("a note held to the end is not one dashed note: %q", row)
 	}
-	// Quieter, the block is lower, all along.
+	// Quieter, the mark is softer.
 	s.press("j", "<", "<", "<", "<", "<", "<", "<", "<")
 	m = s.m()
-	row = ansi.Strip(m.noteRow(m.pattern, m.pattern.Grid.Rows[1].Pad, false))
-	if !strings.HasPrefix(row, "▃▃") || strings.Contains(row, "█") {
+	row = ansi.Strip(m.noteRow(m.pattern, m.pattern.Grid.Rows[1].Pad, false, m.patSpan(m.pattern, 60)))
+	if !strings.HasPrefix(row, "◌") || strings.Contains(row, "●") {
 		t.Errorf("velocity 47 is drawn %q", row)
 	}
-	// A short note covers its step only; the rest of the row is dots.
-	s.press("enter", "l", "l", "l", "l", "enter")
+	// A short note marks its step only; the rest of the row is dots, no dashes.
+	s.press("x", "l", "l", "l", "l", "x")
 	m = s.m()
-	row = ansi.Strip(m.noteRow(m.pattern, m.pattern.Grid.Rows[1].Pad, false))
-	if !strings.HasPrefix(row, "· ") || !strings.Contains(row, "██") || strings.Count(row, "█") != 2 {
+	row = ansi.Strip(m.noteRow(m.pattern, m.pattern.Grid.Rows[1].Pad, false, m.patSpan(m.pattern, 60)))
+	if !strings.HasPrefix(row, "· ") || strings.Count(row, "●") != 1 || strings.Contains(row, "─") {
 		t.Errorf("a one-step note is drawn %q", row)
+	}
+}
+
+func TestThePatternThatPlaysIsMarkedWhereverTheCursorIs(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	m := s.m()
+	level, _ := proto.ParamByName("level")
+	if _, err := app.Assign(m.unit, m.unit, pad(t, "C1"), "SD:IMPORT/kick.wav"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.unit.SetParam(level.ID, proto.TargetPad(pad(t, "C1")), 127); err != nil {
+		t.Fatal(err)
+	}
+	s.press("r", "]", "]", "N", "enter", "tab", "P")
+	if !s.m().looping() {
+		t.Fatalf("nothing loops: %s", s.m().message)
+	}
+	// The cursor moves on to another slot; the one that plays keeps its mark.
+	s.press("l")
+	m = s.m()
+	tile := m.tile(30, 2, "1", "1 pads", 0, tileState{noLevel: true, progress: 0.5, playing: true})
+	if !strings.Contains(ansi.Strip(tile), "▶") || !strings.Contains(ansi.Strip(tile), "━") {
+		t.Errorf("a playing pattern tile has no mark or progress: %q", ansi.Strip(tile))
+	}
+	if idle := ansi.Strip(m.tile(30, 2, "2", "1 pads", 0, tileState{noLevel: true, progress: -1})); strings.ContainsAny(idle, "╌━") {
+		t.Errorf("a pattern that does not play has a bar: %q", idle)
+	}
+	s.shows("▶")
+}
+
+func TestASampleIsTriedInTheLoopAndAssignedWithoutStoppingIt(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	m := s.m()
+	level, _ := proto.ParamByName("level")
+	for _, p := range []string{"C1", "C2"} {
+		if _, err := app.Assign(m.unit, m.unit, pad(t, p), "SD:IMPORT/kick.wav"); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.unit.SetParam(level.ID, proto.TargetPad(pad(t, p)), 127); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A pattern of bank C loops.
+	s.press("r", "]", "]", "N", "enter", "tab", "P")
+	if len(s.player.looped) != 1 || !s.m().looping() {
+		t.Fatalf("the pattern does not loop: %s", s.m().message)
+	}
+	// The assign dialog for C1, on snare.wav: listening tries it in the loop, on C1.
+	findSnare := func() {
+		t.Helper()
+		s.press("tab", "g", "a", "/", "ctrl+u")
+		s.typeText("snare")
+		s.press("ctrl+o")
+		if b := s.m().browser; b == nil || b.tree.Rows()[b.at].Name != "snare.wav" {
+			t.Fatal("the assign dialog is not on snare.wav")
+		}
+	}
+	findSnare()
+	replaced, played := len(s.player.replaced), len(s.player.played)
+	s.press(" ")
+	if try := s.m().loopTry; try == nil || try.pad != pad(t, "C1") {
+		t.Fatalf("snare.wav is not tried on C1: %+v", try)
+	}
+	if len(s.player.replaced) != replaced+1 || len(s.player.played) != played || !s.m().looping() {
+		t.Fatalf("trying a file: replaced %d (was %d), played %d (was %d), looping %v",
+			len(s.player.replaced), replaced, len(s.player.played), played, s.m().looping())
+	}
+	s.shows("in the playing pattern")
+	// Esc: the pad's own sound comes back, the loop goes on, nothing was written.
+	s.press("esc")
+	if s.m().loopTry != nil || !s.m().looping() || len(s.player.replaced) != replaced+2 {
+		t.Fatalf("after Esc: try %+v, looping %v, replaced %d", s.m().loopTry, s.m().looping(), len(s.player.replaced))
+	}
+	if s.padName("C1") != "kick" {
+		t.Fatalf("C1 is %q after giving the file up", s.padName("C1"))
+	}
+	// Again, and assign it: C1 holds the snare now, the loop never stopped or started over.
+	s.press("tab")
+	findSnare()
+	s.press(" ", "enter", "enter")
+	if s.padName("C1") != "snare" {
+		t.Fatalf("C1 is %q after assigning", s.padName("C1"))
+	}
+	if !s.m().looping() || len(s.player.looped) != 1 || s.m().loopTry != nil {
+		t.Errorf("after assigning: looping %v, loops started %d, try %+v", s.m().looping(), len(s.player.looped), s.m().loopTry)
 	}
 }
 
@@ -3549,19 +3870,32 @@ func TestAChangeIsHeardAtOnceInALoopingPattern(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	s.press("r", "]", "]", "N", "tab", "enter")
+	s.press("r", "]", "]", "N", "enter", "tab", "enter")
 	s.press("P")
 	if len(s.player.looped) != 1 {
 		t.Fatalf("looped %d: %s", len(s.player.looped), s.m().message)
 	}
 	first := s.player.looped[0]
 	// While it loops, a line under the step numbers shows where it is and how long is left.
-	s.shows("s to go", "██")
+	s.shows("s to go")
+	if line := ansi.Strip(s.m().playhead(s.m().pattern, s.m().patSpan(s.m().pattern, 200))); !strings.ContainsAny(line, "█━") {
+		t.Errorf("the playhead line has no position: %q", line)
+	}
+	// While it plays, the bar on show follows the music: three quarters through a 2-bar round
+	// is bar 2, wherever the cursor is.
+	late := s.m()
+	late.loopStart = time.Now().Add(-late.loopRound * 3 / 4)
+	if page := late.viewPage(late.pattern); page != 1 {
+		t.Errorf("three quarters through the round the page is %d, want 1", page)
+	}
+	if sp := late.patSpan(late.pattern, 60); sp.lo != 16 {
+		t.Errorf("a one-bar view three quarters through starts at step %d, want 16", sp.lo)
+	}
 	if frac, left, ok := s.m().loopAt(s.m().pattern.Slot); !ok || frac < 0 || frac >= 1 || left <= 0 {
 		t.Errorf("loop at %v, %v left, %v", frac, left, ok)
 	}
 	// Taking a note out: the loop goes on with the new mix at once, from where it is, not restarted.
-	s.press("enter")
+	s.press("x")
 	if len(s.player.replaced) != 1 || len(s.player.looped) != 1 {
 		t.Fatalf("queued %d, looped %d after an edit", len(s.player.replaced), len(s.player.looped))
 	}
@@ -3602,7 +3936,7 @@ func peak(s formats.Sample) int {
 func TestTheLengthOfANoteChangesByAStep(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("N", "tab", "enter")
+	s.press("N", "enter", "tab", "enter")
 	notesOf := func() []formats.NoteRecord {
 		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
 		notes, _ := formats.NoteRecords(data)
@@ -3630,19 +3964,273 @@ func TestTheLengthOfANoteChangesByAStep(t *testing.T) {
 	if got := lengthAt(0); got != 3840-2*step {
 		t.Errorf("after - on a later step it lasts %d, want %d", got, 3840-2*step)
 	}
-	s.shows("lasts 14 steps")
+	s.shows("lasts 30 steps")
 	// A one-step note: shorter stops at a step, longer adds one.
 	s.press("l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l")
-	s.press("enter")
+	s.press("x")
 	tick := s.m().pattern.StepTick(15)
 	if got := lengthAt(tick); got != step {
 		t.Fatalf("a new note lasts %d, want %d", got, step)
 	}
 	s.press("-")
 	s.shows("one step long already")
-	s.press("h", "h", "h", "enter", "+")
+	s.press("h", "h", "h", "x", "+")
 	if got := lengthAt(s.m().pattern.StepTick(12)); got != 2*step {
 		t.Errorf("after + a new note lasts %d, want %d", got, 2*step)
+	}
+}
+
+func TestPatternEditPagesPerBar(t *testing.T) {
+	s := open(t)
+	// Wide enough, every bar is on show side by side.
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "enter", "tab", "enter")
+	s.shows("Pattern A1", "Bars 1–2 / 2")
+	// Too narrow for two, the grid shows one bar at a time and pages.
+	s.send(tea.WindowSizeMsg{Width: 100, Height: 54})
+	s.shows("Bar 1 / 2")
+	spp := s.m().pattern.StepsPerPage()
+	if spp != 16 {
+		t.Fatalf("steps per page = %d, want 16", spp)
+	}
+	// } flips to the next bar; the header and page follow.
+	s.press("}")
+	s.shows("Bar 2 / 2")
+	if got := s.m().patPage(); got != 1 {
+		t.Errorf("after } the page is %d, want 1", got)
+	}
+	// { flips back.
+	s.press("{")
+	s.shows("Bar 1 / 2")
+	if got := s.m().patPage(); got != 0 {
+		t.Errorf("after { the page is %d, want 0", got)
+	}
+	// Walking the cursor off the right of bar 1 with l auto-pages into bar 2.
+	for i := 0; i < spp; i++ {
+		s.press("l")
+	}
+	s.shows("Bar 2 / 2")
+	if got := s.m().patCol; got != spp {
+		t.Errorf("after walking off bar 1 the cursor is at col %d, want %d", got, spp)
+	}
+	// A note set on bar 2 lands on the right tick.
+	notesOf := func() []formats.NoteRecord {
+		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+		notes, _ := formats.NoteRecords(data)
+		return notes
+	}
+	s.press("g", "l", "l") // start of bar 2, then step 3 of the bar.
+	wantTick := s.m().pattern.StepTick(s.m().patCol)
+	if wantTick != 1920+2*120 {
+		t.Fatalf("bar 2 step 3 is tick %d, want %d", wantTick, 1920+2*120)
+	}
+	s.press("x")
+	s.shows("bar 2 step 3")
+	found := false
+	for _, n := range notesOf() {
+		if n.Tick == wantTick {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no note at tick %d after setting bar 2 step 3", wantTick)
+	}
+}
+
+func TestEnterExpandsATrackAndEscCollapsesIt(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "enter", "tab", "enter")
+	notes := func() int {
+		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+		n, _ := formats.NoteRecords(data)
+		return len(n)
+	}
+	before := notes()
+	// Enter on the snare row expands it: the step numbers of the bar show, nothing is written.
+	s.press("j", "enter")
+	if !s.m().patFocus || s.m().patRow != 1 {
+		t.Fatalf("Enter did not expand the track: focus %v, row %d", s.m().patFocus, s.m().patRow)
+	}
+	s.shows("Esc collapse")
+	if nums := ansi.Strip(s.m().focusLane(s.m().pattern, s.m().pattern.Grid.Rows[1].Pad, s.m().patSpan(s.m().pattern, 150))[0]); !strings.HasPrefix(nums, "1") || !strings.Contains(nums, "16") {
+		t.Errorf("the expanded lane is not numbered 1-16: %q", nums)
+	}
+	if notes() != before {
+		t.Fatal("expanding a track changed the pattern")
+	}
+	// Inside the lane, Enter sets a note on the step under the cursor.
+	s.press("l", "l", "enter")
+	if notes() != before+1 {
+		t.Fatalf("%d notes after Enter in the lane, want %d", notes(), before+1)
+	}
+	// j moves the expanded lane to the next track.
+	s.press("j")
+	if !s.m().patFocus || s.m().patRow != 2 {
+		t.Errorf("j in the lane: focus %v, row %d", s.m().patFocus, s.m().patRow)
+	}
+	// Esc collapses it back to the grid; a second Esc closes the pattern.
+	s.press("esc")
+	if s.m().patFocus || s.m().pattern == nil {
+		t.Fatalf("Esc did not collapse: focus %v, pattern open %v", s.m().patFocus, s.m().pattern != nil)
+	}
+	s.shows("Enter open track")
+	s.press("esc")
+	if s.m().pattern != nil {
+		t.Error("a second Esc did not close the pattern")
+	}
+}
+
+func TestANoteIsNudgedByTicksAndSnappedBack(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "enter", "tab", "enter")
+	pad := s.m().pattern.Grid.Rows[0].Pad
+	tickOf := func() int {
+		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+		notes, _ := formats.NoteRecords(data)
+		for _, n := range notes {
+			if n.Pad == pad {
+				return int(n.Tick)
+			}
+		}
+		return -1
+	}
+	// The note on the first step cannot go earlier than the start.
+	s.press("H")
+	s.shows("cannot move further")
+	// L by 5, ) by 1: 6 ticks late, and the readout says so.
+	s.press("L", ")")
+	if got := tickOf(); got != 6 {
+		t.Fatalf("after L ) the note is at tick %d, want 6", got)
+	}
+	s.shows("+6 ticks late")
+	// ( back by 1.
+	s.press("(")
+	if got := tickOf(); got != 5 {
+		t.Errorf("after ( the note is at tick %d, want 5", got)
+	}
+	// 0 puts it back on the grid; it is one edit on the undo stack like any other.
+	s.press("0")
+	if got := tickOf(); got != 0 {
+		t.Errorf("after 0 the note is at tick %d, want 0", got)
+	}
+	s.shows("on the grid")
+	s.press("u")
+	if got := tickOf(); got != 5 {
+		t.Errorf("undoing the snap left the note at tick %d, want 5", got)
+	}
+}
+
+func TestAPatternIsDoubledAndHalvedFromTheTools(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "enter", "tab", "enter")
+	if bars := s.m().pattern.Bars(); bars != 2 {
+		t.Fatalf("the new pattern is %d bars", bars)
+	}
+	notes := func() int {
+		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+		n, _ := formats.NoteRecords(data)
+		return len(n)
+	}
+	before := notes()
+	// T, down to DOUBLE (after SWING, QUANT, SHIFT, REVERSE, HUMANIZE): 4 bars, every note twice.
+	s.press("T")
+	s.shows("DOUBLE", "2 bars → 4 bars, played again", "HALF")
+	s.press("j", "j", "j", "j", "j", "enter")
+	s.shows("doubled: 2 bars → 4 bars")
+	if bars := s.m().pattern.Bars(); bars != 4 || notes() != 2*before {
+		t.Fatalf("after DOUBLE: %d bars, %d notes (was %d)", bars, notes(), before)
+	}
+	// HALF takes it back to 2 bars.
+	s.press("T", "j", "j", "j", "j", "j", "j", "enter")
+	s.shows("halved: 4 bars → 2 bars")
+	if bars := s.m().pattern.Bars(); bars != 2 || notes() != before {
+		t.Fatalf("after HALF: %d bars, %d notes (want %d)", bars, notes(), before)
+	}
+	// Each is one edit to undo.
+	s.press("u")
+	if bars := s.m().pattern.Bars(); bars != 4 {
+		t.Errorf("undoing HALF left %d bars, want 4", bars)
+	}
+}
+
+func TestALongPatternShowsTwoBarsAPageAndWhatComesNext(t *testing.T) {
+	s := open(t)
+	// Room for three bars and more: still only two are shown, stretched.
+	s.send(tea.WindowSizeMsg{Width: 220, Height: 54})
+	s.press("N", "enter", "tab", "enter")
+	s.press("T", "j", "j", "j", "j", "j", "enter") // DOUBLE: 4 bars
+	if bars := s.m().pattern.Bars(); bars != 4 {
+		t.Fatalf("%d bars after DOUBLE", bars)
+	}
+	s.shows("Bars 1–2 / 4", "next: bars 3–4")
+	if sp := s.m().patSpan(s.m().pattern, 400); sp.hi-sp.lo != 32 {
+		t.Errorf("a very wide view shows %d steps, want 32 (two bars)", sp.hi-sp.lo)
+	}
+	// } turns the whole page: bars 3-4, and the next is the first page again.
+	s.press("}")
+	s.shows("Bars 3–4 / 4", "next: bars 1–2")
+	if got := s.m().patCol; got != 32 {
+		t.Errorf("after } the cursor is on step %d, want 32 (bar 3)", got)
+	}
+	s.press("{")
+	s.shows("Bars 1–2 / 4")
+}
+
+func TestARangeOfBarsIsShownEditedAndLoopedAlone(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 200, Height: 54})
+	// Bank C gets real samples, so the pattern mixes.
+	m := s.m()
+	level, _ := proto.ParamByName("level")
+	for _, p := range []string{"C1", "C2"} {
+		if _, err := app.Assign(m.unit, m.unit, pad(t, p), "SD:IMPORT/kick.wav"); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.unit.SetParam(level.ID, proto.TargetPad(pad(t, p)), 127); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.press("r", "]", "]", "N", "enter", "tab", "enter")
+	s.press("T", "j", "j", "j", "j", "j", "enter") // DOUBLE: 4 bars
+	s.press("P")
+	whole := s.player.looped[len(s.player.looped)-1].Frames()
+	// v lists the whole pattern, each bar, and each two bars side by side.
+	s.press("v")
+	s.shows("Show and loop", "Whole pattern", "Bar 4", "Bars 3–4")
+	// Whole, Bar 1-4, Bars 1-2, 2-3, 3-4: the eighth row.
+	s.press("j", "j", "j", "j", "j", "j", "j", "enter")
+	s.shows("Bars 3–4 / 4", "⟲ Bars 3–4 only")
+	if lo, hi := s.m().colBounds(s.m().pattern); lo != 32 || hi != 64 {
+		t.Fatalf("the cursor may go %d..%d, want 32..64", lo, hi)
+	}
+	if col := s.m().patCol; col < 32 || col >= 64 {
+		t.Errorf("the cursor is on step %d, outside bars 3-4", col)
+	}
+	// The cursor stops at the range's edge.
+	for range 40 {
+		s.press("l")
+	}
+	if col := s.m().patCol; col != 63 {
+		t.Errorf("l stopped on step %d, want 63 (the end of bar 4)", col)
+	}
+	// The loop starts over on the two bars: half as long as the whole.
+	looped := s.player.looped[len(s.player.looped)-1].Frames()
+	if looped*2 != whole {
+		t.Errorf("the range loops %d frames, the whole pattern %d; want half", looped, whole)
+	}
+	// { moves the range to bars 1-2; v and the first row bring the whole pattern back.
+	s.press("{")
+	s.shows("⟲ Bars 1–2 only")
+	s.press("v", "g", "enter")
+	s.shows("Bars 1–2 / 4", "next: bars 3–4")
+	if s.m().patRange != nil {
+		t.Error("the whole pattern was chosen but a range is still set")
+	}
+	if got := s.player.looped[len(s.player.looped)-1].Frames(); got != whole {
+		t.Errorf("back to the whole pattern the loop is %d frames, want %d", got, whole)
 	}
 }
 
@@ -3650,7 +4238,7 @@ func TestThePatternInFrontShowsItsStepsBesideAndSessionIsGone(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 180, Height: 56})
 	s.hides("Session")
-	s.press("N", "tab")
+	s.press("N", "enter", "tab")
 	// Without Enter: the panel beside shows the steps of the pattern in front.
 	s.shows("Pattern A1", "120.00 BPM", "A1   kick", "Enter edits the steps")
 	if s.m().patPreview[s.m().patterns[0][0].Slot] == nil {
@@ -3677,7 +4265,7 @@ func TestMuteAndSoloChangeWhatThisComputerPlays(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	s.press("r", "]", "]", "N", "tab", "P")
+	s.press("r", "]", "]", "N", "enter", "tab", "P")
 	if len(s.player.looped) != 1 {
 		t.Fatalf("not looping: %s", s.m().message)
 	}
@@ -3710,7 +4298,7 @@ func TestMuteAndSoloChangeWhatThisComputerPlays(t *testing.T) {
 	s.shows("MUTE")
 	// * still sets the velocity to 127.
 	s.press("<", "*")
-	s.shows("velocity of C2 step 1 is 127")
+	s.shows("velocity of C2 bar 1 step 1 is 127")
 	// S keeps what is heard as a new pattern: C2 is muted, so only C1 plays in it.
 	s.press("S")
 	s.shows("Save pattern C1 as you hear it", "this one", "C2 is free")
@@ -3808,6 +4396,54 @@ func TestWorkingOffline(t *testing.T) {
 	sc.shows("● CONNECTED  sim", "home kick")
 	sc.hides("OFFLINE")
 	sc.hides("office kick")
+}
+
+// TestTheLastProjectIsOpenedAgainOffline works on a folder of two projects, switches to the
+// second, and opens the folder again in a new session: it is on the second project.
+func TestTheLastProjectIsOpenedAgainOffline(t *testing.T) {
+	lib := t.TempDir()
+	for dir, name := range map[string]string{"A": "FIRST ONE", "B": "SECOND ONE"} {
+		local := filepath.Join(lib, dir, "PADCONF.BIN")
+		if err := os.MkdirAll(filepath.Dir(local), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(local, formats.NewPadconf(nil, name).Bytes(), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	openOffline := func(dir string) (app.Unit, io.Closer, string, error) {
+		s, _, err := sim.OpenFolder(dir)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		d := device.New(s, "offline")
+		return d, d, "2 projects found", nil
+	}
+	store := &memStore{}
+	session := func() *screen {
+		sc := &screen{t: t, sim: sim.New(), player: &fakePlayer{}, store: store}
+		connect := func() (app.Unit, io.Closer, error) { return nil, nil, ErrNoUnit }
+		sc.model = NewConnecting(connect, sc.player, store).WithOffline(openOffline, func() bool { return false }, "")
+		sc.run(sc.model.Init())
+		sc.run(sc.m().goOffline(lib))
+		return sc
+	}
+
+	first := session()
+	first.shows("FIRST ONE")
+	// The second project, from the projects view.
+	first.press("3", "j", "enter")
+	first.shows("project 2 selected", "SECOND ONE")
+	if got := store.state.Projects[lib]; got != 2 {
+		t.Fatalf("the project remembered for the folder is %d, want 2", got)
+	}
+
+	// Next time the folder is opened, it is on the second project again.
+	second := session()
+	second.shows("SECOND ONE", "project 2, as last time")
+	if p := second.m().snap.Project; p != 1 {
+		t.Errorf("the folder opened on project %d, want 2", p+1)
+	}
 }
 
 func TestVMarksAndUnmarksTheBank(t *testing.T) {
