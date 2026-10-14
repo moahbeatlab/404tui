@@ -73,6 +73,33 @@ progress bar with a line per step.
   `R` restores an export onto a bank you choose. `p` there also makes a pattern: every
   restored pad starts together on beat 1 and is held for 2 bars.
 
+### Slicer
+
+`Z` on a pad (or on an audio file in Files) opens the slicer: the sample as a waveform cut into
+slices, played back on this computer in an order you set or at random, and rendered onto a pad
+when you like it. Everything happens in the software; the unit's own chop points are not used.
+The slices are kept per sample in `slices.json` in your config folder, so the sample opens as
+you left it.
+
+- **Slices:** the sample opens in 8 equal slices. `e` cuts it in 16, 32, 4, 8… equal ones, `t`
+  slices at the onsets it finds (again for a different sensitivity), `c` cuts the slice in
+  front in two and `d` removes it. `h l` choose a slice and `H L` move its start (one dot of
+  the waveform at a time, `{ }` eight), the end of the slice before follows. `i` zooms to the
+  slice, so a dot is a millisecond or less; `I` zooms out. Starts settle on a zero crossing, so
+  the cut does not click (`z` turns that off). `u` undoes.
+- **Per slice:** `r` reverse, `m` mute, `[ ]` chance, `< >` pitch in semitones, `- +` gain,
+  `X` back to plain. Enter plays the slice once.
+- **Order:** `Tab` moves to the order lane, the sequence the slices play in. `H L` carry a step,
+  `j k` make it play another slice, `a` repeats it, `d` drops it, `R` shuffles, `o` resets.
+- **Mode** (`M`): *order* plays the lane over and over (a slice's chance is the chance it plays,
+  else its time is left silent), *random* picks by chance as weight, *no repeat* never plays the
+  same slice twice in a row, *shuffle* plays every slice once per round in a new order. `S` rolls
+  the seed.
+- **Play** with Space. The next round is rendered while the one before sounds and takes over
+  without a gap; edits are heard from the next round on, and the playhead follows on the waveform.
+- **Bounce:** `b` asks for a pad and renders what the slicer plays, for as many rounds as `n`
+  sets (1, 2, 4 or 8), onto it. The same seed gives the same bounce.
+
 ### Patterns
 
 The bank's 16 pattern slots are a panel under the pads; `Tab` moves between the two, and
@@ -162,7 +189,7 @@ without the unit.
 | `device` | Session with the unit over a `Port`: transactions, events, files, import, render |
 | `serialport` | Finds and opens the unit's USB serial port |
 | `sim` | In-memory SP-404MKII, for tests, and over folders of projects for offline work |
-| `formats` | SMP, WAV, AIFF, FLAC, MP3 decoding with resampling to 48 kHz, patterns, `PADCONF.BIN` |
+| `formats` | SMP, WAV, AIFF, FLAC, MP3 decoding with resampling to 48 kHz, patterns, `PADCONF.BIN`, the slicer's slices and sequencer |
 | `app` | What the tool does with a unit, apart from how it is shown: assign, export/restore, patterns, file tree |
 | `playback` | Plays samples on this computer's speakers |
 | `tui` | The Bubble Tea UI |

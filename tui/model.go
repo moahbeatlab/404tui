@@ -137,6 +137,9 @@ type picker struct {
 	sourceBank int
 	bank       int
 	pad        int
+	// bounce is a rendered sample, under bounceName, that the picker puts on the pad chosen.
+	bounce     *formats.Sample
+	bounceName string
 	// digits is the pad number being typed.
 	digits string
 	// confirm is set once the chosen pad holds a sample and the user has been told.
@@ -235,6 +238,10 @@ type Model struct {
 	editor     *editor
 	// chromatic is the dialog that plays a pad as notes from the keyboard.
 	chromatic *chromatic
+	// slicer is the dialog that cuts a sample into slices and plays them in an order or at
+	// random; slices keeps what it was set to for each sample.
+	slicer *slicer
+	slices sliceStore
 	// indexes are the file indexes searches use, one per source, kept until files change.
 	indexes map[string]*app.Index
 	// tags is the tag index kept at the root of the SD card, once it has been read; tagJob is
@@ -448,6 +455,7 @@ func New(unit app.Unit, player app.Player, store Store) Model {
 		listenGen:  new(atomic.Int64),
 		padAudio:   &padCache{samples: map[factKey]formats.Sample{}},
 		store:      store,
+		slices:     newSliceStore(store),
 		saved:      new([]byte),
 		log:        slog.New(slog.DiscardHandler),
 	}
@@ -1055,6 +1063,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 	case chromaticMsg:
 		return m.chromaticLoaded(msg)
+	case slicerLoadedMsg:
+		return m.slicerLoaded(msg)
+	case slicerTickMsg:
+		return m.slicerTicked(msg)
 	case originsMsg:
 		m.originsBusy = false
 		if msg.err == nil && m.origins == nil {
@@ -1365,7 +1377,7 @@ func (m Model) leaveOffline() (tea.Model, tea.Cmd) {
 	m.unit, m.closer, m.snap = nil, nil, nil
 	m.offline, m.unitBack, m.previewLocal = "", false, m.previewWas
 	m.busy, m.polling, m.connecting = "", false, true
-	m.prompt, m.picker, m.palette, m.browser, m.chromatic, m.toggles = nil, nil, nil, nil, nil, nil
+	m.prompt, m.picker, m.palette, m.browser, m.chromatic, m.toggles, m.slicer = nil, nil, nil, nil, nil, nil, nil
 	m.pattern, m.patterns, m.patPreview = nil, map[int][]app.PatternRow{}, map[proto.PadIndex]*app.PatternDetail{}
 	m.tree, m.infos = nil, map[string]fileInfo{}
 	clear(m.indexes)
@@ -1388,7 +1400,7 @@ func (m Model) lose() (tea.Model, tea.Cmd) {
 	m.stopListening()
 	m.unit, m.closer, m.snap = nil, nil, nil
 	m.lost, m.busy, m.polling, m.connecting = true, "", false, false
-	m.prompt, m.picker, m.palette, m.browser, m.chromatic, m.toggles = nil, nil, nil, nil, nil, nil
+	m.prompt, m.picker, m.palette, m.browser, m.chromatic, m.toggles, m.slicer = nil, nil, nil, nil, nil, nil, nil
 	m.message = ""
 	return m, nil
 }

@@ -41,6 +41,7 @@ var commands = []command{
 	{"o", "Preview pads on this computer or on the unit (switch; O and 0 work too)", []int{secPads}},
 	{"P", "Play this pad once on this computer", []int{secPads}},
 	{"C", "Chromatic: play this pad as notes from the keyboard, on this computer", []int{secPads}},
+	{"Z", "Slicer: slice this pad's sample (in Files, the file)", []int{secPads, secFiles}},
 	{"c", "Copy this pad (or the marked ones) to another pad, in any bank", []int{secPads}},
 	{"b", "Edit this bank's tempo and volume", []int{secPads, secPatterns}},
 	{"<", "Bank tempo down 1 BPM", []int{secPads, secPatterns}},
@@ -170,6 +171,8 @@ func (m Model) overlayName() string {
 		return "editor"
 	case m.chromatic != nil:
 		return "chromatic"
+	case m.slicer != nil:
+		return "slicer"
 	case m.browser != nil:
 		return "browser"
 	case m.prompt != nil:
@@ -210,6 +213,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.promptKey(key)
 	case m.picker != nil:
 		return m.pickerKey(key)
+	case m.slicer != nil:
+		return m.slicerKey(key)
 	case m.toggles != nil:
 		return m.togglesKey(key)
 	case m.tmplPicker != nil:
@@ -609,6 +614,8 @@ func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 		return m.previewPadLocal(row)
 	case "C":
 		return m.openChromatic(row)
+	case "Z":
+		return m.openSlicerPad(row)
 	case "o", "O", "0":
 		m.previewLocal = !m.previewLocal
 		where := "the unit"
@@ -1939,6 +1946,12 @@ func (m Model) filesKey(name string) (tea.Model, tea.Cmd) {
 			m.busy = "listing files"
 			return m, m.loadDir(node.Path, at)
 		}
+	case "Z":
+		if node.Dir || !isAudio(node.Name) {
+			m.message = "Z slices an audio file: put the cursor on one"
+			return m, nil
+		}
+		return m.openSlicerFile(node.Path)
 	case "enter":
 		switch {
 		case node.Dir && !node.Expanded:
@@ -2589,6 +2602,9 @@ func (m Model) pickerEnter() (tea.Model, tea.Cmd) {
 	}
 	if len(p.copyFrom) > 0 {
 		return m.copyEnter()
+	}
+	if p.bounce != nil {
+		return m.bounceEnter()
 	}
 	target, _ := proto.PadFromBankPad(uint16(p.bank), uint16(p.pad))
 	held := m.snap.Pads[target.Index()].HasSample

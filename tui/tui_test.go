@@ -137,7 +137,7 @@ func (s *screen) run(cmd tea.Cmd) {
 		return
 	}
 	switch msg := cmd().(type) {
-	case nil, tickMsg:
+	case nil, tickMsg, slicerTickMsg:
 	case tea.BatchMsg:
 		for _, c := range msg {
 			s.run(c)

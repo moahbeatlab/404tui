@@ -30,6 +30,7 @@ var helpText = [][2]string{
 	{"/ (Pads, Projects)", "find a pad or project by name"},
 	{"Enter (Pads)", "preview the pad: on the unit, or on this computer after O"},
 	{"o, P (Pads)", "o switches where pads preview (unit / this computer; O and 0 work too); P plays the pad once on this computer"},
+	{"Z (Pads, Files)", "slicer: cut the sample into slices on a waveform, move their starts, set an order or play them at random, then b bounces the result onto a pad"},
 	{"C (Pads)", "chromatic: play the pad as notes on this computer (a w s e d f … are piano keys, z / x shift the octave)"},
 	{"n / d (Pads)", "rename / delete the sample"},
 	{"v / V (Pads)", "mark a pad / every pad with a sample"},
@@ -89,6 +90,8 @@ func (m Model) View() string {
 		main = dialog(m.promptBox())
 	case m.picker != nil:
 		main = dialog(m.pickerBox())
+	case m.slicer != nil && m.busy == "":
+		main = m.center(m.slicerBox(), g.bodyH)
 	case m.toggles != nil:
 		main = dialog(m.togglesBox())
 	case m.tmplPicker != nil:
@@ -1787,7 +1790,10 @@ func (m Model) pickerBox() string {
 	if len(p.copyFrom) > 0 {
 		return m.copyPickerBox()
 	}
-	title := fmt.Sprintf("Assign %s to a pad", app.Base(p.files[0]))
+	title := "Bounce the slices to a pad"
+	if p.bounce == nil {
+		title = fmt.Sprintf("Assign %s to a pad", app.Base(p.files[0]))
+	}
 	if len(p.files) > 1 {
 		title = fmt.Sprintf("Assign %d files, from the pad you choose onward, to free pads", len(p.files))
 	}
