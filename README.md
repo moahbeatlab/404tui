@@ -168,7 +168,19 @@ without the unit.
 | `tui` | The Bubble Tea UI |
 | `cmd/sp404` | The command |
 
-Tests: `go test -race ./...`
+Tests: `go test -race ./...`, or `make test` (vet, gofmt check and the tests).
+
+## Build
+
+    make                    # ./sp404 for this computer
+    make dist               # every platform, into dist/
+    make linux              # linux amd64 and arm64
+    make windows            # windows amd64 and arm64 (.exe)
+    make macos              # darwin amd64, arm64 and a universal binary
+    make dist VERSION=0.2   # stamp a version into the binaries
+
+Linux and Windows build without cgo from any computer. The macOS binaries need cgo (the serial
+port library asks IOKit for the USB ports), so `make macos` runs on a Mac.
 
 ## Licence
 

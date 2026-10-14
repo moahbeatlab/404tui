@@ -5,3 +5,6 @@
 captures/
 *.pcap
 *.pcapng
+
+# Cross-compiled release binaries (make dist)
+/dist/
