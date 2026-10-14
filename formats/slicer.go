@@ -25,6 +25,23 @@ type Slicing struct {
 	Mode  PlayMode `json:"mode"`
 	// Seed makes random modes repeatable: the same seed picks the same slices.
 	Seed int64 `json:"seed"`
+	// Division and BPM put the steps on a grid: with a Division of 16, every step lasts a
+	// sixteenth note at BPM, whatever the slice's length; a longer slice is cut off, a shorter
+	// one leaves silence. Division 0 plays the slices at their own length, one after the other.
+	Division int     `json:"division,omitempty"`
+	BPM      float64 `json:"bpm,omitempty"`
+}
+
+// Divisions are the grids a slicing can be put on, as notes to the bar: 4 is a quarter note.
+var Divisions = []int{0, 4, 8, 16}
+
+// StepFrames is how long a step lasts on the grid, 0 when the slices play at their own
+// length.
+func (s *Slicing) StepFrames() int {
+	if s.Division <= 0 || s.BPM <= 0 {
+		return 0
+	}
+	return max(int(math.Round(float64(SampleRate)*60/s.BPM*4/float64(s.Division))), 1)
 }
 
 // Slice is where one slice starts and how it sounds.
@@ -257,6 +274,12 @@ func (s *Slicing) Validate() error {
 	if s.Mode < 0 || int(s.Mode) >= len(modeNames) {
 		s.Mode = ModeOrder
 	}
+	if !slices.Contains(Divisions, s.Division) {
+		s.Division = 0
+	}
+	if s.BPM != 0 {
+		s.BPM = min(max(s.BPM, 40), 300)
+	}
 	return nil
 }
 
@@ -407,6 +430,8 @@ func Render(src Sample, s *Slicing, q *Sequencer, steps int) (Sample, []Placed) 
 	out := Sample{Channels: src.Channels}
 	var placed []Placed
 	cache := map[int]Sample{}
+	ch := max(src.Channels, 1)
+	grid := s.StepFrames()
 	for n := 0; n < steps; n++ {
 		step := q.Next()
 		audio, ok := cache[step.Slice]
@@ -414,12 +439,20 @@ func Render(src Sample, s *Slicing, q *Sequencer, steps int) (Sample, []Placed) 
 			audio = SliceAudio(src, s, step.Slice)
 			cache[step.Slice] = audio
 		}
-		placed = append(placed, Placed{Step: step, At: out.Frames(), Frames: audio.Frames()})
-		if step.Rest {
-			out.Samples = append(out.Samples, make([]int16, len(audio.Samples))...)
-		} else {
-			out.Samples = append(out.Samples, audio.Samples...)
+		slot := audio.Frames()
+		if grid > 0 {
+			slot = grid
 		}
+		placed = append(placed, Placed{Step: step, At: out.Frames(), Frames: slot, Audio: min(audio.Frames(), slot)})
+		piece := make([]int16, slot*ch)
+		if !step.Rest {
+			copy(piece, audio.Samples[:min(len(audio.Samples), len(piece))])
+			if audio.Frames() > slot {
+				// Cut off by the next step: fade out, so the cut does not click.
+				fadeOut(piece, ch, min(declick, slot/2))
+			}
+		}
+		out.Samples = append(out.Samples, piece...)
 	}
 	return out, placed
 }
@@ -427,7 +460,21 @@ func Render(src Sample, s *Slicing, q *Sequencer, steps int) (Sample, []Placed) 
 // Placed is a step in a rendered sample.
 type Placed struct {
 	Step
-	At, Frames int
+	// At is where the step starts and Frames how long it lasts; Audio is how much of that the
+	// slice sounds for (on a grid it can be less, or cut short).
+	At, Frames, Audio int
+}
+
+// fadeOut brings the last frames of interleaved audio down to nothing.
+func fadeOut(samples []int16, ch, frames int) {
+	n := len(samples) / ch
+	for f := 0; f < frames && f < n; f++ {
+		g := float64(f) / float64(frames)
+		at := (n - 1 - f) * ch
+		for c := 0; c < ch; c++ {
+			samples[at+c] = int16(math.Round(float64(samples[at+c]) * g))
+		}
+	}
 }
 
 // ---- waveform and cutting helpers ----

@@ -352,6 +352,30 @@ func TestSlicerOnAFile(t *testing.T) {
 	s.shows("audio file")
 }
 
+func TestSlicerGrid(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("T")
+	sl := s.slicing()
+	if sl.Division != 4 || sl.BPM != 120 {
+		t.Fatalf("division %d, bpm %g", sl.Division, sl.BPM)
+	}
+	s.shows("grid 1/4 at 120 BPM")
+	s.press("T")
+	s.press("T") // 1/16
+	s.press(".", ".")
+	if sl := s.slicing(); sl.Division != 16 || sl.BPM != 122 {
+		t.Fatalf("division %d, bpm %g", sl.Division, sl.BPM)
+	}
+	want := s.slicing().StepFrames() * len(s.slicing().Order)
+	if got := s.m().slicer.bounceSample().Frames(); got != want {
+		t.Errorf("a bounce is %d frames, %d steps of the grid are %d", got, len(s.slicing().Order), want)
+	}
+	s.press("T")
+	s.shows("grid off")
+	s.press(".")
+	s.shows("no grid")
+}
+
 func TestSlicerEmptyPad(t *testing.T) {
 	s := open(t)
 	s.press("r", "j", "j", "Z")

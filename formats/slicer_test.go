@@ -278,6 +278,46 @@ func TestRender(t *testing.T) {
 	}
 }
 
+func TestGridStepsHaveTheLengthOfANote(t *testing.T) {
+	src := ramp(48000)
+	s := NewSlicing(48000, 4)   // slices of 12000 frames
+	s.Division, s.BPM = 16, 120 // a sixteenth is 6000 frames
+	if s.StepFrames() != 6000 {
+		t.Fatalf("step %d", s.StepFrames())
+	}
+	out, placed := Render(src, s, NewSequencer(s), 4)
+	if out.Frames() != 24000 || placed[1].At != 6000 || placed[1].Frames != 6000 || placed[1].Audio != 6000 {
+		t.Fatalf("%d frames, placed %+v", out.Frames(), placed)
+	}
+	// A slice longer than the step is cut off with a fade; the next starts on the beat.
+	if out.Samples[6000+3000] != SliceAudio(src, s, 1).Samples[3000] {
+		t.Error("the middle of the step is not the slice")
+	}
+	if last := out.Samples[6000+5999]; last != 0 {
+		t.Errorf("the cut was not faded out: %d", last)
+	}
+	// A slice shorter than the step leaves silence after it.
+	s.Division = 4 // a quarter is 24000 frames
+	out, placed = Render(src, s, NewSequencer(s), 1)
+	if out.Frames() != 24000 || placed[0].Audio != 12000 {
+		t.Fatalf("%d frames, audio %d", out.Frames(), placed[0].Audio)
+	}
+	for _, v := range out.Samples[12000:] {
+		if v != 0 {
+			t.Fatal("the rest of the step is not silent")
+		}
+	}
+	s.Division = 0
+	if s.StepFrames() != 0 {
+		t.Error("no grid still has a step")
+	}
+	s.Division, s.BPM = 7, 9000
+	_ = s.Validate()
+	if s.Division != 0 || s.BPM != 300 {
+		t.Errorf("division %d, bpm %g", s.Division, s.BPM)
+	}
+}
+
 func TestPeaks(t *testing.T) {
 	s := Sample{Channels: 2, Samples: []int16{0, 100, 0, -300, 50, 0, 0, 0}}
 	if got := s.Peaks(0, 4, 2); !slices.Equal(got, []int{300, 50}) {

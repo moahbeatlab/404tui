@@ -262,6 +262,32 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.slicerChange(func(sl *formats.Slicing) { sl.Seed = seed })
 		m.message = fmt.Sprintf("new seed %d: the random picks and chances roll again", seed)
 		return m, nil
+	case "T":
+		next := formats.Divisions[(indexOf(formats.Divisions, s.sl.Division)+1)%len(formats.Divisions)]
+		m.slicerChange(func(sl *formats.Slicing) {
+			sl.Division = next
+			if sl.BPM <= 0 {
+				sl.BPM = m.slicerBankTempo()
+			}
+		})
+		if next == 0 {
+			m.message = "grid off: slices play at their own length"
+		} else {
+			m.message = fmt.Sprintf("grid: every step is a 1/%d at %g BPM (. and , change the tempo)", next, s.sl.BPM)
+		}
+		return m, nil
+	case ",", ".":
+		if s.sl.Division == 0 {
+			m.message = "no grid: T puts the steps on one, then , and . change the tempo"
+			return m, nil
+		}
+		d := 1.0
+		if name == "," {
+			d = -1
+		}
+		m.slicerChange(func(sl *formats.Slicing) { sl.BPM = min(max(sl.BPM+d, 40), 300) })
+		m.message = fmt.Sprintf("%g BPM", s.sl.BPM)
+		return m, nil
 	case "n":
 		s.rounds = slicerRounds[(indexOf(slicerRounds, s.rounds)+1)%len(slicerRounds)]
 		m.message = fmt.Sprintf("a bounce holds %s", plural(s.rounds, "round"))
@@ -375,6 +401,21 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("slice %d back to its plain settings", s.at+1)
 	}
 	return m, nil
+}
+
+// slicerBankTempo is the tempo of the bank in front, for a grid to start from.
+func (m Model) slicerBankTempo() float64 {
+	if m.snap == nil {
+		return 120
+	}
+	bpm := m.snap.Banks[m.bank].Tempo
+	if m.snap.UsesProjectTempo {
+		bpm = m.snap.ProjectTempo
+	}
+	if bpm < 40 {
+		return 120
+	}
+	return bpm
 }
 
 // slicerUndoLast drops the undo step of an edit that turned out to change nothing.
@@ -596,7 +637,11 @@ func (s *slicer) playhead() (frame, slice int) {
 			continue
 		}
 		start, length := s.sl.Slices[p.Slice].Start, s.sl.Length(p.Slice)
-		pos := (elapsed - p.At) * length / max(p.Frames, 1)
+		// On a grid the slice may sound for less than the step: past that, it is over.
+		if elapsed-p.At >= max(p.Audio, 1) {
+			return -1, p.Slice
+		}
+		pos := (elapsed - p.At) * length / max(p.Audio, 1)
 		if s.sl.Slices[p.Slice].Reverse {
 			pos = length - 1 - pos
 		}
@@ -883,7 +928,7 @@ func (m Model) slicerBox() string {
 var slicerHelp = []string{
 	"h l slice", "H L nudge start", "{ } coarse", "c cut", "d delete", "e equal slices", "t onsets", "i I zoom", "u undo",
 	"r reverse", "m mute", "[ ] chance", "< > pitch", "- + gain", "X plain",
-	"M mode", "S new seed", "n bounce rounds", "z snap", "Tab order lane",
+	"M mode", "S new seed", "T grid", ", . tempo", "n bounce rounds", "z snap", "Tab order lane",
 	"Space play", "Enter hear slice", "b bounce to pad", "Esc close",
 }
 
@@ -995,8 +1040,12 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 		st.dim.Render("pitch ") + st.accent.Render(fmt.Sprintf("%+d", x.Pitch)) + "   " +
 		st.dim.Render("play ") + st.accent.Render(dir)
 	dot := float64(max((to-from)/cols, 1)) / formats.SampleRate * 1000
-	third := st.faint.Render(fmt.Sprintf("a nudge moves one dot, %.2f ms  ·  snap to zero crossing %s  ·  seed %d  ·  a bounce holds %s",
-		dot, onOff(s.snap), s.sl.Seed, plural(s.rounds, "round")))
+	grid := "grid off"
+	if s.sl.Division > 0 {
+		grid = fmt.Sprintf("grid 1/%d at %g BPM", s.sl.Division, s.sl.BPM)
+	}
+	third := st.faint.Render(fmt.Sprintf("a nudge moves one dot, %.2f ms  ·  snap %s  ·  %s  ·  seed %d  ·  a bounce holds %s",
+		dot, onOff(s.snap), grid, s.sl.Seed, plural(s.rounds, "round")))
 	return []string{first, second, third}
 }
 

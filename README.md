@@ -95,6 +95,10 @@ you left it.
   else its time is left silent), *random* picks by chance as weight, *no repeat* never plays the
   same slice twice in a row, *shuffle* plays every slice once per round in a new order. `S` rolls
   the seed.
+- **Grid** (`T`): off, 1/4, 1/8 or 1/16. On a grid every step lasts that long at the bank's tempo
+  (`, .` change it), whatever the slice's length: a longer slice is cut off, a shorter one leaves
+  silence, so a bounce can be dropped into a pattern at the tempo. Off, the slices play one after
+  the other at their own length.
 - **Play** with Space. The next round is rendered while the one before sounds and takes over
   without a gap; edits are heard from the next round on, and the playhead follows on the waveform.
 - **Bounce:** `b` asks for a pad and renders what the slicer plays, for as many rounds as `n`
