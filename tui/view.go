@@ -1133,7 +1133,22 @@ func (m Model) patternSlotDetail(g geom) string {
 		lines = append(lines, "", st.dim.Render("Enter edits the steps  ·  P or Space plays it in a loop"), st.dim.Render("d delete  v mark  c copy  x move  p put"))
 	}
 	body := strings.Join(lines, "\n")
-	return m.box("Pattern "+cur.Slot.String(), body, g.detailW, max(g.detailH, 5, strings.Count(body, "\n")+3), false)
+	return m.box("Pattern "+cur.Slot.String(), body, g.detailW, max(g.detailH, 5, strings.Count(body, "\n")+3, m.patternPanelRoom(g)), false)
+}
+
+// patternPanelRoom is the height the pattern panel keeps for the most a pattern can have: the 16
+// pads of a bank as tracks, under their heading and over the keys. The panel stays that tall when
+// the screen has the room (what is below it, the history, keeps a few lines), so it does not
+// change size from one pattern to the next; on a low screen it is as tall as its pattern needs.
+func (m Model) patternPanelRoom(g geom) int {
+	const full = 2 + 4 + 1 + proto.PadsPerBank + 3 // frame, heading, a playhead line, tracks, keys
+	room := g.bodyH - g.top
+	if g.side {
+		room -= 5 // the history under it
+	} else {
+		room -= g.gridH + 1
+	}
+	return min(full, room)
 }
 
 // patternDetail is an opened pattern: its step grid, one row per pad it plays.

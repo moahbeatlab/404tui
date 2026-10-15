@@ -4479,3 +4479,36 @@ func TestVMarksAndUnmarksTheBank(t *testing.T) {
 		t.Errorf("Esc left %d marked", len(s.m().marked))
 	}
 }
+
+func TestPatternPanelKeepsRoomForSixteenTracks(t *testing.T) {
+	for _, size := range [][2]int{{170, 70}, {100, 60}, {170, 34}} {
+		s := open(t)
+		s.send(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		s.press("N", "enter", "tab")
+		s.shows("Pattern A")
+		g := s.m().geom()
+		panel := s.m().patternSlotDetail(g)
+		h := lipgloss.Height(panel)
+		// What the 16 tracks need, and what the screen can give it.
+		full := 2 + 4 + 1 + 16 + 3
+		room := g.bodyH - g.top
+		if g.side {
+			room -= 5
+		} else {
+			room -= g.gridH + 1
+		}
+		want := min(full, room)
+		if h < want {
+			t.Errorf("%dx%d: the pattern panel is %d lines, should keep %d (full %d, room %d)", size[0], size[1], h, want, full, room)
+		}
+		// An empty slot keeps the same height: it does not change from one pattern to the next.
+		s.press("l")
+		if other := lipgloss.Height(s.m().patternSlotDetail(g)); other != h {
+			t.Errorf("%dx%d: %d lines for the next slot, %d for the pattern", size[0], size[1], other, h)
+		}
+		// The whole screen still fits.
+		if got := len(strings.Split(s.model.View(), "\n")); got > size[1] {
+			t.Errorf("%dx%d: the screen is %d lines", size[0], size[1], got)
+		}
+	}
+}
