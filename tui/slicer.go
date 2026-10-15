@@ -2082,19 +2082,20 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 		} else {
 			chance += st.faint.Render(" weight")
 		}
+		// The keys that change a setting stand beside its slider.
+		key := func(k string) string { return st.faint.Render(k) + " " }
 		rollText := "off"
 		if x.Roll > 1 {
-			rollText = fmt.Sprintf("x%d", x.Roll)
-			rollText += "  loudness " + slider(x.RollLoud, formats.RollLoudMax, w) + fmt.Sprintf(" %+d%%", x.RollLoud) +
-				"  pitch " + slider(x.RollPitch, formats.RollPitchMax, w) + fmt.Sprintf(" %+d", x.RollPitch)
+			rollText = fmt.Sprintf("x%d", x.Roll) + st.dim.Render("  loudness ") + key("5 6") + st.accent.Render(slider(x.RollLoud, formats.RollLoudMax, w)+fmt.Sprintf(" %+d%%", x.RollLoud)) +
+				st.dim.Render("  pitch ") + key("7 8") + st.accent.Render(slider(x.RollPitch, formats.RollPitchMax, w)+fmt.Sprintf(" %+d", x.RollPitch))
 		}
-		second := st.dim.Render("chance ") + st.accent.Render(chance) + "   " +
-			st.dim.Render("gain ") + st.accent.Render(track(x.Gain, 0, 400, w)+fmt.Sprintf(" %d%%", x.Gain)) + "   " +
-			st.dim.Render("pitch ") + st.accent.Render(slider(x.Pitch, 24, w)+fmt.Sprintf(" %+d", x.Pitch))
-		envLine := st.dim.Render("attack ") + st.accent.Render(track(indexOf(formats.EnvSteps, x.Attack), 0, len(formats.EnvSteps)-1, w)+fmt.Sprintf(" %d ms", x.Attack)) + "   " +
-			st.dim.Render("release ") + st.accent.Render(track(indexOf(formats.EnvSteps, x.Release), 0, len(formats.EnvSteps)-1, w)+fmt.Sprintf(" %d ms", x.Release)) + "   " +
-			st.dim.Render("play ") + st.accent.Render(dir) + "   " +
-			st.dim.Render("roll ") + st.accent.Render(rollText)
+		second := st.dim.Render("chance ") + key("( )") + st.accent.Render(chance) + "   " +
+			st.dim.Render("gain ") + key("- +") + st.accent.Render(track(x.Gain, 0, 400, w)+fmt.Sprintf(" %d%%", x.Gain)) + "   " +
+			st.dim.Render("pitch ") + key("< >") + st.accent.Render(slider(x.Pitch, 24, w)+fmt.Sprintf(" %+d", x.Pitch))
+		envLine := st.dim.Render("attack ") + key("1 2") + st.accent.Render(track(indexOf(formats.EnvSteps, x.Attack), 0, len(formats.EnvSteps)-1, w)+fmt.Sprintf(" %d ms", x.Attack)) + "   " +
+			st.dim.Render("release ") + key("3 4") + st.accent.Render(track(indexOf(formats.EnvSteps, x.Release), 0, len(formats.EnvSteps)-1, w)+fmt.Sprintf(" %d ms", x.Release)) + "   " +
+			st.dim.Render("play ") + key("r") + st.accent.Render(dir) + "   " +
+			st.dim.Render("roll ") + key("x") + st.accent.Render("") + rollText
 		extra = []string{second, envLine}
 	}
 	second := st.dim.Render("chance ") + st.accent.Render(chance) + "   " +
@@ -2121,8 +2122,8 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 		human = fmt.Sprintf("humanize %d%%", s.sl.Humanize)
 	}
 	if rich {
-		swing = "swing " + track(indexOf(formats.Swings, s.sl.Swing), 0, len(formats.Swings)-1, 7) + fmt.Sprintf(" %d%%", max(s.sl.Swing, 50))
-		human = "humanize " + track(indexOf(formats.Humanizes, s.sl.Humanize), 0, len(formats.Humanizes)-1, 7) + fmt.Sprintf(" %d%%", s.sl.Humanize)
+		swing = "swing w " + track(indexOf(formats.Swings, s.sl.Swing), 0, len(formats.Swings)-1, 7) + fmt.Sprintf(" %d%%", max(s.sl.Swing, 50))
+		human = "humanize W " + track(indexOf(formats.Humanizes, s.sl.Humanize), 0, len(formats.Humanizes)-1, 7) + fmt.Sprintf(" %d%%", s.sl.Humanize)
 	}
 	third := st.faint.Render(fmt.Sprintf("a nudge moves "+step+", %.2f ms", dot)) + st.dim.Render(fmt.Sprintf("  ·  snap %s  ·  %s  ·  %s  ·  %s", onOff(s.snap), grid, swing, human))
 	take := plural(s.takes, "take") + " of " + plural(s.rounds, "round")
