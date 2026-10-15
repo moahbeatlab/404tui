@@ -109,6 +109,7 @@ var commands = []command{
 	{"shift+tab", "Fold every folder in the list", []int{secFiles}},
 	{"f", "Find a folder by name, in every indexed folder and the open ones; it is opened for you (h or Tab collapses it)", []int{secFiles}},
 	{"ctrl+a", "Autoplay: files play as the cursor rests on them", []int{secFiles}},
+	{"w", "Files: switch between three columns (h goes up a folder, l goes into one, j k move along it) and the folder tree", []int{secFiles}},
 	{"}", "Jump to the next folder in the list (Alt-n too)", []int{secFiles}},
 	{"{", "Jump to the previous folder in the list (Alt-p too)", []int{secFiles}},
 	{"1", "Go to Pads", nil},
@@ -2023,6 +2024,21 @@ func (m Model) filesKey(name string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	node := rows[at]
+	if name == "w" {
+		m.ranger = !m.ranger
+		m.message = map[bool]string{true: "files: three columns", false: "files: folder tree"}[m.ranger]
+		return m, m.wanted()
+	}
+	if m.ranger {
+		if next, cmd, ok := m.rangerKey(name); ok {
+			m = next
+			if cmd != nil {
+				return m, cmd
+			}
+			m.rangerTidy()
+			return m.filesTail(before)
+		}
+	}
 	switch name {
 	case "j", "down":
 		m.fileAt = clamp(at+1, 0, len(rows)-1)
@@ -2113,8 +2129,13 @@ func (m Model) filesKey(name string) (tea.Model, tea.Cmd) {
 		}
 		return m.listen(node.Path)
 	}
+	return m.filesTail(before)
+}
+
+// filesTail is what follows a key in the files: what the row under the cursor needs is read,
+// and moving on to another row plays it, if autoplay is on, and stops the old sound at once.
+func (m Model) filesTail(before int) (tea.Model, tea.Cmd) {
 	cmd := m.wanted()
-	// Moving on to another row plays it, if autoplay is on, and stops the old sound at once.
 	if m.fileAt != before {
 		cmd = tea.Batch(cmd, m.scheduleAutoplay())
 	}

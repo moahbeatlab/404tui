@@ -112,7 +112,7 @@ func (m Model) View() string {
 	default:
 		main = m.withRail(g, fit(m.body(g), g.bodyH))
 	}
-	parts := []string{m.header(), m.rule(), fit(main, g.bodyH)}
+	parts := []string{m.header(), m.tabBar(), fit(main, g.bodyH)}
 	if m.tagJob.active() {
 		parts = append(parts, m.indexBar())
 	}
@@ -156,6 +156,56 @@ func (m Model) withRail(g geom, body string) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, rail, rule, "  ", body)
 }
 
+// tabSpans are the columns each tab of the tab bar covers, left to right, as start and end
+// (end not in).
+func tabSpans() [][2]int {
+	spans := make([][2]int, len(railSections))
+	x := 2
+	for i, s := range railSections {
+		w := len(fmt.Sprintf(" %d %s ", i+1, sectionNames[s]))
+		spans[i] = [2]int{x, x + w}
+		x += w + 1
+	}
+	return spans
+}
+
+// tabAt is the section of the tab at column x of the tab bar.
+func (m Model) tabAt(x int) (int, bool) {
+	if m.unit == nil || m.snap == nil {
+		return 0, false
+	}
+	for i, span := range tabSpans() {
+		if x >= span[0] && x < span[1] {
+			return railSections[i], true
+		}
+	}
+	return 0, false
+}
+
+// tabBar is the line under the header: a tab for each section, the one in front lit, and a
+// rule across the rest of the width. Before there is a unit to show, it is only the rule.
+func (m Model) tabBar() string {
+	if m.unit == nil || m.snap == nil {
+		return m.rule()
+	}
+	st := m.st
+	var b strings.Builder
+	b.WriteString(st.faint.Render("──"))
+	for i, s := range railSections {
+		text := fmt.Sprintf(" %d %s ", i+1, sectionNames[s])
+		if s == m.section || s == secPads && m.section == secPatterns {
+			b.WriteString(lipgloss.NewStyle().Background(st.th.accent).Foreground(st.th.cursorFg).Bold(true).Render(text))
+		} else {
+			b.WriteString(st.dim.Render(text))
+		}
+		b.WriteString(st.faint.Render("─"))
+	}
+	if rest := m.width - ansi.StringWidth(b.String()); rest > 0 {
+		b.WriteString(st.faint.Render(strings.Repeat("─", rest)))
+	}
+	return b.String()
+}
+
 // rule is the line under the header.
 func (m Model) rule() string {
 	return m.st.faint.Render(strings.Repeat("─", m.width))
@@ -180,9 +230,6 @@ func (m Model) railView(g geom) string {
 	for i, it := range items {
 		text, active, base := "", false, st.text
 		switch it.kind {
-		case railSection:
-			text = fmt.Sprintf(" %d %s", slices.Index(railSections, it.index)+1, sectionNames[it.index])
-			active = it.index == m.section || it.index == secPads && m.section == secPatterns
 		case railBank:
 			n := counts[it.index]
 			left, right := fmt.Sprintf(" %c", 'A'+it.index), countLabel(n)+" "
@@ -334,7 +381,7 @@ func (m Model) statusBar() string {
 			chips = []string{chip("Enter", "assign"), chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("p", "paste"), chip("u", "unmark"), chip("Esc", "clear")}
 			break
 		}
-		chips = []string{chip("Enter", "assign"), chip("v", "mark"), chip("*", "favourite"), chip("/", "search"), chip("s", "tags"), chip("f", "folder"), chip("i", "index"), chip("Space", "listen")}
+		chips = []string{chip("Enter", "assign"), chip("v", "mark"), chip("*", "favourite"), chip("/", "search"), chip("s", "tags"), chip("f", "folder"), chip("i", "index"), chip("w", "view"), chip("Space", "listen")}
 	case secProjects:
 		chips = []string{chip("Enter", "select"), chip("n", "rename"), chip("e", "export"), chip("R", "restore"), chip("X", "erase")}
 	}
@@ -1341,6 +1388,9 @@ func (m Model) filesBody(g geom) string {
 	title := rootName(m.root)
 	if n := len(m.fileMarks); n > 0 {
 		title += fmt.Sprintf("  ·  %d marked", n)
+	}
+	if m.ranger {
+		return m.rangerBody(g)
 	}
 	detailW := g.bodyW - g.listW - 1
 	list := m.box(title, m.treeLines(g.bodyH-2), g.listW, g.bodyH, true)

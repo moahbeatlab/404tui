@@ -120,7 +120,10 @@ func connectTo(t *testing.T, s *sim.Sim, store *memStore) *screen {
 	d := device.New(s, "sim")
 	t.Cleanup(func() { d.Close() })
 	player := &fakePlayer{}
-	sc := &screen{t: t, model: New(d, player, store), sim: s, player: player, dev: d, store: store}
+	// Most tests are about the folder tree; the three-column view has tests of its own.
+	mdl := New(d, player, store)
+	mdl.ranger = false
+	sc := &screen{t: t, model: mdl, sim: s, player: player, dev: d, store: store}
 	sc.run(sc.model.Init())
 	return sc
 }
@@ -796,10 +799,10 @@ func (s *screen) railRow(kind railKind, index int) int {
 func TestMouse(t *testing.T) {
 	s := open(t)
 	g := s.m().geom()
-	// Sections, on the rail.
-	s.click(3, s.railRow(railSection, secFiles))
+	// Sections, on the tab bar.
+	s.click(tabSpans()[1][0]+1, rowRule)
 	s.shows("▸ IMPORT/")
-	s.click(3, s.railRow(railSection, secPads))
+	s.click(tabSpans()[0][0]+1, rowRule)
 	s.shows("kick")
 	// Banks, on the rail.
 	s.click(3, s.railRow(railBank, 2))
@@ -4973,4 +4976,68 @@ func TestWFindsTheFolderEachBankWasFilledFrom(t *testing.T) {
 	}
 	s.press("2")
 	s.shows("◆▾ IMPORT/")
+}
+
+func TestRangerColumnsFollowTheCursorAndOpenFoldersOnlyToLookInside(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("2", "w")
+	s.shows("files: three columns")
+	// The cursor is on IMPORT: its inside is read at once and shown in the third column.
+	s.shows("IMPORT/", "kick.wav", "pack/")
+	rows := func() []string {
+		var out []string
+		for _, n := range s.m().tree.Rows() {
+			out = append(out, n.Path)
+		}
+		return out
+	}
+	// l goes in: the column of the folder in front now lists what was only a preview.
+	s.press("l")
+	if at := s.m().tree.Rows()[s.m().fileAt].Path; at != "SD:IMPORT/pack" {
+		t.Fatalf("after l the cursor is on %s (%v)", at, rows())
+	}
+	s.shows("snare.wav", "notes.txt")
+	// j moves along the folder in front, not into what is open below it.
+	s.press("j")
+	if at := s.m().tree.Rows()[s.m().fileAt].Path; at != "SD:IMPORT/kick.wav" {
+		t.Fatalf("after j the cursor is on %s", at)
+	}
+	s.press("k", "h")
+	if at := s.m().tree.Rows()[s.m().fileAt].Path; at != "SD:IMPORT" {
+		t.Fatalf("after h the cursor is on %s", at)
+	}
+	// pack was only looked into: it closes when the cursor goes by. IMPORT was entered, so it stays.
+	for _, r := range rows() {
+		if strings.HasPrefix(r, "SD:IMPORT/pack/") {
+			t.Fatalf("pack stayed open: %v", rows())
+		}
+	}
+	s.press("w")
+	s.shows("files: folder tree")
+	s.shows("▾ IMPORT/")
+}
+
+func TestRangerIsTheFilesViewByDefaultAndSurvivesEmptyAndUnreadFolders(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	m.ranger = true
+	s.model = m
+	s.send(tea.WindowSizeMsg{Width: 120, Height: 30})
+	// Before the folder is read, and once it is, the view draws.
+	s.press("2")
+	s.shows("kick.wav")
+	// Every source draws, read or not.
+	s.press("t", "t", "t")
+	s.shows("SD card")
+}
+
+func TestTheTabBarNamesTheSectionsAndTheRailKeepsOnlyBanksAndSources(t *testing.T) {
+	s := open(t)
+	s.shows("1 Pads", "2 Files", "3 Projects")
+	if first := s.m().rail(10)[0]; first.kind != railLabel {
+		t.Errorf("the rail starts with %+v, not with a label", first)
+	}
+	s.click(tabSpans()[2][0]+1, rowRule)
+	s.shows("PROJECT_02")
 }

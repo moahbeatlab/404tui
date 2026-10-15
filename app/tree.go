@@ -213,3 +213,34 @@ func LoadTree(f Storage, root string, expanded []string) (*Tree, error) {
 	}
 	return tree, nil
 }
+
+// Siblings are the rows of the folder level row i is on: every row with the same parent and
+// the same depth, top to bottom, leaving out what is inside the folders that are open.
+func (t *Tree) Siblings(i int) []int {
+	if i < 0 || i >= len(t.nodes) {
+		return nil
+	}
+	depth := t.nodes[i].Depth
+	start := t.Parent(i) + 1
+	var out []int
+	for j := start; j < len(t.nodes) && t.nodes[j].Depth >= depth; j++ {
+		if t.nodes[j].Depth == depth {
+			out = append(out, j)
+		}
+	}
+	return out
+}
+
+// Children are the rows directly inside the open folder at row i.
+func (t *Tree) Children(i int) []int {
+	if i < 0 || i >= len(t.nodes) || !t.nodes[i].Expanded {
+		return nil
+	}
+	var out []int
+	for j := i + 1; j < len(t.nodes) && t.nodes[j].Depth > t.nodes[i].Depth; j++ {
+		if t.nodes[j].Depth == t.nodes[i].Depth+1 {
+			out = append(out, j)
+		}
+	}
+	return out
+}

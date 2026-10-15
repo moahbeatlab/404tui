@@ -380,6 +380,12 @@ type Model struct {
 	// folderUses are the notes of which folders were restored onto which banks.
 	folderUses     *app.FolderUses
 	folderUsesBusy bool
+	// ranger is the three-column view of the files; autoOpen are the folders opened only to be
+	// previewed, previewBusy a preview being read and previewSkip the folders that could not be.
+	ranger         bool
+	autoOpen       map[string]bool
+	dirPreviewBusy bool
+	previewSkip    map[string]bool
 	originsBusy    bool
 	infos          map[string]fileInfo
 	infoBusy       bool
@@ -451,34 +457,37 @@ func New(unit app.Unit, player app.Player, store Store) Model {
 		routed = app.NewRouted(unit)
 	}
 	m := Model{
-		unit:       routed,
-		player:     player,
-		ops:        &sync.Mutex{},
-		prog:       &progress{},
-		st:         newStyles(themes[0]),
-		width:      100,
-		height:     30,
-		busy:       "reading the unit",
-		marked:     map[int]bool{},
-		patterns:   map[int][]app.PatternRow{},
-		patMarks:   map[int]bool{},
-		patConfirm: -1,
-		searchJobs: map[string]*tagJob{},
-		patPreview: map[proto.PadIndex]*app.PatternDetail{},
-		muted:      map[proto.PadIndex]bool{},
-		soloed:     map[proto.PadIndex]bool{},
-		root:       app.CardRoot,
-		fileMarks:  map[string]bool{},
-		facts:      map[factKey]padFacts{},
-		infos:      map[string]fileInfo{},
-		indexes:    map[string]*app.Index{},
-		listenGen:  new(atomic.Int64),
-		padAudio:   &padCache{samples: map[factKey]formats.Sample{}},
-		store:      store,
-		slices:     newSliceStore(store),
-		conds:      newCondStore(store),
-		saved:      new([]byte),
-		log:        slog.New(slog.DiscardHandler),
+		unit:        routed,
+		player:      player,
+		ops:         &sync.Mutex{},
+		prog:        &progress{},
+		st:          newStyles(themes[0]),
+		width:       100,
+		height:      30,
+		busy:        "reading the unit",
+		marked:      map[int]bool{},
+		patterns:    map[int][]app.PatternRow{},
+		patMarks:    map[int]bool{},
+		patConfirm:  -1,
+		searchJobs:  map[string]*tagJob{},
+		patPreview:  map[proto.PadIndex]*app.PatternDetail{},
+		muted:       map[proto.PadIndex]bool{},
+		soloed:      map[proto.PadIndex]bool{},
+		root:        app.CardRoot,
+		fileMarks:   map[string]bool{},
+		ranger:      true,
+		autoOpen:    map[string]bool{},
+		previewSkip: map[string]bool{},
+		facts:       map[factKey]padFacts{},
+		infos:       map[string]fileInfo{},
+		indexes:     map[string]*app.Index{},
+		listenGen:   new(atomic.Int64),
+		padAudio:    &padCache{samples: map[factKey]formats.Sample{}},
+		store:       store,
+		slices:      newSliceStore(store),
+		conds:       newCondStore(store),
+		saved:       new([]byte),
+		log:         slog.New(slog.DiscardHandler),
 	}
 	if store != nil {
 		m.mem = store.Load()
@@ -647,6 +656,8 @@ type (
 		row     int
 		entries []fileapi.DirEntry
 		err     error
+		// preview: opened to look into; into: the cursor goes in once it is open.
+		preview, into bool
 	}
 	// treeMsg carries the tree listed again after a change to the files.
 	treeMsg struct {
@@ -1232,9 +1243,14 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.usage, m.usageState = nil, 0
 		}
 	case dirMsg:
-		m.busy = ""
+		if msg.preview {
+			m.dirPreviewBusy = false
+		} else {
+			m.busy = ""
+		}
 		switch {
 		case msg.err != nil:
+			m.previewSkip[msg.path] = true
 			m.message = fmt.Sprintf("listing %s failed: %v", display(msg.path), msg.err)
 		// The answer to a question about a volume the tree has since left.
 		case msg.root != m.root:
@@ -1243,7 +1259,26 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.fileAt = 0
 			return m, m.wanted()
 		case m.tree != nil && msg.row < len(m.tree.Rows()) && m.tree.Rows()[msg.row].Path == msg.path:
+			cursor := ""
+			if rows := m.tree.Rows(); m.fileAt < len(rows) {
+				cursor = rows[m.fileAt].Path
+			}
 			m.tree.Expand(msg.row, msg.entries)
+			if msg.preview {
+				m.autoOpen[msg.path] = true
+			}
+			// What opened above the cursor moved it down.
+			if i := m.tree.Index(cursor); cursor != "" && i >= 0 {
+				m.fileAt = i
+			}
+			if msg.into {
+				if kids := m.tree.Children(msg.row); len(kids) > 0 {
+					m.fileAt = kids[0]
+				} else {
+					m.message = msg.path[strings.LastIndexByte(msg.path, '/')+1:] + " is empty"
+				}
+			}
+			return m, m.wanted()
 		}
 	case treeMsg:
 		m.busy = ""
@@ -1503,6 +1538,9 @@ func (m *Model) wanted() tea.Cmd {
 		if m.tree == nil {
 			m.busy = "listing files"
 			return m.loadFilesTree()
+		}
+		if cmd := m.rangerPreview(); cmd != nil {
+			return cmd
 		}
 		if m.folderUses == nil && !m.folderUsesBusy {
 			m.folderUsesBusy = true

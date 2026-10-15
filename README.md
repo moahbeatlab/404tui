@@ -21,9 +21,9 @@ checks sequencing and data handling, not the unit's actual behaviour.
     go run ./cmd/sp404 -sim            # the terminal UI against the simulated device
     go run ./cmd/sp404 -version        # print the version (0.1-alpha)
 
-The header says `404tui by moahbeatlab` with the version at the top right. A rail down the
-left lists the three sections, **Pads** (`1`), **Files** (`2`) and **Projects** (`3`), and
-under them the banks or file sources of the section you are in. Dialogs open over the
+The header says `404tui by moahbeatlab` with the version at the top right. Under it, tabs
+name the three sections, **Pads** (`1`), **Files** (`2`) and **Projects** (`3`; click one or press
+its number), and a rail down the left lists the banks or file sources of the section you are in. Dialogs open over the
 screen. A History panel on the right keeps what happened, with times.
 
 ### Connecting
@@ -252,6 +252,11 @@ pattern, from the grid or from an expanded track, back to the patterns under the
   Windows leave on a card. On the marked files: `d` deletes (SD card only, after a question),
   `c` copies and `x` cuts, `p` pastes (also into another source), `n` renames and `N` makes
   a folder. `Ctrl-D`/`Ctrl-U` page, `}`/`{` jump between folders, `Shift-Tab` folds all.
+- **Three columns:** the Files view shows the folder above, the folder in front and a preview
+  (the inside of a folder, the details of a file), as the ranger file manager does. `j k` move
+  along the folder in front, `h` goes up a folder, `l` or Enter goes into one. A folder is read
+  as soon as the cursor is on it, to be shown in the preview, and closed again when the cursor
+  moves on. `w` switches to the folder tree and back.
 - **Tags:** `i` indexes the folder in front in the background: words from file and folder
   names become tags, saved on the card in `SD:404tui-index.json.gz`, so the index is built
   once and kept up to date, not rebuilt at every start. `*` favourites the marked files or

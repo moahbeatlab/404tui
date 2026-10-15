@@ -84,7 +84,7 @@ func (m Model) geom() geom {
 	return g
 }
 
-// railSections are the sections the rail lists, in order. The patterns are not one of them:
+// railSections are the sections the tabs list, in order. The patterns are not one of them:
 // they are the panel under the pads, reached with Tab.
 var railSections = []int{secPads, secFiles, secProjects}
 
@@ -93,7 +93,6 @@ type railKind int
 
 const (
 	railNone railKind = iota
-	railSection
 	railBank
 	railRoot
 	railLabel
@@ -105,14 +104,11 @@ type railItem struct {
 	index int
 }
 
-// rail lists what each row of the rail stands for, from the top of the body: the four
-// sections, then the banks or file sources of the section in front. The view draws it and
+// rail lists what each row of the rail stands for, from the top of the body: the banks or
+// file sources of the section in front. The sections are the tabs above (see tabBar). The view draws it and
 // the mouse reads it.
 func (m Model) rail(height int) []railItem {
 	items := make([]railItem, 0, height)
-	for _, s := range railSections {
-		items = append(items, railItem{railSection, s})
-	}
 	banks := func() []railItem {
 		var out []railItem
 		for b := 0; b < proto.Banks; b++ {
@@ -122,7 +118,10 @@ func (m Model) rail(height int) []railItem {
 	}
 	// add appends a labelled group, windowed to the room that is left.
 	add := func(label int, group []railItem, current int, reserve int) {
-		items = append(items, railItem{railNone, 0}, railItem{railLabel, label})
+		if len(items) > 0 {
+			items = append(items, railItem{railNone, 0})
+		}
+		items = append(items, railItem{railLabel, label})
 		room := max(height-len(items)-reserve, 1)
 		from, to := window(len(group), current, room)
 		items = append(items, group[from:to]...)
@@ -185,6 +184,11 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m.wheel(wheel)
 	}
 	switch {
+	case msg.Y == rowRule:
+		if section, ok := m.tabAt(msg.X); ok {
+			return m.goTo(section)
+		}
+		return m, nil
 	case msg.X < g.railW && msg.Y >= rowBody:
 		return m.clickRail(msg.Y-rowBody, g)
 	case msg.X >= g.bodyX && msg.Y >= rowBody:
@@ -201,8 +205,6 @@ func (m Model) clickRail(row int, g geom) (tea.Model, tea.Cmd) {
 	}
 	item := items[row]
 	switch item.kind {
-	case railSection:
-		return m.goTo(item.index)
 	case railBank:
 		return m.clickBank(item.index)
 	case railRoot:

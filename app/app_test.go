@@ -163,3 +163,29 @@ func TestMoveAndRenameOnTheCard(t *testing.T) {
 		t.Error("moving a file onto itself succeeded")
 	}
 }
+
+func TestTreeSiblingsAndChildren(t *testing.T) {
+	dir, file := fileapi.DtDir, fileapi.DtReg
+	tree := app.NewTree(app.CardRoot, []fileapi.DirEntry{{Name: "readme.txt", Kind: file}, {Name: "IMPORT", Kind: dir}, {Name: "EXPORT", Kind: dir}})
+	tree.Expand(1, []fileapi.DirEntry{{Name: "kick.wav", Kind: file}, {Name: "pack", Kind: dir}})
+	tree.Expand(2, []fileapi.DirEntry{{Name: "snare.wav", Kind: file}})
+	// Rows: EXPORT, IMPORT, pack, snare.wav, kick.wav, readme.txt.
+	if got := tree.Siblings(4); !slices.Equal(got, []int{2, 4}) {
+		t.Errorf("siblings of kick.wav = %v", got)
+	}
+	if got := tree.Siblings(0); !slices.Equal(got, []int{0, 1, 5}) {
+		t.Errorf("siblings of EXPORT = %v (what is inside IMPORT is not one)", got)
+	}
+	if got := tree.Siblings(3); !slices.Equal(got, []int{3}) {
+		t.Errorf("siblings of snare.wav = %v", got)
+	}
+	if got := tree.Children(1); !slices.Equal(got, []int{2, 4}) {
+		t.Errorf("children of IMPORT = %v", got)
+	}
+	if got := tree.Children(0); got != nil {
+		t.Errorf("children of a closed folder = %v", got)
+	}
+	if tree.Siblings(-1) != nil || tree.Siblings(9) != nil {
+		t.Error("no such row, no siblings")
+	}
+}
