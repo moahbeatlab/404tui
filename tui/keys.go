@@ -3386,6 +3386,18 @@ func (m Model) cycleExplain() []string {
 	loops, bars, seconds := app.CycleOf(d.Length, d.Beats, d.BankTempo, live, condRolls)
 	out := []string{fmt.Sprintf("the pattern is %s long; with these conditions it only repeats exactly after %s, so B bounces %s (%.1f s) to a pad",
 		plural(max(bars/max(loops, 1), 1), "bar"), plural(loops, "loop"), plural(bars, "bar"), seconds)}
+	// Several spans only meet again after their least common multiple: say why the bounce is long.
+	if spans := live.Spans(); len(spans) > 1 && live.CycleLoops() > spans[len(spans)-1] {
+		var words []string
+		for _, n := range spans {
+			words = append(words, fmt.Sprint(n))
+		}
+		out = append(out, fmt.Sprintf("conditions over %s loops only meet again after %s: that is why it is long. With the same span (all x:2, or 2 and 4) the cycle is just the longest one",
+			strings.Join(words, " and "), plural(live.CycleLoops(), "loop")))
+	}
+	if seconds > 20 {
+		out = append(out, fmt.Sprintf("%.0f s is long for a pad: fewer different spans make it shorter, and chances alone are 4 loops", seconds))
+	}
 	if _, keys, ok := m.condKeysAt(); ok {
 		out = append([]string{"the note here plays " + m.patConds[keys[0]].Explain()}, out...)
 	}

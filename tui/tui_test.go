@@ -4874,3 +4874,14 @@ func TestANoteUnderALongerOneIsDrawnAsANote(t *testing.T) {
 		t.Errorf("step 4 is the long note going on: start %v, cover %d", start[3], cover[3])
 	}
 }
+
+func TestMixedSpansSayWhyTheBounceIsLong(t *testing.T) {
+	s := openConditionPattern(t)
+	// One note on 1:2, another on 1:3 (c steps through always, 1:2, 2:2, 1:3 ...).
+	s.press("c")
+	s.shows("only on loop 1 of every 2 loops")
+	s.hides("meet again")
+	s.press("l", "l", "x")
+	s.press("c", "c", "c")
+	s.shows("meet again after 6 loops", "2 and 3")
+}

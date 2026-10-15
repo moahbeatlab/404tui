@@ -140,6 +140,19 @@ func (cs Conditions) CycleLoops() int {
 	return loops
 }
 
+// Spans are the different numbers of loops the conditions count over (the B of A:B), smallest
+// first: 2 and 3 for a note on 1:2 and another on 2:3.
+func (cs Conditions) Spans() []int {
+	var out []int
+	for _, c := range cs {
+		if c.B > 1 && !slices.Contains(out, c.B) {
+			out = append(out, c.B)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // Chancy says whether any condition has a chance in it, so that the cycle is one roll of many.
 func (cs Conditions) Chancy() bool {
 	for _, c := range cs {
