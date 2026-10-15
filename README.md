@@ -214,12 +214,13 @@ pattern, from the grid or from an expanded track, back to the patterns under the
   is left out and, with some tracks soloed (`s`), only those are in it. To print one track,
   solo it. You stay in the pattern, to mute others and bounce again. The unit's envelope,
   effects and time stretch are not in it, as when it plays here.
-- **Select notes** (`V` in an open pattern): chooses notes of one track to change together. `h l`
-  stretch the selection over the steps between where it started and the cursor, `a` takes every
-  note of the track. Then `, .` and `< >` change their velocity, `+ -` their length, `H L ( )`
-  nudge them, `0` puts them back on the grid, `c C` gives them a condition and `x` takes them
-  out; the selection follows the notes. `Esc` leaves it. To make a variant of some notes (another
-  pitch, say), select them, bounce the track to a new pad and point the notes at it.
+- **Select notes** (`V` in an open pattern): chooses notes of one track to change together.
+  `h l` move over the track, `x` (or `Enter`) chooses the note under the cursor or lets it go again, and
+  `a` takes every note of the track. Then `, .` and `< >` change their velocity, `+ -` their
+  length, `H L ( )` nudge them, `0` puts them back on the grid, `c C` gives them a condition and
+  `d` takes them out; the selection follows the notes. `Esc` leaves it. To make a variant of
+  some notes (another pitch, say), select them, bounce the track to a new pad and point the
+  notes at it.
 - **Conditions** (`c` forward, `C` back, on the note under the cursor): when a note plays over the
   loops of the pattern, as the trig conditions of other sequencers do: every loop, `1:2` (the
   first of every 2 loops), `2:2`, `1:3` … `3:3`, `1:4` … `4:4`, `1:8` … `8:8`, then chances (90,

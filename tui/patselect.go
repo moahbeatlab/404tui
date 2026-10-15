@@ -12,12 +12,10 @@ import (
 	"github.com/moahbeatlab/404tui/proto"
 )
 
-// noteSelection is the notes of one track chosen to be changed together: V starts it at the
-// cursor, h and l stretch it over the steps between where it started and the cursor, and a takes
-// every note of the track.
+// noteSelection is the notes of one track chosen to be changed together: V opens it, h and l
+// move the cursor over the track, and Enter chooses the note under it or lets it go again.
 type noteSelection struct {
-	pad    proto.PadIndex
-	anchor int
+	pad proto.PadIndex
 	// ticks are where the chosen notes start.
 	ticks map[uint32]bool
 }
@@ -33,19 +31,25 @@ func noteCol(d *app.PatternDetail, tick uint32) int {
 	return min(int(uint64(tick)*uint64(d.Grid.Steps)/uint64(d.Length)), d.Grid.Steps-1)
 }
 
-// selectRange chooses the notes of the selection's track that start in the steps from the
-// anchor to the cursor.
-func (m Model) selectRange() {
+// toggleChosen chooses the notes that start in the step under the cursor, or lets them go.
+func (m Model) toggleChosen() (tea.Model, tea.Cmd) {
 	s, d := m.patSel, m.pattern
-	lo, hi := min(s.anchor, m.patCol), max(s.anchor, m.patCol)
-	s.ticks = map[uint32]bool{}
-	for _, n := range d.Notes {
-		if n.Pad == s.pad {
-			if c := noteCol(d, n.Tick); c >= lo && c <= hi {
-				s.ticks[n.Tick] = true
-			}
+	notes := d.CellNotes(s.pad, m.patCol)
+	if len(notes) == 0 {
+		m.message = "no note starts here: h l go to one, x chooses it"
+		return m, nil
+	}
+	if s.ticks[notes[0].Tick] {
+		for _, n := range notes {
+			delete(s.ticks, n.Tick)
+		}
+	} else {
+		for _, n := range notes {
+			s.ticks[n.Tick] = true
 		}
 	}
+	m.message = fmt.Sprintf("%s of %s chosen", plural(len(m.chosenNotes()), "note"), s.pad)
+	return m, nil
 }
 
 // selectedCols are the steps of a track where a chosen note starts, for drawing them.
@@ -68,9 +72,11 @@ func (m Model) startSelecting() (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	m.patSel = &noteSelection{pad: pad, anchor: m.patCol}
-	m.selectRange()
-	m.message = "select: h l stretch it over the notes of " + pad.String() + ", a takes all of them, then change them together (the keys are listed below); Esc leaves"
+	m.patSel = &noteSelection{pad: pad, ticks: map[uint32]bool{}}
+	for _, n := range m.pattern.CellNotes(pad, m.patCol) {
+		m.patSel.ticks[n.Tick] = true
+	}
+	m.message = "select: h l go to a note, x chooses it or lets it go, then change the chosen ones together"
 	return m, nil
 }
 
@@ -78,11 +84,7 @@ func (m Model) startSelecting() (tea.Model, tea.Cmd) {
 func (m Model) selectionLine() string {
 	s := m.patSel
 	n := len(m.chosenNotes())
-	text := fmt.Sprintf("SELECT  %s of %s", plural(n, "note"), s.pad)
-	if n == 0 {
-		text += "  (h l reach a note, a takes them all)"
-	}
-	return text
+	return fmt.Sprintf("SELECT  %s of %s chosen", plural(n, "note"), s.pad)
 }
 
 // chosenNotes are the notes of the open pattern that are chosen.
@@ -99,11 +101,11 @@ func (m Model) chosenNotes() []formats.NoteRecord {
 // selectionHelp are the keys of the selection, in place of the pattern's own while it is open.
 func (m Model) selectionHelp() []helpGroup {
 	return []helpGroup{
-		{"select", []helpKey{{"h l", "stretch"}, {"g G { }", "move on"}, {"a", "all notes of the track"}, {"Esc V", "leave"}}},
+		{"select", []helpKey{{"h l", "move"}, {"x Enter", "choose / let go"}, {"a", "all of the track"}, {"Esc V", "leave"}}},
 		{"velocity", []helpKey{{", .", "by 1"}, {"< >", "by 10"}, {"*", "pad's own level"}}},
 		{"length", []helpKey{{"+ -", "by a step"}}},
 		{"timing", []helpKey{{"H L", "nudge 5 ticks"}, {"( )", "1 tick"}, {"0", "back on the grid"}}},
-		{"notes", []helpKey{{"x d", "take them out"}, {"c C", "condition"}, {"m s", "mute, solo the track"}, {"B", "bounce to a pad"}}},
+		{"notes", []helpKey{{"d", "take them out"}, {"c C", "condition"}, {"m s", "mute, solo the track"}, {"B", "bounce to a pad"}}},
 		{"history", []helpKey{{"u", "undo"}, {"R", "redo"}, {"", m.patHistoryLabel()}}},
 	}
 }
@@ -119,11 +121,12 @@ func (m Model) selectionKey(name string) (tea.Model, tea.Cmd, bool) {
 		m.message = ""
 		return m, nil, true
 	case "h", "left", "l", "right", "g", "G", "{", "[", "}", "]":
-		// The cursor moves (the pattern's own keys), and the selection stretches with it.
+		// The cursor moves with the pattern's own keys; what is chosen stays.
 		next, cmd := m.patternsKeyMove(name)
-		nm := next.(Model)
-		nm.selectRange()
-		return nm, cmd, true
+		return next, cmd, true
+	case "x", "enter":
+		next, cmd := m.toggleChosen()
+		return next, cmd, true
 	case "a":
 		s.ticks = map[uint32]bool{}
 		for _, n := range d.Notes {
@@ -156,7 +159,7 @@ func (m Model) selectionKey(name string) (tea.Model, tea.Cmd, bool) {
 	case "0":
 		next, cmd := m.editSelection(formats.NoteEdit{Snap: uint32(step)}, "back on the grid")
 		return next, cmd, true
-	case "x", "d", "backspace":
+	case "d", "backspace":
 		next, cmd := m.editSelection(formats.NoteEdit{Delete: true}, "taken out")
 		return next, cmd, true
 	case "c", "C":
@@ -174,7 +177,7 @@ func (m Model) selectionKey(name string) (tea.Model, tea.Cmd, bool) {
 func (m Model) editSelection(edit formats.NoteEdit, what string) (tea.Model, tea.Cmd) {
 	s, d := m.patSel, m.pattern
 	if len(m.chosenNotes()) == 0 {
-		m.message = "no note is chosen: h l reach one, a takes them all"
+		m.message = "no note is chosen: h l go to one, x chooses it, a takes them all"
 		return m, nil
 	}
 	ticks, pad := maps.Clone(s.ticks), s.pad
@@ -209,7 +212,7 @@ func (m Model) editSelection(edit formats.NoteEdit, what string) (tea.Model, tea
 func (m Model) changeSelectionCondition(forward bool) (tea.Model, tea.Cmd) {
 	chosen := m.chosenNotes()
 	if len(chosen) == 0 {
-		m.message = "no note is chosen: h l reach one, a takes them all"
+		m.message = "no note is chosen: h l go to one, x chooses it, a takes them all"
 		return m, nil
 	}
 	dir := 1

@@ -4742,7 +4742,15 @@ func TestSelectingNotesOfATrackChangesThemTogether(t *testing.T) {
 	}
 	s.press("V")
 	s.shows("SELECT", "1 note of")
-	s.press("l", "l", "l", "l", "l", "l")
+	// Moving over notes chooses nothing by itself; Enter chooses the note under the cursor, and
+	// lets it go again.
+	s.press("l", "l")
+	s.shows("1 note of")
+	s.press("x")
+	s.shows("2 notes of")
+	s.press("enter")
+	s.shows("1 note of")
+	s.press("x", "l", "l", "x", "l", "l", "enter")
 	s.shows("4 notes of")
 	// j k stay out of it: a selection is of one track.
 	s.press("j")
@@ -4775,7 +4783,7 @@ func TestSelectingNotesOfATrackChangesThemTogether(t *testing.T) {
 		t.Errorf("0 left the first note at %d, want %d", ticks3[0], ticks[0])
 	}
 	// Taking them out ends the selection.
-	s.press("x")
+	s.press("d")
 	if v, _ := velocities(); len(v) != 0 || s.m().patSel != nil {
 		t.Errorf("%d notes left, selection %v", len(v), s.m().patSel)
 	}
@@ -4785,4 +4793,25 @@ func TestSelectingNotesOfATrackChangesThemTogether(t *testing.T) {
 		t.Errorf("Esc left the selection %v, pattern %v", s.m().patSel, s.m().pattern != nil)
 	}
 	_ = ticks
+}
+
+func TestOnlyTheChosenNotesChange(t *testing.T) {
+	s := openConditionPattern(t)
+	pad0 := s.m().pattern.Grid.Rows[0].Pad
+	vel := func() (out []int) {
+		for _, n := range s.m().pattern.Notes {
+			if n.Pad == pad0 {
+				out = append(out, int(n.Velocity))
+			}
+		}
+		return
+	}
+	s.press("l", "l", "x", "l", "l", "x", "g")
+	// Choose the first and the third note, leave the one between.
+	s.press("V", "l", "l", "l", "l", "x")
+	s.press("<")
+	got := vel()
+	if len(got) != 3 || got[0] != 117 || got[1] != 127 || got[2] != 117 {
+		t.Errorf("velocities %v, want 117 127 117", got)
+	}
 }
