@@ -1189,6 +1189,18 @@ func (m Model) patternMix(slot proto.PadIndex) func() (formats.Sample, int, erro
 	return m.patternMixIn(slot, rng)
 }
 
+// onlyHeard is the conditions of the pads that are heard in the mix: those of a muted track, or of
+// a track that is not soloed, change nothing in the sound, so they do not make the cycle longer.
+func onlyHeard(cs app.Conditions, muted, soloed map[proto.PadIndex]bool) app.Conditions {
+	out := app.Conditions{}
+	for k, c := range cs {
+		if heard(k.Pad, muted, soloed) {
+			out[k] = c
+		}
+	}
+	return out
+}
+
 // patternMixIn is patternMix over the bars of rng, the whole pattern when it is nil.
 func (m Model) patternMixIn(slot proto.PadIndex, rng *barRange) func() (formats.Sample, int, error) {
 	bpm := m.snap.Banks[slot.Bank()].Tempo
@@ -1229,7 +1241,7 @@ func (m Model) patternMixIn(slot proto.PadIndex, rng *barRange) func() (formats.
 		}
 		// Conditions make it a cycle of loops, each note on the loops its condition says.
 		loops := 1
-		if live := conds.Pruned(pattern); len(live) > 0 {
+		if live := onlyHeard(conds.Pruned(pattern), muted, soloed); len(live) > 0 {
 			loops = live.Loops(condRolls)
 			pattern = app.Unroll(pattern, live, loops, seed)
 		}
@@ -3363,7 +3375,7 @@ func (m Model) cycleLine() string {
 	if d == nil {
 		return ""
 	}
-	live := m.patConds.PrunedTo(d.Notes)
+	live := onlyHeard(m.patConds.PrunedTo(d.Notes), m.muted, m.soloed)
 	if len(live) == 0 {
 		return ""
 	}
@@ -3379,7 +3391,7 @@ func (m Model) cycleLine() string {
 // how many loops the bounce needs before it repeats, and what the note at the cursor does.
 func (m Model) cycleExplain() []string {
 	d := m.pattern
-	live := m.patConds.PrunedTo(d.Notes)
+	live := onlyHeard(m.patConds.PrunedTo(d.Notes), m.muted, m.soloed)
 	if len(live) == 0 {
 		return nil
 	}

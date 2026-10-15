@@ -4885,3 +4885,17 @@ func TestMixedSpansSayWhyTheBounceIsLong(t *testing.T) {
 	s.press("c", "c", "c")
 	s.shows("meet again after 6 loops", "2 and 3")
 }
+
+func TestOnlyHeardTracksMakeTheCycleLonger(t *testing.T) {
+	s := openConditionPattern(t)
+	s.press("c")                // the first track: 1:2
+	s.press("j", "c", "c", "c") // the second: 1:3
+	if line := s.m().cycleLine(); !strings.Contains(line, "6 loops") {
+		t.Fatalf("both tracks heard: %q", line)
+	}
+	// Muting the second leaves the first's 1:2: the bounce is 2 loops, not 6.
+	s.press("m")
+	if line := s.m().cycleLine(); !strings.Contains(line, "2 loops") {
+		t.Errorf("second track muted: %q", line)
+	}
+}
