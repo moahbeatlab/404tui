@@ -71,6 +71,8 @@ type slicer struct {
 	tap *slicerTap
 	// takes is how many bounces a b makes, each from its own rounds.
 	takes int
+	// bed is the pattern that plays under the slices, chosen with P.
+	bed *patternBed
 	// marks are the slices picked with s for B to put each on a pad; they are numbers of
 	// slices, so they are dropped when the slices are cut or deleted.
 	marks     map[int]bool
@@ -498,6 +500,10 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case ",", ".":
+		if s.bed != nil {
+			m.message = "the tempo follows pattern " + s.bed.slot.String() + "; P takes the pattern away"
+			return m, nil
+		}
 		if s.sl.Division == 0 {
 			m.message = "no grid: T puts the steps on one, then , and . change the tempo"
 			return m, nil
@@ -664,6 +670,8 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("%s marked", plural(len(s.marks), "slice"))
 	case "B":
 		return m.slicerBounceMarked()
+	case "P":
+		return m.slicerNextPattern()
 	case "X":
 		m.slicerChange(func(sl *formats.Slicing) {
 			x := sl.Slices[s.at]
@@ -867,10 +875,23 @@ func (s *slicer) roundSteps() int {
 
 // render makes round i of the sequence as the slicing is now. Each round has its own seed, so
 // the random modes do not play the same stretch twice.
-func (s *slicer) render(i, passes int) *slicerRound {
+func (s *slicer) render(i, passes int) *slicerRound { return s.renderUnder(i, passes, s.bed) }
+
+// renderUnder is render with the pattern to play under the slices, nil for the slices alone.
+func (s *slicer) renderUnder(i, passes int, bed *patternBed) *slicerRound {
 	sl := s.sl.Clone()
 	sl.Seed += int64(i)
-	audio, placed := formats.Render(s.src, sl, formats.NewSequencer(sl), s.roundSteps()*passes)
+	steps := s.roundSteps() * passes
+	if step := sl.StepFrames(); bed != nil && step > 0 && bed.sample.Frames() > 0 {
+		// Under a pattern a round is as long as the pattern, in steps of the grid.
+		steps = max((bed.sample.Frames()+step/2)/step, 1) * passes
+	} else {
+		bed = nil
+	}
+	audio, placed := formats.Render(s.src, sl, formats.NewSequencer(sl), steps)
+	if bed != nil {
+		audio = withBed(audio, bed.sample, passes)
+	}
 	return &slicerRound{sample: audio, placed: placed, dur: framesDuration(audio.Frames())}
 }
 
@@ -1041,7 +1062,8 @@ func (s *slicer) playhead() (frame, slice int) {
 func (s *slicer) takeSample(k int) formats.Sample {
 	out := formats.Sample{Channels: s.src.Channels}
 	for i := 0; i < s.rounds; i++ {
-		part := s.render(k*s.rounds+i, 1)
+		// A bounce is the slices; the pattern is only for playing along.
+		part := s.renderUnder(k*s.rounds+i, 1, nil)
 		out.Samples = append(out.Samples, part.sample.Samples...)
 	}
 	return out
@@ -1541,7 +1563,7 @@ func (s *slicer) slicerHelp() []helpGroup {
 	return append(groups,
 		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x", "roll"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"1 2", "attack"}, {"3 4", "release"}, {"X", "plain"}}},
 		helpGroup{"feel", []helpKey{{"T", "grid"}, {", .", "tempo"}, {"w", "swing"}, {"W", "humanize"}}},
-		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"M", "mode"}, {"S", "new seed"}, {"Tab", "order lane"}}},
+		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"P", "pattern"}, {"M", "mode"}, {"S", "new seed"}, {"Tab", "order lane"}}},
 		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"s y", "mark"}, {"B", "marked to pads"}, {"n", "rounds"}, {"v", "takes"}, {"A", "add sample"}, {"Esc", "close"}}},
 	)
 }
@@ -1703,6 +1725,12 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 	third := st.faint.Render(fmt.Sprintf("a nudge moves "+step+", %.2f ms", dot)) + st.dim.Render(fmt.Sprintf("  ·  snap %s  ·  %s  ·  %s  ·  %s", onOff(s.snap), grid, swing, human))
 	take := plural(s.takes, "take") + " of " + plural(s.rounds, "round")
 	fourth := st.dim.Render(fmt.Sprintf("seed %d  ·  a bounce makes %s", s.sl.Seed, take))
+	if s.bed != nil {
+		fourth += st.accent.Render("  ·  with pattern " + s.bed.slot.String())
+		if s.sl.Division == 0 {
+			fourth += st.warn.Render(" (grid off: not heard)")
+		}
+	}
 	if n := len(s.marks); n > 0 {
 		fourth += st.accent.Render("  ·  " + plural(n, "slice") + " marked")
 	}

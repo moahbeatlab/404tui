@@ -135,6 +135,17 @@ you left it. The keys are listed at the bottom of the dialog, in groups.
   Every round of a playing loop uses the next number after the seed, which is why the loop
   differs from round to round; Space starts again at the first round of the seed.
 
+**Playing along with a pattern**
+
+- `P` puts a pattern of the bank under the slices (press again for the next one, and after the
+  last one for none). The pattern is mixed from its pads on this computer, at its bank's tempo,
+  and the slicer takes that tempo (a 1/16 grid if there was none; `, .` are locked meanwhile).
+  Every round is exactly as long as the pattern, with the slice steps on its grid, and the two
+  are added into one sample, so they stay together, and a new order (`M`, `S`, `R`) is heard from
+  the next round on, at the bar line. No unit is needed beyond the files it holds.
+- A bounce (`b`, `B`) is only ever the slices: the pattern is for playing along. The pattern is
+  mixed when `P` is pressed, so changes made to its pads are heard after pressing `P` through the patterns to it again.
+
 **Feel**
 
 - **Grid** (`T`): off, 1/4, 1/8 or 1/16. On a grid every step lasts that long at the bank's tempo

@@ -1070,6 +1070,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.slicerLoaded(msg)
 	case slicerTickMsg:
 		return m.slicerTicked(msg)
+	case slicerBedMsg:
+		return m.slicerBedMixed(msg)
 	case originsMsg:
 		m.originsBusy = false
 		if msg.err == nil && m.origins == nil {

@@ -3,6 +3,7 @@ package tui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/moahbeatlab/404tui/proto"
 	"github.com/muesli/termenv"
 	"math"
 	"strconv"
@@ -883,5 +884,66 @@ func TestSlicerDeletingWhilePlayingDoesNotBreakTheScreen(t *testing.T) {
 	}
 	if got := len(s.slicing().Slices); got != 3 {
 		t.Errorf("%d slices left", got)
+	}
+}
+
+func TestSlicerPlaysUnderAPattern(t *testing.T) {
+	s := slicerOpen(t)
+	a1, a2 := pad(t, "A5"), pad(t, "A2")
+	data, err := formats.StartPattern([]proto.PadIndex{a1}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.sim.SetPattern(a2, a1)
+	s.sim.AddFile(formats.PatternPath(1, a2), data)
+	s.press("P")
+	bed := s.m().slicer.bed
+	if bed == nil {
+		t.Fatalf("P did not put a pattern under the slices: %q", s.m().message)
+	}
+	sl := s.slicing()
+	if sl.BPM != bed.bpm || sl.Division != 16 {
+		t.Errorf("the grid is %g BPM 1/%d, the pattern is %g BPM", sl.BPM, sl.Division, bed.bpm)
+	}
+	// A round is exactly the pattern long, or a whole number of times that, so the two stay together.
+	for _, passes := range []int{1, 2, 4} {
+		round := s.m().slicer.render(0, passes).sample
+		if round.Channels != 2 || round.Frames() != bed.sample.Frames()*passes {
+			t.Errorf("%d passes: %d frames of %d channels, the pattern is %d", passes, round.Frames(), round.Channels, bed.sample.Frames())
+		}
+	}
+	// The pattern is heard in it: without it the round differs.
+	with := s.m().slicer.render(0, 1).sample
+	s.m().slicer.bed = nil
+	without := s.m().slicer.render(0, 1).sample
+	same := with.Frames() == without.Frames()
+	for i := 0; same && i < len(with.Samples) && i < len(without.Samples); i++ {
+		same = with.Samples[i] == without.Samples[i]
+	}
+	if same {
+		t.Error("the round sounds the same with and without the pattern")
+	}
+	s.m().slicer.bed = bed
+	// A bounce is the slices alone, without the pattern.
+	if got := s.m().slicer.takeSample(0); got.Frames() == bed.sample.Frames() && got.Channels == 2 {
+		t.Error("the bounce looks like the pattern mix")
+	}
+	if got, alone := s.m().slicer.takeSample(0), s.m().slicer.renderUnder(0, 1, nil).sample; len(got.Samples) != len(alone.Samples) {
+		t.Errorf("a bounce is %d samples, the slices alone %d", len(got.Samples), len(alone.Samples))
+	}
+	// The tempo follows the pattern.
+	s.press(",")
+	if s.slicing().BPM != bed.bpm {
+		t.Error(", changed the tempo under a pattern")
+	}
+	// Playing works, and the next P takes the pattern away again.
+	s.press(" ")
+	for i := 0; i < 50; i++ {
+		s.send(slicerTickMsg{gen: s.m().slicer.gen})
+	}
+	_ = s.model.View()
+	s.press(" ", "P")
+	if s.m().slicer.bed != nil {
+		t.Error("P again did not take the pattern away")
 	}
 }
