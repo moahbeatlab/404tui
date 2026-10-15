@@ -1275,8 +1275,18 @@ func (m Model) slicerAudition() (tea.Model, tea.Cmd) {
 	}
 	s.playing = false
 	m.stopListening()
-	_ = m.player.Play(formats.SliceAudio(s.src, s.sl, s.at))
+	_ = m.player.Play(s.auditionAudio(s.at))
 	return m, nil
+}
+
+// auditionAudio is slice i as one step of the sequence sounds: on the grid it lasts a step,
+// and its roll, pitch, direction, gain and fades are all in it. It plays whatever its chance.
+func (s *slicer) auditionAudio(i int) formats.Sample {
+	sl := s.sl.Clone()
+	sl.Order, sl.Mode = []int{i}, formats.ModeOrder
+	sl.Slices[i].Chance = 100
+	audio, _ := formats.Render(s.src, sl, formats.NewSequencer(sl), 1)
+	return audio
 }
 
 // playhead is where the sound is now, as a frame of the source, and the slice it is in; -1

@@ -1375,3 +1375,25 @@ func TestSlicerStretchesTheSampleToBars(t *testing.T) {
 	s.press("A", "9", "enter")
 	s.shows("stretched to")
 }
+
+func TestSlicerAuditionHasTheRollOfTheSlice(t *testing.T) {
+	s := slicerOpen(t)
+	sl := s.slicing()
+	sl.Slices[s.m().slicer.at].Roll = 4
+	rolled := s.m().slicer.auditionAudio(s.m().slicer.at)
+	sl.Slices[s.m().slicer.at].Roll = 0
+	plain := s.m().slicer.auditionAudio(s.m().slicer.at)
+	if rolled.Frames() == 0 || rolled.Frames() != plain.Frames() {
+		t.Fatalf("lengths %d and %d", rolled.Frames(), plain.Frames())
+	}
+	same := true
+	for i := range rolled.Samples {
+		if rolled.Samples[i] != plain.Samples[i] {
+			same = false
+			break
+		}
+	}
+	if same {
+		t.Error("a rolling slice sounds the same as a plain one when it is heard alone")
+	}
+}
