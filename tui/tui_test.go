@@ -4723,3 +4723,66 @@ func TestAConditionIsExplainedInWords(t *testing.T) {
 	s.shows("the note here plays only on loop 1 of every 2 loops (the 1st, 3rd, 5th ... time round)",
 		"it only repeats exactly after 2 loops")
 }
+
+func TestSelectingNotesOfATrackChangesThemTogether(t *testing.T) {
+	s := openConditionPattern(t)
+	pad0 := s.m().pattern.Grid.Rows[0].Pad
+	velocities := func() (v []int, ticks []uint32) {
+		for _, n := range s.m().pattern.Notes {
+			if n.Pad == pad0 {
+				v, ticks = append(v, int(n.Velocity)), append(ticks, n.Tick)
+			}
+		}
+		return
+	}
+	// Notes on steps 3, 5 and 7 besides the one on step 1.
+	s.press("l", "l", "x", "l", "l", "x", "l", "l", "x", "g")
+	if v, _ := velocities(); len(v) != 4 {
+		t.Fatalf("%d notes on the track, want 4", len(v))
+	}
+	s.press("V")
+	s.shows("SELECT", "1 note of")
+	s.press("l", "l", "l", "l", "l", "l")
+	s.shows("4 notes of")
+	// j k stay out of it: a selection is of one track.
+	s.press("j")
+	s.shows("not for a selection")
+	if s.m().patSel == nil || s.m().patSel.pad != pad0 {
+		t.Fatalf("the selection is %+v", s.m().patSel)
+	}
+	// A change goes to every chosen note, and the selection follows them.
+	s.press("<")
+	v, ticks := velocities()
+	for i, x := range v {
+		if x != 117 {
+			t.Errorf("note %d has velocity %d, want 117", i, x)
+		}
+	}
+	s.press("L", ".")
+	v2, ticks2 := velocities()
+	for i := range v2 {
+		if v2[i] != 118 || ticks2[i] != ticks[i]+5 {
+			t.Errorf("note %d: velocity %d tick %d, want 118 at %d", i, v2[i], ticks2[i], ticks[i]+5)
+		}
+	}
+	// A condition goes on all of them.
+	s.press("c")
+	if got := len(s.m().patConds); got != 4 {
+		t.Errorf("%d notes have a condition, want 4", got)
+	}
+	s.press("0")
+	if _, ticks3 := velocities(); ticks3[0] != ticks[0] {
+		t.Errorf("0 left the first note at %d, want %d", ticks3[0], ticks[0])
+	}
+	// Taking them out ends the selection.
+	s.press("x")
+	if v, _ := velocities(); len(v) != 0 || s.m().patSel != nil {
+		t.Errorf("%d notes left, selection %v", len(v), s.m().patSel)
+	}
+	// Esc leaves a selection and not the pattern.
+	s.press("l", "x", "V", "esc")
+	if s.m().patSel != nil || s.m().pattern == nil {
+		t.Errorf("Esc left the selection %v, pattern %v", s.m().patSel, s.m().pattern != nil)
+	}
+	_ = ticks
+}

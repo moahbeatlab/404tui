@@ -1199,7 +1199,9 @@ func (m Model) patternDetail(g geom) string {
 		}
 		lines = append(lines, m.rowLabel(row.Pad, label, labelStyle)+" "+m.noteRow(d, row.Pad, !m.patFocus && r == m.patRow, sp)+m.mixBadge(row.Pad))
 	}
-	if pad, notes, ok := m.cellOfPattern(); ok {
+	if m.selecting() {
+		lines = append(lines, "", st.hot.Render(m.selectionLine()))
+	} else if pad, notes, ok := m.cellOfPattern(); ok {
 		where := st.bold.Render(fmt.Sprintf("[%s · %s]", pad, m.patStepLabel()))
 		if len(notes) > 0 {
 			loudest := 0
@@ -1240,7 +1242,10 @@ func (m Model) patternDetail(g geom) string {
 // patternHelp are the keys of the open pattern, in groups like the slicer's; with a track
 // expanded the first group is that track's.
 func (m Model) patternHelp(d *app.PatternDetail) []helpGroup {
-	move := helpGroup{"move", []helpKey{{"h j k l", "move"}, {"{ }", "turn page"}, {"v", "show/loop bars"}, {"Tab Enter", "open track"}, {"x", "note on/off"},
+	if m.selecting() {
+		return m.selectionHelp()
+	}
+	move := helpGroup{"move", []helpKey{{"h j k l", "move"}, {"{ }", "turn page"}, {"v", "show/loop bars"}, {"Tab Enter", "open track"}, {"x", "note on/off"}, {"V", "select notes"},
 		{"t", "tools (this pad)"}, {"T", "tools (all)"}, {"Space P", "play"}, {"Esc", "back"}}}
 	if m.patFocus {
 		move = helpGroup{"track", []helpKey{{"h l", "step"}, {"j k", "other track"}, {"{ }", "turn page"}, {"Enter x", "note on/off"}, {"Space P", "play"}, {"Tab", "fold"}, {"Esc", "back"}}}
@@ -2395,6 +2400,8 @@ func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow boo
 		dimmed = true
 	}
 	cursorStyle := lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
+	chosen := m.selectedCols(d, pad)
+	chosenStyle := lipgloss.NewStyle().Background(st.th.markedBg).Foreground(st.th.text).Bold(true)
 	lo, hi := sp.lo, sp.hi
 	var b strings.Builder
 	w := max(sp.w, 1)
@@ -2422,9 +2429,12 @@ func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow boo
 		if dimmed && cover[c] > 0 {
 			style = st.faint
 		}
-		if onCursorRow && c == m.patCol {
+		switch {
+		case onCursorRow && c == m.patCol:
 			b.WriteString(cursorStyle.Render(mark + strings.Repeat(rest, w-1)))
-		} else {
+		case chosen[c] && !sustained:
+			b.WriteString(chosenStyle.Render(mark + strings.Repeat(" ", w-1)))
+		default:
 			b.WriteString(style.Render(mark) + st.accent.Render(strings.Repeat(rest, w-1)))
 		}
 		if c+1 == hi {
@@ -2637,6 +2647,8 @@ func (m Model) focusLane(d *app.PatternDetail, pad proto.PadIndex, sp stepSpan) 
 	st := m.st
 	cover, owner := laneCover(d, pad)
 	cursorStyle := lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
+	chosen := m.selectedCols(d, pad)
+	chosenStyle := lipgloss.NewStyle().Background(st.th.markedBg).Foreground(st.th.text).Bold(true)
 	w := max(sp.w, 1) + 1
 	var nums, notes, vels strings.Builder
 	for c := sp.lo; c < sp.hi; c++ {
@@ -2667,9 +2679,12 @@ func (m Model) focusLane(d *app.PatternDetail, pad proto.PadIndex, sp stepSpan) 
 			mark, style = m.noteGlyph(cover[c])
 			vel = st.accent.Render(noteBlock(cover[c]) + strings.Repeat(" ", w-1))
 		}
-		if c == m.patCol {
+		switch {
+		case c == m.patCol:
 			notes.WriteString(cursorStyle.Render(mark + strings.Repeat(tail, w-1)))
-		} else {
+		case chosen[c] && !sustained:
+			notes.WriteString(chosenStyle.Render(mark + strings.Repeat(" ", w-1)))
+		default:
 			notes.WriteString(style.Render(mark) + st.accent.Render(strings.Repeat(tail, w-1)))
 		}
 		vels.WriteString(vel)

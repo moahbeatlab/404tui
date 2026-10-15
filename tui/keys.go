@@ -350,9 +350,13 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 // escape backs out of the innermost thing: a pattern, a pick-up, marks; else it quits.
 func (m Model) escape() (tea.Model, tea.Cmd) {
 	switch {
+	case m.selecting() && m.section == secPatterns:
+		// Esc ends a selection of notes before it leaves the pattern.
+		m.patSel = nil
+		m.message = ""
 	case m.pattern != nil && m.section == secPatterns:
 		// Back to the patterns under the pads, from the grid or from an expanded track.
-		m.pattern, m.patRange, m.patFocus = nil, nil, false
+		m.pattern, m.patRange, m.patFocus, m.patSel = nil, nil, false, nil
 	case m.section == secPatterns && m.patHolding:
 		m.patHolding = false
 	case m.section == secPatterns && len(m.patMarks) > 0:
@@ -905,7 +909,14 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 	if m.pattern != nil {
 		d := m.pattern
 		rows := d.Grid.Rows
+		if m.selecting() {
+			if next, cmd, ok := m.selectionKey(name); ok {
+				return next, cmd
+			}
+		}
 		switch name {
+		case "V":
+			return m.startSelecting()
 		case "b":
 			if !d.HasSourceBank {
 				m.message = "its pads span more than one bank; retargeting needs one bank"
@@ -3303,6 +3314,17 @@ func (m Model) changeCondition(forward bool) (tea.Model, tea.Cmd) {
 	m.loopDirty = true
 	m.message = fmt.Sprintf("%s %s: %s%s", pad, m.patStepLabel(), next, m.cycleNote())
 	return m, nil
+}
+
+// patternsKeyMove is a key of the open pattern that moves the cursor, done as it is without a
+// selection (the selection is kept).
+func (m Model) patternsKeyMove(name string) (tea.Model, tea.Cmd) {
+	sel := m.patSel
+	m.patSel = nil
+	next, cmd := m.patternsKey(name)
+	nm := next.(Model)
+	nm.patSel = sel
+	return nm, cmd
 }
 
 // rollAgain picks new dice for the chances of the pattern: another seed.

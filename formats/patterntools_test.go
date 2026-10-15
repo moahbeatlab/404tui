@@ -336,3 +336,69 @@ func TestHalvePatternKeepsTheFirstHalf(t *testing.T) {
 		t.Error("a 3-bar pattern was halved")
 	}
 }
+
+func TestEditNotesChangesOnlyTheChosenNotes(t *testing.T) {
+	pad := proto.PadIndex{}
+	other, _ := proto.PadFromBankPad(0, 1)
+	b, err := formats.BlankPattern(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, at := range []uint32{0, 480, 960, 1440} {
+		if b, err = formats.InsertNote(b, at, pad, 100, 120); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if b, err = formats.InsertNote(b, 480, other, 100, 120); err != nil {
+		t.Fatal(err)
+	}
+	chosen := map[uint32]bool{480: true, 1440: true}
+	edited, n, err := formats.EditNotes(b, pad, chosen, formats.NoteEdit{Velocity: -30, Length: 60, Move: 10})
+	if err != nil || n != 2 {
+		t.Fatalf("%d changed, %v", n, err)
+	}
+	notes, _ := formats.NoteRecords(edited)
+	got := map[string][]formats.NoteRecord{}
+	for _, x := range notes {
+		got[x.Pad.String()] = append(got[x.Pad.String()], x)
+	}
+	for _, x := range got[pad.String()] {
+		moved := x.Tick == 490 || x.Tick == 1450
+		if moved && (x.Velocity != 70 || x.Length != 180) {
+			t.Errorf("chosen note at %d: velocity %d length %d", x.Tick, x.Velocity, x.Length)
+		}
+		if !moved && (x.Velocity != 100 || x.Length != 120) {
+			t.Errorf("note at %d changed: velocity %d length %d", x.Tick, x.Velocity, x.Length)
+		}
+	}
+	if len(got[pad.String()]) != 4 || len(got[other.String()]) != 1 || got[other.String()][0].Tick != 480 {
+		t.Errorf("notes %+v", got)
+	}
+	removed, n, err := formats.EditNotes(b, pad, chosen, formats.NoteEdit{Delete: true})
+	if err != nil || n != 2 {
+		t.Fatal(n, err)
+	}
+	if notes, _ := formats.NoteRecords(removed); len(notes) != 3 {
+		t.Errorf("%d notes left, want 3", len(notes))
+	}
+	snapped, _, err := formats.EditNotes(b, pad, map[uint32]bool{480: true}, formats.NoteEdit{Move: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, _, err := formats.EditNotes(snapped, pad, map[uint32]bool{520: true}, formats.NoteEdit{Snap: 120})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if notes, _ := formats.NoteRecords(again); !slicesContainsFunc(notes, func(x formats.NoteRecord) bool { return x.Pad == pad && x.Tick == 480 }) {
+		t.Errorf("snap did not bring the note back to 480: %+v", notes)
+	}
+}
+
+func slicesContainsFunc[S ~[]E, E any](s S, f func(E) bool) bool {
+	for _, e := range s {
+		if f(e) {
+			return true
+		}
+	}
+	return false
+}

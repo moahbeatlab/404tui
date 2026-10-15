@@ -307,7 +307,9 @@ type Model struct {
 	loopTry *loopTry
 	// patRange limits the open pattern to some of its bars: only those are shown, edited and
 	// looped. nil is the whole pattern. rangePick is the list v opens to choose it.
-	patRange  *barRange
+	patRange *barRange
+	// patSel is the notes of a track chosen to be changed together, while V has them open.
+	patSel    *noteSelection
 	rangePick *rangePicker
 	// patTool is the groove-tools menu over the open pattern, nil when it is closed.
 	patTool *patTool

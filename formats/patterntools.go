@@ -363,3 +363,67 @@ func clamp01(x float64) float64 {
 	}
 	return x
 }
+
+// NoteEdit is a change made to several notes at once: each field that is set is applied to every
+// note chosen, and the rest of the note stays as it was.
+type NoteEdit struct {
+	// Velocity is added to each note's, and kept within 1..127; SetVelocity, when above 0, sets it.
+	Velocity    int
+	SetVelocity int
+	// Length is added to each note's length in ticks, never under 1 tick nor past the end.
+	Length int
+	// Move shifts the notes in time by that many ticks, within the pattern.
+	Move int
+	// Snap puts each note on the nearest step of a grid of that many ticks.
+	Snap uint32
+	// Delete takes the notes out.
+	Delete bool
+}
+
+// EditNotes applies edit to the notes of pad that start at one of ticks, and returns the pattern;
+// everything else in it stays as it was. It says how many notes it changed.
+func EditNotes(b []byte, pad proto.PadIndex, ticks map[uint32]bool, edit NoteEdit) ([]byte, int, error) {
+	recs, length, trailer, err := readRecords(b)
+	if err != nil {
+		return nil, 0, err
+	}
+	in := OnlyPad(pad)
+	changed := 0
+	out := recs[:0:0]
+	for _, r := range recs {
+		if !r.note || !in.has(r) || !ticks[r.tick] {
+			out = append(out, r)
+			continue
+		}
+		changed++
+		if edit.Delete {
+			continue
+		}
+		// The bytes of a note after its delta: 3 is the velocity, 5 and 6 the length.
+		if edit.SetVelocity > 0 {
+			r.bytes[3] = byte(min(max(edit.SetVelocity, 1), 127))
+		} else if edit.Velocity != 0 {
+			r.bytes[3] = byte(min(max(int(min(r.bytes[3], 127))+edit.Velocity, 1), 127))
+		}
+		if edit.Length != 0 {
+			n := int(r.bytes[5]) | int(r.bytes[6])<<8
+			n = min(max(n+edit.Length, 1), 65535)
+			if room := int(length) - int(r.tick); room >= 1 {
+				n = min(n, room)
+			}
+			r.bytes[5], r.bytes[6] = byte(n), byte(n>>8)
+		}
+		tick := int64(r.tick)
+		if edit.Snap > 0 {
+			g := int64(edit.Snap)
+			tick = (tick + g/2) / g * g
+		}
+		tick += int64(edit.Move)
+		r.tick = clampTick(tick, max(length, 1)-1)
+		out = append(out, r)
+	}
+	if changed == 0 {
+		return nil, 0, errors.New("none of those notes is in the pattern any more")
+	}
+	return writeRecords(out, length, trailer), changed, nil
+}
