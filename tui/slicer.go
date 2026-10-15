@@ -374,7 +374,7 @@ func (s *slicer) view() (from, to int) {
 }
 
 // slicerCols is how many dots wide the waveform is.
-func (m Model) slicerCells() int { return max(min(m.width-8, 240), 30) }
+func (m Model) slicerCells() int { return max(min(m.width-8, 480), 30) }
 
 // slicerNudge moves the start of the slice in front, or its end, by dots on the screen (a dot
 // is half a cell; eight when coarse is on).
@@ -1679,7 +1679,7 @@ func (m Model) slicerBox() string {
 	if len(preview) > 0 {
 		chrome += len(preview) + 1
 	}
-	rows := clamp(m.geom().bodyH-chrome-len(help), 3, 16)
+	rows := clamp(m.geom().bodyH-chrome-len(help), 3, 48)
 
 	// Slices can overlap: the one in front, or the one sounding, shows where they do.
 	styleOf := func(frame int) cellStyle {
