@@ -822,7 +822,7 @@ func TestSlicerEnvelopeKeys(t *testing.T) {
 	if x.Attack != 5 || x.Release != 2 {
 		t.Errorf("attack %d release %d", x.Attack, x.Release)
 	}
-	s.shows("env 5/2 ms")
+	s.shows("attack", "5 ms", "release", "2 ms")
 	s.press("1", "3")
 	if x := s.slicing().Slices[1]; x.Attack != 2 || x.Release != 0 {
 		t.Errorf("attack %d release %d after stepping back", x.Attack, x.Release)
@@ -1395,5 +1395,26 @@ func TestSlicerAuditionHasTheRollOfTheSlice(t *testing.T) {
 	}
 	if same {
 		t.Error("a rolling slice sounds the same as a plain one when it is heard alone")
+	}
+}
+
+func TestSlicerRollSliders(t *testing.T) {
+	s := slicerOpen(t)
+	s.send(tea.WindowSizeMsg{Width: 140, Height: 50})
+	s.press("5")
+	s.shows("x makes the slice roll first")
+	s.press("x", "5", "5", "5")
+	if got := s.m().slicer.cur1().RollLoud; got != -75 {
+		t.Fatalf("loudness %d, want -75", got)
+	}
+	s.shows("quieter, from 100% down to 25%", "-75%")
+	s.press("8", "8", "8")
+	if got := s.m().slicer.cur1().RollPitch; got != 3 {
+		t.Errorf("pitch %d, want 3", got)
+	}
+	s.shows("pitch", "+3")
+	s.press("X")
+	if x := s.m().slicer.cur1(); x.RollLoud != 0 || x.RollPitch != 0 || x.Roll != 0 {
+		t.Errorf("X left %+v", x)
 	}
 }

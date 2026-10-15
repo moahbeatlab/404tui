@@ -653,7 +653,7 @@ func TestRollShapeChangesTheHits(t *testing.T) {
 	s := NewSlicing(4000, 1)
 	s.Slices[0].Roll = 4
 	even, _ := Render(flat(4000), s, NewSequencer(s), 1)
-	s.Slices[0].RollShape = 1 // decay: 100% down to 25%
+	s.Slices[0].RollLoud = -75 // 100% down to 25%
 	decay, _ := Render(flat(4000), s, NewSequencer(s), 1)
 	if even.Frames() != decay.Frames() {
 		t.Fatalf("lengths %d and %d", even.Frames(), decay.Frames())
@@ -666,7 +666,7 @@ func TestRollShapeChangesTheHits(t *testing.T) {
 		t.Errorf("decay hits %d, %d, %d, %d", mid(decay, 0), mid(decay, 1), mid(decay, 2), mid(decay, 3))
 	}
 	// A rise gets higher: the last hit is shorter than the slice, so it is cut sooner.
-	s.Slices[0].RollShape = 3
+	s.Slices[0].RollLoud, s.Slices[0].RollPitch = 75, 12
 	if rise, _ := Render(flat(4000), s, NewSequencer(s), 1); rise.Frames() != 4000 {
 		t.Errorf("a rise changed the length to %d", rise.Frames())
 	}

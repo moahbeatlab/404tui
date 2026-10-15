@@ -692,14 +692,30 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			m.message = fmt.Sprintf("slice %d rolls: its start hits %d times in the time the slice has", s.at+1, next)
 		}
-	case "Q":
+	case "5", "6":
 		if s.cur1().Roll < 2 {
-			m.message = "Q shapes a roll: x makes the slice roll first"
+			m.message = "5 6 set how a roll gets louder or quieter: x makes the slice roll first"
 			return m, nil
 		}
-		next := (s.cur1().RollShape + 1) % len(formats.RollShapes)
-		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].RollShape = next })
-		m.message = fmt.Sprintf("slice %d: the roll is %s", s.at+1, rollShapeText(formats.RollShapes[next]))
+		by := formats.RollLoudStep
+		if name == "5" {
+			by = -by
+		}
+		next := min(max(s.cur1().RollLoud+by, -formats.RollLoudMax), formats.RollLoudMax)
+		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].RollLoud = next })
+		m.message = "the roll's hits " + rollLoudText(next)
+	case "7", "8":
+		if s.cur1().Roll < 2 {
+			m.message = "7 8 set how a roll changes in pitch: x makes the slice roll first"
+			return m, nil
+		}
+		by := 1
+		if name == "7" {
+			by = -1
+		}
+		next := min(max(s.cur1().RollPitch+by, -formats.RollPitchMax), formats.RollPitchMax)
+		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].RollPitch = next })
+		m.message = fmt.Sprintf("the roll's last hit is %+d semitones from its first", next)
 	case "m":
 		m.slicerChange(func(sl *formats.Slicing) {
 			if sl.Slices[s.at].Chance == 0 {
@@ -1644,6 +1660,9 @@ func (m Model) slicerBox() string {
 	if _, ok := s.coverRounds(); ok && m.geom().bodyH >= 34 {
 		chrome++
 	}
+	if m.geom().bodyH >= 34 {
+		chrome++ // the settings take two lines, each with a slider
+	}
 	roomy := m.geom().bodyH >= 34
 	if !roomy {
 		chrome -= 3
@@ -1907,7 +1926,7 @@ func (s *slicer) slicerHelp() []helpGroup {
 		}
 	}
 	return append(groups,
-		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x Q", "roll shape"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"1 2", "attack"}, {"3 4", "release"}, {"X", "plain"}}},
+		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x", "roll"}, {"5-8", "roll shape"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"1 2", "attack"}, {"3 4", "release"}, {"X", "plain"}}},
 		helpGroup{"feel", []helpKey{{"T", "grid"}, {", .", "tempo"}, {"F", "fit"}, {"C", "cut on grid"}, {"w", "swing"}, {"W", "humanize"}}},
 		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"P", "pattern"}, {"V", "pattern bars"}, {"M", "mode"}, {"S", "new seed"}, {"Tab", "order lane"}}},
 		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"K", "stretch to bars"}, {"s y", "mark"}, {"B", "marked to pads"}, {"n N", "rounds"}, {"v", "takes"}, {"A", "add sample"}, {"Esc", "close"}}},
@@ -2046,7 +2065,37 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 		st.dim.Render("length ") + st.text.Render(seconds(s.sl.Length(s.at)))
 	roll := "off"
 	if x.Roll > 1 {
-		roll = fmt.Sprintf("x%d %s", x.Roll, formats.RollShapes[min(max(x.RollShape, 0), len(formats.RollShapes)-1)].Name)
+		roll = fmt.Sprintf("x%d", x.Roll)
+		if x.RollLoud != 0 || x.RollPitch != 0 {
+			roll += "  " + slider(x.RollLoud, formats.RollLoudMax, 9) + fmt.Sprintf(" %+d%%", x.RollLoud) +
+				"  pitch " + slider(x.RollPitch, formats.RollPitchMax, 9) + fmt.Sprintf(" %+d", x.RollPitch)
+		}
+	}
+	// With room, every setting shows where it is within the values it can have.
+	rich := m.geom().bodyH >= 34
+	var extra []string
+	if rich {
+		const w = 11
+		chance = fmt.Sprintf("%s %3d%%", meter(x.Chance), x.Chance)
+		if s.sl.Mode == formats.ModeOrder {
+			chance += st.faint.Render(" plays")
+		} else {
+			chance += st.faint.Render(" weight")
+		}
+		rollText := "off"
+		if x.Roll > 1 {
+			rollText = fmt.Sprintf("x%d", x.Roll)
+			rollText += "  loudness " + slider(x.RollLoud, formats.RollLoudMax, w) + fmt.Sprintf(" %+d%%", x.RollLoud) +
+				"  pitch " + slider(x.RollPitch, formats.RollPitchMax, w) + fmt.Sprintf(" %+d", x.RollPitch)
+		}
+		second := st.dim.Render("chance ") + st.accent.Render(chance) + "   " +
+			st.dim.Render("gain ") + st.accent.Render(track(x.Gain, 0, 400, w)+fmt.Sprintf(" %d%%", x.Gain)) + "   " +
+			st.dim.Render("pitch ") + st.accent.Render(slider(x.Pitch, 24, w)+fmt.Sprintf(" %+d", x.Pitch))
+		envLine := st.dim.Render("attack ") + st.accent.Render(track(indexOf(formats.EnvSteps, x.Attack), 0, len(formats.EnvSteps)-1, w)+fmt.Sprintf(" %d ms", x.Attack)) + "   " +
+			st.dim.Render("release ") + st.accent.Render(track(indexOf(formats.EnvSteps, x.Release), 0, len(formats.EnvSteps)-1, w)+fmt.Sprintf(" %d ms", x.Release)) + "   " +
+			st.dim.Render("play ") + st.accent.Render(dir) + "   " +
+			st.dim.Render("roll ") + st.accent.Render(rollText)
+		extra = []string{second, envLine}
 	}
 	second := st.dim.Render("chance ") + st.accent.Render(chance) + "   " +
 		st.dim.Render("gain ") + st.accent.Render(fmt.Sprintf("%d%%", x.Gain)) + "   " +
@@ -2071,6 +2120,10 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 	if s.sl.Humanize > 0 {
 		human = fmt.Sprintf("humanize %d%%", s.sl.Humanize)
 	}
+	if rich {
+		swing = "swing " + track(indexOf(formats.Swings, s.sl.Swing), 0, len(formats.Swings)-1, 7) + fmt.Sprintf(" %d%%", max(s.sl.Swing, 50))
+		human = "humanize " + track(indexOf(formats.Humanizes, s.sl.Humanize), 0, len(formats.Humanizes)-1, 7) + fmt.Sprintf(" %d%%", s.sl.Humanize)
+	}
 	third := st.faint.Render(fmt.Sprintf("a nudge moves "+step+", %.2f ms", dot)) + st.dim.Render(fmt.Sprintf("  ·  snap %s  ·  %s  ·  %s  ·  %s", onOff(s.snap), grid, swing, human))
 	take := plural(s.takes, "take") + " of " + plural(s.rounds, "round")
 	fourth := st.dim.Render(fmt.Sprintf("seed %d  ·  a bounce makes %s", s.sl.Seed, take))
@@ -2084,6 +2137,9 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 		fourth += st.accent.Render("  ·  " + plural(n, "slice") + " marked")
 	}
 	lines := []string{first, second, third, fourth}
+	if rich {
+		lines = []string{first, extra[0], extra[1], third, fourth}
+	}
 	if c, ok := s.coverRounds(); ok && m.geom().bodyH >= 34 {
 		note := fmt.Sprintf("a round is %s, the pattern %s: ", plural(c.roundSteps, "step"), plural(c.patSteps, "step"))
 		if s.rounds*c.roundSteps%c.patSteps == 0 {
@@ -2221,14 +2277,45 @@ func barsOf(sl *formats.Slicing) string {
 	return fmt.Sprintf("%.2f bars", bars)
 }
 
-// rollShapeText says what a roll shape does: "a swell: 25% to 100% in loudness".
-func rollShapeText(r formats.RollShape) string {
-	if r.From == r.To && r.Semitones == 0 {
-		return "even: every hit alike"
+// rollLoudText says what a loudness trend of a roll does.
+func rollLoudText(v int) string {
+	switch {
+	case v < 0:
+		return fmt.Sprintf("get quieter, from 100%% down to %d%%", 100+v)
+	case v > 0:
+		return fmt.Sprintf("get louder, from %d%% up to 100%%", 100-v)
 	}
-	text := fmt.Sprintf("%s: loudness %d%% to %d%%", r.Name, r.From, r.To)
-	if r.Semitones != 0 {
-		text += fmt.Sprintf(", pitch 0 to %+d semitones", r.Semitones)
+	return "are all alike"
+}
+
+// slider draws v between -max and max as a small bar of width cells with a dot where it is,
+// the bar running from the middle: "╌╌╌╌●━━━━", the dot in the middle for 0.
+func slider(v, max, width int) string { return bar(v, -max, max, width, (width-1)/2) }
+
+// track draws v between lo and hi as a small bar with a dot, the bar running from the left.
+func track(v, lo, hi, width int) string { return bar(v, lo, hi, width, 0) }
+
+// bar is the bar of width cells with the dot at v of lo..hi, filled from cell anchor to the dot.
+func bar(v, lo, hi, width, anchor int) string {
+	span := max(hi-lo, 1)
+	at := min(max((v-lo)*(width-1)/span, 0), width-1)
+	var b strings.Builder
+	for i := 0; i < width; i++ {
+		switch {
+		case i == at:
+			b.WriteString("●")
+		case i >= min(anchor, at) && i <= maxInt(anchor, at):
+			b.WriteString("━")
+		default:
+			b.WriteString("╌")
+		}
 	}
-	return text
+	return b.String()
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

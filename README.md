@@ -183,8 +183,9 @@ you left it. The keys are listed at the bottom of the dialog, in groups.
   whole number of pattern loops, and `N` sets exactly that many, so the bounce loops cleanly
   against the pattern. `V` limits the pattern under the slices to one bar, two bars, or all of
   it (like `v` in the pattern editor); the view and the loop follow.
-- **Roll shapes:** `x` makes a slice roll; `Q` shapes the roll: even, decay, swell, rise (pitch
-  and loudness up) or fall. **Stretch:** `K` puts the whole sample, stretched without a change of
+- **Roll shapes:** `x` makes a slice roll; `5 6` make its hits quieter or louder from the first to the
+  last (a small slider shows it), and `7 8` make the last hit lower or higher in pitch, up to 12
+  semitones: a fade-out stutter, a swell, or a riser. **Stretch:** `K` puts the whole sample, stretched without a change of
   pitch to a whole number of bars at the grid's (or the pattern's, or the bank's) tempo, on a
   pad; slice that pad at the tempo. `F` fits the grid tempo to the sample instead.
 - **Roll shapes:** `x` makes a slice roll; `Q` shapes the roll: even, decay, swell, rise (pitch

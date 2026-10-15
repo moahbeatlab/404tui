@@ -46,23 +46,12 @@ var Humanizes = []int{0, 25, 50, 100}
 // Rolls are the numbers of hits a slice's roll steps through: 0 is none.
 var Rolls = []int{0, 2, 3, 4, 6, 8}
 
-// RollShape is how the hits of a roll change from the first to the last: their loudness, in
-// percent of the slice's gain, and their pitch, in semitones at the last hit (the ones between
-// are on a straight line). A build-up roll rises in pitch while it swells.
-type RollShape struct {
-	Name      string
-	From, To  int
-	Semitones int
-}
-
-// RollShapes are the shapes a roll steps through; the first is every hit alike.
-var RollShapes = []RollShape{
-	{"even", 100, 100, 0},
-	{"decay", 100, 25, 0},
-	{"swell", 25, 100, 0},
-	{"rise", 40, 100, 12},
-	{"fall", 100, 40, -12},
-}
+// RollLoudSteps and RollPitchSteps are how far the loudness trend and the pitch of a roll can
+// be set, each way, and the size of a step.
+const (
+	RollLoudMax, RollLoudStep = 100, 25
+	RollPitchMax              = 12
+)
 
 // Divisions are the grids a slicing can be put on, as notes to the bar: 4 is a quarter note.
 var Divisions = []int{0, 4, 8, 16}
@@ -92,8 +81,12 @@ type Slice struct {
 	// Roll plays the start of the slice that many times over the time the slice has: a drum
 	// roll. 0 plays it once.
 	Roll int `json:"roll,omitempty"`
-	// RollShape is the index in RollShapes of how the hits of the roll change.
-	RollShape int `json:"roll_shape,omitempty"`
+	// RollLoud is how the hits of a roll get louder (positive) or quieter (negative) from the
+	// first to the last, in percent of the slice's gain: -75 goes from 100% down to 25%, +75
+	// from 25% up to 100%. RollPitch is how many semitones the last hit is higher (or lower)
+	// than the first, on a straight line between.
+	RollLoud  int `json:"roll_loud,omitempty"`
+	RollPitch int `json:"roll_pitch,omitempty"`
 	// Attack and Release are fades in and out of the slice, in milliseconds, baked into its
 	// audio. 0 leaves only the short fade that keeps a cut from clicking.
 	Attack  int `json:"attack,omitempty"`
@@ -434,9 +427,8 @@ func (s *Slicing) Validate() error {
 		if !slices.Contains(Rolls, sl.Roll) {
 			sl.Roll = 0
 		}
-		if sl.RollShape < 0 || sl.RollShape >= len(RollShapes) {
-			sl.RollShape = 0
-		}
+		sl.RollLoud = min(max(sl.RollLoud, -RollLoudMax), RollLoudMax)
+		sl.RollPitch = min(max(sl.RollPitch, -RollPitchMax), RollPitchMax)
 		remap[i] = len(kept)
 		kept = append(kept, sl)
 	}
@@ -668,11 +660,11 @@ func Render(src Sample, s *Slicing, q *Sequencer, steps int) (Sample, []Placed) 
 		piece := make([]int16, slot*ch)
 		if !step.Rest {
 			if roll > 1 {
-				shape := RollShapes[min(max(s.Slices[step.Slice].RollShape, 0), len(RollShapes)-1)]
+				x := s.Slices[step.Slice]
 				for r := 0; r < roll; r++ {
 					hit := audio
-					if shape.Semitones != 0 || shape.From != shape.To {
-						hit = rollHit(audio, shape, float64(r)/float64(roll-1))
+					if x.RollLoud != 0 || x.RollPitch != 0 {
+						hit = rollHit(audio, x.RollLoud, x.RollPitch, float64(r)/float64(roll-1))
 					}
 					lay(piece[(r*slot/roll)*ch:((r+1)*slot/roll)*ch], hit.Samples, ch)
 				}
@@ -691,13 +683,19 @@ func Render(src Sample, s *Slicing, q *Sequencer, steps int) (Sample, []Placed) 
 }
 
 // rollHit is one hit of a roll at t (0 for the first, 1 for the last): the audio at the
-// loudness and the pitch the shape has there.
-func rollHit(audio Sample, shape RollShape, t float64) Sample {
+// loudness and the pitch the roll has there.
+func rollHit(audio Sample, loud, pitch int, t float64) Sample {
 	hit := audio
-	if semis := int(math.Round(float64(shape.Semitones) * t)); semis != 0 {
+	if semis := int(math.Round(float64(pitch) * t)); semis != 0 {
 		hit = hit.Pitched(semis)
 	}
-	gain := (float64(shape.From) + float64(shape.To-shape.From)*t) / 100
+	from, to := 100.0, 100.0
+	if loud < 0 {
+		to += float64(loud)
+	} else {
+		from -= float64(loud)
+	}
+	gain := (from + (to-from)*t) / 100
 	if gain == 1 {
 		return hit
 	}
