@@ -915,6 +915,10 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 			m.picker = &picker{retarget: true, slot: d.Slot, sourceBank: d.SourceBank, bank: (d.SourceBank + 1) % proto.Banks}
 		case "B":
 			return m.patternBounce()
+		case "c", "C":
+			return m.changeCondition(name == "c")
+		case "y":
+			return m.rollAgain()
 		case "r":
 			m.busy = "reading the pattern"
 			return m, m.openPattern(m.pattern.Slot, "refreshed")
@@ -1107,9 +1111,9 @@ func (m Model) startLoop(slot proto.PadIndex) (tea.Model, tea.Cmd) {
 	m.listening = label
 	m.loopSlot = &slot
 	m.message = "mixing " + label + "…"
-	player, gen, mix := m.player, m.listenGen, m.patternMixer(slot)
+	player, gen, mix := m.player, m.listenGen, m.patternMix(slot)
 	return m, func() tea.Msg {
-		sample, err := mix()
+		sample, loops, err := mix()
 		if err != nil {
 			return listenMsg{path: label, err: err}
 		}
@@ -1120,7 +1124,7 @@ func (m Model) startLoop(slot proto.PadIndex) (tea.Model, tea.Cmd) {
 		// samples of its pads are changed; a player that cannot loop plays it once.
 		round := time.Duration(sample.Frames()) * time.Second / formats.SampleRate
 		if looper, ok := player.(app.Looper); ok {
-			return listenMsg{path: label, err: looper.Loop(sample), round: round}
+			return listenMsg{path: label, err: looper.Loop(sample), round: round, loops: loops}
 		}
 		return listenMsg{path: label, err: player.Play(sample)}
 	}
@@ -1130,6 +1134,40 @@ func (m Model) startLoop(slot proto.PadIndex) (tea.Model, tea.Cmd) {
 // each pad at its level, as things are now: the pads are copied, so the mix is not changed by
 // what happens on the screen while it is made.
 func (m Model) patternMixer(slot proto.PadIndex) func() (formats.Sample, error) {
+	mix := m.patternMix(slot)
+	return func() (formats.Sample, error) {
+		sample, _, err := mix()
+		return sample, err
+	}
+}
+
+// condRolls is how many loops a pattern with chances in it is rolled over at least.
+const condRolls = 4
+
+// condKey names a pattern for its conditions: the source, the project and the slot.
+func (m Model) condKey(slot proto.PadIndex) string {
+	source, project := "unit", 0
+	if m.offline != "" {
+		source = m.offline
+	}
+	if m.snap != nil {
+		project = int(m.snap.Project)
+	}
+	return fmt.Sprintf("%s|%d|%s", source, project, slot)
+}
+
+// patternConditions are what is kept for the pattern in a slot: its conditions and the seed.
+func (m Model) patternConditions(slot proto.PadIndex) (app.Conditions, int64) {
+	if m.conds == nil {
+		return nil, 0
+	}
+	p := m.conds.load(m.condKey(slot))
+	return p.conditions(), p.Seed
+}
+
+// patternMix is patternMixer that also says how many loops of the pattern the mix has: one,
+// unless conditions make it a cycle (and then each note is where its condition puts it).
+func (m Model) patternMix(slot proto.PadIndex) func() (formats.Sample, int, error) {
 	bpm := m.snap.Banks[slot.Bank()].Tempo
 	if m.snap.UsesProjectTempo {
 		bpm = m.snap.ProjectTempo
@@ -1151,35 +1189,43 @@ func (m Model) patternMixer(slot proto.PadIndex) func() (formats.Sample, error) 
 	if m.pattern != nil && m.pattern.Slot == slot {
 		rng, ranged = m.rangeOf(m.pattern)
 	}
-	return func() (formats.Sample, error) {
+	// Conditions are read now, with the pads: the screen changes them while the mix is made.
+	conds, seed := m.patternConditions(slot)
+	return func() (formats.Sample, int, error) {
 		ops.Lock()
 		defer ops.Unlock()
 		current, err := unit.CurrentProject()
 		if err != nil {
-			return formats.Sample{}, err
+			return formats.Sample{}, 0, err
 		}
 		data, err := unit.ReadFile(formats.PatternPath(current+1, slot))
 		if err != nil {
-			return formats.Sample{}, err
+			return formats.Sample{}, 0, err
 		}
 		pattern, err := formats.ParsePattern(data)
 		if err != nil {
-			return formats.Sample{}, err
+			return formats.Sample{}, 0, err
 		}
 		if ranged {
 			bar := uint32(pattern.BeatsPerBar()) * formats.PPQ
 			pattern = pattern.Slice(uint32(rng.first)*bar, min(uint32(rng.last+1)*bar, pattern.Length))
+		}
+		// Conditions make it a cycle of loops, each note on the loops its condition says.
+		loops := 1
+		if live := conds.Pruned(pattern); len(live) > 0 {
+			loops = live.Loops(condRolls)
+			pattern = app.Unroll(pattern, live, loops, seed)
 		}
 		// A file tried on a pad plays in its place, the whole file, at the pad's settings.
 		var tried *formats.Sample
 		if try.path != "" {
 			imported, err := app.LoadSample(unit, try.path)
 			if err != nil {
-				return formats.Sample{}, err
+				return formats.Sample{}, 0, err
 			}
 			tried = &imported.Sample
 		}
-		return app.MixPatternVoices(pattern, bpm, func(pad proto.PadIndex) (app.Voice, error) {
+		sample, err := app.MixPatternVoices(pattern, bpm, func(pad proto.PadIndex) (app.Voice, error) {
 			row := pads[pad.Index()]
 			if tried != nil && pad == try.pad && heard(pad, muted, soloed) {
 				return app.PadVoice(*tried, row.Level, row.Params), nil
@@ -1198,11 +1244,16 @@ func (m Model) patternMixer(slot proto.PadIndex) func() (formats.Sample, error) 
 			// The pad as its settings say: level, pan, pitch, direction, gate and loop.
 			return app.PadVoice(sample, row.Level, row.Params), nil
 		})
+		return sample, loops, err
 	}
 }
 
 // loopQueuedMsg ends the mixing of a pattern again after a change while it loops.
-type loopQueuedMsg struct{ err error }
+type loopQueuedMsg struct {
+	err   error
+	loops int
+	round time.Duration
+}
 
 // requeueLoop mixes the looping pattern again, so that a change is heard at once:
 // a note on or off, a velocity, a pad's level. It does nothing when no pattern loops.
@@ -1210,21 +1261,22 @@ func (m Model) requeueLoop() tea.Cmd {
 	if m.loopSlot == nil || m.player == nil || !m.player.Playing() || m.listening != "pattern "+m.loopSlot.String() || m.snap == nil {
 		return nil
 	}
-	player, mix := m.player, m.patternMixer(*m.loopSlot)
+	player, mix := m.player, m.patternMix(*m.loopSlot)
 	return func() tea.Msg {
-		sample, err := mix()
+		sample, loops, err := mix()
 		if err != nil {
 			return loopQueuedMsg{err: err}
 		}
+		round := time.Duration(sample.Frames()) * time.Second / formats.SampleRate
 		// At once, from the place the loop has reached; else from its next round.
 		if replacer, ok := player.(app.LoopReplacer); ok {
-			return loopQueuedMsg{err: replacer.ReplaceLoop(sample)}
+			return loopQueuedMsg{err: replacer.ReplaceLoop(sample), loops: loops, round: round}
 		}
 		if swapper, ok := player.(app.LoopSwapper); ok {
-			return loopQueuedMsg{err: swapper.NextLoop(sample)}
+			return loopQueuedMsg{err: swapper.NextLoop(sample), loops: loops, round: round}
 		}
 		if looper, ok := player.(app.Looper); ok {
-			return loopQueuedMsg{err: looper.Loop(sample)}
+			return loopQueuedMsg{err: looper.Loop(sample), loops: loops, round: round}
 		}
 		return loopQueuedMsg{}
 	}
@@ -3197,6 +3249,102 @@ func (m Model) toggleNote() (tea.Model, tea.Cmd) {
 	return m.editPatternBytes(func(b []byte) ([]byte, error) {
 		return formats.InsertNote(b, tick, pad, 127, length)
 	}, fmt.Sprintf("%s %s: note on %s at velocity 127", d.Slot, m.patStepLabel(), pad))
+}
+
+// condKeys are the keys of the notes at the cursor step: the sixteenth each starts in.
+func (m Model) condKeysAt() (pad proto.PadIndex, keys []app.NoteKey, ok bool) {
+	pad, _, ok = m.cellOfPattern()
+	if !ok {
+		return pad, nil, false
+	}
+	// Only the notes that start in the step: one from before that goes on into it is not this one.
+	notes := m.pattern.CellNotes(pad, m.patCol)
+	seen := map[app.NoteKey]bool{}
+	for _, n := range notes {
+		k := app.NoteKey{Pad: n.Pad, Step: int(n.Tick) / (formats.PPQ / 4)}
+		if !seen[k] {
+			seen[k] = true
+			keys = append(keys, k)
+		}
+	}
+	return pad, keys, len(keys) > 0
+}
+
+// changeCondition steps the condition of the note at the cursor through the list (c forward, C
+// back): always, 1:2 2:2, 1:3 2:3 3:3 and so on, then the chances. It says at once how long the
+// bounce of the pattern is now, since the conditions make it a cycle of loops.
+func (m Model) changeCondition(forward bool) (tea.Model, tea.Cmd) {
+	d := m.pattern
+	pad, keys, ok := m.condKeysAt()
+	if !ok {
+		m.message = "no note here: Enter puts one, then c gives it a condition"
+		return m, nil
+	}
+	dir := 1
+	if !forward {
+		dir = -1
+	}
+	next := app.StepCond(m.patConds[keys[0]], dir)
+	conds := maps.Clone(m.patConds)
+	if conds == nil {
+		conds = app.Conditions{}
+	}
+	for _, k := range keys {
+		conds[k] = next
+	}
+	m.patConds = conds.PrunedTo(d.Notes)
+	m.saveConditions()
+	m.loopDirty = true
+	m.message = fmt.Sprintf("%s %s: %s%s", pad, m.patStepLabel(), next, m.cycleNote())
+	return m, nil
+}
+
+// rollAgain picks new dice for the chances of the pattern: another seed.
+func (m Model) rollAgain() (tea.Model, tea.Cmd) {
+	if !m.patConds.Chancy() {
+		m.message = "no note has a chance: c steps a note's condition on to one (50% and so on)"
+		return m, nil
+	}
+	m.patSeed = time.Now().UnixNano()
+	m.saveConditions()
+	m.loopDirty = true
+	m.message = "the dice are rolled again" + m.cycleNote()
+	return m, nil
+}
+
+// saveConditions keeps the conditions of the open pattern.
+func (m Model) saveConditions() {
+	if m.conds != nil && m.pattern != nil {
+		m.conds.save(m.condKey(m.pattern.Slot), condsOf(m.patConds, m.patSeed))
+	}
+}
+
+// cycleNote says, for the open pattern, how long it is when bounced, or "" with no conditions:
+// ", bounces as 6 loops = 12 bars = 24.0 s".
+func (m Model) cycleNote() string {
+	if line := m.cycleLine(); line != "" {
+		return "; bounced: " + line
+	}
+	return ""
+}
+
+// cycleLine is how long the open pattern is once bounced, with its conditions at the tempo of
+// its bank: "6 loops = 12 bars = 24.0 s", "" when no condition makes it longer than a loop.
+func (m Model) cycleLine() string {
+	d := m.pattern
+	if d == nil {
+		return ""
+	}
+	live := m.patConds.PrunedTo(d.Notes)
+	if len(live) == 0 {
+		return ""
+	}
+	loops, bars, seconds := app.CycleOf(d.Length, d.Beats, d.BankTempo, live, condRolls)
+	line := fmt.Sprintf("%s = %s = %.1f s", plural(loops, "loop"), plural(bars, "bar"), seconds)
+	if live.Chancy() {
+		line += " (chances rolled over those loops)"
+	}
+	return line
 }
 
 // nudgeNote moves the note at the cursor by a number of ticks, or onto the nearest grid step

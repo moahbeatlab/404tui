@@ -245,6 +245,11 @@ type Model struct {
 	// random; slices keeps what it was set to for each sample.
 	slicer *slicer
 	slices sliceStore
+	// conds keeps the conditions of the patterns' notes (when a note plays over the loops);
+	// patConds and patSeed are those of the open pattern, read when it was opened.
+	conds    condStore
+	patConds app.Conditions
+	patSeed  int64
 	// indexes are the file indexes searches use, one per source, kept until files change.
 	indexes map[string]*app.Index
 	// tags is the tag index kept at the root of the SD card, once it has been read; tagJob is
@@ -317,6 +322,8 @@ type Model struct {
 	// loopStart is when the looping pattern started, and loopRound how long a round lasts.
 	loopStart time.Time
 	loopRound time.Duration
+	// loopLoops is how many loops of the pattern the round has: the cycle of its conditions.
+	loopLoops int
 	// patMarks are pattern slots (by slot index) marked for deleting; patHeld is a pattern
 	// picked up to be copied (or, with patCut, moved) into another slot; patConfirm is the
 	// slot index p was pressed on once, where a pattern would be replaced.
@@ -459,6 +466,7 @@ func New(unit app.Unit, player app.Player, store Store) Model {
 		padAudio:   &padCache{samples: map[factKey]formats.Sample{}},
 		store:      store,
 		slices:     newSliceStore(store),
+		conds:      newCondStore(store),
 		saved:      new([]byte),
 		log:        slog.New(slog.DiscardHandler),
 	}
@@ -713,6 +721,8 @@ type (
 		stale bool
 		// round is how long one round of a looping pattern lasts; 0 for anything else.
 		round time.Duration
+		// loops is how many loops of the pattern the round has (its conditions' cycle).
+		loops int
 	}
 	// autoplayMsg fires a moment after the cursor stopped on a result.
 	autoplayMsg struct{ seq int }
@@ -1093,6 +1103,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case loopQueuedMsg:
 		if msg.err != nil {
 			m.message = "the change is not in the loop: " + msg.err.Error()
+		} else if msg.round > 0 {
+			// The cycle may have changed length with the change.
+			m.loopRound, m.loopLoops = msg.round, max(msg.loops, 1)
 		}
 		return m, nil
 	case tagsSavedMsg:
@@ -1117,7 +1130,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.listening == msg.path {
 			if msg.round > 0 {
 				// Where the loop is, from when it started: the line under the steps follows it.
-				m.loopStart, m.loopRound = time.Now(), msg.round
+				m.loopStart, m.loopRound, m.loopLoops = time.Now(), msg.round, max(msg.loops, 1)
 			}
 			m.message = "♪ playing " + app.Base(msg.path)
 			if m.audioOut != "" {
@@ -1155,6 +1168,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.pattern = msg.detail
 		if m.pattern != nil {
+			m.patConds, m.patSeed = m.patternConditions(m.pattern.Slot)
 			// Every pad of the bank with a sample has a row, notes or not.
 			m.pattern.WithRowsFor(m.patternBankPads(m.pattern))
 			if msg.undo != nil {

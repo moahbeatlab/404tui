@@ -4582,3 +4582,137 @@ func TestAPatternIsBouncedToAPadAsItIsHeard(t *testing.T) {
 		t.Error("the bounce with one track muted is silent")
 	}
 }
+
+// openConditionPattern opens a pattern of bank C with a kick on C1 and a snare on C2, both on
+// beat 1 of two bars, at a level you can hear.
+func openConditionPattern(t *testing.T) *screen {
+	t.Helper()
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	m := s.m()
+	level, _ := proto.ParamByName("level")
+	for name, file := range map[string]string{"C1": "SD:IMPORT/kick.wav", "C2": "SD:IMPORT/pack/snare.wav"} {
+		if _, err := app.Assign(m.unit, m.unit, pad(t, name), file); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.unit.SetParam(level.ID, proto.TargetPad(pad(t, name)), 127); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.press("r", "]", "]", "N", "enter", "tab", "enter")
+	if s.m().pattern == nil || len(s.m().pattern.PadsUsed) != 2 {
+		t.Fatalf("the pattern: %+v: %q", s.m().pattern, s.m().message)
+	}
+	return s
+}
+
+func TestAConditionOnANoteSaysHowLongTheBounceIs(t *testing.T) {
+	s := openConditionPattern(t)
+	// The cursor is on the first note: c gives it 1:2, and the length of the bounce is told at once.
+	s.press("c")
+	s.shows("1:2", "bounced: 2 loops = 4 bars = 8.0 s")
+	d := s.m().pattern
+	key := app.NoteKey{Pad: d.Grid.Rows[0].Pad, Step: 0}
+	if got := s.m().patConds[key]; got != (app.Cond{A: 1, B: 2}) {
+		t.Fatalf("the condition is %+v", got)
+	}
+	// The note is drawn as a conditioned one, and the line under the grid has the cycle.
+	s.shows("◐", "conditions")
+	// Another note, 2:3: the cycle is the least common multiple, 6 loops.
+	s.press("j", "c", "c", "c", "c") // 1:2, 2:2, 1:3, 2:3
+	s.shows("2:3", "6 loops = 12 bars = 24.0 s")
+	// The conditions are kept for the pattern.
+	kept := s.m().conds.load(s.m().condKey(d.Slot)).conditions()
+	if len(kept) != 2 {
+		t.Errorf("%d conditions kept: %v", len(kept), kept)
+	}
+	// C goes back, round to the chances; plain again says nothing of a cycle.
+	for i := 0; i < 20 && !s.m().patConds[app.NoteKey{Pad: d.Grid.Rows[1].Pad, Step: 0}].Plain(); i++ {
+		s.press("C")
+	}
+	s.shows("2 loops = 4 bars = 8.0 s")
+	s.press("k")
+	for i := 0; i < 20 && !s.m().patConds[key].Plain(); i++ {
+		s.press("C")
+	}
+	s.hides("bounced:")
+	// No note, no condition.
+	s.press("l")
+	s.press("c")
+	s.shows("no note here")
+}
+
+func TestAPatternWithAConditionBouncesAsALongerLoop(t *testing.T) {
+	s := openConditionPattern(t)
+	// The kick plays on the first of every 2 loops; the snare always.
+	s.press("c")
+	d := s.m().pattern
+	frames := int(float64(d.Length) * float64(formats.SampleRate) * 60 / d.BankTempo / float64(formats.PPQ))
+	mix, loops, err := s.m().patternMix(d.Slot)()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loops != 2 {
+		t.Errorf("%d loops", loops)
+	}
+	if diff := mix.Frames() - 2*frames; diff < -2 || diff > 2 {
+		t.Errorf("the mix is %d frames, two loops are %d", mix.Frames(), 2*frames)
+	}
+	// The first beat of each loop: the kick's 4800 frames are only in the first loop.
+	energy := func(from, n int) (e int64) {
+		for _, v := range mix.Samples[from*2 : (from+n)*2] {
+			e += int64(v) * int64(v) / 1024
+		}
+		return e
+	}
+	first, second := energy(0, 4800), energy(frames, 4800)
+	if first == 0 || second == 0 || second >= first {
+		t.Errorf("the first beat has %d, the second loop's %d: the kick should be only in the first", first, second)
+	}
+	// The same through the bounce key: the pad holds the long mix.
+	s.press("B")
+	s.press("C")
+	s.typeText("9")
+	s.press("enter")
+	row := s.m().snap.Bank(2)[8]
+	got, err := app.PadAudio(s.m().unit, row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := got.Frames() - 2*frames; diff < -2 || diff > 2 {
+		t.Errorf("C9 holds %d frames, two loops are %d", got.Frames(), 2*frames)
+	}
+	// Without the condition it is one loop again.
+	s.press("C")
+	mix, loops, err = s.m().patternMix(d.Slot)()
+	if err != nil || loops != 1 || mix.Frames() > frames+2 {
+		t.Errorf("plain again: %d loops, %d frames, err %v", loops, mix.Frames(), err)
+	}
+}
+
+func TestChancesRollFromASeedThatCanBeChanged(t *testing.T) {
+	s := openConditionPattern(t)
+	s.press("y")
+	s.shows("no note has a chance")
+	// 50%: c until the chances; the first is 90%, then 75, 50.
+	for i := 0; i < 40 && s.m().patConds[app.NoteKey{Pad: s.m().pattern.Grid.Rows[0].Pad}].Prob != 50; i++ {
+		s.press("c")
+	}
+	s.shows("50%", "bounced: 4 loops = 8 bars = 16.0 s (chances rolled over those loops)")
+	d := s.m().pattern
+	one, _, _ := s.m().patternMix(d.Slot)()
+	again, _, _ := s.m().patternMix(d.Slot)()
+	if !slices.Equal(one.Samples, again.Samples) {
+		t.Error("one seed gave two different mixes")
+	}
+	// New dice: another seed. Over 4 loops of one 50% note, two seeds nearly always differ; try a few.
+	differs := false
+	for i := 0; i < 8 && !differs; i++ {
+		s.press("y")
+		other, _, _ := s.m().patternMix(d.Slot)()
+		differs = !slices.Equal(one.Samples, other.Samples)
+	}
+	if !differs {
+		t.Error("new dice never gave another mix")
+	}
+}

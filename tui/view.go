@@ -1216,6 +1216,13 @@ func (m Model) patternDetail(g geom) string {
 			lines = append(lines, "", where+st.dim.Render("  no note  ·  Enter puts one"))
 		}
 	}
+	if line := m.cycleLine(); line != "" {
+		cond := ""
+		if _, keys, ok := m.condKeysAt(); ok {
+			cond = st.text.Render(m.patConds[keys[0]].String()) + st.dim.Render("  ·  ")
+		}
+		lines = append(lines, st.dim.Render("conditions  ")+cond+st.dim.Render("bounced: ")+st.accent.Render(line))
+	}
 	if m.patTool != nil {
 		lines = append(lines, "", m.patToolMenu())
 		lines = append(lines, "", st.faint.Render(strings.Repeat("─", max(g.bodyW-4, 10))))
@@ -1246,6 +1253,7 @@ func (m Model) patternHelp(d *app.PatternDetail) []helpGroup {
 		{"length", []helpKey{{"+ -", "by a step"}}},
 		{"timing", []helpKey{{"H L", "nudge 5 ticks"}, {"( )", "1 tick"}, {"0", "back on the grid"}}},
 		{"pad", []helpKey{{"m", "mute"}, {"s", "solo"}, {"S", "save as heard"}, {"B", "bounce to a pad"}}},
+		{"trig", []helpKey{{"c C", "condition"}, {"y", "roll the dice again"}}},
 		history,
 	}
 }
@@ -2388,6 +2396,10 @@ func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow boo
 			mark, style = "─", st.accent
 		case cover[c] > 0:
 			mark, style = m.noteGlyph(cover[c])
+			if d == m.pattern && m.conditioned(d, pad, c) {
+				// A note with a condition: half lit, in its own colour.
+				mark, style = "◐", st.hot
+			}
 		}
 		// A step is w cells: its mark, then dashes when the note goes on, else spaces.
 		rest := " "
@@ -2418,6 +2430,19 @@ func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow boo
 		}
 	}
 	return b.String()
+}
+
+// conditioned says whether a note that starts in the step has a condition that is not plain.
+func (m Model) conditioned(d *app.PatternDetail, pad proto.PadIndex, col int) bool {
+	if len(m.patConds) == 0 {
+		return false
+	}
+	for _, n := range d.CellNotes(pad, col) {
+		if c, ok := m.patConds[app.NoteKey{Pad: n.Pad, Step: int(n.Tick) / (formats.PPQ / 4)}]; ok && !c.Plain() {
+			return true
+		}
+	}
+	return false
 }
 
 // stepSpan is the columns of a pattern's grid on show: [lo, hi), always whole bars, each step w
@@ -2660,7 +2685,9 @@ func (m Model) loopAt(slot proto.PadIndex) (float64, time.Duration, bool) {
 		return 0, 0, false
 	}
 	in := time.Since(m.loopStart) % m.loopRound
-	return float64(in) / float64(m.loopRound), m.loopRound - in, true
+	// With conditions the round is several loops of the pattern: the place is in the loop.
+	within := math.Mod(float64(in)/float64(m.loopRound)*float64(max(m.loopLoops, 1)), 1)
+	return within, m.loopRound - in, true
 }
 
 // playhead is a line under the step numbers that follows the looping pattern: done is solid,

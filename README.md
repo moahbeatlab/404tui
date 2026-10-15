@@ -201,6 +201,17 @@ pattern, from the grid or from an expanded track, back to the patterns under the
   is left out and, with some tracks soloed (`s`), only those are in it. To print one track,
   solo it. You stay in the pattern, to mute others and bounce again. The unit's envelope,
   effects and time stretch are not in it, as when it plays here.
+- **Conditions** (`c` forward, `C` back, on the note under the cursor): when a note plays over the
+  loops of the pattern, as the trig conditions of other sequencers do: every loop, `1:2` (the
+  first of every 2 loops), `2:2`, `1:3` … `3:3`, `1:4` … `4:4`, `1:8` … `8:8`, then chances (90,
+  75, 50, 25, 10 %). The unit's pattern files have no place for them, so they are kept on this
+  computer (`conditions.json` next to the state file), by pad and sixteenth, and a note with one
+  is drawn `◐`. They apply to what plays here and to a bounce, not to the pattern on the unit.
+  The pattern then runs as a **cycle**: the least common multiple of the conditions (`1:2` with
+  `2:3` makes 6 loops), and with a chance in it at least 4 loops, rolled from a seed (`y` rolls
+  again). Every time you change a condition the line under the grid says how long the bounce is:
+  `bounced: 6 loops = 12 bars = 24.0 s`; the message says it too. The loop that plays here is the
+  same cycle, with the playhead going round each loop of it, and `B` bounces all of it.
 - `P` or Space plays the pattern **on this computer**, in a loop, with a playhead over the
   steps. Each pad is played with its level, pan, pitch, reverse, gate and loop; the unit's
   envelope, effects, vinyl and time stretch are not reproduced. A change to a pad or a note
