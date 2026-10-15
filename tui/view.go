@@ -1981,29 +1981,23 @@ func (m Model) patternSlotBox() string {
 	if rows == nil {
 		return st.modal.Render(st.bold.Render(title) + "\n" + info + "\n\n" + strip.String() + "\n\n" + st.dim.Render("reading the patterns of this bank…"))
 	}
-	const w = 14
-	grid := make([]string, 4)
-	for row := 0; row < 4; row++ {
-		var cells []string
-		for col := 0; col < 4; col++ {
-			pos := row*4 + col
-			label := fmt.Sprintf("%2d", pos+1)
-			style := lipgloss.NewStyle().Width(w).Background(st.th.tileEmpty).Foreground(st.th.faint)
-			if rows[pos].Exists {
-				label = fmt.Sprintf("%2d %d pads", pos+1, len(rows[pos].Pads))
-				style = style.Background(st.th.tile).Foreground(st.th.text)
-			}
-			if p.saveFrom != nil && rows[pos].Slot == *p.saveFrom {
-				label = fmt.Sprintf("%2d this one", pos+1)
-				style = style.Foreground(st.th.good)
-			}
-			if pos == p.pad {
-				style = style.Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
-			}
-			cells = append(cells, style.Render(" "+label))
+	grid := m.dialogGrid(func(pos int) string {
+		name := ""
+		if rows[pos].Exists {
+			name = fmt.Sprintf("%d pads", len(rows[pos].Pads))
 		}
-		grid[row] = strings.Join(cells, " ")
-	}
+		this := p.saveFrom != nil && rows[pos].Slot == *p.saveFrom
+		if this {
+			name = "this one"
+		}
+		return m.tile(dialogTileW, 2, fmt.Sprint(pos+1), name, 0, tileState{
+			empty:    !rows[pos].Exists && !this,
+			cursor:   pos == p.pad,
+			marked:   this,
+			noLevel:  true,
+			progress: -1,
+		})
+	})
 	slot := rows[p.pad]
 	line := st.good.Render(fmt.Sprintf("%s is free", slot.Slot))
 	switch {
@@ -2015,7 +2009,7 @@ func (m Model) patternSlotBox() string {
 			line = st.bad.Render("Press Enter again to replace it")
 		}
 	}
-	return st.modal.Render(st.bold.Render(title) + "\n" + info + "\n\n" + strip.String() + "\n\n" + strings.Join(grid, "\n") + "\n\n" + line +
+	return st.modal.Render(st.bold.Render(title) + "\n" + info + "\n\n" + strip.String() + "\n\n" + grid + "\n\n" + line +
 		"\n\n" + st.dim.Render("A-J or [ ] bank  ·  hjkl move  ·  "+enter+"  ·  Esc back"))
 }
 
@@ -2079,29 +2073,42 @@ func (m Model) bankCountsForPicker() [proto.Banks]int {
 	return counts
 }
 
-// pickerGrid is a small pad grid for choosing a target, showing what is on each pad.
+// pickerGrid is a small pad grid for choosing a target, drawn with the tiles of the pad grid:
+// number, name and level, a pad on a bus marked, the empty ones dark.
 func (m Model) pickerGrid() string {
-	st, p := m.st, m.picker
-	const w = 14
-	rows := make([]string, 4)
+	p := m.picker
+	return m.dialogGrid(func(pos int) string {
+		pad, _ := proto.PadFromBankPad(uint16(p.bank), uint16(pos))
+		r := m.snap.Pads[pad.Index()]
+		return m.tile(dialogTileW, 2, fmt.Sprint(pos+1), r.Name, r.Level, tileState{
+			empty:  !r.HasSample,
+			bus:    r.Params["bus-fx"],
+			muted:  m.muted[r.Pad],
+			solo:   m.soloed[r.Pad],
+			cursor: pos == p.pad,
+		})
+	})
+}
+
+// dialogTileW is the width of a pad tile in the dialogs that choose a pad or a slot.
+const dialogTileW = 17
+
+// dialogGrid lays 16 tiles out 4×4 as on the unit, with a row between them when the screen
+// is tall enough.
+func (m Model) dialogGrid(tile func(pos int) string) string {
+	rows := make([]string, 0, 7)
 	for row := 0; row < 4; row++ {
 		var cells []string
 		for col := 0; col < 4; col++ {
-			pos := row*4 + col
-			pad, _ := proto.PadFromBankPad(uint16(p.bank), uint16(pos))
-			r := m.snap.Pads[pad.Index()]
-			label := fmt.Sprintf("%2d %s", pos+1, r.Name)
-			style := lipgloss.NewStyle().Width(w).Background(st.th.tile).Foreground(st.th.text)
-			switch {
-			case pos == p.pad:
-				style = style.Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
-			case !r.HasSample:
-				style = style.Background(st.th.tileEmpty).Foreground(st.th.faint)
-				label = fmt.Sprintf("%2d", pos+1)
+			if col > 0 {
+				cells = append(cells, " ")
 			}
-			cells = append(cells, style.Render(ansi.Truncate(" "+label, w, "…")))
+			cells = append(cells, tile(row*4+col))
 		}
-		rows[row] = strings.Join(cells, " ")
+		if row > 0 && m.height >= 36 {
+			rows = append(rows, "")
+		}
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, cells...))
 	}
 	return strings.Join(rows, "\n")
 }
