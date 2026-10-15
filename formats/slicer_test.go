@@ -2,6 +2,7 @@ package formats
 
 import (
 	"math"
+	"math/rand"
 	"slices"
 	"testing"
 )
@@ -384,5 +385,175 @@ func TestTransients(t *testing.T) {
 	}
 	if got := (Sample{Channels: 1, Samples: make([]int16, 48000)}).Transients(8, 1); len(got) != 0 {
 		t.Errorf("silence has onsets: %v", got)
+	}
+}
+
+func TestDivideRandomCoversTheSampleWithUnequalSlices(t *testing.T) {
+	rng := rand.New(rand.NewSource(7))
+	s := &Slicing{Frames: 48000}
+	s.DivideRandom(8, rng)
+	if len(s.Slices) != 8 || len(s.Order) != 8 {
+		t.Fatalf("%d slices, order %v", len(s.Slices), s.Order)
+	}
+	at, shortest, longest := 0, 48000, 0
+	for i, sl := range s.Slices {
+		if sl.Start != at {
+			t.Fatalf("slice %d starts at %d, the one before ended at %d", i, sl.Start, at)
+		}
+		at = sl.End
+		shortest, longest = min(shortest, s.Length(i)), max(longest, s.Length(i))
+	}
+	if at != 48000 {
+		t.Errorf("the slices end at %d", at)
+	}
+	if shortest < 48000/8/8 || longest < 2*shortest {
+		t.Errorf("lengths run from %d to %d: not unequal enough, or too short", shortest, longest)
+	}
+	again := &Slicing{Frames: 48000}
+	again.DivideRandom(8, rand.New(rand.NewSource(7)))
+	if !slices.Equal(again.Slices, s.Slices) {
+		t.Error("the same dice cut differently")
+	}
+}
+
+func TestDivideInCutsEachPartOnItsOwn(t *testing.T) {
+	s := &Slicing{Frames: 30000}
+	s.DivideIn([]int{10000}, 6, nil)
+	// 6 slices share the parts by length: 2 in the first part, 4 in the second.
+	if len(s.Slices) != 6 {
+		t.Fatalf("%d slices", len(s.Slices))
+	}
+	for i, sl := range s.Slices {
+		if sl.Start < 10000 && sl.End > 10000 {
+			t.Errorf("slice %d runs over the joint: %d-%d", i, sl.Start, sl.End)
+		}
+	}
+	if s.Slices[1].End != 10000 || s.Slices[2].Start != 10000 {
+		t.Errorf("the first part ends at %d, the second starts at %d", s.Slices[1].End, s.Slices[2].Start)
+	}
+}
+
+func TestExtendAddsSlicesAfterTheOthers(t *testing.T) {
+	s := NewSlicing(4000, 4)
+	s.Order = []int{3, 1}
+	s.Extend(6000, 2)
+	if s.Frames != 6000 || len(s.Slices) != 6 || s.Slices[4].Start != 4000 || s.Slices[5].End != 6000 {
+		t.Fatalf("frames %d, slices %+v", s.Frames, s.Slices)
+	}
+	if !slices.Equal(s.Order, []int{3, 1, 4, 5}) {
+		t.Errorf("order %v", s.Order)
+	}
+}
+
+func TestJoinSamplesMakesMonoStereoWhenMixed(t *testing.T) {
+	mono := Sample{Channels: 1, Samples: []int16{1, 2}}
+	stereo := Sample{Channels: 2, Samples: []int16{5, 6, 7, 8}}
+	got := JoinSamples(mono, stereo)
+	if got.Channels != 2 || !slices.Equal(got.Samples, []int16{1, 1, 2, 2, 5, 6, 7, 8}) {
+		t.Errorf("%+v", got)
+	}
+	if one := JoinSamples(mono, mono); one.Channels != 1 || one.Frames() != 4 {
+		t.Errorf("%+v", one)
+	}
+}
+
+func TestSettleFindsTheNearestOnsetInReach(t *testing.T) {
+	onsets := []int{1000, 5000, 9000}
+	if got := Settle(onsets, 5600, 1000, 200); got != 5000 {
+		t.Errorf("settled on %d", got)
+	}
+	if got := Settle(onsets, 4900, 1000, 200); got != 5000 {
+		t.Errorf("settled on %d, an onset a little ahead", got)
+	}
+	if got := Settle(onsets, 7000, 1000, 200); got != 7000 {
+		t.Errorf("settled on %d with nothing near", got)
+	}
+}
+
+// flat is a sample of one loud value, so that what a render does to its length and its fades can
+// be read off.
+func flat(frames int) Sample {
+	s := Sample{Channels: 1, Samples: make([]int16, frames)}
+	for i := range s.Samples {
+		s.Samples[i] = 10000
+	}
+	return s
+}
+
+func TestRollPlaysTheSliceStartSeveralTimes(t *testing.T) {
+	s := NewSlicing(4000, 1)
+	s.Slices[0].Roll = 4
+	out, placed := Render(flat(4000), s, NewSequencer(s), 1)
+	if out.Frames() != 4000 || placed[0].Roll != 4 {
+		t.Fatalf("%d frames, roll %d", out.Frames(), placed[0].Roll)
+	}
+	// Four hits of 1000 frames: loud in the middle of each, down to nothing where one is cut
+	// off for the next.
+	for hit := 0; hit < 4; hit++ {
+		if v := out.Samples[hit*1000+500]; v < 9000 {
+			t.Errorf("hit %d is %d in the middle", hit, v)
+		}
+		if v := out.Samples[hit*1000+999]; absInt(int(v)) > 300 {
+			t.Errorf("hit %d is still %d where the next starts", hit, v)
+		}
+	}
+}
+
+func TestSwingDelaysEverySecondStep(t *testing.T) {
+	s := NewSlicing(48000, 4)
+	s.Division, s.BPM, s.Swing = 16, 120, 66
+	_, placed := Render(ramp(48000), s, NewSequencer(s), 4)
+	grid := s.StepFrames()
+	if placed[0].Frames <= grid || placed[1].Frames >= grid {
+		t.Fatalf("steps last %d, %d, a straight one %d", placed[0].Frames, placed[1].Frames, grid)
+	}
+	if placed[0].Frames+placed[1].Frames != 2*grid || placed[2].At != 2*grid {
+		t.Errorf("a pair is %d, the third starts at %d, want %d", placed[0].Frames+placed[1].Frames, placed[2].At, 2*grid)
+	}
+	// 66% puts the second step two thirds of the way through the pair.
+	if want := int(float64(2*grid) * 0.66); absInt(placed[1].At-want) > 2 {
+		t.Errorf("the second step starts at %d, want about %d", placed[1].At, want)
+	}
+	// With an odd number of steps the last one has no partner and stays straight, so a round
+	// is as long as its steps.
+	out, _ := Render(ramp(48000), s, NewSequencer(s), 3)
+	if out.Frames() != 3*grid {
+		t.Errorf("three steps are %d frames, want %d", out.Frames(), 3*grid)
+	}
+}
+
+func TestHumanizeIsRepeatableAndOnlyMovesWhatItShould(t *testing.T) {
+	s := NewSlicing(48000, 4)
+	s.Division, s.BPM = 16, 120
+	plain, _ := Render(flat(48000), s, NewSequencer(s), 8)
+	s.Humanize = 100
+	one, placed := Render(flat(48000), s, NewSequencer(s), 8)
+	two, _ := Render(flat(48000), s, NewSequencer(s), 8)
+	if !slices.Equal(one.Samples, two.Samples) {
+		t.Error("the same seed humanized differently")
+	}
+	if slices.Equal(one.Samples, plain.Samples) || one.Frames() != plain.Frames() {
+		t.Errorf("humanize changed nothing, or the length (%d, %d)", one.Frames(), plain.Frames())
+	}
+	late := false
+	for _, p := range placed {
+		late = late || p.Lead > 0
+		if p.Lead >= p.Frames/2 {
+			t.Errorf("a step is %d frames late of %d", p.Lead, p.Frames)
+		}
+	}
+	if !late {
+		t.Error("no step was late")
+	}
+}
+
+func TestValidateKeepsTheNewSettingsInRange(t *testing.T) {
+	s := NewSlicing(4000, 2)
+	s.Swing, s.Humanize, s.Slices[0].Roll = 30, 400, 5
+	if err := s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if s.Swing != 0 || s.Humanize != 100 || s.Slices[0].Roll != 0 {
+		t.Errorf("swing %d, humanize %d, roll %d", s.Swing, s.Humanize, s.Slices[0].Roll)
 	}
 }

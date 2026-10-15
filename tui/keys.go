@@ -154,6 +154,9 @@ func (m Model) key(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.log.Debug("key", "key", key.String(), "section", sectionNames[m.section], "overlay", m.overlayName(), "busy", m.busy)
 	model, cmd := m.handleKey(key)
 	if updated, ok := model.(Model); ok {
+		if updated.slicer != nil && updated.slicer.adding && updated.message == "" {
+			updated.message = slicerAddHint
+		}
 		updated.persist()
 		return updated, cmd
 	}
@@ -193,6 +196,13 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.stopListening()
 		return m, tea.Quit
 	}
+	// While the slicer waits for a sample to add, the main screen is in front: Z takes the one
+	// under the cursor, Esc gives up.
+	if m.slicer != nil && m.slicer.adding && (name == "esc" || name == "q") {
+		m.slicer.adding = false
+		m.message = "nothing added"
+		return m, nil
+	}
 	// The help overlay swallows everything except what closes it.
 	if m.help {
 		if name == "q" || name == "esc" || name == "?" {
@@ -213,7 +223,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.promptKey(key)
 	case m.picker != nil:
 		return m.pickerKey(key)
-	case m.slicer != nil:
+	case m.slicer != nil && !m.slicer.adding:
 		return m.slicerKey(key)
 	case m.toggles != nil:
 		return m.togglesKey(key)
@@ -2603,7 +2613,7 @@ func (m Model) pickerEnter() (tea.Model, tea.Cmd) {
 	if len(p.copyFrom) > 0 {
 		return m.copyEnter()
 	}
-	if p.bounce != nil {
+	if len(p.bounces) > 0 {
 		return m.bounceEnter()
 	}
 	target, _ := proto.PadFromBankPad(uint16(p.bank), uint16(p.pad))

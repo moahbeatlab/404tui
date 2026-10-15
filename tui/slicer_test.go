@@ -316,7 +316,7 @@ func TestSlicerBounceToAPad(t *testing.T) {
 	s.press("l", "r")
 	s.press("b")
 	s.shows("Bounce the slices to a pad")
-	want := s.m().slicer.bounceSample().Frames()
+	want := s.m().slicer.takeSample(0).Frames()
 	s.press("A", "9", "enter")
 	s.shows("bounced")
 	row := s.m().snap.Bank(0)[8]
@@ -343,8 +343,8 @@ func TestSlicerBounceToAPad(t *testing.T) {
 func TestSlicerBounceRoundsAndSeedsAreRepeatable(t *testing.T) {
 	s := slicerOpen(t)
 	s.press("M") // random
-	one := s.m().slicer.bounceSample()
-	again := s.m().slicer.bounceSample()
+	one := s.m().slicer.takeSample(0)
+	again := s.m().slicer.takeSample(0)
 	if one.Frames() != again.Frames() || len(one.Samples) == 0 {
 		t.Fatal("two bounces of the same state differ in length")
 	}
@@ -357,7 +357,7 @@ func TestSlicerBounceRoundsAndSeedsAreRepeatable(t *testing.T) {
 	if s.m().slicer.rounds != 2 {
 		t.Errorf("rounds %d", s.m().slicer.rounds)
 	}
-	if two := s.m().slicer.bounceSample(); two.Frames() <= one.Frames() {
+	if two := s.m().slicer.takeSample(0); two.Frames() <= one.Frames() {
 		t.Errorf("two rounds are %d frames, one %d", two.Frames(), one.Frames())
 	}
 }
@@ -395,7 +395,7 @@ func TestSlicerGrid(t *testing.T) {
 		t.Fatalf("division %d, bpm %g", sl.Division, sl.BPM)
 	}
 	want := s.slicing().StepFrames() * len(s.slicing().Order)
-	if got := s.m().slicer.bounceSample().Frames(); got != want {
+	if got := s.m().slicer.takeSample(0).Frames(); got != want {
 		t.Errorf("a bounce is %d frames, %d steps of the grid are %d", got, len(s.slicing().Order), want)
 	}
 	s.press("T")
@@ -411,4 +411,310 @@ func TestSlicerEmptyPad(t *testing.T) {
 		t.Error("the slicer opened on an empty pad")
 	}
 	s.shows("is empty")
+}
+
+// voice is a second of a rising tone with a hit every quarter second, a second sample to put
+// with the drums.
+func voice() []byte {
+	s := formats.Sample{Channels: 1, Samples: make([]int16, 24000)}
+	for _, start := range []int{0, 8000, 16000} {
+		for i := 0; i < 4000; i++ {
+			s.Samples[start+i] = int16(15000 * math.Exp(-float64(i)/1500) * math.Sin(float64(i)*0.3))
+		}
+	}
+	return s.WAV()
+}
+
+// withVoice puts a second sample on A6, next to the drums on A5, and leaves the slicer: the
+// cursor is on the drums.
+func (s *screen) withVoice() {
+	s.t.Helper()
+	s.sim.AddFile("SD:IMPORT/voice.wav", voice())
+	m := s.m()
+	if _, err := app.Assign(m.unit, m.unit, pad(s.t, "A6"), "SD:IMPORT/voice.wav"); err != nil {
+		s.t.Fatal(err)
+	}
+	s.press("esc", "r")
+}
+
+func TestSlicerRandomCutMakesUnequalSlices(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("E")
+	sl := s.slicing()
+	if len(sl.Slices) != 8 {
+		t.Fatalf("%d slices, E keeps the number", len(sl.Slices))
+	}
+	shortest, longest := sl.Frames, 0
+	for i := range sl.Slices {
+		shortest, longest = min(shortest, sl.Length(i)), max(longest, sl.Length(i))
+	}
+	if longest-shortest < sl.Frames/50 {
+		t.Errorf("slices run from %d to %d frames: they are equal", shortest, longest)
+	}
+	s.shows("at random places")
+	s.press("e")
+	if got := s.slicing(); got.Length(0) != got.Length(1) && len(got.Slices) != 16 {
+		t.Errorf("e did not make equal slices: %d", len(got.Slices))
+	}
+	s.press("u", "u")
+	if got := s.slicing(); len(got.Slices) != 8 || got.Length(0) != 6000 {
+		t.Errorf("undo left %d slices", len(got.Slices))
+	}
+}
+
+func TestSlicerRollsASlice(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("x")
+	s.shows("rolls", "x2")
+	for i := 0; i < 4; i++ {
+		s.press("x")
+	}
+	if s.slicing().Slices[0].Roll != 8 {
+		t.Fatalf("roll %d after five presses", s.slicing().Slices[0].Roll)
+	}
+	s.press("x")
+	if s.slicing().Slices[0].Roll != 0 {
+		t.Errorf("roll %d: it did not come round to once", s.slicing().Slices[0].Roll)
+	}
+	s.press("x", "x") // x3
+	s.press("enter")
+	if got := s.player.played[len(s.player.played)-1]; got.Frames() != 6000 {
+		t.Errorf("a slice that rolls is %d frames, want 6000", got.Frames())
+	}
+}
+
+func TestSlicerSwingAndHumanize(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("w")
+	s.shows("swing needs the grid")
+	s.press("T", "w")
+	s.shows("swing 54%")
+	if s.slicing().Swing != 54 {
+		t.Errorf("swing %d", s.slicing().Swing)
+	}
+	for i := 0; i < 5; i++ {
+		s.press("w")
+	}
+	if s.slicing().Swing != 0 {
+		t.Errorf("swing %d: it did not come round to off", s.slicing().Swing)
+	}
+	s.press("W")
+	s.shows("humanize 25%")
+	s.press("W", "W", "W")
+	if s.slicing().Humanize != 0 {
+		t.Errorf("humanize %d", s.slicing().Humanize)
+	}
+}
+
+func TestSlicerAddsASampleAndPlaysAcrossBoth(t *testing.T) {
+	s := slicerOpen(t)
+	s.withVoice()
+	s.press("Z", "A")
+	s.shows("Pads", "move to the pad")
+	if s.m().slicer == nil || !s.m().slicer.adding {
+		t.Fatal("the slicer is not waiting for a sample")
+	}
+	s.hides("Slice 1/8")
+	// Z on the drums again would add the same sample; the voice is on A6.
+	s.press("l", "Z")
+	sl := s.m().slicer
+	if sl == nil || sl.adding || len(sl.srcs) != 2 {
+		t.Fatalf("the sample was not added: %+v", sl)
+	}
+	if got := s.slicing(); got.Frames != 48000+24000 || len(got.Slices) != 16 {
+		t.Fatalf("%d frames, %d slices", got.Frames, len(got.Slices))
+	}
+	s.shows("Samples", "voice", "16 slices")
+	if sl.at != 8 {
+		t.Errorf("the cursor is on slice %d, want the first of the new sample", sl.at+1)
+	}
+	// The random modes pick across both: with enough rounds slices of both samples come up.
+	s.press("M")
+	seen := map[int]bool{}
+	for i := 0; i < 6; i++ {
+		for _, p := range sl.render(i, 1).placed {
+			seen[sl.sourceAt(sl.sl.Slices[p.Slice].Start)] = true
+		}
+	}
+	if !seen[0] || !seen[1] {
+		t.Errorf("only samples %v played", seen)
+	}
+	// e cuts each sample on its own, by its length: 32 slices make 21 and 11, none across.
+	s.press("e", "e")
+	for i, x := range sl.sl.Slices {
+		if x.Start < 48000 && x.End > 48000 {
+			t.Errorf("slice %d runs over the joint: %d-%d", i+1, x.Start, x.End)
+		}
+	}
+	// Undo takes the sample back out.
+	s.press("u", "u", "u")
+	if len(sl.srcs) != 2 {
+		s.press("u")
+	}
+	for i := 0; i < 5 && len(s.m().slicer.srcs) > 1; i++ {
+		s.press("u")
+	}
+	if got := s.m().slicer; len(got.srcs) != 1 || got.src.Frames() != 48000 || got.sl.Frames != 48000 {
+		t.Errorf("%d samples, %d frames after undo", len(got.srcs), got.src.Frames())
+	}
+}
+
+func TestSlicerAddCanBeCancelledAndKeepsTheChain(t *testing.T) {
+	s := slicerOpen(t)
+	s.withVoice()
+	s.press("Z", "A", "esc")
+	if sl := s.m().slicer; sl == nil || sl.adding || len(sl.srcs) != 1 {
+		t.Fatalf("Esc did not give up adding: %+v", sl)
+	}
+	s.shows("Slice 1/8")
+	// Put together, edited, closed and put together again: the edit is back.
+	s.press("A", "l", "Z")
+	s.press("r")
+	s.press("esc", "h") // the cursor went to the voice; back to the drums
+	s.press("Z", "A", "l", "Z")
+	if got := s.slicing(); len(got.Slices) != 16 || !got.Slices[8].Reverse {
+		t.Errorf("the slicing of the two was not kept: %+v", got.Slices[8])
+	}
+}
+
+func TestSlicerChainFitsTheScreen(t *testing.T) {
+	for _, size := range [][2]int{{80, 30}, {100, 40}, {140, 50}} {
+		s := slicerOpen(t)
+		s.send(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		s.withVoice()
+		s.press("Z", "A", "l", "Z", "i")
+		if len(s.m().slicer.srcs) != 2 {
+			t.Fatalf("%dx%d: not added", size[0], size[1])
+		}
+		box := s.m().slicerBox()
+		if h := len(strings.Split(box, "\n")); h > s.m().geom().bodyH {
+			t.Errorf("%dx%d: the box is %d lines, the screen has room for %d", size[0], size[1], h, s.m().geom().bodyH)
+		}
+		for i, line := range strings.Split(box, "\n") {
+			if w := ansi.StringWidth(line); w > size[0] {
+				t.Errorf("%dx%d: line %d is %d wide", size[0], size[1], i, w)
+			}
+		}
+	}
+}
+
+func TestSlicerTapMarksSlicesWhileTheSamplePlays(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("p")
+	if len(s.player.played) != 1 || s.player.played[0].Frames() != 48000 {
+		t.Fatalf("played %d samples", len(s.player.played))
+	}
+	tap := s.m().slicer.tap
+	if tap == nil || len(s.slicing().Slices) != 1 {
+		t.Fatalf("tap %v, %d slices: the slicing is cleared to one slice", tap, len(s.slicing().Slices))
+	}
+	s.shows("tapping", "Space")
+	// Taps a little after the hits at 12000 and 36000 (the second, 100 ms late): each lands on
+	// its onset.
+	tap.start = time.Now().Add(-framesDuration(12000 + 1500))
+	s.press("space")
+	tap.start = time.Now().Add(-framesDuration(36000 + 4000))
+	s.press("space")
+	// Keys that are not the tap's are left alone.
+	s.press("r", "M", "e")
+	if got := s.slicing(); len(got.Slices) != 3 || got.Slices[0].Reverse || got.Mode != formats.ModeOrder {
+		t.Fatalf("slices %+v", got.Slices)
+	}
+	for i, want := range []int{12000, 36000} {
+		if got := s.slicing().Slices[i+1].Start; absDiff(got, want) > 300 {
+			t.Errorf("mark %d at %d, want about %d", i+1, got, want)
+		}
+	}
+	s.press("u")
+	if len(s.slicing().Slices) != 2 {
+		t.Errorf("u left %d slices", len(s.slicing().Slices))
+	}
+	s.press("p")
+	if s.m().slicer.tap != nil || s.player.stopped == 0 {
+		t.Error("p did not stop the tap")
+	}
+	s.shows("1 marks", "2 slices")
+	// The slicing is kept: u takes the tap back to the eight slices.
+	s.press("u", "u")
+	if len(s.slicing().Slices) != 8 {
+		t.Errorf("%d slices after undoing the tap", len(s.slicing().Slices))
+	}
+}
+
+func TestSlicerTapEndsWhenTheSampleDoes(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("p")
+	s.player.playing = false
+	s.send(slicerTickMsg{gen: s.m().slicer.gen})
+	if s.m().slicer.tap != nil {
+		t.Error("the tap went on after the sample ended")
+	}
+	s.shows("no marks")
+}
+
+func absDiff(a, b int) int {
+	if a < b {
+		return b - a
+	}
+	return a - b
+}
+
+func TestSlicerBounceTakesGoOnFreePads(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("v")
+	s.shows("2 takes")
+	s.press("v", "v", "v")
+	if s.m().slicer.takes != 1 {
+		t.Fatalf("takes %d after four presses", s.m().slicer.takes)
+	}
+	s.press("v") // 2
+	// In order mode with every slice always playing, the takes would all be the same.
+	s.press("b")
+	s.shows("every take would sound the same")
+	if s.m().picker != nil {
+		t.Fatal("the picker opened for takes that do not differ")
+	}
+	s.press("M", "b")
+	s.shows("Bounce 2 takes")
+	// From A4: A4 is free, A5 holds the drums and is left alone, A6 is free.
+	s.press("A", "4")
+	s.shows("A4, A6", "left alone")
+	s.press("enter")
+	s.shows("bounced 2 takes to A4, A6")
+	if s.padName("A5") != "drums" {
+		t.Errorf("A5 holds %q: the drums were replaced", s.padName("A5"))
+	}
+	if s.padName("A4") != "drums slc1" || s.padName("A6") != "drums slc2" {
+		t.Errorf("A4 %q, A6 %q", s.padName("A4"), s.padName("A6"))
+	}
+	one, err := app.PadAudio(s.m().unit, s.m().snap.Bank(0)[3])
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := app.PadAudio(s.m().unit, s.m().snap.Bank(0)[5])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(one.Samples) == 0 || slicesEqual(one.Samples, two.Samples) {
+		t.Error("the two takes are empty or the same")
+	}
+	want := s.m().slicer.takeSample(1)
+	if !slicesEqual(two.Samples, want.Samples) {
+		t.Error("take 2 is not what the slicer renders for it")
+	}
+	if s.m().slicer == nil {
+		t.Error("the bounce closed the slicer")
+	}
+}
+
+func slicesEqual(a, b []int16) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

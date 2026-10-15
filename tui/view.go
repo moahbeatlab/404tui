@@ -30,7 +30,7 @@ var helpText = [][2]string{
 	{"/ (Pads, Projects)", "find a pad or project by name"},
 	{"Enter (Pads)", "preview the pad: on the unit, or on this computer after O"},
 	{"o, P (Pads)", "o switches where pads preview (unit / this computer; O and 0 work too); P plays the pad once on this computer"},
-	{"Z (Pads, Files)", "slicer: cut the sample into slices on a waveform, move their starts, set an order or play them at random, then b bounces the result onto a pad"},
+	{"Z (Pads, Files)", "slicer: cut a sample into slices on a waveform (equal, random, onsets, or tapped while it plays), put samples together with A, play the slices in an order or at random, roll, swing, then b bounces takes onto pads; the keys are listed in the dialog"},
 	{"C (Pads)", "chromatic: play the pad as notes on this computer (a w s e d f … are piano keys, z / x shift the octave)"},
 	{"n / d (Pads)", "rename / delete the sample"},
 	{"v / V (Pads)", "mark a pad / every pad with a sample"},
@@ -90,7 +90,7 @@ func (m Model) View() string {
 		main = dialog(m.promptBox())
 	case m.picker != nil:
 		main = dialog(m.pickerBox())
-	case m.slicer != nil && m.busy == "":
+	case m.slicer != nil && !m.slicer.adding && m.busy == "":
 		main = m.center(m.slicerBox(), g.bodyH)
 	case m.toggles != nil:
 		main = dialog(m.togglesBox())
@@ -1791,7 +1791,10 @@ func (m Model) pickerBox() string {
 		return m.copyPickerBox()
 	}
 	title := "Bounce the slices to a pad"
-	if p.bounce == nil {
+	if len(p.bounces) > 1 {
+		title = fmt.Sprintf("Bounce %d takes of the slices, from the pad you choose onward, to free pads", len(p.bounces))
+	}
+	if len(p.bounces) == 0 {
 		title = fmt.Sprintf("Assign %s to a pad", app.Base(p.files[0]))
 	}
 	if len(p.files) > 1 {
@@ -1818,6 +1821,20 @@ func (m Model) pickerBox() string {
 		line = st.warn.Render(fmt.Sprintf("%s holds %q — it will be replaced", target, row.Name))
 		if p.confirm {
 			line = st.bad.Render("Press Enter again to replace it")
+		}
+	}
+	if len(p.bounces) > 1 {
+		pads := m.takePads(p)
+		var names []string
+		for _, pad := range pads {
+			names = append(names, pad.String())
+		}
+		line = st.dim.Render("goes on " + strings.Join(names, ", ") + "; pads that hold a sample are left alone")
+		if len(pads) < len(p.bounces) {
+			line = st.warn.Render(fmt.Sprintf("only %d of %d takes fit in this bank from here: %s", len(pads), len(p.bounces), strings.Join(names, ", ")))
+		}
+		if len(pads) == 0 {
+			line = st.bad.Render("no free pad in this bank from here on")
 		}
 	}
 	typed := ""

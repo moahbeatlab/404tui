@@ -30,7 +30,21 @@ type Slicing struct {
 	// one leaves silence. Division 0 plays the slices at their own length, one after the other.
 	Division int     `json:"division,omitempty"`
 	BPM      float64 `json:"bpm,omitempty"`
+	// Swing, on a grid, puts every second step late, as a drum machine's swing does: 50 is
+	// straight, 66 is a triplet feel, 0 is off.
+	Swing int `json:"swing,omitempty"`
+	// Humanize is 0..100: how much each step's loudness and, on a grid, its timing wander.
+	Humanize int `json:"humanize,omitempty"`
 }
+
+// Swings are the amounts of swing a slicing steps through, in percent: 0 is off.
+var Swings = []int{0, 54, 58, 62, 66, 70}
+
+// Humanizes are the amounts of humanize a slicing steps through.
+var Humanizes = []int{0, 25, 50, 100}
+
+// Rolls are the numbers of hits a slice's roll steps through: 0 is none.
+var Rolls = []int{0, 2, 3, 4, 6, 8}
 
 // Divisions are the grids a slicing can be put on, as notes to the bar: 4 is a quarter note.
 var Divisions = []int{0, 4, 8, 16}
@@ -57,6 +71,9 @@ type Slice struct {
 	Gain    int  `json:"gain"`
 	Pitch   int  `json:"pitch"` // semitones
 	Reverse bool `json:"reverse,omitempty"`
+	// Roll plays the start of the slice that many times over the time the slice has: a drum
+	// roll. 0 plays it once.
+	Roll int `json:"roll,omitempty"`
 }
 
 // PlayMode is how the next slice is picked.
@@ -103,13 +120,78 @@ func NewSlicing(frames, n int) *Slicing {
 }
 
 // Divide replaces the slices by n equal ones and the order by their sequence.
-func (s *Slicing) Divide(n int) {
-	n = max(1, min(n, max(s.Frames/MinSliceFrames, 1)))
+func (s *Slicing) Divide(n int) { s.DivideIn(nil, n, nil) }
+
+// DivideRandom replaces the slices by n of unequal lengths, cut at random places, and the order
+// by their sequence.
+func (s *Slicing) DivideRandom(n int, rng *rand.Rand) { s.DivideIn(nil, n, rng) }
+
+// DivideIn replaces the slices by about n new ones and the order by their sequence. The sample is
+// made of parts that start at the given frames (a sample put together from several: none for one
+// part), and every part is cut on its own, with its share of the n by its length and at least
+// one. With a rng the cuts fall at random places and the slices differ in length; without one
+// they are equal.
+func (s *Slicing) DivideIn(starts []int, n int, rng *rand.Rand) {
+	bounds := []int{0}
+	for _, f := range starts {
+		if f > bounds[len(bounds)-1] && f < s.Frames {
+			bounds = append(bounds, f)
+		}
+	}
+	bounds = append(bounds, s.Frames)
 	s.Slices = s.Slices[:0]
-	for i := 0; i < n; i++ {
-		s.Slices = append(s.Slices, DefaultSlice(i*s.Frames/n, (i+1)*s.Frames/n))
+	for i := 0; i+1 < len(bounds); i++ {
+		from, to := bounds[i], bounds[i+1]
+		k := max(int(math.Round(float64(n)*float64(to-from)/float64(max(s.Frames, 1)))), 1)
+		s.Slices = append(s.Slices, divideRange(from, to, k, rng)...)
 	}
 	s.ResetOrder()
+}
+
+// divideRange cuts frames from..to in n slices, equal or, with a rng, of random lengths of which
+// none is shorter than an eighth of an equal one.
+func divideRange(from, to, n int, rng *rand.Rand) []Slice {
+	frames := to - from
+	n = max(1, min(n, max(frames/MinSliceFrames, 1)))
+	out := make([]Slice, 0, n)
+	if rng == nil {
+		for i := 0; i < n; i++ {
+			out = append(out, DefaultSlice(from+i*frames/n, from+(i+1)*frames/n))
+		}
+		return out
+	}
+	floor := min(max(frames/(n*8), MinSliceFrames), frames/n)
+	weights := make([]float64, n)
+	total := 0.0
+	for i := range weights {
+		weights[i] = 0.2 + math.Min(rng.ExpFloat64(), 5)
+		total += weights[i]
+	}
+	spare := float64(frames - n*floor)
+	start := from
+	for i := 0; i < n; i++ {
+		end := min(start+floor+int(spare*weights[i]/total), to)
+		if i == n-1 {
+			end = to
+		}
+		out = append(out, DefaultSlice(start, end))
+		start = end
+	}
+	return out
+}
+
+// Extend makes the sample longer, by a part put on its end that is cut in n equal slices, played
+// after the others.
+func (s *Slicing) Extend(frames, n int) {
+	from := s.Frames
+	if frames <= from {
+		return
+	}
+	s.Frames = frames
+	for _, sl := range divideRange(from, frames, n, nil) {
+		s.Order = append(s.Order, len(s.Slices))
+		s.Slices = append(s.Slices, sl)
+	}
 }
 
 // SetStarts replaces the slices by ones starting at the given frames, each running to the start
@@ -261,6 +343,9 @@ func (s *Slicing) Validate() error {
 		sl.Chance = min(max(sl.Chance, 0), 100)
 		sl.Gain = min(max(sl.Gain, 0), 400)
 		sl.Pitch = min(max(sl.Pitch, -24), 24)
+		if !slices.Contains(Rolls, sl.Roll) {
+			sl.Roll = 0
+		}
 		remap[i] = len(kept)
 		kept = append(kept, sl)
 	}
@@ -287,6 +372,10 @@ func (s *Slicing) Validate() error {
 	if s.BPM != 0 {
 		s.BPM = min(max(s.BPM, 40), 300)
 	}
+	if s.Swing < 50 || s.Swing > 75 {
+		s.Swing = 0
+	}
+	s.Humanize = min(max(s.Humanize, 0), 100)
 	return nil
 }
 
@@ -432,13 +521,20 @@ func SliceAudio(src Sample, s *Slicing, i int) Sample {
 
 // Render joins the next steps slices of a sequence into one sample, and says where each one
 // starts in it, in frames, and which it is, so a playhead can follow. The pieces of a rest are
-// silence as long as the slice.
+// silence as long as the slice. On a grid, swing makes every second step late and humanize lets
+// the timing and the loudness wander; both come from the slicing's seed, so a seed plays the
+// same every time.
 func Render(src Sample, s *Slicing, q *Sequencer, steps int) (Sample, []Placed) {
 	out := Sample{Channels: src.Channels}
 	var placed []Placed
 	cache := map[int]Sample{}
 	ch := max(src.Channels, 1)
 	grid := s.StepFrames()
+	human := rand.New(rand.NewSource(s.Seed ^ 0x5bd1e995))
+	swing := 0
+	if grid > 0 && s.Swing > 50 {
+		swing = int(float64(grid) * float64(s.Swing-50) * 2 / 100)
+	}
 	for n := 0; n < steps; n++ {
 		step := q.Next()
 		audio, ok := cache[step.Slice]
@@ -449,14 +545,45 @@ func Render(src Sample, s *Slicing, q *Sequencer, steps int) (Sample, []Placed) 
 		slot := audio.Frames()
 		if grid > 0 {
 			slot = grid
+			switch {
+			case n%2 == 1:
+				slot -= swing
+			case n < steps-1:
+				// The step before a late one lasts longer. A last step with no partner stays
+				// straight, so that the round has the length of its steps and the next starts
+				// on the beat.
+				slot += swing
+			}
 		}
-		placed = append(placed, Placed{Step: step, At: out.Frames(), Frames: slot, Audio: min(audio.Frames(), slot)})
+		// The dice are rolled for every step, so that a setting does not change the others.
+		lateness, loudness := human.Float64(), human.Float64()*2-1
+		lead := 0
+		if grid > 0 && s.Humanize > 0 {
+			lead = min(int(lateness*float64(grid)*float64(s.Humanize)/100/8), slot/2)
+		}
+		gain := 1 + loudness*float64(s.Humanize)/100*0.25
+		roll := s.Slices[step.Slice].Roll
+		if roll > 1 && slot/roll < MinSliceFrames {
+			roll = 0
+		}
+		if roll > 1 {
+			lead = 0
+		}
+		window := slot - lead
+		placed = append(placed, Placed{Step: step, At: out.Frames(), Frames: slot, Audio: min(audio.Frames(), window), Lead: lead, Roll: roll, Len: audio.Frames()})
 		piece := make([]int16, slot*ch)
 		if !step.Rest {
-			copy(piece, audio.Samples[:min(len(audio.Samples), len(piece))])
-			if audio.Frames() > slot {
-				// Cut off by the next step: fade out, so the cut does not click.
-				fadeOut(piece, ch, min(declick, slot/2))
+			if roll > 1 {
+				for r := 0; r < roll; r++ {
+					lay(piece[(r*slot/roll)*ch:((r+1)*slot/roll)*ch], audio.Samples, ch)
+				}
+			} else {
+				lay(piece[lead*ch:], audio.Samples, ch)
+			}
+			if gain != 1 {
+				for i, v := range piece {
+					piece[i] = int16(min(max(math.Round(float64(v)*gain), math.MinInt16), math.MaxInt16))
+				}
 			}
 		}
 		out.Samples = append(out.Samples, piece...)
@@ -464,12 +591,23 @@ func Render(src Sample, s *Slicing, q *Sequencer, steps int) (Sample, []Placed) 
 	return out, placed
 }
 
+// lay copies audio to the start of dst, which has the given channels; audio that is longer is
+// cut off with a fade-out, so the cut does not click.
+func lay(dst, audio []int16, ch int) {
+	n := copy(dst, audio)
+	if len(audio) > len(dst) {
+		fadeOut(dst[:n], ch, min(declick, n/ch/2))
+	}
+}
+
 // Placed is a step in a rendered sample.
 type Placed struct {
 	Step
 	// At is where the step starts and Frames how long it lasts; Audio is how much of that the
-	// slice sounds for (on a grid it can be less, or cut short).
-	At, Frames, Audio int
+	// slice sounds for (on a grid it can be less, or cut short), after Lead frames of silence
+	// that humanize put in front. Len is the whole slice as it sounds, and Roll the number of
+	// hits it is played in.
+	At, Frames, Audio, Lead, Len, Roll int
 }
 
 // fadeOut brings the last frames of interleaved audio down to nothing.
@@ -616,4 +754,42 @@ func (s Sample) Transients(limit int, sensitivity float64) []int {
 	}
 	sort.Ints(out)
 	return out
+}
+
+// JoinSamples puts samples one after the other. A mono sample that comes with stereo ones is
+// played on both sides.
+func JoinSamples(parts ...Sample) Sample {
+	ch := 1
+	for _, p := range parts {
+		ch = max(ch, p.Channels)
+	}
+	out := Sample{Channels: ch}
+	for _, p := range parts {
+		if max(p.Channels, 1) == ch {
+			out.Samples = append(out.Samples, p.Samples...)
+			continue
+		}
+		for _, v := range p.Samples {
+			for c := 0; c < ch; c++ {
+				out.Samples = append(out.Samples, v)
+			}
+		}
+	}
+	return out
+}
+
+// Settle moves a frame to the onset closest to it, looking up to before frames back and after
+// frames ahead; with no onset that near it stays where it is. It is what makes a marker that was
+// put down a little late, as a finger is, land on the hit.
+func Settle(onsets []int, frame, before, after int) int {
+	best, found := frame, false
+	for _, o := range onsets {
+		if o < frame-before || o > frame+after {
+			continue
+		}
+		if !found || absInt(o-frame) < absInt(best-frame) {
+			best, found = o, true
+		}
+	}
+	return best
 }

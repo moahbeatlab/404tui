@@ -79,32 +79,79 @@ progress bar with a line per step.
 slices, played back on this computer in an order you set or at random, and rendered onto a pad
 when you like it. Everything happens in the software; the unit's own chop points are not used.
 The slices are kept per sample in `slices.json` in your config folder, so the sample opens as
-you left it.
+you left it. The keys are listed at the bottom of the dialog, in groups.
 
-- **Slices:** the sample opens in 8 equal slices. `e` cuts it in 16, 32, 4, 8… equal ones, `t`
-  slices at the onsets it finds (again for a different sensitivity), `c` cuts the slice in
-  front in two and `d` removes it. `h l` choose a slice.
-- **Start and end:** every slice has a start and an end of its own, and moving one moves nothing
-  else: slices can leave gaps between them or overlap. `[ ]` move the start of the slice in front
-  and `{ }` its end, one dot of the waveform at a time (`f` makes it eight). `i` zooms to the
-  slice, so a dot is a millisecond or less; `I` zooms out. Edges settle on a zero crossing, so
-  the cut does not click (`z` turns that off). `u` undoes.
-- **Per slice:** `r` reverse, `m` mute, `( )` chance, `< >` pitch in semitones, `- +` gain,
-  `X` back to plain. Enter plays the slice once.
+**Cutting**
+
+- The sample opens in 8 equal slices. `e` cuts it in 16, 32, 4, 8… **equal** slices, `E` cuts the
+  same number of slices at **random places**, so they differ in length (again for another roll),
+  `t` slices at the **onsets** it finds (again for a different sensitivity), `c` cuts the slice in
+  front in two and `d` removes it. `h l` choose a slice, `u` undoes.
+- **Tap** (`p`): the sample plays from the start and every press of Space cuts a slice there, the
+  way you chop on the SP. The slicing starts again from one slice, so the slices you had are
+  replaced (`u` brings them back). A key press comes a little after the hit, so a mark moves to
+  the onset just before it, up to 100 ms back. `u` takes the last mark back, `p` or Esc stops.
+- **Several samples** (`A`): puts another pad's or file's sample after the one you are slicing.
+  The dialog steps aside: move to the other pad (Pads) or file (Files), press `Z`, and it joins,
+  cut in 8 slices of its own; Esc gives up. Slices of all the samples are played in one
+  sequence, so the random modes pick across them, for example between two vocals. A thin line on
+  the waveform shows where a sample ends, and a line under it lists them. `e`, `E` and `t` cut
+  every sample on its own. The slicing you make of those samples is kept: put the same samples
+  together again, in the same order, and it is back. `u` takes the last added sample out.
+  Up to 8 samples.
+
+**Start and end**
+
+- Every slice has a start and an end of its own, and moving one moves nothing else: slices can
+  leave gaps between them or overlap. `[ ]` move the start of the slice in front and `{ }` its
+  end, one dot of the waveform at a time (`f` makes it eight). `i` zooms to the slice, so a dot
+  is a millisecond or less; `I` zooms out. Edges settle on a zero crossing, so the cut does not
+  click (`z` turns that off).
+
+**Per slice**
+
+- `r` reverse, `m` mute, `( )` chance, `< >` pitch in semitones, `- +` gain, `X` back to plain.
+  Enter plays the slice once.
+- **Roll** (`x`): the slice plays its start 2, 3, 4, 6 or 8 times in the time it has, like a drum
+  roll. On a grid the time is the step, so a roll of 4 on a 1/8 step is four 1/32 hits. Press
+  `x` again for the next number; after 8 the slice plays once.
+
+**Order, mode and the seed**
+
 - **Order:** `Tab` moves to the order lane, the sequence the slices play in. `H L` carry a step,
   `j k` make it play another slice, `a` repeats it, `d` drops it, `R` shuffles, `o` resets.
 - **Mode** (`M`): *order* plays the lane over and over (a slice's chance is the chance it plays,
   else its time is left silent), *random* picks by chance as weight, *no repeat* never plays the
-  same slice twice in a row, *shuffle* plays every slice once per round in a new order. `S` rolls
-  the seed.
+  same slice twice in a row, *shuffle* plays every slice once per round in a new order.
+- **Seed** (`S`): the slicer has no randomness of its own, it rolls dice from a number, the seed.
+  The same seed always gives the same picks, rests and humanizing, so what you heard can be
+  heard again and a bounce is repeatable. `S` picks a new seed and so a different sequence.
+  Every round of a playing loop uses the next number after the seed, which is why the loop
+  differs from round to round; Space starts again at the first round of the seed.
+
+**Feel**
+
 - **Grid** (`T`): off, 1/4, 1/8 or 1/16. On a grid every step lasts that long at the bank's tempo
   (`, .` change it), whatever the slice's length: a longer slice is cut off, a shorter one leaves
   silence, so a bounce can be dropped into a pattern at the tempo. Off, the slices play one after
   the other at their own length.
+- **Swing** (`w`, needs the grid): every second step comes late. 54% is a little, 66% a
+  triplet feel, 70% a lot. With an odd number of steps in a round the last one stays straight.
+- **Humanize** (`W`): 25, 50 or 100%. Each step's loudness varies a little and, on a grid, each
+  step comes a little late (by up to an eighth of a step at 100%). It follows the seed.
+
+**Playing and bouncing**
+
 - **Play** with Space. The next round is rendered while the one before sounds and takes over
   without a gap; edits are heard from the next round on, and the playhead follows on the waveform.
-- **Bounce:** `b` asks for a pad and renders what the slicer plays, for as many rounds as `n`
-  sets (1, 2, 4 or 8), onto it. The same seed gives the same bounce.
+- **Bounce:** `b` asks for a pad and renders what the slicer plays onto it, for as many rounds as
+  `n` sets (1, 2, 4 or 8). The same seed gives the same bounce.
+- **Takes** (`v`): 1, 2, 4 or 8. With more than one, `b` renders that many takes, each from its
+  own rounds (take 1 is what a loop plays in its first rounds, take 2 the rounds after them…), and
+  puts them on the **free** pads of the bank from the pad you choose onward, named `name slc1`,
+  `name slc2`… Pads that hold a sample are skipped, never replaced. Listen to them on the unit,
+  keep the best and delete the rest. Takes only differ when something is random: use a random
+  mode, a chance below 100 or humanize; otherwise `b` tells you so.
 
 ### Patterns
 

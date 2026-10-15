@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"math"
+	"math/rand"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,6 +30,19 @@ var slicerSensitivities = []float64{0.5, 0.7, 0.9, 0.3}
 // slicerRounds are the numbers of rounds a bounce can hold.
 var slicerRounds = []int{1, 2, 4, 8}
 
+// slicerTakes are the numbers of takes a bounce can make: each one goes on a pad of its own.
+var slicerTakes = []int{1, 2, 4, 8}
+
+// slicerMaxSources is how many samples can be put together in one slicer.
+const slicerMaxSources = 8
+
+// Tapping slices: a key press comes after the hit it is meant for, so a marker looks for an
+// onset up to tapBefore frames earlier (100 ms) and tapAfter later (20 ms).
+const (
+	tapBefore = 4800
+	tapAfter  = 960
+)
+
 // slicerMinRound is the shortest a round that is looped is made, by playing the pass over
 // again: a round is rendered ahead of time, and a short one would leave no time for that.
 const slicerMinRound = 1200 * time.Millisecond
@@ -43,7 +58,17 @@ type slicer struct {
 	// key is what the slicing is kept under between runs.
 	key string
 	src formats.Sample
-	sl  *formats.Slicing
+	// srcs are the samples src is made of, one after the other; there is one unless more
+	// were added with A.
+	srcs []slicerSource
+	sl   *formats.Slicing
+	// adding is set while the dialog is put aside so that the sample to add can be chosen on
+	// the main screen.
+	adding bool
+	// tap is set while the sample plays for markers to be put on it.
+	tap *slicerTap
+	// takes is how many bounces a b makes, each from its own rounds.
+	takes int
 	// at is the slice in front; lane is the place in the order that has the cursor.
 	at, lane  int
 	focusLane bool
@@ -65,6 +90,19 @@ type slicer struct {
 	round    int
 	cur, nxt *slicerRound
 	dirty    bool
+}
+
+// slicerSource is one of the samples a slicer is made of: where it starts in the joined sample.
+type slicerSource struct {
+	key, name string
+	from      int
+}
+
+// slicerTap is a sample being played to slice it by hand.
+type slicerTap struct {
+	start  time.Time
+	onsets []int
+	marks  int
 }
 
 // slicerRound is a stretch of the sequence rendered ahead: what the player has, and where each
@@ -144,12 +182,17 @@ func (m Model) slicerLoaded(msg slicerLoadedMsg) (tea.Model, tea.Cmd) {
 // openSlicer opens the dialog, with the slices that were kept for this sample when there are
 // some, else the sample cut in eight.
 func (m Model) openSlicer(key, title, name string, sample formats.Sample) (tea.Model, tea.Cmd) {
+	if m.slicer != nil && m.slicer.adding {
+		return m.slicerAddSource(key, name, sample)
+	}
 	if sample.Frames() < formats.MinSliceFrames*2 {
 		m.message = "that sample is too short to slice"
 		return m, nil
 	}
+	base := key
 	key = fmt.Sprintf("%s|%d", key, sample.Frames())
-	s := &slicer{title: title, name: name, key: key, src: sample, snap: true, rounds: 1}
+	s := &slicer{title: title, name: name, key: key, src: sample, snap: true, rounds: 1, takes: 1,
+		srcs: []slicerSource{{key: base, name: name}}}
 	if m.slices != nil {
 		if saved, ok := m.slices.load(key); ok && saved.Frames == sample.Frames() && saved.Validate() == nil {
 			s.sl = saved
@@ -159,13 +202,111 @@ func (m Model) openSlicer(key, title, name string, sample formats.Sample) (tea.M
 		s.sl = formats.NewSlicing(sample.Frames(), 8)
 		s.equal = 2 // the next e is 16 slices
 	}
-	for _, v := range sample.Samples {
-		s.peak = max(s.peak, int(math.Abs(float64(v))))
-	}
-	s.peak = max(s.peak, 1)
+	s.findPeak()
 	m.slicer = s
 	m.message = ""
 	return m, nil
+}
+
+// findPeak is the loudest value of the sample, which the waveform is scaled to.
+func (s *slicer) findPeak() {
+	s.peak = 1
+	for _, v := range s.src.Samples {
+		s.peak = max(s.peak, int(math.Abs(float64(v))))
+	}
+}
+
+// sourceStarts are the frames where the samples that were put together start, after the first.
+func (s *slicer) sourceStarts() []int {
+	var out []int
+	for _, x := range s.srcs[1:] {
+		out = append(out, x.from)
+	}
+	return out
+}
+
+// sourceAt is the number of the sample a frame belongs to.
+func (s *slicer) sourceAt(frame int) int {
+	at := 0
+	for i, x := range s.srcs {
+		if frame >= x.from {
+			at = i
+		}
+	}
+	return at
+}
+
+// heading names what is sliced: the sample, or all the samples put together.
+func (s *slicer) heading() string {
+	if len(s.srcs) < 2 {
+		return s.title
+	}
+	var names []string
+	for _, x := range s.srcs {
+		names = append(names, x.name)
+	}
+	return strings.Join(names, " + ")
+}
+
+// rekey names the slicing for the samples it is made of now.
+func (s *slicer) rekey() {
+	var keys []string
+	for _, x := range s.srcs {
+		keys = append(keys, x.key)
+	}
+	s.key = fmt.Sprintf("%s|%d", strings.Join(keys, "+"), s.src.Frames())
+}
+
+// slicerAddHint is shown on the main screen while the slicer waits for a sample to add.
+const slicerAddHint = "Slicer: move to the pad (Pads) or the audio file (Files) to add and press Z; Esc cancels"
+
+// slicerAddSource puts another sample on the end of the one being sliced: its slices join the
+// others, and the random modes play across all of them. The slices it had are kept; it comes
+// with eight equal ones, unless the same samples were put together before, then what was kept
+// for them comes back.
+func (m Model) slicerAddSource(key, name string, sample formats.Sample) (tea.Model, tea.Cmd) {
+	s := m.slicer
+	s.adding = false
+	switch {
+	case sample.Frames() < formats.MinSliceFrames*2:
+		m.message = "that sample is too short to slice"
+		return m, nil
+	case len(s.srcs) >= slicerMaxSources:
+		m.message = fmt.Sprintf("%d samples is the most one slicer holds", slicerMaxSources)
+		return m, nil
+	}
+	s.undo = append(s.undo, s.sl.Clone())
+	from := s.src.Frames()
+	s.src = formats.JoinSamples(s.src, sample)
+	s.srcs = append(s.srcs, slicerSource{key: key, name: name, from: from})
+	s.rekey()
+	s.findPeak()
+	s.zoomed = false
+	if m.slices != nil {
+		if saved, ok := m.slices.load(s.key); ok && saved.Frames == s.src.Frames() && saved.Validate() == nil {
+			s.sl = saved
+			s.settle(m)
+			m.message = fmt.Sprintf("%q added; the slicing kept for these samples is back", name)
+			return m, nil
+		}
+	}
+	s.sl.Extend(s.src.Frames(), 8)
+	s.at = len(s.sl.Slices) - 8
+	s.settle(m)
+	m.message = fmt.Sprintf("%q added: sample %d, cut in 8 slices. e and E cut all the samples again, u takes it back", name, len(s.srcs))
+	return m, nil
+}
+
+// shrinkSources drops the samples that were added after the slicing now in front was made.
+func (s *slicer) shrinkSources() {
+	for len(s.srcs) > 1 && s.srcs[len(s.srcs)-1].from >= s.sl.Frames {
+		s.srcs = s.srcs[:len(s.srcs)-1]
+	}
+	if frames := s.sl.Frames; s.src.Frames() > frames {
+		s.src.Samples = s.src.Samples[:frames*max(s.src.Channels, 1)]
+		s.rekey()
+		s.findPeak()
+	}
 }
 
 // ---- editing ----
@@ -243,6 +384,9 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.busy != "" {
 		return m, nil
 	}
+	if s.tap != nil {
+		return m.slicerTapKey(name)
+	}
 	switch name {
 	case "esc", "q":
 		s.playing = false
@@ -263,6 +407,7 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "u":
 		if n := len(s.undo); n > 0 {
 			s.sl, s.undo = s.undo[n-1], s.undo[:n-1]
+			s.shrinkSources()
 			s.settle(m)
 			m.message = "undone"
 		}
@@ -274,7 +419,60 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "S":
 		seed := time.Now().UnixNano() & 0xffff
 		m.slicerChange(func(sl *formats.Slicing) { sl.Seed = seed })
-		m.message = fmt.Sprintf("new seed %d: the random picks and chances roll again", seed)
+		m.message = fmt.Sprintf("new seed %d: the dice roll again, so the random picks and chances come out differently", seed)
+		return m, nil
+	case "w":
+		if s.sl.Division == 0 {
+			m.message = "swing needs the grid: T puts the steps on one"
+			return m, nil
+		}
+		next := formats.Swings[(indexOf(formats.Swings, s.sl.Swing)+1)%len(formats.Swings)]
+		m.slicerChange(func(sl *formats.Slicing) { sl.Swing = next })
+		if next == 0 {
+			m.message = "swing off: every step on the beat"
+		} else {
+			m.message = fmt.Sprintf("swing %d%%: every second step comes late (50 is straight, 66 a triplet)", next)
+		}
+		return m, nil
+	case "W":
+		next := formats.Humanizes[(indexOf(formats.Humanizes, s.sl.Humanize)+1)%len(formats.Humanizes)]
+		m.slicerChange(func(sl *formats.Slicing) { sl.Humanize = next })
+		switch {
+		case next == 0:
+			m.message = "humanize off: every step as set"
+		case s.sl.Division == 0:
+			m.message = fmt.Sprintf("humanize %d%%: each step's loudness wanders (with the grid on, its timing too)", next)
+		default:
+			m.message = fmt.Sprintf("humanize %d%%: each step's loudness and timing wander a little", next)
+		}
+		return m, nil
+	case "v":
+		s.takes = slicerTakes[(indexOf(slicerTakes, s.takes)+1)%len(slicerTakes)]
+		if s.takes == 1 {
+			m.message = "a bounce makes one take"
+		} else {
+			m.message = fmt.Sprintf("a bounce makes %d takes, each from its own rounds, on free pads in a row", s.takes)
+		}
+		return m, nil
+	case "A":
+		if len(s.srcs) >= slicerMaxSources {
+			m.message = fmt.Sprintf("%d samples is the most one slicer holds", slicerMaxSources)
+			return m, nil
+		}
+		s.playing, s.adding = false, true
+		m.stopListening()
+		return m, nil
+	case "p":
+		return m.slicerTapStart()
+	case "E":
+		n := len(s.sl.Slices)
+		if n < 2 {
+			n = 8
+		}
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		m.slicerChange(func(sl *formats.Slicing) { sl.DivideIn(s.sourceStarts(), n, rng) })
+		s.at = 0
+		m.message = fmt.Sprintf("cut in %d slices at random places (E cuts again, e makes equal ones, u undoes)", len(s.sl.Slices))
 		return m, nil
 	case "T":
 		next := formats.Divisions[(indexOf(formats.Divisions, s.sl.Division)+1)%len(formats.Divisions)]
@@ -379,7 +577,7 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "e":
 		count := slicerEqualCounts[s.equal%len(slicerEqualCounts)]
 		s.equal++
-		m.slicerChange(func(sl *formats.Slicing) { sl.Divide(count) })
+		m.slicerChange(func(sl *formats.Slicing) { sl.DivideIn(s.sourceStarts(), count, nil) })
 		s.at = 0
 		m.message = fmt.Sprintf("cut in %d equal slices (u undoes)", len(s.sl.Slices))
 	case "t":
@@ -390,11 +588,20 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.message = fmt.Sprintf("no onsets found at sensitivity %.1f; t tries another", sens)
 			break
 		}
+		starts = append(starts, s.sourceStarts()...)
 		m.slicerChange(func(sl *formats.Slicing) { sl.SetStarts(starts) })
 		s.at = 0
 		m.message = fmt.Sprintf("%d slices from the onsets, sensitivity %.1f (t again changes it, u undoes)", len(s.sl.Slices), sens)
 	case "r":
 		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Reverse = !sl.Slices[s.at].Reverse })
+	case "x":
+		next := formats.Rolls[(indexOf(formats.Rolls, s.cur1().Roll)+1)%len(formats.Rolls)]
+		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Roll = next })
+		if next == 0 {
+			m.message = fmt.Sprintf("slice %d plays once", s.at+1)
+		} else {
+			m.message = fmt.Sprintf("slice %d rolls: its start hits %d times in the time the slice has", s.at+1, next)
+		}
 	case "m":
 		m.slicerChange(func(sl *formats.Slicing) {
 			if sl.Slices[s.at].Chance == 0 {
@@ -424,6 +631,85 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// slicerTapStart plays the sample from its start so that slices can be marked as it goes by, the
+// way chops are made on the SP: the slicing is cleared to one slice per sample, and every press
+// of Space cuts the slice that is playing at that moment.
+func (m Model) slicerTapStart() (tea.Model, tea.Cmd) {
+	s := m.slicer
+	if m.player == nil {
+		m.message = "no audio output to play on"
+		return m, nil
+	}
+	s.playing, s.zoomed = false, false
+	m.stopListening()
+	m.slicerChange(func(sl *formats.Slicing) { sl.SetStarts(s.sourceStarts()) })
+	s.at = 0
+	s.gen++
+	s.tap = &slicerTap{start: time.Now(), onsets: s.src.Transients(256, 0.5)}
+	_ = m.player.Play(s.src)
+	m.listening = "slicer"
+	m.message = ""
+	return m, m.slicerTick()
+}
+
+// slicerTapKey handles the keys while the sample plays for tapping.
+func (m Model) slicerTapKey(name string) (tea.Model, tea.Cmd) {
+	s := m.slicer
+	switch name {
+	case " ", "space":
+		frame := int(time.Since(s.tap.start) * formats.SampleRate / time.Second)
+		if frame >= s.sl.Frames {
+			return m.slicerTapEnd()
+		}
+		frame = formats.Settle(s.tap.onsets, frame, tapBefore, tapAfter)
+		if s.snap {
+			frame = s.src.ZeroCrossing(frame, 128)
+		}
+		in := -1
+		for i, x := range s.sl.Slices {
+			if frame >= x.Start && frame < x.End {
+				in = i
+			}
+		}
+		cut := -1
+		if in >= 0 {
+			m.slicerChange(func(sl *formats.Slicing) { cut = sl.Split(in, frame) })
+		}
+		if cut < 0 {
+			m.slicerUndoLast()
+			return m, nil
+		}
+		s.tap.marks++
+		s.at = cut
+	case "u":
+		if s.tap.marks > 0 {
+			m.slicerUndoLast()
+			s.tap.marks--
+			s.settle(m)
+		}
+	case "p", "esc", "q", "enter":
+		return m.slicerTapEnd()
+	}
+	return m, nil
+}
+
+// slicerTapEnd stops the sample and keeps the slices that were marked.
+func (m Model) slicerTapEnd() (tea.Model, tea.Cmd) {
+	s := m.slicer
+	marks := s.tap.marks
+	s.tap = nil
+	s.gen++
+	m.stopListening()
+	s.at = clamp(s.at, 0, len(s.sl.Slices)-1)
+	switch marks {
+	case 0:
+		m.message = "no marks: the sample is back to one slice per sample (u undoes)"
+	default:
+		m.message = fmt.Sprintf("%d marks: %d slices (u undoes; p taps again)", marks, len(s.sl.Slices))
+	}
+	return m, nil
+}
+
 // slicerBankTempo is the tempo of the bank in front, for a grid to start from.
 func (m Model) slicerBankTempo() float64 {
 	if m.snap == nil {
@@ -444,6 +730,7 @@ func (m Model) slicerUndoLast() {
 	s := m.slicer
 	if n := len(s.undo); n > 0 {
 		s.sl, s.undo = s.undo[n-1], s.undo[:n-1]
+		s.shrinkSources()
 	}
 }
 
@@ -598,6 +885,12 @@ func (m Model) slicerTick() tea.Cmd {
 // round sounding is under way, so it takes over without a gap.
 func (m Model) slicerTicked(msg slicerTickMsg) (tea.Model, tea.Cmd) {
 	s := m.slicer
+	if s != nil && s.tap != nil && msg.gen == s.gen {
+		if !m.player.Playing() || time.Since(s.tap.start) >= framesDuration(s.sl.Frames) {
+			return m.slicerTapEnd()
+		}
+		return m, m.slicerTick()
+	}
 	if s == nil || !s.playing || msg.gen != s.gen {
 		return m, nil
 	}
@@ -649,6 +942,19 @@ func (m Model) slicerAudition() (tea.Model, tea.Cmd) {
 // playhead is where the sound is now, as a frame of the source, and the slice it is in; -1
 // when nothing plays.
 func (s *slicer) playhead() (frame, slice int) {
+	if s.tap != nil {
+		at := int(time.Since(s.tap.start) * formats.SampleRate / time.Second)
+		if at >= s.sl.Frames {
+			return -1, -1
+		}
+		in := -1
+		for i, x := range s.sl.Slices {
+			if at >= x.Start && at < x.End {
+				in = i
+			}
+		}
+		return at, in
+	}
 	if !s.playing || s.cur == nil {
 		return -1, -1
 	}
@@ -657,12 +963,24 @@ func (s *slicer) playhead() (frame, slice int) {
 		if elapsed < p.At || elapsed >= p.At+max(p.Frames, 1) {
 			continue
 		}
+		if p.Rest {
+			return -1, -1
+		}
 		start, length := s.sl.Slices[p.Slice].Start, s.sl.Length(p.Slice)
-		// On a grid the slice may sound for less than the step: past that, it is over.
-		if elapsed-p.At >= max(p.Audio, 1) {
+		t := elapsed - p.At - p.Lead
+		heard := p.Audio
+		if p.Roll > 1 {
+			// Each hit plays the start of the slice again.
+			seg := max(p.Frames/p.Roll, 1)
+			t = (elapsed - p.At) % seg
+			heard = min(p.Len, seg)
+		}
+		// On a grid the slice may sound for less than the step: before that or past it,
+		// nothing sounds.
+		if t < 0 || t >= max(heard, 1) {
 			return -1, p.Slice
 		}
-		pos := (elapsed - p.At) * length / max(p.Audio, 1)
+		pos := t * length / max(p.Len, 1)
 		if s.sl.Slices[p.Slice].Reverse {
 			pos = length - 1 - pos
 		}
@@ -673,46 +991,108 @@ func (s *slicer) playhead() (frame, slice int) {
 
 // ---- bounce ----
 
-// bounceSample renders what the slicer plays, for as many rounds as are set.
-func (s *slicer) bounceSample() formats.Sample {
+// takeSample renders take k of a bounce: as many rounds as are set, the next ones after the
+// rounds of the take before, as the rounds that play on one after the other.
+func (s *slicer) takeSample(k int) formats.Sample {
 	out := formats.Sample{Channels: s.src.Channels}
 	for i := 0; i < s.rounds; i++ {
-		part := s.render(i, 1)
+		part := s.render(k*s.rounds+i, 1)
 		out.Samples = append(out.Samples, part.sample.Samples...)
 	}
 	return out
 }
 
-// slicerBounce asks which pad the rendered sequence goes onto.
+// varies says whether the rounds can differ: a take after the first would be the same as it
+// otherwise.
+func (s *slicer) varies() bool {
+	if s.sl.Mode != formats.ModeOrder || s.sl.Humanize > 0 {
+		return true
+	}
+	for _, i := range s.sl.Order {
+		if c := s.sl.Slices[i].Chance; c > 0 && c < 100 {
+			return true
+		}
+	}
+	return false
+}
+
+// slicerBounce asks which pad the rendered sequence goes onto, or which pad the first of
+// several takes goes onto.
 func (m Model) slicerBounce() (tea.Model, tea.Cmd) {
 	s := m.slicer
 	if m.unit == nil || m.snap == nil {
 		m.message = "no unit to put it on"
 		return m, nil
 	}
-	sample := s.bounceSample()
-	if sample.Frames() == 0 {
-		m.message = "nothing to bounce: every slice is silent"
+	if s.takes > 1 && !s.varies() {
+		m.message = "every take would sound the same: the mode is order and every slice always plays. M picks a random mode, ( ) lower a chance, W humanizes; v sets one take"
 		return m, nil
 	}
 	// The pad's name has room for 16 characters: the sample's, cut short, and a mark.
 	name := []rune(s.name)
-	name = name[:min(len(name), app.MaxPadName-4)]
-	padName := strings.TrimSpace(string(name)) + " slc"
+	var samples []formats.Sample
+	var names []string
+	for k := 0; k < s.takes; k++ {
+		sample := s.takeSample(k)
+		if sample.Frames() == 0 {
+			m.message = "nothing to bounce: every slice is silent"
+			return m, nil
+		}
+		padName := strings.TrimSpace(string(name[:min(len(name), app.MaxPadName-4)])) + " slc"
+		if s.takes > 1 {
+			padName = fmt.Sprintf("%s slc%d", strings.TrimSpace(string(name[:min(len(name), app.MaxPadName-5)])), k+1)
+		}
+		samples, names = append(samples, sample), append(names, padName)
+	}
 	bank := m.bank
-	m.picker = &picker{bank: bank, pad: m.nextFree(bank), bounce: &sample, bounceName: padName}
+	m.picker = &picker{bank: bank, pad: m.nextFree(bank), bounces: samples, bounceNames: names}
 	return m, nil
 }
 
-// bounceEnter puts the rendered sequence on the pad the picker chose.
+// takePads are the free pads of the picker's bank, from the pad chosen on, that the takes go on.
+func (m Model) takePads(p *picker) []proto.PadIndex {
+	start, _ := proto.PadFromBankPad(uint16(p.bank), uint16(p.pad))
+	taken := func(pad proto.PadIndex) bool { return m.snap.Pads[pad.Index()].HasSample }
+	pads := slices.DeleteFunc(app.FreePads(start, len(p.bounces), taken), func(pad proto.PadIndex) bool { return pad.Bank() != start.Bank() })
+	return pads[:min(len(pads), len(p.bounces))]
+}
+
+// bounceEnter puts the rendered sequence on the pad the picker chose, or the takes on the free
+// pads from there on.
 func (m Model) bounceEnter() (tea.Model, tea.Cmd) {
 	p := m.picker
 	target, _ := proto.PadFromBankPad(uint16(p.bank), uint16(p.pad))
+	if len(p.bounces) > 1 {
+		pads := m.takePads(p)
+		if len(pads) == 0 {
+			m.message = fmt.Sprintf("no free pad in bank %c from %s on", 'A'+p.bank, target)
+			return m, nil
+		}
+		samples, names := p.bounces, p.bounceNames
+		m.picker = nil
+		unit := m.unit
+		m.busy = fmt.Sprintf("bouncing %d takes", len(pads))
+		return m, m.edit(func() tea.Msg {
+			var done []string
+			for i, pad := range pads {
+				if _, err := app.PutSample(unit, pad, samples[i], names[i]); err != nil {
+					return doneMsg{message: fmt.Sprintf("take %d failed on %s: %v", i+1, pad, err), reload: len(done) > 0}
+				}
+				done = append(done, pad.String())
+			}
+			first := pads[0]
+			message := fmt.Sprintf("bounced %d takes to %s (%.1f s each)", len(done), strings.Join(done, ", "), float64(samples[0].Frames())/formats.SampleRate)
+			if len(done) < len(samples) {
+				message += fmt.Sprintf("; %d did not fit in the bank", len(samples)-len(done))
+			}
+			return doneMsg{message: message, reload: true, focus: &first}
+		})
+	}
 	if m.snap.Pads[target.Index()].HasSample && !p.confirm {
 		p.confirm = true
 		return m, nil
 	}
-	sample, name := *p.bounce, p.bounceName
+	sample, name := p.bounces[0], p.bounceNames[0]
 	m.picker = nil
 	unit := m.unit
 	m.busy = "bouncing to " + target.String()
@@ -744,6 +1124,8 @@ const (
 	cellSlice cellKind = iota
 	cellEdge
 	cellHead
+	// cellSource is the line where one of the samples put together ends and the next starts.
+	cellSource
 )
 
 // cellStyle is how a run of cells is drawn.
@@ -774,6 +1156,8 @@ func (m Model) slicerStyle(c cellStyle) lipgloss.Style {
 	switch c.kind {
 	case cellHead:
 		return lipgloss.NewStyle().Foreground(st.th.text).Bold(true)
+	case cellSource:
+		return lipgloss.NewStyle().Foreground(st.th.text).Faint(true)
 	case cellEdge:
 		if c.selected && c.end {
 			return lipgloss.NewStyle().Foreground(st.th.warn).Bold(true)
@@ -821,8 +1205,23 @@ func (m Model) slicerBox() string {
 	span := max(to-from, 1)
 	head, headSlice := s.playhead()
 	help := m.slicerHelpLines(cells)
-	// What is not the waveform takes 15 lines with the border; the waveform gets the rest.
-	rows := clamp(m.geom().bodyH-15-len(help), 3, 10)
+	// What is not the waveform takes 16 lines with the border (one more with several samples);
+	// the waveform gets the rest. On a low screen the blank lines between the parts go.
+	chrome := 16
+	if len(s.srcs) > 1 {
+		chrome++
+	}
+	roomy := m.geom().bodyH >= 34
+	if !roomy {
+		chrome -= 3
+	}
+	blank := func() []string {
+		if roomy {
+			return []string{""}
+		}
+		return nil
+	}
+	rows := clamp(m.geom().bodyH-chrome-len(help), 3, 10)
 
 	// Slices can overlap: the one in front, or the one sounding, shows where they do.
 	styleOf := func(frame int) cellStyle {
@@ -850,6 +1249,13 @@ func (m Model) slicerBox() string {
 	if head >= from && head < to {
 		headCol = min(colOf(head), cols-1)
 	}
+	// Where one sample ends and the next starts.
+	joint := make([]bool, cols+1)
+	for _, x := range s.srcs[1:] {
+		if x.from > from && x.from < to {
+			joint[min(colOf(x.from), cols-1)] = true
+		}
+	}
 
 	// The waveform: peaks as dots, mirrored about the middle, with the edges as full lines.
 	amps := s.src.Peaks(from, to, cols)
@@ -857,7 +1263,7 @@ func (m Model) slicerBox() string {
 	heights := make([]int, cols)
 	for c, a := range amps {
 		heights[c] = min(max(1, int(math.Sqrt(float64(a)/float64(s.peak))*float64(half)+0.5)), half)
-		if edge[c].slice > 0 || c == headCol {
+		if edge[c].slice > 0 || c == headCol || joint[c] {
 			heights[c] = half
 		}
 	}
@@ -881,6 +1287,8 @@ func (m Model) slicerBox() string {
 			switch {
 			case headCol == c*2 || headCol == c*2+1:
 				styles[c] = cellStyle{kind: cellHead}
+			case joint[c*2] || joint[c*2+1]:
+				styles[c] = cellStyle{kind: cellSource}
 			case edge[c*2].slice > 0 || edge[c*2+1].slice > 0:
 				e := edge[c*2]
 				e.put(edge[c*2+1], s.at)
@@ -962,18 +1370,24 @@ func (m Model) slicerBox() string {
 
 	// Header.
 	playing := st.faint.Render("■ stopped")
-	if s.playing {
+	switch {
+	case s.tap != nil:
+		playing = st.bad.Render("● tapping")
+	case s.playing:
 		playing = st.good.Render("▶ playing")
 	}
-	title := st.bold.Render("Slicer") + st.dim.Render("  ·  ") + st.text.Render(s.title) + st.dim.Render(fmt.Sprintf("  ·  %s  ·  %s", seconds(sl.Frames), plural(len(sl.Slices), "slice")))
+	title := st.bold.Render("Slicer") + st.dim.Render("  ·  ") + st.text.Render(s.heading()) + st.dim.Render(fmt.Sprintf("  ·  %s  ·  %s", seconds(sl.Frames), plural(len(sl.Slices), "slice")))
 	right := st.dim.Render("mode ") + st.accent.Render(sl.Mode.String()) + "  " + playing
 	titleLine := title + strings.Repeat(" ", max(cells-ansi.StringWidth(title)-ansi.StringWidth(right), 2)) + right
 
-	lines := []string{titleLine, "", m.slicerRuns(numText, numStyle)}
+	lines := append([]string{titleLine}, blank()...)
+	lines = append(lines, m.slicerRuns(numText, numStyle))
 	lines = append(lines, wave...)
-	lines = append(lines, bar, axisLine, "")
+	lines = append(lines, bar, axisLine)
+	lines = append(lines, blank()...)
 	lines = append(lines, m.sliceInfo(from, to, cols)...)
-	lines = append(lines, "", m.orderLane(cells, head >= 0))
+	lines = append(lines, blank()...)
+	lines = append(lines, m.orderLane(cells, head >= 0))
 	lines = append(lines, m.roundLine(cells))
 	lines = append(lines, st.faint.Render(strings.Repeat("─", cells)))
 	lines = append(lines, help...)
@@ -996,8 +1410,11 @@ type helpGroup struct {
 // slicerHelp are the keys the dialog lists under itself, in groups; the order lane's keys take
 // the place of the first two while the cursor is in the lane.
 func (s *slicer) slicerHelp() []helpGroup {
+	if s.tap != nil {
+		return []helpGroup{{"tap", []helpKey{{"Space", "cut here"}, {"u", "take the last cut back"}, {"p", "stop"}}}}
+	}
 	groups := []helpGroup{
-		{"slices", []helpKey{{"h l", "select"}, {"c", "cut"}, {"d", "delete"}, {"e", "equal slices"}, {"t", "onsets"}, {"u", "undo"}}},
+		{"slices", []helpKey{{"h l", "select"}, {"c", "cut"}, {"d", "delete"}, {"e", "equal"}, {"E", "random"}, {"t", "onsets"}, {"p", "tap"}, {"u", "undo"}}},
 		{"edges", []helpKey{{"[ ]", "start"}, {"{ }", "end"}, {"f", "coarse"}, {"z", "snap"}, {"i I", "zoom"}}},
 	}
 	if s.focusLane {
@@ -1006,9 +1423,10 @@ func (s *slicer) slicerHelp() []helpGroup {
 		}
 	}
 	return append(groups,
-		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"X", "plain"}}},
-		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"M", "mode"}, {"T", "grid"}, {", .", "tempo"}, {"S", "seed"}, {"Tab", "order lane"}}},
-		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"n", "rounds"}, {"Esc", "close"}}},
+		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x", "roll"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"X", "plain"}}},
+		helpGroup{"feel", []helpKey{{"T", "grid"}, {", .", "tempo"}, {"w", "swing"}, {"W", "humanize"}}},
+		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"M", "mode"}, {"S", "new seed"}, {"Tab", "order lane"}}},
+		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"n", "rounds"}, {"v", "takes"}, {"A", "add sample"}, {"Esc", "close"}}},
 	)
 }
 
@@ -1053,6 +1471,9 @@ func (m Model) sliceLabel(i, width int) string {
 	}
 	if x.Reverse {
 		flags = append(flags, "rev")
+	}
+	if x.Roll > 1 {
+		flags = append(flags, fmt.Sprintf("x%d", x.Roll))
 	}
 	if x.Pitch != 0 {
 		flags = append(flags, fmt.Sprintf("%+d", x.Pitch))
@@ -1125,10 +1546,15 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 		st.dim.Render("start ") + st.text.Render(seconds(x.Start)) + st.faint.Render(fmt.Sprintf(" (%d)", x.Start)) + "   " +
 		st.dim.Render("end ") + st.text.Render(seconds(x.End)) + st.faint.Render(fmt.Sprintf(" (%d)", x.End)) + "   " +
 		st.dim.Render("length ") + st.text.Render(seconds(s.sl.Length(s.at)))
+	roll := "off"
+	if x.Roll > 1 {
+		roll = fmt.Sprintf("x%d", x.Roll)
+	}
 	second := st.dim.Render("chance ") + st.accent.Render(chance) + "   " +
 		st.dim.Render("gain ") + st.accent.Render(fmt.Sprintf("%d%%", x.Gain)) + "   " +
 		st.dim.Render("pitch ") + st.accent.Render(fmt.Sprintf("%+d", x.Pitch)) + "   " +
-		st.dim.Render("play ") + st.accent.Render(dir)
+		st.dim.Render("play ") + st.accent.Render(dir) + "   " +
+		st.dim.Render("roll ") + st.accent.Render(roll)
 	dot := float64(max((to-from)/cols, 1)) / formats.SampleRate * 1000
 	grid := "grid off"
 	if s.sl.Division > 0 {
@@ -1139,9 +1565,36 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 		step = "eight dots"
 		dot *= 8
 	}
-	third := st.faint.Render(fmt.Sprintf("a nudge moves "+step+", %.2f ms  ·  snap %s  ·  %s  ·  seed %d  ·  a bounce holds %s",
-		dot, onOff(s.snap), grid, s.sl.Seed, plural(s.rounds, "round")))
-	return []string{first, second, third}
+	swing, human := "swing off", "humanize off"
+	if s.sl.Swing > 0 {
+		swing = fmt.Sprintf("swing %d%%", s.sl.Swing)
+	}
+	if s.sl.Humanize > 0 {
+		human = fmt.Sprintf("humanize %d%%", s.sl.Humanize)
+	}
+	third := st.faint.Render(fmt.Sprintf("a nudge moves "+step+", %.2f ms  ·  snap %s  ·  %s  ·  %s  ·  %s", dot, onOff(s.snap), grid, swing, human))
+	take := plural(s.takes, "take") + " of " + plural(s.rounds, "round")
+	fourth := st.faint.Render(fmt.Sprintf("seed %d  ·  a bounce makes %s  ·  the seed is the dice of the random modes and chances: the same seed picks the same slices, S rolls again", s.sl.Seed, take))
+	lines := []string{first, second, third, fourth}
+	if len(s.srcs) > 1 {
+		var parts []string
+		in := s.sourceAt(x.Start)
+		for i, src := range s.srcs {
+			end := s.src.Frames()
+			if i+1 < len(s.srcs) {
+				end = s.srcs[i+1].from
+			}
+			part := fmt.Sprintf("%d %s %s", i+1, src.name, seconds(end-src.from))
+			if i == in {
+				part = st.accent.Render(part)
+			} else {
+				part = st.dim.Render(part)
+			}
+			parts = append(parts, part)
+		}
+		lines = append(lines, st.dim.Render("Samples  ")+strings.Join(parts, st.faint.Render("  ·  ")))
+	}
+	return lines
 }
 
 // orderLane draws the order the slices play in, as numbered steps with the cursor on one.

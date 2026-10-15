@@ -137,9 +137,10 @@ type picker struct {
 	sourceBank int
 	bank       int
 	pad        int
-	// bounce is a rendered sample, under bounceName, that the picker puts on the pad chosen.
-	bounce     *formats.Sample
-	bounceName string
+	// bounces are rendered samples, each under its name, that the picker puts on the pad chosen
+	// (one) or on the free pads from there on (several).
+	bounces     []formats.Sample
+	bounceNames []string
 	// digits is the pad number being typed.
 	digits string
 	// confirm is set once the chosen pad holds a sample and the user has been told.
