@@ -917,6 +917,8 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 		switch name {
 		case "V":
 			return m.startSelecting()
+		case "D":
+			return m.clearTrackInView()
 		case "b":
 			if !d.HasSourceBank {
 				m.message = "its pads span more than one bank; retargeting needs one bank"
@@ -3326,6 +3328,33 @@ func (m Model) changeCondition(forward bool) (tea.Model, tea.Cmd) {
 	m.loopDirty = true
 	m.message = fmt.Sprintf("%s %s: %s%s", pad, m.patStepLabel(), next, m.cycleNote())
 	return m, nil
+}
+
+// clearTrackInView takes out every note of the track under the cursor that starts in the bars on
+// show (the page, or the range), leaving the track's notes in the other bars and the other
+// tracks as they are. u brings them back.
+func (m Model) clearTrackInView() (tea.Model, tea.Cmd) {
+	pad, _, ok := m.cellOfPattern()
+	if !ok {
+		return m, nil
+	}
+	d := m.pattern
+	sp := m.patSpan(d, m.geom().bodyW-2)
+	ticks := map[uint32]bool{}
+	for _, n := range d.Notes {
+		if c := noteCol(d, n.Tick); n.Pad == pad && c >= sp.lo && c < sp.hi {
+			ticks[n.Tick] = true
+		}
+	}
+	if len(ticks) == 0 {
+		m.message = fmt.Sprintf("no note of %s starts in %s", pad, spanLabel(d, sp))
+		return m, nil
+	}
+	note := fmt.Sprintf("%s: the notes of %s in %s are taken out (u brings them back)", d.Slot, pad, strings.ToLower(spanLabel(d, sp)))
+	return m.editPatternBytes(func(b []byte) ([]byte, error) {
+		out, _, err := formats.EditNotes(b, pad, ticks, formats.NoteEdit{Delete: true})
+		return out, err
+	}, note)
 }
 
 // patternsKeyMove is a key of the open pattern that moves the cursor, done as it is without a

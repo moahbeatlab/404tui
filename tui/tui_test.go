@@ -4899,3 +4899,45 @@ func TestOnlyHeardTracksMakeTheCycleLonger(t *testing.T) {
 		t.Errorf("second track muted: %q", line)
 	}
 }
+
+func TestDClearsTheTrackOnlyInTheBarsOnShow(t *testing.T) {
+	s := openConditionPattern(t)
+	pad0 := s.m().pattern.Grid.Rows[0].Pad
+	count := func() (n int) {
+		for _, x := range s.m().pattern.Notes {
+			if x.Pad == pad0 {
+				n++
+			}
+		}
+		return
+	}
+	// Doubled (T, down to DOUBLE, Enter): four bars, the first two on show.
+	s.press("T", "j", "j", "j", "j", "j", "enter")
+	if bars := s.m().pattern.Bars(); bars != 4 {
+		t.Fatalf("%d bars after doubling, want 4", bars)
+	}
+	s.press("l", "x", "g")
+	before := count()
+	s.press("D")
+	s.shows("taken out")
+	after := count()
+	if after >= before || after == 0 {
+		t.Errorf("notes of the track: %d before D, %d after; the bars not on show keep theirs", before, after)
+	}
+	s.press("u")
+	if got := count(); got != before {
+		t.Errorf("u left %d notes, want %d", got, before)
+	}
+	// Another track is not touched.
+	s.press("D", "j")
+	rows := s.m().pattern.Grid.Rows
+	other := 0
+	for _, x := range s.m().pattern.Notes {
+		if x.Pad == rows[1].Pad {
+			other++
+		}
+	}
+	if other == 0 {
+		t.Error("D took notes out of another track")
+	}
+}

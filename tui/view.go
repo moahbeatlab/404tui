@@ -1250,8 +1250,8 @@ func (m Model) patternHelp(d *app.PatternDetail) []helpGroup {
 	if m.selecting() {
 		return m.selectionHelp()
 	}
-	move := helpGroup{"move", []helpKey{{"h j k l", "move"}, {"{ }", "turn page"}, {"v", "show/loop bars"}, {"Tab Enter", "open track"}, {"x", "note on/off"}, {"V", "select notes"},
-		{"t", "tools (this pad)"}, {"T", "tools (all)"}, {"Space P", "play"}, {"Esc", "back"}}}
+	move := helpGroup{"move", []helpKey{{"h j k l", "move"}, {"{ }", "turn page"}, {"v", "show/loop bars"}, {"Tab Enter", "open track"}, {"x", "note on/off"}, {"V", "select notes"}, {"D", "clear track here"},
+		{"t", "tools (this pad)"}, {"T", "tools: swing, quantize, shift, double, half"}, {"Space P", "play"}, {"Esc", "back"}}}
 	if m.patFocus {
 		move = helpGroup{"track", []helpKey{{"h l", "step"}, {"j k", "other track"}, {"{ }", "turn page"}, {"Enter x", "note on/off"}, {"Space P", "play"}, {"Tab", "fold"}, {"Esc", "back"}}}
 	}
