@@ -624,7 +624,8 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Gain = min(sl.Slices[s.at].Gain+10, 400) })
 	case "X":
 		m.slicerChange(func(sl *formats.Slicing) {
-			sl.Slices[s.at] = formats.Slice{Start: sl.Slices[s.at].Start, Chance: 100, Gain: 100}
+			x := sl.Slices[s.at]
+			sl.Slices[s.at] = formats.Slice{Start: x.Start, End: x.End, Chance: 100, Gain: 100}
 		})
 		m.message = fmt.Sprintf("slice %d back to its plain settings", s.at+1)
 	}
@@ -1307,18 +1308,47 @@ func (m Model) slicerBox() string {
 	for c := range numStyle {
 		numStyle[c] = cellStyle{kind: cellSlice, slice: -1}
 	}
-	for i, x := range sl.Slices {
+	// A number is left out when it would run into the one before; the selected one always shows.
+	put := func(i int, force bool) {
+		x := sl.Slices[i]
 		if x.Start < from || x.Start >= to {
-			continue
+			return
 		}
 		c := min(colOf(x.Start)/2, cells-1)
 		label := []rune(fmt.Sprint(i + 1))
+		if !force {
+			for k := -1; k <= len(label); k++ {
+				if c+k >= 0 && c+k < cells && numText[c+k] != ' ' {
+					return
+				}
+			}
+		}
 		for k, r := range label {
 			if c+k < cells {
 				numText[c+k] = r
 				numStyle[c+k] = cellStyle{kind: cellEdge, slice: i, selected: i == s.at}
 			}
 		}
+		if force && c > 0 && numText[c-1] == ' ' {
+			numText[c-1] = '▸'
+			numStyle[c-1] = cellStyle{kind: cellEdge, slice: i, selected: true}
+		}
+	}
+	for i := range sl.Slices {
+		if i != s.at {
+			put(i, false)
+		}
+	}
+	// The selected one goes last and clears what it covers.
+	if x := sl.Slices[s.at]; x.Start >= from && x.Start < to {
+		c := min(colOf(x.Start)/2, cells-1)
+		for k := -1; k <= len(fmt.Sprint(s.at+1)); k++ {
+			if c+k >= 0 && c+k < cells {
+				numText[c+k] = ' '
+				numStyle[c+k] = cellStyle{kind: cellSlice, slice: -1}
+			}
+		}
+		put(s.at, true)
 	}
 
 	if x := sl.Slices[s.at]; x.End > from && x.End <= to {
@@ -1637,6 +1667,8 @@ func (m Model) orderLane(width int, playing bool) string {
 			style = lipgloss.NewStyle().Background(st.th.accent).Foreground(st.th.cursorFg).Bold(true)
 		case !unused && playing && order[i] == headSlice:
 			style = style.Background(st.th.tile).Bold(true)
+		case order[i] == s.at && !unused:
+			style = style.Underline(true).Bold(true)
 		case unused:
 			style = lipgloss.NewStyle().Foreground(st.th.faint)
 		}

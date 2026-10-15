@@ -2,7 +2,10 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"math"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -731,5 +734,70 @@ func TestSlicerGridTicksShowWithGrid(t *testing.T) {
 	}
 	if strings.Contains(v, "the same seed picks") {
 		t.Fatal("the long seed sentence is back on screen")
+	}
+}
+
+func TestSlicerPlainSettingsKeepTheSlicesEdges(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("l", "r", "(", "x")
+	before := s.slicing().Slices[1]
+	s.press("X")
+	got := s.slicing().Slices[1]
+	if got.Start != before.Start || got.End != before.End || got.End <= got.Start {
+		t.Errorf("X changed the edges: %+v -> %+v", before, got)
+	}
+	if got.Reverse || got.Chance != 100 || got.Gain != 100 || got.Roll != 0 {
+		t.Errorf("X left settings behind: %+v", got)
+	}
+}
+
+func TestSlicerNumbersDropWhenSlicesAreTiny(t *testing.T) {
+	s := slicerOpen(t)
+	s.send(tea.WindowSizeMsg{Width: 80, Height: 40})
+	// 120 slices of 400 frames: far more than the 72 cells of the waveform can label.
+	sl := s.slicing()
+	sl.Slices = sl.Slices[:0]
+	for i := 0; i < 120; i++ {
+		sl.Slices = append(sl.Slices, formats.Slice{Start: i * 400, End: (i + 1) * 400, Chance: 100, Gain: 100})
+	}
+	sl.ResetOrder()
+	s.m().slicer.at = 57
+	numbers := ""
+	for _, line := range strings.Split(ansiStrip(s.m().slicerBox()), "\n") {
+		if numbers == "" && strings.Contains(line, "58") { // the line of slice numbers is the first
+			numbers = line
+		}
+	}
+	runs := strings.FieldsFunc(numbers, func(r rune) bool { return r < '0' || r > '9' })
+	sawSelected := false
+	for _, run := range runs {
+		n, _ := strconv.Atoi(run)
+		if n < 1 || n > 120 {
+			t.Errorf("run %q is not a slice number: %q", run, numbers)
+		}
+		sawSelected = sawSelected || n == 58
+	}
+	if !sawSelected {
+		t.Errorf("the selected slice 58 has no number: %q", numbers)
+	}
+	if !strings.Contains(numbers, "▸58") {
+		t.Errorf("the selected slice has no start marker: %q", numbers)
+	}
+}
+
+func TestSlicerOrderLaneMarksTheSelectedSlice(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(prev)
+	s := slicerOpen(t)
+	s.press("l", "l") // slice 3, lane not focused
+	three := s.m().orderLane(80, false)
+	s.press("l") // slice 4
+	four := s.m().orderLane(80, false)
+	if three == four {
+		t.Error("the lane looks the same with slice 3 and slice 4 selected")
+	}
+	if ansiStrip(three) != ansiStrip(four) {
+		t.Errorf("selecting changed the lane's text:\n%q\n%q", ansiStrip(three), ansiStrip(four))
 	}
 }
