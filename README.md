@@ -181,7 +181,8 @@ you left it. The keys are listed at the bottom of the dialog, in groups.
   `n` sets (1, 2, 4 or 8). The same seed gives the same bounce. A bounce is the slices alone,
   not the pattern under them; with a pattern and a grid the slicer says how many rounds make a
   whole number of pattern loops, and `N` sets exactly that many, so the bounce loops cleanly
-  against the pattern.
+  against the pattern. `V` limits the pattern under the slices to one bar, two bars, or all of
+  it (like `v` in the pattern editor); the view and the loop follow.
 - **Takes** (`v`): 1, 2, 4 or 8. With more than one, `b` renders that many takes, each from its
   own rounds (take 1 is what a loop plays in its first rounds, take 2 the rounds after them…), and
   puts them on the **free** pads of the bank from the pad you choose onward, named `name slc1`,

@@ -1293,3 +1293,31 @@ func TestSlicerSaysHowManyRoundsCoverThePattern(t *testing.T) {
 		t.Errorf("the bounce is %d frames, the pattern %d", got, s.m().slicer.bed.sample.Frames())
 	}
 }
+
+func TestSlicerLimitsThePatternToSomeBars(t *testing.T) {
+	s := slicerOpen(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	patternOnA2(t, s, "A2")
+	data, err := formats.StartPattern([]proto.PadIndex{pad(t, "A5")}, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.sim.AddFile(formats.PatternPath(1, pad(t, "A2")), data)
+	s.press("T", "P", "enter")
+	whole := s.m().slicer.bed.sample.Frames()
+	s.press("V")
+	s.shows("Bar 1 of the pattern only")
+	bed := s.m().slicer.bed
+	if got := bed.sample.Frames(); got*4 != whole && (got*4 < whole-8 || got*4 > whole+8) {
+		t.Errorf("one bar is %d frames, the whole pattern %d", got, whole)
+	}
+	s.shows("Bar 1 / 4")
+	s.press("V", "V", "V", "V")
+	s.shows("Bars 1–2 of the pattern only")
+	for i := 0; i < 3; i++ {
+		s.press("V")
+	}
+	if s.m().slicer.bedRange != nil || s.m().slicer.bed.sample.Frames() != whole {
+		t.Errorf("V did not come round to the whole pattern: %v", s.m().slicer.bedRange)
+	}
+}

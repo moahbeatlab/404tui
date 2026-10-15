@@ -117,7 +117,7 @@ func (m Model) slicerChooserKey(name string) (tea.Model, tea.Cmd) {
 	case "0", "backspace", "x":
 		s.chooser = nil
 		if s.bed != nil {
-			s.bed, s.dirty = nil, true
+			s.bed, s.bedRange, s.dirty = nil, nil, true
 			m.message = "the slices play alone again"
 		}
 	case "enter":
@@ -127,6 +127,9 @@ func (m Model) slicerChooserKey(name string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		s.chooser = nil
+		if s.bedRange != nil && s.bedRange.slot != row.Slot {
+			s.bedRange = nil
+		}
 		m.message = "mixing pattern " + row.Slot.String() + "…"
 		return m, m.slicerMixBed(row.Slot, false)
 	}
@@ -136,9 +139,13 @@ func (m Model) slicerChooserKey(name string) (tea.Model, tea.Cmd) {
 // slicerMixBed mixes a pattern in the background: remix when it is the pattern already under the
 // slices, mixed again after something changed.
 func (m Model) slicerMixBed(slot proto.PadIndex, remix bool) tea.Cmd {
-	mix, bpm := m.patternMixer(slot), m.bankTempo(int(slot.Bank()))
+	var rng *barRange
+	if r := m.slicer.bedRange; r != nil && r.slot == slot {
+		rng = r
+	}
+	mix, bpm := m.patternMixIn(slot, rng), m.bankTempo(int(slot.Bank()))
 	return func() tea.Msg {
-		sample, err := mix()
+		sample, _, err := mix()
 		return slicerBedMsg{slot: slot, sample: sample, bpm: bpm, err: err, remix: remix}
 	}
 }
@@ -277,11 +284,53 @@ func (s *slicer) bedFraction(d *app.PatternDetail) (float64, bool) {
 	if s.bed == nil || !s.playing || s.cur == nil || s.cur.start.IsZero() || s.bed.slot != d.Slot {
 		return 0, false
 	}
-	loop := d.TicksToMillis(int(d.Length)) / 1000
+	loop := d.TicksToMillis(s.bedTicks(d)) / 1000
 	if loop <= 0 {
 		return 0, false
 	}
 	return math.Mod(time.Since(s.cur.start).Seconds()/loop, 1), true
+}
+
+// bedTicks is how long the pattern under the slices loops: the bars of its range, or all of it.
+func (s *slicer) bedTicks(d *app.PatternDetail) int {
+	if r := s.bedRange; r != nil && r.slot == d.Slot && r.last < d.Bars() {
+		return min(r.bars()*d.Beats*int(formats.PPQ), int(d.Length))
+	}
+	return int(d.Length)
+}
+
+// slicerBarsKey is V: the pattern under the slices is limited to one bar, two bars, then the
+// whole pattern again, as v does in the pattern editor. The slices follow the shorter loop.
+func (m Model) slicerBarsKey() (tea.Model, tea.Cmd) {
+	s := m.slicer
+	if s.bed == nil {
+		m.message = "V limits the pattern to some of its bars: P puts one under the slices first"
+		return m, nil
+	}
+	d := m.patPreview[s.bed.slot]
+	if d == nil {
+		m.message = "the pattern is being read…"
+		return m, nil
+	}
+	items := []*barRange{nil}
+	for b := range d.Bars() {
+		items = append(items, &barRange{slot: d.Slot, first: b, last: b})
+	}
+	for b := 0; b+1 < d.Bars(); b++ {
+		items = append(items, &barRange{slot: d.Slot, first: b, last: b + 1})
+	}
+	at := 0
+	for i, it := range items {
+		if (it == nil && s.bedRange == nil) || (it != nil && s.bedRange != nil && *it == *s.bedRange) {
+			at = i
+		}
+	}
+	s.bedRange = items[(at+1)%len(items)]
+	m.message = "the whole pattern is under the slices"
+	if s.bedRange != nil {
+		m.message = s.bedRange.label() + " of the pattern only, looped under the slices  ·  V for the next"
+	}
+	return m, m.slicerMixBed(s.bed.slot, true)
 }
 
 // slicerPatternLines draws the pattern as the pattern editor does, its steps and a row for each
@@ -302,18 +351,30 @@ func (m Model) slicerPatternLines(width, room int) []string {
 	}
 	st := m.st
 	frac, playing := s.bedFraction(d)
-	page := 0
-	if playing {
-		page = m.loopStep(d, frac) / d.StepsPerPage()
+	// Bars of the range: shown whole, the playhead goes round them.
+	first, nBars := 0, d.Bars()
+	if r := s.bedRange; r != nil && r.slot == slot && r.last < d.Bars() {
+		first, nBars = r.first, r.bars()
 	}
-	sp := spanFor(d, page, width, 1, 4, gridGapW)
+	spp := d.StepsPerPage()
+	now := first*spp + min(int(frac*float64(nBars*spp)), nBars*spp-1)
+	page := first
+	if playing && nBars == d.Bars() {
+		page = now / spp
+	}
+	var sp stepSpan
+	if nBars < d.Bars() {
+		sp = spanBars(d, first, nBars, width, 1, 4, gridGapW)
+	} else {
+		sp = spanFor(d, page, width, 1, 4, gridGapW)
+	}
 	tracks := len(d.Grid.Rows)
 	shown := min(tracks, max(room-4, 1))
 	head := st.bold.Render("Pattern "+slot.String()) +
 		st.dim.Render(fmt.Sprintf("  %.2f BPM  ·  %d/4  ·  %s  ·  %s", d.BankTempo, d.Beats, plural(d.Bars(), "bar"), plural(len(d.PadsUsed), "pad")))
 	lines := []string{head + "  " + m.spanHeader(d, sp), m.stepRuler(d, sp)}
 	if playing {
-		lines = append(lines, m.headLine(d, sp, m.loopStep(d, frac), fmt.Sprintf("▶ %.1f s to go", (1-frac)*d.TicksToMillis(int(d.Length))/1000)))
+		lines = append(lines, m.headLine(d, sp, now, fmt.Sprintf("▶ %.1f s to go", (1-frac)*d.TicksToMillis(s.bedTicks(d))/1000)))
 	} else {
 		lines = append(lines, "")
 	}

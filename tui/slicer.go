@@ -77,6 +77,8 @@ type slicer struct {
 	takes int
 	// bed is the pattern that plays under the slices, chosen with P.
 	bed *patternBed
+	// bedRange limits the pattern to some of its bars; nil is all of it.
+	bedRange *barRange
 	// chooser is the list of patterns while P has it open.
 	chooser *patternChooser
 	// cutting is the mode D starts: a cursor on the waveform that h l move and p puts an edge
@@ -555,6 +557,8 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		s.rounds = slicerRounds[(indexOf(slicerRounds, s.rounds)+1)%len(slicerRounds)]
 		m.message = fmt.Sprintf("a bounce holds %s", plural(s.rounds, "round"))
 		return m, nil
+	case "V":
+		return m.slicerBarsKey()
 	case "N":
 		cover, ok := s.coverRounds()
 		if !ok {
@@ -1806,7 +1810,7 @@ func (s *slicer) slicerHelp() []helpGroup {
 	return append(groups,
 		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x", "roll"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"1 2", "attack"}, {"3 4", "release"}, {"X", "plain"}}},
 		helpGroup{"feel", []helpKey{{"T", "grid"}, {", .", "tempo"}, {"C", "cut on grid"}, {"w", "swing"}, {"W", "humanize"}}},
-		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"P", "pattern"}, {"M", "mode"}, {"S", "new seed"}, {"Tab", "order lane"}}},
+		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"P", "pattern"}, {"V", "pattern bars"}, {"M", "mode"}, {"S", "new seed"}, {"Tab", "order lane"}}},
 		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"s y", "mark"}, {"B", "marked to pads"}, {"n N", "rounds"}, {"v", "takes"}, {"A", "add sample"}, {"Esc", "close"}}},
 	)
 }

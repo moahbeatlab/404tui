@@ -1168,6 +1168,18 @@ func (m Model) patternConditions(slot proto.PadIndex) (app.Conditions, int64) {
 // patternMix is patternMixer that also says how many loops of the pattern the mix has: one,
 // unless conditions make it a cycle (and then each note is where its condition puts it).
 func (m Model) patternMix(slot proto.PadIndex) func() (formats.Sample, int, error) {
+	// With a range set on this pattern, only its bars are mixed: the loop is that long.
+	var rng *barRange
+	if m.pattern != nil && m.pattern.Slot == slot {
+		if r, ok := m.rangeOf(m.pattern); ok {
+			rng = &r
+		}
+	}
+	return m.patternMixIn(slot, rng)
+}
+
+// patternMixIn is patternMix over the bars of rng, the whole pattern when it is nil.
+func (m Model) patternMixIn(slot proto.PadIndex, rng *barRange) func() (formats.Sample, int, error) {
 	bpm := m.snap.Banks[slot.Bank()].Tempo
 	if m.snap.UsesProjectTempo {
 		bpm = m.snap.ProjectTempo
@@ -1182,12 +1194,6 @@ func (m Model) patternMix(slot proto.PadIndex) func() (formats.Sample, int, erro
 	var try loopTry
 	if m.loopTry != nil {
 		try = *m.loopTry
-	}
-	// With a range set on this pattern, only its bars are mixed: the loop is that long.
-	var rng barRange
-	ranged := false
-	if m.pattern != nil && m.pattern.Slot == slot {
-		rng, ranged = m.rangeOf(m.pattern)
 	}
 	// Conditions are read now, with the pads: the screen changes them while the mix is made.
 	conds, seed := m.patternConditions(slot)
@@ -1206,7 +1212,7 @@ func (m Model) patternMix(slot proto.PadIndex) func() (formats.Sample, int, erro
 		if err != nil {
 			return formats.Sample{}, 0, err
 		}
-		if ranged {
+		if rng != nil {
 			bar := uint32(pattern.BeatsPerBar()) * formats.PPQ
 			pattern = pattern.Slice(uint32(rng.first)*bar, min(uint32(rng.last+1)*bar, pattern.Length))
 		}
