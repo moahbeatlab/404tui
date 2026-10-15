@@ -718,3 +718,18 @@ func slicesEqual(a, b []int16) bool {
 	}
 	return true
 }
+
+func TestSlicerGridTicksShowWithGrid(t *testing.T) {
+	s := slicerOpen(t)
+	if strings.Contains(s.m().View(), "┃") {
+		t.Fatal("ticks shown with the grid off")
+	}
+	s.press("T")
+	v := s.m().View()
+	if !strings.Contains(v, "┃") || !strings.Contains(v, "╵") {
+		t.Fatalf("no bar and beat ticks with the grid on:\n%s", v)
+	}
+	if strings.Contains(v, "the same seed picks") {
+		t.Fatal("the long seed sentence is back on screen")
+	}
+}

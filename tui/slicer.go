@@ -1211,6 +1211,9 @@ func (m Model) slicerBox() string {
 	if len(s.srcs) > 1 {
 		chrome++
 	}
+	if sl.Division > 0 {
+		chrome++
+	}
 	roomy := m.geom().bodyH >= 34
 	if !roomy {
 		chrome -= 3
@@ -1221,7 +1224,7 @@ func (m Model) slicerBox() string {
 		}
 		return nil
 	}
-	rows := clamp(m.geom().bodyH-chrome-len(help), 3, 10)
+	rows := clamp(m.geom().bodyH-chrome-len(help), 3, 16)
 
 	// Slices can overlap: the one in front, or the one sounding, shows where they do.
 	styleOf := func(frame int) cellStyle {
@@ -1383,7 +1386,11 @@ func (m Model) slicerBox() string {
 	lines := append([]string{titleLine}, blank()...)
 	lines = append(lines, m.slicerRuns(numText, numStyle))
 	lines = append(lines, wave...)
-	lines = append(lines, bar, axisLine)
+	lines = append(lines, bar)
+	if sl.Division > 0 {
+		lines = append(lines, m.gridTicks(from, to, cells))
+	}
+	lines = append(lines, axisLine)
 	lines = append(lines, blank()...)
 	lines = append(lines, m.sliceInfo(from, to, cols)...)
 	lines = append(lines, blank()...)
@@ -1580,9 +1587,9 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 	if s.sl.Humanize > 0 {
 		human = fmt.Sprintf("humanize %d%%", s.sl.Humanize)
 	}
-	third := st.faint.Render(fmt.Sprintf("a nudge moves "+step+", %.2f ms  ·  snap %s  ·  %s  ·  %s  ·  %s", dot, onOff(s.snap), grid, swing, human))
+	third := st.faint.Render(fmt.Sprintf("a nudge moves "+step+", %.2f ms", dot)) + st.dim.Render(fmt.Sprintf("  ·  snap %s  ·  %s  ·  %s  ·  %s", onOff(s.snap), grid, swing, human))
 	take := plural(s.takes, "take") + " of " + plural(s.rounds, "round")
-	fourth := st.faint.Render(fmt.Sprintf("seed %d  ·  a bounce makes %s  ·  the seed is the dice of the random modes and chances: the same seed picks the same slices, S rolls again", s.sl.Seed, take))
+	fourth := st.dim.Render(fmt.Sprintf("seed %d  ·  a bounce makes %s", s.sl.Seed, take))
 	lines := []string{first, second, third, fourth}
 	if len(s.srcs) > 1 {
 		var parts []string
@@ -1666,4 +1673,36 @@ func (m Model) roundLine(width int) string {
 		parts = append(parts, n)
 	}
 	return st.dim.Render(fmt.Sprintf("Round %-3d", s.round+1)) + st.text.Render(strings.Join(parts, " "))
+}
+
+// gridTicks marks the steps of the tempo grid under the waveform: a dot per step, a tick per
+// beat and a bar line per four beats, so the slice edges can be judged against the tempo.
+func (m Model) gridTicks(from, to, cells int) string {
+	st, s := m.st, m.slicer
+	step := 60 / s.sl.BPM * formats.SampleRate * 4 / float64(s.sl.Division)
+	span := float64(max(to-from, 1))
+	if step <= 0 || s.sl.BPM <= 0 {
+		return ""
+	}
+	perBeat := max(s.sl.Division/4, 1)
+	cellsPerStep := step / span * float64(cells)
+	out := []rune(strings.Repeat(" ", cells))
+	for n := int(float64(from) / step); float64(n)*step < float64(to); n++ {
+		at := float64(n)*step - float64(from)
+		if at < 0 {
+			continue
+		}
+		c := min(int(at/span*float64(cells)), cells-1)
+		beat := n%perBeat == 0
+		bar := beat && (n/perBeat)%4 == 0
+		switch {
+		case bar:
+			out[c] = '┃'
+		case beat && (cellsPerStep*float64(perBeat) >= 2):
+			out[c] = '╵'
+		case !beat && cellsPerStep >= 2:
+			out[c] = '·'
+		}
+	}
+	return st.faint.Render(string(out))
 }
