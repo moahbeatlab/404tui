@@ -349,8 +349,12 @@ func (m Model) statusBar() string {
 	if m.listening != "" && m.player != nil && m.player.Playing() {
 		line = st.hot.Render("♪ "+ansi.Truncate(app.Base(m.listening), 28, "…")) + st.faint.Render("  │  ") + line
 	}
-	if m.message != "" {
-		line = st.warn.Render(m.message) + st.faint.Render("  │  ") + line
+	message := m.message
+	if message == "" && m.slicer != nil && m.slicer.adding {
+		message = slicerAddHint
+	}
+	if message != "" {
+		line = st.warn.Render(message) + st.faint.Render("  │  ") + line
 	}
 	return ansi.Truncate(" "+line, m.width, "…")
 }

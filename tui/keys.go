@@ -154,9 +154,6 @@ func (m Model) key(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.log.Debug("key", "key", key.String(), "section", sectionNames[m.section], "overlay", m.overlayName(), "busy", m.busy)
 	model, cmd := m.handleKey(key)
 	if updated, ok := model.(Model); ok {
-		if updated.slicer != nil && updated.slicer.adding && updated.message == "" {
-			updated.message = slicerAddHint
-		}
 		updated.persist()
 		return updated, cmd
 	}
@@ -201,7 +198,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.slicer != nil && m.slicer.adding && (name == "esc" || name == "q") {
 		m.slicer.adding = false
 		m.message = "nothing added"
-		return m, nil
+		return m.goTo(m.slicer.backTo)
 	}
 	// The help overlay swallows everything except what closes it.
 	if m.help {

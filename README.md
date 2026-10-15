@@ -83,16 +83,23 @@ you left it. The keys are listed at the bottom of the dialog, in groups.
 
 **Cutting**
 
-- The sample opens in 8 equal slices. `e` cuts it in 16, 32, 4, 8… **equal** slices, `E` cuts the
+- The sample opens in 8 equal slices. `e` cuts it in 16, 32, 4, 8… **equal** slices (the message
+  says which one comes next; it divides the sample by length and does not look at the tempo), `E` cuts the
   same number of slices at **random places**, so they differ in length (again for another roll),
   `t` slices at the **onsets** it finds (again for a different sensitivity), `c` cuts the slice in
   front in two and `d` removes it. `h l` choose a slice, `u` undoes.
-- **Tap** (`p`): the sample plays from the start and every press of Space cuts a slice there, the
+- **By hand** (`D`): takes every edge away (`u` brings them back) and shows a cursor. `h l` move
+  it a dot (eight with `f`), `H L` jump, by a grid step when a grid is on (`T`), else by 1/32 of
+  the sample. `p` puts an edge at the cursor; while the sample plays (Space) it cuts at the
+  playhead instead, so you can listen and mark as it goes by. `d` removes the slice the cursor is
+  in; `D` or Esc puts the cursor away.
+- **Tap** (`p` when the cursor is not on): the sample plays from the start and every press of Space cuts a slice there, the
   way you chop on the SP. The slicing starts again from one slice, so the slices you had are
   replaced (`u` brings them back). A key press comes a little after the hit, so a mark moves to
   the onset just before it, up to 100 ms back. `u` takes the last mark back, `p` or Esc stops.
-- **Several samples** (`A`): puts another pad's or file's sample after the one you are slicing.
-  The dialog steps aside: move to the other pad (Pads) or file (Files), press `Z`, and it joins,
+- **Several samples** (`A`): puts another sample after the one you are slicing.
+  The dialog steps aside and the file browser comes up: move to an audio file, press `Z`, and it joins
+  (`1` goes to the pads instead, to take the sample of a pad; Esc gives up and goes back to where you were),
   cut in 8 slices of its own; Esc gives up. Slices of all the samples are played in one
   sequence, so the random modes pick across them, for example between two vocals. A thin line on
   the waveform shows where a sample ends, and a line under it lists them. `e`, `E` and `t` cut

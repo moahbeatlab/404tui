@@ -67,6 +67,8 @@ type slicer struct {
 	// adding is set while the dialog is put aside so that the sample to add can be chosen on
 	// the main screen.
 	adding bool
+	// backTo is the part of the main screen A was pressed in, to go back to.
+	backTo int
 	// tap is set while the sample plays for markers to be put on it.
 	tap *slicerTap
 	// takes is how many bounces a b makes, each from its own rounds.
@@ -75,6 +77,10 @@ type slicer struct {
 	bed *patternBed
 	// chooser is the list of patterns while P has it open.
 	chooser *patternChooser
+	// cutting is the mode D starts: a cursor on the waveform that h l move and p puts an edge
+	// at, at cutAt (a frame); the playhead takes its place while the sample plays.
+	cutting bool
+	cutAt   int
 	// marks are the slices picked with s for B to put each on a pad; they are numbers of
 	// slices, so they are dropped when the slices are cut or deleted.
 	marks     map[int]bool
@@ -268,7 +274,7 @@ func (s *slicer) rekey() {
 }
 
 // slicerAddHint is shown on the main screen while the slicer waits for a sample to add.
-const slicerAddHint = "Slicer: move to the pad (Pads) or the audio file (Files) to add and press Z; Esc cancels"
+const slicerAddHint = "Slicer: choose an audio file to add (1 for a pad instead) and press Z; Esc cancels"
 
 // slicerAddSource puts another sample on the end of the one being sliced: its slices join the
 // others, and the random modes play across all of them. The slices it had are kept; it comes
@@ -277,6 +283,7 @@ const slicerAddHint = "Slicer: move to the pad (Pads) or the audio file (Files) 
 func (m Model) slicerAddSource(key, name string, sample formats.Sample) (tea.Model, tea.Cmd) {
 	s := m.slicer
 	s.adding = false
+	m.section = s.backTo // where A was pressed; that part of the screen was loaded already
 	switch {
 	case sample.Frames() < formats.MinSliceFrames*2:
 		m.message = "that sample is too short to slice"
@@ -339,6 +346,7 @@ func (s *slicer) settle(m Model) {
 	s.at = clamp(s.at, 0, len(s.sl.Slices)-1)
 	s.lane = clamp(s.lane, 0, len(s.sl.Order)-1)
 	s.dirty = true
+	s.cutAt = clamp(s.cutAt, 0, max(s.sl.Frames-1, 0))
 	if len(s.sl.Slices) != s.marksOver {
 		s.marks, s.marksOver = nil, len(s.sl.Slices)
 	}
@@ -403,7 +411,14 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if s.chooser != nil {
 		return m.slicerChooserKey(name)
 	}
+	if s.cutting {
+		if mm, cmd, ok := m.slicerCutKey(name); ok {
+			return mm, cmd
+		}
+	}
 	switch name {
+	case "D":
+		return m.slicerClear()
 	case "esc", "q":
 		s.playing = false
 		m.stopListening()
@@ -475,9 +490,10 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.message = fmt.Sprintf("%d samples is the most one slicer holds", slicerMaxSources)
 			return m, nil
 		}
-		s.playing, s.adding = false, true
+		s.playing, s.adding, s.backTo = false, true, m.section
 		m.stopListening()
-		return m, nil
+		// The file browser comes first, to pick a new sample; 1 goes to the pads for an existing one.
+		return m.goTo(secFiles)
 	case "p":
 		return m.slicerTapStart()
 	case "E":
@@ -599,7 +615,7 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		s.equal++
 		m.slicerChange(func(sl *formats.Slicing) { sl.DivideIn(s.sourceStarts(), count, nil) })
 		s.at = 0
-		m.message = fmt.Sprintf("cut in %d equal slices (u undoes)", len(s.sl.Slices))
+		m.message = fmt.Sprintf("cut in %d equal slices; e again: %d, u undoes", len(s.sl.Slices), slicerEqualCounts[s.equal%len(slicerEqualCounts)])
 	case "t":
 		sens := slicerSensitivities[s.sens%len(slicerSensitivities)]
 		s.sens++
@@ -706,6 +722,86 @@ func (m Model) slicerTapStart() (tea.Model, tea.Cmd) {
 	m.listening = "slicer"
 	m.message = ""
 	return m, m.slicerTick()
+}
+
+// slicerClear takes every edge away, leaving one slice per sample, and starts the cut cursor
+// at the beginning: h l move it, p puts an edge there, and while the sample plays p cuts at the
+// playhead instead.
+func (m Model) slicerClear() (tea.Model, tea.Cmd) {
+	s := m.slicer
+	s.zoomed, s.focusLane = false, false
+	m.slicerChange(func(sl *formats.Slicing) { sl.SetStarts(s.sourceStarts()) })
+	s.at, s.cutting, s.cutAt = 0, true, 0
+	m.message = "all edges taken away (u brings them back): h l move the cursor, p puts an edge, Space plays"
+	return m, nil
+}
+
+// slicerCutKey handles the keys of the cut cursor; ok is false for the ones it leaves to the
+// slicer, which then act on the slice the cursor is in.
+func (m Model) slicerCutKey(name string) (tea.Model, tea.Cmd, bool) {
+	s := m.slicer
+	frames := s.sl.Frames
+	from, to := s.view()
+	per := max((to-from)/(m.slicerCells()*2), 1)
+	move := func(delta int) {
+		s.cutAt = clamp(s.cutAt+delta, 0, frames-1)
+		m.message = fmt.Sprintf("cursor at %s (slice %d)", seconds(s.cutAt), s.sliceAt(s.cutAt)+1)
+	}
+	dots := 1
+	if s.coarse {
+		dots = 8
+	}
+	step := max(frames/32, per)
+	if grid := s.sl.StepFrames(); grid > 0 {
+		step = grid
+	}
+	switch name {
+	case "h", "left":
+		move(-per * dots)
+	case "l", "right":
+		move(per * dots)
+	case "H":
+		// The grid step before the cursor, from the start of the sample.
+		move(-(s.cutAt - (s.cutAt-1)/step*step))
+	case "L":
+		move((s.cutAt/step+1)*step - s.cutAt)
+	case "p":
+		at := s.cutAt
+		if head, _ := s.playhead(); s.playing && head >= 0 {
+			at = head
+		}
+		if s.snap {
+			at = s.src.ZeroCrossing(at, 256)
+		}
+		i := s.sliceAt(at)
+		cut := -1
+		m.slicerChange(func(sl *formats.Slicing) { cut = sl.Split(i, at) })
+		if cut < 0 {
+			m.slicerUndoLast()
+			m.message = "too close to an edge to put one here"
+		} else {
+			m.message = fmt.Sprintf("edge at %s: %d slices", seconds(at), len(s.sl.Slices))
+		}
+		return m, nil, true
+	case "esc", "D":
+		s.cutting = false
+		m.message = "cut cursor off"
+	default:
+		s.at = s.sliceAt(s.cutAt)
+		return m, nil, false
+	}
+	return m, nil, true
+}
+
+// sliceAt is the slice a frame is in: the nearest before it when it is in a gap.
+func (s *slicer) sliceAt(frame int) int {
+	at := 0
+	for i, x := range s.sl.Slices {
+		if x.Start <= frame {
+			at = i
+		}
+	}
+	return at
 }
 
 // slicerTapKey handles the keys while the sample plays for tapping.
@@ -1234,6 +1330,8 @@ const (
 	cellSlice cellKind = iota
 	cellEdge
 	cellHead
+	// cellCursor is the cursor D starts, where p puts an edge.
+	cellCursor
 	// cellSource is the line where one of the samples put together ends and the next starts.
 	cellSource
 )
@@ -1266,6 +1364,8 @@ func (m Model) slicerStyle(c cellStyle) lipgloss.Style {
 	switch c.kind {
 	case cellHead:
 		return lipgloss.NewStyle().Foreground(st.th.text).Bold(true)
+	case cellCursor:
+		return lipgloss.NewStyle().Foreground(st.th.accent).Bold(true)
 	case cellSource:
 		return lipgloss.NewStyle().Foreground(st.th.text).Faint(true)
 	case cellEdge:
@@ -1358,9 +1458,12 @@ func (m Model) slicerBox() string {
 			edge[min(colOf(x.End), cols-1)].put(edgeInfo{slice: i + 1, end: true}, s.at)
 		}
 	}
-	headCol := -1
+	headCol, cursorCol := -1, -1
 	if head >= from && head < to {
 		headCol = min(colOf(head), cols-1)
+	}
+	if s.cutting && s.cutAt >= from && s.cutAt < to {
+		cursorCol = min(colOf(s.cutAt), cols-1)
 	}
 	// Where one sample ends and the next starts.
 	joint := make([]bool, cols+1)
@@ -1376,7 +1479,7 @@ func (m Model) slicerBox() string {
 	heights := make([]int, cols)
 	for c, a := range amps {
 		heights[c] = min(max(1, int(math.Sqrt(float64(a)/float64(s.peak))*float64(half)+0.5)), half)
-		if edge[c].slice > 0 || c == headCol || joint[c] {
+		if edge[c].slice > 0 || c == headCol || c == cursorCol || joint[c] {
 			heights[c] = half
 		}
 	}
@@ -1400,6 +1503,8 @@ func (m Model) slicerBox() string {
 			switch {
 			case headCol == c*2 || headCol == c*2+1:
 				styles[c] = cellStyle{kind: cellHead}
+			case cursorCol == c*2 || cursorCol == c*2+1:
+				styles[c] = cellStyle{kind: cellCursor}
 			case joint[c*2] || joint[c*2+1]:
 				styles[c] = cellStyle{kind: cellSource}
 			case edge[c*2].slice > 0 || edge[c*2+1].slice > 0:
@@ -1561,7 +1666,10 @@ func (s *slicer) slicerHelp() []helpGroup {
 	}
 	groups := []helpGroup{
 		{"slices", []helpKey{{"h l", "select"}, {"c", "cut"}, {"d", "delete"}, {"e", "equal"}, {"E", "random"}, {"t", "onsets"}, {"p", "tap"}, {"u", "undo"}}},
-		{"edges", []helpKey{{"[ ]", "start"}, {"{ }", "end"}, {"f", "coarse"}, {"z", "snap"}, {"i I", "zoom"}}},
+		{"edges", []helpKey{{"[ ]", "start"}, {"{ }", "end"}, {"f", "coarse"}, {"z", "snap"}, {"i I", "zoom"}, {"D", "clear, by hand"}}},
+	}
+	if s.cutting {
+		groups = []helpGroup{{"cut", []helpKey{{"h l", "move"}, {"H L", "jump"}, {"p", "place an edge (at the playhead when playing)"}, {"d", "delete slice"}, {"Space", "play"}, {"D Esc", "done"}}}}
 	}
 	if s.focusLane {
 		groups = []helpGroup{

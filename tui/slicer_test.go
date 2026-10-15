@@ -514,13 +514,15 @@ func TestSlicerAddsASampleAndPlaysAcrossBoth(t *testing.T) {
 	s := slicerOpen(t)
 	s.withVoice()
 	s.press("Z", "A")
-	s.shows("Pads", "move to the pad")
+	s.shows("audio file to add")
 	if s.m().slicer == nil || !s.m().slicer.adding {
 		t.Fatal("the slicer is not waiting for a sample")
 	}
 	s.hides("Slice 1/8")
-	// Z on the drums again would add the same sample; the voice is on A6.
-	s.press("l", "Z")
+	// A file, not a pad: the voice is in IMPORT.
+	s.expand("IMPORT")
+	s.cursorOn("voice.wav")
+	s.press("Z")
 	sl := s.m().slicer
 	if sl == nil || sl.adding || len(sl.srcs) != 2 {
 		t.Fatalf("the sample was not added: %+v", sl)
@@ -572,10 +574,20 @@ func TestSlicerAddCanBeCancelledAndKeepsTheChain(t *testing.T) {
 	}
 	s.shows("Slice 1/8")
 	// Put together, edited, closed and put together again: the edit is back.
-	s.press("A", "l", "Z")
+	addVoice := func() {
+		s.press("A")
+		s.expand("IMPORT")
+		s.cursorOn("voice.wav")
+		s.press("Z")
+	}
+	addVoice()
 	s.press("r")
-	s.press("esc", "h") // the cursor went to the voice; back to the drums
-	s.press("Z", "A", "l", "Z")
+	s.press("esc")
+	if s.m().section != secPads {
+		t.Errorf("after adding, the screen is in section %d, not back in the pads", s.m().section)
+	}
+	s.press("Z")
+	addVoice()
 	if got := s.slicing(); len(got.Slices) != 16 || !got.Slices[8].Reverse {
 		t.Errorf("the slicing of the two was not kept: %+v", got.Slices[8])
 	}
@@ -586,7 +598,7 @@ func TestSlicerChainFitsTheScreen(t *testing.T) {
 		s := slicerOpen(t)
 		s.send(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 		s.withVoice()
-		s.press("Z", "A", "l", "Z", "i")
+		s.press("Z", "A", "1", "l", "Z", "i")
 		if len(s.m().slicer.srcs) != 2 {
 			t.Fatalf("%dx%d: not added", size[0], size[1])
 		}
@@ -1053,4 +1065,127 @@ func loud(x formats.Sample) (n int) {
 		}
 	}
 	return n
+}
+
+func TestSlicerAddOpensTheFileBrowser(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("A")
+	if s.m().section != secFiles || !s.m().slicer.adding {
+		t.Fatalf("section %d, adding %v", s.m().section, s.m().slicer.adding)
+	}
+	s.shows("audio file to add")
+	// A pad can be added too: 1 goes there. Esc gives up and goes back to where A was pressed.
+	s.press("1")
+	if s.m().section != secPads || !s.m().slicer.adding {
+		t.Fatalf("1 did not go to the pads: section %d", s.m().section)
+	}
+	s.press("esc")
+	if s.m().slicer.adding || s.m().section != secPads {
+		t.Errorf("Esc: adding %v, section %d", s.m().slicer.adding, s.m().section)
+	}
+	s.press("A", "1", "Z")
+	if len(s.m().slicer.srcs) != 2 || s.m().slicer.adding {
+		t.Errorf("a pad was not added: %d samples", len(s.m().slicer.srcs))
+	}
+}
+
+func TestSlicerEqualSaysWhatComesNext(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("e")
+	s.shows("16 equal slices; e again: 32")
+	s.press("e")
+	s.shows("32 equal slices; e again: 4")
+	s.press("e", "e")
+	if n := len(s.slicing().Slices); n != 8 {
+		t.Errorf("%d slices after 4 then 8", n)
+	}
+}
+
+func TestSlicerClearThenPlaceEdgesByHand(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("D")
+	if n := len(s.slicing().Slices); n != 1 || !s.m().slicer.cutting {
+		t.Fatalf("%d slices, cutting %v", n, s.m().slicer.cutting)
+	}
+	s.shows("place an edge") // the help of the cursor
+	// Move on and place: the edge lands where the cursor is (without snapping to a zero crossing).
+	s.press("z") // snap off
+	s.press("L", "L", "L", "L", "L", "L", "L", "L")
+	at := s.m().slicer.cutAt
+	if at <= 0 {
+		t.Fatal("the cursor did not move")
+	}
+	s.press("p")
+	if got := s.slicing(); len(got.Slices) != 2 || got.Slices[1].Start != at {
+		t.Fatalf("slices %+v, cursor at %d", got.Slices, at)
+	}
+	// Further on again: a third slice. h goes back a dot, where an edge is possible too.
+	s.press("L", "L", "p")
+	if len(s.slicing().Slices) != 3 {
+		t.Errorf("%d slices", len(s.slicing().Slices))
+	}
+	before := s.m().slicer.cutAt
+	s.press("h")
+	if s.m().slicer.cutAt >= before {
+		t.Error("h did not move back")
+	}
+	// Twice in one place: the second is too close to the first.
+	s.press("p", "p")
+	s.shows("too close")
+	if len(s.slicing().Slices) != 4 {
+		t.Errorf("%d slices, want 4", len(s.slicing().Slices))
+	}
+	// d deletes the slice the cursor is in.
+	s.press("d")
+	if len(s.slicing().Slices) != 3 {
+		t.Errorf("%d slices after d", len(s.slicing().Slices))
+	}
+	s.press("esc")
+	if s.m().slicer.cutting || s.m().slicer == nil {
+		t.Error("Esc did not just leave the cut cursor")
+	}
+	for i := 0; i < 20 && len(s.slicing().Slices) != 8; i++ {
+		s.press("u")
+	}
+	if len(s.slicing().Slices) != 8 {
+		t.Errorf("undo brought back %d slices, want the 8 it was cleared from", len(s.slicing().Slices))
+	}
+}
+
+func TestSlicerCutCursorJumpsAGridStep(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("T") // a grid
+	step := s.slicing().StepFrames()
+	if step == 0 {
+		t.Fatal("no grid")
+	}
+	s.press("D", "L")
+	if got := s.m().slicer.cutAt; got != step {
+		t.Errorf("one jump reaches %d, one step is %d", got, step)
+	}
+	s.press("L", "L", "L")
+	if got := s.m().slicer.cutAt; got != s.slicing().Frames-1 {
+		t.Errorf("jumps past the end reach %d, the last frame is %d", got, s.slicing().Frames-1)
+	}
+	s.press("H", "H", "H", "H", "H")
+	if got := s.m().slicer.cutAt; got != 0 {
+		t.Errorf("jumps back reach %d, want the start", got)
+	}
+}
+
+func TestSlicerPlayingThenPlacesAtThePlayhead(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("D", "z", " ")
+	// The playhead is 0.5 s in.
+	if cur := s.m().slicer.cur; cur != nil {
+		cur.start = time.Now().Add(-500 * time.Millisecond)
+	}
+	s.press("p")
+	if n := len(s.slicing().Slices); n != 2 {
+		t.Fatalf("%d slices", n)
+	}
+	at := s.slicing().Slices[1].Start
+	if at < 22000 || at > 26000 {
+		t.Errorf("the edge is at frame %d, the playhead was near 24000", at)
+	}
 }
