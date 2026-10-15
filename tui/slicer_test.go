@@ -1353,3 +1353,25 @@ func TestSlicerRedoAndFitTempo(t *testing.T) {
 		t.Errorf("after F the sample is %.3f bars at %g BPM", bars, sl.BPM)
 	}
 }
+
+func TestSlicerStretchesTheSampleToBars(t *testing.T) {
+	s := slicerOpen(t)
+	s.send(tea.WindowSizeMsg{Width: 120, Height: 40})
+	s.press("T")
+	for s.slicing().Division != 16 {
+		s.press("T")
+	}
+	s.press(".", ".", ".", ".", ".", ".", ".", ".", ".", ".", "K")
+	if s.m().picker == nil || s.m().picker.bounceWhat != "stretch" {
+		t.Fatalf("K opened no pad chooser: %q", s.m().message)
+	}
+	s.shows("Put the stretched sample on a pad", "bars at")
+	got := s.m().picker.bounces[0]
+	bpm := s.slicing().BPM
+	bars := float64(got.Frames()) / (240 / bpm * formats.SampleRate)
+	if bars != float64(int(bars+0.5)) && (bars-float64(int(bars+0.5)) > 0.001 || float64(int(bars+0.5))-bars > 0.001) {
+		t.Errorf("the stretched sample is %.3f bars at %g BPM", bars, bpm)
+	}
+	s.press("A", "9", "enter")
+	s.shows("stretched to")
+}

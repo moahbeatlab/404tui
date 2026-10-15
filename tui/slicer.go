@@ -583,6 +583,8 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "V":
 		return m.slicerBarsKey()
+	case "K":
+		return m.slicerStretch()
 	case "N":
 		cover, ok := s.coverRounds()
 		if !ok {
@@ -690,6 +692,14 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			m.message = fmt.Sprintf("slice %d rolls: its start hits %d times in the time the slice has", s.at+1, next)
 		}
+	case "Q":
+		if s.cur1().Roll < 2 {
+			m.message = "Q shapes a roll: x makes the slice roll first"
+			return m, nil
+		}
+		next := (s.cur1().RollShape + 1) % len(formats.RollShapes)
+		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].RollShape = next })
+		m.message = fmt.Sprintf("slice %d: the roll is %s", s.at+1, rollShapeText(formats.RollShapes[next]))
 	case "m":
 		m.slicerChange(func(sl *formats.Slicing) {
 			if sl.Slices[s.at].Chance == 0 {
@@ -1382,6 +1392,37 @@ func (m Model) slicerBounce() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// slicerStretch asks which pad the whole sample goes onto, stretched without a change of pitch
+// to a whole number of bars at the tempo of the grid (or of the bank, with no grid).
+func (m Model) slicerStretch() (tea.Model, tea.Cmd) {
+	s := m.slicer
+	if m.unit == nil || m.snap == nil {
+		m.message = "no unit to put it on"
+		return m, nil
+	}
+	bpm := m.slicerBankTempo()
+	if s.sl.Division > 0 && s.sl.BPM > 0 {
+		bpm = s.sl.BPM
+	}
+	if s.bed != nil && s.bed.bpm > 0 {
+		bpm = s.bed.bpm
+	}
+	barFrames := 240 / bpm * formats.SampleRate
+	bars := max(math.Round(float64(s.src.Frames())/barFrames), 1)
+	frames := int(math.Round(bars * barFrames))
+	ratio := float64(frames) / float64(max(s.src.Frames(), 1))
+	if ratio < 0.5 || ratio > 2 {
+		m.message = fmt.Sprintf("%.0f bars at %g BPM would stretch the sample %.2f times: too far to sound right. , . set another tempo", bars, bpm, ratio)
+		return m, nil
+	}
+	out := s.src.Stretched(frames)
+	name := []rune(s.name)
+	padName := strings.TrimSpace(string(name[:min(len(name), app.MaxPadName-3)])) + " st"
+	m.picker = &picker{bank: m.bank, pad: m.nextFree(m.bank), bounces: []formats.Sample{out}, bounceNames: []string{padName},
+		bounceWhat: "stretch", note: fmt.Sprintf("%.1f s stretched to %.0f bars at %g BPM, %.1f s (x%.3f, same pitch)", float64(s.src.Frames())/formats.SampleRate, bars, bpm, float64(frames)/formats.SampleRate, ratio)}
+	return m, nil
+}
+
 // slicerBounceMarked asks which pad the marked slices go onto: each one as it sounds, on its
 // own pad, from the pad chosen on.
 func (m Model) slicerBounceMarked() (tea.Model, tea.Cmd) {
@@ -1856,10 +1897,10 @@ func (s *slicer) slicerHelp() []helpGroup {
 		}
 	}
 	return append(groups,
-		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x", "roll"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"1 2", "attack"}, {"3 4", "release"}, {"X", "plain"}}},
+		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x Q", "roll shape"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"1 2", "attack"}, {"3 4", "release"}, {"X", "plain"}}},
 		helpGroup{"feel", []helpKey{{"T", "grid"}, {", .", "tempo"}, {"F", "fit"}, {"C", "cut on grid"}, {"w", "swing"}, {"W", "humanize"}}},
 		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"P", "pattern"}, {"V", "pattern bars"}, {"M", "mode"}, {"S", "new seed"}, {"Tab", "order lane"}}},
-		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"s y", "mark"}, {"B", "marked to pads"}, {"n N", "rounds"}, {"v", "takes"}, {"A", "add sample"}, {"Esc", "close"}}},
+		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"K", "stretch to bars"}, {"s y", "mark"}, {"B", "marked to pads"}, {"n N", "rounds"}, {"v", "takes"}, {"A", "add sample"}, {"Esc", "close"}}},
 	)
 }
 
@@ -1995,7 +2036,7 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 		st.dim.Render("length ") + st.text.Render(seconds(s.sl.Length(s.at)))
 	roll := "off"
 	if x.Roll > 1 {
-		roll = fmt.Sprintf("x%d", x.Roll)
+		roll = fmt.Sprintf("x%d %s", x.Roll, formats.RollShapes[min(max(x.RollShape, 0), len(formats.RollShapes)-1)].Name)
 	}
 	second := st.dim.Render("chance ") + st.accent.Render(chance) + "   " +
 		st.dim.Render("gain ") + st.accent.Render(fmt.Sprintf("%d%%", x.Gain)) + "   " +
@@ -2168,4 +2209,16 @@ func barsOf(sl *formats.Slicing) string {
 		return plural(int(math.Round(bars)), "bar")
 	}
 	return fmt.Sprintf("%.2f bars", bars)
+}
+
+// rollShapeText says what a roll shape does: "a swell: 25% to 100% in loudness".
+func rollShapeText(r formats.RollShape) string {
+	if r.From == r.To && r.Semitones == 0 {
+		return "even: every hit alike"
+	}
+	text := fmt.Sprintf("%s: loudness %d%% to %d%%", r.Name, r.From, r.To)
+	if r.Semitones != 0 {
+		text += fmt.Sprintf(", pitch 0 to %+d semitones", r.Semitones)
+	}
+	return text
 }

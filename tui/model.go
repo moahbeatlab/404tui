@@ -143,6 +143,8 @@ type picker struct {
 	bounceNames []string
 	// bounceWhat names what the bounces are in messages: "takes" (the default) or "slices".
 	bounceWhat string
+	// note is a line under the title of the pad chooser, about what is put on the pad.
+	note string
 	// digits is the pad number being typed.
 	digits string
 	// confirm is set once the chosen pad holds a sample and the user has been told.

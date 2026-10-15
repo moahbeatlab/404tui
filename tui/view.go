@@ -1843,6 +1843,9 @@ func (m Model) pickerBox() string {
 	if p.bounceWhat == "pattern" {
 		title = "Bounce the pattern, as you hear it, to a pad"
 	}
+	if p.bounceWhat == "stretch" {
+		title = "Put the stretched sample on a pad\n" + st.dim.Render(p.note)
+	}
 	if len(p.bounces) == 0 {
 		title = fmt.Sprintf("Assign %s to a pad", app.Base(p.files[0]))
 	}

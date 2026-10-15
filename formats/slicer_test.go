@@ -648,3 +648,26 @@ func TestDivideGridCutsOneSlicePerStep(t *testing.T) {
 		t.Error("a step shorter than a slice changed the slicing")
 	}
 }
+
+func TestRollShapeChangesTheHits(t *testing.T) {
+	s := NewSlicing(4000, 1)
+	s.Slices[0].Roll = 4
+	even, _ := Render(flat(4000), s, NewSequencer(s), 1)
+	s.Slices[0].RollShape = 1 // decay: 100% down to 25%
+	decay, _ := Render(flat(4000), s, NewSequencer(s), 1)
+	if even.Frames() != decay.Frames() {
+		t.Fatalf("lengths %d and %d", even.Frames(), decay.Frames())
+	}
+	mid := func(x Sample, hit int) int { return int(x.Samples[hit*1000+500]) }
+	if mid(even, 0) != mid(even, 3) {
+		t.Errorf("even hits differ: %d and %d", mid(even, 0), mid(even, 3))
+	}
+	if mid(decay, 0) < 9000 || mid(decay, 3) > mid(decay, 0)/3 || mid(decay, 3) < 1000 {
+		t.Errorf("decay hits %d, %d, %d, %d", mid(decay, 0), mid(decay, 1), mid(decay, 2), mid(decay, 3))
+	}
+	// A rise gets higher: the last hit is shorter than the slice, so it is cut sooner.
+	s.Slices[0].RollShape = 3
+	if rise, _ := Render(flat(4000), s, NewSequencer(s), 1); rise.Frames() != 4000 {
+		t.Errorf("a rise changed the length to %d", rise.Frames())
+	}
+}
