@@ -3464,7 +3464,7 @@ func (m Model) undoPatternEdit() (tea.Model, tea.Cmd) {
 	// the redo stack.
 	snap := h.undo[len(h.undo)-1]
 	h.undo = h.undo[:len(h.undo)-1]
-	note := fmt.Sprintf("undo (%d left, R redoes)", len(h.undo))
+	note := fmt.Sprintf("undo: step %d/%d (R redoes)", len(h.undo), len(h.undo)+len(h.redo)+1)
 	return m.applyPatternSnapshot(snap, note, editUndo)
 }
 
@@ -3478,7 +3478,7 @@ func (m Model) redoPatternEdit() (tea.Model, tea.Cmd) {
 	}
 	snap := h.redo[len(h.redo)-1]
 	h.redo = h.redo[:len(h.redo)-1]
-	note := fmt.Sprintf("redo (%d left, u undoes)", len(h.redo))
+	note := fmt.Sprintf("redo: step %d/%d (u undoes)", len(h.undo)+1, len(h.undo)+len(h.redo)+1)
 	return m.applyPatternSnapshot(snap, note, editRedo)
 }
 

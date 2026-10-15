@@ -453,7 +453,7 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			s.sl, s.undo = s.undo[n-1], s.undo[:n-1]
 			s.shrinkSources()
 			s.settle(m)
-			m.message = "undone"
+			m.message = fmt.Sprintf("undone (%d more to undo)", len(s.undo))
 		}
 		return m, nil
 	case "M":

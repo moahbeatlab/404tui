@@ -3682,7 +3682,7 @@ func TestUndoRedoStackGoesManyStepsBack(t *testing.T) {
 	if countNotes() != start {
 		t.Fatalf("after undoing all three %d notes, want %d", countNotes(), start)
 	}
-	s.shows("0 undo · 3 redo")
+	s.shows("0 undo · 3 redo", "step 0/3")
 	// Nothing left to undo.
 	s.press("u")
 	s.shows("nothing to undo")
@@ -3691,7 +3691,7 @@ func TestUndoRedoStackGoesManyStepsBack(t *testing.T) {
 	if countNotes() != start-2 {
 		t.Fatalf("after redoing two %d notes, want %d", countNotes(), start-2)
 	}
-	s.shows("2 undo · 1 redo")
+	s.shows("2 undo · 1 redo", "step 2/3")
 	// A fresh edit drops the redo future.
 	s.press("j", "x")
 	s.shows("3 undo · 0 redo")

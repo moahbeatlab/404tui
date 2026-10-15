@@ -1277,13 +1277,13 @@ func (m Model) offsetLabel(d *app.PatternDetail, tick uint32) string {
 		m.st.dim.Render(fmt.Sprintf(" (%.0f%% of a step, %.0f ms)", pct, math.Abs(d.TicksToMillis(off))))
 }
 
-// patHistoryLabel is how far the open pattern can be undone and redone, e.g. "2 undo · 1 redo".
+// patHistoryLabel is how far the open pattern can be undone and redone, e.g. "step 2/3  ·  2 undo · 1 redo": the edit the pattern is at, of all there are.
 func (m Model) patHistoryLabel() string {
 	var u, r int
 	if h := m.patHist; h != nil && m.pattern != nil && h.slot == m.pattern.Slot {
 		u, r = len(h.undo), len(h.redo)
 	}
-	return fmt.Sprintf("%d undo · %d redo", u, r)
+	return fmt.Sprintf("step %d/%d  ·  %d undo · %d redo", u, u+r, u, r)
 }
 
 // patToolMenu draws the groove-tools menu over the open pattern: the five tools in a column with
