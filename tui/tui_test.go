@@ -4716,3 +4716,10 @@ func TestChancesRollFromASeedThatCanBeChanged(t *testing.T) {
 		t.Error("new dice never gave another mix")
 	}
 }
+
+func TestAConditionIsExplainedInWords(t *testing.T) {
+	s := openConditionPattern(t)
+	s.press("c")
+	s.shows("the note here plays only on loop 1 of every 2 loops (the 1st, 3rd, 5th ... time round)",
+		"it only repeats exactly after 2 loops")
+}

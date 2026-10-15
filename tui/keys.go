@@ -3347,6 +3347,23 @@ func (m Model) cycleLine() string {
 	return line
 }
 
+// cycleExplain says in plain words what the conditions line means: how long the pattern is,
+// how many loops the bounce needs before it repeats, and what the note at the cursor does.
+func (m Model) cycleExplain() []string {
+	d := m.pattern
+	live := m.patConds.PrunedTo(d.Notes)
+	if len(live) == 0 {
+		return nil
+	}
+	loops, bars, seconds := app.CycleOf(d.Length, d.Beats, d.BankTempo, live, condRolls)
+	out := []string{fmt.Sprintf("the pattern is %s long; with these conditions it only repeats exactly after %s, so B bounces %s (%.1f s) to a pad",
+		plural(max(bars/max(loops, 1), 1), "bar"), plural(loops, "loop"), plural(bars, "bar"), seconds)}
+	if _, keys, ok := m.condKeysAt(); ok {
+		out = append([]string{"the note here plays " + m.patConds[keys[0]].Explain()}, out...)
+	}
+	return out
+}
+
 // nudgeNote moves the note at the cursor by a number of ticks, or onto the nearest grid step
 // when snap is set, keeping everything else about it. The cursor follows the note into the step
 // it lands in, so the offset shown beside it stays the one of the note just moved.

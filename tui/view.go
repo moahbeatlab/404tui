@@ -1222,6 +1222,9 @@ func (m Model) patternDetail(g geom) string {
 			cond = st.text.Render(m.patConds[keys[0]].String()) + st.dim.Render("  ·  ")
 		}
 		lines = append(lines, st.dim.Render("conditions  ")+cond+st.dim.Render("bounced: ")+st.accent.Render(line))
+		for _, e := range m.cycleExplain() {
+			lines = append(lines, strings.Split(st.faint.Render(ansi.Wrap(e, max(g.bodyW-6, 10), "")), "\n")...)
+		}
 	}
 	if m.patTool != nil {
 		lines = append(lines, "", m.patToolMenu())

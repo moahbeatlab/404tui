@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"slices"
+	"strings"
 
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/proto"
@@ -35,6 +36,39 @@ func (c Cond) String() string {
 		return fmt.Sprintf("%d:%d", c.A, c.B)
 	}
 	return fmt.Sprintf("%d%%", c.Prob)
+}
+
+// Explain says in plain words when the note plays: "only on loop 1 of every 2 loops (...)".
+func (c Cond) Explain() string {
+	when := "on every loop"
+	if c.B > 1 {
+		var nth []string
+		for k := 0; k < 3; k++ {
+			nth = append(nth, ordinal(k*c.B+c.A))
+		}
+		when = fmt.Sprintf("only on loop %d of every %d loops (the %s ... time round)", c.A, c.B, strings.Join(nth, ", "))
+	}
+	if c.Chancy() {
+		if c.B > 1 {
+			return fmt.Sprintf("%s, and then only %d%% of the time", when, c.Prob)
+		}
+		return fmt.Sprintf("%d%% of the time, rolled again on every loop", c.Prob)
+	}
+	return when
+}
+
+func ordinal(n int) string {
+	switch {
+	case n%100 >= 11 && n%100 <= 13:
+		return fmt.Sprintf("%dth", n)
+	case n%10 == 1:
+		return fmt.Sprintf("%dst", n)
+	case n%10 == 2:
+		return fmt.Sprintf("%dnd", n)
+	case n%10 == 3:
+		return fmt.Sprintf("%drd", n)
+	}
+	return fmt.Sprintf("%dth", n)
 }
 
 // Plays says whether the note plays on loop (counted from 0) when the dice have shown roll
