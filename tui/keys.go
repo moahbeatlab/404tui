@@ -60,7 +60,7 @@ var commands = []command{
 	{"S", "In an open pattern: save it as you hear it into a slot you choose, without the muted pads (or with only the soloed ones)", []int{secPatterns}},
 	{"N", "New pattern: pick a template (all pads held, blank, or a genre groove)", []int{secPads, secPatterns}},
 	{"F", "Find where the samples on the pads came from, for the pads with no origin noted: names and lengths are matched against the index", []int{secPads}},
-	{"tab", "Move between the pads and the patterns panel under them", []int{secPads, secPatterns}},
+	{"tab", "Move between the pads and the patterns panel under them (in an open pattern: expand / fold the track on the cursor row)", []int{secPads, secPatterns}},
 	{"enter", "Open pattern", []int{secPatterns}},
 	{"d", "Delete the pattern (or the marked ones)", []int{secPatterns}},
 	{"v", "Mark / unmark a pattern for deleting", []int{secPatterns}},
@@ -70,7 +70,7 @@ var commands = []command{
 	{"P", "Play the pattern on this computer (again stops it; s stops)", []int{secPatterns}},
 	{"b", "Retarget the open pattern to another bank", []int{secPatterns}},
 	{"{ }", "In an open pattern: turn to the previous / next page of bars (up to two bars a page)", []int{secPatterns}},
-	{"enter", "In an open pattern: expand the track into a big 16-step lane (Esc collapses it); inside it, note on/off", []int{secPatterns}},
+	{"enter", "In an open pattern: expand the track into a big 16-step lane (Tab does too, and folds it again); inside it, note on/off. Esc leaves the pattern", []int{secPatterns}},
 	{"x", "In an open pattern: note on/off at the cursor", []int{secPatterns}},
 	{"v", "In an open pattern: show, edit and loop only some bars (a bar, or two) — v again for the whole pattern", []int{secPatterns}},
 	{"H L", "In an open pattern: nudge the note at the cursor 5 ticks earlier / later (off the grid)", []int{secPatterns}},
@@ -289,6 +289,14 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// The patterns of the bank are the panel under the pads: Tab moves into it.
 			return m.goTo(secPatterns)
 		case secPatterns:
+			if m.pattern != nil {
+				// In an open pattern Tab expands the track on the cursor row into its step
+				// lane, and folds it again; Esc leaves the pattern.
+				if len(m.pattern.Grid.Rows) > 0 {
+					m.patFocus = !m.patFocus
+				}
+				return m, nil
+			}
 			return m.goTo(secPads)
 		case secFiles:
 			if name == "shift+tab" && m.tree != nil {
@@ -341,11 +349,9 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 // escape backs out of the innermost thing: a pattern, a pick-up, marks; else it quits.
 func (m Model) escape() (tea.Model, tea.Cmd) {
 	switch {
-	case m.pattern != nil && m.section == secPatterns && m.patFocus:
-		// An expanded track collapses back into the grid first.
-		m.patFocus = false
 	case m.pattern != nil && m.section == secPatterns:
-		m.pattern, m.patRange = nil, nil
+		// Back to the patterns under the pads, from the grid or from an expanded track.
+		m.pattern, m.patRange, m.patFocus = nil, nil, false
 	case m.section == secPatterns && m.patHolding:
 		m.patHolding = false
 	case m.section == secPatterns && len(m.patMarks) > 0:

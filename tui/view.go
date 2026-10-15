@@ -1215,10 +1215,10 @@ func (m Model) patternDetail(g geom) string {
 // patternHelp are the keys of the open pattern, in groups like the slicer's; with a track
 // expanded the first group is that track's.
 func (m Model) patternHelp(d *app.PatternDetail) []helpGroup {
-	move := helpGroup{"move", []helpKey{{"h j k l", "move"}, {"{ }", "turn page"}, {"v", "show/loop bars"}, {"Enter", "open track"}, {"x", "note on/off"},
+	move := helpGroup{"move", []helpKey{{"h j k l", "move"}, {"{ }", "turn page"}, {"v", "show/loop bars"}, {"Tab Enter", "open track"}, {"x", "note on/off"},
 		{"t", "tools (this pad)"}, {"T", "tools (all)"}, {"Space P", "play"}, {"Esc", "back"}}}
 	if m.patFocus {
-		move = helpGroup{"track", []helpKey{{"h l", "step"}, {"j k", "other track"}, {"{ }", "turn page"}, {"Enter x", "note on/off"}, {"Space P", "play"}, {"Esc", "collapse"}}}
+		move = helpGroup{"track", []helpKey{{"h l", "step"}, {"j k", "other track"}, {"{ }", "turn page"}, {"Enter x", "note on/off"}, {"Space P", "play"}, {"Tab", "fold"}, {"Esc", "back"}}}
 	}
 	history := helpGroup{"history", []helpKey{{"u", "undo"}, {"R", "redo"}}}
 	if d.HasSourceBank {

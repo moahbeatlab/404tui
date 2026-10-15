@@ -4054,7 +4054,7 @@ func TestEnterExpandsATrackAndEscCollapsesIt(t *testing.T) {
 	if !s.m().patFocus || s.m().patRow != 1 {
 		t.Fatalf("Enter did not expand the track: focus %v, row %d", s.m().patFocus, s.m().patRow)
 	}
-	s.shows("Esc collapse")
+	s.shows("Tab fold")
 	if nums := ansi.Strip(s.m().focusLane(s.m().pattern, s.m().pattern.Grid.Rows[1].Pad, s.m().patSpan(s.m().pattern, 150))[0]); !strings.HasPrefix(nums, "1") || !strings.Contains(nums, "16") {
 		t.Errorf("the expanded lane is not numbered 1-16: %q", nums)
 	}
@@ -4071,15 +4071,30 @@ func TestEnterExpandsATrackAndEscCollapsesIt(t *testing.T) {
 	if !s.m().patFocus || s.m().patRow != 2 {
 		t.Errorf("j in the lane: focus %v, row %d", s.m().patFocus, s.m().patRow)
 	}
-	// Esc collapses it back to the grid; a second Esc closes the pattern.
-	s.press("esc")
-	if s.m().patFocus || s.m().pattern == nil {
-		t.Fatalf("Esc did not collapse: focus %v, pattern open %v", s.m().patFocus, s.m().pattern != nil)
+	// Tab folds it back to the grid, and expands it again, without leaving the pattern.
+	s.press("tab")
+	if s.m().patFocus || s.m().pattern == nil || s.m().section != secPatterns {
+		t.Fatalf("Tab did not fold: focus %v, pattern open %v, section %d", s.m().patFocus, s.m().pattern != nil, s.m().section)
 	}
-	s.shows("Enter open track")
+	s.shows("Tab Enter open track")
+	s.press("tab")
+	if !s.m().patFocus || s.m().patRow != 2 {
+		t.Fatalf("Tab did not expand the track on the cursor row: focus %v, row %d", s.m().patFocus, s.m().patRow)
+	}
+	// Esc goes back to the patterns under the pads, even from an expanded track.
+	s.press("esc")
+	if s.m().pattern != nil || s.m().patFocus || s.m().section != secPatterns {
+		t.Fatalf("Esc: pattern open %v, focus %v, section %d", s.m().pattern != nil, s.m().patFocus, s.m().section)
+	}
+	s.shows("Patterns · bank A")
+	// From the grid too; and it opens folded again.
+	s.press("enter")
+	if s.m().patFocus || s.m().pattern == nil {
+		t.Errorf("reopened: focus %v, pattern open %v", s.m().patFocus, s.m().pattern != nil)
+	}
 	s.press("esc")
 	if s.m().pattern != nil {
-		t.Error("a second Esc did not close the pattern")
+		t.Error("Esc from the grid did not close the pattern")
 	}
 }
 

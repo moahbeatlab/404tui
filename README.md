@@ -189,7 +189,9 @@ you left it. The keys are listed at the bottom of the dialog, in groups.
 ### Patterns
 
 The bank's 16 pattern slots are a panel under the pads; `Tab` moves between the two, and
-the highlighted pattern is previewed on the right.
+the highlighted pattern is previewed on the right. In an open pattern `Tab` expands the track on
+the cursor row into a big step lane (`Enter` does too) and folds it again; Esc leaves the
+pattern, from the grid or from an expanded track, back to the patterns under the pads.
 
 - `N` makes a pattern in the first free slot: every sample of the bank on beat 1, 2 bars.
   `c` or `x` pick a pattern up and `p` puts it in a slot of any bank (a second `p` replaces
