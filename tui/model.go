@@ -930,6 +930,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if again := updated.requeueLoop(); again != nil {
 				cmd = tea.Batch(cmd, again)
 			}
+			// A pattern under the slicer's slices is mixed again for the same reasons.
+			if again := updated.slicerRemix(); again != nil {
+				cmd = tea.Batch(cmd, again)
+			}
 		}
 		var start tea.Cmd
 		updated, start = updated.autoIndex(nil)

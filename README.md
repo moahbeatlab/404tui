@@ -137,14 +137,16 @@ you left it. The keys are listed at the bottom of the dialog, in groups.
 
 **Playing along with a pattern**
 
-- `P` puts a pattern of the bank under the slices (press again for the next one, and after the
-  last one for none). The pattern is mixed from its pads on this computer, at its bank's tempo,
-  and the slicer takes that tempo (a 1/16 grid if there was none; `, .` are locked meanwhile).
-  Every round is exactly as long as the pattern, with the slice steps on its grid, and the two
-  are added into one sample, so they stay together, and a new order (`M`, `S`, `R`) is heard from
-  the next round on, at the bar line. No unit is needed beyond the files it holds.
+- `P` opens the patterns as the pads lie (arrows or `h j k l` move, `[ ]` change the bank,
+  Enter puts that pattern under the slices, `0` takes it away, Esc leaves things as they were).
+  The pattern is mixed from its pads on this computer, at its bank's tempo, and the slicer takes
+  that tempo (a 1/16 grid if there was none; `, .` are locked meanwhile). Every round is exactly
+  as long as the pattern, with the slice steps on its grid, and the two are added into one
+  sample, so they stay together, and a new order (`M`, `S`, `R`) is heard from the next round on,
+  at the loop point. No unit is needed beyond the files it holds.
 - A bounce (`b`, `B`) is only ever the slices: the pattern is for playing along. The pattern is
-  mixed when `P` is pressed, so changes made to its pads are heard after pressing `P` through the patterns to it again.
+  mixed again by itself when what it plays changes (a bounce onto one of its pads, a pad's
+  setting, the pattern edited), and heard from the next round.
 
 **Feel**
 

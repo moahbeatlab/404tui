@@ -123,7 +123,7 @@ func TestSlicerE2EWorksOnARealSample(t *testing.T) {
 				{"order lane", []string{"tab", "a", "l", "l", "d", "u", "tab"}},
 				{"modes", []string{"M", "M", "M", "S", "S"}},
 				{"zoom", []string{"z", "z", "z", "0", "I"}},
-				{"pattern", []string{"P"}},
+				{"pattern", []string{"P", "enter"}},
 			} {
 				s.press(step.keys...)
 				s.checkSlicer(step.name)

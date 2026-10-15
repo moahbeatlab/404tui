@@ -2,9 +2,11 @@ package tui
 
 import (
 	"fmt"
-	"slices"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
@@ -25,60 +27,168 @@ type slicerBedMsg struct {
 	slot   proto.PadIndex
 	sample formats.Sample
 	bpm    float64
-	none   bool
+	remix  bool
 	err    error
 }
 
-// slicerNextPattern moves P on to the next pattern of the bank that has notes, and after the
-// last one to none. The pattern is mixed in the background.
-func (m Model) slicerNextPattern() (tea.Model, tea.Cmd) {
+// patternChooser is the list of a bank's 16 pattern slots, laid out like the pads, that P opens
+// in place of the keys under the waveform.
+type patternChooser struct {
+	bank, cursor int
+	rows         []app.PatternRow
+}
+
+// slicerChoosePattern opens the chooser on the bank of the pattern now under the slices, or on
+// the bank of the pad in front, at the first pattern there is.
+func (m Model) slicerChoosePattern() (tea.Model, tea.Cmd) {
 	s := m.slicer
 	if m.unit == nil || m.snap == nil {
 		m.message = "no unit to read patterns from"
 		return m, nil
 	}
-	rows := m.patterns[m.bank]
-	if !slices.ContainsFunc(rows, func(r app.PatternRow) bool { return r.Exists }) {
-		// Nothing known yet, or a list that may be out of date: read the slots.
-		m.ops.Lock()
-		var err error
-		rows, err = app.LoadPatterns(m.unit, m.bank)
-		m.ops.Unlock()
-		if err != nil {
-			m.message = "patterns: " + err.Error()
-			return m, nil
-		}
-	}
-	var slots []proto.PadIndex
-	for _, r := range rows {
-		if r.Exists {
-			slots = append(slots, r.Slot)
-		}
-	}
-	next := 0
+	bank := m.bank
 	if s.bed != nil {
-		for i, slot := range slots {
-			if slot == s.bed.slot {
-				next = i + 1
+		bank = int(s.bed.slot.Bank())
+	}
+	c := &patternChooser{bank: bank}
+	if err := m.loadChooser(c); err != nil {
+		m.message = "patterns: " + err.Error()
+		return m, nil
+	}
+	if s.bed != nil {
+		c.cursor = int(s.bed.slot.Pad())
+	}
+	s.chooser = c
+	return m, nil
+}
+
+// loadChooser reads the slots of the chooser's bank, and puts the cursor on the first pattern
+// when it is not on one.
+func (m Model) loadChooser(c *patternChooser) error {
+	m.ops.Lock()
+	rows, err := app.LoadPatterns(m.unit, c.bank)
+	m.ops.Unlock()
+	if err != nil {
+		return err
+	}
+	c.rows = rows
+	if !c.rows[c.cursor].Exists {
+		for i, r := range rows {
+			if r.Exists {
+				c.cursor = i
+				break
 			}
 		}
 	}
-	if next >= len(slots) {
-		if s.bed == nil {
-			m.message = fmt.Sprintf("no pattern in bank %c", 'A'+m.bank)
+	return nil
+}
+
+// slicerChooserKey moves in the chooser: the arrows or h j k l over the slots, [ ] for another
+// bank, Enter to take the pattern, 0 for none, Esc to leave it as it was.
+func (m Model) slicerChooserKey(name string) (tea.Model, tea.Cmd) {
+	s := m.slicer
+	c := s.chooser
+	switch name {
+	case "esc", "q", "P":
+		s.chooser = nil
+	case "h", "left":
+		c.cursor = clamp(c.cursor-1, 0, proto.PadsPerBank-1)
+	case "l", "right":
+		c.cursor = clamp(c.cursor+1, 0, proto.PadsPerBank-1)
+	case "k", "up":
+		c.cursor = clamp(c.cursor-4, 0, proto.PadsPerBank-1)
+	case "j", "down":
+		c.cursor = clamp(c.cursor+4, 0, proto.PadsPerBank-1)
+	case "[", "]":
+		next := c.bank + 1
+		if name == "[" {
+			next = c.bank - 1
+		}
+		if next >= 0 && next < proto.Banks {
+			old := c.bank
+			c.bank = next
+			if err := m.loadChooser(c); err != nil {
+				c.bank = old
+				m.message = "patterns: " + err.Error()
+			}
+		}
+	case "0", "backspace", "x":
+		s.chooser = nil
+		if s.bed != nil {
+			s.bed, s.dirty = nil, true
+			m.message = "the slices play alone again"
+		}
+	case "enter":
+		row := c.rows[c.cursor]
+		if !row.Exists {
+			m.message = "that pattern slot is empty"
 			return m, nil
 		}
-		s.bed, s.dirty = nil, true
-		m.message = "the slices play alone again"
-		return m, nil
+		s.chooser = nil
+		m.message = "mixing pattern " + row.Slot.String() + "…"
+		return m, m.slicerMixBed(row.Slot, false)
 	}
-	slot := slots[next]
-	m.message = "mixing pattern " + slot.String() + "…"
-	mix, bpm := m.patternMixer(slot), m.slicerBankTempo()
-	return m, func() tea.Msg {
+	return m, nil
+}
+
+// slicerMixBed mixes a pattern in the background: remix when it is the pattern already under the
+// slices, mixed again after something changed.
+func (m Model) slicerMixBed(slot proto.PadIndex, remix bool) tea.Cmd {
+	mix, bpm := m.patternMixer(slot), m.bankTempo(int(slot.Bank()))
+	return func() tea.Msg {
 		sample, err := mix()
-		return slicerBedMsg{slot: slot, sample: sample, bpm: bpm, err: err}
+		return slicerBedMsg{slot: slot, sample: sample, bpm: bpm, err: err, remix: remix}
 	}
+}
+
+// slicerRemix mixes the pattern under the slices again, as the pads or the pattern are now. It
+// is asked for whenever a looping pattern would be: the pads were read again after a bounce, a
+// pad's setting changed, the pattern was edited.
+func (m Model) slicerRemix() tea.Cmd {
+	s := m.slicer
+	if s == nil || s.bed == nil || m.unit == nil || m.snap == nil {
+		return nil
+	}
+	return m.slicerMixBed(s.bed.slot, true)
+}
+
+// chooserLines draw the chooser: a heading, then the 16 slots as the pads lie, four to a row.
+func (m Model) chooserLines(width int) []string {
+	st, s := m.st, m.slicer
+	c := s.chooser
+	lines := []string{st.bold.Render(fmt.Sprintf("Pattern  bank %c", 'A'+c.bank)) + st.dim.Render("   arrows move  [ ] bank  Enter take it  0 none  Esc leave")}
+	cell := max((width-3)/4, 8)
+	for row := 0; row < 4; row++ {
+		var b strings.Builder
+		for col := 0; col < 4; col++ {
+			i := row*4 + col
+			r := c.rows[i]
+			text := fmt.Sprintf("%2d ·", i+1)
+			if r.Exists {
+				var pads []string
+				for _, p := range r.Pads {
+					pads = append(pads, p.String())
+				}
+				text = fmt.Sprintf("%2d %s", i+1, strings.Join(pads, " "))
+			}
+			if s.bed != nil && s.bed.slot == r.Slot {
+				text += " ◀"
+			}
+			text = ansi.Truncate(text, cell-1, "…")
+			text += strings.Repeat(" ", max(cell-ansi.StringWidth(text), 0))
+			switch {
+			case i == c.cursor:
+				text = lipgloss.NewStyle().Background(st.th.accent).Foreground(st.th.cursorFg).Bold(true).Render(text)
+			case r.Exists:
+				text = st.text.Render(text)
+			default:
+				text = st.faint.Render(text)
+			}
+			b.WriteString(text)
+		}
+		lines = append(lines, b.String())
+	}
+	return lines
 }
 
 // slicerBedMixed puts a mixed pattern under the slices: the grid takes the pattern's tempo
@@ -86,6 +196,16 @@ func (m Model) slicerNextPattern() (tea.Model, tea.Cmd) {
 func (m Model) slicerBedMixed(msg slicerBedMsg) (tea.Model, tea.Cmd) {
 	s := m.slicer
 	if s == nil {
+		return m, nil
+	}
+	if msg.remix {
+		// Only if that pattern is still the one under the slices; the grid stays as it is.
+		if s.bed == nil || s.bed.slot != msg.slot || msg.err != nil {
+			return m, nil
+		}
+		s.bed = &patternBed{slot: msg.slot, sample: msg.sample, bpm: msg.bpm}
+		s.sl.BPM = msg.bpm
+		s.settle(m)
 		return m, nil
 	}
 	if msg.err != nil {

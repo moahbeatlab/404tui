@@ -889,14 +889,10 @@ func TestSlicerDeletingWhilePlayingDoesNotBreakTheScreen(t *testing.T) {
 
 func TestSlicerPlaysUnderAPattern(t *testing.T) {
 	s := slicerOpen(t)
-	a1, a2 := pad(t, "A5"), pad(t, "A2")
-	data, err := formats.StartPattern([]proto.PadIndex{a1}, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s.sim.SetPattern(a2, a1)
-	s.sim.AddFile(formats.PatternPath(1, a2), data)
+	patternOnA2(t, s)
 	s.press("P")
+	s.shows("Pattern  bank A")
+	s.press("enter")
 	bed := s.m().slicer.bed
 	if bed == nil {
 		t.Fatalf("P did not put a pattern under the slices: %q", s.m().message)
@@ -923,6 +919,9 @@ func TestSlicerPlaysUnderAPattern(t *testing.T) {
 	if same {
 		t.Error("the round sounds the same with and without the pattern")
 	}
+	if loud(bed.sample) == 0 {
+		t.Error("the pattern mix is silent")
+	}
 	s.m().slicer.bed = bed
 	// A bounce is the slices alone, without the pattern.
 	if got := s.m().slicer.takeSample(0); got.Frames() == bed.sample.Frames() && got.Channels == 2 {
@@ -943,7 +942,115 @@ func TestSlicerPlaysUnderAPattern(t *testing.T) {
 	}
 	_ = s.model.View()
 	s.press(" ", "P")
+	s.shows("Pattern  bank A")
+	s.press("0")
 	if s.m().slicer.bed != nil {
-		t.Error("P again did not take the pattern away")
+		t.Error("0 in the chooser did not take the pattern away")
 	}
+}
+
+func TestSlicerPatternChooser(t *testing.T) {
+	s := slicerOpen(t)
+	patternOnA2(t, s, "A2", "A7", "B3")
+	s.press("P")
+	if c := s.m().slicer.chooser; c == nil || c.cursor != 1 {
+		t.Fatalf("the chooser starts on %+v, want slot 2", c)
+	}
+	s.shows("arrows move")
+	// An empty slot is not taken.
+	s.press("l", "enter")
+	if s.m().slicer.bed != nil || s.m().slicer.chooser == nil {
+		t.Error("an empty slot was taken or the chooser closed")
+	}
+	// Other bank, then leave without choosing.
+	s.press("]")
+	if c := s.m().slicer.chooser; c.bank != 1 || c.cursor != 2 {
+		t.Fatalf("bank %d cursor %d, want bank B with the cursor on slot 3", c.bank, c.cursor)
+	}
+	s.press("esc")
+	if s.m().slicer.chooser != nil || s.m().slicer.bed != nil {
+		t.Error("Esc did not leave the chooser as it was")
+	}
+	// The pattern of another bank is taken, with its own tempo.
+	s.press("P", "]", "l", "enter")
+	bed := s.m().slicer.bed
+	if bed == nil || bed.slot.String() != "B3" {
+		t.Fatalf("bed %+v: %q", bed, s.m().message)
+	}
+	s.shows("with pattern B3")
+	// Reopened, the chooser starts on the pattern that is chosen.
+	s.press("P")
+	if c := s.m().slicer.chooser; c.bank != 1 || c.cursor != 2 {
+		t.Errorf("reopened on bank %d slot %d", c.bank, c.cursor+1)
+	}
+	s.press("esc")
+	// Every line still fits.
+	for _, size := range [][2]int{{80, 30}, {140, 50}} {
+		s.send(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		s.press("P")
+		if h := len(strings.Split(s.m().slicerBox(), "\n")); h > s.m().geom().bodyH {
+			t.Errorf("%dx%d: the box with the chooser is %d lines, room for %d", size[0], size[1], h, s.m().geom().bodyH)
+		}
+		s.press("esc")
+	}
+}
+
+func TestSlicerPatternIsMixedAgainWhenAPadItPlaysChanges(t *testing.T) {
+	s := slicerOpen(t)
+	patternOnA2(t, s)
+	s.press("P", "enter")
+	before := s.m().slicer.bed
+	if before == nil {
+		t.Fatal("no pattern under the slices")
+	}
+	// Put the first slice on A5, the pad the pattern plays: the pattern must sound different.
+	s.press("s", "B", "A", "5", "enter", "enter")
+	s.shows("bounced")
+	after := s.m().slicer.bed
+	if after == nil || after.slot != before.slot {
+		t.Fatalf("the pattern is gone: %+v", after)
+	}
+	if loud(before.sample) == 0 {
+		t.Fatal("the pattern was silent to begin with")
+	}
+	// The slice is 0.1 s of the 1 s the pad held, so far less of the mix is sound now.
+	if loud(after.sample) >= loud(before.sample)/2 {
+		t.Errorf("the pattern still has %d loud samples of %d after a short slice took the pad", loud(after.sample), loud(before.sample))
+	}
+}
+
+// patternOnA2 puts a pattern on A2 that plays A5 (the drums), with A5 at a level you can hear;
+// the simulated pads start at level 0.
+func patternOnA2(t *testing.T, s *screen, slots ...string) {
+	t.Helper()
+	level, _ := proto.ParamByName("level")
+	if err := s.m().unit.SetParam(level.ID, proto.TargetPad(pad(t, "A5")), 127); err != nil {
+		t.Fatal(err)
+	}
+	data, err := formats.StartPattern([]proto.PadIndex{pad(t, "A5")}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(slots) == 0 {
+		slots = []string{"A2"}
+	}
+	for _, slot := range slots {
+		s.sim.SetPattern(pad(t, slot), pad(t, "A5"))
+		s.sim.AddFile(formats.PatternPath(1, pad(t, slot)), data)
+	}
+	// The screen reads the pads again, so the level is known.
+	s.press("esc", "r", "Z")
+	if s.m().slicer == nil {
+		t.Fatal("the slicer did not open again")
+	}
+}
+
+// loud counts the samples of a mix that are not silence.
+func loud(x formats.Sample) (n int) {
+	for _, v := range x.Samples {
+		if v > 200 || v < -200 {
+			n++
+		}
+	}
+	return n
 }

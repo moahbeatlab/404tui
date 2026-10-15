@@ -73,6 +73,8 @@ type slicer struct {
 	takes int
 	// bed is the pattern that plays under the slices, chosen with P.
 	bed *patternBed
+	// chooser is the list of patterns while P has it open.
+	chooser *patternChooser
 	// marks are the slices picked with s for B to put each on a pad; they are numbers of
 	// slices, so they are dropped when the slices are cut or deleted.
 	marks     map[int]bool
@@ -398,6 +400,9 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if s.tap != nil {
 		return m.slicerTapKey(name)
 	}
+	if s.chooser != nil {
+		return m.slicerChooserKey(name)
+	}
 	switch name {
 	case "esc", "q":
 		s.playing = false
@@ -671,7 +676,7 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "B":
 		return m.slicerBounceMarked()
 	case "P":
-		return m.slicerNextPattern()
+		return m.slicerChoosePattern()
 	case "X":
 		m.slicerChange(func(sl *formats.Slicing) {
 			x := sl.Slices[s.at]
@@ -762,11 +767,14 @@ func (m Model) slicerTapEnd() (tea.Model, tea.Cmd) {
 }
 
 // slicerBankTempo is the tempo of the bank in front, for a grid to start from.
-func (m Model) slicerBankTempo() float64 {
+func (m Model) slicerBankTempo() float64 { return m.bankTempo(m.bank) }
+
+// bankTempo is the tempo of a bank, or the project's when it uses that; 120 when unknown.
+func (m Model) bankTempo(bank int) float64 {
 	if m.snap == nil {
 		return 120
 	}
-	bpm := m.snap.Banks[m.bank].Tempo
+	bpm := m.snap.Banks[bank].Tempo
 	if m.snap.UsesProjectTempo {
 		bpm = m.snap.ProjectTempo
 	}
@@ -1570,6 +1578,9 @@ func (s *slicer) slicerHelp() []helpGroup {
 
 // slicerHelpLines are the slicer's keys, drawn in groups.
 func (m Model) slicerHelpLines(width int) []string {
+	if m.slicer.chooser != nil {
+		return m.chooserLines(width)
+	}
 	return m.helpLines(m.slicer.slicerHelp(), width, 8)
 }
 
