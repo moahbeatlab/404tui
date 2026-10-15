@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -399,7 +401,18 @@ func (m Model) slicerNudge(end bool, dots int) {
 	})
 }
 
+// slicerKey handles a key of the slicer, and reads the pattern shown under it when that is not
+// in hand yet.
 func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	next, cmd := m.slicerKeyDo(key)
+	if nm, ok := next.(Model); ok && nm.slicer != nil {
+		read := nm.wanted()
+		return nm, tea.Batch(cmd, read)
+	}
+	return next, cmd
+}
+
+func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	s := m.slicer
 	name := key.String()
 	if m.busy != "" {
@@ -511,7 +524,7 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.slicerChange(func(sl *formats.Slicing) {
 			sl.Division = next
 			if sl.BPM <= 0 {
-				sl.BPM = m.slicerBankTempo()
+				sl.BPM = m.slicerStartTempo()
 			}
 		})
 		if next == 0 {
@@ -806,7 +819,7 @@ func (m Model) slicerCutOnGrid() (tea.Model, tea.Cmd) {
 		m.slicerChange(func(sl *formats.Slicing) {
 			sl.Division = 16
 			if sl.BPM <= 0 {
-				sl.BPM = m.slicerBankTempo()
+				sl.BPM = m.slicerStartTempo()
 			}
 		})
 	}
@@ -902,6 +915,23 @@ func (m Model) slicerTapEnd() (tea.Model, tea.Cmd) {
 }
 
 // slicerBankTempo is the tempo of the bank in front, for a grid to start from.
+// nameTempo is a tempo written in a sample's name, "125_b_downsouth" or "loop 90bpm": a number of
+// 60 to 200 standing alone between separators; 0 when there is none.
+var nameTempo = regexp.MustCompile(`(?i)(?:^|[^0-9.])(\d{2,3})(?:\s?bpm)?(?:[^0-9]|$)`)
+
+// slicerStartTempo is the tempo a grid starts at: the one in the sample's name when it has one,
+// else the bank's.
+func (m Model) slicerStartTempo() float64 {
+	if s := m.slicer; s != nil {
+		for _, hit := range nameTempo.FindAllStringSubmatch(s.title+" "+s.name, -1) {
+			if n, _ := strconv.Atoi(hit[1]); n >= 60 && n <= 200 {
+				return float64(n)
+			}
+		}
+	}
+	return m.slicerBankTempo()
+}
+
 func (m Model) slicerBankTempo() float64 { return m.bankTempo(m.bank) }
 
 // bankTempo is the tempo of a bank, or the project's when it uses that; 120 when unknown.
@@ -1477,6 +1507,12 @@ func (m Model) slicerBox() string {
 		}
 		return nil
 	}
+	// The pattern under the slices (or the one the chooser is on) is drawn under the keys when
+	// the screen has the room: what is left after the waveform has its least.
+	preview := m.slicerPatternLines(cells, m.geom().bodyH-chrome-len(help)-3-1)
+	if len(preview) > 0 {
+		chrome += len(preview) + 1
+	}
 	rows := clamp(m.geom().bodyH-chrome-len(help), 3, 16)
 
 	// Slices can overlap: the one in front, or the one sounding, shows where they do.
@@ -1685,6 +1721,10 @@ func (m Model) slicerBox() string {
 	lines = append(lines, m.roundLine(cells))
 	lines = append(lines, st.faint.Render(strings.Repeat("─", cells)))
 	lines = append(lines, help...)
+	if len(preview) > 0 {
+		lines = append(lines, st.faint.Render(strings.Repeat("─", cells)))
+		lines = append(lines, preview...)
+	}
 	// Whatever is wider than the waveform is cut, so the box never outgrows the screen.
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, cells, "…")

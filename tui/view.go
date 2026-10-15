@@ -2708,12 +2708,17 @@ func (m Model) playhead(d *app.PatternDetail, sp stepSpan) string {
 	if !ok {
 		return ""
 	}
+	return m.headLine(d, sp, m.loopStep(d, frac), fmt.Sprintf("▶ %.1f s to go", left.Seconds()))
+}
+
+// headLine is the playhead under the step numbers with the pattern at step now, and label at
+// its start.
+func (m Model) headLine(d *app.PatternDetail, sp stepSpan, now int, label string) string {
 	st := m.st
-	now := m.loopStep(d, frac)
 	// fill draws a gap in a line's style, keeping the bar line where there is one.
 	fill := m.fillGap
 	var b strings.Builder
-	b.WriteString(st.hot.Render(fmt.Sprintf("%-20s", fmt.Sprintf("▶ %.1f s to go", left.Seconds()))))
+	b.WriteString(st.hot.Render(fmt.Sprintf("%-20s", label)))
 	for c := sp.lo; c < sp.hi; c++ {
 		gap := ""
 		if c+1 < sp.hi {

@@ -1226,3 +1226,41 @@ func TestSlicerCutsOnTheTempoGrid(t *testing.T) {
 		t.Error("undo left no slices")
 	}
 }
+
+func TestSlicerShowsThePatternUnderTheSlices(t *testing.T) {
+	s := slicerOpen(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	patternOnA2(t, s, "A2", "A7", "B3")
+	s.press("P")
+	// The chooser shows the pattern it is on, as the pattern editor does.
+	s.shows("Pattern A2", "A5   drums")
+	s.press("enter")
+	s.shows("with pattern A2", "Pattern A2")
+	// While the slices play the playhead goes round it.
+	s.press(" ")
+	s.send(slicerTickMsg{gen: s.m().slicer.gen})
+	s.shows("s to go")
+	s.press(" ")
+	for _, size := range [][2]int{{80, 30}, {100, 40}, {140, 50}} {
+		s.send(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		if h := len(strings.Split(s.m().slicerBox(), "\n")); h > s.m().geom().bodyH {
+			t.Errorf("%dx%d: the box is %d lines, room for %d", size[0], size[1], h, s.m().geom().bodyH)
+		}
+	}
+}
+
+func TestSlicerGridTempoComesFromTheName(t *testing.T) {
+	for name, want := range map[string]float64{"125_b_downsouth": 125, "loop 90bpm": 90, "kick_039": 0, "take 7 of 3000": 0} {
+		m := Model{slicer: &slicer{name: name}}
+		got := m.slicerStartTempo()
+		if want == 0 {
+			if got == want {
+				t.Errorf("%q: no tempo in the name, got %g", name, got)
+			}
+			continue
+		}
+		if got != want {
+			t.Errorf("%q: %g, want %g", name, got, want)
+		}
+	}
+}

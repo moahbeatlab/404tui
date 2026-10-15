@@ -2,7 +2,9 @@ package tui
 
 import (
 	"fmt"
+	"math"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -252,4 +254,79 @@ func withBed(slices, bed formats.Sample, passes int) formats.Sample {
 		out.Samples[i] = int16(max(min(v, 32767), -32768))
 	}
 	return out
+}
+
+// previewSlot is the pattern to draw under the slicer: the one the chooser is on, else the one
+// under the slices.
+func (s *slicer) previewSlot() (proto.PadIndex, bool) {
+	if c := s.chooser; c != nil {
+		if r := c.rows[c.cursor]; r.Exists {
+			return r.Slot, true
+		}
+		return proto.PadIndex{}, false
+	}
+	if s.bed != nil {
+		return s.bed.slot, true
+	}
+	return proto.PadIndex{}, false
+}
+
+// bedFraction is how far through its loop the pattern under the slices is while they play,
+// from 0 to 1: a round is whole loops of the pattern, so it is the time in the round, in loops.
+func (s *slicer) bedFraction(d *app.PatternDetail) (float64, bool) {
+	if s.bed == nil || !s.playing || s.cur == nil || s.cur.start.IsZero() || s.bed.slot != d.Slot {
+		return 0, false
+	}
+	loop := d.TicksToMillis(int(d.Length)) / 1000
+	if loop <= 0 {
+		return 0, false
+	}
+	return math.Mod(time.Since(s.cur.start).Seconds()/loop, 1), true
+}
+
+// slicerPatternLines draws the pattern as the pattern editor does, its steps and a row for each
+// pad, with a playhead going round while the slices play: at most room lines, none when that is
+// too few or the pattern is not read yet.
+func (m Model) slicerPatternLines(width, room int) []string {
+	s := m.slicer
+	slot, ok := s.previewSlot()
+	if !ok || room < 5 {
+		return nil
+	}
+	d := m.patPreview[slot]
+	if d == nil {
+		if m.patUnread[slot] {
+			return []string{m.st.faint.Render("pattern " + slot.String() + " cannot be shown")}
+		}
+		return []string{m.st.faint.Render("reading pattern " + slot.String() + "…")}
+	}
+	st := m.st
+	frac, playing := s.bedFraction(d)
+	page := 0
+	if playing {
+		page = m.loopStep(d, frac) / d.StepsPerPage()
+	}
+	sp := spanFor(d, page, width, 1, 4, gridGapW)
+	tracks := len(d.Grid.Rows)
+	shown := min(tracks, max(room-4, 1))
+	head := st.bold.Render("Pattern "+slot.String()) +
+		st.dim.Render(fmt.Sprintf("  %.2f BPM  ·  %d/4  ·  %s  ·  %s", d.BankTempo, d.Beats, plural(d.Bars(), "bar"), plural(len(d.PadsUsed), "pad")))
+	lines := []string{head + "  " + m.spanHeader(d, sp), m.stepRuler(d, sp)}
+	if playing {
+		lines = append(lines, m.headLine(d, sp, m.loopStep(d, frac), fmt.Sprintf("▶ %.1f s to go", (1-frac)*d.TicksToMillis(int(d.Length))/1000)))
+	} else {
+		lines = append(lines, "")
+	}
+	if tracks == 0 {
+		lines = append(lines, st.dim.Render("  (no notes)"))
+	}
+	for _, row := range d.Grid.Rows[:shown] {
+		name := m.snap.Pads[row.Pad.Index()].Name
+		label := fmt.Sprintf("%-4s %-14s", row.Pad, ansi.Truncate(name, 14, "…"))
+		lines = append(lines, m.rowLabel(row.Pad, label, st.bold)+" "+m.noteRow(d, row.Pad, false, sp))
+	}
+	if shown < tracks {
+		lines = append(lines, st.faint.Render(fmt.Sprintf("  … and %s more", plural(tracks-shown, "track"))))
+	}
+	return lines
 }

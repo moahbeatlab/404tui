@@ -313,7 +313,9 @@ type Model struct {
 	// again, because something it plays changed.
 	// patPreview are the patterns read to show the one in front of the cursor in the patterns
 	// panel, by slot; previewBusy is set while one is read.
-	patPreview  map[proto.PadIndex]*app.PatternDetail
+	patPreview map[proto.PadIndex]*app.PatternDetail
+	// patUnread are the patterns that could not be read for the preview.
+	patUnread   map[proto.PadIndex]bool
 	previewBusy bool
 	loopSlot    *proto.PadIndex
 	loopDirty   bool
@@ -1098,6 +1100,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.previewBusy = false
 		if msg.err == nil && msg.detail != nil {
 			m.patPreview[msg.detail.Slot] = msg.detail
+			delete(m.patUnread, msg.detail.Slot)
+		} else {
+			// Not asked for again, or a pattern that cannot be read would be asked for for ever.
+			if m.patUnread == nil {
+				m.patUnread = map[proto.PadIndex]bool{}
+			}
+			m.patUnread[msg.slot] = true
 		}
 		return m, m.wanted()
 	case loopQueuedMsg:
@@ -1451,6 +1460,13 @@ func (m *Model) wanted() tea.Cmd {
 			return m.fileInfoCmd(node.Path)
 		}
 	}
+	if s := m.slicer; s != nil && !m.previewBusy {
+		// The pattern shown under the slicer.
+		if slot, ok := s.previewSlot(); ok && m.patPreview[slot] == nil && !m.patUnread[slot] {
+			m.previewBusy = true
+			return m.loadPreview(slot)
+		}
+	}
 	switch m.section {
 	case secPatterns:
 		if m.patterns[m.bank] == nil {
@@ -1729,6 +1745,7 @@ func (m Model) patternBankPads(d *app.PatternDetail) []proto.PadIndex {
 
 // patPreviewMsg is a pattern read for the panel beside the patterns.
 type patPreviewMsg struct {
+	slot   proto.PadIndex
 	detail *app.PatternDetail
 	err    error
 }
@@ -1739,6 +1756,6 @@ func (m Model) loadPreview(slot proto.PadIndex) tea.Cmd {
 		m.ops.Lock()
 		defer m.ops.Unlock()
 		d, err := app.OpenPattern(m.unit, slot)
-		return patPreviewMsg{detail: d, err: err}
+		return patPreviewMsg{slot: slot, detail: d, err: err}
 	}
 }
