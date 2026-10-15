@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/proto/fileapi"
@@ -142,6 +143,16 @@ func indexBarLines(st styles, job *tagJob, width int) []string {
 // have no origin noted, by matching their names and lengths against the search index of the
 // card; what is certain is noted and saved. Pads that fit several files, or none, are told.
 func (m Model) scanOrigins() (tea.Model, tea.Cmd) {
+	return m.scanOriginsFor(false)
+}
+
+// scanFolderUses finds the origins of the pads like scanOrigins, then notes, for each bank
+// of the project, the folder most of its samples came from.
+func (m Model) scanFolderUses() (tea.Model, tea.Cmd) {
+	return m.scanOriginsFor(true)
+}
+
+func (m Model) scanOriginsFor(banks bool) (tea.Model, tea.Cmd) {
 	ix := m.indexes[app.CardRoot]
 	rows, project, unit := m.snap.Pads, m.snap.Project, m.unit
 	withSample := 0
@@ -211,13 +222,61 @@ func (m Model) scanOrigins() (tea.Model, tea.Cmd) {
 		if n := len(scan.Unknown); n > 0 {
 			message += fmt.Sprintf("; %d are not in the index", n)
 		}
-		if len(scan.Found) == 0 {
-			return doneMsg{message: message}
+		origins := have
+		if len(scan.Found) > 0 {
+			var err error
+			if origins, err = app.RecordOrigins(unit, project, scan.Found); err != nil {
+				return doneMsg{message: message + "; saving them failed: " + err.Error()}
+			}
 		}
-		origins, err := app.RecordOrigins(unit, project, scan.Found)
+		if !banks {
+			if len(scan.Found) == 0 {
+				return doneMsg{message: message}
+			}
+			return doneMsg{message: message, origins: origins}
+		}
+		found := app.FolderUsesFromOrigins(origins, project, rows)
+		if len(found) == 0 {
+			return doneMsg{message: message + "; no bank has most of its samples from one folder", origins: origins}
+		}
+		uses, err := app.RecordFolderUses(unit, project, found)
 		if err != nil {
-			return doneMsg{message: message + "; saving them failed: " + err.Error()}
+			return doneMsg{message: message + "; saving the folders failed: " + err.Error(), origins: origins}
 		}
-		return doneMsg{message: message, origins: origins}
+		var banksSeen []string
+		for _, f := range found {
+			banksSeen = append(banksSeen, fmt.Sprintf("%c", 'A'+f.Bank))
+		}
+		return doneMsg{message: fmt.Sprintf("%s; folders found for bank %s", message, strings.Join(banksSeen, ", ")), origins: origins, folderUses: uses}
 	})
+}
+
+// folderUseLines say where a folder was put: which project and bank, and the folders inside it.
+func (m Model) folderUseLines(folder string, width int) []string {
+	st := m.st
+	own, inside := m.folderUses.Of(folder)
+	if len(own)+len(inside) == 0 {
+		return nil
+	}
+	var lines []string
+	for _, u := range own {
+		how := "restored"
+		if u.Matched {
+			how = "found"
+		}
+		lines = append(lines, st.accent.Render("◆ ")+st.text.Render(fmt.Sprintf("Used in project %d, bank %c", u.Project, 'A'+u.Bank))+
+			st.dim.Render(fmt.Sprintf("  ·  %s, %s, %s", plural(u.Pads, "pad"), how, u.At)))
+	}
+	if n := len(inside); n > 0 {
+		var where []string
+		for _, u := range inside[:min(n, 6)] {
+			where = append(where, fmt.Sprintf("%d·%c", u.Project, 'A'+u.Bank))
+		}
+		text := "Folders inside it are on " + strings.Join(where, " ")
+		if n > 6 {
+			text += fmt.Sprintf(" and %d more", n-6)
+		}
+		lines = append(lines, st.dim.Render("◆ "+ansi.Truncate(text, width-2, "…")))
+	}
+	return append(lines, "")
 }

@@ -61,6 +61,7 @@ var commands = []command{
 	{"B", "In an open pattern: bounce it as you hear it (m mutes, s solos a track) to one sample on a pad you choose", []int{secPatterns}},
 	{"N", "New pattern: pick a template (all pads held, blank, or a genre groove)", []int{secPads, secPatterns}},
 	{"F", "Find where the samples on the pads came from, for the pads with no origin noted: names and lengths are matched against the index", []int{secPads}},
+	{"W", "Find which folder each bank of this project was filled from, and note it, so the Files view shows the folder as used (needs the folders indexed)", []int{secPads}},
 	{"tab", "Move between the pads and the patterns panel under them (in an open pattern: expand / fold the track on the cursor row)", []int{secPads, secPatterns}},
 	{"enter", "Open pattern", []int{secPatterns}},
 	{"d", "Delete the pattern (or the marked ones)", []int{secPatterns}},
@@ -563,6 +564,8 @@ func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 		return m.openTemplatePicker()
 	case "F":
 		return m.scanOrigins()
+	case "W":
+		return m.scanFolderUses()
 	case "m":
 		return m.toggleMute(row.Pad)
 	case "M":
@@ -2763,20 +2766,14 @@ func (m Model) promptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case name == "enter":
 		return m.apply()
-	case name == "backspace":
-		if p.buffer != "" {
-			r := []rune(p.buffer)
-			p.buffer = string(r[:len(r)-1])
-		}
-	case name == "ctrl+u":
-		p.buffer = ""
+	case p.edit(name):
 	case name == "tab" && p.kind == promptBulkRename:
 		p.suffix = !p.suffix
 	case key.Type == tea.KeyRunes || key.Type == tea.KeySpace:
 		for _, r := range key.Runes {
 			// The unit only accepts printable ASCII in names; paths and searches can hold more.
 			if r >= ' ' && (r <= '~' || p.kind == promptExport || p.kind == promptRestore || p.kind == promptSearch || p.kind == promptExportName || p.kind == promptAssignFile || p.kind == promptMkdir || p.kind == promptFindFolder || p.kind == promptProjectExport || p.kind == promptProjectExportName || p.kind == promptProjectRestore) {
-				p.buffer += string(r)
+				p.insert(string(r))
 			}
 		}
 	}
@@ -3017,6 +3014,7 @@ func (m Model) runRestore(plan *app.PadRestore, bank int, slot *proto.PadIndex) 
 		return m, nil
 	}
 	first := targets[0]
+	project := m.snap.Project
 	m.busy = fmt.Sprintf("restoring %d pads", len(plan.Pads))
 	prog := m.prog
 	prog.begin(0)
@@ -3026,14 +3024,22 @@ func (m Model) runRestore(plan *app.PadRestore, bank int, slot *proto.PadIndex) 
 		if err != nil {
 			return doneMsg{message: "restore failed: " + err.Error(), reload: true}
 		}
+		var records []app.FolderUseRecord
+		for b, n := range app.RestoredBanks(targets) {
+			records = append(records, app.FolderUseRecord{Bank: b, Folder: plan.Dir, Pads: n})
+		}
+		uses, err := app.RecordFolderUses(unit, project, records)
+		if err != nil {
+			summary += "; the folder could not be noted as used: " + err.Error()
+		}
 		if slot == nil {
-			return doneMsg{message: summary, reload: true, focus: &first}
+			return doneMsg{message: summary, reload: true, focus: &first, folderUses: uses}
 		}
 		if err := app.WriteStartPattern(unit, *slot, targets, app.StartBars); err != nil {
-			return doneMsg{message: summary + "; the pattern was not made: " + err.Error(), reload: true, focus: &first}
+			return doneMsg{message: summary + "; the pattern was not made: " + err.Error(), reload: true, focus: &first, folderUses: uses}
 		}
 		summary += fmt.Sprintf("; pattern %s starts them together (%d bars)", *slot, app.StartBars)
-		return doneMsg{message: summary, reload: true, focus: &first, patterns: true}
+		return doneMsg{message: summary, reload: true, focus: &first, patterns: true, folderUses: uses}
 	})
 }
 

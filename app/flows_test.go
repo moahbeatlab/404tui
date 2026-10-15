@@ -1441,3 +1441,42 @@ func TestAPutSampleGetsFullLevel(t *testing.T) {
 		t.Errorf("the pad is at level %d after a put, want 127", got)
 	}
 }
+
+func TestFolderUsesAreWorkedOutFromOriginsAndRolledUp(t *testing.T) {
+	o := &app.Origins{Pads: map[string]app.Origin{}}
+	var rows []app.PadRow
+	for i, name := range []string{"a", "b", "c", "d"} {
+		p := proto.AllPads()[32+i] // bank C
+		rows = append(rows, app.PadRow{Pad: p, HasSample: true, Name: name})
+		folder := "SD:IMPORT/kit-one"
+		if i == 3 {
+			folder = "SD:IMPORT/other"
+		}
+		o.Pads[fmt.Sprintf("1/%s", p)] = app.Origin{Path: folder + "/" + name + ".wav", Name: name}
+	}
+	// One lone sample on bank D is not a folder.
+	lone := proto.AllPads()[48]
+	rows = append(rows, app.PadRow{Pad: lone, HasSample: true, Name: "x"})
+	o.Pads[fmt.Sprintf("1/%s", lone)] = app.Origin{Path: "SD:IMPORT/solo/x.wav", Name: "x"}
+
+	found := app.FolderUsesFromOrigins(o, 0, rows)
+	if len(found) != 1 || found[0].Bank != 2 || found[0].Folder != "SD:IMPORT/kit-one" || found[0].Pads != 3 {
+		t.Fatalf("found %+v", found)
+	}
+
+	f := &app.FolderUses{Banks: map[string]app.FolderUse{
+		"1/C": {Folder: "SD:IMPORT/house/kit-one"},
+		"2/A": {Folder: "SD:IMPORT/house"},
+	}}
+	own, inside := f.Of("SD:IMPORT/house")
+	if len(own) != 1 || own[0].Project != 2 || len(inside) != 1 || inside[0].Bank != 2 {
+		t.Fatalf("own %+v inside %+v", own, inside)
+	}
+	if f.Used("SD:IMPORT/hou") || !f.Used("SD:IMPORT") || f.Used("SD:IMPORT/house/kit-two") {
+		t.Error("a folder is used by its own name or a folder inside it, not by a name that starts the same")
+	}
+	var none *app.FolderUses
+	if none.Used("SD:IMPORT") {
+		t.Error("no notes, nothing used")
+	}
+}

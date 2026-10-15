@@ -277,7 +277,7 @@ func (m Model) tagsPromptBox(p *prompt) string {
 	if len(p.paths) == 1 && len(p.folders) == 0 {
 		lines = append(lines, st.dim.Render(padTo("From name", 12))+st.text.Render(words(m.tags.OwnTags(p.paths[0]))))
 	}
-	lines = append(lines, "", st.accent.Render("> ")+p.buffer+"█", "")
+	lines = append(lines, "", st.accent.Render("> ")+p.shown(), "")
 	var used []string
 	for i, c := range m.tags.UserTagCounts() {
 		if i >= 14 {

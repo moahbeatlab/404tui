@@ -64,3 +64,11 @@ Goal: review the layers and keep them honest. The layering is `cmd/sp404` → `t
 - [ ] A `release` target that sets the version with
   `-ldflags "-X github.com/moahbeatlab/404tui/version.Version=…"`, and builds for macOS,
   Linux and Windows.
+
+## Let the tag index grow without rewriting it
+
+- [ ] `SD:404tui-index.json.gz` grows with the sample library and is written whole on every
+  save, over a link of about 2 MB/s. Look at a format that can be updated in part (an
+  append-only log of changes folded in now and then, or SQLite on the computer with only a
+  copy on the card). The origins and folder notes are bounded (2560 and 160 entries) and can
+  stay JSON.

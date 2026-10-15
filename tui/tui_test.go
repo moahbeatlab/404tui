@@ -933,6 +933,15 @@ func TestExportAndRestoreThroughTheFolderBrowser(t *testing.T) {
 	s.shows("onto which bank?")
 	s.press("enter", "enter")
 	s.shows("3 pads restored onto bank A from SD:IMPORT/PROJECT_01-A")
+	// The folder is noted as used, and the Files view says so.
+	data, ok := s.sim.File("SD:404tui-folders.json")
+	if !ok || !strings.Contains(string(data), `"1/A"`) || !strings.Contains(string(data), "SD:IMPORT/PROJECT_01-A") {
+		t.Fatalf("the folder notes: %v %s", ok, data)
+	}
+	s.press("2")
+	s.shows("◆▾ IMPORT/", "◆  ▾ PROJECT_01-A/")
+	s.press("k", "k", "k", "k")
+	s.shows("Used in project 1, bank A")
 }
 
 func TestThemesAndNarrowScreens(t *testing.T) {
@@ -4940,4 +4949,28 @@ func TestDClearsTheTrackOnlyInTheBarsOnShow(t *testing.T) {
 	if other == 0 {
 		t.Error("D took notes out of another track")
 	}
+}
+
+func TestWFindsTheFolderEachBankWasFilledFrom(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.sim.AddFile("SD:IMPORT/Great Kit/Loop 9.wav", wav(2400))
+	s.sim.AddFile("SD:IMPORT/Great Kit/Loop 8.wav", wav(2800))
+	s.press("2", "tab", "i")
+	s.shows("indexed")
+	s.press("r", "1")
+	m := s.m()
+	for i, f := range []string{"Loop 9", "Loop 8"} {
+		if _, err := app.Assign(m.unit, m.unit, pad(t, fmt.Sprintf("G%d", i+1)), "SD:IMPORT/Great Kit/"+f+".wav"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.press("r", "W")
+	s.shows("folders found for bank G")
+	data, ok := s.sim.File("SD:404tui-folders.json")
+	if !ok || !strings.Contains(string(data), `"1/G"`) || !strings.Contains(string(data), `"matched": true`) {
+		t.Fatalf("the folder notes: %v %s", ok, data)
+	}
+	s.press("2")
+	s.shows("◆▾ IMPORT/")
 }

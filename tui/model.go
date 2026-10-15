@@ -93,6 +93,7 @@ const (
 type prompt struct {
 	kind   promptKind
 	buffer string
+	back   int // runes between the cursor and the end of buffer
 	// What the answer applies to.
 	pads    []proto.PadIndex
 	rows    []app.PadRow
@@ -375,10 +376,13 @@ type Model struct {
 	stripBusy bool
 	// origins say where the samples on the pads came from; originsBusy is set while they are
 	// read from the card.
-	origins     *app.Origins
-	originsBusy bool
-	infos       map[string]fileInfo
-	infoBusy    bool
+	origins *app.Origins
+	// folderUses are the notes of which folders were restored onto which banks.
+	folderUses     *app.FolderUses
+	folderUsesBusy bool
+	originsBusy    bool
+	infos          map[string]fileInfo
+	infoBusy       bool
 
 	// lastAssigned is the pad a file last went onto; a file goes to the next free one.
 	lastAssigned proto.PadIndex
@@ -617,6 +621,8 @@ type (
 		patterns bool
 		// origins are the notes of where samples came from, after an assign or a delete.
 		origins *app.Origins
+		// folderUses are the notes of which folders are on which banks, after a restore or a scan.
+		folderUses *app.FolderUses
 	}
 	patternsMsg struct {
 		bank int
@@ -1039,6 +1045,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.origins != nil {
 			m.origins = msg.origins
 		}
+		if msg.folderUses != nil {
+			m.folderUses = msg.folderUses
+		}
 		if msg.focus != nil {
 			m.section, m.bank, m.pad = secPads, int(msg.focus.Bank()), int(msg.focus.Pad())
 			if msg.assigned {
@@ -1094,6 +1103,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.slicerBedMixed(msg)
 	case patBounceMsg:
 		return m.patternBounced(msg)
+	case folderUsesMsg:
+		m.folderUsesBusy = false
+		if msg.err == nil && m.folderUses == nil {
+			m.folderUses = msg.uses
+		}
+		return m, m.wanted()
 	case originsMsg:
 		m.originsBusy = false
 		if msg.err == nil && m.origins == nil {
@@ -1489,6 +1504,10 @@ func (m *Model) wanted() tea.Cmd {
 			m.busy = "listing files"
 			return m.loadFilesTree()
 		}
+		if m.folderUses == nil && !m.folderUsesBusy {
+			m.folderUsesBusy = true
+			return m.loadFolderUses()
+		}
 		if node, ok := m.fileNode(); ok && !node.Dir && isAudio(node.Name) && !m.infoBusy {
 			if _, have := m.infos[node.Path]; !have {
 				m.infoBusy = true
@@ -1646,6 +1665,22 @@ func (m Model) logMessage() Model {
 type originsMsg struct {
 	origins *app.Origins
 	err     error
+}
+
+// folderUsesMsg is the notes of which folders were put on which banks, read from the card.
+type folderUsesMsg struct {
+	uses *app.FolderUses
+	err  error
+}
+
+// loadFolderUses reads the notes from the card, without holding the screen.
+func (m Model) loadFolderUses() tea.Cmd {
+	return func() tea.Msg {
+		m.ops.Lock()
+		defer m.ops.Unlock()
+		f, err := app.LoadFolderUses(m.unit)
+		return folderUsesMsg{uses: f, err: err}
+	}
 }
 
 // loadOrigins reads the notes from the card, without holding the screen.

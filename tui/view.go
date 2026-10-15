@@ -1359,6 +1359,8 @@ func (m Model) treeLines(height int) string {
 			return m.st.hot.Render("♪")
 		case m.favouriteMark(n.Path) != "":
 			return m.favouriteMark(n.Path)
+		case n.Dir && m.folderUses.Used(n.Path):
+			return m.st.accent.Render("◆")
 		}
 		return " "
 	})
@@ -1448,6 +1450,7 @@ func (m Model) fileDetail(height, width int) string {
 	case node.Name == app.Sidecar:
 		lines = append(lines, st.good.Render("Pad export"), st.dim.Render("Enter or R restores it; you choose the bank"))
 	case node.Dir:
+		lines = append(lines, m.folderUseLines(node.Path, width)...)
 		lines = append(lines, st.dim.Render("R restores pads from an export here; you choose the bank"))
 	}
 	return strings.Join(lines, "\n")
@@ -1812,7 +1815,7 @@ func (m Model) promptBox() string {
 	if p.kind == promptFindFolder && m.tree != nil {
 		return m.folderFinderBox(m.geom(), m.tree.Rows(), m.indexes[m.root], p.buffer, p.choice, "Find a folder in "+rootName(m.root))
 	}
-	return st.modal.Width(min(m.width-4, 72)).Render(st.bold.Render(title) + "\n\n" + st.accent.Render("> ") + p.buffer + "█" + "\n\n" + st.dim.Render(hint+"Enter apply  ·  Esc cancel"))
+	return st.modal.Width(min(m.width-4, 72)).Render(st.bold.Render(title) + "\n\n" + st.accent.Render("> ") + p.shown() + "\n\n" + st.dim.Render(hint+"Enter apply  ·  Esc cancel"))
 }
 
 // pickerBox is the pad chooser of an assign, or the bank chooser of a retarget.

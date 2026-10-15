@@ -257,6 +257,12 @@ pattern, from the grid or from an expanded track, back to the patterns under the
   once and kept up to date, not rebuilt at every start. `*` favourites the marked files or
   folders, and `+` adds your own tags (a word with `-` in front takes one off). The same keys
   work in the `a` dialog.
+- **Used folders:** a folder restored onto a bank with `R` gets a `◆` in the tree (and so do the
+  folders above it), and its details say "Used in project 1, bank C". The notes are in
+  `SD:404tui-folders.json`, one entry per project and bank, so it never holds more than 160.
+  `W` in Pads goes the other way for the project in front: it finds where the samples came from
+  (as `F` does), then notes, for every bank whose samples are mostly (and at least two) from
+  one folder, that the folder is on that bank. It needs the folders indexed with `i`.
 - **Finding:** `/` searches every audio file of the source by keyword, and `s` searches tags
   only, with the tags listed in a sidebar (`Tab` switches between the two). Enter assigns,
   `Ctrl-O` shows the file in the tree. `f` finds a folder by name; favourite folders come
