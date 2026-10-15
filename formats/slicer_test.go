@@ -598,3 +598,53 @@ func TestStepEnvStaysInRange(t *testing.T) {
 		t.Errorf("steps: %d %d %d", StepEnv(0, 1), StepEnv(7, 1), StepEnv(7, -1))
 	}
 }
+
+func TestDivideGridCutsOneSlicePerStep(t *testing.T) {
+	edges := func(s *Slicing) []int {
+		var out []int
+		for _, x := range s.Slices {
+			out = append(out, x.Start)
+		}
+		return out
+	}
+	// A second at 120 BPM: a 1/4 step is half a second, a 1/16 step is 6000 frames.
+	s := NewSlicing(48000, 1)
+	if !s.DivideGrid(nil, 24000, 0) || !slices.Equal(edges(s), []int{0, 24000}) {
+		t.Errorf("quarters: %v", edges(s))
+	}
+	s.DivideGrid(nil, 6000, 0)
+	if len(s.Slices) != 8 || s.Slices[7].End != 48000 || len(s.Order) != 8 {
+		t.Errorf("sixteenths: %d slices, last ends %d, order %v", len(s.Slices), s.Slices[7].End, s.Order)
+	}
+	// The slices are one step long and touch.
+	for i, x := range s.Slices {
+		if x.End-x.Start != 6000 || (i > 0 && x.Start != s.Slices[i-1].End) {
+			t.Errorf("slice %d is %d..%d", i, x.Start, x.End)
+		}
+	}
+	// An anchor puts a grid line there: what is before it is a slice of its own.
+	s.DivideGrid(nil, 6000, 1000)
+	if got := edges(s); !slices.Equal(got, []int{0, 1000, 7000, 13000, 19000, 25000, 31000, 37000, 43000}) {
+		t.Errorf("anchored: %v", got)
+	}
+	// A short lead-in is not a slice.
+	s.DivideGrid(nil, 6000, 30)
+	if got := edges(s); got[0] != 0 || got[1] != 6030 {
+		t.Errorf("a lead-in of 30 frames: %v", got)
+	}
+	// Samples put together are cut each on their own.
+	s.DivideGrid([]int{24000}, 6000, 0)
+	if got := edges(s); !slices.Equal(got, []int{0, 6000, 12000, 18000, 24000, 30000, 36000, 42000}) {
+		t.Errorf("two samples: %v", got)
+	}
+	// A step that does not divide: the leftover joins the last slice when it is too short.
+	s.DivideGrid(nil, 7000, 0)
+	if last := s.Slices[len(s.Slices)-1]; last.End != 48000 || s.Validate() != nil {
+		t.Errorf("uneven: %v %v", edges(s), s.Validate())
+	}
+	// Too short a step does nothing.
+	before := len(s.Slices)
+	if s.DivideGrid(nil, 10, 0) || len(s.Slices) != before {
+		t.Error("a step shorter than a slice changed the slicing")
+	}
+}

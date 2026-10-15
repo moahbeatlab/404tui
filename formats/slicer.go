@@ -166,6 +166,54 @@ func (s *Slicing) DivideIn(starts []int, n int, rng *rand.Rand) {
 	s.ResetOrder()
 }
 
+// DivideGrid cuts the sample on a tempo grid: an edge at every step frames, so each slice is one
+// step long. Each part (as in DivideIn) has its grid lines from its own start, except the part
+// that anchor lies in, where one of the lines is at the anchor: the downbeat, when the sample
+// begins a little before it. What is left before the first line, if it is long enough to be a
+// slice, is one. A step shorter than a slice can be leaves things as they are, and false.
+func (s *Slicing) DivideGrid(starts []int, step float64, anchor int) bool {
+	if !(step >= MinSliceFrames) || math.IsInf(step, 0) {
+		return false
+	}
+	bounds := []int{0}
+	for _, f := range starts {
+		if f > bounds[len(bounds)-1] && f < s.Frames {
+			bounds = append(bounds, f)
+		}
+	}
+	bounds = append(bounds, s.Frames)
+	s.Slices = s.Slices[:0]
+	for i := 0; i+1 < len(bounds); i++ {
+		from, to := bounds[i], bounds[i+1]
+		base := float64(from)
+		if anchor >= from && anchor < to {
+			base = float64(anchor)
+		}
+		edges := []int{from}
+		for k := -int(math.Floor((base - float64(from)) / step)); ; k++ {
+			e := int(math.Round(base + float64(k)*step))
+			if e >= to {
+				break
+			}
+			if e-edges[len(edges)-1] >= MinSliceFrames {
+				edges = append(edges, e)
+			}
+		}
+		if len(edges) > 1 && to-edges[len(edges)-1] < MinSliceFrames {
+			edges = edges[:len(edges)-1]
+		}
+		for j, e := range edges {
+			end := to
+			if j+1 < len(edges) {
+				end = edges[j+1]
+			}
+			s.Slices = append(s.Slices, DefaultSlice(e, end))
+		}
+	}
+	s.ResetOrder()
+	return true
+}
+
 // divideRange cuts frames from..to in n slices, equal or, with a rng, of random lengths of which
 // none is shorter than an eighth of an equal one.
 func divideRange(from, to, n int, rng *rand.Rand) []Slice {

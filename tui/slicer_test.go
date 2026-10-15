@@ -1189,3 +1189,40 @@ func TestSlicerPlayingThenPlacesAtThePlayhead(t *testing.T) {
 		t.Errorf("the edge is at frame %d, the playhead was near 24000", at)
 	}
 }
+
+func TestSlicerCutsOnTheTempoGrid(t *testing.T) {
+	s := slicerOpen(t)
+	bpm := s.m().slicerBankTempo()
+	step := int(60 / bpm * formats.SampleRate * 4 / 16)
+	s.press("C") // the grid is off: it goes on at 1/16 and the sample is cut in steps
+	got := s.slicing()
+	if got.Division != 16 || got.BPM != bpm {
+		t.Fatalf("grid 1/%d at %g BPM, want 1/16 at %g", got.Division, got.BPM, bpm)
+	}
+	if want := (48000 + step - 1) / step; len(got.Slices) < want-1 || len(got.Slices) > want {
+		t.Errorf("%d slices of %d frames in 48000", len(got.Slices), step)
+	}
+	if got.Slices[1].Start != step || got.Slices[0].Start != 0 {
+		t.Errorf("the slices start at %d and %d, a step is %d", got.Slices[0].Start, got.Slices[1].Start, step)
+	}
+	s.shows("bars of 4/4", "u undoes")
+	// A coarser grid, and the tempo: 1/4 at 120 BPM is half a second.
+	s.press("T", "T") // 1/4 -> 1/8 -> 1/16 -> off? set it by looking
+	for s.slicing().Division != 4 {
+		s.press("T")
+	}
+	s.press("C")
+	if n := len(s.slicing().Slices); n != int(math.Ceil(48000/(60/bpm*formats.SampleRate))) {
+		t.Errorf("%d quarter notes", n)
+	}
+	// The cut cursor says where a grid line is.
+	s.press("D", "L", "C") // the cursor sits one grid step in; a line there changes nothing
+	s.shows("with a line at the cursor")
+	// Undo brings the old slices back.
+	for i := 0; i < 3; i++ {
+		s.press("u")
+	}
+	if n := len(s.slicing().Slices); n == 0 {
+		t.Error("undo left no slices")
+	}
+}

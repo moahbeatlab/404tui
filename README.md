@@ -88,6 +88,13 @@ you left it. The keys are listed at the bottom of the dialog, in groups.
   same number of slices at **random places**, so they differ in length (again for another roll),
   `t` slices at the **onsets** it finds (again for a different sensitivity), `c` cuts the slice in
   front in two and `d` removes it. `h l` choose a slice, `u` undoes.
+- **On the tempo** (`C`): cuts one slice per step of the grid, at the tempo you set: `T` picks
+  the step (1/4, 1/8, 1/16; with the grid off, `C` turns on 1/16 at the bank's tempo) and `, .`
+  the BPM. The message says how many bars of 4/4 the sample is at that tempo: 8.00 means the
+  tempo fits, 7.4 means try another with `, .` and `C` again. With the cut cursor on (`D`), one
+  grid line is put at the cursor, to say where the downbeat is when the sample starts early;
+  what is before it becomes a slice of its own. Samples put together (`A`) are each cut from
+  their own start. `u` undoes.
 - **By hand** (`D`): takes every edge away (`u` brings them back) and shows a cursor. `h l` move
   it a dot (eight with `f`), `H L` jump, by a grid step when a grid is on (`T`), else by 1/32 of
   the sample. `p` puts an edge at the cursor; while the sample plays (Space) it cuts at the

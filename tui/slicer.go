@@ -520,6 +520,8 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.message = fmt.Sprintf("grid: every step is a 1/%d at %g BPM (. and , change the tempo)", next, s.sl.BPM)
 		}
 		return m, nil
+	case "C":
+		return m.slicerCutOnGrid()
 	case ",", ".":
 		if s.bed != nil {
 			m.message = "the tempo follows pattern " + s.bed.slot.String() + "; P takes the pattern away"
@@ -791,6 +793,43 @@ func (m Model) slicerCutKey(name string) (tea.Model, tea.Cmd, bool) {
 		return m, nil, false
 	}
 	return m, nil, true
+}
+
+// slicerCutOnGrid cuts the sample on the tempo grid, one slice per step at the BPM: the grid is
+// switched on (1/16 at the bank's tempo) when it is off. With the cut cursor on, one of the grid
+// lines is at the cursor, to say where the downbeat is; else the grid starts at the sample's
+// start. The message says how many bars of 4/4 the sample is at this tempo: a whole number means
+// the tempo is right, anything else that , . should be tried.
+func (m Model) slicerCutOnGrid() (tea.Model, tea.Cmd) {
+	s := m.slicer
+	if s.sl.Division == 0 {
+		m.slicerChange(func(sl *formats.Slicing) {
+			sl.Division = 16
+			if sl.BPM <= 0 {
+				sl.BPM = m.slicerBankTempo()
+			}
+		})
+	}
+	step := 60 / s.sl.BPM * formats.SampleRate * 4 / float64(s.sl.Division)
+	anchor := -1
+	if s.cutting {
+		anchor = s.cutAt
+	}
+	ok := false
+	m.slicerChange(func(sl *formats.Slicing) { ok = sl.DivideGrid(s.sourceStarts(), step, anchor) })
+	if !ok {
+		m.slicerUndoLast()
+		m.message = "the grid steps are too short to cut in: T makes them longer, , lowers the tempo"
+		return m, nil
+	}
+	s.at = 0
+	bars := float64(s.sl.Frames) / (60 / s.sl.BPM * formats.SampleRate * 4)
+	where := "from the start"
+	if anchor >= 0 {
+		where = "with a line at the cursor"
+	}
+	m.message = fmt.Sprintf("cut on the 1/%d grid at %g BPM %s: %d slices; the sample is %.2f bars of 4/4 at this tempo (u undoes)", s.sl.Division, s.sl.BPM, where, len(s.sl.Slices), bars)
+	return m, nil
 }
 
 // sliceAt is the slice a frame is in: the nearest before it when it is in a gap.
@@ -1678,7 +1717,7 @@ func (s *slicer) slicerHelp() []helpGroup {
 	}
 	return append(groups,
 		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x", "roll"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"1 2", "attack"}, {"3 4", "release"}, {"X", "plain"}}},
-		helpGroup{"feel", []helpKey{{"T", "grid"}, {", .", "tempo"}, {"w", "swing"}, {"W", "humanize"}}},
+		helpGroup{"feel", []helpKey{{"T", "grid"}, {", .", "tempo"}, {"C", "cut on grid"}, {"w", "swing"}, {"W", "humanize"}}},
 		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"P", "pattern"}, {"M", "mode"}, {"S", "new seed"}, {"Tab", "order lane"}}},
 		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"s y", "mark"}, {"B", "marked to pads"}, {"n", "rounds"}, {"v", "takes"}, {"A", "add sample"}, {"Esc", "close"}}},
 	)
