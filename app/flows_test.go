@@ -1420,3 +1420,24 @@ func TestGridOffsetIsTheDistanceToTheNearestStep(t *testing.T) {
 		t.Errorf("TicksToMillis(120) = %v, want 125", got)
 	}
 }
+
+func TestAPutSampleGetsFullLevel(t *testing.T) {
+	d, _ := connect(t)
+	a1 := pad(t, "A1")
+	level, _ := proto.ParamByName("level")
+	if err := d.SetParam(level.ID, proto.TargetPad(a1), 20); err != nil {
+		t.Fatal(err)
+	}
+	sample := formats.Sample{Channels: 2, Samples: make([]int16, 4000)}
+	if _, err := app.PutSample(d, a1, sample, "bounce"); err != nil {
+		t.Fatal(err)
+	}
+	block, err := d.PadBlock(a1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := block.Param(level.ID)
+	if got != 127 {
+		t.Errorf("the pad is at level %d after a put, want 127", got)
+	}
+}

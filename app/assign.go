@@ -65,8 +65,18 @@ func PutSample(u Importer, pad proto.PadIndex, sample formats.Sample, name strin
 	if err := u.ImportSMP(current+1, pad, sample.SMP(), name); err != nil {
 		return "", fmt.Errorf("importing onto %s: %w", pad, err)
 	}
+	// A sample put on a pad plays at full level, whatever the pad had before (and a pad that
+	// had none reads as 0): 127, as a pad is when it is new.
+	if p, ok := u.(interface {
+		SetParam(id byte, target proto.Target, value int32) error
+	}); ok {
+		_ = p.SetParam(paramLevel, proto.TargetPad(pad), DefaultPadLevel)
+	}
 	return name, nil
 }
+
+// DefaultPadLevel is the level a pad gets with a sample put on it.
+const DefaultPadLevel = 127
 
 // Placement is where one file of a multi-file assign went.
 type Placement struct {
