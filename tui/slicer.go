@@ -1538,7 +1538,7 @@ func (m Model) slicerBox() string {
 	if sl.Division > 0 {
 		chrome++
 	}
-	if _, ok := s.coverRounds(); ok {
+	if _, ok := s.coverRounds(); ok && m.geom().bodyH >= 34 {
 		chrome++
 	}
 	roomy := m.geom().bodyH >= 34
@@ -1981,7 +1981,7 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 		fourth += st.accent.Render("  ·  " + plural(n, "slice") + " marked")
 	}
 	lines := []string{first, second, third, fourth}
-	if c, ok := s.coverRounds(); ok {
+	if c, ok := s.coverRounds(); ok && m.geom().bodyH >= 34 {
 		note := fmt.Sprintf("a round is %s, the pattern %s: ", plural(c.roundSteps, "step"), plural(c.patSteps, "step"))
 		if s.rounds*c.roundSteps%c.patSteps == 0 {
 			note += fmt.Sprintf("%s fit it exactly (N sets %d)", plural(s.rounds, "round"), c.rounds)
