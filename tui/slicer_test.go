@@ -1418,3 +1418,22 @@ func TestSlicerRollSliders(t *testing.T) {
 		t.Errorf("X left %+v", x)
 	}
 }
+
+func TestSlicerFillsThePageAtAnySize(t *testing.T) {
+	s := slicerOpen(t)
+	patternOnA2(t, s, "A2")
+	s.press("T", "P", "enter")
+	for w := 60; w <= 320; w += 20 {
+		for h := 16; h <= 110; h += 6 {
+			s.send(tea.WindowSizeMsg{Width: w, Height: h})
+			box := strings.Split(s.m().slicerBox(), "\n")
+			wide := 0
+			for _, l := range box {
+				wide = max(wide, ansi.StringWidth(l))
+			}
+			if body := s.m().geom().bodyH; len(box) != body || wide > w {
+				t.Errorf("%dx%d: the box is %d lines of %d wide, the page %d lines of %d", w, h, len(box), wide, body, w)
+			}
+		}
+	}
+}

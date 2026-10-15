@@ -374,7 +374,7 @@ func (s *slicer) view() (from, to int) {
 }
 
 // slicerCols is how many dots wide the waveform is.
-func (m Model) slicerCells() int { return max(min(m.width-8, 480), 30) }
+func (m Model) slicerCells() int { return max(m.width-8, 30) }
 
 // slicerNudge moves the start of the slice in front, or its end, by dots on the screen (a dot
 // is half a cell; eight when coarse is on).
@@ -1679,7 +1679,18 @@ func (m Model) slicerBox() string {
 	if len(preview) > 0 {
 		chrome += len(preview) + 1
 	}
-	rows := clamp(m.geom().bodyH-chrome-len(help), 3, 48)
+	rows := m.geom().bodyH - chrome - len(help)
+	if rows < 3 && len(help) > 0 {
+		// Low screen: the list of keys gives up lines until the waveform has its least, and
+		// says so, so the box always fits the page.
+		cut := min(3-rows, len(help))
+		help = help[:len(help)-cut]
+		rows += cut
+		if len(help) > 0 {
+			help[len(help)-1] = st.faint.Render("more keys: a taller window shows them all")
+		}
+	}
+	rows = max(rows, 1)
 
 	// Slices can overlap: the one in front, or the one sounding, shows where they do.
 	styleOf := func(frame int) cellStyle {
@@ -1890,6 +1901,15 @@ func (m Model) slicerBox() string {
 	if len(preview) > 0 {
 		lines = append(lines, st.faint.Render(strings.Repeat("─", cells)))
 		lines = append(lines, preview...)
+	}
+	// On a very low screen the blank lines go, then whatever still does not fit.
+	for over := len(lines) + 2 - m.geom().bodyH; over > 0; over = len(lines) + 2 - m.geom().bodyH {
+		at := slices.Index(lines, "")
+		if at < 0 {
+			lines = lines[:max(len(lines)-over, 1)]
+			break
+		}
+		lines = slices.Delete(lines, at, at+1)
 	}
 	// Whatever is wider than the waveform is cut, so the box never outgrows the screen.
 	for i, l := range lines {
