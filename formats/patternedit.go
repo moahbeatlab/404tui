@@ -17,6 +17,9 @@ type NoteRecord struct {
 	Pad      proto.PadIndex
 	Velocity uint8
 	Length   uint16
+	// Pitch is the pitch byte of the record: 0 for a plain note, anything else is a note played
+	// chromatically on the unit. How the value maps to semitones is not known here.
+	Pitch uint8
 }
 
 // NoteRecords lists the notes of a pattern file with their offsets.
@@ -34,7 +37,7 @@ func NoteRecords(b []byte) ([]NoteRecord, error) {
 			if !ok {
 				return nil, errors.New("invalid pattern file: note on a pad beyond J16")
 			}
-			notes = append(notes, NoteRecord{Offset: at, Tick: tick, Pad: pad, Velocity: min(r[4], 127), Length: binary.LittleEndian.Uint16(r[6:])})
+			notes = append(notes, NoteRecord{Offset: at, Tick: tick, Pad: pad, Velocity: min(r[4], 127), Length: binary.LittleEndian.Uint16(r[6:]), Pitch: r[3]})
 		case r[1] == endRecord:
 			return notes, nil
 		}

@@ -188,10 +188,6 @@ you left it. The keys are listed at the bottom of the dialog, in groups.
   semitones: a fade-out stutter, a swell, or a riser. **Stretch:** `K` puts the whole sample, stretched without a change of
   pitch to a whole number of bars at the grid's (or the pattern's, or the bank's) tempo, on a
   pad; slice that pad at the tempo. `F` fits the grid tempo to the sample instead.
-- **Roll shapes:** `x` makes a slice roll; `Q` shapes the roll: even, decay, swell, rise (pitch
-  and loudness up) or fall. **Stretch:** `K` puts the whole sample, stretched without a change of
-  pitch to a whole number of bars at the grid's (or the pattern's, or the bank's) tempo, on a
-  pad; slice that pad at the tempo. `F` fits the grid tempo to the sample instead.
 - **Takes** (`v`): 1, 2, 4 or 8. With more than one, `b` renders that many takes, each from its
   own rounds (take 1 is what a loop plays in its first rounds, take 2 the rounds after them…), and
   puts them on the **free** pads of the bank from the pad you choose onward, named `name slc1`,

@@ -1188,7 +1188,7 @@ func (m Model) patternDetail(g geom) string {
 			lines = append(lines, m.rowLabel(row.Pad, focused, lit)+" "+rule+m.mixBadge(row.Pad),
 				pad+lane[0],
 				pad+lane[1],
-				pad+lane[2], pad+rule)
+				pad+lane[2], pad+lane[3], pad+rule)
 			continue
 		}
 		if !m.patFocus && r == m.patRow {
@@ -1213,6 +1213,11 @@ func (m Model) patternDetail(g geom) string {
 				st.accent.Render(levelBar(16, loudest, 127)) +
 				st.text.Render(fmt.Sprintf("  ·  %s  ·  ", plural(int(math.Round(length)), "step"))) +
 				m.offsetLabel(d, notes[0].Tick)
+			// A note played chromatically on the unit has a pitch byte; what it means in
+			// semitones is not known, so it is shown as it is.
+			if pitch := notes[0].Pitch; pitch != 0 {
+				here += st.dim.Render("  ·  ") + st.accent.Render(fmt.Sprintf("chromatic: pitch byte %d (0x%02X)", pitch, pitch))
+			}
 			lines = append(lines, "", here)
 		} else {
 			lines = append(lines, "", where+st.dim.Render("  no note  ·  Enter puts one"))
@@ -1223,7 +1228,7 @@ func (m Model) patternDetail(g geom) string {
 		if _, keys, ok := m.condKeysAt(); ok {
 			cond = st.text.Render(m.patConds[keys[0]].String()) + st.dim.Render("  ·  ")
 		}
-		lines = append(lines, st.dim.Render("conditions  ")+cond+st.dim.Render("bounced: ")+st.accent.Render(line))
+		lines = append(lines, st.dim.Render("conditions  ")+cond+st.dim.Render("bounced: ")+st.accent.Render(line)+st.dim.Render("   notes with a condition are drawn ")+lipgloss.NewStyle().Foreground(st.th.cond).Bold(true).Render("◐"))
 		for _, e := range m.cycleExplain() {
 			lines = append(lines, strings.Split(st.faint.Render(ansi.Wrap(e, max(g.bodyW-6, 10), "")), "\n")...)
 		}
@@ -2392,7 +2397,7 @@ func (m Model) noteGlyph(velocity int) (string, lipgloss.Style) {
 // on show still shows.
 func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow bool, sp stepSpan) string {
 	st := m.st
-	cover, owner := laneCover(d, pad)
+	cover, _, start := laneCover(d, pad)
 	// A pad that is not heard in the mix on this computer has its notes greyed out, and so do the
 	// tracks around one that is expanded, so the eye stays on it.
 	dimmed := !heard(pad, m.muted, m.soloed)
@@ -2408,8 +2413,8 @@ func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow boo
 	for c := lo; c < hi; c++ {
 		// sustained is a step a note from before carries into: it draws a dash, not a fresh mark;
 		// carries is a note going on into the next step, which dashes run on to.
-		sustained := cover[c] > 0 && c > 0 && owner[c] >= 0 && owner[c] == owner[c-1]
-		carries := c+1 < len(owner) && owner[c] >= 0 && owner[c] == owner[c+1] && !dimmed
+		sustained := cover[c] > 0 && !start[c]
+		carries := cover[c] > 0 && c+1 < len(cover) && cover[c+1] > 0 && !start[c+1] && !dimmed
 		mark, style := "·", st.faint
 		switch {
 		case sustained:
@@ -2417,8 +2422,9 @@ func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow boo
 		case cover[c] > 0:
 			mark, style = m.noteGlyph(cover[c])
 			if d == m.pattern && m.conditioned(d, pad, c) {
-				// A note with a condition: half lit, in its own colour.
-				mark, style = "◐", st.hot
+				// A note with a condition: half lit, in a colour of its own (green: no other mark in
+				// the grid has it).
+				mark, style = "◐", lipgloss.NewStyle().Foreground(st.th.cond).Bold(true)
 			}
 		}
 		// A step is w cells: its mark, then dashes when the note goes on, else spaces.
@@ -2613,29 +2619,39 @@ func (m Model) spanHeader(d *app.PatternDetail, sp stepSpan) string {
 }
 
 // laneCover is, for each step of the whole pattern, the velocity a pad sounds there (0: none) and
-// which of d.Notes it comes from (-1: none); a note covers every step it lasts into.
-func laneCover(d *app.PatternDetail, pad proto.PadIndex) (cover, owner []int) {
+// which of d.Notes it comes from (-1: none); a note covers every step it lasts into. start says
+// where a note starts: there the cover is the loudest note that starts in the step, so a note
+// that begins under a longer one is drawn as itself and not taken for the long one going on.
+func laneCover(d *app.PatternDetail, pad proto.PadIndex) (cover, owner []int, start []bool) {
 	steps := d.Grid.Steps
-	cover, owner = make([]int, steps), make([]int, steps)
+	cover, owner, start = make([]int, steps), make([]int, steps), make([]bool, steps)
 	for i := range owner {
 		owner[i] = -1
 	}
+	starts := make([]int, steps)
 	for i, n := range d.Notes {
 		if n.Pad != pad || d.Length == 0 {
 			continue
 		}
-		start := min(int(uint64(n.Tick)*uint64(steps)/uint64(d.Length)), steps-1)
+		first := min(int(uint64(n.Tick)*uint64(steps)/uint64(d.Length)), steps-1)
 		end := n.Tick + uint32(n.Length)
-		for c := start; c < steps; c++ {
-			if c > start && d.StepTick(c) >= end {
-				break
-			}
+		for c := first + 1; c < steps && d.StepTick(c) < end; c++ {
 			if int(n.Velocity) >= cover[c] {
 				cover[c], owner[c] = int(n.Velocity), i
 			}
 		}
+		if int(n.Velocity) >= starts[first] {
+			starts[first] = int(n.Velocity)
+			start[first] = true
+			owner[first] = i
+		}
 	}
-	return cover, owner
+	for c := range steps {
+		if start[c] {
+			cover[c] = starts[c]
+		}
+	}
+	return cover, owner, start
 }
 
 // focusLane draws the expanded track over the same bars and step places as the compact rows
@@ -2645,12 +2661,12 @@ func laneCover(d *app.PatternDetail, pad proto.PadIndex) (cover, owner []int) {
 // meant to sit right of the 20-cell label column.
 func (m Model) focusLane(d *app.PatternDetail, pad proto.PadIndex, sp stepSpan) []string {
 	st := m.st
-	cover, owner := laneCover(d, pad)
+	cover, _, start := laneCover(d, pad)
 	cursorStyle := lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
 	chosen := m.selectedCols(d, pad)
 	chosenStyle := lipgloss.NewStyle().Background(st.th.markedBg).Foreground(st.th.text).Bold(true)
 	w := max(sp.w, 1) + 1
-	var nums, notes, vels strings.Builder
+	var nums, notes, vels, lens strings.Builder
 	for c := sp.lo; c < sp.hi; c++ {
 		i := c - sp.lo
 		num := st.faint
@@ -2663,21 +2679,25 @@ func (m Model) focusLane(d *app.PatternDetail, pad proto.PadIndex, sp stepSpan) 
 			n = "·"
 		}
 		nums.WriteString(num.Render(n + strings.Repeat(" ", max(w-len([]rune(n)), 0))))
-		// A note from before that carries into this step is a dash; a note starting here its mark,
-		// running on in dashes when it lasts into the next step.
-		sustained := cover[c] > 0 && c > 0 && owner[c] >= 0 && owner[c] == owner[c-1]
-		carries := c+1 < len(owner) && owner[c] >= 0 && owner[c] == owner[c+1]
+		// A note shows only where it starts, with its velocity as a bar; how long it lasts is
+		// the line under the bars: ┣━━━ from where it starts to where it ends. A note that
+		// begins under a longer one is a note of its own.
+		sustained := cover[c] > 0 && !start[c]
+		carries := cover[c] > 0 && c+1 < len(cover) && cover[c+1] > 0 && !start[c+1]
 		tail := " "
-		if carries {
-			tail = "─"
-		}
 		mark, style, vel := "·", st.faint, strings.Repeat(" ", w)
+		length := strings.Repeat(" ", w)
 		switch {
 		case sustained:
-			mark, style = "─", st.accent
+			length = st.accent.Render(strings.Repeat("━", w))
 		case cover[c] > 0:
+			length = st.accent.Render("┣" + strings.Repeat(map[bool]string{true: "━", false: " "}[carries], w-1))
 			mark, style = m.noteGlyph(cover[c])
 			vel = st.accent.Render(noteBlock(cover[c]) + strings.Repeat(" ", w-1))
+			if d == m.pattern && m.conditioned(d, pad, c) {
+				mark, style = "◐", lipgloss.NewStyle().Foreground(st.th.cond).Bold(true)
+				vel = lipgloss.NewStyle().Foreground(st.th.cond).Render(noteBlock(cover[c]) + strings.Repeat(" ", w-1))
+			}
 		}
 		switch {
 		case c == m.patCol:
@@ -2688,6 +2708,7 @@ func (m Model) focusLane(d *app.PatternDetail, pad proto.PadIndex, sp stepSpan) 
 			notes.WriteString(style.Render(mark) + st.accent.Render(strings.Repeat(tail, w-1)))
 		}
 		vels.WriteString(vel)
+		lens.WriteString(length)
 		if c+1 < sp.hi {
 			// What the compact row has after a step beyond the one space the lane's step already
 			// takes, so the two line up.
@@ -2695,14 +2716,15 @@ func (m Model) focusLane(d *app.PatternDetail, pad proto.PadIndex, sp stepSpan) 
 			g := st.faint.Render(gap)
 			nums.WriteString(g)
 			vels.WriteString(g)
+			notes.WriteString(g)
 			if carries {
-				notes.WriteString(m.fillGap(gap, "─", st.accent))
+				lens.WriteString(m.fillGap(gap, "━", st.accent))
 			} else {
-				notes.WriteString(g)
+				lens.WriteString(g)
 			}
 		}
 	}
-	return []string{nums.String(), notes.String(), vels.String()}
+	return []string{nums.String(), notes.String(), vels.String(), lens.String()}
 }
 
 // loopAt is where the looping pattern is in its round, from 0 to 1, and how long is left of

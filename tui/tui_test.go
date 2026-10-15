@@ -4815,3 +4815,62 @@ func TestOnlyTheChosenNotesChange(t *testing.T) {
 		t.Errorf("velocities %v, want 117 127 117", got)
 	}
 }
+
+func TestAChromaticNoteShowsItsPitchByte(t *testing.T) {
+	s := openConditionPattern(t)
+	s.hides("chromatic: pitch byte")
+	d := s.m().pattern
+	n := d.Notes[0]
+	// The unit played the first note chromatically: its record has a pitch byte.
+	if _, err := app.EditPattern(s.m().unit, d.Slot, func(b []byte) ([]byte, error) {
+		b[n.Offset+3] = 0x8D
+		return b, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Two edits elsewhere read the pattern again.
+	s.press("l", "x", "x", "g")
+	s.shows("chromatic: pitch byte 141 (0x8D)")
+}
+
+func TestAConditionedNoteIsMarkedInTheExpandedTrackToo(t *testing.T) {
+	s := openConditionPattern(t)
+	if !s.m().patFocus {
+		s.press("enter")
+	}
+	if !s.m().patFocus {
+		t.Fatal("the track is not expanded")
+	}
+	s.press("c", "l")
+	s.hides("conditions  1:2") // the cursor has left the note
+	s.shows("◐", "notes with a condition are drawn")
+}
+
+// A note that begins under a longer one is drawn as a note of its own, with its own velocity.
+func TestANoteUnderALongerOneIsDrawnAsANote(t *testing.T) {
+	s := openConditionPattern(t)
+	d := s.m().pattern
+	pad0 := d.Grid.Rows[0].Pad
+	// The note on step 1 lasts long; another, softer one starts two steps into it.
+	step := d.StepTicks()
+	longOne := d.CellNotes(pad0, 0)[0]
+	if _, err := app.EditPattern(s.m().unit, d.Slot, func(b []byte) ([]byte, error) {
+		if err := formats.SetLength(b, longOne.Offset, uint16(step*6)); err != nil {
+			return nil, err
+		}
+		return formats.InsertNote(b, d.StepTick(2), pad0, 40, uint16(step))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s.press("l", "x", "x", "g")
+	cover, _, start := laneCover(s.m().pattern, pad0)
+	if !start[2] || cover[2] != 40 {
+		t.Errorf("step 3 starts a note of velocity 40: start %v, cover %d", start[2], cover[2])
+	}
+	if start[1] || cover[1] != 127 {
+		t.Errorf("step 2 is the long note going on: start %v, cover %d", start[1], cover[1])
+	}
+	if start[3] || cover[3] != 127 {
+		t.Errorf("step 4 is the long note going on: start %v, cover %d", start[3], cover[3])
+	}
+}
