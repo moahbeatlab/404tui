@@ -58,6 +58,7 @@ var commands = []command{
 	{"m", "Mute this pad in the pattern playing on this computer (again unmutes)", []int{secPads, secPatterns}},
 	{"M", "Solo this pad in the pattern playing on this computer: only the soloed pads sound (again unsolos); s does the same", []int{secPads, secPatterns}},
 	{"S", "In an open pattern: save it as you hear it into a slot you choose, without the muted pads (or with only the soloed ones)", []int{secPatterns}},
+	{"B", "In an open pattern: bounce it as you hear it (m mutes, s solos a track) to one sample on a pad you choose", []int{secPatterns}},
 	{"N", "New pattern: pick a template (all pads held, blank, or a genre groove)", []int{secPads, secPatterns}},
 	{"F", "Find where the samples on the pads came from, for the pads with no origin noted: names and lengths are matched against the index", []int{secPads}},
 	{"tab", "Move between the pads and the patterns panel under them (in an open pattern: expand / fold the track on the cursor row)", []int{secPads, secPatterns}},
@@ -912,6 +913,8 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 			}
 			// Default to the next bank over, so a single Enter does something useful.
 			m.picker = &picker{retarget: true, slot: d.Slot, sourceBank: d.SourceBank, bank: (d.SourceBank + 1) % proto.Banks}
+		case "B":
+			return m.patternBounce()
 		case "r":
 			m.busy = "reading the pattern"
 			return m, m.openPattern(m.pattern.Slot, "refreshed")

@@ -1245,7 +1245,7 @@ func (m Model) patternHelp(d *app.PatternDetail) []helpGroup {
 		{"velocity", []helpKey{{", .", "by 1"}, {"< >", "by 10"}, {"*", "pad's own level"}}},
 		{"length", []helpKey{{"+ -", "by a step"}}},
 		{"timing", []helpKey{{"H L", "nudge 5 ticks"}, {"( )", "1 tick"}, {"0", "back on the grid"}}},
-		{"pad", []helpKey{{"m", "mute"}, {"s", "solo"}, {"S", "save as heard"}}},
+		{"pad", []helpKey{{"m", "mute"}, {"s", "solo"}, {"S", "save as heard"}, {"B", "bounce to a pad"}}},
 		history,
 	}
 }
@@ -1828,6 +1828,9 @@ func (m Model) pickerBox() string {
 		if p.bounceWhat == "slices" {
 			title = fmt.Sprintf("Put the %d marked slices on free pads, from the pad you choose onward", len(p.bounces))
 		}
+	}
+	if p.bounceWhat == "pattern" {
+		title = "Bounce the pattern, as you hear it, to a pad"
 	}
 	if len(p.bounces) == 0 {
 		title = fmt.Sprintf("Assign %s to a pad", app.Base(p.files[0]))

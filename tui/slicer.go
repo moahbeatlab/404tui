@@ -1337,7 +1337,7 @@ func (m Model) bounceEnter() (tea.Model, tea.Cmd) {
 		p.confirm = true
 		return m, nil
 	}
-	sample, name := p.bounces[0], p.bounceNames[0]
+	sample, name, what := p.bounces[0], p.bounceNames[0], p.bounceWhat
 	m.picker = nil
 	unit := m.unit
 	m.busy = "bouncing to " + target.String()
@@ -1345,8 +1345,12 @@ func (m Model) bounceEnter() (tea.Model, tea.Cmd) {
 		if _, err := app.PutSample(unit, target, sample, name); err != nil {
 			return doneMsg{message: err.Error()}
 		}
-		return doneMsg{message: fmt.Sprintf("bounced %.1f s of slices to %s as %q", float64(sample.Frames())/formats.SampleRate, target, name),
-			reload: true, focus: &target}
+		done := doneMsg{message: bouncedMessage(what, sample, target.String(), name), reload: true, focus: &target}
+		if what == "pattern" {
+			// Staying in the pattern: more tracks can be muted, and bounced again.
+			done.focus = nil
+		}
+		return done
 	})
 }
 

@@ -196,6 +196,11 @@ pattern, from the grid or from an expanded track, back to the patterns under the
 - `N` makes a pattern in the first free slot: every sample of the bank on beat 1, 2 bars.
   `c` or `x` pick a pattern up and `p` puts it in a slot of any bank (a second `p` replaces
   one), `v` marks and `d` deletes.
+- `B` in an open pattern **bounces** it to one sample on a pad you choose: the mix that plays on
+  this computer, as long as the pattern (or the bars of the range), so what you muted with `m`
+  is left out and, with some tracks soloed (`s`), only those are in it. To print one track,
+  solo it. You stay in the pattern, to mute others and bounce again. The unit's envelope,
+  effects and time stretch are not in it, as when it plays here.
 - `P` or Space plays the pattern **on this computer**, in a loop, with a playhead over the
   steps. Each pad is played with its level, pan, pitch, reverse, gate and loop; the unit's
   envelope, effects, vinyl and time stretch are not reproduced. A change to a pad or a note

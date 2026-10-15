@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -4510,5 +4511,74 @@ func TestPatternPanelKeepsRoomForSixteenTracks(t *testing.T) {
 		if got := len(strings.Split(s.model.View(), "\n")); got > size[1] {
 			t.Errorf("%dx%d: the screen is %d lines", size[0], size[1], got)
 		}
+	}
+}
+
+func TestAPatternIsBouncedToAPadAsItIsHeard(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	m := s.m()
+	level, _ := proto.ParamByName("level")
+	for name, file := range map[string]string{"C1": "SD:IMPORT/kick.wav", "C2": "SD:IMPORT/pack/snare.wav"} {
+		if _, err := app.Assign(m.unit, m.unit, pad(t, name), file); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.unit.SetParam(level.ID, proto.TargetPad(pad(t, name)), 127); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.press("r", "]", "]", "N", "enter", "tab", "enter") // the pattern of bank C is open
+	if s.m().pattern == nil || len(s.m().pattern.PadsUsed) != 2 {
+		t.Fatalf("the pattern: %+v: %q", s.m().pattern, s.m().message)
+	}
+	bounce := func(target string) formats.Sample {
+		t.Helper()
+		s.press("B")
+		s.shows("Bounce the pattern")
+		s.press("C")
+		s.typeText(target[1:])
+		s.press("enter")
+		if s.m().picker != nil {
+			s.press("enter") // a pad that holds a sample asks twice
+		}
+		s.shows("as you hear it")
+		n, _ := strconv.Atoi(target[1:])
+		row := s.m().snap.Bank(2)[n-1]
+		if !row.HasSample {
+			t.Fatalf("%s has no sample: %q", target, s.m().message)
+		}
+		got, err := app.PadAudio(s.m().unit, row)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	all := bounce("C9")
+	if all.Frames() == 0 {
+		t.Fatal("the bounce is empty")
+	}
+	// The pattern is two bars at the bank's tempo; the bounce is that long.
+	d := s.m().pattern
+	frames := int(float64(d.Length) * float64(formats.SampleRate) * 60 / d.BankTempo / float64(formats.PPQ))
+	if diff := all.Frames() - frames; diff < -2 || diff > 2 {
+		t.Errorf("the bounce is %d frames, the pattern %d", all.Frames(), frames)
+	}
+	// Muting a track leaves it out of the bounce.
+	s.press("m")
+	muted := bounce("C10")
+	if muted.Frames() != all.Frames() {
+		t.Errorf("muting changed the length: %d, %d", muted.Frames(), all.Frames())
+	}
+	energy := func(x formats.Sample) (e int64) {
+		for _, v := range x.Samples {
+			e += int64(v) * int64(v) / 1024
+		}
+		return e
+	}
+	if energy(muted) >= energy(all) {
+		t.Errorf("a muted track is still in the bounce: %d vs %d", energy(muted), energy(all))
+	}
+	if energy(muted) == 0 {
+		t.Error("the bounce with one track muted is silent")
 	}
 }
