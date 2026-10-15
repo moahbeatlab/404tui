@@ -102,7 +102,9 @@ type slicer struct {
 	equal  int
 	rounds int
 	undo   []*formats.Slicing
-	peak   int
+	// redo are the edits taken back with u, the newest last.
+	redo []*formats.Slicing
+	peak int
 
 	// Playback: the round sounding and the one queued after it.
 	playing  bool
@@ -296,7 +298,7 @@ func (m Model) slicerAddSource(key, name string, sample formats.Sample) (tea.Mod
 		m.message = fmt.Sprintf("%d samples is the most one slicer holds", slicerMaxSources)
 		return m, nil
 	}
-	s.undo = append(s.undo, s.sl.Clone())
+	s.undo, s.redo = append(s.undo, s.sl.Clone()), nil
 	from := s.src.Frames()
 	s.src = formats.JoinSamples(s.src, sample)
 	s.srcs = append(s.srcs, slicerSource{key: key, name: name, from: from})
@@ -336,7 +338,7 @@ func (s *slicer) shrinkSources() {
 // that is queued is made again, so the edit is heard from the next round on.
 func (m Model) slicerChange(edit func(*formats.Slicing)) {
 	s := m.slicer
-	s.undo = append(s.undo, s.sl.Clone())
+	s.undo, s.redo = append(s.undo, s.sl.Clone()), nil
 	if len(s.undo) > slicerUndoDepth {
 		s.undo = s.undo[1:]
 	}
@@ -452,12 +454,34 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "u":
 		if n := len(s.undo); n > 0 {
+			s.redo = append(s.redo, s.sl)
 			s.sl, s.undo = s.undo[n-1], s.undo[:n-1]
 			s.shrinkSources()
 			s.settle(m)
-			m.message = fmt.Sprintf("undone (%d more to undo)", len(s.undo))
+			m.message = fmt.Sprintf("undo: step %d/%d (U redoes)", len(s.undo), len(s.undo)+len(s.redo))
+		} else {
+			m.message = "nothing to undo"
 		}
 		return m, nil
+	case "U":
+		n := len(s.redo)
+		if n == 0 {
+			m.message = "nothing to redo: U brings back what u took away"
+			return m, nil
+		}
+		next := s.redo[n-1]
+		if next.Frames > s.src.Frames() {
+			m.message = "that step added a sample, which cannot be brought back: A adds it again"
+			s.redo = nil
+			return m, nil
+		}
+		s.undo, s.redo = append(s.undo, s.sl), s.redo[:n-1]
+		s.sl = next
+		s.settle(m)
+		m.message = fmt.Sprintf("redo: step %d/%d (u undoes)", len(s.undo), len(s.undo)+len(s.redo))
+		return m, nil
+	case "F":
+		return m.slicerFitTempo()
 	case "M":
 		m.slicerChange(func(sl *formats.Slicing) { sl.Mode = sl.Mode.Next() })
 		m.message = "mode: " + s.sl.Mode.String()
@@ -960,6 +984,30 @@ func (m Model) bankTempo(bank int) float64 {
 		return 120
 	}
 	return bpm
+}
+
+// slicerFitTempo sets the grid tempo so that the sample is a whole number of bars of 4/4: the
+// bars it is at the tempo now, rounded, and the tempo that makes exactly that many.
+func (m Model) slicerFitTempo() (tea.Model, tea.Cmd) {
+	s := m.slicer
+	if s.sl.Division == 0 || s.sl.BPM <= 0 {
+		m.message = "no grid: T puts the steps on one, then F fits its tempo to the sample"
+		return m, nil
+	}
+	if s.bed != nil {
+		m.message = "the tempo follows pattern " + s.bed.slot.String() + "; P takes the pattern away"
+		return m, nil
+	}
+	seconds := float64(s.sl.Frames) / formats.SampleRate
+	bars := max(math.Round(seconds/(240/s.sl.BPM)), 1)
+	bpm := math.Round(bars*240/seconds*100) / 100
+	if bpm < 40 || bpm > 300 {
+		m.message = fmt.Sprintf("%.0f bars would need %.1f BPM: out of range", bars, bpm)
+		return m, nil
+	}
+	m.slicerChange(func(sl *formats.Slicing) { sl.BPM = bpm })
+	m.message = fmt.Sprintf("tempo %g BPM: the sample is exactly %.0f bars of 4/4 (, . change it by 1)", bpm, bars)
+	return m, nil
 }
 
 // slicerUndoLast drops the undo step of an edit that turned out to change nothing.
@@ -1796,7 +1844,7 @@ func (s *slicer) slicerHelp() []helpGroup {
 		return []helpGroup{{"tap", []helpKey{{"Space", "cut here"}, {"u", "take the last cut back"}, {"p", "stop"}}}}
 	}
 	groups := []helpGroup{
-		{"slices", []helpKey{{"h l", "select"}, {"c", "cut"}, {"d", "delete"}, {"e", "equal"}, {"E", "random"}, {"t", "onsets"}, {"p", "tap"}, {"u", "undo"}}},
+		{"slices", []helpKey{{"h l", "select"}, {"c", "cut"}, {"d", "delete"}, {"e", "equal"}, {"E", "random"}, {"t", "onsets"}, {"p", "tap"}, {"u U", "undo redo"}}},
 		{"edges", []helpKey{{"[ ]", "start"}, {"{ }", "end"}, {"f", "coarse"}, {"z", "snap"}, {"i I", "zoom"}, {"D", "clear, by hand"}}},
 	}
 	if s.cutting {
@@ -1809,7 +1857,7 @@ func (s *slicer) slicerHelp() []helpGroup {
 	}
 	return append(groups,
 		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x", "roll"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"1 2", "attack"}, {"3 4", "release"}, {"X", "plain"}}},
-		helpGroup{"feel", []helpKey{{"T", "grid"}, {", .", "tempo"}, {"C", "cut on grid"}, {"w", "swing"}, {"W", "humanize"}}},
+		helpGroup{"feel", []helpKey{{"T", "grid"}, {", .", "tempo"}, {"F", "fit"}, {"C", "cut on grid"}, {"w", "swing"}, {"W", "humanize"}}},
 		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"P", "pattern"}, {"V", "pattern bars"}, {"M", "mode"}, {"S", "new seed"}, {"Tab", "order lane"}}},
 		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"s y", "mark"}, {"B", "marked to pads"}, {"n N", "rounds"}, {"v", "takes"}, {"A", "add sample"}, {"Esc", "close"}}},
 	)
@@ -1958,7 +2006,7 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 	dot := float64(max((to-from)/cols, 1)) / formats.SampleRate * 1000
 	grid := "grid off"
 	if s.sl.Division > 0 {
-		grid = fmt.Sprintf("grid 1/%d at %g BPM", s.sl.Division, s.sl.BPM)
+		grid = fmt.Sprintf("grid 1/%d at %g BPM = %s", s.sl.Division, s.sl.BPM, barsOf(s.sl))
 	}
 	step := "one dot"
 	if s.coarse {
@@ -2110,4 +2158,14 @@ func (m Model) gridTicks(from, to, cells int) string {
 		}
 	}
 	return st.faint.Render(string(out))
+}
+
+// barsOf is how many bars of 4/4 the sample is at the grid's tempo: "5 bars" when whole, else
+// "5.12 bars", which says the tempo is off.
+func barsOf(sl *formats.Slicing) string {
+	bars := float64(sl.Frames) / (240 / sl.BPM * formats.SampleRate)
+	if math.Abs(bars-math.Round(bars)) < 0.005 {
+		return plural(int(math.Round(bars)), "bar")
+	}
+	return fmt.Sprintf("%.2f bars", bars)
 }

@@ -1321,3 +1321,35 @@ func TestSlicerLimitsThePatternToSomeBars(t *testing.T) {
 		t.Errorf("V did not come round to the whole pattern: %v", s.m().slicer.bedRange)
 	}
 }
+
+func TestSlicerRedoAndFitTempo(t *testing.T) {
+	s := slicerOpen(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	n := len(s.slicing().Slices)
+	s.press("e")
+	cut := len(s.slicing().Slices)
+	s.press("u")
+	s.shows("undo: step 0/1")
+	if len(s.slicing().Slices) != n {
+		t.Fatalf("u left %d slices, want %d", len(s.slicing().Slices), n)
+	}
+	s.press("U")
+	s.shows("redo: step 1/1")
+	if len(s.slicing().Slices) != cut {
+		t.Errorf("U left %d slices, want %d", len(s.slicing().Slices), cut)
+	}
+	s.press("U")
+	s.shows("nothing to redo")
+	// A new edit drops what could be redone.
+	s.press("u", "d", "U")
+	s.shows("nothing to redo")
+
+	// F fits the tempo to a whole number of bars: 1 s at 120 BPM is half a bar, so one bar at 240.
+	s.press("T")
+	s.press("F")
+	sl := s.slicing()
+	bars := float64(sl.Frames) / (240 / sl.BPM * formats.SampleRate)
+	if bars != float64(int(bars+0.5)) && (bars-float64(int(bars+0.5)) > 0.01 || float64(int(bars+0.5))-bars > 0.01) {
+		t.Errorf("after F the sample is %.3f bars at %g BPM", bars, sl.BPM)
+	}
+}
