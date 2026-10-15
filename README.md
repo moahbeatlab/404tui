@@ -112,6 +112,12 @@ you left it. The keys are listed at the bottom of the dialog, in groups.
 
 - `r` reverse, `m` mute, `( )` chance, `< >` pitch in semitones, `- +` gain, `X` back to plain.
   Enter plays the slice once.
+- **Envelope** (`1 2` attack shorter/longer, `3 4` release shorter/longer): a fade in and out of
+  the slice, from 0 up to 2 s, baked into its audio, so it sounds the same on every pad and in the
+  computer's playback. 0 leaves only the short fade that stops a cut from clicking.
+- **Slices to pads** (`s` marks the slice in front, `y` marks all or none, `B`): each marked slice
+  is rendered as it sounds (reverse, pitch, gain, envelope) and put on its own pad, on the free
+  pads from the one you choose onward. Marks go when slices are cut or deleted.
 - **Roll** (`x`): the slice plays its start 2, 3, 4, 6 or 8 times in the time it has, like a drum
   roll. On a grid the time is the step, so a roll of 4 on a 1/8 step is four 1/32 hits. Press
   `x` again for the next number; after 8 the slice plays once.

@@ -801,3 +801,87 @@ func TestSlicerOrderLaneMarksTheSelectedSlice(t *testing.T) {
 		t.Errorf("selecting changed the lane's text:\n%q\n%q", ansiStrip(three), ansiStrip(four))
 	}
 }
+
+func TestSlicerEnvelopeKeys(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("l", "2", "2", "4")
+	x := s.slicing().Slices[1]
+	if x.Attack != 5 || x.Release != 2 {
+		t.Errorf("attack %d release %d", x.Attack, x.Release)
+	}
+	s.shows("env 5/2 ms")
+	s.press("1", "3")
+	if x := s.slicing().Slices[1]; x.Attack != 2 || x.Release != 0 {
+		t.Errorf("attack %d release %d after stepping back", x.Attack, x.Release)
+	}
+	s.press("2", "4", "X")
+	if x := s.slicing().Slices[1]; x.Attack != 0 || x.Release != 0 {
+		t.Errorf("X left an envelope: %+v", x)
+	}
+}
+
+func TestSlicerBouncesMarkedSlicesToPads(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("B")
+	s.shows("no slice is marked")
+	s.press("l", "s", "l", "l", "s") // slices 2 and 4
+	s.shows("2 slices marked")
+	s.press("B")
+	s.shows("Put the 2 marked slices")
+	s.press("A", "9", "enter")
+	s.shows("bounced")
+	bank := s.m().snap.Bank(0)
+	a9, a10 := bank[8], bank[9]
+	if !a9.HasSample || !a10.HasSample {
+		t.Fatalf("A9 %v, A10 %v", a9.HasSample, a10.HasSample)
+	}
+	for i, row := range []app.PadRow{a9, a10} {
+		got, err := app.PadAudio(s.m().unit, row)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := formats.SliceAudio(s.m().slicer.src, s.slicing(), []int{1, 3}[i])
+		if got.Frames() != want.Frames() {
+			t.Errorf("pad %d holds %d frames, slice %d is %d", 9+i, got.Frames(), []int{2, 4}[i], want.Frames())
+		}
+	}
+	if !strings.Contains(s.padName("A9"), "s2") || !strings.Contains(s.padName("A10"), "s4") {
+		t.Errorf("pad names %q %q", s.padName("A9"), s.padName("A10"))
+	}
+}
+
+func TestSlicerMarksGoWhenSlicesChange(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("s", "y")
+	if len(s.m().slicer.marks) != 8 {
+		t.Fatalf("y marked %d", len(s.m().slicer.marks))
+	}
+	s.press("y")
+	if len(s.m().slicer.marks) != 0 {
+		t.Errorf("a second y left %d marked", len(s.m().slicer.marks))
+	}
+	s.press("s", "c")
+	if len(s.m().slicer.marks) != 0 {
+		t.Error("cutting a slice kept marks that now point at other slices")
+	}
+}
+
+func TestSlicerDeletingWhilePlayingDoesNotBreakTheScreen(t *testing.T) {
+	s := slicerOpen(t)
+	s.press(" ")
+	for i := 0; i < 7; i++ {
+		s.press("l")
+	}
+	for i := 0; i < 5; i++ {
+		// The playhead is in the last steps of the round, which a delete takes away.
+		if cur := s.m().slicer.cur; cur != nil {
+			cur.start = time.Now().Add(-cur.dur * 9 / 10)
+		}
+		s.press("d")
+		_ = s.model.View()
+		s.press("h")
+	}
+	if got := len(s.slicing().Slices); got != 3 {
+		t.Errorf("%d slices left", got)
+	}
+}

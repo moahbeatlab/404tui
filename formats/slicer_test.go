@@ -557,3 +557,44 @@ func TestValidateKeepsTheNewSettingsInRange(t *testing.T) {
 		t.Errorf("swing %d, humanize %d, roll %d", s.Swing, s.Humanize, s.Slices[0].Roll)
 	}
 }
+
+func TestSliceEnvelopeFadesInAndOut(t *testing.T) {
+	src := Sample{Channels: 1, Samples: make([]int16, 48000)}
+	for i := range src.Samples {
+		src.Samples[i] = 10000
+	}
+	s := NewSlicing(48000, 1)
+	plain := SliceAudio(src, s, 0)
+	s.Slices[0].Attack, s.Slices[0].Release = 100, 200 // ms
+	got := SliceAudio(src, s, 0)
+	if got.Frames() != plain.Frames() {
+		t.Fatalf("the envelope changed the length: %d, %d", got.Frames(), plain.Frames())
+	}
+	a, r := 100*SampleRate/1000, 200*SampleRate/1000
+	if got.Samples[0] != 0 || got.Samples[a/2] < 4000 || got.Samples[a/2] > 6000 {
+		t.Errorf("attack: start %d, halfway %d", got.Samples[0], got.Samples[a/2])
+	}
+	if got.Samples[a+10] != 10000 {
+		t.Errorf("after the attack the sample is %d, not at full level", got.Samples[a+10])
+	}
+	n := got.Frames()
+	if got.Samples[n-1] != 0 || got.Samples[n-r/2] < 4000 || got.Samples[n-r/2] > 6000 {
+		t.Errorf("release: end %d, halfway %d", got.Samples[n-1], got.Samples[n-r/2])
+	}
+	// Longer than the slice: it still fits, never louder than the source.
+	s.Slices[0].Attack, s.Slices[0].Release = 2000, 2000
+	for _, v := range SliceAudio(src, s, 0).Samples {
+		if v > 10000 {
+			t.Fatal("the envelope made it louder")
+		}
+	}
+}
+
+func TestStepEnvStaysInRange(t *testing.T) {
+	if StepEnv(0, -1) != 0 || StepEnv(2000, 1) != 2000 {
+		t.Error("steps leave the range")
+	}
+	if StepEnv(0, 1) != 2 || StepEnv(7, 1) != 10 || StepEnv(7, -1) != 2 {
+		t.Errorf("steps: %d %d %d", StepEnv(0, 1), StepEnv(7, 1), StepEnv(7, -1))
+	}
+}

@@ -74,6 +74,24 @@ type Slice struct {
 	// Roll plays the start of the slice that many times over the time the slice has: a drum
 	// roll. 0 plays it once.
 	Roll int `json:"roll,omitempty"`
+	// Attack and Release are fades in and out of the slice, in milliseconds, baked into its
+	// audio. 0 leaves only the short fade that keeps a cut from clicking.
+	Attack  int `json:"attack,omitempty"`
+	Release int `json:"release,omitempty"`
+}
+
+// EnvSteps are the lengths, in milliseconds, that an attack or a release steps through.
+var EnvSteps = []int{0, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000}
+
+// StepEnv moves ms one place up or down EnvSteps, from the nearest place if it is between.
+func StepEnv(ms, dir int) int {
+	at := 0
+	for i, v := range EnvSteps {
+		if v <= ms {
+			at = i
+		}
+	}
+	return EnvSteps[min(max(at+dir, 0), len(EnvSteps)-1)]
 }
 
 // PlayMode is how the next slice is picked.
@@ -343,6 +361,8 @@ func (s *Slicing) Validate() error {
 		sl.Chance = min(max(sl.Chance, 0), 100)
 		sl.Gain = min(max(sl.Gain, 0), 400)
 		sl.Pitch = min(max(sl.Pitch, -24), 24)
+		sl.Attack = min(max(sl.Attack, 0), EnvSteps[len(EnvSteps)-1])
+		sl.Release = min(max(sl.Release, 0), EnvSteps[len(EnvSteps)-1])
 		if !slices.Contains(Rolls, sl.Roll) {
 			sl.Roll = 0
 		}
@@ -501,12 +521,15 @@ func SliceAudio(src Sample, s *Slicing, i int) Sample {
 	}
 	frames := out.Frames()
 	fade := min(declick, frames/2)
+	attack := max(fade, min(sl.Attack*SampleRate/1000, frames))
+	release := max(fade, min(sl.Release*SampleRate/1000, frames))
 	for f := 0; f < frames; f++ {
 		g := float64(sl.Gain) / 100
-		if f < fade {
-			g *= float64(f) / float64(fade)
-		} else if left := frames - 1 - f; left < fade {
-			g *= float64(left) / float64(fade)
+		if f < attack {
+			g *= float64(f) / float64(attack)
+		}
+		if left := frames - 1 - f; left < release {
+			g *= float64(left) / float64(release)
 		}
 		if g == 1 {
 			continue

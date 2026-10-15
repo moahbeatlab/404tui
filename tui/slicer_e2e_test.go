@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -177,7 +178,7 @@ func TestSlicerE2EWorksOnARealSample(t *testing.T) {
 // checks the invariants after every key. A failure names the seed and the keys that led to it.
 func TestSlicerE2EFuzz(t *testing.T) {
 	keys := strings.Fields(`h l g G [ ] H L { } f c d e t r x m ( ) < > - + = X o R I 0 i z T , . n b
-		u M S w W v A p E tab shift+tab space enter esc j k`)
+		u M S w W v A p E 1 2 3 4 s y B tab shift+tab space enter esc j k`)
 	sizes := [][2]int{{80, 30}, {100, 40}, {140, 50}, {220, 60}}
 	for _, path := range realSamples(t) {
 		for seed := int64(1); seed <= 6; seed++ {
@@ -190,7 +191,7 @@ func TestSlicerE2EFuzz(t *testing.T) {
 				defer func() {
 					if r := recover(); r != nil {
 						tail := trail[max(0, len(trail)-25):]
-						t.Fatalf("panic %v after keys: %v", r, tail)
+						t.Fatalf("panic %v after keys: %v\n%s", r, tail, debug.Stack())
 					}
 				}()
 				for i := 0; i < 600; i++ {

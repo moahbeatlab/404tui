@@ -141,6 +141,8 @@ type picker struct {
 	// (one) or on the free pads from there on (several).
 	bounces     []formats.Sample
 	bounceNames []string
+	// bounceWhat names what the bounces are in messages: "takes" (the default) or "slices".
+	bounceWhat string
 	// digits is the pad number being typed.
 	digits string
 	// confirm is set once the chosen pad holds a sample and the user has been told.

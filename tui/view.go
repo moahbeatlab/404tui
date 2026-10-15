@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"fmt"
 	"math"
 	"path/filepath"
@@ -1805,6 +1806,9 @@ func (m Model) pickerBox() string {
 	title := "Bounce the slices to a pad"
 	if len(p.bounces) > 1 {
 		title = fmt.Sprintf("Bounce %d takes of the slices, from the pad you choose onward, to free pads", len(p.bounces))
+		if p.bounceWhat == "slices" {
+			title = fmt.Sprintf("Put the %d marked slices on free pads, from the pad you choose onward", len(p.bounces))
+		}
 	}
 	if len(p.bounces) == 0 {
 		title = fmt.Sprintf("Assign %s to a pad", app.Base(p.files[0]))
@@ -1843,7 +1847,7 @@ func (m Model) pickerBox() string {
 		}
 		line = st.dim.Render("goes on " + strings.Join(names, ", ") + "; pads that hold a sample are left alone")
 		if len(pads) < len(p.bounces) {
-			line = st.warn.Render(fmt.Sprintf("only %d of %d takes fit in this bank from here: %s", len(pads), len(p.bounces), strings.Join(names, ", ")))
+			line = st.warn.Render(fmt.Sprintf("only %d of %d %s fit in this bank from here: %s", len(pads), len(p.bounces), cmp.Or(p.bounceWhat, "takes"), strings.Join(names, ", ")))
 		}
 		if len(pads) == 0 {
 			line = st.bad.Render("no free pad in this bank from here on")

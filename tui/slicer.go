@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"cmp"
 	"fmt"
 	"math"
 	"math/rand"
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -69,6 +71,10 @@ type slicer struct {
 	tap *slicerTap
 	// takes is how many bounces a b makes, each from its own rounds.
 	takes int
+	// marks are the slices picked with s for B to put each on a pad; they are numbers of
+	// slices, so they are dropped when the slices are cut or deleted.
+	marks     map[int]bool
+	marksOver int
 	// at is the slice in front; lane is the place in the order that has the cursor.
 	at, lane  int
 	focusLane bool
@@ -329,6 +335,9 @@ func (s *slicer) settle(m Model) {
 	s.at = clamp(s.at, 0, len(s.sl.Slices)-1)
 	s.lane = clamp(s.lane, 0, len(s.sl.Order)-1)
 	s.dirty = true
+	if len(s.sl.Slices) != s.marksOver {
+		s.marks, s.marksOver = nil, len(s.sl.Slices)
+	}
 	if m.slices != nil {
 		m.slices.save(s.key, s.sl)
 	}
@@ -622,6 +631,39 @@ func (m Model) slicerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Gain = max(sl.Slices[s.at].Gain-10, 0) })
 	case "+", "=":
 		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Gain = min(sl.Slices[s.at].Gain+10, 400) })
+	case "1", "2", "3", "4":
+		dir := map[string]int{"1": -1, "2": 1, "3": -1, "4": 1}[key.String()]
+		attack := key.String() <= "2"
+		m.slicerChange(func(sl *formats.Slicing) {
+			x := &sl.Slices[s.at]
+			if attack {
+				x.Attack = formats.StepEnv(x.Attack, dir)
+			} else {
+				x.Release = formats.StepEnv(x.Release, dir)
+			}
+		})
+	case "s":
+		if s.marks == nil {
+			s.marks, s.marksOver = map[int]bool{}, len(s.sl.Slices)
+		}
+		if s.marks[s.at] {
+			delete(s.marks, s.at)
+		} else {
+			s.marks[s.at] = true
+		}
+		m.message = fmt.Sprintf("%s marked; B puts each marked slice on its own pad", plural(len(s.marks), "slice"))
+	case "y":
+		all := len(s.marks) < len(s.sl.Slices)
+		s.marks, s.marksOver = map[int]bool{}, len(s.sl.Slices)
+		for i := range s.sl.Slices {
+			s.marks[i] = all
+		}
+		if !all {
+			s.marks = nil
+		}
+		m.message = fmt.Sprintf("%s marked", plural(len(s.marks), "slice"))
+	case "B":
+		return m.slicerBounceMarked()
 	case "X":
 		m.slicerChange(func(sl *formats.Slicing) {
 			x := sl.Slices[s.at]
@@ -964,7 +1006,9 @@ func (s *slicer) playhead() (frame, slice int) {
 		if elapsed < p.At || elapsed >= p.At+max(p.Frames, 1) {
 			continue
 		}
-		if p.Rest {
+		if p.Rest || p.Slice >= len(s.sl.Slices) {
+			// A rest, or a slice taken away since the round was made: the next round is
+			// made from what is left.
 			return -1, -1
 		}
 		start, length := s.sl.Slices[p.Slice].Start, s.sl.Length(p.Slice)
@@ -1050,6 +1094,41 @@ func (m Model) slicerBounce() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// slicerBounceMarked asks which pad the marked slices go onto: each one as it sounds, on its
+// own pad, from the pad chosen on.
+func (m Model) slicerBounceMarked() (tea.Model, tea.Cmd) {
+	s := m.slicer
+	if m.unit == nil || m.snap == nil {
+		m.message = "no unit to put them on"
+		return m, nil
+	}
+	if len(s.marks) == 0 {
+		m.message = "no slice is marked: s marks the slice in front, y marks them all"
+		return m, nil
+	}
+	name := []rune(s.name)
+	var samples []formats.Sample
+	var names []string
+	for i := range s.sl.Slices {
+		if !s.marks[i] {
+			continue
+		}
+		audio := formats.SliceAudio(s.src, s.sl, i)
+		if audio.Frames() == 0 {
+			continue
+		}
+		suffix := fmt.Sprintf(" s%d", i+1)
+		base := strings.TrimSpace(string(name[:min(len(name), app.MaxPadName-len(suffix))]))
+		samples, names = append(samples, audio), append(names, base+suffix)
+	}
+	if len(samples) == 0 {
+		m.message = "the marked slices are silent"
+		return m, nil
+	}
+	m.picker = &picker{bank: m.bank, pad: m.nextFree(m.bank), bounces: samples, bounceNames: names, bounceWhat: "slices"}
+	return m, nil
+}
+
 // takePads are the free pads of the picker's bank, from the pad chosen on, that the takes go on.
 func (m Model) takePads(p *picker) []proto.PadIndex {
 	start, _ := proto.PadFromBankPad(uint16(p.bank), uint16(p.pad))
@@ -1072,7 +1151,7 @@ func (m Model) bounceEnter() (tea.Model, tea.Cmd) {
 		samples, names := p.bounces, p.bounceNames
 		m.picker = nil
 		unit := m.unit
-		m.busy = fmt.Sprintf("bouncing %d takes", len(pads))
+		m.busy = fmt.Sprintf("bouncing %d %s", len(pads), cmp.Or(p.bounceWhat, "takes"))
 		return m, m.edit(func() tea.Msg {
 			var done []string
 			for i, pad := range pads {
@@ -1460,10 +1539,10 @@ func (s *slicer) slicerHelp() []helpGroup {
 		}
 	}
 	return append(groups,
-		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x", "roll"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"X", "plain"}}},
+		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x", "roll"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"1 2", "attack"}, {"3 4", "release"}, {"X", "plain"}}},
 		helpGroup{"feel", []helpKey{{"T", "grid"}, {", .", "tempo"}, {"w", "swing"}, {"W", "humanize"}}},
 		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"M", "mode"}, {"S", "new seed"}, {"Tab", "order lane"}}},
-		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"n", "rounds"}, {"v", "takes"}, {"A", "add sample"}, {"Esc", "close"}}},
+		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"s y", "mark"}, {"B", "marked to pads"}, {"n", "rounds"}, {"v", "takes"}, {"A", "add sample"}, {"Esc", "close"}}},
 	)
 }
 
@@ -1536,6 +1615,9 @@ func (m Model) sliceLabel(i, width int) string {
 	if len(label) > width {
 		return ""
 	}
+	if m.slicer.marks[i] && utf8.RuneCountInString(label) < width {
+		label = "●" + label
+	}
 	return label
 }
 
@@ -1597,6 +1679,7 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 	}
 	second := st.dim.Render("chance ") + st.accent.Render(chance) + "   " +
 		st.dim.Render("gain ") + st.accent.Render(fmt.Sprintf("%d%%", x.Gain)) + "   " +
+		st.dim.Render("env ") + st.accent.Render(fmt.Sprintf("%d/%d ms", x.Attack, x.Release)) + "   " +
 		st.dim.Render("pitch ") + st.accent.Render(fmt.Sprintf("%+d", x.Pitch)) + "   " +
 		st.dim.Render("play ") + st.accent.Render(dir) + "   " +
 		st.dim.Render("roll ") + st.accent.Render(roll)
@@ -1620,6 +1703,9 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 	third := st.faint.Render(fmt.Sprintf("a nudge moves "+step+", %.2f ms", dot)) + st.dim.Render(fmt.Sprintf("  ·  snap %s  ·  %s  ·  %s  ·  %s", onOff(s.snap), grid, swing, human))
 	take := plural(s.takes, "take") + " of " + plural(s.rounds, "round")
 	fourth := st.dim.Render(fmt.Sprintf("seed %d  ·  a bounce makes %s", s.sl.Seed, take))
+	if n := len(s.marks); n > 0 {
+		fourth += st.accent.Render("  ·  " + plural(n, "slice") + " marked")
+	}
 	lines := []string{first, second, third, fourth}
 	if len(s.srcs) > 1 {
 		var parts []string
