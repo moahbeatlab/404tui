@@ -1430,18 +1430,26 @@ func (s *slicer) slicerHelp() []helpGroup {
 	)
 }
 
-// helpLines draws the groups: a heading, then the keys as the status bar shows them, an accent
-// key and a dim word, wrapped under the heading when a row is too long.
+// slicerHelpLines are the slicer's keys, drawn in groups.
 func (m Model) slicerHelpLines(width int) []string {
+	return m.helpLines(m.slicer.slicerHelp(), width, 8)
+}
+
+// helpLines draws the groups: a heading of head cells, then the keys as the status bar shows
+// them, an accent key and a dim word, wrapped under the heading when a row is too long. A key
+// with no key is a note, drawn dim.
+func (m Model) helpLines(groups []helpGroup, width, head int) []string {
 	st := m.st
-	const head = 8
 	var lines []string
-	for _, g := range m.slicer.slicerHelp() {
+	for _, g := range groups {
 		line := st.faint.Render(fmt.Sprintf("%-*s", head, g.name))
 		used := head
 		for i, k := range g.keys {
 			chip := st.accent.Render(k.key) + st.dim.Render(" "+k.what)
 			w := ansi.StringWidth(k.key) + 1 + ansi.StringWidth(k.what)
+			if k.key == "" {
+				chip, w = st.faint.Render(k.what), ansi.StringWidth(k.what)
+			}
 			if i > 0 && used+2+w > width {
 				lines = append(lines, line)
 				line, used = strings.Repeat(" ", head), head

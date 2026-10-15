@@ -761,6 +761,8 @@ func TestPatternsOpenAndRetarget(t *testing.T) {
 	// Slot 2 is one right of slot 1, which is top left.
 	s.press("l", "enter")
 	s.shows("Pattern B2", "120.00 BPM", "A1   kick", "A2   snare")
+	// The keys are listed in groups, each under its own heading.
+	s.shows("move", "velocity", "length", "timing", "pad", "history", "0 undo · 0 redo")
 	// A hit is a mark as bright as its velocity.
 	if !strings.ContainsAny(ansi.Strip(s.m().View()), "○◌◉●") {
 		t.Error("no hit is drawn")

@@ -1198,24 +1198,36 @@ func (m Model) patternDetail(g geom) string {
 	}
 	if m.patTool != nil {
 		lines = append(lines, "", m.patToolMenu())
-		hint := "tools:  j k pick  ·  h l amount  ·  e 8th/16th grid  ·  Enter apply  ·  Esc close"
-		lines = append(lines, "", st.dim.Render(hint))
+		lines = append(lines, "", st.faint.Render(strings.Repeat("─", max(g.bodyW-4, 10))))
+		lines = append(lines, m.helpLines([]helpGroup{{"tools", []helpKey{{"j k", "pick"}, {"h l", "amount"}, {"e", "8th/16th grid"}, {"Enter", "apply"}, {"Esc", "close"}}}}, max(g.bodyW-4, 10), 9)...)
 		return m.box("Pattern "+d.Slot.String(), strings.Join(lines, "\n"), g.bodyW, g.bodyH, true)
 	}
-	hint := "move:  h j k l  ·  { } turn page  ·  v show/loop bars  ·  Enter open track  ·  x note on/off  ·  t tools (this pad)  ·  T tools (all)  ·  Space or P play  ·  Esc back\n"
-	if m.patFocus {
-		hint = "track:  h l step  ·  j k other track  ·  { } turn page  ·  Enter or x note on/off  ·  Space or P play  ·  Esc collapse\n"
-	}
-	hint +=
-		"velocity:  , . by 1  ·  < > by 10  ·  * to the pad's own level\n" +
-			"length:  + - by a step  ·  timing:  H L nudge 5 ticks  ·  ( ) 1 tick  ·  0 back on the grid\n" +
-			"pad:  m mute  ·  s solo  ·  S save as heard\n" +
-			"history:  u undo  ·  R redo  ·  " + m.patHistoryLabel()
-	if d.HasSourceBank {
-		hint += "  ·  b retarget bank"
-	}
-	lines = append(lines, "", st.dim.Render(hint))
+	lines = append(lines, "", st.faint.Render(strings.Repeat("─", max(g.bodyW-4, 10))))
+	lines = append(lines, m.helpLines(m.patternHelp(d), max(g.bodyW-4, 10), 9)...)
 	return m.box("Pattern "+d.Slot.String(), strings.Join(lines, "\n"), g.bodyW, g.bodyH, true)
+}
+
+// patternHelp are the keys of the open pattern, in groups like the slicer's; with a track
+// expanded the first group is that track's.
+func (m Model) patternHelp(d *app.PatternDetail) []helpGroup {
+	move := helpGroup{"move", []helpKey{{"h j k l", "move"}, {"{ }", "turn page"}, {"v", "show/loop bars"}, {"Enter", "open track"}, {"x", "note on/off"},
+		{"t", "tools (this pad)"}, {"T", "tools (all)"}, {"Space P", "play"}, {"Esc", "back"}}}
+	if m.patFocus {
+		move = helpGroup{"track", []helpKey{{"h l", "step"}, {"j k", "other track"}, {"{ }", "turn page"}, {"Enter x", "note on/off"}, {"Space P", "play"}, {"Esc", "collapse"}}}
+	}
+	history := helpGroup{"history", []helpKey{{"u", "undo"}, {"R", "redo"}}}
+	if d.HasSourceBank {
+		history.keys = append(history.keys, helpKey{"b", "retarget bank"})
+	}
+	history.keys = append(history.keys, helpKey{"", m.patHistoryLabel()})
+	return []helpGroup{
+		move,
+		{"velocity", []helpKey{{", .", "by 1"}, {"< >", "by 10"}, {"*", "pad's own level"}}},
+		{"length", []helpKey{{"+ -", "by a step"}}},
+		{"timing", []helpKey{{"H L", "nudge 5 ticks"}, {"( )", "1 tick"}, {"0", "back on the grid"}}},
+		{"pad", []helpKey{{"m", "mute"}, {"s", "solo"}, {"S", "save as heard"}}},
+		history,
+	}
 }
 
 // offsetLabel says how far a note at tick is off the grid, as swing, shift or humanize leave
