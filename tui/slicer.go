@@ -555,6 +555,15 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		s.rounds = slicerRounds[(indexOf(slicerRounds, s.rounds)+1)%len(slicerRounds)]
 		m.message = fmt.Sprintf("a bounce holds %s", plural(s.rounds, "round"))
 		return m, nil
+	case "N":
+		cover, ok := s.coverRounds()
+		if !ok {
+			m.message = "N sets the rounds to cover a pattern: P puts one under the slices, and T turns the grid on"
+			return m, nil
+		}
+		s.rounds = cover.rounds
+		m.message = "a bounce holds " + cover.String()
+		return m, nil
 	case "b":
 		return m.slicerBounce()
 	case "o":
@@ -1029,6 +1038,38 @@ func indexOf(list []int, v int) int {
 
 // ---- playing ----
 
+// cover is how many rounds of the sequence make a whole number of loops of the pattern under
+// the slices, so that the bounce ends where the pattern starts again.
+type cover struct {
+	rounds, roundSteps, patSteps, division int
+}
+
+func gcd(a, b int) int {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	return a
+}
+
+// coverRounds is the least number of rounds that fits the pattern exactly; false without a
+// pattern, or without a grid to count the steps of.
+func (s *slicer) coverRounds() (cover, bool) {
+	step := s.sl.StepFrames()
+	if s.bed == nil || step <= 0 || s.bed.sample.Frames() <= 0 {
+		return cover{}, false
+	}
+	pat := max((s.bed.sample.Frames()+step/2)/step, 1)
+	round := max(s.roundSteps(), 1)
+	return cover{rounds: pat / gcd(round, pat), roundSteps: round, patSteps: pat, division: s.sl.Division}, true
+}
+
+// String says what the rounds come to: "8 rounds = 64 steps = 4.0 bars, one loop of the pattern".
+func (c cover) String() string {
+	steps := c.rounds * c.roundSteps
+	return fmt.Sprintf("%s = %s = %.2f bars of 4/4, %s of the pattern",
+		plural(c.rounds, "round"), plural(steps, "step"), float64(steps)/float64(max(c.division, 1)), plural(steps/c.patSteps, "loop"))
+}
+
 // roundSteps is how many steps make one pass of the sequence.
 func (s *slicer) roundSteps() int {
 	switch s.sl.Mode {
@@ -1497,6 +1538,9 @@ func (m Model) slicerBox() string {
 	if sl.Division > 0 {
 		chrome++
 	}
+	if _, ok := s.coverRounds(); ok {
+		chrome++
+	}
 	roomy := m.geom().bodyH >= 34
 	if !roomy {
 		chrome -= 3
@@ -1763,7 +1807,7 @@ func (s *slicer) slicerHelp() []helpGroup {
 		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x", "roll"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"1 2", "attack"}, {"3 4", "release"}, {"X", "plain"}}},
 		helpGroup{"feel", []helpKey{{"T", "grid"}, {", .", "tempo"}, {"C", "cut on grid"}, {"w", "swing"}, {"W", "humanize"}}},
 		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"P", "pattern"}, {"M", "mode"}, {"S", "new seed"}, {"Tab", "order lane"}}},
-		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"s y", "mark"}, {"B", "marked to pads"}, {"n", "rounds"}, {"v", "takes"}, {"A", "add sample"}, {"Esc", "close"}}},
+		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"s y", "mark"}, {"B", "marked to pads"}, {"n N", "rounds"}, {"v", "takes"}, {"A", "add sample"}, {"Esc", "close"}}},
 	)
 }
 
@@ -1937,6 +1981,15 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 		fourth += st.accent.Render("  ·  " + plural(n, "slice") + " marked")
 	}
 	lines := []string{first, second, third, fourth}
+	if c, ok := s.coverRounds(); ok {
+		note := fmt.Sprintf("a round is %s, the pattern %s: ", plural(c.roundSteps, "step"), plural(c.patSteps, "step"))
+		if s.rounds*c.roundSteps%c.patSteps == 0 {
+			note += fmt.Sprintf("%s fit it exactly (N sets %d)", plural(s.rounds, "round"), c.rounds)
+			lines = append(lines, st.dim.Render(note))
+		} else {
+			lines = append(lines, st.dim.Render(note)+st.warn.Render(fmt.Sprintf("%d rounds fit it exactly: press N", c.rounds)))
+		}
+	}
 	if len(s.srcs) > 1 {
 		var parts []string
 		in := s.sourceAt(x.Start)

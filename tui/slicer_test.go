@@ -1264,3 +1264,32 @@ func TestSlicerGridTempoComesFromTheName(t *testing.T) {
 		}
 	}
 }
+
+func TestSlicerSaysHowManyRoundsCoverThePattern(t *testing.T) {
+	s := slicerOpen(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	patternOnA2(t, s, "A2", "A7", "B3")
+	s.press("T")
+	for s.m().slicer.sl.Division != 16 {
+		s.press("T")
+	}
+	s.press("P", "enter")
+	c, ok := s.m().slicer.coverRounds()
+	if !ok {
+		t.Fatalf("no cover with a grid and a pattern: %q", s.m().message)
+	}
+	// The pattern is a bar of 16 steps; the order has 8 steps: two rounds.
+	if c.patSteps != 16 || c.roundSteps != 8 || c.rounds != 2 {
+		t.Fatalf("cover %+v, want 2 rounds of 8 steps over 16", c)
+	}
+	s.shows("a round is 8 steps, the pattern 16 steps", "press N")
+	s.press("N")
+	if s.m().slicer.rounds != 2 {
+		t.Errorf("N set %d rounds, want 2", s.m().slicer.rounds)
+	}
+	s.shows("2 rounds fit it exactly")
+	// What a bounce holds then is a whole number of pattern loops long.
+	if got := s.m().slicer.takeSample(0).Frames(); got != s.m().slicer.bed.sample.Frames() {
+		t.Errorf("the bounce is %d frames, the pattern %d", got, s.m().slicer.bed.sample.Frames())
+	}
+}
