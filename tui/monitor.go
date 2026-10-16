@@ -30,22 +30,28 @@ type monLine struct {
 type ccState struct {
 	ch, cc, val int
 	at          time.Time
+	first       int // the order controllers were first seen in
 }
 
 type monitor struct {
 	lines  []monLine
 	counts map[midiin.Kind]int
 	hits   map[int]time.Time // bank*16 + pad (0 to 15) -> when it was last hit
+	vel    map[int]int       // ... and how hard
+	offs   map[int]time.Time // ... and when it was let go
 	held   map[int]bool
 	ccs    map[[2]int]*ccState
 	beatAt time.Time
 	bpm    float64
+	seen   int
 }
 
 func newMonitor() *monitor {
 	return &monitor{
 		counts: map[midiin.Kind]int{},
 		hits:   map[int]time.Time{},
+		vel:    map[int]int{},
+		offs:   map[int]time.Time{},
 		held:   map[int]bool{},
 		ccs:    map[[2]int]*ccState{},
 	}
@@ -100,15 +106,17 @@ func (mo *monitor) add(e midiin.Event) {
 	if bank, pad, ok := padOfEvent(e); ok {
 		key := bank*16 + pad
 		if e.Kind == midiin.NoteOn {
-			mo.hits[key], mo.held[key] = at, true
+			mo.hits[key], mo.held[key], mo.vel[key] = at, true, e.Data2
 		} else {
 			delete(mo.held, key)
+			mo.offs[key] = at
 		}
 	}
 	if e.Kind == midiin.CC {
 		k := [2]int{e.Channel, e.Data1}
 		if mo.ccs[k] == nil {
-			mo.ccs[k] = &ccState{ch: e.Channel, cc: e.Data1}
+			mo.seen++
+			mo.ccs[k] = &ccState{ch: e.Channel, cc: e.Data1, first: mo.seen}
 		}
 		mo.ccs[k].val, mo.ccs[k].at = e.Data2, at
 	}
@@ -136,13 +144,38 @@ func (mo *monitor) tick(at time.Time, ticks int) {
 	mo.beatAt = at
 }
 
-// hot says whether a pad of a bank was hit just now or is still held.
-func (mo *monitor) hot(bank, pad int, now time.Time) bool {
+// monFade is how long the glow of a pad takes to die away once it is let go.
+const monFade = 700 * time.Millisecond
+
+// glow is how brightly a pad shows, 0 to 1: a hit lights it by how hard it was hit, it stays so while
+// held and fades after.
+func (mo *monitor) glow(bank, pad int, now time.Time) float64 {
 	if mo == nil {
-		return false
+		return 0
 	}
 	key := bank*16 + pad
-	return mo.held[key] && now.Sub(mo.hits[key]) < 5*time.Second || now.Sub(mo.hits[key]) < monHot
+	hit, ok := mo.hits[key]
+	if !ok {
+		return 0
+	}
+	level := 0.45 + 0.55*float64(mo.vel[key])/127
+	if mo.held[key] && now.Sub(hit) < 5*time.Second {
+		return level
+	}
+	since := hit
+	if off := mo.offs[key]; off.After(since) {
+		since = off
+	}
+	// A message with no note off still fades, from the hit.
+	if age := now.Sub(since); age < monFade {
+		return level * (1 - float64(age)/float64(monFade))
+	}
+	return 0
+}
+
+// hot says whether a pad of a bank is lit by a hit.
+func (mo *monitor) hot(bank, pad int, now time.Time) bool {
+	return mo.glow(bank, pad, now) > 0
 }
 
 // moving lists the controllers that moved lately, the newest first.
@@ -261,4 +294,17 @@ func (m Model) monitorLines() []string {
 // logCue writes the cue (the pattern that plays and the next) to the event log.
 func (m Model) logCue() {
 	m.perfLog.Add(time.Now(), "pattern", perflog.P("now", slotText(m.perfNow)), perflog.P("next", slotText(m.perfNext)))
+}
+
+// controls lists every controller seen, in the order it was first seen.
+func (mo *monitor) controls() []*ccState {
+	if mo == nil {
+		return nil
+	}
+	out := make([]*ccState, 0, len(mo.ccs))
+	for _, c := range mo.ccs {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].first < out[j].first })
+	return out
 }

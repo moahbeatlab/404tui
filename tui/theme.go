@@ -1,6 +1,11 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // theme is one colour scheme. Every colour the UI uses comes from here.
 type theme struct {
@@ -89,4 +94,43 @@ func busBadge(bus int32) string {
 		return "²"
 	}
 	return ""
+}
+
+// rgbOf is the colour as red, green and blue: a 256-colour number or a #rrggbb.
+func rgbOf(c lipgloss.Color) (r, g, b int) {
+	s := string(c)
+	if len(s) == 7 && s[0] == '#' {
+		v, _ := strconv.ParseUint(s[1:], 16, 32)
+		return int(v >> 16 & 255), int(v >> 8 & 255), int(v & 255)
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 || n > 255 {
+		return 128, 128, 128
+	}
+	switch {
+	case n < 16:
+		base := [16][3]int{{0, 0, 0}, {128, 0, 0}, {0, 128, 0}, {128, 128, 0}, {0, 0, 128}, {128, 0, 128}, {0, 128, 128}, {192, 192, 192},
+			{128, 128, 128}, {255, 0, 0}, {0, 255, 0}, {255, 255, 0}, {0, 0, 255}, {255, 0, 255}, {0, 255, 255}, {255, 255, 255}}
+		return base[n][0], base[n][1], base[n][2]
+	case n < 232:
+		n -= 16
+		level := func(i int) int {
+			if i == 0 {
+				return 0
+			}
+			return 55 + 40*i
+		}
+		return level(n / 36), level(n / 6 % 6), level(n % 6)
+	}
+	v := 8 + 10*(n-232)
+	return v, v, v
+}
+
+// blend mixes two colours, t of the way from a to b (0 to 1).
+func blend(a, b lipgloss.Color, t float64) lipgloss.Color {
+	t = max(0, min(t, 1))
+	ar, ag, ab := rgbOf(a)
+	br, bg, bb := rgbOf(b)
+	mix := func(x, y int) int { return int(float64(x) + (float64(y)-float64(x))*t + 0.5) }
+	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", mix(ar, br), mix(ag, bg), mix(ab, bb)))
 }

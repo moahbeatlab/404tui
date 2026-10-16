@@ -142,17 +142,40 @@ func (m Model) perfBody(g geom) string {
 func (m Model) perfTile(row app.PadRow, w, h int) []string {
 	st := m.st
 	selected := m.hasSelected && m.selected == row.Pad
-	hit := m.mon.hot(int(row.Pad.Bank()), int(row.Pad.Pad()), time.Now())
-	sounding := m.playing && m.playingPad == row.Pad || hit
+	glow := m.mon.glow(int(row.Pad.Bank()), int(row.Pad.Pad()), time.Now())
+	sounding := m.playing && m.playingPad == row.Pad
 	bg, fg := st.th.tile, st.th.text
+	// The stripe on the left edge: the pad's bus, or the accent when it is the selected pad.
+	edge := bg
+	if bus := row.Params["bus-fx"]; bus == 1 || bus == 2 {
+		edge, _ = st.th.busColour(bus)
+	}
 	switch {
 	case !row.HasSample:
-		bg, fg = st.th.tileEmpty, st.th.faint
+		bg, fg, edge = st.th.tileEmpty, st.th.faint, st.th.tileEmpty
 	case sounding:
-		bg, fg = st.th.hot, st.th.cursorFg
+		bg, fg, edge = st.th.hot, st.th.cursorFg, st.th.cursorFg
+	case glow > 0:
+		// A hit lights the tile by how hard it was hit and fades as it dies away.
+		bg = blend(st.th.tile, st.th.hot, glow)
+		fg, edge = st.th.text, st.th.hot
+		if glow > 0.45 {
+			fg = st.th.cursorFg
+		}
 	case selected:
-		bg, fg = st.th.accent, st.th.cursorFg
+		bg, fg, edge = blend(st.th.tile, st.th.accent, 0.3), st.th.accent, st.th.accent
 	}
+	inner := m.perfTileInner(row, w-1, h, bg, fg, sounding, glow)
+	stripe := lipgloss.NewStyle().Foreground(edge).Background(bg).Render("▌")
+	for i := range inner {
+		inner[i] = stripe + inner[i]
+	}
+	return inner
+}
+
+// perfTileInner draws a tile but for its stripe.
+func (m Model) perfTileInner(row app.PadRow, w, h int, bg, fg lipgloss.Color, sounding bool, glow float64) []string {
+	st := m.st
 	style := lipgloss.NewStyle().Background(bg).Foreground(fg).Bold(true)
 	line := func(text string) string {
 		pad := max(w-ansi.StringWidth(text), 0)
@@ -204,6 +227,10 @@ func (m Model) perfTile(row app.PadRow, w, h int) []string {
 	}
 	// The bar under the name: how far the sounding sample has gone.
 	bar := line("")
+	if glow > 0 && !sounding {
+		// How hard the pad was hit, fading with the glow.
+		bar = style.Render(" " + levelBar(w-2, int(glow*100), 100) + " ")
+	}
 	if sounding {
 		if f, ok := m.facts[factKey{row.Pad, row.Size, row.Name}]; ok && f.err == nil && f.facts.Frames > 0 {
 			bar = style.Render(" " + levelBar(w-2, int(min(m.playPos, f.facts.Frames)), int(f.facts.Frames)) + " ")
@@ -468,27 +495,7 @@ func (m Model) perfMovement(width int) []string {
 		return []string{st.dim.Render("MOVING  waiting for the unit's MIDI input (Config)")}
 	}
 	now := time.Now()
-	moving := m.mon.moving(now)
-	const barW = 24
-	lines := make([]string, 0, 4)
-	for i := 0; i < 3; i++ {
-		head := st.dim.Render("MOVING  ")
-		if i > 0 {
-			head = strings.Repeat(" ", 8)
-		}
-		if i < len(moving) {
-			c := moving[i]
-			fade := st.accent
-			if now.Sub(c.at) > 2*time.Second {
-				fade = st.dim
-			}
-			lines = append(lines, head+st.text.Render(fmt.Sprintf("ch %-2d cc %-3d ", c.ch, c.cc))+fade.Render(levelBar(barW, c.val, 127))+st.text.Render(fmt.Sprintf(" %3d", c.val)))
-		} else if i == 0 {
-			lines = append(lines, head+st.dim.Render("turn a knob or hit a pad on the unit"))
-		} else {
-			lines = append(lines, "")
-		}
-	}
+	lines := m.perfControls(now, width)
 	last := m.mon.last(3)
 	text := ""
 	for _, l := range last {
@@ -496,4 +503,76 @@ func (m Model) perfMovement(width int) []string {
 	}
 	lines = append(lines, st.dim.Render("LAST    ")+st.text.Render(ansi.Truncate(strings.TrimSpace(text), width-10, "…")))
 	return lines
+}
+
+// knobGlyph is a controller as a dial that fills as it is turned up.
+func knobGlyph(v int) string {
+	switch f := float64(v) / 127; {
+	case f < 0.06:
+		return "○"
+	case f < 0.37:
+		return "◔"
+	case f < 0.63:
+		return "◑"
+	case f < 0.94:
+		return "◕"
+	}
+	return "●"
+}
+
+// perfControls draws the controllers the unit (or anything on its MIDI) has sent as a row of strips,
+// each a fader beside a dial with its value and its channel and number. It is always three lines
+// high. Those moved in the last seconds are in the accent colour, the others dimmed.
+func (m Model) perfControls(now time.Time, width int) []string {
+	st := m.st
+	all := m.mon.controls()
+	if len(all) == 0 {
+		return []string{
+			st.dim.Render("CONTROLS  turn a knob or move a fader on the unit (or the controller on its MIDI in):"),
+			st.dim.Render("          each one that sends a controller shows here, with its fader, dial and number"),
+			"",
+		}
+	}
+	const cellW = 10
+	n := max(min((width-10)/cellW, 16), 1)
+	shown := all
+	if len(shown) > n {
+		shown = shown[:n]
+	}
+	const blocks = " ▁▂▃▄▅▆▇█"
+	var out [3]string
+	for _, c := range shown {
+		live := now.Sub(c.at) < monMoving
+		style := st.dim
+		if live {
+			style = st.accent
+			if now.Sub(c.at) > 2*time.Second {
+				style = st.text
+			}
+		}
+		level := c.val * 24 / 127
+		var fader [3]string
+		for k := 0; k < 3; k++ {
+			cnt := clamp(level-8*(2-k), 0, 8)
+			if cnt == 0 {
+				fader[k] = st.faint.Render("╎")
+			} else {
+				fader[k] = style.Render(string([]rune(blocks)[cnt]))
+			}
+		}
+		mid := []string{
+			style.Render("(" + knobGlyph(c.val) + ")"),
+			style.Render(fmt.Sprintf("%3d", c.val)),
+			st.dim.Render(fmt.Sprintf("%d:%d", c.ch, c.cc)),
+		}
+		for k := 0; k < 3; k++ {
+			cell := fader[k] + " " + mid[k]
+			pad := max(cellW-ansi.StringWidth(cell), 0)
+			out[k] += cell + strings.Repeat(" ", pad)
+		}
+	}
+	if len(all) > len(shown) {
+		out[2] += st.dim.Render(fmt.Sprintf("+%d more", len(all)-len(shown)))
+	}
+	return []string{st.dim.Render("CONTROLS ") + out[0], strings.Repeat(" ", 9) + out[1], strings.Repeat(" ", 9) + out[2]}
 }
