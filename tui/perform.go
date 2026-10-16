@@ -223,6 +223,14 @@ func (m Model) perfBankBody(g geom) string {
 	if m.playing {
 		head += st.dim.Render("   ▶ " + m.playingPad.String() + " " + m.snap.Pads[m.playingPad.Index()].Name)
 	}
+	if bars := 0; true {
+		if d, _ := m.perfTracks(m.perfNow); d != nil {
+			bars = d.Bars()
+		}
+		if clock := m.clockText(bars); clock != "" {
+			head += "   " + lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render("♩ "+clock)
+		}
+	}
 	top = append(top, head, m.perfCue(width))
 	// Patterns of the bank, under the pads.
 	var bottom []string

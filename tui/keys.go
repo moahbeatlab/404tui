@@ -3021,7 +3021,7 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			return doneMsg{message: fmt.Sprintf("project %d restored from %s", plan.Project+1, plan.Dir), reload: true}
 		})
 	}
-	if p.kind != promptDelete && p.kind != promptFindFolder && p.kind != promptBusWords && p.kind != promptBusScan && p.kind != promptRepairPads && p.kind != promptRecDir && p.kind != promptRecDevice && p.kind != promptBusNote && p.kind != promptLiveCode && p.kind != promptRecCode && text == "" {
+	if p.kind != promptDelete && p.kind != promptFindFolder && p.kind != promptBusWords && p.kind != promptBusScan && p.kind != promptRepairPads && p.kind != promptRecDir && p.kind != promptRecDevice && p.kind != promptBusNote && p.kind != promptLiveCode && p.kind != promptRecCode && p.kind != promptMidi && text == "" {
 		m.message = "nothing typed"
 		return m, nil
 	}
@@ -3116,6 +3116,8 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			m.message = fmt.Sprintf("%s: hit pads %s, in any bank", what, codeText(code))
 		}
 		return m, nil
+	case promptMidi:
+		return m.applyMidi(p.busOf, strings.TrimSpace(text))
 	case promptBusNote:
 		m.mem.BusNotes[p.busOf-1] = text
 		m.message = fmt.Sprintf("BUS %d: %s", p.busOf, text)

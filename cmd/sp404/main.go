@@ -21,6 +21,7 @@ import (
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/doctor"
 	"github.com/moahbeatlab/404tui/formats"
+	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/playback"
 	"github.com/moahbeatlab/404tui/record"
 	"github.com/moahbeatlab/404tui/serialport"
@@ -229,7 +230,7 @@ func runUI(o options, l logging) error {
 	} else {
 		l.Warn("no audio output", "err", audioErr)
 	}
-	model := tui.NewConnecting(connector(o, l.Logger), player, tui.DefaultStore()).WithAudio(player, audioErr).WithRecorder(record.Default()).
+	model := tui.NewConnecting(connector(o, l.Logger), player, tui.DefaultStore()).WithAudio(player, audioErr).WithRecorder(record.Default()).WithMIDI(midiin.Default()).
 		WithOffline(offlineOpener(l.Logger), unitPresent(o), o.offline)
 	if l.path != "" {
 		model = model.WithLogger(l.Logger, l.path)

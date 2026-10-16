@@ -26,8 +26,11 @@ WINDOWS := windows-amd64 windows-arm64
 
 .PHONY: build test vet fmt dist linux windows macos clean
 
+# MIDI input is built in on a Mac (it needs cgo); elsewhere it is left out.
+MIDITAGS := $(if $(filter Darwin,$(shell uname -s)),-tags midi,)
+
 build:
-	go build -ldflags "$(LDFLAGS)" -o $(BIN) $(PKG)
+	go build $(MIDITAGS) -ldflags "$(LDFLAGS)" -o $(BIN) $(PKG)
 
 test: vet fmt
 	go test -race ./...
@@ -53,8 +56,8 @@ $(DIST)/$(BIN)-windows-%.exe: FORCE
 
 macos:
 ifeq ($(shell uname -s),Darwin)
-	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 $(GOBUILD) -o $(DIST)/$(BIN)-darwin-amd64 $(PKG)
-	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(DIST)/$(BIN)-darwin-arm64 $(PKG)
+	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 $(GOBUILD) -tags midi -o $(DIST)/$(BIN)-darwin-amd64 $(PKG)
+	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) -tags midi -o $(DIST)/$(BIN)-darwin-arm64 $(PKG)
 	lipo -create -output $(DIST)/$(BIN)-darwin-universal $(DIST)/$(BIN)-darwin-amd64 $(DIST)/$(BIN)-darwin-arm64
 else
 	@echo "the macOS binaries need cgo for the serial port: build them on a Mac"; exit 1

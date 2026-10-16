@@ -2002,6 +2002,8 @@ func (m Model) promptBox() string {
 		return m.busScanBox(p)
 	case promptRepairPads:
 		return m.repairBox(p)
+	case promptMidi:
+		title, hint = midiPromptTitle(p.busOf), midiPromptHint(p.busOf)
 	case promptLiveCode:
 		title, hint = "Pads for the live mode", "pad numbers 1 to 16, hit in turn on the unit, in any bank; off for none  ·  "
 	case promptRecCode:

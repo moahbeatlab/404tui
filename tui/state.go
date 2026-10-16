@@ -48,6 +48,13 @@ type State struct {
 	// recording ("1 3 3 7", "1 16 16 16" when empty; "off" turns one off).
 	LiveCode string `json:"liveCode,omitempty"`
 	RecCode  string `json:"recCode,omitempty"`
+	// MidiPort is a part of the name of the MIDI input to listen to ("404" when empty); MidiChan
+	// the channel that controls the app ("16" when empty, "off" for none); MidiMap the message
+	// for each action: live mode, recording, next becomes now, clear next ("note 60" or "cc 20";
+	// notes 60 to 63 when empty, "off" for none).
+	MidiPort string    `json:"midiPort,omitempty"`
+	MidiChan string    `json:"midiChan,omitempty"`
+	MidiMap  [4]string `json:"midiMap,omitempty"`
 	// BusNotes are what the user wrote of the effect on each bus (the unit does not say), shown in
 	// the Perform view.
 	BusNotes [2]string `json:"busNotes,omitempty"`

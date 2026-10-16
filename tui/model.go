@@ -20,6 +20,7 @@ import (
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/formats"
+	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/proto/fileapi"
 	"github.com/moahbeatlab/404tui/record"
@@ -93,6 +94,9 @@ const (
 	// promptLiveCode and promptRecCode ask for the pads that switch the live mode and a recording.
 	promptLiveCode
 	promptRecCode
+	// promptMidi asks for a part of the MIDI setting that prompt.busOf numbers: 0 the input, 1 the
+	// control channel, 2 to 5 the four messages.
+	promptMidi
 	// promptBusNote asks for a note on the effect of a bus (prompt.busOf).
 	promptBusNote
 	// promptDeleteFiles confirms deleting prompt.paths from the card; promptMkdir names a new
@@ -301,6 +305,14 @@ type Model struct {
 	// perfNow and perfNext are the pattern that plays and the one that comes next, as the
 	// Perform view shows them: what the user says, the unit does not tell.
 	perfNow, perfNext *proto.PadIndex
+	// midiSrc is where MIDI comes from, midi the input that is open (nil when none is), midiOpening
+	// is set while one is being opened, and clock counts the MIDI clock.
+	midiSrc     midiin.Source
+	midi        *midiLink
+	midiOpening bool
+	midiErr     string
+	midiPadAt   time.Time
+	clock       *clockState
 	// codes holds the pads hit lately, for the codes that start the live mode and a recording;
 	// liveOn is set while the live mode is on, liveBack the view it goes back to.
 	codes    *codeState
@@ -770,6 +782,15 @@ type (
 		err       error
 		onPurpose bool
 	}
+	// midiOpenedMsg is the result of opening the MIDI input; midiMsg is a message from it.
+	midiOpenedMsg struct {
+		link *midiLink
+		err  error
+	}
+	midiMsg struct {
+		link *midiLink
+		ev   midiin.Event
+	}
 	// checkMsg is what comparing samples with their files found, a line or two for each.
 	checkMsg struct{ lines []string }
 	usageMsg struct {
@@ -839,13 +860,14 @@ func tick() tea.Cmd {
 }
 
 func (m Model) Init() tea.Cmd {
+	midi := m.startMIDI()
 	if m.unit == nil && m.startOffline != "" && m.openOffline != nil {
-		return tea.Batch(m.goOffline(m.startOffline), tick())
+		return tea.Batch(m.goOffline(m.startOffline), tick(), midi)
 	}
 	if m.unit == nil {
-		return tea.Batch(m.tryConnect(), tick())
+		return tea.Batch(m.tryConnect(), tick(), midi)
 	}
-	return tea.Batch(m.load(""), tick())
+	return tea.Batch(m.load(""), tick(), midi)
 }
 
 // tryConnect looks for a unit and opens it.
@@ -1067,8 +1089,17 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 	case tea.MouseMsg:
 		return m.mouse(msg)
+	case midiOpenedMsg:
+		return m.midiOpened(msg)
+	case midiMsg:
+		return m.midiEvent(msg)
 	case tickMsg:
 		m.frame++
+		if m.midiSrc != nil && m.midi == nil && !m.midiOpening && m.frame%50 == 25 {
+			// The unit's MIDI input appears when it is plugged in: it is looked for now and then.
+			m.midiOpening = true
+			return m, tea.Batch(tick(), m.startMIDI())
+		}
 		if m.unit == nil {
 			if m.connect != nil && !m.connecting && m.frame%connectTicks == 0 {
 				m.connecting = true
@@ -1500,7 +1531,7 @@ func (m Model) polled(msg pollMsg) (tea.Model, tea.Cmd) {
 	var codeCmd tea.Cmd
 	if msg.have {
 		a := msg.activity
-		if m.padHit(m.hasSelected, a) {
+		if m.padHit(m.hasSelected, a) && time.Since(m.midiPadAt) > 10*time.Second {
 			m, codeCmd = m.codeHit(int(a.Selected.Pad()) + 1)
 		}
 		m.playing, m.playPos = a.Playing, a.Position

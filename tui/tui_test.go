@@ -25,6 +25,7 @@ import (
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/formats"
+	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/record"
 	"github.com/moahbeatlab/404tui/sim"
@@ -5907,9 +5908,9 @@ func TestPadCodesOnTheUnitSwitchTheLiveModeAndARecording(t *testing.T) {
 func TestTheCodesAreSetInConfig(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("6", "G")
+	s.press("6", "g", "j", "j", "j", "j", "j", "j", "j", "j", "j")
 	s.shows("Pad codes on the unit", "1 3 3 7", "1 16 16 16")
-	s.press("k", "enter")
+	s.press("enter")
 	s.shows("Pads for the live mode")
 	s.press("ctrl+u")
 	s.typeText("2 4 4 8")
@@ -5928,5 +5929,118 @@ func TestTheCodesAreSetInConfig(t *testing.T) {
 	s.press("enter")
 	if len(s.m().recCode()) != 0 {
 		t.Errorf("rec code %v after off", s.m().recCode())
+	}
+}
+
+func TestMIDIFromTheUnitAndAControllerDoTheSameAsTheCodes(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	stopped := 0
+	fake := &fakeRecorder{stopped: &stopped}
+	s.model = s.m().WithRecorder(fake)
+	m := s.m()
+	m.mem.RecordDir = t.TempDir()
+	link := &midiLink{ch: make(chan midiin.Event, 4), name: "SP-404MKII"}
+	m.midi = link
+	s.model = m
+	feed := func(e midiin.Event) {
+		next, cmd := s.m().midiEvent(midiMsg{link: link, ev: e})
+		s.model = next
+		if s.m().rec != nil || e.Data1 == 61 {
+			s.run(cmd) // a recording starts and stops in a command
+		}
+	}
+	note := func(ch, n int) midiin.Event {
+		return midiin.Event{Kind: midiin.NoteOn, Channel: ch, Data1: n, Data2: 100}
+	}
+	// The unit's pads: pad 1 is note 48, pad 3 note 50, pad 7 note 46 (bank A is channel 1).
+	for _, n := range []int{48, 50, 50, 46} {
+		feed(note(1, n))
+	}
+	if !s.m().liveOn || s.m().section != secPerform {
+		t.Fatalf("pads 1 3 3 7 by MIDI: live %v, section %d", s.m().liveOn, s.m().section)
+	}
+	// A controller on the control channel (16): note 60 switches the live mode off again.
+	feed(note(16, 60))
+	if s.m().liveOn {
+		t.Error("note 60 on channel 16 did not leave the live mode")
+	}
+	// Note 61 starts a recording and again stops it; a note on another channel does nothing.
+	feed(note(15, 61))
+	if s.m().rec != nil {
+		t.Error("a note on another channel started a recording")
+	}
+	feed(note(16, 61))
+	s.shows("REC")
+	feed(note(16, 61))
+	if s.m().rec != nil || stopped != 1 {
+		t.Errorf("note 61 again: recording %v, stopped %d", s.m().rec != nil, stopped)
+	}
+	// The messages are set in Config: a controller turned up past half works too.
+	m = s.m()
+	m.mem.MidiMap[2], m.mem.MidiMap[3] = "cc 20", "off"
+	one := pad(t, "A2")
+	m.perfNext = &one
+	m.section = secPerform
+	s.model = m
+	feed(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: 20, Data2: 30})
+	if s.m().perfNow != nil {
+		t.Error("a controller below half counted")
+	}
+	feed(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: 20, Data2: 100})
+	if s.m().perfNow == nil || *s.m().perfNow != one || s.m().perfNext != nil {
+		t.Errorf("cc 20 up: now %v next %v", s.m().perfNow, s.m().perfNext)
+	}
+}
+
+func TestTheMIDIClockCountsBarsInPerform(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	link := &midiLink{ch: make(chan midiin.Event, 4)}
+	m := s.m()
+	m.midi = link
+	s.model = m
+	feed := func(e midiin.Event) {
+		next, _ := s.m().midiEvent(midiMsg{link: link, ev: e})
+		s.model = next
+	}
+	feed(midiin.Event{Kind: midiin.Start})
+	// Nine beats: the third beat of the third bar.
+	for i := 0; i < 24*9; i++ {
+		feed(midiin.Event{Kind: midiin.Clock})
+	}
+	if got := s.m().clockText(0); got != "BAR 3 · BEAT 2" {
+		t.Errorf("clock text %q", got)
+	}
+	if got := s.m().clockText(2); got != "BAR 3 · BEAT 2  ·  LOOP 2" {
+		t.Errorf("with a 2-bar pattern: %q", got)
+	}
+	feed(midiin.Event{Kind: midiin.Stop})
+	if got := s.m().clockText(0); !strings.Contains(got, "stopped") {
+		t.Errorf("after stop: %q", got)
+	}
+	s.press("7")
+	s.shows("♩ BAR 3")
+}
+
+func TestMidiSettingsAreReadAndRefused(t *testing.T) {
+	if k, n, ok := parseMidiMap("cc 20"); !ok || n != 20 {
+		t.Errorf("cc 20: %v %d %v", k, n, ok)
+	}
+	if _, n, ok := parseMidiMap("60"); !ok || n != 60 {
+		t.Errorf("a bare number is a note: %d %v", n, ok)
+	}
+	for _, bad := range []string{"", "off", "note 200", "pitch 3", "note"} {
+		if _, _, ok := parseMidiMap(bad); ok {
+			t.Errorf("%q was accepted", bad)
+		}
+	}
+	for note, want := range map[int]int{48: 1, 49: 2, 50: 3, 51: 4, 44: 5, 40: 9, 36: 13, 39: 16} {
+		if got, ok := padOfNote(note); !ok || got != want {
+			t.Errorf("note %d is pad %d, want %d", note, got, want)
+		}
+	}
+	if _, ok := padOfNote(60); ok {
+		t.Error("note 60 is not a pad")
 	}
 }

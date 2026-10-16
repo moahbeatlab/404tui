@@ -84,6 +84,22 @@ that is hit again while it is the selected one shows only through its sample sta
 pads that repeat in a code need a sample, and the first pad of a code is not seen if it was the
 selected pad already and makes no sound.
 
+### MIDI (experimental)
+
+The unit sends MIDI over USB: a note for each pad hit, and its clock and start/stop. On a Mac, `make build`
+builds MIDI input in (`go build -tags midi`; it needs cgo); other builds leave it out. 404tui listens to
+the input with `404` in its name (set in Config, `6`). What it does:
+
+- **Pads:** a note on channels 1 to 10 is a pad hit (pad 1 is note 48, pad 13 note 36), so the pad codes
+  see every hit exactly, repeated or on an empty pad. It takes the place of the polling for ten seconds
+  after a note.
+- **Clock:** the Perform tab counts `♩ BAR 5 · BEAT 2 · LOOP 3` from the clock and start/stop the unit
+  sends (24 ticks to a quarter note; the loop is of the pattern you said plays). The unit has to send
+  MIDI clock: check its MIDI sync setting.
+- **Control channel:** a note (or a controller turned up past half) on the control channel, 16 to start
+  with, does an action: notes 60 to 63 switch the live mode, start and stop a recording, make the next
+  pattern the one that plays, and clear it. The channel and each message are set in Config.
+
 ### Connecting
 
 The UI starts even with no unit, shows a waiting screen, connects by itself when you plug

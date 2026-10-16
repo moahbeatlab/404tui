@@ -76,7 +76,10 @@ const (
 	cfgRecDevice
 	cfgLiveCode
 	cfgRecCode
-	cfgRows
+	cfgMidiPort
+	cfgMidiChan
+	cfgMidiMap // the four messages follow
+	cfgRows    = cfgMidiMap + 4
 )
 
 // cycleColour is the colour after (or before) the named one, the theme's own ("") at one end.
@@ -137,6 +140,12 @@ func (m Model) configKey(name string) (tea.Model, tea.Cmd) {
 		case cfgRecDevice:
 			if name == " " || name == "enter" {
 				m.prompt = &prompt{kind: promptRecDevice, buffer: m.recordDevice()}
+			}
+			return m, nil
+		case cfgMidiPort, cfgMidiChan, cfgMidiMap, cfgMidiMap + 1, cfgMidiMap + 2, cfgMidiMap + 3:
+			if name == " " || name == "enter" {
+				field := m.cfgAt - cfgMidiPort
+				m.prompt = &prompt{kind: promptMidi, busOf: field, buffer: m.midiFieldText(field)}
 			}
 			return m, nil
 		case cfgLiveCode, cfgRecCode:
@@ -213,6 +222,15 @@ func (m Model) configBody(g geom) string {
 		row(cfgLiveCode, "Live mode (the Perform view)", st.text.Render(codeOrOff(m.liveCode())), "Enter edits"),
 		row(cfgRecCode, "Start and stop a recording", st.text.Render(codeOrOff(m.recCode())), "Enter edits"),
 		st.dim.Render("Hit those pads in turn, in any bank, within four seconds; the same code again switches it off. A pad that repeats needs a sample."),
+		"",
+		st.bold.Render("MIDI"),
+		row(cfgMidiPort, "Input with this in its name", st.text.Render(m.midiPort()), "Enter edits"),
+		row(cfgMidiChan, "Control channel", st.text.Render(m.midiFieldText(1)), "Enter edits"),
+		row(cfgMidiMap, "Live mode", st.text.Render(m.midiMapText(0)), "Enter edits"),
+		row(cfgMidiMap+1, "Start and stop a recording", st.text.Render(m.midiMapText(1)), "Enter edits"),
+		row(cfgMidiMap+2, "Next pattern becomes the one that plays", st.text.Render(m.midiMapText(2)), "Enter edits"),
+		row(cfgMidiMap+3, "Clear the next pattern", st.text.Render(m.midiMapText(3)), "Enter edits"),
+		st.dim.Render(m.midiLine()),
 		"",
 		st.dim.Render("A word matches a word of the pad's name (Kick_125, OHat, DrumLoop, 14_Perc1) and a longer one by its start;"),
 		st.dim.Render("where a name has words of both, BUS 1 wins. B in Pads sets the buses of the bank, the marked pads or the project."),
