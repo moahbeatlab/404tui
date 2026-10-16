@@ -17,6 +17,8 @@ import (
 type addAsk struct {
 	// sec is the tab it was opened on.
 	sec int
+	// perf is 1 or 2 when the list is for the Perform view's pattern that plays or the next.
+	perf int
 	// pads is set once a pad is being chosen (Slicer), patterns once a pattern is (Sequencer).
 	pads     *padChooser
 	patterns *patternChooser
@@ -57,6 +59,11 @@ func (m Model) sequencerTabKey(name string) (tea.Model, tea.Cmd) {
 
 // openPatternAsk opens the list of the patterns of a bank, to choose the one the Sequencer edits.
 func (m Model) openPatternAsk() (tea.Model, tea.Cmd) {
+	return m.openPatternAskFor(secSequencer, 0)
+}
+
+// openPatternAskFor opens the same list for the Sequencer (perf 0) or for the Perform view.
+func (m Model) openPatternAskFor(sec, perf int) (tea.Model, tea.Cmd) {
 	if m.unit == nil || m.snap == nil {
 		m.message = "no unit to read patterns from"
 		return m, nil
@@ -66,7 +73,7 @@ func (m Model) openPatternAsk() (tea.Model, tea.Cmd) {
 		m.message = "patterns: " + err.Error()
 		return m, nil
 	}
-	m.addAsk = &addAsk{sec: secSequencer, patterns: c}
+	m.addAsk = &addAsk{sec: sec, perf: perf, patterns: c}
 	return m, m.wanted()
 }
 
@@ -149,6 +156,15 @@ func (m Model) patternChooserKey(a *addAsk, name string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.addAsk = nil
+		if a.perf != 0 {
+			slot := row.Slot
+			if a.perf == 1 {
+				m.perfNow = &slot
+			} else {
+				m.perfNext = &slot
+			}
+			return m, m.wanted()
+		}
 		return m.openSequencerPattern(row.Slot)
 	}
 	return m, nil

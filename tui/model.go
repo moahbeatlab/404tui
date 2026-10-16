@@ -34,10 +34,11 @@ const (
 	secSlicer
 	secSequencer
 	secConfig
+	secPerform
 	secCount
 )
 
-var sectionNames = [secCount]string{"Pads", "Patterns", "Files", "Projects", "Slicer", "Sequencer", "Config"}
+var sectionNames = [secCount]string{"Pads", "Patterns", "Files", "Projects", "Slicer", "Sequencer", "Config", "Perform"}
 
 // previewStopAfter is how long a preview plays before it is stopped; tests shorten it.
 var previewStopAfter = func(d time.Duration) time.Duration { return d }
@@ -89,6 +90,8 @@ const (
 	// of the input to record.
 	promptRecDir
 	promptRecDevice
+	// promptBusNote asks for a note on the effect of a bus (prompt.busOf).
+	promptBusNote
 	// promptDeleteFiles confirms deleting prompt.paths from the card; promptMkdir names a new
 	// folder in prompt.path.
 	promptDeleteFiles
@@ -292,6 +295,9 @@ type Model struct {
 	// recorder starts recordings of the unit's audio input; rec is the one running.
 	recorder record.Backend
 	rec      *record.Session
+	// perfNow and perfNext are the pattern that plays and the one that comes next, as the
+	// Perform view shows them: what the user says, the unit does not tell.
+	perfNow, perfNext *proto.PadIndex
 	// report is a list of lines shown in a dialog until a key closes it.
 	report *report
 	// cfgAt is the row of the Config view the cursor is on.
@@ -1618,6 +1624,15 @@ func (m *Model) wanted() tea.Cmd {
 		if _, have := m.infos[node.Path]; !node.Dir && isAudio(node.Name) && !have {
 			m.infoBusy = true
 			return m.fileInfoCmd(node.Path)
+		}
+	}
+	if m.section == secPerform && !m.previewBusy {
+		// The patterns the Perform view shows are read to know which pads play in them.
+		for _, slot := range []*proto.PadIndex{m.perfNow, m.perfNext} {
+			if slot != nil && m.patPreview[*slot] == nil && !m.patUnread[*slot] {
+				m.previewBusy = true
+				return m.loadPreview(*slot)
+			}
 		}
 	}
 	if a := m.addAsk; a != nil && a.patterns != nil && !m.previewBusy {

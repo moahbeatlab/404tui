@@ -346,6 +346,8 @@ func (m Model) body(g geom) string {
 		return m.slicerTabBody(g)
 	case secConfig:
 		return m.configBody(g)
+	case secPerform:
+		return m.perfBody(g)
 	case secSequencer:
 		return m.sequencerTabBody(g)
 	}
@@ -493,6 +495,8 @@ func (m Model) statusBar() string {
 		chips = []string{chip("a", "choose a pattern"), chip("N", "new pattern")}
 	case secConfig:
 		chips = []string{chip("j k", "move"), chip("h l", "change"), chip("Enter", "edit"), chip("Space", "toggle")}
+	case secPerform:
+		chips = []string{chip("a", "now"), chip("n", "next"), chip("Space", "next becomes now"), chip("x", "clear next"), chip("f F", "bus effect notes")}
 	case secProjects:
 		chips = []string{chip("Enter", "select"), chip("n", "rename"), chip("e", "export"), chip("R", "restore"), chip("X", "erase")}
 	}
@@ -1998,6 +2002,8 @@ func (m Model) promptBox() string {
 		return m.busScanBox(p)
 	case promptRepairPads:
 		return m.repairBox(p)
+	case promptBusNote:
+		title, hint = fmt.Sprintf("The effect on BUS %d", p.busOf), "what you set on the unit, e.g. Hall reverb, shown in Perform  ·  "
 	case promptRecDir:
 		title, hint = "Record into folder", "empty for the default, Music/404tui  ·  "
 	case promptRecDevice:

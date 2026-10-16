@@ -61,6 +61,17 @@ installed; it finds the input by a part of its name (`404` by default). **Config
 folder (`~/Music/404tui` by default) and that part of the name. It works on macOS, Linux (through
 PulseAudio or PipeWire) and Windows (DirectShow, ffmpeg only).
 
+### Perform (experimental)
+
+Tab **Perform** (`7`) is a dashboard for the stage. The unit does not say which pattern runs, so it is
+told: `a` chooses the pattern that plays and `n` the next one; `Space` makes the next the one that plays.
+The samples of the pattern that plays are drawn as big as the screen allows, with the pad
+number: that is what there is to mute and bring back. Under it, the next pattern: which samples to
+**bring in** and which to **take out**, and in the pattern that plays each sample that leaves is
+marked `▼ OUT NEXT`. Below that, what goes to each bus (BUS 1 and BUS 2, in their colours) and a
+note of the effect on it (`f`, `F`), because the unit does not tell the effect. A recording started
+with `Ctrl-R` is shown at the top.
+
 ### Connecting
 
 The UI starts even with no unit, shows a waiting screen, connects by itself when you plug

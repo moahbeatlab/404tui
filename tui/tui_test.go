@@ -5693,3 +5693,93 @@ func TestCtrlRRecordsWithAClearSignAndStops(t *testing.T) {
 	s.press("ctrl+r")
 	s.shows("install ffmpeg")
 }
+
+func TestBigTextDrawsCapitalsThreeRowsTall(t *testing.T) {
+	rows := bigText("kick", 1)
+	for i, r := range rows {
+		if w := ansi.StringWidth(r); w != bigWidth("kick", 1) {
+			t.Errorf("row %d is %d cells, want %d", i, w, bigWidth("kick", 1))
+		}
+	}
+	if rows[0] == "" || !strings.ContainsAny(strings.Join(rows[:], ""), "▀▄█") {
+		t.Errorf("nothing drawn: %q", rows)
+	}
+	wide := bigText("K1", 2)
+	if ansi.StringWidth(wide[0]) != bigWidth("K1", 2) || bigWidth("K1", 2) != 2*(3*2+2)-2 {
+		t.Errorf("a text at scale 2 is %d cells", ansi.StringWidth(wide[0]))
+	}
+	if bigText("é?", 1)[1] == "" {
+		t.Error("a character the font lacks is not drawn as a space")
+	}
+}
+
+func TestPerformShowsThePatternThatPlaysAndWhatChangesInTheNext(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	one, err := formats.StartPattern([]proto.PadIndex{pad(t, "A1"), pad(t, "A2"), pad(t, "A3")}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := formats.StartPattern([]proto.PadIndex{pad(t, "A2"), pad(t, "A3")}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for slot, data := range map[string][]byte{"A2": one, "A3": two} {
+		s.sim.SetPattern(pad(t, slot), pad(t, "A1"))
+		s.sim.AddFile(formats.PatternPath(1, pad(t, slot)), data)
+	}
+	s.press("r", "7")
+	s.shows("Perform", "chooses the pattern that is playing")
+	s.press("a", "enter")
+	s.shows("NOW", "A2", "3 tracks")
+	// The next pattern: l goes to the next slot of the chooser.
+	s.press("n", "l", "enter")
+	s.shows("NEXT", "A3", "TAKE OUT", "A1 kick")
+	if s.m().perfNow == nil || s.m().perfNext == nil {
+		t.Fatalf("now %v next %v", s.m().perfNow, s.m().perfNext)
+	}
+	// Space: the next pattern is the one that plays, and there is no next.
+	s.press(" ")
+	if s.m().perfNow == nil || *s.m().perfNow != pad(t, "A3") || s.m().perfNext != nil {
+		t.Errorf("after Space: now %v, next %v", s.m().perfNow, s.m().perfNext)
+	}
+	s.shows("NOW", "A3", "2 tracks")
+	s.press("x", " ")
+	s.shows("no next pattern")
+}
+
+func TestPerformListsWhatGoesToEachBusAndShowsARecording(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	// kick and snare go to BUS 2, hat to BUS 1.
+	for pd, bus := range map[string]int32{"A1": 2, "A2": 2, "A3": 1} {
+		if err := s.m().unit.SetParam(0x7A, proto.TargetPad(pad(t, pd)), bus); err != nil {
+			t.Fatal(err)
+		}
+	}
+	one, err := formats.StartPattern([]proto.PadIndex{pad(t, "A1"), pad(t, "A2"), pad(t, "A3")}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.sim.SetPattern(pad(t, "A2"), pad(t, "A1"))
+	s.sim.AddFile(formats.PatternPath(1, pad(t, "A2")), one)
+	s.press("r", "7", "a", "enter")
+	s.shows("BUS 1", "BUS 2", "hat", "kick  ·  snare", "f notes the effect")
+	// The effect of a bus is what the user writes: the unit does not say.
+	s.press("f")
+	s.shows("The effect on BUS 1")
+	s.typeText("Hall reverb")
+	s.press("enter")
+	s.shows("BUS 1", "Hall reverb")
+	// A recording shows in the dashboard too.
+	stopped := 0
+	fake := &fakeRecorder{stopped: &stopped}
+	s.model = s.m().WithRecorder(fake)
+	m := s.m()
+	m.mem.RecordDir = t.TempDir()
+	s.model = m
+	s.press("ctrl+r")
+	s.shows("RECORDING", "take.wav")
+	s.press("ctrl+r")
+	s.hides("RECORDING")
+}

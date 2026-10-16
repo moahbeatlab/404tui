@@ -338,7 +338,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "esc":
 		return m.escape()
-	case "1", "2", "3", "4", "5", "6":
+	case "1", "2", "3", "4", "5", "6", "7":
 		return m.goTo(railSections[int(name[0]-'1')])
 	case "shift+tab", "tab":
 		switch m.section {
@@ -407,6 +407,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.sequencerTabKey(name)
 	case secConfig:
 		return m.configKey(name)
+	case secPerform:
+		return m.perfKey(name)
 	case secFiles:
 		return m.filesKey(name)
 	}
@@ -3019,7 +3021,7 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			return doneMsg{message: fmt.Sprintf("project %d restored from %s", plan.Project+1, plan.Dir), reload: true}
 		})
 	}
-	if p.kind != promptDelete && p.kind != promptFindFolder && p.kind != promptBusWords && p.kind != promptBusScan && p.kind != promptRepairPads && p.kind != promptRecDir && p.kind != promptRecDevice && text == "" {
+	if p.kind != promptDelete && p.kind != promptFindFolder && p.kind != promptBusWords && p.kind != promptBusScan && p.kind != promptRepairPads && p.kind != promptRecDir && p.kind != promptRecDevice && p.kind != promptBusNote && text == "" {
 		m.message = "nothing typed"
 		return m, nil
 	}
@@ -3091,6 +3093,10 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			}
 			return doneMsg{message: message, reload: true}
 		})
+	case promptBusNote:
+		m.mem.BusNotes[p.busOf-1] = text
+		m.message = fmt.Sprintf("BUS %d: %s", p.busOf, text)
+		return m, nil
 	case promptRecDir:
 		m.mem.RecordDir = text
 		m.message = "recordings go to " + display(m.recordDir())

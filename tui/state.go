@@ -44,6 +44,10 @@ type State struct {
 	RecordDir    string `json:"recordDir,omitempty"`
 	RecordDevice string `json:"recordDevice,omitempty"`
 
+	// BusNotes are what the user wrote of the effect on each bus (the unit does not say), shown in
+	// the Perform view.
+	BusNotes [2]string `json:"busNotes,omitempty"`
+
 	// ScanDir is the folder the last scan for where the samples came from looked in.
 	ScanDir string `json:"scanDir,omitempty"`
 
