@@ -2324,16 +2324,16 @@ func (m Model) withKeyGuide(text string, groups []keyGroup, height, width int) s
 		line := ""
 		first := true
 		emit := func() {
-			label := strings.Repeat(" ", 8)
+			label := strings.Repeat(" ", 10)
 			if first {
-				label = padTo(grp.label, 8)
+				label = padTo("  "+grp.label, 10)
 			}
 			guide = append(guide, st.faint.Render(label)+line)
 			line, first = "", false
 		}
 		for _, k := range grp.keys {
 			item := st.accent.Render(k[0]) + st.dim.Render(" "+k[1])
-			if line != "" && ansi.StringWidth(line)+ansi.StringWidth(item)+2 > width-8 {
+			if line != "" && ansi.StringWidth(line)+ansi.StringWidth(item)+2 > width-12 {
 				emit()
 			}
 			if line != "" {
@@ -2343,6 +2343,7 @@ func (m Model) withKeyGuide(text string, groups []keyGroup, height, width int) s
 		}
 		emit()
 	}
+	guide = append([]string{st.faint.Render(strings.Repeat("─", max(width, 1)))}, guide...)
 	used := strings.Count(text, "\n") + 1
 	if used+len(guide)+1 > height {
 		return text
