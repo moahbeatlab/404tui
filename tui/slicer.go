@@ -228,12 +228,6 @@ func (m Model) openSlicer(key, title, name string, sample formats.Sample) (tea.M
 	m.slicer = s
 	m.sliceWant = false
 	m.message = ""
-	if slot := m.bedWant; slot != nil {
-		// A pattern was chosen before the sample: it comes under the slices now.
-		m.bedWant = nil
-		m.message = "mixing pattern " + slot.String() + "…"
-		return m, m.slicerMixBed(*slot, false)
-	}
 	return m, nil
 }
 
@@ -1774,10 +1768,11 @@ func (m Model) slicerBox() string {
 				e := edge[c*2]
 				e.put(edge[c*2+1], s.at)
 				styles[c] = cellStyle{kind: cellEdge, slice: e.slice - 1, selected: e.slice-1 == s.at, end: e.end}
-				// A line, not dots: it reads as a cut whatever the waveform does beside it.
-				text[c] = '│'
-				if styles[c].selected {
-					text[c] = '║'
+				// A hairline, not dots: it reads as a cut whatever the waveform does beside it. A
+				// start sits at the left of its cell, an end at the right.
+				text[c] = '▏'
+				if e.end {
+					text[c] = '▕'
 				}
 			}
 		}

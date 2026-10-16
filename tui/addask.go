@@ -35,17 +35,26 @@ func (m Model) addAskKey(name string) (tea.Model, tea.Cmd) {
 	switch name {
 	case "esc", "q", "a":
 		m.addAsk = nil
-	case "s":
-		m.addAsk = nil
+	case "f":
 		if a.sec == secSlicer {
-			// A sample for the slicer is chosen on the Files screen: Z slices the file in front.
-			m.sliceWant = true
-			m.message = "choose an audio file and press Z (1 for a pad instead)"
+			// A new sample for the slicer is chosen on the Files screen: Z slices the file in front.
+			m.addAsk, m.sliceWant = nil, true
+			m.message = "choose an audio file and press Z"
 			return m.goTo(secFiles)
 		}
-		// A sample for the sequencer goes onto a pad, in the file dialog that a opens on Pads.
-		return m.openAssign(m.padRow().Pad)
+	case "s":
+		if a.sec == secPatterns {
+			// A sample for the sequencer goes onto a pad, in the file dialog that a opens on Pads.
+			m.addAsk = nil
+			return m.openAssign(m.padRow().Pad)
+		}
 	case "p":
+		if a.sec == secSlicer {
+			// A pad's sample for the slicer: Z on the pad.
+			m.addAsk, m.sliceWant = nil, true
+			m.message = "choose a pad and press Z"
+			return m.goTo(secPads)
+		}
 		if m.unit == nil || m.snap == nil {
 			m.message = "no unit to read patterns from"
 			return m, nil
@@ -60,8 +69,7 @@ func (m Model) addAskKey(name string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// addChooserKey moves in the pattern chooser; Enter takes the pattern: the sequencer opens it,
-// the slicer keeps it for the sample that is chosen next.
+// addChooserKey moves in the pattern chooser; Enter opens the pattern in the sequencer.
 func (m Model) addChooserKey(a *addAsk, c *patternChooser, name string) (tea.Model, tea.Cmd) {
 	if moved, note := m.chooserMove(c, name); moved {
 		if note != "" {
@@ -79,12 +87,6 @@ func (m Model) addChooserKey(a *addAsk, c *patternChooser, name string) (tea.Mod
 			return m, nil
 		}
 		m.addAsk = nil
-		if a.sec == secSlicer {
-			slot := row.Slot
-			m.bedWant, m.sliceWant = &slot, true
-			m.message = fmt.Sprintf("pattern %s will play with the slices: choose an audio file and press Z", slot)
-			return m.goTo(secFiles)
-		}
 		m.bank, m.patternCursor = int(row.Slot.Bank()), int(row.Slot.Pad())
 		m.busy = "reading the pattern"
 		return m, m.openPattern(row.Slot, "")
@@ -100,15 +102,19 @@ func (m Model) addAskBox() string {
 		lines := m.chooserGrid(a.chooser, nil, 56, keys)
 		return st.modal.Render(strings.Join(lines, "\n"))
 	}
-	what, sample, pattern := "Slicer", "slice it", "plays with the slices (choose the sample next)"
-	if a.sec == secPatterns {
-		what, sample, pattern = "Sequencer", "put it on a pad", "open it to edit"
-	}
 	lines := []string{
-		st.bold.Render(what + ": add a sample or a pattern"), "",
-		st.accent.Render("s") + st.text.Render("  a sample  ") + st.dim.Render(sample),
-		st.accent.Render("p") + st.text.Render("  a pattern  ") + st.dim.Render(pattern), "",
+		st.bold.Render("Slicer: choose what to slice"), "",
+		st.accent.Render("p") + st.text.Render("  a pad  ") + st.dim.Render("one of the pads on the unit"),
+		st.accent.Render("f") + st.text.Render("  a new sample  ") + st.dim.Render("from the file view"), "",
 		st.dim.Render("Esc cancel"),
+	}
+	if a.sec == secPatterns {
+		lines = []string{
+			st.bold.Render("Sequencer: add a sample or a pattern"), "",
+			st.accent.Render("s") + st.text.Render("  a sample  ") + st.dim.Render("put it on a pad"),
+			st.accent.Render("p") + st.text.Render("  a pattern  ") + st.dim.Render("open it to edit"), "",
+			st.dim.Render("Esc cancel"),
+		}
 	}
 	return st.modal.Render(strings.Join(lines, "\n"))
 }
@@ -119,8 +125,7 @@ func (m Model) slicerTabBody(g geom) string {
 	key := func(k, what string) string { return st.accent.Render(fmt.Sprintf("%-8s", k)) + st.dim.Render(what) }
 	lines := []string{
 		st.dim.Render("Nothing is open in the slicer."), "",
-		key("a", "choose a sample to slice, or a pattern to play with the slices"),
-		key("Z", "on a pad or a file (Pads, Files) slices the one under the cursor"),
+		key("a", "choose a pad, or a new sample from the file view"),
 	}
 	return m.box("Slicer", strings.Join(lines, "\n"), g.bodyW+g.bodyX-1, g.bodyH, true)
 }

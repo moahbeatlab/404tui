@@ -283,7 +283,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.addAskKey(name)
 	}
 	if m.sliceWant && name == "esc" {
-		m.sliceWant, m.bedWant = false, nil
+		m.sliceWant = false
 		m.message = "nothing chosen"
 		return m.goTo(secSlicer)
 	}

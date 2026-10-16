@@ -800,9 +800,9 @@ func TestMouse(t *testing.T) {
 	s := open(t)
 	g := s.m().geom()
 	// Sections, on the tab bar.
-	s.click(tabSpans()[1][0]+1, rowRule)
+	s.clickTab(1)
 	s.shows("▸ IMPORT/")
-	s.click(tabSpans()[0][0]+1, rowRule)
+	s.clickTab(0)
 	s.shows("kick")
 	// Banks, on the rail.
 	s.click(3, s.railRow(railBank, 2))
@@ -5038,22 +5038,22 @@ func TestTheTabBarNamesTheSectionsAndTheRailKeepsOnlyBanksAndSources(t *testing.
 	if first := s.m().rail(10)[0]; first.kind != railLabel {
 		t.Errorf("the rail starts with %+v, not with a label", first)
 	}
-	s.click(tabSpans()[2][0]+1, rowRule)
+	s.clickTab(2)
 	s.shows("PROJECT_02")
 }
 
-func TestSlicerAndSequencerTabsOfferASampleOrAPattern(t *testing.T) {
+func TestSlicerAndSequencerTabsOfferWhatToAdd(t *testing.T) {
 	s := open(t)
 	s.shows("4 Slicer", "5 Sequencer")
 
-	// Slicer: a asks, s goes to Files with Z to slice, Esc gives up.
+	// Slicer: a asks for a pad or a new sample; f goes to Files with Z to slice, Esc gives up.
 	s.press("4")
 	s.shows("Nothing is open in the slicer")
 	s.press("a")
-	s.shows("a sample", "a pattern")
-	s.press("s")
+	s.shows("a pad", "a new sample")
+	s.press("f")
 	if !s.m().sliceWant || s.m().section != secFiles {
-		t.Fatalf("after s: sliceWant=%v section=%d", s.m().sliceWant, s.m().section)
+		t.Fatalf("after f: sliceWant=%v section=%d", s.m().sliceWant, s.m().section)
 	}
 	s.shows("slice the file or pad under the cursor")
 	s.press("esc")
@@ -5061,12 +5061,34 @@ func TestSlicerAndSequencerTabsOfferASampleOrAPattern(t *testing.T) {
 		t.Errorf("Esc left sliceWant=%v section=%d", s.m().sliceWant, s.m().section)
 	}
 
-	// Slicer: p shows the patterns of a bank; an empty slot is refused.
-	s.press("a", "p")
+	// Slicer: p goes to the pads, and Z there opens the slicer with the Slicer tab lit.
+	m := s.m()
+	s.sim.AddFile("SD:IMPORT/drums.wav", drums())
+	if _, err := app.Assign(m.unit, m.unit, pad(t, "A5"), "SD:IMPORT/drums.wav"); err != nil {
+		t.Fatal(err)
+	}
+	s.press("r", "4", "a", "p")
+	if !s.m().sliceWant || s.m().section != secPads {
+		t.Fatalf("after p: sliceWant=%v section=%d", s.m().sliceWant, s.m().section)
+	}
+	s.press("j", "Z")
+	if s.m().slicer == nil || s.m().sliceWant {
+		t.Fatalf("Z: slicer=%v sliceWant=%v", s.m().slicer != nil, s.m().sliceWant)
+	}
+	if s.m().activeTab() != secSlicer {
+		t.Error("the Slicer tab is not lit while the slicer is open")
+	}
+	if s.m().section == secSlicer {
+		t.Error("the slicer should leave the screen it was opened from where it was")
+	}
+	s.press("esc")
+
+	// Sequencer: p shows the patterns of a bank; an empty slot is refused.
+	s.press("5", "a", "p")
 	s.shows("Pattern  bank A")
 	s.press("enter")
-	if s.m().addAsk == nil || s.m().bedWant != nil {
-		t.Errorf("an empty slot was taken: %+v", s.m().bedWant)
+	if s.m().addAsk == nil {
+		t.Error("an empty slot was taken")
 	}
 	s.press("esc", "esc")
 	if s.m().addAsk != nil {
@@ -5074,7 +5096,7 @@ func TestSlicerAndSequencerTabsOfferASampleOrAPattern(t *testing.T) {
 	}
 
 	// Sequencer: s opens the file dialog for a pad.
-	s.press("5", "a")
+	s.press("a")
 	s.shows("Sequencer: add a sample or a pattern")
 	s.press("s")
 	if s.m().browser == nil {
@@ -5089,4 +5111,32 @@ func TestProjectsAndSlicerTabsUseTheWholeWidth(t *testing.T) {
 		t.Errorf("projects keep a rail of %d", g.railW)
 	}
 	s.shows("PROJECT_02")
+}
+
+// clickTab clicks the tab with that index, wherever the tabs are.
+func (s *screen) clickTab(i int) {
+	s.t.Helper()
+	row, spans := s.m().tabLayout()
+	s.click(spans[i][0]+1, row)
+}
+
+func TestTabsSitInTheHeaderWhenItHasRoomAndUnderItWhenNot(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 200, Height: 30})
+	if row, _ := s.m().tabLayout(); row != rowHeader {
+		t.Errorf("at 200 columns the tabs are on row %d", row)
+	}
+	s.shows("1 Pads", "5 Sequencer")
+	s.clickTab(1)
+	if s.m().section != secFiles {
+		t.Errorf("clicking the Files tab in the header went to section %d", s.m().section)
+	}
+	s.send(tea.WindowSizeMsg{Width: 90, Height: 30})
+	if row, _ := s.m().tabLayout(); row != rowRule {
+		t.Errorf("at 90 columns the tabs are on row %d", row)
+	}
+	s.clickTab(0)
+	if s.m().section != secPads {
+		t.Errorf("clicking the Pads tab under the header went to section %d", s.m().section)
+	}
 }

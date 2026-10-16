@@ -188,8 +188,8 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m.wheel(wheel)
 	}
 	switch {
-	case msg.Y == rowRule:
-		if section, ok := m.tabAt(msg.X); ok {
+	case msg.Y == rowRule || msg.Y == rowHeader:
+		if section, ok := m.tabAt(msg.X, msg.Y); ok {
 			return m.goTo(section)
 		}
 		return m, nil
