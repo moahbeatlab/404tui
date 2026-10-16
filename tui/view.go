@@ -79,6 +79,8 @@ func (m Model) View() string {
 	switch {
 	case m.help:
 		main = dialog(m.helpBox())
+	case m.palette != nil:
+		main = dialog(m.paletteBox())
 	case m.addAsk != nil:
 		main = dialog(m.addAskBox())
 	case m.search != nil:
@@ -1839,20 +1841,23 @@ func (m Model) paletteBox() string {
 	st := m.st
 	found := m.matches()
 	lines := []string{st.accent.Render("> ") + m.palette.filter + "█", ""}
+	if m.palette.title != "" && m.palette.items != nil {
+		lines[1] = st.bold.Render(m.palette.title) + st.dim.Render("   ? or Esc closes")
+	}
 	if len(found) == 0 {
 		lines = append(lines, st.dim.Render("no command matches"))
 	}
 	from, to := window(len(found), m.palette.cursor, max(m.height-12, 5))
 	for i := from; i < to; i++ {
 		c := found[i]
-		line := fmt.Sprintf("%-7s %s", st.dim.Render(c.key), c.label)
+		line := fmt.Sprintf("%s %s", st.accent.Render(fmt.Sprintf("%-9s", c.key)), c.label)
 		if i == m.palette.cursor {
-			line = lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true).Render(fmt.Sprintf("%-7s %s", c.key, c.label))
+			line = lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true).Render(fmt.Sprintf("%-9s %s", c.key, c.label))
 		}
 		lines = append(lines, line)
 	}
-	lines = append(lines, "", st.dim.Render("↑↓ navigate  ·  Enter run  ·  Esc close"))
-	return st.modal.Width(min(m.width-4, 70)).Render(strings.Join(lines, "\n"))
+	lines = append(lines, "", st.dim.Render("type to search  ·  ↑↓ navigate  ·  Enter run  ·  ? or Esc close"))
+	return st.modal.Width(min(m.width-4, 90)).Render(strings.Join(lines, "\n"))
 }
 
 func (m Model) promptBox() string {

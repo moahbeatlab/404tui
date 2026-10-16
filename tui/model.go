@@ -157,6 +157,10 @@ type picker struct {
 type palette struct {
 	filter string
 	cursor int
+	// items are the commands it lists when it is for the dialog in front (title says which);
+	// without them it lists the commands of the section.
+	items []command
+	title string
 }
 
 // patToolKind is one of the groove tools that reshape the whole open pattern.

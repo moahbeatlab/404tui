@@ -112,6 +112,12 @@ var commands = []command{
 	{"w", "Files: switch between three columns (h goes up a folder, l goes into one, j k move along it) and the folder tree", []int{secFiles}},
 	{"}", "Jump to the next folder in the list (Alt-n too)", []int{secFiles}},
 	{"{", "Jump to the previous folder in the list (Alt-p too)", []int{secFiles}},
+	{"h", "Files (three columns): up to the parent folder", []int{secFiles}},
+	{"l", "Files (three columns): into the folder in front; Enter and Tab do too", []int{secFiles}},
+	{"j", "Files (three columns): the next file or folder in this column; k the one before", []int{secFiles}},
+	{"a", "Slicer: choose a pad, or a new sample from the file view, to slice", []int{secSlicer}},
+	{"a", "Sequencer: choose a pattern to edit (a again, in the editor, chooses another)", []int{secSequencer}},
+	{"N", "Sequencer: make a new pattern", []int{secSequencer}},
 	{"1", "Go to Pads", nil},
 	{"2", "Go to Files", nil},
 	{"3", "Go to Projects", nil},
@@ -127,6 +133,14 @@ var commands = []command{
 // matches are the commands of the section in front that contain the palette's filter.
 func (m *Model) matches() []command {
 	var out []command
+	if m.palette.items != nil {
+		for _, c := range m.palette.items {
+			if strings.Contains(strings.ToLower(c.key+" "+c.label), strings.ToLower(m.palette.filter)) {
+				out = append(out, c)
+			}
+		}
+		return out
+	}
 	for _, c := range commands {
 		here := len(c.sections) == 0
 		for _, s := range c.sections {
@@ -198,6 +212,11 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.stopListening()
 		return m, tea.Quit
 	}
+	// ? lists what can be done with the view or dialog in front, searchable, wherever it is; in a
+	// text being typed it is a letter.
+	if name == "?" && m.palette == nil && m.unit != nil && m.snap != nil && !m.typingText() && !m.help {
+		return m.openContextPalette()
+	}
 	// While the slicer waits for a sample to add, the main screen is in front: Z takes the one
 	// under the cursor, Esc gives up.
 	if m.slicer != nil && m.slicer.adding && (name == "esc" || name == "q") {
@@ -213,6 +232,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch {
+	case m.palette != nil:
+		return m.paletteKey(key)
 	case m.search != nil:
 		return m.searchKey(key)
 	case m.editor != nil:
@@ -2499,9 +2520,17 @@ func (m Model) paletteKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch name := key.String(); {
 	case name == "esc":
 		m.palette = nil
+	case name == "?" && p.filter == "":
+		m.palette = nil
 	case name == "enter":
 		m.palette = nil
 		if p.cursor < len(found) {
+			if p.items != nil {
+				if k, ok := runnableKey(found[p.cursor].key); ok {
+					return m.key(keyFor(k))
+				}
+				return m, nil
+			}
 			return m.key(keyFor(found[p.cursor].key))
 		}
 	case name == "up" || name == "ctrl+p":

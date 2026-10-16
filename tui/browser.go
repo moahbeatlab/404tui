@@ -568,30 +568,13 @@ func (m Model) assignBox(g geom) string {
 // room; with files marked it leads with how many and offers what can be done to them.
 func (m Model) assignKeys(b *browser, width int) string {
 	st := m.st
-	keys := [][2]string{
-		{"Enter", "assign"}, {"Space", "listen"},
-		{"Ctrl-A", "autoplay " + onOff(m.autoplay)}, {"v", "mark"},
-		{"V", "mark folder"}, {"J", "mark junk"},
-		{"*", "favourite"}, {"+", "add tags"},
-		{"i", "index folder"}, {"#", "by number " + onOff(m.byNumber)}, {"d", "delete"}, {"n", "rename"},
-		{"Tab / l", "open folder"},
-		{"S-Tab", "fold all"}, {"t", "source"},
-		{"/", "search"}, {"s", "search tags"}, {"f", "find folder"},
-		{"p", "type a path"}, {"Esc", "close"},
-	}
+	keys := m.assignKeyList(b)
 	var out []string
 	if b.findNote != "" {
 		out = append(out, st.warn.Render(b.findNote))
 	}
 	if n := len(b.marks); n > 0 {
 		out = append(out, st.good.Render(plural(n, "item")+" marked"))
-		keys = [][2]string{
-			{"d", "delete"}, {"u", "unmark all"},
-			{"Enter", "assign audio"}, {"v", "mark"},
-			{"V", "mark folder"}, {"J", "mark junk"},
-			{"*", "favourite"}, {"+", "add tags"},
-			{"#", "by number " + onOff(m.byNumber)}, {"f", "find folder"}, {"Esc", "close"},
-		}
 	}
 	colW := max(width/2, 20)
 	for i := 0; i < len(keys); i += 2 {
@@ -603,6 +586,32 @@ func (m Model) assignKeys(b *browser, width int) string {
 		out = append(out, row)
 	}
 	return strings.Join(out, "\n")
+}
+
+// assignKeyList are the keys of the assign dialog, each with what it does; with files marked
+// it leads with what can be done to them.
+func (m Model) assignKeyList(b *browser) [][2]string {
+	keys := [][2]string{
+		{"Enter", "assign"}, {"Space", "listen"},
+		{"Ctrl-A", "autoplay " + onOff(m.autoplay)}, {"v", "mark"},
+		{"V", "mark folder"}, {"J", "mark junk"},
+		{"*", "favourite"}, {"+", "add tags"},
+		{"i", "index folder"}, {"#", "by number " + onOff(m.byNumber)}, {"d", "delete"}, {"n", "rename"},
+		{"Tab / l", "open folder"},
+		{"S-Tab", "fold all"}, {"t", "source"},
+		{"/", "search"}, {"s", "search tags"}, {"f", "find folder"},
+		{"p", "type a path"}, {"Esc", "close"},
+	}
+	if len(b.marks) > 0 {
+		keys = [][2]string{
+			{"d", "delete"}, {"u", "unmark all"},
+			{"Enter", "assign audio"}, {"v", "mark"},
+			{"V", "mark folder"}, {"J", "mark junk"},
+			{"*", "favourite"}, {"+", "add tags"},
+			{"#", "by number " + onOff(m.byNumber)}, {"f", "find folder"}, {"Esc", "close"},
+		}
+	}
+	return keys
 }
 
 // browserFind takes the keys while a folder name is typed: the matching open folders are

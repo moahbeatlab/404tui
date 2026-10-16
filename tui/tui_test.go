@@ -250,12 +250,15 @@ func TestEverySectionRenders(t *testing.T) {
 
 func TestHelpAndPalette(t *testing.T) {
 	s := open(t)
+	// ? is the same searchable list as the palette, for the view in front.
 	s.press("?")
-	s.shows("Keybindings")
-	s.press("2")
-	s.shows("Keybindings")
+	s.shows("Preview pad on the unit", "type to search")
 	s.press("?")
-	s.hides("Keybindings")
+	s.hides("type to search")
+	s.press("2", "?")
+	s.shows("Assign this file to a pad")
+	s.hides("Preview pad on the unit")
+	s.press("esc", "1")
 
 	s.press(":")
 	s.shows("Preview pad on the unit", "Mark / unmark pad", "↑↓ navigate")
@@ -5197,5 +5200,35 @@ func TestAFolderWithSamplesOnPadsGetsTheMarkerInTheTree(t *testing.T) {
 	}
 	if m.folderUsed("SD:IMPORT/Kit2") || m.folderUsed("SD:IMPORT/Kit/Sub/kick.wav") == false && false {
 		t.Error("a folder beside it is marked")
+	}
+}
+
+func TestQuestionMarkListsTheCommandsOfTheDialogInFront(t *testing.T) {
+	s := slicerOpen(t)
+	// The slicer: its keys, by group, searchable; Enter on a single key sends it.
+	s.press("?")
+	s.shows("Slicer", "slices: select", "sound: reverse")
+	s.typeText("zoom")
+	s.shows("edges: zoom")
+	s.hides("sound: reverse")
+	s.press("esc")
+	s.press("esc")
+	s.press("1", "a")
+	// The assign dialog.
+	s.press("?")
+	s.shows("Assign a file", "autoplay", "type a path")
+	s.press("?")
+	s.hides("Assign a file  ")
+	if s.m().browser == nil {
+		t.Error("closing the list closed the dialog under it")
+	}
+	s.press("esc")
+	// A text being typed keeps ? as a letter.
+	s.press("n")
+	if s.m().prompt != nil {
+		s.press("?")
+		if s.m().palette != nil {
+			t.Error("? opened the list inside a text prompt")
+		}
 	}
 }
