@@ -79,6 +79,8 @@ func (m Model) View() string {
 	switch {
 	case m.help:
 		main = dialog(m.helpBox())
+	case m.addAsk != nil:
+		main = dialog(m.addAskBox())
 	case m.search != nil:
 		main = dialog(m.searchBox(g))
 	case m.editor != nil:
@@ -151,20 +153,31 @@ func overlay(base, box string, width, height int) string {
 
 // withRail puts the navigation rail to the left of the body, with a rule between them.
 func (m Model) withRail(g geom, body string) string {
+	if g.railW == 0 {
+		return " " + strings.ReplaceAll(body, "\n", "\n ")
+	}
 	rail := m.railView(g)
 	rule := strings.TrimSuffix(strings.Repeat(m.st.faint.Render("│")+"\n", g.bodyH), "\n")
 	return lipgloss.JoinHorizontal(lipgloss.Top, rail, rule, "  ", body)
 }
 
+// How the tabs sit on the bar: the rule before the first, each tab's label with room around
+// it, and the rule between two tabs.
+const (
+	tabLead   = 3
+	tabGap    = 3
+	tabFormat = "  %d %s  "
+)
+
 // tabSpans are the columns each tab of the tab bar covers, left to right, as start and end
 // (end not in).
 func tabSpans() [][2]int {
 	spans := make([][2]int, len(railSections))
-	x := 2
+	x := tabLead
 	for i, s := range railSections {
-		w := len(fmt.Sprintf(" %d %s ", i+1, sectionNames[s]))
+		w := len(fmt.Sprintf(tabFormat, i+1, sectionNames[s]))
 		spans[i] = [2]int{x, x + w}
-		x += w + 1
+		x += w + tabGap
 	}
 	return spans
 }
@@ -190,15 +203,15 @@ func (m Model) tabBar() string {
 	}
 	st := m.st
 	var b strings.Builder
-	b.WriteString(st.faint.Render("──"))
+	b.WriteString(st.faint.Render(strings.Repeat("─", tabLead)))
 	for i, s := range railSections {
-		text := fmt.Sprintf(" %d %s ", i+1, sectionNames[s])
-		if s == m.section || s == secPads && m.section == secPatterns {
+		text := fmt.Sprintf(tabFormat, i+1, sectionNames[s])
+		if s == m.section {
 			b.WriteString(lipgloss.NewStyle().Background(st.th.accent).Foreground(st.th.cursorFg).Bold(true).Render(text))
 		} else {
 			b.WriteString(st.dim.Render(text))
 		}
-		b.WriteString(st.faint.Render("─"))
+		b.WriteString(st.faint.Render(strings.Repeat("─", tabGap)))
 	}
 	if rest := m.width - ansi.StringWidth(b.String()); rest > 0 {
 		b.WriteString(st.faint.Render(strings.Repeat("─", rest)))
@@ -265,6 +278,8 @@ func (m Model) body(g geom) string {
 		return m.patternsBody(g)
 	case secFiles:
 		return m.filesBody(g)
+	case secSlicer:
+		return m.slicerTabBody(g)
 	}
 	return m.projectsBody(g)
 }
@@ -375,15 +390,23 @@ func (m Model) statusBar() string {
 	case secPads:
 		chips = []string{chip("Enter", "preview on "+map[bool]string{true: "computer", false: "unit"}[m.previewLocal]), chip("a", "assign"), chip("v", "mark"), chip("t", "set"), chip("c", "copy"), chip("d", "delete"), chip("Tab", "patterns"), chip("[ ]", "bank")}
 	case secPatterns:
-		chips = []string{chip("Enter", "open"), chip("N", "new"), chip("P", "play"), chip("d", "delete"), chip("c", "copy"), chip("[ ]", "bank")}
+		chips = []string{chip("Enter", "open"), chip("a", "add sample or pattern"), chip("N", "new"), chip("P", "play"), chip("d", "delete"), chip("c", "copy"), chip("[ ]", "bank")}
 	case secFiles:
 		if len(m.fileMarks) > 0 || len(m.clip) > 0 {
 			chips = []string{chip("Enter", "assign"), chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("p", "paste"), chip("u", "unmark"), chip("Esc", "clear")}
 			break
 		}
 		chips = []string{chip("Enter", "assign"), chip("v", "mark"), chip("*", "favourite"), chip("/", "search"), chip("s", "tags"), chip("f", "folder"), chip("i", "index"), chip("w", "view"), chip("Space", "listen")}
+	case secSlicer:
+		chips = []string{chip("a", "sample or pattern"), chip("Z", "slice a pad or file")}
 	case secProjects:
 		chips = []string{chip("Enter", "select"), chip("n", "rename"), chip("e", "export"), chip("R", "restore"), chip("X", "erase")}
+	}
+	switch {
+	case m.addAsk != nil:
+		chips = []string{chip("s", "sample"), chip("p", "pattern"), chip("Esc", "cancel")}
+	case m.sliceWant:
+		chips = []string{chip("Z", "slice the file or pad under the cursor"), chip("1 2", "pads or files"), chip("Esc", "cancel")}
 	}
 	chips = append(chips, chip("?", "all keys"), chip("q", "quit"))
 	line := strings.Join(chips, st.faint.Render("  "))

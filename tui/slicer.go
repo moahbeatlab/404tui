@@ -226,7 +226,14 @@ func (m Model) openSlicer(key, title, name string, sample formats.Sample) (tea.M
 	}
 	s.findPeak()
 	m.slicer = s
+	m.sliceWant = false
 	m.message = ""
+	if slot := m.bedWant; slot != nil {
+		// A pattern was chosen before the sample: it comes under the slices now.
+		m.bedWant = nil
+		m.message = "mixing pattern " + slot.String() + "…"
+		return m, m.slicerMixBed(*slot, false)
+	}
 	return m, nil
 }
 

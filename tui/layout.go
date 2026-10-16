@@ -47,6 +47,10 @@ func (m Model) geom() geom {
 		g.railW = 12
 	}
 	g.bodyX = g.railW + 2
+	if m.section == secProjects || m.section == secSlicer {
+		// The projects have nothing to put on a rail: the list takes the width.
+		g.railW, g.bodyX = 0, 1
+	}
 	g.bodyW = max(m.width-g.bodyX-1, 20)
 	if m.section == secPads || m.section == secPatterns {
 		g.top = 2
@@ -84,9 +88,9 @@ func (m Model) geom() geom {
 	return g
 }
 
-// railSections are the sections the tabs list, in order. The patterns are not one of them:
-// they are the panel under the pads, reached with Tab.
-var railSections = []int{secPads, secFiles, secProjects}
+// railSections are the sections the tabs list, in order, and the number keys with them. The
+// Sequencer is the patterns: they are also the panel under the pads, reached with Tab.
+var railSections = []int{secPads, secFiles, secProjects, secSlicer, secPatterns}
 
 // railKind is what a row of the rail stands for.
 type railKind int

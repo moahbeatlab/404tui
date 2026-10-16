@@ -90,30 +90,15 @@ func (m Model) loadChooser(c *patternChooser) error {
 func (m Model) slicerChooserKey(name string) (tea.Model, tea.Cmd) {
 	s := m.slicer
 	c := s.chooser
+	if moved, note := m.chooserMove(c, name); moved {
+		if note != "" {
+			m.message = note
+		}
+		return m, nil
+	}
 	switch name {
 	case "esc", "q", "P":
 		s.chooser = nil
-	case "h", "left":
-		c.cursor = clamp(c.cursor-1, 0, proto.PadsPerBank-1)
-	case "l", "right":
-		c.cursor = clamp(c.cursor+1, 0, proto.PadsPerBank-1)
-	case "k", "up":
-		c.cursor = clamp(c.cursor-4, 0, proto.PadsPerBank-1)
-	case "j", "down":
-		c.cursor = clamp(c.cursor+4, 0, proto.PadsPerBank-1)
-	case "[", "]":
-		next := c.bank + 1
-		if name == "[" {
-			next = c.bank - 1
-		}
-		if next >= 0 && next < proto.Banks {
-			old := c.bank
-			c.bank = next
-			if err := m.loadChooser(c); err != nil {
-				c.bank = old
-				m.message = "patterns: " + err.Error()
-			}
-		}
 	case "0", "backspace", "x":
 		s.chooser = nil
 		if s.bed != nil {
@@ -134,6 +119,38 @@ func (m Model) slicerChooserKey(name string) (tea.Model, tea.Cmd) {
 		return m, m.slicerMixBed(row.Slot, false)
 	}
 	return m, nil
+}
+
+// chooserMove moves the cursor of a pattern chooser: the arrows or h j k l over the slots, [ ]
+// for another bank. It says whether the key was one of those, and what went wrong if a bank
+// could not be read.
+func (m Model) chooserMove(c *patternChooser, name string) (bool, string) {
+	switch name {
+	case "h", "left":
+		c.cursor = clamp(c.cursor-1, 0, proto.PadsPerBank-1)
+	case "l", "right":
+		c.cursor = clamp(c.cursor+1, 0, proto.PadsPerBank-1)
+	case "k", "up":
+		c.cursor = clamp(c.cursor-4, 0, proto.PadsPerBank-1)
+	case "j", "down":
+		c.cursor = clamp(c.cursor+4, 0, proto.PadsPerBank-1)
+	case "[", "]":
+		next := c.bank + 1
+		if name == "[" {
+			next = c.bank - 1
+		}
+		if next >= 0 && next < proto.Banks {
+			old := c.bank
+			c.bank = next
+			if err := m.loadChooser(c); err != nil {
+				c.bank = old
+				return true, "patterns: " + err.Error()
+			}
+		}
+	default:
+		return false, ""
+	}
+	return true, ""
 }
 
 // slicerMixBed mixes a pattern in the background: remix when it is the pattern already under the
@@ -163,9 +180,19 @@ func (m Model) slicerRemix() tea.Cmd {
 
 // chooserLines draw the chooser: a heading, then the 16 slots as the pads lie, four to a row.
 func (m Model) chooserLines(width int) []string {
-	st, s := m.st, m.slicer
-	c := s.chooser
-	lines := []string{st.bold.Render(fmt.Sprintf("Pattern  bank %c", 'A'+c.bank)) + st.dim.Render("   arrows move  [ ] bank  Enter take it  0 none  Esc leave")}
+	s := m.slicer
+	var bed *proto.PadIndex
+	if s.bed != nil {
+		bed = &s.bed.slot
+	}
+	return m.chooserGrid(s.chooser, bed, width, "   arrows move  [ ] bank  Enter take it  0 none  Esc leave")
+}
+
+// chooserGrid draws a pattern chooser: a heading with the keys, then the 16 slots as the pads
+// lie, four to a row; the slot bed is marked.
+func (m Model) chooserGrid(c *patternChooser, bed *proto.PadIndex, width int, keys string) []string {
+	st := m.st
+	lines := []string{st.bold.Render(fmt.Sprintf("Pattern  bank %c", 'A'+c.bank)) + st.dim.Render(keys)}
 	cell := max((width-3)/4, 8)
 	for row := 0; row < 4; row++ {
 		var b strings.Builder
@@ -180,7 +207,7 @@ func (m Model) chooserLines(width int) []string {
 				}
 				text = fmt.Sprintf("%2d %s", i+1, strings.Join(pads, " "))
 			}
-			if s.bed != nil && s.bed.slot == r.Slot {
+			if bed != nil && *bed == r.Slot {
 				text += " ◀"
 			}
 			text = ansi.Truncate(text, cell-1, "…")

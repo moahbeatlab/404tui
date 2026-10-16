@@ -22,8 +22,11 @@ checks sequencing and data handling, not the unit's actual behaviour.
     go run ./cmd/sp404 -version        # print the version (0.1-alpha)
 
 The header says `404tui by moahbeatlab` with the version at the top right. Under it, tabs
-name the three sections, **Pads** (`1`), **Files** (`2`) and **Projects** (`3`; click one or press
-its number), and a rail down the left lists the banks or file sources of the section you are in. Dialogs open over the
+name the sections, **Pads** (`1`), **Files** (`2`), **Projects** (`3`), **Slicer** (`4`) and
+**Sequencer** (`5`, the patterns; click one or press its number), and a rail down the left lists the banks or
+file sources of the section you are in. In the Slicer and Sequencer tabs, `a` adds a sample or a
+pattern: in the Slicer a sample is chosen on Files (`Z` slices it) and a pattern plays with the
+slices; in the Sequencer a sample goes onto a pad and a pattern opens to edit. Dialogs open over the
 screen. A History panel on the right keeps what happened, with times.
 
 ### Connecting

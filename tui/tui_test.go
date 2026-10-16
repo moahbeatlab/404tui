@@ -5041,3 +5041,52 @@ func TestTheTabBarNamesTheSectionsAndTheRailKeepsOnlyBanksAndSources(t *testing.
 	s.click(tabSpans()[2][0]+1, rowRule)
 	s.shows("PROJECT_02")
 }
+
+func TestSlicerAndSequencerTabsOfferASampleOrAPattern(t *testing.T) {
+	s := open(t)
+	s.shows("4 Slicer", "5 Sequencer")
+
+	// Slicer: a asks, s goes to Files with Z to slice, Esc gives up.
+	s.press("4")
+	s.shows("Nothing is open in the slicer")
+	s.press("a")
+	s.shows("a sample", "a pattern")
+	s.press("s")
+	if !s.m().sliceWant || s.m().section != secFiles {
+		t.Fatalf("after s: sliceWant=%v section=%d", s.m().sliceWant, s.m().section)
+	}
+	s.shows("slice the file or pad under the cursor")
+	s.press("esc")
+	if s.m().sliceWant || s.m().section != secSlicer {
+		t.Errorf("Esc left sliceWant=%v section=%d", s.m().sliceWant, s.m().section)
+	}
+
+	// Slicer: p shows the patterns of a bank; an empty slot is refused.
+	s.press("a", "p")
+	s.shows("Pattern  bank A")
+	s.press("enter")
+	if s.m().addAsk == nil || s.m().bedWant != nil {
+		t.Errorf("an empty slot was taken: %+v", s.m().bedWant)
+	}
+	s.press("esc", "esc")
+	if s.m().addAsk != nil {
+		t.Error("Esc twice should close the dialog")
+	}
+
+	// Sequencer: s opens the file dialog for a pad.
+	s.press("5", "a")
+	s.shows("Sequencer: add a sample or a pattern")
+	s.press("s")
+	if s.m().browser == nil {
+		t.Error("s in the Sequencer should open the file dialog")
+	}
+}
+
+func TestProjectsAndSlicerTabsUseTheWholeWidth(t *testing.T) {
+	s := open(t)
+	s.press("3")
+	if g := s.m().geom(); g.railW != 0 {
+		t.Errorf("projects keep a rail of %d", g.railW)
+	}
+	s.shows("PROJECT_02")
+}

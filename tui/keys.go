@@ -115,6 +115,8 @@ var commands = []command{
 	{"1", "Go to Pads", nil},
 	{"2", "Go to Files", nil},
 	{"3", "Go to Projects", nil},
+	{"4", "Go to the Slicer; a there (and in the Sequencer) adds a sample or a pattern", nil},
+	{"5", "Go to the Sequencer (the patterns)", nil},
 	{"U", "Working offline: leave offline mode and connect to the unit once it is plugged in", nil},
 	{"ctrl+t", "Next colour theme", nil},
 	{"r", "Refresh from the unit", nil},
@@ -277,6 +279,14 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.message = ""
+	if m.addAsk != nil {
+		return m.addAskKey(name)
+	}
+	if m.sliceWant && name == "esc" {
+		m.sliceWant, m.bedWant = false, nil
+		m.message = "nothing chosen"
+		return m.goTo(secSlicer)
+	}
 
 	switch name {
 	case ":":
@@ -284,7 +294,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "esc":
 		return m.escape()
-	case "1", "2", "3":
+	case "1", "2", "3", "4", "5":
 		return m.goTo(railSections[int(name[0]-'1')])
 	case "shift+tab", "tab":
 		switch m.section {
@@ -342,7 +352,13 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case secPads:
 		return m.padsKey(name)
 	case secPatterns:
+		if m.pattern == nil && name == "a" {
+			m.addAsk = &addAsk{sec: secPatterns}
+			return m, nil
+		}
 		return m.patternsKey(name)
+	case secSlicer:
+		return m.slicerTabKey(name)
 	case secFiles:
 		return m.filesKey(name)
 	}
