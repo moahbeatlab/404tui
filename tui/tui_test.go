@@ -6606,3 +6606,27 @@ func TestTheRecordingShowsItsLevelAndAClipLight(t *testing.T) {
 		}
 	}
 }
+
+// CTRL 1 to 3 of a bus send CC 16 to 18 on the bus's channel: they are its knobs without learning, and
+// what is learned takes their place.
+func TestABusKnobsAreItsChannelsCC16To18UntilLearned(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	m := s.m()
+	for bus, ch := range []int{1, 2} {
+		for _, cc := range []int{16, 17, 18} {
+			if !m.isFxKnob(ch, cc) {
+				t.Errorf("ch %d cc %d is not a knob of bus %d", ch, cc, bus+1)
+			}
+		}
+	}
+	if m.isFxKnob(1, 74) || m.isFxKnob(3, 16) {
+		t.Error("another controller was taken for a bus knob")
+	}
+	m.mem.FxKnobs[1] = []string{"ch 5 cc 20"}
+	if !m.isFxKnob(5, 20) || m.isFxKnob(2, 16) {
+		t.Error("learned knobs did not replace the defaults")
+	}
+	s.model = m
+	s.press("7") // the view draws without a MIDI monitor too
+}

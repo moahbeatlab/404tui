@@ -544,7 +544,24 @@ func (m Model) perfControls(now time.Time, width int) []string {
 // isFxKnob says whether a controller is one of the knobs shown under a bus's effect.
 func (m Model) isFxKnob(ch, cc int) bool {
 	text := fmt.Sprintf("ch %d cc %d", ch, cc)
-	return slices.Contains(m.mem.FxKnobs[0], text) || slices.Contains(m.mem.FxKnobs[1], text)
+	return slices.Contains(m.fxKnobList(0), text) || slices.Contains(m.fxKnobList(1), text)
+}
+
+// fxKnobList is the controllers of a bus's effect (bus 0 or 1): the ones learned with k or K, else
+// the unit's own: CTRL 1 to 3 send CC 16 to 18 on channel 1 for bus 1 and channel 2 for bus 2.
+func (m Model) fxKnobList(bus int) []string {
+	if k := m.mem.FxKnobs[bus]; len(k) > 0 {
+		return k
+	}
+	return []string{fmt.Sprintf("ch %d cc 16", bus+1), fmt.Sprintf("ch %d cc 17", bus+1), fmt.Sprintf("ch %d cc 18", bus+1)}
+}
+
+// ccOf is what the controller on a channel last sent, nil before it sent anything.
+func (m Model) ccOf(ch, cc int) *ccState {
+	if m.mon == nil {
+		return nil
+	}
+	return m.mon.ccs[[2]int{ch, cc}]
 }
 
 // isFxSwitch is whether the controller is the message that says a bus's effect is on or off.
@@ -768,11 +785,11 @@ func (m Model) perfFxLines(width int) []string {
 	var rows [3]string
 	for bus := 0; bus < 2; bus++ {
 		var col [3]string
-		knobs := m.mem.FxKnobs[bus]
+		knobs := m.fxKnobList(bus)
 		for _, text := range knobs {
 			var ch, cc int
 			fmt.Sscanf(text, "ch %d cc %d", &ch, &cc)
-			cell := m.controlCell(m.mon.ccs[[2]int{ch, cc}], fmt.Sprintf("%d:%d", ch, cc), now)
+			cell := m.controlCell(m.ccOf(ch, cc), fmt.Sprintf("%d:%d", ch, cc), now)
 			for k := 0; k < 3; k++ {
 				col[k] += cell[k]
 			}

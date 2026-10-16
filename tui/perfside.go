@@ -273,14 +273,14 @@ func (m Model) fxPanel(bus, w, rows int, now time.Time) (string, lipgloss.Color,
 	cells := make([][]string, 0, 3)
 	for k := 0; k < 3; k++ {
 		label := fmt.Sprintf("C%d", k+1)
-		if k >= len(m.mem.FxKnobs[bus]) {
+		if k >= len(m.fxKnobList(bus)) {
 			cells = append(cells, m.bigFader(0, rows, st.faint, "-", label, "", cw))
 			continue
 		}
 		var ch, cc int
-		fmt.Sscanf(m.mem.FxKnobs[bus][k], "ch %d cc %d", &ch, &cc)
+		fmt.Sscanf(m.fxKnobList(bus)[k], "ch %d cc %d", &ch, &cc)
 		val, style, vt := 0, st.faint, "-"
-		if c := m.mon.ccs[[2]int{ch, cc}]; c != nil {
+		if c := m.ccOf(ch, cc); c != nil {
 			val, vt, style = c.val, fmt.Sprint(c.val), st.dim
 			if now.Sub(c.at) < fresh {
 				style = bold
@@ -291,7 +291,7 @@ func (m Model) fxPanel(bus, w, rows int, now time.Time) (string, lipgloss.Color,
 	lines = append(lines, "")
 	lines = append(lines, faderRow(cells)...)
 	if len(m.mem.FxKnobs[bus]) == 0 {
-		lines = append(lines, st.dim.Render(map[int]string{0: "k", 1: "K"}[bus]+" assigns a knob"))
+		lines = append(lines, st.dim.Render(fmt.Sprintf("ch %d cc 16-18   %s learns other knobs", bus+1, map[int]string{0: "k", 1: "K"}[bus])))
 	}
 	return fmt.Sprintf("BUS %d", bus+1), colour, lines
 }

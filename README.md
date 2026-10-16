@@ -108,10 +108,10 @@ the input with `404` in its name (set in Config, `6`). What it does:
   message when you switch one. `l` (BUS 1) or `L` (BUS 2) learns it: press the key, then switch the effect
   on or off on the unit; the next controller or note is taken as that bus's message (a controller from
   half up, or a note on, is on; a note off is off). The FX line then shows `● ON` or `○ off` with what you
-  noted for the bus (`f`/`F`). `k` (bus 1) or `K` (bus 2) learns the three knobs of the bus's effect: press it once, then turn
-  C1, C2 and C3 on the unit one after the other. They are shown under the bus as faders with the value.
-  Esc stops learning, Backspace forgets what is learned; until they are learned, a knob only shows in
-  CONTROLS. Changes of an effect go to the event log as `fx`.
+  noted for the bus (`f`/`F`). The three knobs of a bus (CTRL 1 to 3) are CC 16 to 18 on channel 1 for bus 1 and channel 2 for
+  bus 2, shown under the bus as faders with the value; nothing to set up. `k` or `K` learns other
+  controllers instead: press it once, then turn C1, C2 and C3 one after the other. Esc stops learning,
+  Backspace forgets what was learned (back to CC 16 to 18). Changes of an effect go to the event log as `fx`.
 - **Pattern player:** `p` in Perform shows the pattern you said plays (`a`) as the Sequencer draws it, a row
   per track with its notes over the bars the playhead is in, and a ▼ playhead that follows the unit's MIDI
   clock. The clock starts at the unit's Start; if the pattern began later, `s` says "the loop starts now".
