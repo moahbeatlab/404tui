@@ -61,6 +61,8 @@ func Parse(b []byte) (Event, bool) {
 		return Event{}, false
 	}
 	switch b[0] {
+	case 0xF0:
+		return Event{Kind: Sysex, Raw: append([]byte(nil), b...)}, true
 	case 0xF8:
 		return Event{Kind: Clock}, true
 	case 0xFA:

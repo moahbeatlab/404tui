@@ -67,7 +67,6 @@ func (rtSource) Open(part string, on func(Event)) (func(), string, error) {
 	}, drivers.ListenConfig{
 		TimeCode: true,
 		SysEx:    true,
-		OnSysEx:  func(b []byte) { on(Event{Kind: Sysex, Raw: b}) },
 	})
 	if err != nil {
 		in.Close()

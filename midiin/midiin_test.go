@@ -24,6 +24,7 @@ func TestParseReadsTheMessagesTheAppUses(t *testing.T) {
 		{[]byte{0xC2, 5}, Event{Kind: ProgramChange, Channel: 3, Data1: 5}, true},
 		{[]byte{0xD0, 90}, Event{Kind: Pressure, Channel: 1, Data2: 90}, true},
 		{[]byte{0xA0, 48, 70}, Event{Kind: Pressure, Channel: 1, Data1: 48, Data2: 70}, true},
+		{[]byte{0xF0, 0x41, 0xF7}, Event{Kind: Sysex, Raw: []byte{0xF0, 0x41, 0xF7}}, true},
 		{[]byte{0xFE}, Event{}, false}, // active sensing
 		{[]byte{0x90, 48}, Event{}, false},
 		{nil, Event{}, false},
