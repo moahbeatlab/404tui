@@ -125,7 +125,7 @@ the input with `404` in its name (set in Config, `6`). What it does:
   means the recording is distorted, so turn the unit's volume or the pad levels down. It reads the end of
   the WAV file as it is written, so it needs nothing but the recording itself.
 - **Layout:** on a wide screen (110 columns and up) Perform is split: the pads of the bank the unit is on in
-  the right 70%, with their whole names in plain text, and the left 30% for what you read from afar: the
+  the right half, with their whole names in plain text, and the left half for what you read from afar: the
   beat of the bar as four big blocks, the cue (what plays, what is next, what comes in and goes out), the
   patterns of the bank the unit is on (four at most, the one that plays and the next first; it follows
   when you switch bank), each bus's effect with a big ON/off and its knobs as tall faders, and the other

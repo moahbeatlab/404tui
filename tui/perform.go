@@ -907,11 +907,11 @@ func wrapName(name string, w, max int) []string {
 	return lines
 }
 
-// perfSplitBody is the Perform view on a wide screen: the left 30% for what is read from afar (the
+// perfSplitBody is the Perform view on a wide screen: the left half for what is read from afar (the
 // beat, the cue, the patterns of the bank, the effects and the knobs), the pads on the right.
 func (m Model) perfSplitBody(g geom, width int) string {
 	bank := m.perfBank()
-	side := max(width*30/100, 44)
+	side := max(width*50/100, 44)
 	gridW := width - side - 2
 	inner := g.bodyH - 2
 	tileW := max((gridW-3)/4, 10)
