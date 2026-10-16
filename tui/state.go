@@ -35,6 +35,10 @@ type State struct {
 	// on offline), as its number from 1: a folder opened offline goes back to it.
 	Projects map[string]int `json:"projects,omitempty"`
 
+	// Buses is the rule that sends a pad to a bus by its name, as the Config view sets it; nil is
+	// the default.
+	Buses *app.BusRule `json:"buses,omitempty"`
+
 	// ScanDir is the folder the last scan for where the samples came from looked in.
 	ScanDir string `json:"scanDir,omitempty"`
 

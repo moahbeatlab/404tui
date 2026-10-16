@@ -208,3 +208,24 @@ func TestIndexOfAllHoldsTheFilesOfEverySource(t *testing.T) {
 		t.Error("a missing index has files")
 	}
 }
+
+func TestTheBusRuleSendsDrumsToOneBusAndTheRestToAnother(t *testing.T) {
+	r := app.DefaultBusRule()
+	drums := []string{"Kick_125_Cm", "14_Kick_125_G_Klezmer", "09_OHat_125_G", "10_Perc1_125", "HTHF_125_Percussion_Loop", "12_Clap_125", "DrumLoop_124", "snare 03", "hihat_closed", "TomHigh"}
+	others := []string{"01_Bass1_125_G", "02_Synth_125", "06_Lead_125", "07_FX1_125", "ptn I4 mix", "vocal chop", "Pad_warm", "pastrami"}
+	for _, n := range drums {
+		if !r.IsDrum(n) || r.BusFor(n) != 2 {
+			t.Errorf("%q is not a drum pad going to BUS 2", n)
+		}
+	}
+	for _, n := range others {
+		if r.IsDrum(n) || r.BusFor(n) != 1 {
+			t.Errorf("%q is a drum pad", n)
+		}
+	}
+	// The words are the user's: a custom list and other buses.
+	r = app.BusRule{DrumWords: []string{"boom"}, DrumBus: 1, OtherBus: 0}
+	if r.BusFor("boom_01") != 1 || r.BusFor("kick") != 0 {
+		t.Error("the custom words and buses are not used")
+	}
+}

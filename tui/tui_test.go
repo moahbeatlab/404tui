@@ -5295,3 +5295,83 @@ func TestAGrooveTemplateIsAskedLengthToo(t *testing.T) {
 		t.Fatalf("the lane dialog is not for 4 bars: %+v", s.m().laneMap)
 	}
 }
+
+func TestBusScanSetsDrumsToOneBusAndTheRestToAnother(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	// A pad that is not a drum: assigned with a name no drum word is in.
+	s.sim.AddFile("SD:IMPORT/warm pad.wav", wav(4800))
+	if _, err := app.Assign(m.unit, m.unit, pad(t, "A5"), "SD:IMPORT/warm pad.wav"); err != nil {
+		t.Fatal(err)
+	}
+	s.press("r", "B")
+	s.shows("Set the bus of", "drum pads → BUS 2", "others → BUS 1", "y apply")
+	s.press("y")
+	s.shows("set by their names")
+	bank := s.m().snap.Bank(0)
+	if bank[0].Params["bus-fx"] != 2 || bank[1].Params["bus-fx"] != 2 || bank[2].Params["bus-fx"] != 2 {
+		t.Errorf("kick, snare, hat on buses %d %d %d, want 2", bank[0].Params["bus-fx"], bank[1].Params["bus-fx"], bank[2].Params["bus-fx"])
+	}
+	if bank[4].Params["bus-fx"] != 1 {
+		t.Errorf("the pad on BUS %d, want 1", bank[4].Params["bus-fx"])
+	}
+	// Run again: everything is right already, so nothing is asked.
+	s.press("B")
+	s.shows("on the bus its name says")
+	if s.m().prompt != nil {
+		t.Error("a scan with nothing to change asked a question")
+	}
+}
+
+func TestConfigSetsTheDrumWordsAndBusesAndAssignFollowsThem(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("6")
+	s.shows("Buses by pad name", "Drum words", "What it makes of bank A")
+	// h l on the drum bus row: 2 → 0 (none) → 1.
+	s.press("j", "l")
+	if got := s.m().busRule().DrumBus; got != 0 {
+		t.Errorf("drum bus %d after l from 2, want 0", got)
+	}
+	s.press("l")
+	if got := s.m().busRule().DrumBus; got != 1 {
+		t.Errorf("drum bus %d, want 1", got)
+	}
+	// The words are edited as text.
+	s.press("k", "enter")
+	s.shows("Drum words")
+	s.press("ctrl+u")
+	s.typeText("boom, bap")
+	s.press("enter")
+	if got := s.m().busRule().DrumWords; fmt.Sprint(got) != "[boom bap]" {
+		t.Errorf("drum words %v", got)
+	}
+	// A file assigned afterwards goes to the bus the rule says.
+	s.sim.AddFile("SD:IMPORT/boom hit.wav", wav(4800))
+	s.sim.AddFile("SD:IMPORT/warm pad.wav", wav(4800))
+	for pd, file := range map[string]string{"A5": "SD:IMPORT/boom hit.wav", "A6": "SD:IMPORT/warm pad.wav"} {
+		_, cmd := s.m().assign([]string{file}, pad(t, pd))
+		s.send(cmd())
+	}
+	s.press("r")
+	bank := s.m().snap.Bank(0)
+	// boom is a drum word now, and the drum bus is BUS 1; warm pad goes to the other bus, BUS 1 by default.
+	if got := bank[4].Params["bus-fx"]; got != 1 {
+		t.Errorf("the boom pad is on bus %d, want the drum bus 1", got)
+	}
+	s.press("6", "j", "j", "h", "h")
+	if got := s.m().busRule().OtherBus; got != 2 {
+		t.Fatalf("other bus %d, want 2", got)
+	}
+	_, cmd := s.m().assign([]string{"SD:IMPORT/warm pad.wav"}, pad(t, "A7"))
+	s.send(cmd())
+	s.press("r")
+	if got := s.m().snap.Bank(0)[6].Params["bus-fx"]; got != 2 {
+		t.Errorf("a pad that is not a drum is on bus %d, want the other bus 2", got)
+	}
+	// Reset brings the defaults back.
+	s.press("6", "j", "j", "j", "j", "enter")
+	if r := s.m().busRule(); r.DrumBus != 2 || r.OtherBus != 1 || len(r.DrumWords) < 10 {
+		t.Errorf("after the reset: %+v", r)
+	}
+}

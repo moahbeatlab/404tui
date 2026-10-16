@@ -122,7 +122,10 @@ var commands = []command{
 	{"2", "Go to Files", nil},
 	{"3", "Go to Projects", nil},
 	{"4", "Go to the Slicer; a there chooses a pad or a new sample to slice", nil},
-	{"5", "Go to the Sequencer; a there chooses a pattern to edit (or a sample for a pad)", nil},
+	{"5", "Go to the Sequencer; a there chooses a pattern to edit", nil},
+	{"6", "Go to Config: the drum words and buses (inside the slicer 6 is an envelope key: use the tab)", nil},
+	{"B", "Set the bus of the bank's pads (the marked ones; p: the whole project) by their names, as Config says", []int{secPads}},
+	{"j", "Config: the next setting; k the one before; h l change it, Enter edits the drum words", []int{secConfig}},
 	{"U", "Working offline: leave offline mode and connect to the unit once it is plugged in", nil},
 	{"ctrl+t", "Next colour theme", nil},
 	{"r", "Refresh from the unit", nil},
@@ -321,7 +324,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "esc":
 		return m.escape()
-	case "1", "2", "3", "4", "5":
+	case "1", "2", "3", "4", "5", "6":
 		return m.goTo(railSections[int(name[0]-'1')])
 	case "shift+tab", "tab":
 		switch m.section {
@@ -388,6 +391,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.slicerTabKey(name)
 	case secSequencer:
 		return m.sequencerTabKey(name)
+	case secConfig:
+		return m.configKey(name)
 	case secFiles:
 		return m.filesKey(name)
 	}
@@ -631,6 +636,8 @@ func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 		return m.scanOrigins()
 	case "W":
 		return m.scanFolderUses()
+	case "B":
+		return m.askBusScan(false)
 	case "m":
 		return m.toggleMute(row.Pad)
 	case "M":
@@ -2262,7 +2269,7 @@ func (m Model) startAssign(node app.Node) (tea.Model, tea.Cmd) {
 
 // assign carries out an assign: one file onto a pad, or several onto the free pads from it on.
 func (m Model) assign(files []string, start proto.PadIndex) (tea.Model, tea.Cmd) {
-	unit, snap := m.unit, m.snap
+	unit, snap, rule := m.unit, m.snap, m.busRule()
 	m.fileMarks = map[string]bool{}
 	m.busy = fmt.Sprintf("assigning %d file(s)", len(files))
 	if len(files) == 1 {
@@ -2275,6 +2282,9 @@ func (m Model) assign(files []string, start proto.PadIndex) (tea.Model, tea.Cmd)
 			name, err := app.Assign(unit, unit, start, files[0])
 			if err != nil {
 				return doneMsg{message: err.Error()}
+			}
+			if rule.OnAssign {
+				_ = app.SetPadBus(unit, start, rule.BusFor(name))
 			}
 			message := fmt.Sprintf("%s: assigned to %s as %q, from %s", app.Base(files[0]), start, name, display(app.Dir(files[0])))
 			prog.logLine(app.Base(files[0]) + " assigned to " + start.String())
@@ -2343,6 +2353,13 @@ func (m Model) assign(files []string, start proto.PadIndex) (tea.Model, tea.Cmd)
 				prog.logLine(app.Base(p.File) + " assigned to " + p.Pad.String())
 			}
 		})
+		if rule.OnAssign {
+			for _, p := range placed {
+				if p.Err == nil && !p.Blank {
+					_ = app.SetPadBus(unit, p.Pad, rule.BusFor(app.PadName(p.File)))
+				}
+			}
+		}
 		tempos := app.ApplyTempos(unit, placed, plan, func(done int, what string) {
 			prog.step(len(pads)+done, what)
 			prog.logLine(what)
@@ -2857,6 +2874,17 @@ func (m Model) promptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if p.kind == promptBusScan {
+		switch name {
+		case "y", "enter":
+			return m.apply()
+		case "p":
+			return m.askBusScan(!p.scanAll)
+		case "n", "q":
+			m.prompt = nil
+		}
+		return m, nil
+	}
 	if p.kind == promptDelete || p.kind == promptConfirmRestore || p.kind == promptDeleteFiles || p.kind == promptEraseProject || p.kind == promptDeletePatterns {
 		switch name {
 		case "y", "enter":
@@ -2972,7 +3000,7 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			return doneMsg{message: fmt.Sprintf("project %d restored from %s", plan.Project+1, plan.Dir), reload: true}
 		})
 	}
-	if p.kind != promptDelete && p.kind != promptFindFolder && text == "" {
+	if p.kind != promptDelete && p.kind != promptFindFolder && p.kind != promptDrumWords && p.kind != promptBusScan && text == "" {
 		m.message = "nothing typed"
 		return m, nil
 	}
@@ -3044,6 +3072,28 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			}
 			return doneMsg{message: message, reload: true}
 		})
+	case promptBusScan:
+		buses := p.buses
+		m.busy = "setting the buses"
+		return m, m.edit(func() tea.Msg {
+			failed := 0
+			for pad, bus := range buses {
+				if err := app.SetPadBus(unit, pad, bus); err != nil {
+					failed++
+				}
+			}
+			message := fmt.Sprintf("the bus of %s set by their names", plural(len(buses)-failed, "pad"))
+			if failed > 0 {
+				message += fmt.Sprintf(", %d failed", failed)
+			}
+			return doneMsg{message: message, reload: true}
+		})
+	case promptDrumWords:
+		rule := m.busRule()
+		rule.DrumWords = splitWords(text)
+		m.setBusRule(rule)
+		m.message = fmt.Sprintf("%s kept as drum words", plural(len(rule.DrumWords), "word"))
+		return m, nil
 	case promptDelete:
 		m.marked = map[int]bool{}
 		m.busy = "deleting"

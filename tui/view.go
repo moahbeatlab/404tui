@@ -335,6 +335,8 @@ func (m Model) body(g geom) string {
 		return m.filesBody(g)
 	case secSlicer:
 		return m.slicerTabBody(g)
+	case secConfig:
+		return m.configBody(g)
 	case secSequencer:
 		return m.sequencerTabBody(g)
 	}
@@ -459,7 +461,7 @@ func (m Model) statusBar() string {
 	// in the Details panel.
 	switch m.section {
 	case secPads:
-		chips = []string{chip("Enter", "preview on "+map[bool]string{true: "computer", false: "unit"}[m.previewLocal]), chip("a", "assign"), chip("v", "mark"), chip("t", "set"), chip("c", "copy"), chip("d", "delete"), chip("Tab", "patterns"), chip("[ ]", "bank")}
+		chips = []string{chip("Enter", "preview on "+map[bool]string{true: "computer", false: "unit"}[m.previewLocal]), chip("a", "assign"), chip("v", "mark"), chip("t", "set"), chip("c", "copy"), chip("d", "delete"), chip("B", "buses by name"), chip("Tab", "patterns"), chip("[ ]", "bank")}
 	case secPatterns:
 		if m.seqTab {
 			chips = []string{chip("a", "other pattern"), chip("P", "play"), chip("Esc", "close")}
@@ -476,6 +478,8 @@ func (m Model) statusBar() string {
 		chips = []string{chip("a", "choose a pad or a sample")}
 	case secSequencer:
 		chips = []string{chip("a", "choose a pattern"), chip("N", "new pattern")}
+	case secConfig:
+		chips = []string{chip("j k", "move"), chip("h l", "change"), chip("Enter", "edit"), chip("Space", "toggle")}
 	case secProjects:
 		chips = []string{chip("Enter", "select"), chip("n", "rename"), chip("e", "export"), chip("R", "restore"), chip("X", "erase")}
 	}
@@ -1973,6 +1977,10 @@ func (m Model) promptBox() string {
 				st.warn.Render("Every sample, pattern and setting in it is lost, and it becomes empty.") + "\n" +
 				st.dim.Render("Export it first (e) if you may want it back.") +
 				"\n\n" + st.dim.Render("y erase   n/Esc keep"))
+	case promptBusScan:
+		return m.busScanBox(p)
+	case promptDrumWords:
+		title, hint = "Drum words", "separated by commas or spaces; a pad whose name holds one goes to the drum bus  ·  "
 	case promptDelete:
 		names := make([]string, len(p.pads))
 		for i, pad := range p.pads {

@@ -26,6 +26,18 @@ screen. A History panel on the right keeps what happened, with times.
 
 `?` anywhere lists, searchable, what can be done with the view or dialog in front (the same list as `:` for a view; for the slicer, the pattern editor and the file dialogs, their own keys; Enter sends a single key); `1`–`5` always change the view; the slicer and the Sequencer's pattern stay as they were when you come back (Esc closes them). In the Slicer tab, `a` chooses what to slice: `p` a pad (a list of the pads, over the tab) or `f` a new sample from the file view (`Z` slices it). The slicer opens over the tab, with the tab lit. In the Sequencer tab, `a` lists the slots of a bank with a preview of the one in front (`[ ]` for another bank; Enter opens it in the editor, Esc closes the editor); `a` in the editor chooses another pattern, and `N` makes a new one.
 
+### Buses by pad name
+
+Drum pads go to one bus and everything else to another, decided by the pad's name. **Config** (`6`)
+holds the rule: the drum words (kick, snare, hat, perc, … editable with Enter), the bus of a pad
+with a drum word (BUS 2 by default), the bus of every other pad (BUS 1 by default), and whether the
+bus is set when a file is assigned (it is). A word matches a word of the pad's name (`Kick_125`,
+`OHat`, `DrumLoop`, `14_Perc1`), and a longer word also its start. The view shows what the rule
+makes of the bank in front. For pads that are on the unit already, `B` in Pads looks at the bank
+(or the marked pads) and asks before it sets the bus of those that are not on the one their name
+says; `p` there widens it to the whole project. The rule is kept with the rest of what 404tui
+remembers (`state.json` in the user's config folder, under `404tui`).
+
 ### Connecting
 
 The UI starts even with no unit, shows a waiting screen, connects by itself when you plug

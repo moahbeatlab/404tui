@@ -32,10 +32,11 @@ const (
 	secProjects
 	secSlicer
 	secSequencer
+	secConfig
 	secCount
 )
 
-var sectionNames = [secCount]string{"Pads", "Patterns", "Files", "Projects", "Slicer", "Sequencer"}
+var sectionNames = [secCount]string{"Pads", "Patterns", "Files", "Projects", "Slicer", "Sequencer", "Config"}
 
 // previewStopAfter is how long a preview plays before it is stopped; tests shorten it.
 var previewStopAfter = func(d time.Duration) time.Duration { return d }
@@ -76,6 +77,10 @@ const (
 	promptEraseProject
 	// promptDeletePatterns confirms deleting the pattern slots in prompt.pads.
 	promptDeletePatterns
+	// promptBusScan confirms setting the buses of the pads in prompt.buses; promptDrumWords asks
+	// for the list of drum words.
+	promptBusScan
+	promptDrumWords
 	// promptDeleteFiles confirms deleting prompt.paths from the card; promptMkdir names a new
 	// folder in prompt.path.
 	promptDeleteFiles
@@ -116,6 +121,10 @@ type prompt struct {
 	field  int
 	// choice is the folder picked from the matches while one is looked for (f).
 	choice int
+	// buses are the pads a bus scan would change, each with the bus it would get; scanAll is
+	// set when it looks at the whole project, not the bank (or the marked pads) in front.
+	buses   map[proto.PadIndex]int32
+	scanAll bool
 }
 
 // picker is the pad chooser a file is assigned through, or the bank chooser of a
@@ -264,6 +273,8 @@ type Model struct {
 	// seqTab is set while a pattern that the Sequencer tab opened is in front: its tab is lit,
 	// and leaving the pattern goes back to that tab.
 	seqTab bool
+	// cfgAt is the row of the Config view the cursor is on.
+	cfgAt int
 	// seqSlot is the pattern the Sequencer tab had open when it was left; it is read again when
 	// the tab is back.
 	seqSlot *proto.PadIndex
