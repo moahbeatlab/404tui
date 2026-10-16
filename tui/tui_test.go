@@ -6377,10 +6377,16 @@ func TestTheEffectOfABusIsLearnedFromTheUnitAndShownWithItsKnobs(t *testing.T) {
 	}
 	// Knobs of BUS 1's effect: the next controllers moved, shown with a fader and a dial each.
 	s.press("k")
-	s.shows("LEARNING A KNOB FOR BUS 1")
+	s.shows("LEARNING THE KNOBS OF BUS 1")
 	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 16, Data2: 80})
-	s.press("k")
+	if s.m().fxKnob != 1 {
+		t.Error("learning stopped after the first knob")
+	}
 	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 17, Data2: 20})
+	s.press("esc") // two of three found: Esc stops
+	if s.m().fxKnob != 0 {
+		t.Error("esc did not stop learning knobs")
+	}
 	if got := s.m().mem.FxKnobs[0]; len(got) != 2 || got[0] != "ch 1 cc 16" || got[1] != "ch 1 cc 17" {
 		t.Fatalf("knobs %v", got)
 	}

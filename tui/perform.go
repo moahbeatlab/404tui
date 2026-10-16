@@ -53,7 +53,11 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 			bus = 2
 		}
 		m.fxKnob = bus
-		m.message = fmt.Sprintf("BUS %d: move a knob or fader on the unit; Esc cancels", bus)
+		if len(m.mem.FxKnobs[bus-1]) >= 3 {
+			// Three are known already: learn them again, from C1.
+			m.mem.FxKnobs[bus-1] = nil
+		}
+		m.message = fmt.Sprintf("BUS %d: turn C%d on the unit, then C%d and C%d; Esc stops", bus, len(m.mem.FxKnobs[bus-1])+1, len(m.mem.FxKnobs[bus-1])+2, len(m.mem.FxKnobs[bus-1])+3)
 	case "backspace":
 		switch {
 		case m.fxLearn != 0:
@@ -684,8 +688,14 @@ func (m Model) fxEvent(e midiin.Event) Model {
 		}
 		// A copy, so the saved state before this one is not changed under it.
 		m.mem.FxKnobs[m.fxKnob-1] = append(slices.Clone(knobs), text)
-		m.message = fmt.Sprintf("BUS %d: %s is a knob of its effect", m.fxKnob, text)
-		m.fxKnob = 0
+		got := len(m.mem.FxKnobs[m.fxKnob-1])
+		if got >= 3 {
+			m.message = fmt.Sprintf("BUS %d: %s is C%d, all three knobs found", m.fxKnob, text, got)
+			m.fxKnob = 0
+		} else {
+			// Still listening: the next knob you turn is the next one.
+			m.message = fmt.Sprintf("BUS %d: %s is C%d, turn C%d (Esc stops)", m.fxKnob, text, got, got+1)
+		}
 		return m
 	}
 	for bus := 0; bus < 2; bus++ {
@@ -720,7 +730,7 @@ func (m Model) perfFxHead(width int) string {
 		return lipgloss.NewStyle().Foreground(st.th.warn).Bold(true).Render(fmt.Sprintf("FX  LEARNING BUS %d: switch its effect on or off on the unit   Esc cancels   Backspace forgets it", m.fxLearn))
 	}
 	if m.fxKnob != 0 {
-		return lipgloss.NewStyle().Foreground(st.th.warn).Bold(true).Render(fmt.Sprintf("FX  LEARNING A KNOB FOR BUS %d: move it on the unit (three at most)   Esc cancels   Backspace forgets its knobs", m.fxKnob))
+		return lipgloss.NewStyle().Foreground(st.th.warn).Bold(true).Render(fmt.Sprintf("FX  LEARNING THE KNOBS OF BUS %d: turn C1, then C2, then C3 on the unit   Esc stops   Backspace forgets them", m.fxKnob))
 	}
 	text := st.dim.Render("FX  ")
 	for bus := int32(1); bus <= 2; bus++ {
