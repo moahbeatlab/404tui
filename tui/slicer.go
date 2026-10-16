@@ -1673,6 +1673,8 @@ type cellStyle struct {
 	selected, playing, end bool
 	// marked is set for a slice marked with s: it has the same ground as the one in front.
 	marked bool
+	// ground gives an edge of the waveform the ground of its slice, so no black shows beside it.
+	ground bool
 }
 
 // edgeInfo is a slice's edge at a dot of the waveform: slice is its number, 0 for none. Where
@@ -1699,13 +1701,17 @@ func (m Model) slicerStyle(c cellStyle) lipgloss.Style {
 	case cellSource:
 		return lipgloss.NewStyle().Foreground(st.th.text).Faint(true)
 	case cellEdge:
-		if c.selected && c.end {
-			return lipgloss.NewStyle().Foreground(st.th.warn).Bold(true)
+		edge := lipgloss.NewStyle().Foreground(st.th.text)
+		switch {
+		case c.selected && c.end:
+			edge = lipgloss.NewStyle().Foreground(st.th.warn).Bold(true)
+		case c.selected:
+			edge = lipgloss.NewStyle().Foreground(st.th.hot).Bold(true)
 		}
-		if c.selected {
-			return lipgloss.NewStyle().Foreground(st.th.hot).Bold(true)
+		if c.ground && (c.selected || c.marked) {
+			edge = edge.Background(st.th.tile)
 		}
-		return lipgloss.NewStyle().Foreground(st.th.text)
+		return edge
 	}
 	if c.slice < 0 {
 		return lipgloss.NewStyle().Foreground(st.th.faint)
@@ -1863,7 +1869,8 @@ func (m Model) slicerBox() string {
 			case edge[c*2].slice > 0 || edge[c*2+1].slice > 0:
 				e := edge[c*2]
 				e.put(edge[c*2+1], s.at)
-				styles[c] = cellStyle{kind: cellEdge, slice: e.slice - 1, selected: e.slice-1 == s.at, end: e.end}
+				styles[c] = cellStyle{kind: cellEdge, slice: e.slice - 1, selected: e.slice-1 == s.at, end: e.end,
+					marked: s.marks[e.slice-1], ground: true}
 				// A hairline, not dots: it reads as a cut whatever the waveform does beside it. A
 				// start sits at the left of its cell, an end at the right.
 				text[c] = '▏'

@@ -1551,3 +1551,25 @@ func TestMarkedSlicesHaveTheGroundOfTheSliceInFront(t *testing.T) {
 		t.Errorf("grounds: plain %v, marked %v, in front %v", plain.GetBackground(), marked.GetBackground(), front.GetBackground())
 	}
 }
+
+func TestTheEdgesOfAMarkedOrSelectedSliceHaveItsGround(t *testing.T) {
+	s := slicerOpen(t)
+	m := s.m()
+	tile := m.slicerStyle(cellStyle{kind: cellSlice, slice: 1, selected: true}).GetBackground()
+	for _, c := range []cellStyle{
+		{kind: cellEdge, slice: 1, selected: true, ground: true},
+		{kind: cellEdge, slice: 1, selected: true, end: true, ground: true},
+		{kind: cellEdge, slice: 2, marked: true, ground: true},
+	} {
+		if got := m.slicerStyle(c).GetBackground(); got != tile {
+			t.Errorf("%+v has ground %v, want %v", c, got, tile)
+		}
+	}
+	if got := m.slicerStyle(cellStyle{kind: cellEdge, slice: 3, ground: true}).GetBackground(); got == tile {
+		t.Error("an edge of a plain slice has the ground")
+	}
+	// The number above the waveform keeps no ground.
+	if got := m.slicerStyle(cellStyle{kind: cellEdge, slice: 1, selected: true}).GetBackground(); got == tile {
+		t.Error("the slice number has the ground")
+	}
+}
