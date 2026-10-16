@@ -136,72 +136,38 @@ func (m Model) perfBody(g geom) string {
 	return m.perfPatternBody(g)
 }
 
-// perfTile is one pad of the bank as a big tile: its number and length in bars, the name in block
-// letters, and a bar under it that fills while it sounds. The pad the unit has selected is in the
-// accent colour, the one that sounds in the hot one.
+// perfTile is a pad of the Pads view, only bigger: the same tile (number, length in bars, bus badge,
+// the unit's selected pad, the settings and the level bar) with the name in block letters between
+// them. A pad hit on the unit lights it by how hard it was hit and fades.
 func (m Model) perfTile(row app.PadRow, w, h int) []string {
-	st := m.st
-	selected := m.hasSelected && m.selected == row.Pad
-	glow := m.mon.glow(int(row.Pad.Bank()), int(row.Pad.Pad()), time.Now())
-	sounding := m.playing && m.playingPad == row.Pad
-	bg, fg := st.th.tile, st.th.text
-	// The stripe on the left edge: the pad's bus, or the accent when it is the selected pad.
-	edge := bg
-	if bus := row.Params["bus-fx"]; bus == 1 || bus == 2 {
-		edge, _ = st.th.busColour(bus)
+	ts := tileState{
+		empty:    !row.HasSample,
+		bus:      row.Params["bus-fx"],
+		flags:    padFlags(row),
+		muted:    m.muted[row.Pad],
+		solo:     m.soloed[row.Pad],
+		cursor:   m.hasSelected && m.selected == row.Pad,
+		playing:  m.playing && m.playingPad == row.Pad,
+		selected: m.hasSelected && m.selected == row.Pad,
+		bars:     m.padBars(row, w),
+		glow:     m.mon.glow(int(row.Pad.Bank()), int(row.Pad.Pad()), time.Now()),
 	}
-	switch {
-	case !row.HasSample:
-		bg, fg, edge = st.th.tileEmpty, st.th.faint, st.th.tileEmpty
-	case sounding:
-		bg, fg, edge = st.th.hot, st.th.cursorFg, st.th.cursorFg
-	case glow > 0:
-		// A hit lights the tile by how hard it was hit and fades as it dies away.
-		bg = blend(st.th.tile, st.th.hot, glow)
-		fg, edge = st.th.text, st.th.hot
-		if glow > 0.45 {
-			fg = st.th.cursorFg
-		}
-	case selected:
-		bg, fg, edge = blend(st.th.tile, st.th.accent, 0.3), st.th.accent, st.th.accent
+	// The tile as Pads draws it at four rows: number, name, settings, level.
+	parts := strings.Split(m.tile(w, 4, fmt.Sprint(row.Pad.Pad()+1), row.Name, row.Level, ts), "\n")
+	if h <= 4 || ts.empty && h <= 4 {
+		return parts
 	}
-	inner := m.perfTileInner(row, w-1, h, bg, fg, sounding, glow)
-	stripe := lipgloss.NewStyle().Foreground(edge).Background(bg).Render("▌")
-	for i := range inner {
-		inner[i] = stripe + inner[i]
-	}
-	return inner
-}
-
-// perfTileInner draws a tile but for its stripe.
-func (m Model) perfTileInner(row app.PadRow, w, h int, bg, fg lipgloss.Color, sounding bool, glow float64) []string {
-	st := m.st
+	bg, fg := m.tileColours(ts)
 	style := lipgloss.NewStyle().Background(bg).Foreground(fg).Bold(true)
 	line := func(text string) string {
-		pad := max(w-ansi.StringWidth(text), 0)
-		return style.Render(text + strings.Repeat(" ", pad))
+		return style.Render(text + strings.Repeat(" ", max(w-ansi.StringWidth(text), 0)))
 	}
-	num := fmt.Sprint(row.Pad.Pad() + 1)
-	head := " " + num
-	if row.HasSample {
-		if bars := m.padBars(row, 99); bars != "" {
-			head += strings.Repeat(" ", max(w-len(head)-len(bars)-2, 1)) + bars
-		}
-		if bus := row.Params["bus-fx"]; bus == 1 || bus == 2 {
-			colour, _ := st.th.busColour(bus)
-			if len(head) < w-2 {
-				head = lipgloss.NewStyle().Background(bg).Foreground(colour).Bold(true).Render(busBadge(bus)) + style.Render(" ") + style.Render(strings.TrimPrefix(head, " "))
-			}
-		}
+	body := h - 3
+	mid := make([]string, body)
+	for i := range mid {
+		mid[i] = line("")
 	}
-	out := []string{line(head)}
-	body := h - 2
-	switch {
-	case !row.HasSample:
-		for i := 0; i < body; i++ {
-			out = append(out, line(""))
-		}
-	case body >= 3:
+	if !ts.empty && body >= 3 {
 		name := strings.TrimSpace(row.Name)
 		scale := 1
 		if bigWidth(name, 2) <= w-2 {
@@ -211,32 +177,16 @@ func (m Model) perfTileInner(row app.PadRow, w, h int, bg, fg lipgloss.Color, so
 			name = string([]rune(name)[:max(maxChars, 1)])
 		}
 		bt := bigText(name, scale)
-		// The name sits in the middle of the tile.
 		above := (body - 3) / 2
-		for i := 0; i < above; i++ {
-			out = append(out, line(""))
-		}
 		for i := 0; i < 3; i++ {
-			out = append(out, line(" "+bt[i]))
+			mid[above+i] = line(" " + bt[i])
 		}
-		for i := above + 3; i < body; i++ {
-			out = append(out, line(""))
-		}
-	default:
-		out = append(out, line(" "+ansi.Truncate(row.Name, w-2, "…")))
+	} else if !ts.empty {
+		mid[0] = line(" " + ansi.Truncate(row.Name, w-2, "…"))
 	}
-	// The bar under the name: how far the sounding sample has gone.
-	bar := line("")
-	if glow > 0 && !sounding {
-		// How hard the pad was hit, fading with the glow.
-		bar = style.Render(" " + levelBar(w-2, int(glow*100), 100) + " ")
-	}
-	if sounding {
-		if f, ok := m.facts[factKey{row.Pad, row.Size, row.Name}]; ok && f.err == nil && f.facts.Frames > 0 {
-			bar = style.Render(" " + levelBar(w-2, int(min(m.playPos, f.facts.Frames)), int(f.facts.Frames)) + " ")
-		}
-	}
-	return append(out, bar)
+	out := []string{parts[0]}
+	out = append(out, mid...)
+	return append(out, parts[2], parts[3])
 }
 
 // perfBankBody is the Perform view as it opens: the 16 pads of the bank the unit is on, as big as the
@@ -254,15 +204,14 @@ func (m Model) perfBankBody(g geom) string {
 	if m.playing {
 		head += st.dim.Render("   ▶ " + m.playingPad.String() + " " + m.snap.Pads[m.playingPad.Index()].Name)
 	}
-	if bars := 0; true {
-		if d, _ := m.perfTracks(m.perfNow); d != nil {
-			bars = d.Bars()
-		}
-		if clock := m.clockText(bars); clock != "" {
-			head += "   " + lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render("♩ "+clock)
-		}
+	bars := 0
+	if d, _ := m.perfTracks(m.perfNow); d != nil {
+		bars = d.Bars()
 	}
-	top = append(top, head, m.perfCue(width))
+	if clock := m.clockText(bars); clock != "" {
+		head += "   " + lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render("♩ "+clock)
+	}
+	top = append(top, head, m.perfTicker(bars), m.perfCue(width))
 	// Patterns of the bank, under the pads.
 	var bottom []string
 	if rows := m.patterns[bank]; rows != nil {
@@ -283,30 +232,15 @@ func (m Model) perfBankBody(g geom) string {
 	// The tiles take what is left.
 	avail := g.bodyH - 2 - len(top) - len(bottom) - 2 - 3
 	tileH := max(avail/4, 3)
-	tileW := max((width-3*2)/4, 10)
+	tileW := max((width-3)/4, 10)
 	rows := m.snap.Bank(bank)
 	var lines []string
 	lines = append(lines, top...)
 	lines = append(lines, "")
-	for r := 0; r < 4; r++ {
-		tiles := make([][]string, 4)
-		for c := 0; c < 4; c++ {
-			tiles[c] = m.perfTile(rows[r*4+c], tileW, tileH)
-		}
-		for l := 0; l < tileH; l++ {
-			var b strings.Builder
-			for c := 0; c < 4; c++ {
-				b.WriteString(tiles[c][l])
-				if c < 3 {
-					b.WriteString("  ")
-				}
-			}
-			lines = append(lines, b.String())
-		}
-		if r < 3 {
-			lines = append(lines, "")
-		}
-	}
+	// The grid of the Pads view, with the same gaps, only bigger.
+	lines = append(lines, m.grid(g, func(p int) string {
+		return strings.Join(m.perfTile(rows[p], tileW, tileH), "\n")
+	}))
 	lines = append(lines, "")
 	lines = append(lines, bottom...)
 	return m.box("Perform", strings.Join(lines, "\n"), g.bodyW+g.bodyX-1, g.bodyH, true)
@@ -392,6 +326,7 @@ func (m Model) perfPatternBody(g geom) string {
 	if rec := m.perfRecLine(); rec != "" {
 		lines = append(lines, rec, "")
 	}
+	lines = append(lines, m.perfTicker(nowBars(nowD)), "")
 	lines = append(lines, m.perfHead("NOW", m.perfNow, nowD, now, st.accent), "")
 	if m.perfNow == nil {
 		lines = append(lines, st.dim.Render("a  chooses the pattern that is playing"), st.dim.Render("n  chooses the one that comes next"))
@@ -575,4 +510,54 @@ func (m Model) perfControls(now time.Time, width int) []string {
 		out[2] += st.dim.Render(fmt.Sprintf("+%d more", len(all)-len(shown)))
 	}
 	return []string{st.dim.Render("CONTROLS ") + out[0], strings.Repeat(" ", 9) + out[1], strings.Repeat(" ", 9) + out[2]}
+}
+
+// nowBars is the length in bars of a pattern, 0 when it is not known.
+func nowBars(d *app.PatternDetail) int {
+	if d == nil {
+		return 0
+	}
+	return d.Bars()
+}
+
+// perfTicker is the line that ticks with the MIDI clock: the sixteen steps of the bar fill up as the
+// bar goes by, the one that is now is lit, and the first of each beat is marked. With the length of
+// the pattern that plays it also shows where the loop is. Every clock tick redraws the screen, so it
+// keeps time with the unit.
+func (m Model) perfTicker(loopBars int) string {
+	st := m.st
+	c := m.clock
+	if c == nil || time.Since(c.at) > 2*time.Second {
+		return st.dim.Render("TICK  no clock: the unit sends it when it plays (its MIDI sync setting must send clock)")
+	}
+	pos := max(c.ticks-1, 0)
+	step, beat := pos/6%16, pos/24%4
+	hotStyle := lipgloss.NewStyle().Foreground(st.th.hot).Bold(true)
+	var b strings.Builder
+	b.WriteString(st.dim.Render("TICK  "))
+	for i := 0; i < 16; i++ {
+		if i > 0 && i%4 == 0 {
+			b.WriteString(" ")
+		}
+		switch {
+		case i == step && c.running:
+			b.WriteString(hotStyle.Render("██"))
+		case i < step && c.running:
+			b.WriteString(st.good.Render("▐▌"))
+		case i%4 == 0:
+			b.WriteString(st.dim.Render("▐▌"))
+		default:
+			b.WriteString(st.faint.Render("▐▌"))
+		}
+	}
+	text := fmt.Sprintf("   BEAT %d", beat+1)
+	if loopBars > 0 {
+		inLoop := pos / 96 % loopBars
+		frac := (pos % (96 * loopBars)) * 100 / (96 * loopBars)
+		text += fmt.Sprintf("   LOOP BAR %d/%d ", inLoop+1, loopBars)
+		b.WriteString(st.text.Render(text) + st.accent.Render(levelBar(16, frac, 100)))
+		return b.String()
+	}
+	b.WriteString(st.text.Render(text))
+	return b.String()
 }

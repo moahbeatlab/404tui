@@ -601,23 +601,39 @@ type tileState struct {
 	// bars is how long the pad's sample is in bars at the bank's tempo, when it is a loop of
 	// them; empty otherwise.
 	bars string
+	// glow, from 0 to 1, lights the tile as a pad hit on the unit does: by how hard it was hit,
+	// fading as it dies away.
+	glow float64
+}
+
+// tileColours are the background and text colours of a tile for its state.
+func (m Model) tileColours(ts tileState) (bg, fg lipgloss.Color) {
+	th := m.st.th
+	bg, fg = th.tile, th.text
+	switch {
+	case ts.cursor:
+		bg, fg = th.cursorBg, th.cursorFg
+	case ts.playing:
+		bg, fg = th.hot, th.cursorFg
+	case ts.glow > 0:
+		bg = blend(th.tile, th.hot, ts.glow)
+		if ts.glow > 0.5 {
+			fg = th.cursorFg
+		}
+	case ts.marked:
+		bg = th.markedBg
+	case ts.empty:
+		bg, fg = th.tileEmpty, th.faint
+	}
+	return bg, fg
 }
 
 // tile draws one pad of the grid: its number, name and level, on a background that says
 // what state it is in.
 func (m Model) tile(w, h int, num, name string, level int32, ts tileState) string {
 	th := m.st.th
-	bg, fg := th.tile, th.text
-	switch {
-	case ts.cursor:
-		bg, fg = th.cursorBg, th.cursorFg
-	case ts.playing:
-		bg, fg = th.hot, th.cursorFg
-	case ts.marked:
-		bg = th.markedBg
-	case ts.empty:
-		bg, fg = th.tileEmpty, th.faint
-	}
+	bg, fg := m.tileColours(ts)
+	bright := ts.cursor || ts.playing || ts.glow > 0.5
 	style := lipgloss.NewStyle().Background(bg).Foreground(fg).Width(w)
 	bold := style.Bold(true)
 
@@ -640,7 +656,7 @@ func (m Model) tile(w, h int, num, name string, level int32, ts tileState) strin
 	busColour, onBus := th.busColour(ts.bus)
 	if onBus && !ts.empty {
 		busStyle = pieceBold.Foreground(busColour)
-		if ts.cursor || ts.playing {
+		if bright {
 			// On the bright tiles the colour would be lost: the badge keeps the dark text.
 			busStyle = pieceBold
 		}
@@ -674,7 +690,7 @@ func (m Model) tile(w, h int, num, name string, level int32, ts tileState) strin
 	// A setting that is on is lit, one that is off is faint, so the letters are always there.
 	onStyle := lipgloss.NewStyle().Background(bg).Foreground(th.good).Bold(true)
 	offStyle := lipgloss.NewStyle().Background(bg).Foreground(th.faint)
-	if ts.cursor || ts.playing {
+	if bright {
 		onStyle, offStyle = pieceBold, piece.Faint(true)
 	}
 	line := func(left string) string {
@@ -702,7 +718,7 @@ func (m Model) tile(w, h int, num, name string, level int32, ts tileState) strin
 		out := pieceBold.Render(left) + extra + piece.Render(strings.Repeat(" ", gap))
 		if barsText != "" {
 			barsStyle := piece.Foreground(th.dim)
-			if ts.cursor || ts.playing {
+			if bright {
 				barsStyle = piece.Faint(true)
 			}
 			out += barsStyle.Render(barsText) + piece.Render(" ")
@@ -712,7 +728,7 @@ func (m Model) tile(w, h int, num, name string, level int32, ts tileState) strin
 			if ts.solo {
 				markStyle = markStyle.Foreground(th.good)
 			}
-			if ts.cursor || ts.playing {
+			if bright {
 				markStyle = pieceBold
 			}
 			out += markStyle.Render(mixMark) + piece.Render(" ")
