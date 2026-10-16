@@ -104,6 +104,15 @@ the input with `404` in its name (set in Config, `6`). What it does:
   gets a fader and a dial with its value and `channel:number` in a CONTROLS strip (the ones moved lately
   are bright), and the last messages scroll under them. Config has a MIDI monitor (counts per kind, the tempo of the clock, the last messages; `c`
   clears) to see what the unit and anything plugged into it really send.
+- **Effects in Perform:** the unit does not say over USB which effect is on, but it may send a MIDI
+  message when you switch one. `l` (BUS 1) or `L` (BUS 2) learns it: press the key, then switch the effect
+  on or off on the unit; the next controller or note is taken as that bus's message (a controller from
+  half up, or a note on, is on; a note off is off). The FX line then shows `● ON` or `○ off` with what you
+  noted for the bus (`f`/`F`). `k` or `K` learns up to three knobs or faders for the bus's effect (move
+  one on the unit), shown under it as a fader and a dial with the value. Esc cancels learning, Backspace
+  forgets what is learned. Changes of an effect go to the event log as `fx`.
+- **Ticker:** a line in Perform keeps time with the unit's MIDI clock: the sixteen steps of the bar, the
+  beat, and where the loop is.
 - **Event log:** while Ctrl-R records the unit's audio, everything above is also written beside the WAV
   as `name.events.jsonl`, one JSON object per line with its time in seconds from the start of the
   audio (`on`/`off` with bank and pad, `cc`, `program`, `sysex`, `beat` with the tempo, `start`/`stop`,

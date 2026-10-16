@@ -11,6 +11,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moahbeatlab/404tui/app"
+	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/perflog"
 	"github.com/moahbeatlab/404tui/proto"
 )
 
@@ -36,6 +38,31 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 	case "x":
 		m.perfNext = nil
 		m.logCue()
+	case "l", "L":
+		bus := 1
+		if name == "L" {
+			bus = 2
+		}
+		m.fxLearn = bus
+		m.message = fmt.Sprintf("BUS %d: switch its effect on or off on the unit; Esc cancels", bus)
+	case "k", "K":
+		bus := 1
+		if name == "K" {
+			bus = 2
+		}
+		m.fxKnob = bus
+		m.message = fmt.Sprintf("BUS %d: move a knob or fader on the unit; Esc cancels", bus)
+	case "backspace":
+		switch {
+		case m.fxLearn != 0:
+			m.mem.FxMsg[m.fxLearn-1], m.fxOn[m.fxLearn-1] = "", false
+			m.message = fmt.Sprintf("BUS %d: effect message forgotten", m.fxLearn)
+			m.fxLearn = 0
+		case m.fxKnob != 0:
+			m.mem.FxKnobs[m.fxKnob-1] = nil
+			m.message = fmt.Sprintf("BUS %d: knobs forgotten", m.fxKnob)
+			m.fxKnob = 0
+		}
 	case "v":
 		m.perfPatterns = !m.perfPatterns
 	case "f", "F":
@@ -227,8 +254,9 @@ func (m Model) perfBankBody(g geom) string {
 		}
 		bottom = append(bottom, st.dim.Render("PATTERNS  ")+st.text.Render(ansi.Truncate(line, width-12, "…")))
 	}
+	bottom = append(bottom, m.perfFxLines(width)...)
 	bottom = append(bottom, m.perfMovement(width)...)
-	bottom = append(bottom, st.dim.Render("a n  cue the patterns   Space  next becomes now   v  patterns big   f F  note a bus effect   Ctrl-R  record"))
+	bottom = append(bottom, st.dim.Render("a n cue   Space next→now   v patterns   f F note the effect   l L learn its on/off   k K its knobs   ^R rec"))
 	// The tiles take what is left.
 	avail := g.bodyH - 2 - len(top) - len(bottom) - 2 - 3
 	tileH := max(avail/4, 3)
@@ -413,6 +441,7 @@ func (m Model) perfPatternBody(g geom) string {
 	lines = append(lines, "")
 	lines = append(lines, m.perfBusLines(now, width)...)
 	lines = append(lines, "")
+	lines = append(lines, m.perfFxLines(width)...)
 	lines = append(lines, m.perfMovement(width)...)
 	lines = append(lines, "", st.dim.Render("a  the pattern that plays   n  the next one   Space  next becomes now   x  clear next   f F  note the effect of BUS 1, 2   Ctrl-R  record"))
 	return m.box("Perform", strings.Join(lines, "\n"), g.bodyW+g.bodyX-1, g.bodyH, true)
@@ -460,7 +489,12 @@ func knobGlyph(v int) string {
 // high. Those moved in the last seconds are in the accent colour, the others dimmed.
 func (m Model) perfControls(now time.Time, width int) []string {
 	st := m.st
-	all := m.mon.controls()
+	var all []*ccState
+	for _, c := range m.mon.controls() {
+		if !m.isFxKnob(c.ch, c.cc) {
+			all = append(all, c)
+		}
+	}
 	if len(all) == 0 {
 		return []string{
 			st.dim.Render("CONTROLS  turn a knob or move a fader on the unit (or the controller on its MIDI in):"),
@@ -474,42 +508,63 @@ func (m Model) perfControls(now time.Time, width int) []string {
 	if len(shown) > n {
 		shown = shown[:n]
 	}
-	const blocks = " ▁▂▃▄▅▆▇█"
 	var out [3]string
 	for _, c := range shown {
-		live := now.Sub(c.at) < monMoving
-		style := st.dim
-		if live {
-			style = st.accent
-			if now.Sub(c.at) > 2*time.Second {
-				style = st.text
-			}
-		}
-		level := c.val * 24 / 127
-		var fader [3]string
+		cell := m.controlCell(c, fmt.Sprintf("%d:%d", c.ch, c.cc), now)
 		for k := 0; k < 3; k++ {
-			cnt := clamp(level-8*(2-k), 0, 8)
-			if cnt == 0 {
-				fader[k] = st.faint.Render("╎")
-			} else {
-				fader[k] = style.Render(string([]rune(blocks)[cnt]))
-			}
-		}
-		mid := []string{
-			style.Render("(" + knobGlyph(c.val) + ")"),
-			style.Render(fmt.Sprintf("%3d", c.val)),
-			st.dim.Render(fmt.Sprintf("%d:%d", c.ch, c.cc)),
-		}
-		for k := 0; k < 3; k++ {
-			cell := fader[k] + " " + mid[k]
-			pad := max(cellW-ansi.StringWidth(cell), 0)
-			out[k] += cell + strings.Repeat(" ", pad)
+			out[k] += cell[k]
 		}
 	}
 	if len(all) > len(shown) {
 		out[2] += st.dim.Render(fmt.Sprintf("+%d more", len(all)-len(shown)))
 	}
 	return []string{st.dim.Render("CONTROLS ") + out[0], strings.Repeat(" ", 9) + out[1], strings.Repeat(" ", 9) + out[2]}
+}
+
+// isFxKnob says whether a controller is one of the knobs shown under a bus's effect.
+func (m Model) isFxKnob(ch, cc int) bool {
+	text := fmt.Sprintf("ch %d cc %d", ch, cc)
+	return slices.Contains(m.mem.FxKnobs[0], text) || slices.Contains(m.mem.FxKnobs[1], text)
+}
+
+// controlCell is a controller as three lines ten cells wide: a fader beside a dial, its value, and
+// a label. One moved lately is in the accent colour, the others dimmed; c is nil for one that has
+// not sent anything yet.
+func (m Model) controlCell(c *ccState, label string, now time.Time) [3]string {
+	st := m.st
+	const cellW = 10
+	const blocks = " ▁▂▃▄▅▆▇█"
+	val, style := 0, st.faint
+	if c != nil {
+		val, style = c.val, st.dim
+		if now.Sub(c.at) < monMoving {
+			style = st.accent
+			if now.Sub(c.at) > 2*time.Second {
+				style = st.text
+			}
+		}
+	}
+	level := val * 24 / 127
+	var fader [3]string
+	for k := 0; k < 3; k++ {
+		cnt := clamp(level-8*(2-k), 0, 8)
+		if cnt == 0 {
+			fader[k] = st.faint.Render("╎")
+		} else {
+			fader[k] = style.Render(string([]rune(blocks)[cnt]))
+		}
+	}
+	value := "  -"
+	if c != nil {
+		value = fmt.Sprintf("%3d", val)
+	}
+	mid := [3]string{style.Render("(" + knobGlyph(val) + ")"), style.Render(value), st.dim.Render(label)}
+	var out [3]string
+	for k := 0; k < 3; k++ {
+		cell := fader[k] + " " + mid[k]
+		out[k] = cell + strings.Repeat(" ", max(cellW-ansi.StringWidth(cell), 0))
+	}
+	return out
 }
 
 // nowBars is the length in bars of a pattern, 0 when it is not known.
@@ -560,4 +615,143 @@ func (m Model) perfTicker(loopBars int) string {
 	}
 	b.WriteString(st.text.Render(text))
 	return b.String()
+}
+
+// fxMsg is the message that says an effect is on or off, from the setting: its kind, channel and
+// number.
+func fxMsg(text string) (kind midiin.Kind, ch, n int, ok bool) {
+	var word string
+	if _, err := fmt.Sscanf(text, "ch %d %s %d", &ch, &word, &n); err != nil {
+		return 0, 0, 0, false
+	}
+	switch word {
+	case "cc":
+		return midiin.CC, ch, n, true
+	case "note":
+		return midiin.NoteOn, ch, n, true
+	}
+	return 0, 0, 0, false
+}
+
+// fxEvent takes a message from the unit for the effect of the buses: while one is being learned the
+// next controller or note is it; otherwise a message that was learned sets the bus on or off (a
+// controller from half up, a note on; a note off is off).
+func (m Model) fxEvent(e midiin.Event) Model {
+	if m.fxLearn != 0 && (e.Kind == midiin.CC || e.Kind == midiin.NoteOn) {
+		if _, _, isPad := padOfEvent(e); !isPad {
+			word := "cc"
+			if e.Kind == midiin.NoteOn {
+				word = "note"
+			}
+			text := fmt.Sprintf("ch %d %s %d", e.Channel, word, e.Data1)
+			m.mem.FxMsg[m.fxLearn-1] = text
+			m.fxOn[m.fxLearn-1] = e.Kind == midiin.NoteOn || e.Data2 >= 64
+			m.message = fmt.Sprintf("BUS %d effect is %s", m.fxLearn, text)
+			m.fxLearn = 0
+			return m
+		}
+	}
+	if m.fxKnob != 0 && e.Kind == midiin.CC {
+		text := fmt.Sprintf("ch %d cc %d", e.Channel, e.Data1)
+		knobs := m.mem.FxKnobs[m.fxKnob-1]
+		if slices.Contains(knobs, text) {
+			return m
+		}
+		if len(knobs) >= 3 {
+			knobs = knobs[1:]
+		}
+		// A copy, so the saved state before this one is not changed under it.
+		m.mem.FxKnobs[m.fxKnob-1] = append(slices.Clone(knobs), text)
+		m.message = fmt.Sprintf("BUS %d: %s is a knob of its effect", m.fxKnob, text)
+		m.fxKnob = 0
+		return m
+	}
+	for bus := 0; bus < 2; bus++ {
+		kind, ch, n, ok := fxMsg(m.mem.FxMsg[bus])
+		if !ok || e.Channel != ch || e.Data1 != n {
+			continue
+		}
+		var on bool
+		switch {
+		case kind == midiin.CC && e.Kind == midiin.CC:
+			on = e.Data2 >= 64
+		case kind == midiin.NoteOn && e.Kind == midiin.NoteOn:
+			on = true
+		case kind == midiin.NoteOn && e.Kind == midiin.NoteOff:
+			on = false
+		default:
+			continue
+		}
+		if on != m.fxOn[bus] {
+			m.perfLog.Add(e.At, "fx", perflog.P("bus", bus+1), perflog.P("on", on))
+		}
+		m.fxOn[bus] = on
+	}
+	return m
+}
+
+// perfFx is the line with the effect of each bus: on or off as the unit said (once it has been
+// learned which message that is), and what you noted for it.
+func (m Model) perfFxHead(width int) string {
+	st := m.st
+	if m.fxLearn != 0 {
+		return lipgloss.NewStyle().Foreground(st.th.warn).Bold(true).Render(fmt.Sprintf("FX  LEARNING BUS %d: switch its effect on or off on the unit   Esc cancels   Backspace forgets it", m.fxLearn))
+	}
+	if m.fxKnob != 0 {
+		return lipgloss.NewStyle().Foreground(st.th.warn).Bold(true).Render(fmt.Sprintf("FX  LEARNING A KNOB FOR BUS %d: move it on the unit (three at most)   Esc cancels   Backspace forgets its knobs", m.fxKnob))
+	}
+	text := st.dim.Render("FX  ")
+	for bus := int32(1); bus <= 2; bus++ {
+		colour, _ := st.th.busColour(bus)
+		style := lipgloss.NewStyle().Foreground(colour).Bold(true)
+		state := st.dim.Render("? " + map[int32]string{1: "l", 2: "L"}[bus] + " learns")
+		if _, _, _, ok := fxMsg(m.mem.FxMsg[bus-1]); ok {
+			state = st.faint.Render("○ off")
+			if m.fxOn[bus-1] {
+				state = lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render("● ON")
+			}
+		}
+		note := m.mem.BusNotes[bus-1]
+		if note == "" {
+			note = "—"
+		}
+		text += style.Render(fmt.Sprintf("BUS %d ", bus)) + state + st.text.Render("  "+note)
+		if bus == 1 {
+			text += "     "
+		}
+	}
+	return ansi.Truncate(text, width, "…")
+}
+
+// perfFxLines is the effects: a line for each bus (on or off, and what you noted for it), and under it
+// the knobs learned for each as faders and dials. Narrow screens get the line alone.
+func (m Model) perfFxLines(width int) []string {
+	head := m.perfFxHead(width)
+	if width < 80 {
+		return []string{head}
+	}
+	st := m.st
+	now := time.Now()
+	half := max((width-4)/2, 34)
+	var rows [3]string
+	for bus := 0; bus < 2; bus++ {
+		var col [3]string
+		knobs := m.mem.FxKnobs[bus]
+		for _, text := range knobs {
+			var ch, cc int
+			fmt.Sscanf(text, "ch %d cc %d", &ch, &cc)
+			cell := m.controlCell(m.mon.ccs[[2]int{ch, cc}], fmt.Sprintf("%d:%d", ch, cc), now)
+			for k := 0; k < 3; k++ {
+				col[k] += cell[k]
+			}
+		}
+		if len(knobs) == 0 {
+			key := map[int]string{0: "k", 1: "K"}[bus]
+			col[0] = st.dim.Render(fmt.Sprintf("%s  assigns a knob of BUS %d's effect", key, bus+1))
+		}
+		for k := 0; k < 3; k++ {
+			rows[k] += col[k] + strings.Repeat(" ", max(half-ansi.StringWidth(col[k]), 0))
+		}
+	}
+	return []string{head, rows[0], rows[1], rows[2]}
 }

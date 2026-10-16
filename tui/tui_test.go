@@ -6289,3 +6289,90 @@ func TestARecordingWritesWhatTheUnitSendsToAnEventLogAndPerformShowsIt(t *testin
 }
 
 type Entry = perflog.Entry
+
+func TestTheEffectOfABusIsLearnedFromTheUnitAndShownWithItsKnobs(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	stopped := 0
+	m := s.m().WithRecorder(&fakeRecorder{stopped: &stopped})
+	m.mem.RecordDir = t.TempDir()
+	link := &midiLink{ch: make(chan midiin.Event, 4)}
+	m.midi, m.midiSrc = link, &fakeMIDI{}
+	s.model = m
+	s.press("ctrl+r")
+	feed := func(e midiin.Event) {
+		e.At = time.Now()
+		next, _ := s.m().midiEvent(midiMsg{link: link, ev: e})
+		s.model = next
+	}
+	s.press("7")
+	s.shows("l L learn its on/off")
+	s.shows("l learns")
+	// l: the next controller is BUS 1's effect; it says on at once, and is not acted on otherwise.
+	s.press("l")
+	s.shows("LEARNING BUS 1")
+	feed(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: 62, Data2: 127}) // the control channel's note 62 is a note: this cc is not mapped
+	if s.m().fxLearn != 0 || s.m().mem.FxMsg[0] != "ch 16 cc 62" || !s.m().fxOn[0] {
+		t.Fatalf("learned %q learn %d on %v", s.m().mem.FxMsg[0], s.m().fxLearn, s.m().fxOn)
+	}
+	s.shows("● ON")
+	feed(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: 62, Data2: 0})
+	if s.m().fxOn[0] {
+		t.Error("cc 62 at 0 did not switch it off")
+	}
+	s.shows("○ off")
+	// A pad's note is not taken for the effect: Esc leaves learning.
+	s.press("L")
+	s.shows("LEARNING BUS 2")
+	feed(midiin.Event{Kind: midiin.NoteOn, Channel: 1, Data1: 48, Data2: 100})
+	if s.m().fxLearn != 2 {
+		t.Error("a pad hit was taken as the effect")
+	}
+	s.press("esc")
+	if s.m().fxLearn != 0 || s.m().mem.FxMsg[1] != "" {
+		t.Error("esc did not leave learning")
+	}
+	// Notes work too: note on is on, note off is off.
+	s.press("L")
+	feed(midiin.Event{Kind: midiin.NoteOn, Channel: 12, Data1: 70, Data2: 100})
+	if s.m().mem.FxMsg[1] != "ch 12 note 70" || !s.m().fxOn[1] {
+		t.Fatalf("bus 2: %q %v", s.m().mem.FxMsg[1], s.m().fxOn)
+	}
+	feed(midiin.Event{Kind: midiin.NoteOff, Channel: 12, Data1: 70})
+	if s.m().fxOn[1] {
+		t.Error("note off did not switch it off")
+	}
+	// Knobs of BUS 1's effect: the next controllers moved, shown with a fader and a dial each.
+	s.press("k")
+	s.shows("LEARNING A KNOB FOR BUS 1")
+	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 16, Data2: 80})
+	s.press("k")
+	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 17, Data2: 20})
+	if got := s.m().mem.FxKnobs[0]; len(got) != 2 || got[0] != "ch 1 cc 16" || got[1] != "ch 1 cc 17" {
+		t.Fatalf("knobs %v", got)
+	}
+	s.shows("1:16")
+	s.shows(" 80")
+	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 16, Data2: 100})
+	s.shows("100")
+	// A knob under an effect is not also in CONTROLS: a third controller is.
+	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 74, Data2: 50})
+	if !s.m().isFxKnob(1, 16) || s.m().isFxKnob(1, 74) {
+		t.Error("which controllers are an effect's knobs")
+	}
+	s.press("ctrl+r")
+	es, err := perflog.Read(perflog.PathFor(filepath.Join(s.m().recordDir(), "take.wav")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fx []string
+	for _, e := range es {
+		if e["k"] == "fx" {
+			fx = append(fx, fmt.Sprint(e["bus"], e["on"]))
+		}
+	}
+	// The learning message itself is not an event; only changes after it are.
+	if len(fx) != 2 || fx[0] != "1 false" || fx[1] != "2 false" {
+		t.Errorf("fx events %v", fx)
+	}
+}
