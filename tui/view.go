@@ -1509,8 +1509,8 @@ func (m Model) treeLines(height int) string {
 			return m.st.hot.Render("♪")
 		case m.favouriteMark(n.Path) != "":
 			return m.favouriteMark(n.Path)
-		case n.Dir && m.folderUses.Used(n.Path):
-			return m.st.accent.Render("◆")
+		case n.Dir && m.folderUsed(n.Path):
+			return m.usedMark()
 		}
 		return " "
 	})
@@ -1601,6 +1601,8 @@ func (m Model) fileDetail(height, width int) string {
 		lines = append(lines, st.good.Render("Pad export"), st.dim.Render("Enter or R restores it; you choose the bank"))
 	case node.Dir:
 		lines = append(lines, m.folderUseLines(node.Path, width)...)
+		lines = append(lines, m.folderPadLines(node.Path, width)...)
+		lines = append(lines, m.folderPadLines(node.Path, width)...)
 		lines = append(lines, st.dim.Render("R restores pads from an export here; you choose the bank"))
 	}
 	return strings.Join(lines, "\n")

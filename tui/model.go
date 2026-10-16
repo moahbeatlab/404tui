@@ -1581,6 +1581,11 @@ func (m *Model) wanted() tea.Cmd {
 			m.folderUsesBusy = true
 			return m.loadFolderUses()
 		}
+		// The pads' origins give the folders their marker and say which pads came from them.
+		if m.origins == nil && !m.originsBusy {
+			m.originsBusy = true
+			return m.loadOrigins()
+		}
 		if node, ok := m.fileNode(); ok && !node.Dir && isAudio(node.Name) && !m.infoBusy {
 			if _, have := m.infos[node.Path]; !have {
 				m.infoBusy = true

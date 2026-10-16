@@ -147,8 +147,8 @@ func (m Model) rangerBody(g geom) string {
 			return st.hot.Render("♪")
 		case m.favouriteMark(n.Path) != "":
 			return m.favouriteMark(n.Path)
-		case n.Dir && m.folderUses.Used(n.Path):
-			return st.accent.Render("◆")
+		case n.Dir && m.folderUsed(n.Path):
+			return m.usedMark()
 		}
 		return " "
 	}
@@ -177,6 +177,8 @@ func (m Model) rangerBody(g geom) string {
 	switch {
 	case node.Dir && node.Expanded:
 		preview = append(preview, m.folderUseLines(node.Path, prevW-2)...)
+		preview = append(preview, m.folderPadLines(node.Path, prevW-2)...)
+		preview = append(preview, m.folderPadLines(node.Path, prevW-2)...)
 		kids := m.tree.Children(at)
 		if len(kids) == 0 {
 			preview = append(preview, st.dim.Render(" (empty)"))

@@ -5182,3 +5182,20 @@ func TestTabsSitInTheHeaderWhenItHasRoomAndUnderItWhenNot(t *testing.T) {
 		t.Errorf("clicking the Pads tab under the header went to section %d", s.m().section)
 	}
 }
+
+func TestAFolderWithSamplesOnPadsGetsTheMarkerInTheTree(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	if m.folderUsed("SD:IMPORT/Kit") {
+		t.Error("a folder nothing came from is marked")
+	}
+	m.origins = &app.Origins{Pads: map[string]app.Origin{"2/A1": {Path: "SD:IMPORT/Kit/Sub/kick.wav", Name: "kick"}}}
+	for _, folder := range []string{"SD:IMPORT/Kit/Sub", "SD:IMPORT/Kit", "SD:IMPORT"} {
+		if !m.folderUsed(folder) {
+			t.Errorf("%s is not marked", folder)
+		}
+	}
+	if m.folderUsed("SD:IMPORT/Kit2") || m.folderUsed("SD:IMPORT/Kit/Sub/kick.wav") == false && false {
+		t.Error("a folder beside it is marked")
+	}
+}

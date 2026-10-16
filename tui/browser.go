@@ -525,8 +525,8 @@ func (m Model) assignBox(g geom) string {
 			return st.hot.Render("♪")
 		case m.favouriteMark(n.Path) != "":
 			return m.favouriteMark(n.Path)
-		case n.Dir && m.folderUses.Used(n.Path):
-			return m.st.accent.Render("◆")
+		case n.Dir && m.folderUsed(n.Path):
+			return m.usedMark()
 		}
 		return " "
 	}

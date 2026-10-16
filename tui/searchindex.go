@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moahbeatlab/404tui/app"
@@ -366,4 +367,28 @@ func (r routedUnit) ReadPrefix(path string, n uint32) ([]byte, bool, error) {
 		return app.Local{}.ReadPrefix(path, n)
 	}
 	return r.Unit.ReadPrefix(path, n)
+}
+
+// folderUsed reports whether a folder, or one inside it, was put on a bank (restored), or has
+// a sample on a pad that was assigned from it: it gets the ◆ in the trees.
+func (m Model) folderUsed(path string) bool {
+	if m.folderUses.Used(path) {
+		return true
+	}
+	if m.origins == nil {
+		return false
+	}
+	under := path + "/"
+	for _, o := range m.origins.Pads {
+		if strings.HasPrefix(o.Path, under) {
+			return true
+		}
+	}
+	return false
+}
+
+// usedMark is the icon in the gutter of the trees for a folder that was used: a diamond in the
+// colour of conditions, which no other mark has.
+func (m Model) usedMark() string {
+	return lipgloss.NewStyle().Foreground(m.st.th.cond).Bold(true).Render("◆")
 }
