@@ -468,7 +468,7 @@ func (m Model) statusBar() string {
 			chips = []string{chip("a", "other pattern"), chip("P", "play"), chip("Esc", "close")}
 			break
 		}
-		chips = []string{chip("Enter", "open"), chip("N", "new"), chip("P", "play"), chip("d", "delete"), chip("c", "copy"), chip("[ ]", "bank")}
+		chips = []string{chip("Enter", "open"), chip("N", "new"), chip("Space", "play / stop"), chip("d", "delete"), chip("c", "copy"), chip("[ ]", "bank")}
 	case secFiles:
 		if len(m.fileMarks) > 0 || len(m.clip) > 0 {
 			chips = []string{chip("Enter", "assign"), chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("p", "paste"), chip("u", "unmark"), chip("Esc", "clear")}
@@ -1303,7 +1303,7 @@ func (m Model) patternSlotDetail(g geom) string {
 				lines = append(lines, m.rowLabel(row.Pad, label, st.bold)+" "+m.noteRow(d, row.Pad, false, sp)+m.mixBadge(row.Pad))
 			}
 		}
-		lines = append(lines, "", st.dim.Render("Enter edits the steps  ·  P or Space plays it in a loop"), st.dim.Render("d delete  v mark  c copy  x move  p put"))
+		lines = append(lines, "", st.dim.Render("Enter edits the steps  ·  Space or P plays it in a loop, again stops it"), st.dim.Render("d delete  v mark  c copy  x move  p put"))
 	}
 	body := strings.Join(lines, "\n")
 	return m.box("Pattern "+cur.Slot.String(), body, g.detailW, max(g.detailH, 5, strings.Count(body, "\n")+3, m.patternPanelRoom(g)), false)

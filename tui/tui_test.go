@@ -3119,6 +3119,35 @@ func TestAPatternPlaysInALoopUntilStopped(t *testing.T) {
 	}
 }
 
+func TestSpaceOnAPatternPlaysAndStopsItAndEnterOpensIt(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	if _, err := app.Assign(m.unit, m.unit, pad(t, "C1"), "SD:IMPORT/kick.wav"); err != nil {
+		t.Fatal(err)
+	}
+	s.press("r", "]", "]", "N", "enter", "enter", "tab")
+	// The pattern is open from making it: leave it, so the panel is in front.
+	s.press("esc", "1", "tab")
+	if s.m().pattern != nil || s.m().section != secPatterns {
+		t.Fatalf("pattern open %v, section %d", s.m().pattern != nil, s.m().section)
+	}
+	s.press(" ")
+	if s.m().pattern != nil || s.m().seqTab {
+		t.Error("Space opened the pattern: only Enter does")
+	}
+	if len(s.player.looped) != 1 {
+		t.Fatalf("Space did not play the pattern: looped %d, %s", len(s.player.looped), s.m().message)
+	}
+	s.press(" ")
+	if s.player.playing {
+		t.Error("the second Space did not stop it")
+	}
+	s.press("enter")
+	if s.m().pattern == nil || !s.m().seqTab {
+		t.Error("Enter did not open the pattern in the Sequencer")
+	}
+}
+
 func TestFavouriteAndTagFilesAndFindThemByTheirTags(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 180, Height: 50})

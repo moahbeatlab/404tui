@@ -1098,7 +1098,7 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 	switch name {
 	case "N":
 		return m.openTemplatePicker()
-	case "P", "s":
+	case "P", "s", " ":
 		rows := m.patterns[m.bank]
 		if rows == nil || !rows[m.patternCursor].Exists {
 			if name == "s" && m.player != nil {
@@ -1156,7 +1156,7 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 		m.bank = (m.bank + 1) % proto.Banks
 		cmd := m.wanted()
 		return m, cmd
-	case "enter", " ":
+	case "enter":
 		rows := m.patterns[m.bank]
 		if rows == nil || !rows[m.patternCursor].Exists {
 			m.message = "that pattern slot is empty"
