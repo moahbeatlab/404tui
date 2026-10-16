@@ -193,8 +193,16 @@ func (m Model) rangerBody(g geom) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		m.box(parentTitle, parentBody, parentW, g.bodyH, false), " ",
 		m.box(here, cur, curW, g.bodyH, true), " ",
-		m.box(title, strings.Join(preview, "\n"), prevW, g.bodyH, false))
+		m.box(title, m.withKeyGuide(strings.Join(preview, "\n"), rangerKeyGuide, inner, prevW-2), prevW, g.bodyH, false))
 }
+
+// rangerKeyGuide is the Files key guide with the keys of the column view in the View line.
+var rangerKeyGuide = func() []keyGroup {
+	g := slices.Clone(filesKeyGuide)
+	g[len(g)-1] = keyGroup{"View", [][2]string{{"Space", "listen"}, {"^A", "autoplay"}, {"[ ]", "target bank"}, {"t", "source"},
+		{"h", "up"}, {"l", "into"}, {"w", "tree view"}}}
+	return g
+}()
 
 // rangerColumn draws some rows of the tree one under the other, with the cursor on row at.
 func (m Model) rangerColumn(idx []int, at, height, width int, markOf func(app.Node) string) string {
