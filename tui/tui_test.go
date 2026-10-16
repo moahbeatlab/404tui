@@ -6247,12 +6247,12 @@ func TestARecordingWritesWhatTheUnitSendsToAnEventLogAndPerformShowsIt(t *testin
 	m.perfNow = &one
 	s.model = m
 	s.press("7")
-	s.shows("MOVING")
-	s.shows("cc 74")
+	s.shows("CONTROLS")
+	s.shows("1:74")
 	s.shows("LAST")
 	s.shows("bank C pad 2")
 	s.press("v")
-	s.shows("cc 74")
+	s.shows("1:74")
 	// Config lists the messages.
 	s.press("6")
 	s.shows("MIDI monitor")
