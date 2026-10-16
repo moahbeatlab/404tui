@@ -77,10 +77,10 @@ const (
 	promptEraseProject
 	// promptDeletePatterns confirms deleting the pattern slots in prompt.pads.
 	promptDeletePatterns
-	// promptBusScan confirms setting the buses of the pads in prompt.buses; promptDrumWords asks
-	// for the list of drum words.
+	// promptBusScan confirms setting the buses of the pads in prompt.buses; promptBusWords asks
+	// for the words of a bus.
 	promptBusScan
-	promptDrumWords
+	promptBusWords
 	// promptDeleteFiles confirms deleting prompt.paths from the card; promptMkdir names a new
 	// folder in prompt.path.
 	promptDeleteFiles
@@ -125,6 +125,8 @@ type prompt struct {
 	// set when it looks at the whole project, not the bank (or the marked pads) in front.
 	buses   map[proto.PadIndex]int32
 	scanAll bool
+	// busOf is the bus whose words a promptBusWords is about.
+	busOf int
 }
 
 // picker is the pad chooser a file is assigned through, or the bank chooser of a

@@ -28,15 +28,16 @@ screen. A History panel on the right keeps what happened, with times.
 
 ### Buses by pad name
 
-Drum pads go to one bus and everything else to another, decided by the pad's name. **Config** (`6`)
-holds the rule: the drum words (kick, snare, hat, perc, … editable with Enter), the bus of a pad
-with a drum word (BUS 2 by default), the bus of every other pad (BUS 1 by default), and whether the
-bus is set when a file is assigned (it is). A word matches a word of the pad's name (`Kick_125`,
-`OHat`, `DrumLoop`, `14_Perc1`), and a longer word also its start. The view shows what the rule
-makes of the bank in front. For pads that are on the unit already, `B` in Pads looks at the bank
-(or the marked pads) and asks before it sets the bus of those that are not on the one their name
-says; `p` there widens it to the whole project. The rule is kept with the rest of what 404tui
-remembers (`state.json` in the user's config folder, under `404tui`).
+A pad goes to a bus by its name. **Config** (`6`) has two lines of words, one for the samples that go
+to BUS 1 and one for BUS 2 (the second starts with the words of a drum kit: kick, snare, hat, perc, …;
+Enter edits a line), the colour each bus is drawn in (`h` `l` choose one; it is the colour of the
+pads and everywhere else), the bus of a name with none of the words (BUS 1 to start with), and whether
+the bus is set when a file is assigned (it is). A word matches a word of the pad's name (`Kick_125`,
+`OHat`, `DrumLoop`, `14_Perc1`), and a longer word also its start; a name with words of both lines goes
+to BUS 1. The view shows what the rule makes of the bank in front. For pads that are on the unit
+already, `B` in Pads looks at the bank (or the marked pads) and asks before it sets the bus of those
+that are not on the one their name says; `p` there widens it to the whole project. The rule is kept
+with the rest of what 404tui remembers (`state.json` in the user's config folder, under `404tui`).
 
 ### Connecting
 

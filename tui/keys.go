@@ -123,7 +123,7 @@ var commands = []command{
 	{"3", "Go to Projects", nil},
 	{"4", "Go to the Slicer; a there chooses a pad or a new sample to slice", nil},
 	{"5", "Go to the Sequencer; a there chooses a pattern to edit", nil},
-	{"6", "Go to Config: the drum words and buses (inside the slicer 6 is an envelope key: use the tab)", nil},
+	{"6", "Go to Config: the words, colours and buses (inside the slicer 6 is an envelope key: use the tab)", nil},
 	{"B", "Set the bus of the bank's pads (the marked ones; p: the whole project) by their names, as Config says", []int{secPads}},
 	{"j", "Config: the next setting; k the one before; h l change it, Enter edits the drum words", []int{secConfig}},
 	{"U", "Working offline: leave offline mode and connect to the unit once it is plugged in", nil},
@@ -3000,7 +3000,7 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			return doneMsg{message: fmt.Sprintf("project %d restored from %s", plan.Project+1, plan.Dir), reload: true}
 		})
 	}
-	if p.kind != promptDelete && p.kind != promptFindFolder && p.kind != promptDrumWords && p.kind != promptBusScan && text == "" {
+	if p.kind != promptDelete && p.kind != promptFindFolder && p.kind != promptBusWords && p.kind != promptBusScan && text == "" {
 		m.message = "nothing typed"
 		return m, nil
 	}
@@ -3088,11 +3088,15 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			}
 			return doneMsg{message: message, reload: true}
 		})
-	case promptDrumWords:
+	case promptBusWords:
 		rule := m.busRule()
-		rule.DrumWords = splitWords(text)
+		if p.busOf == 1 {
+			rule.Bus1Words = splitWords(text)
+		} else {
+			rule.Bus2Words = splitWords(text)
+		}
 		m.setBusRule(rule)
-		m.message = fmt.Sprintf("%s kept as drum words", plural(len(rule.DrumWords), "word"))
+		m.message = fmt.Sprintf("%s kept for BUS %d", plural(len(splitWords(text)), "word"), p.busOf)
 		return m, nil
 	case promptDelete:
 		m.marked = map[int]bool{}

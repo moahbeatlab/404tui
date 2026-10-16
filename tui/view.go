@@ -66,6 +66,7 @@ var helpText = [][2]string{
 // View draws a header, the body with the navigation rail down its left, and a status bar;
 // the help, a prompt, a picker, the palette or a wait is drawn over the body.
 func (m Model) View() string {
+	m = m.withBusColours()
 	g := m.geom()
 	// A dialog is drawn in the middle of the screen it belongs to, over it, not instead of it.
 	dialog := func(box string) string {
@@ -1979,8 +1980,8 @@ func (m Model) promptBox() string {
 				"\n\n" + st.dim.Render("y erase   n/Esc keep"))
 	case promptBusScan:
 		return m.busScanBox(p)
-	case promptDrumWords:
-		title, hint = "Drum words", "separated by commas or spaces; a pad whose name holds one goes to the drum bus  ·  "
+	case promptBusWords:
+		title, hint = fmt.Sprintf("Words for BUS %d", p.busOf), "separated by commas or spaces; a pad whose name holds one goes to the bus  ·  "
 	case promptDelete:
 		names := make([]string, len(p.pads))
 		for i, pad := range p.pads {

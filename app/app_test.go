@@ -209,23 +209,23 @@ func TestIndexOfAllHoldsTheFilesOfEverySource(t *testing.T) {
 	}
 }
 
-func TestTheBusRuleSendsDrumsToOneBusAndTheRestToAnother(t *testing.T) {
+func TestTheBusRuleSendsNamesWithAWordToItsBus(t *testing.T) {
 	r := app.DefaultBusRule()
 	drums := []string{"Kick_125_Cm", "14_Kick_125_G_Klezmer", "09_OHat_125_G", "10_Perc1_125", "HTHF_125_Percussion_Loop", "12_Clap_125", "DrumLoop_124", "snare 03", "hihat_closed", "TomHigh"}
 	others := []string{"01_Bass1_125_G", "02_Synth_125", "06_Lead_125", "07_FX1_125", "ptn I4 mix", "vocal chop", "Pad_warm", "pastrami"}
 	for _, n := range drums {
-		if !r.IsDrum(n) || r.BusFor(n) != 2 {
-			t.Errorf("%q is not a drum pad going to BUS 2", n)
+		if r.Match(n) != 2 || r.BusFor(n) != 2 {
+			t.Errorf("%q is not sent to BUS 2", n)
 		}
 	}
 	for _, n := range others {
-		if r.IsDrum(n) || r.BusFor(n) != 1 {
-			t.Errorf("%q is a drum pad", n)
+		if r.Match(n) != 0 || r.BusFor(n) != 1 {
+			t.Errorf("%q matches a word or is not on BUS 1 (%d)", n, r.BusFor(n))
 		}
 	}
-	// The words are the user's: a custom list and other buses.
-	r = app.BusRule{DrumWords: []string{"boom"}, DrumBus: 1, OtherBus: 0}
-	if r.BusFor("boom_01") != 1 || r.BusFor("kick") != 0 {
-		t.Error("the custom words and buses are not used")
+	// A word of BUS 1 wins over one of BUS 2, and the rest goes where Other says.
+	r = app.BusRule{Bus1Words: []string{"loop"}, Bus2Words: []string{"drum", "boom"}, Other: 0}
+	if r.BusFor("DrumLoop_1") != 1 || r.BusFor("boom_01") != 2 || r.BusFor("synth") != 0 {
+		t.Errorf("the lists are not used as they should: %d %d %d", r.BusFor("DrumLoop_1"), r.BusFor("boom_01"), r.BusFor("synth"))
 	}
 }

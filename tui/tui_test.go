@@ -5306,7 +5306,7 @@ func TestBusScanSetsDrumsToOneBusAndTheRestToAnother(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.press("r", "B")
-	s.shows("Set the bus of", "drum pads → BUS 2", "others → BUS 1", "y apply")
+	s.shows("Set the bus of", "BUS 2 words", "y apply")
 	s.press("y")
 	s.shows("set by their names")
 	bank := s.m().snap.Bank(0)
@@ -5324,30 +5324,34 @@ func TestBusScanSetsDrumsToOneBusAndTheRestToAnother(t *testing.T) {
 	}
 }
 
-func TestConfigSetsTheDrumWordsAndBusesAndAssignFollowsThem(t *testing.T) {
+func TestConfigSetsTheWordsColoursAndBusesAndAssignFollowsThem(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	s.press("6")
-	s.shows("Buses by pad name", "Drum words", "What it makes of bank A")
-	// h l on the drum bus row: 2 → 0 (none) → 1.
-	s.press("j", "l")
-	if got := s.m().busRule().DrumBus; got != 0 {
-		t.Errorf("drum bus %d after l from 2, want 0", got)
-	}
-	s.press("l")
-	if got := s.m().busRule().DrumBus; got != 1 {
-		t.Errorf("drum bus %d, want 1", got)
-	}
-	// The words are edited as text.
-	s.press("k", "enter")
-	s.shows("Drum words")
+	s.shows("Words for samples on", "Colour of", "What it makes of bank A")
+	// The words of BUS 2 are edited as text.
+	s.press("j", "enter")
+	s.shows("Words for BUS 2")
 	s.press("ctrl+u")
 	s.typeText("boom, bap")
 	s.press("enter")
-	if got := s.m().busRule().DrumWords; fmt.Sprint(got) != "[boom bap]" {
-		t.Errorf("drum words %v", got)
+	if got := s.m().busRule().Bus2Words; fmt.Sprint(got) != "[boom bap]" {
+		t.Errorf("BUS 2 words %v", got)
 	}
-	// A file assigned afterwards goes to the bus the rule says.
+	// The colour of BUS 1: l takes the next, and the theme draws the pads with it.
+	s.press("j", "l")
+	if got := s.m().busRule().Bus1Colour; got != "blue" {
+		t.Errorf("BUS 1 colour %q after l, want blue", got)
+	}
+	if got := s.m().withBusColours().st.th.bus1; got != "75" {
+		t.Errorf("the theme's BUS 1 is %q, want 75", got)
+	}
+	// A name with none of the words goes to no bus: h from BUS 1.
+	s.press("j", "j", "h")
+	if got := s.m().busRule().Other; got != 0 {
+		t.Fatalf("other bus %d, want 0", got)
+	}
+	// A file assigned afterwards goes where the rule says.
 	s.sim.AddFile("SD:IMPORT/boom hit.wav", wav(4800))
 	s.sim.AddFile("SD:IMPORT/warm pad.wav", wav(4800))
 	for pd, file := range map[string]string{"A5": "SD:IMPORT/boom hit.wav", "A6": "SD:IMPORT/warm pad.wav"} {
@@ -5356,23 +5360,15 @@ func TestConfigSetsTheDrumWordsAndBusesAndAssignFollowsThem(t *testing.T) {
 	}
 	s.press("r")
 	bank := s.m().snap.Bank(0)
-	// boom is a drum word now, and the drum bus is BUS 1; warm pad goes to the other bus, BUS 1 by default.
-	if got := bank[4].Params["bus-fx"]; got != 1 {
-		t.Errorf("the boom pad is on bus %d, want the drum bus 1", got)
+	if got := bank[4].Params["bus-fx"]; got != 2 {
+		t.Errorf("the boom pad is on bus %d, want 2", got)
 	}
-	s.press("6", "j", "j", "h", "h")
-	if got := s.m().busRule().OtherBus; got != 2 {
-		t.Fatalf("other bus %d, want 2", got)
-	}
-	_, cmd := s.m().assign([]string{"SD:IMPORT/warm pad.wav"}, pad(t, "A7"))
-	s.send(cmd())
-	s.press("r")
-	if got := s.m().snap.Bank(0)[6].Params["bus-fx"]; got != 2 {
-		t.Errorf("a pad that is not a drum is on bus %d, want the other bus 2", got)
+	if got := bank[5].Params["bus-fx"]; got != 0 {
+		t.Errorf("the pad with no word is on bus %d, want none", got)
 	}
 	// Reset brings the defaults back.
-	s.press("6", "j", "j", "j", "j", "enter")
-	if r := s.m().busRule(); r.DrumBus != 2 || r.OtherBus != 1 || len(r.DrumWords) < 10 {
+	s.press("6", "j", "j", "j", "j", "j", "j", "enter")
+	if r := s.m().busRule(); r.Other != 1 || r.Bus1Colour != "" || len(r.Bus2Words) < 10 {
 		t.Errorf("after the reset: %+v", r)
 	}
 }
