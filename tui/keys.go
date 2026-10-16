@@ -3021,7 +3021,7 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			return doneMsg{message: fmt.Sprintf("project %d restored from %s", plan.Project+1, plan.Dir), reload: true}
 		})
 	}
-	if p.kind != promptDelete && p.kind != promptFindFolder && p.kind != promptBusWords && p.kind != promptBusScan && p.kind != promptRepairPads && p.kind != promptRecDir && p.kind != promptRecDevice && p.kind != promptBusNote && text == "" {
+	if p.kind != promptDelete && p.kind != promptFindFolder && p.kind != promptBusWords && p.kind != promptBusScan && p.kind != promptRepairPads && p.kind != promptRecDir && p.kind != promptRecDevice && p.kind != promptBusNote && p.kind != promptLiveCode && p.kind != promptRecCode && text == "" {
 		m.message = "nothing typed"
 		return m, nil
 	}
@@ -3093,6 +3093,29 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			}
 			return doneMsg{message: message, reload: true}
 		})
+	case promptLiveCode, promptRecCode:
+		text = strings.ToLower(text)
+		if text != "" && text != "off" && parseCode(text) == nil {
+			m.message = "a code is pad numbers from 1 to 16, like 1 3 3 7 (or off)"
+			return m, nil
+		}
+		what := "live mode"
+		if p.kind == promptRecCode {
+			m.mem.RecCode = text
+			what = "recording"
+		} else {
+			m.mem.LiveCode = text
+		}
+		if text == "off" {
+			m.message = what + ": no code"
+		} else {
+			code := m.liveCode()
+			if p.kind == promptRecCode {
+				code = m.recCode()
+			}
+			m.message = fmt.Sprintf("%s: hit pads %s, in any bank", what, codeText(code))
+		}
+		return m, nil
 	case promptBusNote:
 		m.mem.BusNotes[p.busOf-1] = text
 		m.message = fmt.Sprintf("BUS %d: %s", p.busOf, text)

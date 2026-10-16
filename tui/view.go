@@ -2002,6 +2002,10 @@ func (m Model) promptBox() string {
 		return m.busScanBox(p)
 	case promptRepairPads:
 		return m.repairBox(p)
+	case promptLiveCode:
+		title, hint = "Pads for the live mode", "pad numbers 1 to 16, hit in turn on the unit, in any bank; off for none  ·  "
+	case promptRecCode:
+		title, hint = "Pads for recording", "pad numbers 1 to 16, hit in turn on the unit, in any bank; off for none  ·  "
 	case promptBusNote:
 		title, hint = fmt.Sprintf("The effect on BUS %d", p.busOf), "what you set on the unit, e.g. Hall reverb, shown in Perform  ·  "
 	case promptRecDir:

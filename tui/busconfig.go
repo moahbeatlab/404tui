@@ -74,6 +74,8 @@ const (
 	cfgReset
 	cfgRecDir
 	cfgRecDevice
+	cfgLiveCode
+	cfgRecCode
 	cfgRows
 )
 
@@ -137,6 +139,19 @@ func (m Model) configKey(name string) (tea.Model, tea.Cmd) {
 				m.prompt = &prompt{kind: promptRecDevice, buffer: m.recordDevice()}
 			}
 			return m, nil
+		case cfgLiveCode, cfgRecCode:
+			if name == " " || name == "enter" {
+				kind, code := promptLiveCode, m.liveCode()
+				if m.cfgAt == cfgRecCode {
+					kind, code = promptRecCode, m.recCode()
+				}
+				text := codeText(code)
+				if len(code) == 0 {
+					text = "off"
+				}
+				m.prompt = &prompt{kind: kind, buffer: text}
+			}
+			return m, nil
 		}
 		m.setBusRule(rule)
 	}
@@ -193,6 +208,11 @@ func (m Model) configBody(g geom) string {
 		row(cfgRecDir, "Record into folder", st.text.Render(display(m.recordDir())), "Enter edits"),
 		row(cfgRecDevice, "Input with this in its name", st.text.Render(m.recordDevice()), "Enter edits"),
 		st.dim.Render(m.recorderLine()),
+		"",
+		st.bold.Render("Pad codes on the unit"),
+		row(cfgLiveCode, "Live mode (the Perform view)", st.text.Render(codeOrOff(m.liveCode())), "Enter edits"),
+		row(cfgRecCode, "Start and stop a recording", st.text.Render(codeOrOff(m.recCode())), "Enter edits"),
+		st.dim.Render("Hit those pads in turn, in any bank, within four seconds; the same code again switches it off. A pad that repeats needs a sample."),
 		"",
 		st.dim.Render("A word matches a word of the pad's name (Kick_125, OHat, DrumLoop, 14_Perc1) and a longer one by its start;"),
 		st.dim.Render("where a name has words of both, BUS 1 wins. B in Pads sets the buses of the bank, the marked pads or the project."),
@@ -341,4 +361,11 @@ func (m Model) recorderLine() string {
 		return "Ctrl-R records the unit's audio to a WAV file, from anywhere. No recorder is installed: install ffmpeg (or sox)."
 	}
 	return "Ctrl-R starts and stops a recording of the unit's audio (as 24-bit 48 kHz WAV, with " + tool + ") from anywhere; the header shows it."
+}
+
+func codeOrOff(code []int) string {
+	if len(code) == 0 {
+		return "off"
+	}
+	return codeText(code)
 }

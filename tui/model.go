@@ -90,6 +90,9 @@ const (
 	// of the input to record.
 	promptRecDir
 	promptRecDevice
+	// promptLiveCode and promptRecCode ask for the pads that switch the live mode and a recording.
+	promptLiveCode
+	promptRecCode
 	// promptBusNote asks for a note on the effect of a bus (prompt.busOf).
 	promptBusNote
 	// promptDeleteFiles confirms deleting prompt.paths from the card; promptMkdir names a new
@@ -298,6 +301,11 @@ type Model struct {
 	// perfNow and perfNext are the pattern that plays and the one that comes next, as the
 	// Perform view shows them: what the user says, the unit does not tell.
 	perfNow, perfNext *proto.PadIndex
+	// codes holds the pads hit lately, for the codes that start the live mode and a recording;
+	// liveOn is set while the live mode is on, liveBack the view it goes back to.
+	codes    *codeState
+	liveOn   bool
+	liveBack int
 	// perfPatterns shows the Perform view's patterns, big, in place of the pads of the bank.
 	perfPatterns bool
 	// report is a list of lines shown in a dialog until a key closes it.
@@ -1073,7 +1081,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			probe := m.probe
 			return m, tea.Batch(tick(), func() tea.Msg { return unitSeenMsg(probe()) })
 		}
-		if m.frame%pollTicks == 0 && m.busy == "" && !m.polling {
+		if m.frame%m.pollEvery() == 0 && m.busy == "" && !m.polling {
 			m.polling = true
 			return m, tea.Batch(tick(), m.poll())
 		}
@@ -1489,8 +1497,12 @@ func (m Model) polled(msg pollMsg) (tea.Model, tea.Cmd) {
 	if msg.lost {
 		return m.lose()
 	}
+	var codeCmd tea.Cmd
 	if msg.have {
 		a := msg.activity
+		if m.padHit(m.hasSelected, a) {
+			m, codeCmd = m.codeHit(int(a.Selected.Pad()) + 1)
+		}
 		m.playing, m.playPos = a.Playing, a.Position
 		if a.HasSelected {
 			if a.Playing {
@@ -1507,9 +1519,9 @@ func (m Model) polled(msg pollMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.changed && m.busy == "" {
 		m.busy = "reading the unit"
-		return m, m.load("")
+		return m, tea.Batch(codeCmd, m.load(""))
 	}
-	return m, m.wanted()
+	return m, tea.Batch(codeCmd, m.wanted())
 }
 
 // connected takes up a unit that was found.

@@ -5810,3 +5810,123 @@ func TestPerformOpensOnTheBankTheUnitIsOnWithItsPadsBig(t *testing.T) {
 	s.press("v")
 	s.shows("BANK C")
 }
+
+func TestParseCodeReadsPadNumbers(t *testing.T) {
+	for in, want := range map[string]string{"1 3 3 7": "[1 3 3 7]", "1,16,16,16": "[1 16 16 16]", "1-3-3-7": "[1 3 3 7]", "off": "[]", "": "[]", "0 1": "[]", "1 17": "[]", "a": "[]"} {
+		if got := fmt.Sprint(parseCode(in)); got != want {
+			t.Errorf("parseCode(%q) = %s, want %s", in, got, want)
+		}
+	}
+}
+
+func TestACodeIsCompletedByTheRightPadsInTime(t *testing.T) {
+	c := &codeState{}
+	now := time.Now()
+	live, rec := []int{1, 3, 3, 7}, []int{1, 16, 16, 16}
+	for i, p := range []int{1, 3, 3} {
+		if got := c.feed(p, now.Add(time.Duration(i)*300*time.Millisecond), live, rec); got != -1 {
+			t.Fatalf("hit %d completed code %d", i, got)
+		}
+	}
+	if got := c.feed(7, now.Add(time.Second), live, rec); got != 0 {
+		t.Errorf("1 3 3 7 completed %d, want 0", got)
+	}
+	// A hit that is not the next one starts over; too slow does not count.
+	c = &codeState{}
+	for _, p := range []int{1, 16, 16, 5, 16} {
+		if got := c.feed(p, now, live, rec); got != -1 {
+			t.Fatalf("a wrong run completed %d", got)
+		}
+	}
+	c = &codeState{}
+	c.feed(1, now, live, rec)
+	c.feed(16, now.Add(time.Second), live, rec)
+	c.feed(16, now.Add(2*time.Second), live, rec)
+	if got := c.feed(16, now.Add(5*time.Second), live, rec); got != -1 {
+		t.Errorf("a code that took five seconds counted: %d", got)
+	}
+	c = &codeState{}
+	c.feed(5, now, live, rec)
+	c.feed(1, now, live, rec)
+	c.feed(16, now, live, rec)
+	c.feed(16, now, live, rec)
+	if got := c.feed(16, now, live, rec); got != 1 {
+		t.Errorf("a run with other hits before it: %d, want 1", got)
+	}
+}
+
+func TestPadCodesOnTheUnitSwitchTheLiveModeAndARecording(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	stopped := 0
+	fake := &fakeRecorder{stopped: &stopped}
+	s.model = s.m().WithRecorder(fake)
+	m := s.m()
+	m.mem.RecordDir = t.TempDir()
+	s.model = m
+	poll := func(pd string, playing bool, pos uint32) {
+		s.send(pollMsg{have: true, activity: device.Activity{Selected: pad(t, pd), HasSelected: true, Playing: playing, Position: pos}})
+	}
+	// 1 3 3 7 in bank A: pad 1 is the selected pad already, so it is seen as its sample sounding;
+	// pad 3 twice (the second as its sample starting over).
+	poll("A1", true, 100)
+	poll("A3", false, 0)
+	poll("A3", true, 6000)
+	poll("A3", false, 0)
+	poll("A7", false, 0)
+	if !s.m().liveOn || s.m().section != secPerform {
+		t.Fatalf("after 1 3 3 7: live %v, section %d", s.m().liveOn, s.m().section)
+	}
+	// The same pads, in another bank, switch it off again.
+	poll("B1", true, 100)
+	poll("B3", false, 0)
+	poll("B3", true, 6000)
+	poll("B3", false, 0)
+	poll("B7", false, 0)
+	if s.m().liveOn || s.m().section == secPerform {
+		t.Fatalf("1 3 3 7 again: live %v, section %d", s.m().liveOn, s.m().section)
+	}
+	// 1 16 16 16 starts a recording; a sample that starts over is another hit.
+	poll("C1", true, 100)
+	poll("C16", true, 9000)
+	poll("C16", true, 100)
+	poll("C16", true, 50)
+	s.shows("REC")
+	if fake.started != 1 {
+		t.Fatalf("started %d recordings", fake.started)
+	}
+	poll("D1", true, 100)
+	poll("D16", true, 9000)
+	poll("D16", true, 100)
+	poll("D16", true, 50)
+	if stopped != 1 || s.m().rec != nil {
+		t.Errorf("the code again: stopped %d, still recording %v", stopped, s.m().rec != nil)
+	}
+}
+
+func TestTheCodesAreSetInConfig(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("6", "G")
+	s.shows("Pad codes on the unit", "1 3 3 7", "1 16 16 16")
+	s.press("k", "enter")
+	s.shows("Pads for the live mode")
+	s.press("ctrl+u")
+	s.typeText("2 4 4 8")
+	s.press("enter")
+	if got := s.m().liveCode(); fmt.Sprint(got) != "[2 4 4 8]" {
+		t.Errorf("live code %v", got)
+	}
+	// A code that is not pad numbers is refused; off turns one off.
+	s.press("j", "enter")
+	s.press("ctrl+u")
+	s.typeText("1 99")
+	s.press("enter")
+	s.shows("pad numbers from 1 to 16")
+	s.press("enter", "ctrl+u")
+	s.typeText("off")
+	s.press("enter")
+	if len(s.m().recCode()) != 0 {
+		t.Errorf("rec code %v after off", s.m().recCode())
+	}
+}

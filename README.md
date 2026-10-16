@@ -72,6 +72,18 @@ marked `▼ OUT NEXT`. Below that, what goes to each bus (BUS 1 and BUS 2, in th
 note of the effect on it (`f`, `F`), because the unit does not tell the effect. A recording started
 with `Ctrl-R` is shown at the top.
 
+### Pad codes (experimental)
+
+Pads hit in turn on the unit can switch things on: **1 3 3 7** switches the live mode (the Perform tab,
+and back to where you were), **1 16 16 16** starts a recording and the same code stops it. Any bank
+counts; the pad numbers are what matter, and a code has to be played within four seconds. Config (`6`)
+sets both codes (pad numbers 1 to 16 with spaces between; `off` turns one off). The unit sends nothing
+when a pad is hit, so this is read from the pad it has selected and from how far the pad that sounds
+has played, and the unit is asked about ten times a second while a code is set. That means: a pad
+that is hit again while it is the selected one shows only through its sample starting over, so the
+pads that repeat in a code need a sample, and the first pad of a code is not seen if it was the
+selected pad already and makes no sound.
+
 ### Connecting
 
 The UI starts even with no unit, shows a waiting screen, connects by itself when you plug
