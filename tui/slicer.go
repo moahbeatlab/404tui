@@ -1615,7 +1615,7 @@ func (m Model) slicerStyle(c cellStyle) lipgloss.Style {
 		if c.selected {
 			return lipgloss.NewStyle().Foreground(st.th.hot).Bold(true)
 		}
-		return lipgloss.NewStyle().Foreground(st.th.dim)
+		return lipgloss.NewStyle().Foreground(st.th.text)
 	}
 	if c.slice < 0 {
 		return lipgloss.NewStyle().Foreground(st.th.faint)
@@ -1774,6 +1774,11 @@ func (m Model) slicerBox() string {
 				e := edge[c*2]
 				e.put(edge[c*2+1], s.at)
 				styles[c] = cellStyle{kind: cellEdge, slice: e.slice - 1, selected: e.slice-1 == s.at, end: e.end}
+				// A line, not dots: it reads as a cut whatever the waveform does beside it.
+				text[c] = '│'
+				if styles[c].selected {
+					text[c] = '║'
+				}
 			}
 		}
 		wave[r] = m.slicerRuns(text, styles)
