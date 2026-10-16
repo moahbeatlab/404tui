@@ -47,3 +47,5 @@ Slice edges in the slicer waveform are hairlines `▏▕`. Key menu under the ra
 indent. Rename/text prompts have cursor editing (Ctrl-A/E etc.). Folder-use markers (`◆`, `W` scan).
 Open: mouse clicks in ranger Files not adapted; layout redesign (A/B/C) parked; tag-index storage format
 (todo.md); header tabs may jump between header/row during the CONNECTED banner on borderline widths.
+
+2026-10-17: `ranger` (which contained `slicer` and `pattern-tools`) was fast-forward merged into `main` and pushed (main = 5d64188). Work continues on `main`; the old branches `slicer`, `ranger`, `pattern-tools` still exist on origin (not deleted). Also shipped since: Config tab (6) with bus rule by pad name (words per bus, colours, scan with B in Pads), offline project folders named "NN Name", Hold default 100 for assigned/new pads, `?` = searchable command list everywhere, V selects across tracks, EXTEND tool, new-pattern length question.
