@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -6042,5 +6043,165 @@ func TestMidiSettingsAreReadAndRefused(t *testing.T) {
 	}
 	if _, ok := padOfNote(60); ok {
 		t.Error("note 60 is not a pad")
+	}
+}
+
+// fakeMIDI is a MIDI source the test plays: Open hands it the callback the driver would be given,
+// and a message is played into it from another goroutine, as the driver's thread does.
+type fakeMIDI struct {
+	mu      sync.Mutex
+	opens   []string
+	failFor int // the first opens fail, as before the unit is plugged in
+	on      func(midiin.Event)
+	stopped int
+}
+
+func (f *fakeMIDI) Ports() ([]string, error) { return []string{"SP-404MKII"}, nil }
+
+func (f *fakeMIDI) Open(part string, on func(midiin.Event)) (func(), string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.opens = append(f.opens, part)
+	if len(f.opens) <= f.failFor {
+		return nil, "", errors.New("no MIDI input with " + part + " in its name")
+	}
+	f.on = on
+	return func() { f.mu.Lock(); f.stopped++; f.mu.Unlock() }, "SP-404MKII", nil
+}
+
+// play sends raw MIDI bytes the way the driver does: parsed, into the callback.
+func (f *fakeMIDI) play(t *testing.T, raw ...byte) {
+	t.Helper()
+	e, ok := midiin.Parse(raw)
+	if !ok {
+		t.Fatalf("% x is not a message", raw)
+	}
+	f.mu.Lock()
+	on := f.on
+	f.mu.Unlock()
+	on(e)
+}
+
+func (f *fakeMIDI) listening() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.on != nil
+}
+
+// eventually waits for a condition that a running program brings about.
+func eventually(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	for i := 0; i < 400; i++ {
+		if cond() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("never happened: %s", what)
+}
+
+// The whole way, in a program that runs: the input is opened when it starts (and again after a
+// failure, until the unit is there), and raw bytes played into the driver's callback end as pad
+// codes, a recording, and the clock, with no help from the test but the bytes.
+func TestRawMIDIBytesDriveARunningProgram(t *testing.T) {
+	old := tickEvery
+	tickEvery = 5 * time.Millisecond
+	defer func() { tickEvery = old }()
+	s := open(t)
+	stopped := 0
+	rec := &fakeRecorder{stopped: &stopped}
+	src := &fakeMIDI{failFor: 2}
+	m := s.m().WithRecorder(rec).WithMIDI(src)
+	m.mem.RecordDir = t.TempDir()
+	p := tea.NewProgram(m, tea.WithInput(nil), tea.WithOutput(io.Discard), tea.WithoutSignals())
+	done := make(chan Model, 1)
+	go func() {
+		final, err := p.Run()
+		if err != nil {
+			t.Error(err)
+		}
+		done <- final.(Model)
+	}()
+	p.Send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	// The first two tries fail (no unit plugged in): the third finds the input.
+	eventually(t, "the input is opened after two failures", src.listening)
+	src.mu.Lock()
+	opens := len(src.opens)
+	src.mu.Unlock()
+	if opens != 3 {
+		t.Errorf("the input was opened %d times, want 3", opens)
+	}
+	// The bank A pads 1 3 3 7 as raw bytes: note on, channel 1.
+	for _, n := range []byte{48, 50, 50, 46} {
+		src.play(t, 0x90, n, 100)
+		src.play(t, 0x80, n, 0)
+	}
+	// Then 1 16 16 16 on channel 3 (bank C): a recording starts and runs.
+	for _, n := range []byte{48, 39, 39, 39} {
+		src.play(t, 0x92, n, 90)
+	}
+	eventually(t, "the recording started", func() bool { return rec.started == 1 })
+	// A start and 24 ticks to the quarter note, nine quarter notes.
+	src.play(t, 0xFA)
+	for i := 0; i < 24*9; i++ {
+		src.play(t, 0xF8)
+	}
+	// The control channel: note 60 on channel 16 (0x9F) brings the live mode back on.
+	src.play(t, 0x9F, 60, 127)
+	// Every message is a pass through the program's loop and a draw; they are let go through.
+	time.Sleep(3 * time.Second)
+	p.Quit()
+	var final Model
+	select {
+	case final = <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the program did not end")
+	}
+	// 1 3 3 7 switched the live mode on, and note 60 on channel 16 switched it off again... then
+	// the recording code started the recording; the quit stopped nothing by itself, so it runs.
+	if final.rec == nil {
+		t.Error("the recording of 1 16 16 16 is not running")
+	}
+	if final.clock == nil || final.clock.ticks != 24*9 {
+		t.Errorf("the clock counted %v ticks, want %d", final.clock, 24*9)
+	}
+	if got := final.clockText(0); !strings.Contains(got, "BAR 3 · BEAT 2") {
+		t.Errorf("clock text %q", got)
+	}
+	// 1 3 3 7 turned the live mode on and the control note turned it off.
+	if final.liveOn {
+		t.Error("the live mode is still on after note 60 on channel 16")
+	}
+}
+
+func TestChangingTheMIDIInputInConfigClosesTheOldOneAndOpensTheNew(t *testing.T) {
+	s := open(t)
+	src := &fakeMIDI{}
+	m := s.m().WithMIDI(src)
+	opened := m.startMIDI()
+	msg := opened()
+	next, _ := m.Update(msg)
+	m = next.(Model)
+	if m.midi == nil || m.midi.name != "SP-404MKII" {
+		t.Fatalf("not listening: %+v", m.midi)
+	}
+	// A new part of the name: the old input is stopped, a new open is asked for with it.
+	nm, cmd := m.applyMidi(0, "Keystation")
+	m = nm.(Model)
+	if src.stopped != 1 {
+		t.Errorf("the old input was stopped %d times, want 1", src.stopped)
+	}
+	msg = cmd()
+	if _, ok := msg.(midiOpenedMsg); !ok {
+		t.Fatalf("the command gave %T", msg)
+	}
+	if got := src.opens[len(src.opens)-1]; got != "keystation" {
+		t.Errorf("opened with %q, want keystation", got)
+	}
+	// A message from the input that was closed is ignored.
+	old := &midiLink{ch: make(chan midiin.Event, 1)}
+	next, _ = m.midiEvent(midiMsg{link: old, ev: midiin.Event{Kind: midiin.Start}})
+	if next.(Model).clock != nil && next.(Model).clock.running {
+		t.Error("a message of a closed input was acted on")
 	}
 }
