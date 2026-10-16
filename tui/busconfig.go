@@ -140,11 +140,13 @@ func (m Model) configBody(g geom) string {
 		return lipgloss.NewStyle().Foreground(c).Bold(true)
 	}
 	row := func(i int, label, value, hint string) string {
-		marker, name := "  ", st.text.Render(fmt.Sprintf("%-*s", labelW, label))
+		// The label can hold coloured text, so its room is counted in cells, not bytes.
+		pad := strings.Repeat(" ", max(labelW-ansi.StringWidth(label), 2))
+		marker, name := "  ", st.text.Render(label)
 		if i == m.cfgAt {
-			marker, name = st.accent.Render("▶ "), st.bold.Render(fmt.Sprintf("%-*s", labelW, label))
+			marker, name = st.accent.Render("▶ "), st.bold.Render(label)
 		}
-		return marker + name + value + "  " + st.dim.Render(hint)
+		return marker + name + pad + value + "  " + st.dim.Render(hint)
 	}
 	valueW := max(g.bodyW-labelW-24, 20)
 	words := func(list []string) string {

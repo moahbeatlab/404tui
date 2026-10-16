@@ -5450,3 +5450,20 @@ func TestZeroResetsANoteToOneStepOnTheGrid(t *testing.T) {
 		t.Errorf("after 0 in a selection the note is %d ticks, want %d", got, step)
 	}
 }
+
+func TestConfigRowsKeepTheirValuesApartFromTheLabels(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("6")
+	view := ansi.Strip(s.m().View())
+	for _, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, "Words for samples on BUS") || strings.Contains(line, "Colour of BUS") {
+			if strings.Contains(line, "BUS 1kick") || strings.Contains(line, "BUS 2kick") || strings.Contains(line, "BUS 2██") || strings.Contains(line, "BUS 1██") {
+				t.Errorf("a value is up against its label: %q", line)
+			}
+			if strings.Contains(line, "BUS 2") && !strings.Contains(line, "BUS 2  ") {
+				t.Errorf("less than two spaces after the label: %q", line)
+			}
+		}
+	}
+}
