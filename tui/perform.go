@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -118,8 +119,12 @@ func (m Model) perfRecLine() string {
 	if m.rec == nil {
 		return ""
 	}
-	return lipgloss.NewStyle().Foreground(m.st.th.hot).Bold(true).Render("● RECORDING") +
+	text := lipgloss.NewStyle().Foreground(m.st.th.hot).Bold(true).Render("● RECORDING") +
 		m.st.dim.Render("  "+display(m.rec.Path)+"   Ctrl-R stops it")
+	if m.lvl != nil && m.lvl.ok {
+		text += "   " + m.clipBadge(time.Now()) + m.st.text.Render(" "+strings.TrimSpace(dbText(math.Max(m.lvl.hold[0], m.lvl.hold[1]))))
+	}
+	return text
 }
 
 // perfPads are the pads that play in a pattern, in pad order, with their sample names.

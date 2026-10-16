@@ -2,8 +2,10 @@ package tui
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -106,6 +108,13 @@ func (m Model) recBadge() string {
 	}
 	d := time.Since(m.rec.Started).Truncate(time.Second)
 	text := fmt.Sprintf(" %s REC %02d:%02d  %s ", dot, int(d.Minutes()), int(d.Seconds())%60, humanBytes(m.rec.Size()))
+	if m.lvl != nil && m.lvl.ok {
+		// How loud, and a warning when it clipped: that is what to look at while playing.
+		text = strings.TrimRight(text, " ") + "  " + strings.TrimSpace(dbText(math.Max(m.lvl.hold[0], m.lvl.hold[1]))) + " "
+		if m.lvl.clipping(time.Now()) {
+			text += "CLIP! "
+		}
+	}
 	return lipgloss.NewStyle().Background(m.st.th.hot).Foreground(m.st.th.cursorFg).Bold(true).Render(text)
 }
 

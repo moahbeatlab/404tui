@@ -118,6 +118,12 @@ the input with `404` in its name (set in Config, `6`). What it does:
   has not been heard on MIDI for a whole round, while other pads have, is shown as MUTED (a × on its tile,
   MUTED in the player and in the patterns view). It works only if the unit sends its pad notes over MIDI
   while a pattern plays; check the MIDI monitor in Config while one runs.
+- **Recording level:** while Ctrl-R records, a level meter shows how loud the sound is: the header badge
+  carries the peak in dB (0 dB is full scale), and Perform has a big stereo meter (L and R bars from -60 to
+  0 dB, green, then yellow, then red near the top, with the highest peak held for a moment) and a clip
+  light. CLIP lights when the sound reached full scale (above -0.3 dB) and stays on for five seconds: it
+  means the recording is distorted, so turn the unit's volume or the pad levels down. It reads the end of
+  the WAV file as it is written, so it needs nothing but the recording itself.
 - **Layout:** on a wide screen (110 columns and up) Perform is split: the pads of the bank the unit is on in
   the right 70%, with their whole names in plain text, and the left 30% for what you read from afar: the
   beat of the bar as four big blocks, the cue (what plays, what is next, what comes in and goes out), the

@@ -309,6 +309,11 @@ func (m Model) perfSidebar(width, h int) []string {
 	head := lipgloss.NewStyle().Foreground(st.th.accent).Bold(true).Render(fmt.Sprintf("BANK %c", 'A'+bank)) +
 		st.dim.Render(fmt.Sprintf("   %.2f BPM", m.bankTempo(bank)))
 	add(head)
+	if lines := m.levelLines(width); lines != nil {
+		// While recording: how loud it is, and the clip light.
+		add(lines...)
+		add("")
+	}
 	if clock := m.clockText(bars); clock != "" {
 		add(lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render("♩ " + clock))
 	}

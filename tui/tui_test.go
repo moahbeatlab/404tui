@@ -5642,6 +5642,38 @@ type fakeRecorder struct {
 	started     int
 	err         error
 	stopped     *int
+	// loud is the sample value (24 bit) of the recording's end; 0 means half scale.
+	loud int32
+}
+
+// fakeWAV is a stereo 24-bit WAV of about 3 MB whose last frames are at the given level.
+func fakeWAV(loud int32) []byte {
+	var b []byte
+	le32 := func(v uint32) { b = binary.LittleEndian.AppendUint32(b, v) }
+	le16 := func(v uint16) { b = binary.LittleEndian.AppendUint16(b, v) }
+	b = append(b, "RIFF"...)
+	le32(0xFFFFFFFF)
+	b = append(b, "WAVEfmt "...)
+	le32(16)
+	le16(1)
+	le16(2)
+	le32(48000)
+	le32(48000 * 6)
+	le16(6)
+	le16(24)
+	b = append(b, "data"...)
+	le32(0xFFFFFFFF)
+	frames := (3 << 20) / 6
+	for i := 0; i < frames; i++ {
+		v := int32(0)
+		if i >= frames-6000 {
+			v = loud
+		}
+		for c := 0; c < 2; c++ {
+			b = append(b, byte(v), byte(v>>8), byte(v>>16))
+		}
+	}
+	return b
 }
 
 func (f *fakeRecorder) Start(dir, device string) (*record.Session, error) {
@@ -5652,7 +5684,11 @@ func (f *fakeRecorder) Start(dir, device string) (*record.Session, error) {
 	f.started++
 	path := filepath.Join(dir, "take.wav")
 	_ = os.MkdirAll(dir, 0o755)
-	_ = os.WriteFile(path, make([]byte, 3<<20), 0o644)
+	level := f.loud
+	if level == 0 {
+		level = 4194304
+	}
+	_ = os.WriteFile(path, fakeWAV(level), 0o644)
 	return record.NewSession(path, "fake", func() error { *f.stopped++; return nil }), nil
 }
 
@@ -6521,6 +6557,46 @@ func TestWrapNameKeepsTheWholeNameWhenThereIsRoom(t *testing.T) {
 		got := wrapName(c.name, c.w, c.n)
 		if strings.Join(got, "|") != strings.Join(c.want, "|") {
 			t.Errorf("wrapName(%q, %d, %d) = %q, want %q", c.name, c.w, c.n, got, c.want)
+		}
+	}
+}
+
+func TestTheRecordingShowsItsLevelAndAClipLight(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		loud int32
+		clip bool
+	}{{"half scale", 4194304, false}, {"full scale", 8388607, true}} {
+		s := open(t)
+		s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+		stopped := 0
+		m := s.m().WithRecorder(&fakeRecorder{stopped: &stopped, loud: c.loud})
+		m.mem.RecordDir = t.TempDir()
+		s.model = m
+		s.press("ctrl+r")
+		// A tick reads the end of the file.
+		s.send(tickMsg{})
+		if s.m().lvl == nil || !s.m().lvl.ok {
+			t.Fatalf("%s: no level read", c.name)
+		}
+		s.press("7")
+		s.shows("REC LEVEL")
+		if c.clip {
+			s.shows("CLIP", "too loud")
+		} else {
+			s.shows("-6.0 dB", "loudest so far")
+			s.hides("too loud")
+		}
+		// The header carries the level too, wherever the user is.
+		s.press("1")
+		if c.clip {
+			s.shows("CLIP!")
+		} else {
+			s.shows("-6.0 dB")
+		}
+		s.press("ctrl+r")
+		if s.m().lvl != nil {
+			t.Errorf("%s: the meter outlived the recording", c.name)
 		}
 	}
 }

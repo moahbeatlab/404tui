@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -303,6 +304,7 @@ type Model struct {
 	// recorder starts recordings of the unit's audio input; rec is the one running.
 	recorder record.Backend
 	rec      *record.Session
+	lvl      *levelMeter // the level of the recording that runs
 	// perfNow and perfNext are the pattern that plays and the one that comes next, as the
 	// Perform view shows them: what the user says, the unit does not tell.
 	perfNow, perfNext *proto.PadIndex
@@ -1112,6 +1114,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.midiEvent(msg)
 	case tickMsg:
 		m.frame++
+		m.sampleLevel()
 		if m.midiSrc != nil && m.midi == nil && !m.midiOpening && m.frame%50 == 25 {
 			// The unit's MIDI input appears when it is plugged in: it is looked for now and then.
 			m.midiOpening = true
@@ -1493,6 +1496,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.rec = msg.session
+		m.lvl = &levelMeter{hold: [2]float64{math.Inf(-1), math.Inf(-1)}, peak: [2]float64{math.Inf(-1), math.Inf(-1)}, top: math.Inf(-1)}
 		m.log.Info("recording started", "path", msg.session.Path, "tool", msg.session.Tool)
 		m.message = "recording to " + display(msg.session.Path) + " (" + msg.session.Tool + "): Ctrl-R stops it"
 		if m.midi != nil {
@@ -1511,7 +1515,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case recEndedMsg:
 		m.log.Info("recording ended", "path", msg.path, "bytes", msg.size, "err", msg.err)
 		if m.rec == msg.session {
-			m.rec = nil
+			m.rec, m.lvl = nil, nil
 			m.closePerfLog()
 			m.perfLog = nil
 		}
