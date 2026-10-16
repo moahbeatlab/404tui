@@ -84,6 +84,14 @@ func (m Model) stopRecordingNow() {
 	if m.rec != nil {
 		_ = m.rec.Stop()
 	}
+	m.closePerfLog()
+}
+
+// closePerfLog finishes the event log of a recording.
+func (m Model) closePerfLog() {
+	if m.perfLog != nil {
+		_ = m.perfLog.Close()
+	}
 }
 
 // recBadge is the mark in the header while a recording runs: red, with how long it has gone on and

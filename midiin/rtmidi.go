@@ -58,11 +58,17 @@ func (rtSource) Open(part string, on func(Event)) (func(), string, error) {
 		drv.Close()
 		return nil, "", err
 	}
+	// RtMidi leaves out the clock (it counts as time code), system exclusive and active sensing
+	// unless asked; the clock is wanted, and the monitor shows what the unit sends besides.
 	stopListening, err := in.Listen(func(msg []byte, _ int32) {
 		if e, ok := Parse(msg); ok {
 			on(e)
 		}
-	}, drivers.ListenConfig{})
+	}, drivers.ListenConfig{
+		TimeCode: true,
+		SysEx:    true,
+		OnSysEx:  func(b []byte) { on(Event{Kind: Sysex, Raw: b}) },
+	})
 	if err != nil {
 		in.Close()
 		drv.Close()

@@ -99,6 +99,7 @@ func (m Model) startMIDI() tea.Cmd {
 	return func() tea.Msg {
 		link := &midiLink{ch: make(chan midiin.Event, 512)}
 		stop, name, err := src.Open(part, func(e midiin.Event) {
+			e.At = time.Now() // when it arrived, not when the program gets to it
 			select {
 			case link.ch <- e:
 			default: // nobody is reading: a clock is not worth waiting for
@@ -187,22 +188,33 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 	if m.clock == nil {
 		m.clock = &clockState{}
 	}
+	if m.mon == nil {
+		m.mon = newMonitor()
+	}
+	m.mon.add(e)
 	switch e.Kind {
 	case midiin.Clock:
 		m.clock.ticks++
 		m.clock.at = time.Now()
 		m.clock.running = true
+		m.mon.tick(e.At, m.clock.ticks)
+		m.logMIDI(e)
 		return m, next
 	case midiin.Start:
 		m.clock.ticks, m.clock.running, m.clock.at = 0, true, time.Now()
+		m.mon.beatAt = time.Time{}
+		m.logMIDI(e)
 		return m, next
 	case midiin.Continue:
 		m.clock.running, m.clock.at = true, time.Now()
+		m.logMIDI(e)
 		return m, next
 	case midiin.Stop:
 		m.clock.running = false
+		m.logMIDI(e)
 		return m, next
 	}
+	m.logMIDI(e)
 	ctl := m.midiChan()
 	// A message on the control channel: a note on, or a controller turned up.
 	if ctl != 0 && e.Channel == ctl {

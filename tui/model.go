@@ -21,6 +21,7 @@ import (
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/perflog"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/proto/fileapi"
 	"github.com/moahbeatlab/404tui/record"
@@ -313,6 +314,9 @@ type Model struct {
 	midiErr     string
 	midiPadAt   time.Time
 	clock       *clockState
+	// mon is what the MIDI input said lately; perfLog the event log of the recording that runs.
+	mon     *monitor
+	perfLog *perflog.Log
 	// codes holds the pads hit lately, for the codes that start the live mode and a recording;
 	// liveOn is set while the live mode is on, liveBack the view it goes back to.
 	codes    *codeState
@@ -1477,10 +1481,22 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.rec = msg.session
 		m.message = "recording to " + display(msg.session.Path) + " (" + msg.session.Tool + "): Ctrl-R stops it"
+		if m.midi != nil {
+			// What the unit sends goes into a log beside the audio.
+			l, note := m.startPerfLog(msg.session.Path, msg.session.Started)
+			m.perfLog = l
+			if note != "" {
+				m.message = note
+			} else {
+				m.message += " · events to " + display(l.Path)
+			}
+		}
 		return m, waitRecording(msg.session)
 	case recEndedMsg:
 		if m.rec == msg.session {
 			m.rec = nil
+			m.closePerfLog()
+			m.perfLog = nil
 		}
 		switch {
 		case msg.err != nil && !msg.onPurpose:
@@ -1533,6 +1549,12 @@ func (m Model) polled(msg pollMsg) (tea.Model, tea.Cmd) {
 		a := msg.activity
 		if m.padHit(m.hasSelected, a) && time.Since(m.midiPadAt) > 10*time.Second {
 			m, codeCmd = m.codeHit(int(a.Selected.Pad()) + 1)
+		}
+		if a.Playing != m.playing || a.Playing && a.Selected != m.playingPad {
+			m.perfLog.Add(time.Now(), "sound", perflog.P("on", a.Playing), perflog.P("bank", string(rune('A'+a.Selected.Bank()))), perflog.P("pad", int(a.Selected.Pad())+1))
+		}
+		if a.HasSelected && (!m.hasSelected || a.Selected != m.selected) {
+			m.perfLog.Add(time.Now(), "select", perflog.P("bank", string(rune('A'+a.Selected.Bank()))), perflog.P("pad", int(a.Selected.Pad())+1))
 		}
 		m.playing, m.playPos = a.Playing, a.Position
 		if a.HasSelected {

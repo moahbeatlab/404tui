@@ -99,6 +99,10 @@ func (m Model) configKey(name string) (tea.Model, tea.Cmd) {
 		m.cfgAt = min(m.cfgAt+1, cfgRows-1)
 	case "k", "up":
 		m.cfgAt = max(m.cfgAt-1, 0)
+	case "c":
+		m.mon = newMonitor()
+		m.message = "the MIDI monitor is empty"
+		return m, nil
 	case "g":
 		m.cfgAt = 0
 	case "G":
@@ -232,11 +236,15 @@ func (m Model) configBody(g geom) string {
 		row(cfgMidiMap+3, "Clear the next pattern", st.text.Render(m.midiMapText(3)), "Enter edits"),
 		st.dim.Render(m.midiLine()),
 		"",
+	}
+	lines = append(lines, m.monitorLines()...)
+	lines = append(lines,
+		"",
 		st.dim.Render("A word matches a word of the pad's name (Kick_125, OHat, DrumLoop, 14_Perc1) and a longer one by its start;"),
 		st.dim.Render("where a name has words of both, BUS 1 wins. B in Pads sets the buses of the bank, the marked pads or the project."),
 		"",
 		st.bold.Render(fmt.Sprintf("What it makes of bank %c", 'A'+m.bank)),
-	}
+	)
 	bank := m.snap.Bank(m.bank)
 	colW := max((g.bodyW-4)/2, 30)
 	for i := 0; i < len(bank); i += 2 {

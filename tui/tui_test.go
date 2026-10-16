@@ -27,6 +27,7 @@ import (
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/perflog"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/record"
 	"github.com/moahbeatlab/404tui/sim"
@@ -6205,3 +6206,86 @@ func TestChangingTheMIDIInputInConfigClosesTheOldOneAndOpensTheNew(t *testing.T)
 		t.Error("a message of a closed input was acted on")
 	}
 }
+
+func TestARecordingWritesWhatTheUnitSendsToAnEventLogAndPerformShowsIt(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	stopped := 0
+	dir := t.TempDir()
+	m := s.m().WithRecorder(&fakeRecorder{stopped: &stopped})
+	m.mem.RecordDir = dir
+	link := &midiLink{ch: make(chan midiin.Event, 4)}
+	m.midi, m.midiSrc = link, &fakeMIDI{}
+	s.model = m
+	s.press("ctrl+r")
+	if s.m().rec == nil || s.m().perfLog == nil {
+		t.Fatalf("recording %v, log %v", s.m().rec != nil, s.m().perfLog != nil)
+	}
+	at := s.m().rec.Started
+	feed := func(after time.Duration, e midiin.Event) {
+		e.At = at.Add(after)
+		next, _ := s.m().midiEvent(midiMsg{link: link, ev: e})
+		s.model = next
+	}
+	feed(1500*time.Millisecond, midiin.Event{Kind: midiin.NoteOn, Channel: 3, Data1: 48, Data2: 100})
+	feed(1700*time.Millisecond, midiin.Event{Kind: midiin.NoteOff, Channel: 3, Data1: 48})
+	feed(2*time.Second, midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 74, Data2: 100})
+	feed(2100*time.Millisecond, midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 74, Data2: 20})
+	feed(2200*time.Millisecond, midiin.Event{Kind: midiin.ProgramChange, Channel: 1, Data1: 5})
+	feed(2300*time.Millisecond, midiin.Event{Kind: midiin.Sysex, Raw: []byte{0xF0, 0x41, 0xF7}})
+	feed(3*time.Second, midiin.Event{Kind: midiin.Start})
+	for i := 0; i < 49; i++ { // two beats and the first tick of the third
+		feed(3*time.Second+time.Duration(i)*20833*time.Microsecond, midiin.Event{Kind: midiin.Clock})
+	}
+	// The pad is hit again, and Perform shows it, the knob and the last messages.
+	feed(4*time.Second, midiin.Event{Kind: midiin.NoteOn, Channel: 3, Data1: 49, Data2: 90})
+	if !s.m().mon.hot(2, 1, at.Add(4*time.Second)) || s.m().mon.hot(2, 0, at.Add(4*time.Second)) {
+		t.Error("the pad that was hit is not hot (or its neighbour is)")
+	}
+	one, _ := proto.ParsePad("A2")
+	m = s.m()
+	m.perfNow = &one
+	s.model = m
+	s.press("7")
+	s.shows("MOVING")
+	s.shows("cc 74")
+	s.shows("LAST")
+	s.shows("bank C pad 2")
+	s.press("v")
+	s.shows("cc 74")
+	// Config lists the messages.
+	s.press("6")
+	s.shows("MIDI monitor")
+	s.shows("program")
+	s.press("ctrl+r")
+	if s.m().perfLog != nil && s.m().rec != nil {
+		t.Error("the recording did not end")
+	}
+	es, err := perflog.Read(perflog.PathFor(filepath.Join(dir, "take.wav")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := ""
+	for _, e := range es {
+		kinds += e["k"].(string) + " "
+	}
+	for _, want := range []string{"start ", "on ", "off ", "cc ", "program ", "sysex ", "beat "} {
+		if !strings.Contains(kinds, want) {
+			t.Errorf("no %q in the log: %s", want, kinds)
+		}
+	}
+	if es[1]["k"] != "on" || es[1]["t"] != 1.5 || es[1]["bank"] != "C" || es[1]["pad"] != 1.0 || es[1]["ch"] != 3.0 {
+		t.Errorf("first event %v", es[1])
+	}
+	var beats []Entry
+	for _, e := range es {
+		if e["k"] == "beat" {
+			beats = append(beats, e)
+		}
+	}
+	if len(beats) != 3 || beats[2]["n"] != 2.0 {
+		t.Errorf("beats %v", beats)
+	}
+}
+
+type Entry = perflog.Entry

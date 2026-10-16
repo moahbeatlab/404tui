@@ -6,6 +6,7 @@ package midiin
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Kind is what a message is.
@@ -21,10 +22,15 @@ const (
 	Start
 	Stop
 	Continue
+	// The rest are shown by the monitor and logged; nothing acts on them.
+	ProgramChange
+	Pressure // channel pressure or key pressure (Data1 the key, 0 for channel pressure)
+	PitchBend
+	Sysex
 )
 
 func (k Kind) String() string {
-	return [...]string{"note on", "note off", "cc", "clock", "start", "stop", "continue"}[k]
+	return [...]string{"note on", "note off", "cc", "clock", "start", "stop", "continue", "program", "pressure", "pitch bend", "sysex"}[k]
 }
 
 // Event is a message. Channel is 1 to 16 for a channel message and 0 for the others; Data1 is the
@@ -33,9 +39,15 @@ type Event struct {
 	Kind         Kind
 	Channel      int
 	Data1, Data2 int
+	// At is when the message arrived; Raw holds the bytes of a system exclusive message.
+	At  time.Time
+	Raw []byte
 }
 
 func (e Event) String() string {
+	if e.Kind == Sysex {
+		return fmt.Sprintf("sysex %d bytes", len(e.Raw))
+	}
 	if e.Channel == 0 {
 		return e.Kind.String()
 	}
@@ -58,12 +70,26 @@ func Parse(b []byte) (Event, bool) {
 	case 0xFC:
 		return Event{Kind: Stop}, true
 	}
-	if b[0] < 0x80 || b[0] >= 0xF0 || len(b) < 3 {
+	if b[0] < 0x80 || b[0] >= 0xF0 || len(b) < 2 {
 		return Event{}, false
 	}
 	ch := int(b[0]&0x0F) + 1
-	d1, d2 := int(b[1]&0x7F), int(b[2]&0x7F)
+	d1, d2 := int(b[1]&0x7F), 0
 	switch b[0] & 0xF0 {
+	case 0xC0:
+		return Event{Kind: ProgramChange, Channel: ch, Data1: d1}, true
+	case 0xD0:
+		return Event{Kind: Pressure, Channel: ch, Data2: d1}, true
+	}
+	if len(b) < 3 {
+		return Event{}, false
+	}
+	d2 = int(b[2] & 0x7F)
+	switch b[0] & 0xF0 {
+	case 0xA0:
+		return Event{Kind: Pressure, Channel: ch, Data1: d1, Data2: d2}, true
+	case 0xE0:
+		return Event{Kind: PitchBend, Channel: ch, Data1: d1 | d2<<7}, true
 	case 0x90:
 		if d2 == 0 {
 			return Event{Kind: NoteOff, Channel: ch, Data1: d1}, true

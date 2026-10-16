@@ -1,6 +1,9 @@
 package midiin
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestParseReadsTheMessagesTheAppUses(t *testing.T) {
 	for _, c := range []struct {
@@ -17,13 +20,16 @@ func TestParseReadsTheMessagesTheAppUses(t *testing.T) {
 		{[]byte{0xFA}, Event{Kind: Start}, true},
 		{[]byte{0xFB}, Event{Kind: Continue}, true},
 		{[]byte{0xFC}, Event{Kind: Stop}, true},
-		{[]byte{0xE0, 0, 64}, Event{}, false}, // pitch bend
-		{[]byte{0xFE}, Event{}, false},        // active sensing
+		{[]byte{0xE0, 0, 64}, Event{Kind: PitchBend, Channel: 1, Data1: 8192}, true},
+		{[]byte{0xC2, 5}, Event{Kind: ProgramChange, Channel: 3, Data1: 5}, true},
+		{[]byte{0xD0, 90}, Event{Kind: Pressure, Channel: 1, Data2: 90}, true},
+		{[]byte{0xA0, 48, 70}, Event{Kind: Pressure, Channel: 1, Data1: 48, Data2: 70}, true},
+		{[]byte{0xFE}, Event{}, false}, // active sensing
 		{[]byte{0x90, 48}, Event{}, false},
 		{nil, Event{}, false},
 	} {
 		got, ok := Parse(c.in)
-		if ok != c.ok || got != c.want {
+		if ok != c.ok || !reflect.DeepEqual(got, c.want) {
 			t.Errorf("Parse(% x) = %v, %v; want %v, %v", c.in, got, ok, c.want, c.ok)
 		}
 	}

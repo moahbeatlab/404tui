@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -30,9 +31,11 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.perfNow, m.perfNext = m.perfNext, nil
+		m.logCue()
 		return m, m.wanted()
 	case "x":
 		m.perfNext = nil
+		m.logCue()
 	case "v":
 		m.perfPatterns = !m.perfPatterns
 	case "f", "F":
@@ -139,7 +142,8 @@ func (m Model) perfBody(g geom) string {
 func (m Model) perfTile(row app.PadRow, w, h int) []string {
 	st := m.st
 	selected := m.hasSelected && m.selected == row.Pad
-	sounding := m.playing && m.playingPad == row.Pad
+	hit := m.mon.hot(int(row.Pad.Bank()), int(row.Pad.Pad()), time.Now())
+	sounding := m.playing && m.playingPad == row.Pad || hit
 	bg, fg := st.th.tile, st.th.text
 	switch {
 	case !row.HasSample:
@@ -247,6 +251,7 @@ func (m Model) perfBankBody(g geom) string {
 		}
 		bottom = append(bottom, st.dim.Render("PATTERNS  ")+st.text.Render(ansi.Truncate(line, width-12, "…")))
 	}
+	bottom = append(bottom, m.perfMovement(width)...)
 	bottom = append(bottom, st.dim.Render("a n  cue the patterns   Space  next becomes now   v  patterns big   f F  note a bus effect   Ctrl-R  record"))
 	// The tiles take what is left.
 	avail := g.bodyH - 2 - len(top) - len(bottom) - 2 - 3
@@ -445,6 +450,50 @@ func (m Model) perfPatternBody(g geom) string {
 	}
 	lines = append(lines, "")
 	lines = append(lines, m.perfBusLines(now, width)...)
+	lines = append(lines, "")
+	lines = append(lines, m.perfMovement(width)...)
 	lines = append(lines, "", st.dim.Render("a  the pattern that plays   n  the next one   Space  next becomes now   x  clear next   f F  note the effect of BUS 1, 2   Ctrl-R  record"))
 	return m.box("Perform", strings.Join(lines, "\n"), g.bodyW+g.bodyX-1, g.bodyH, true)
+}
+
+// perfMovement shows what the unit sends as it happens: the controllers that were moved lately as
+// bars, and the last messages. It keeps the same height whatever is going on, so the view does not
+// jump.
+func (m Model) perfMovement(width int) []string {
+	st := m.st
+	if m.midiSrc == nil {
+		return []string{st.dim.Render("MOVING  no MIDI in this build: the unit's knobs and pads show here when it has MIDI (make build)")}
+	}
+	if m.midi == nil {
+		return []string{st.dim.Render("MOVING  waiting for the unit's MIDI input (Config)")}
+	}
+	now := time.Now()
+	moving := m.mon.moving(now)
+	const barW = 24
+	lines := make([]string, 0, 4)
+	for i := 0; i < 3; i++ {
+		head := st.dim.Render("MOVING  ")
+		if i > 0 {
+			head = strings.Repeat(" ", 8)
+		}
+		if i < len(moving) {
+			c := moving[i]
+			fade := st.accent
+			if now.Sub(c.at) > 2*time.Second {
+				fade = st.dim
+			}
+			lines = append(lines, head+st.text.Render(fmt.Sprintf("ch %-2d cc %-3d ", c.ch, c.cc))+fade.Render(levelBar(barW, c.val, 127))+st.text.Render(fmt.Sprintf(" %3d", c.val)))
+		} else if i == 0 {
+			lines = append(lines, head+st.dim.Render("turn a knob or hit a pad on the unit"))
+		} else {
+			lines = append(lines, "")
+		}
+	}
+	last := m.mon.last(3)
+	text := ""
+	for _, l := range last {
+		text += strings.Join(strings.Fields(l.text), " ") + "   "
+	}
+	lines = append(lines, st.dim.Render("LAST    ")+st.text.Render(ansi.Truncate(strings.TrimSpace(text), width-10, "…")))
+	return lines
 }

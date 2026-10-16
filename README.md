@@ -99,6 +99,15 @@ the input with `404` in its name (set in Config, `6`). What it does:
 - **Control channel:** a note (or a controller turned up past half) on the control channel, 16 to start
   with, does an action: notes 60 to 63 switch the live mode, start and stop a recording, make the next
   pattern the one that plays, and clear it. The channel and each message are set in Config.
+- **Movement in Perform:** pads hit on the unit light up in the Perform tab, the controllers that were
+  moved lately (knobs) show as bars with their channel and number, and the last messages scroll under
+  them. Config has a MIDI monitor (counts per kind, the tempo of the clock, the last messages; `c`
+  clears) to see what the unit and anything plugged into it really send.
+- **Event log:** while Ctrl-R records the unit's audio, everything above is also written beside the WAV
+  as `name.events.jsonl`, one JSON object per line with its time in seconds from the start of the
+  audio (`on`/`off` with bank and pad, `cc`, `program`, `sysex`, `beat` with the tempo, `start`/`stop`,
+  `select`/`sound` from the polled pad, `pattern` for the cue). It is the base for replaying a
+  performance.
 
 ### Connecting
 

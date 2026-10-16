@@ -163,6 +163,7 @@ func (m Model) patternChooserKey(a *addAsk, name string) (tea.Model, tea.Cmd) {
 			} else {
 				m.perfNext = &slot
 			}
+			m.logCue()
 			return m, m.wanted()
 		}
 		return m.openSequencerPattern(row.Slot)
