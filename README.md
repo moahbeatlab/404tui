@@ -102,14 +102,13 @@ the input with `404` in its name (set in Config, `6`). What it does:
 - **Movement in Perform:** pads hit on the unit light up in the Perform tab by how hard they were hit and
   fade out (a stripe on the tile's edge is its bus, the selected pad is tinted), every controller seen
   gets a fader and a dial with its value and `channel:number` in a CONTROLS strip (the ones moved lately
-  are bright), and the last messages scroll under them. Config has a MIDI monitor (counts per kind, the tempo of the clock, the last messages; `c`
+  are bright). Config has a MIDI monitor (counts per kind, the tempo of the clock, the last messages; `c`
   clears) to see what the unit and anything plugged into it really send.
-- **Effects in Perform:** the unit does not say over USB which effect is on, but it may send a MIDI
-  message when you switch one. `l` (BUS 1) or `L` (BUS 2) learns it: press the key, then switch the effect
-  on or off on the unit; the next controller or note is taken as that bus's message (a controller from
-  half up, or a note on, is on; a note off is off). The FX line then shows `● ON` or `○ off` with what you
-  noted for the bus (`f`/`F`). The three knobs of a bus (CTRL 1 to 3) are CC 16 to 18 on channel 1 for bus 1 and channel 2 for
-  bus 2, shown under the bus as faders with the value; nothing to set up. Changes of an effect go to the event log as `fx`.
+- **Effects in Perform:** buses 1 and 2 send on channel 1 and 2 (the SP-404MKII's MIDI): CC 83 says which
+  effect a bus holds (its name is shown), CC 19 switches it (0 to 63 off, 64 and up on), and CC 16 to 18 are
+  its knobs CTRL 1 to 3, shown as faders C1 to C3 with the value. Nothing to set up; until the unit has sent
+  an effect, the bus says so. `f`/`F` notes what you use a bus for. Changes of an effect go to the event
+  log as `fx`, with the effect's name.
 - **Pattern player:** `p` in Perform shows the pattern you said plays (`a`) as the Sequencer draws it, a row
   per track with its notes over the bars the playhead is in, and a ▼ playhead that follows the unit's MIDI
   clock. The clock starts at the unit's Start; if the pattern began later, `s` says "the loop starts now".
@@ -117,20 +116,20 @@ the input with `404` in its name (set in Config, `6`). What it does:
   has not been heard on MIDI for a whole round, while other pads have, is shown as MUTED (a × on its tile,
   MUTED in the player and in the patterns view). It works only if the unit sends its pad notes over MIDI
   while a pattern plays; check the MIDI monitor in Config while one runs.
-- **Recording level:** while Ctrl-R records, a level meter shows how loud the sound is: the header badge
-  carries the peak in dB (0 dB is full scale), and Perform has a big stereo meter (L and R bars from -60 to
-  0 dB, green, then yellow, then red near the top, with the highest peak held for a moment) and a clip
-  light. CLIP lights when the sound reached full scale (above -0.3 dB) and stays on for five seconds: it
-  means the recording is distorted, so turn the unit's volume or the pad levels down. It reads the end of
-  the WAV file as it is written, so it needs nothing but the recording itself.
+- **Level:** the Perform view always shows how loud the unit is: a big stereo meter (L and R bars from
+  -60 to 0 dB, green, then yellow, then red near the top, with the highest peak held for a moment), the
+  loudest so far and a clip light. With ffmpeg (or sox) installed it listens to the unit's audio input
+  while Perform is open and nothing records (it writes nothing to disk, and stops when you leave Perform);
+  during a Ctrl-R recording it reads the end of the WAV file as it is written, and the header badge
+  carries the peak in dB. CLIP lights when the sound reached full scale (above -0.3 dB) and stays on for
+  five seconds: it means the sound is distorted, so turn the unit's volume or the pad levels down. The
+  first time, macOS may ask to let the terminal use the microphone.
 - **Layout:** on a wide screen (110 columns and up) Perform is split: the pads of the bank the unit is on in
-  the right half, with their whole names in plain text, and the left half for what you read from afar: the
-  beat of the bar as four big blocks, the cue (what plays, what is next, what comes in and goes out), the
-  patterns of the bank the unit is on (four at most, the one that plays and the next first; it follows
-  when you switch bank), and a panel for each bus: a big ON/off, your note, and its three knobs C1 to C3
-  as tall faders in the bus colour that light up while you turn them. Under them the other controllers as
-  faders and the last MIDI messages. Everything sits in titled panels; the faders take the height that is
-  left. Narrower sides put clock and cue, then everything, one under the other.
+  the right half, with their whole names in plain text (pads without a sample do not light up), and the
+  left half in titled panels: the beat of the bar as four big blocks, the level, a panel for each bus (ON
+  or off, the effect's name, your note, its knobs C1 to C3 as tall faders in the bus colour that light up
+  while you turn them), the other controllers as faders, and the keys. The faders take the height that is
+  left. Narrower sides put the panels one under the other.
 - **Pattern found from the unit:** while the unit's sequencer runs it sends every note its pattern plays
   over MIDI (channel = the pad's bank). 404tui takes those for what the pattern plays, not for pads hit
   by hand (so a pattern cannot trigger a pad code), and finds the pattern whose pads fit them: it becomes

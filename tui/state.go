@@ -58,9 +58,6 @@ type State struct {
 	// BusNotes are what the user wrote of the effect on each bus (the unit does not say), shown in
 	// the Perform view.
 	BusNotes [2]string `json:"busNotes,omitempty"`
-	// FxMsg is the MIDI message that says a bus's effect is on or off ("ch 1 cc 83" or "ch 1 note 60"),
-	// learned from the unit in the Perform view.
-	FxMsg [2]string `json:"fxMsg,omitempty"`
 
 	// ScanDir is the folder the last scan for where the samples came from looked in.
 	ScanDir string `json:"scanDir,omitempty"`

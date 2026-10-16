@@ -65,6 +65,10 @@ func (m Model) toggleRecording() (tea.Model, tea.Cmd) {
 		m.message = record.ErrNoTool.Error()
 		return m, nil
 	}
+	if m.lvl != nil && m.lvl.src != nil {
+		m.lvl.src.Stop() // the recorder takes the input
+		m.lvl = nil
+	}
 	b, dir, device := m.recorder, m.recordDir(), m.recordDevice()
 	m.message = "starting the recorder…"
 	return m, func() tea.Msg {
@@ -83,6 +87,9 @@ func waitRecording(s *record.Session) tea.Cmd {
 
 // stopRecordingNow ends a recording before the program quits, so the file is finished.
 func (m Model) stopRecordingNow() {
+	if m.lvl != nil && m.lvl.src != nil {
+		m.lvl.src.Stop()
+	}
 	if m.rec != nil {
 		_ = m.rec.Stop()
 	}

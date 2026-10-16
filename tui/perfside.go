@@ -258,18 +258,24 @@ func (m Model) fxPanel(bus, w, rows int, now time.Time) (string, lipgloss.Color,
 	st := m.st
 	colour, _ := st.th.busColour(int32(bus + 1))
 	bold := lipgloss.NewStyle().Foreground(colour).Bold(true)
-	state := st.dim.Render("?  " + map[int]string{0: "l", 1: "L"}[bus] + " learns its on/off")
-	if _, _, _, ok := fxMsg(m.mem.FxMsg[bus]); ok {
-		state = lipgloss.NewStyle().Background(st.th.faint).Foreground(st.th.text).Render("  off  ")
-		if m.fxOn[bus] {
-			state = lipgloss.NewStyle().Background(st.th.good).Foreground(st.th.cursorFg).Bold(true).Render("  ON   ")
+	state, name := m.fxState(bus)
+	if state != "" && m.fx[bus].onSeen {
+		bg := st.th.faint
+		fg := st.th.text
+		label := "  off  "
+		if m.fx[bus].on {
+			bg, fg, label = st.th.good, st.th.cursorFg, "  ON   "
 		}
+		state = lipgloss.NewStyle().Background(bg).Foreground(fg).Bold(m.fx[bus].on).Render(label)
+	}
+	if name == "" {
+		name = "effect not sent yet"
 	}
 	note := m.mem.BusNotes[bus]
-	if note == "" {
-		note = "no note (f F)"
+	lines := []string{state + "  " + bold.Render(name)}
+	if note != "" {
+		lines = append(lines, st.text.Render(note))
 	}
-	lines := []string{state + "  " + st.text.Render(note)}
 	cells := make([][]string, 0, 3)
 	for k := 0; k < 3; k++ {
 		label := fmt.Sprintf("C%d", k+1)
@@ -305,7 +311,7 @@ func (m Model) controlsPanel(w, rows int, now time.Time) (string, lipgloss.Color
 	if len(all) == 0 {
 		return "CONTROLS", st.th.accent, []string{st.dim.Render("turn a knob or move a fader"), st.dim.Render("on the unit or its MIDI in")}
 	}
-	cw := 9
+	cw := 11
 	n := max((w-4)/cw, 1)
 	title := "CONTROLS"
 	if len(all) > n {
@@ -324,26 +330,25 @@ func (m Model) controlsPanel(w, rows int, now time.Time) (string, lipgloss.Color
 }
 
 // perfSidebar is the whole left side, h lines high and width cells wide: panels for the clock, the
-// cue, the patterns, each bus's effect with its knobs, the other controllers, what came last and the
-// keys. From 76 cells wide two panels sit side by side.
+// level, each bus's effect with its knobs, the other controllers and the keys. From 76 cells wide the
+// clock and the level sit side by side, from 52 the two buses.
 func (m Model) perfSidebar(width, h int) []string {
 	st := m.st
 	now := time.Now()
 	bank := m.perfBank()
-	// Clock and cue need room side by side; the buses and the controllers fit from a narrower side.
 	wideTop, wide := width >= 76, width >= 52
 	half := width / 2
-	// The faders take the height that is left: the panels around them need about 30 lines side by
-	// side, and a recording adds its own.
-	spare, per := h-30, 2
+	// The faders take the height that is left: the other panels need about 24 lines side by side, a
+	// little more stacked, and the banner of a recording one more.
+	spare, per := h-24, 2
 	if !wideTop {
-		spare -= 4
+		spare -= 6
 	}
 	if !wide {
-		spare, per = h-50, 3
+		spare, per = h-40, 3
 	}
 	if m.rec != nil {
-		spare -= 6
+		spare--
 	}
 	rows := clamp(spare/per, 3, 14)
 	var out []string
@@ -351,19 +356,16 @@ func (m Model) perfSidebar(width, h int) []string {
 	if rec := m.perfRecLine(); rec != "" {
 		add(rec)
 	}
-	if lines := m.levelLines(width - 4); lines != nil {
-		add(m.panel("RECORDING", st.th.hot, lines, width)...)
-	}
-	bars := 0
-	if d, _ := m.perfTracks(m.perfNow); d != nil {
-		bars = d.Bars()
-	}
 	pw, pt := width, width
 	if wide {
 		pw = half
 	}
 	if wideTop {
 		pt = half
+	}
+	bars := 0
+	if d, _ := m.perfTracks(m.perfNow); d != nil {
+		bars = d.Bars()
 	}
 	clock := []string{lipgloss.NewStyle().Foreground(st.th.accent).Bold(true).Render(fmt.Sprintf("BANK %c", 'A'+bank)) +
 		st.dim.Render(fmt.Sprintf("   %.2f BPM", m.bankTempo(bank)))}
@@ -373,33 +375,23 @@ func (m Model) perfSidebar(width, h int) []string {
 		clock = append(clock, "")
 	}
 	clock = append(clock, m.perfBeats()...)
-	cue := m.sideCue()
-	add(m.pairPanels(wideTop, pt, "CLOCK", st.th.accent, clock, width-pt*b2i(wideTop), "CUE", st.th.bus1, cue)...)
-	pats := m.sidePatterns(bank)
-	add(m.panel(fmt.Sprintf("PATTERNS · bank %c", 'A'+bank), st.th.good, pats[1:], width)...)
+	title, colour := "LEVEL", st.th.good
+	if m.rec != nil {
+		title, colour = "RECORDING", st.th.hot
+	}
+	add(m.pairPanels(wideTop, pt, "CLOCK", st.th.accent, clock, width-pt*b2i(wideTop), title, colour, m.levelLines(width-pt*b2i(wideTop)-4))...)
 	if m.midiSrc == nil {
 		add(st.dim.Render("no MIDI in this build: effects, knobs and the clock need it (make build)"))
 	} else {
-		if m.fxLearn != 0 {
-			add(m.perfFxHead(width))
-		}
 		w2 := width - pw*b2i(wide)
 		ta, ca, la := m.fxPanel(0, pw, rows, now)
 		tb, cb, lb := m.fxPanel(1, w2, rows, now)
 		add(m.pairPanels(wide, pw, ta, ca, la, w2, tb, cb, lb)...)
-		tc, cc, lc := m.controlsPanel(pw, rows, now)
-		var last []string
-		for _, l := range m.mon.last(max(rows, 3)) {
-			last = append(last, st.text.Render(strings.Join(strings.Fields(l.text), " ")))
-		}
-		if len(last) == 0 {
-			last = []string{st.dim.Render("nothing yet")}
-		}
-		add(m.pairPanels(wide, pw, tc, cc, lc, w2, "LAST MIDI", st.th.faint, last)...)
+		tc, cc, lc := m.controlsPanel(width, max(rows*2/3, 3), now)
+		add(m.panel(tc, cc, lc, width)...)
 	}
 	add(m.panel("KEYS", st.th.faint, []string{
-		st.dim.Render("a n  cue   Space  next→now   v  patterns   p  player"),
-		st.dim.Render("f F  effect note   l L  learn on/off   ^R  record"),
+		st.dim.Render("p  player   v  patterns   f F  note the effect   ^R  record   ?  all keys"),
 	}, width)...)
 	if len(out) > h {
 		out = out[:h]

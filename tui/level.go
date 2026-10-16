@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/moahbeatlab/404tui/record"
@@ -36,23 +37,43 @@ type levelMeter struct {
 	clipped time.Time // when the sound last clipped
 	top     float64   // the highest dB of the whole recording
 	ok      bool
+	// src is the program that listens to the input when nothing is being recorded; nil while the
+	// level is read from the file of a recording.
+	src *record.Meter
 }
 
-// sampleLevel reads the level of the recording that runs (the end of its file), a few times a second.
+func newLevelMeter() *levelMeter {
+	return &levelMeter{hold: [2]float64{math.Inf(-1), math.Inf(-1)}, peak: [2]float64{math.Inf(-1), math.Inf(-1)}, top: math.Inf(-1)}
+}
+
+// sampleLevel reads the level of what is heard: the end of the recording's file while one runs, else
+// what the listening program says, a few times a second.
 func (m Model) sampleLevel() {
-	if m.rec == nil || m.lvl == nil || time.Since(m.lvl.read) < 90*time.Millisecond {
+	if m.lvl == nil || time.Since(m.lvl.read) < 90*time.Millisecond {
 		return
 	}
 	now := time.Now()
 	m.lvl.read = now
-	l, err := record.ReadLevel(m.rec.Path, meterWindow)
-	if err != nil || len(l.Peak) == 0 {
+	var peaks []float64
+	switch {
+	case m.lvl.src != nil:
+		p, ok := m.lvl.src.Level()
+		if !ok {
+			return
+		}
+		peaks = p[:]
+	case m.rec != nil:
+		l, err := record.ReadLevel(m.rec.Path, meterWindow)
+		if err != nil || len(l.Peak) == 0 {
+			return
+		}
+		peaks = l.Peak
+	default:
 		return
 	}
 	m.lvl.ok = true
 	for c := 0; c < 2; c++ {
-		src := min(c, len(l.Peak)-1)
-		db := record.DB(l.Peak[src])
+		db := record.DB(peaks[min(c, len(peaks)-1)])
 		m.lvl.peak[c] = db
 		if db >= m.lvl.hold[c] || now.Sub(m.lvl.holdAt[c]) > meterHold {
 			m.lvl.hold[c], m.lvl.holdAt[c] = db, now
@@ -64,6 +85,75 @@ func (m Model) sampleLevel() {
 			m.lvl.top = db
 		}
 	}
+}
+
+// meterEnded is the listening program ending: wait for it, so the meter can be started again.
+type meterStartedMsg struct {
+	meter *record.Meter
+	err   error
+}
+type meterEndedMsg struct{ meter *record.Meter }
+
+func waitMeter(mt *record.Meter) tea.Cmd {
+	return func() tea.Msg {
+		<-mt.Done()
+		return meterEndedMsg{meter: mt}
+	}
+}
+
+// meterRetry is how long to wait before listening again after it failed (the unit may be plugged in).
+const meterRetry = 5 * time.Second
+
+// syncMeter starts the listening program when the Perform view is open and nothing records, and ends
+// it when either stops being so: the level is there to set the volume by, whether or not it records.
+func (m Model) syncMeter() (Model, tea.Cmd) {
+	if m.section != secPerform || m.rec != nil {
+		if m.lvl != nil && m.lvl.src != nil {
+			m.lvl.src.Stop()
+			m.lvl = nil
+		}
+		return m, nil
+	}
+	mt, ok := m.recorder.(record.Metering)
+	if !ok || m.lvl != nil || m.meterBusy || time.Now().Before(m.meterAgain) {
+		return m, nil
+	}
+	m.meterBusy = true
+	device := m.recordDevice()
+	return m, func() tea.Msg {
+		meter, err := mt.StartMeter(device)
+		return meterStartedMsg{meter: meter, err: err}
+	}
+}
+
+// meterStarted takes in the listening program that started, or why it did not.
+func (m Model) meterStarted(msg meterStartedMsg) (Model, tea.Cmd) {
+	m.meterBusy = false
+	if msg.err != nil {
+		m.meterErr, m.meterAgain = msg.err.Error(), time.Now().Add(meterRetry)
+		return m, nil
+	}
+	if m.section != secPerform || m.rec != nil || m.lvl != nil {
+		msg.meter.Stop()
+		return m, nil
+	}
+	m.meterErr = ""
+	m.lvl = newLevelMeter()
+	m.lvl.src = msg.meter
+	return m, waitMeter(msg.meter)
+}
+
+// meterEnded takes in the listening program ending by itself (the unit was switched off).
+func (m Model) meterEnded(msg meterEndedMsg) Model {
+	if m.lvl != nil && m.lvl.src == msg.meter {
+		m.lvl = nil
+		m.meterErr = "the input is gone"
+		if err := msg.meter.Err(); err != nil {
+			m.meterErr = err.Error()
+		}
+		m.meterAgain = time.Now().Add(meterRetry)
+	}
+	return m
 }
 
 // clipping says whether the sound clipped lately.
@@ -129,22 +219,29 @@ func (m Model) clipBadge(now time.Time) string {
 // the clip light, with what to do about it.
 func (m Model) levelLines(width int) []string {
 	st := m.st
-	if m.rec == nil {
-		return nil
+	if m.lvl == nil || !m.lvl.ok {
+		switch {
+		case m.rec != nil:
+			return []string{st.dim.Render("reading the recording…")}
+		case m.meterErr != "":
+			return []string{st.dim.Render("no level: " + m.meterErr), st.dim.Render("the unit has to be on and plugged in")}
+		}
+		if _, ok := m.recorder.(record.Metering); !ok {
+			return []string{st.dim.Render("no level: install ffmpeg (or sox) to listen")}
+		}
+		return []string{st.dim.Render("listening…")}
 	}
 	now := time.Now()
-	head := st.bold.Render("REC LEVEL") + "  " + m.clipBadge(now)
-	if !m.lvl.ok {
-		return []string{head, st.dim.Render("reading the recording…")}
-	}
 	barW := max(width-12, 10)
-	out := []string{head}
+	var out []string
 	for c, name := range []string{"L", "R"} {
-		out = append(out, st.bold.Render(name)+" "+m.meterBar(m.lvl.peak[c], m.lvl.hold[c], barW)+st.text.Render(" "+dbText(m.lvl.hold[c])))
+		bar := m.meterBar(m.lvl.peak[c], m.lvl.hold[c], barW)
+		// Two rows a channel: the level is what you set the volume by, so it is big.
+		out = append(out, st.bold.Render(name)+" "+bar+st.text.Render(" "+dbText(m.lvl.hold[c])), "  "+bar)
 	}
-	hint := st.dim.Render(fmt.Sprintf("loudest so far %s", strings.TrimSpace(dbText(m.lvl.top))))
+	hint := m.clipBadge(now) + st.dim.Render(fmt.Sprintf(" loudest so far %s", strings.TrimSpace(dbText(m.lvl.top))))
 	if m.lvl.clipping(now) {
-		hint = lipgloss.NewStyle().Foreground(st.th.bad).Bold(true).Render("too loud: turn the unit's volume or the pad levels down")
+		hint = m.clipBadge(now) + lipgloss.NewStyle().Foreground(st.th.bad).Bold(true).Render(" too loud: turn the unit's volume down")
 	}
 	return append(out, hint)
 }

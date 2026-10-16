@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -304,7 +303,12 @@ type Model struct {
 	// recorder starts recordings of the unit's audio input; rec is the one running.
 	recorder record.Backend
 	rec      *record.Session
-	lvl      *levelMeter // the level of the recording that runs
+	lvl      *levelMeter // the level of what is heard: of the recording that runs, else of the input
+	// meterErr is why the input could not be listened to; meterAgain is when to try again, meterBusy
+	// that it is being started.
+	meterErr   string
+	meterAgain time.Time
+	meterBusy  bool
 	// perfNow and perfNext are the pattern that plays and the one that comes next, as the
 	// Perform view shows them: what the user says, the unit does not tell.
 	perfNow, perfNext *proto.PadIndex
@@ -319,10 +323,9 @@ type Model struct {
 	// mon is what the MIDI input said lately; perfLog the event log of the recording that runs.
 	mon     *monitor
 	perfLog *perflog.Log
-	// fxLearn is the bus (1 or 2) whose effect message is being learned from the unit, 0 for none;
-	// fxOn is whether each bus's effect was last said to be on.
-	fxLearn int
-	fxOn    [2]bool
+	// fx is what the unit last said of the effect of each bus: switched on or off (CC 19), and which
+	// effect it is (CC 83).
+	fx [2]busFx
 	// codes holds the pads hit lately, for the codes that start the live mode and a recording;
 	// liveOn is set while the live mode is on, liveBack the view it goes back to.
 	codes    *codeState
@@ -1088,6 +1091,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmd = tea.Batch(cmd, again)
 			}
 		}
+		var listen tea.Cmd
+		updated, listen = updated.syncMeter()
+		if listen != nil {
+			cmd = tea.Batch(cmd, listen)
+		}
 		var start tea.Cmd
 		updated, start = updated.autoIndex(nil)
 		updated.persist()
@@ -1487,13 +1495,20 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		m.prompt = &prompt{kind: promptConfirmRestore, plan: msg.plan}
+	case meterStartedMsg:
+		return m.meterStarted(msg)
+	case meterEndedMsg:
+		return m.meterEnded(msg), nil
 	case recStartedMsg:
 		if msg.err != nil {
 			m.message = "recording did not start: " + msg.err.Error()
 			return m, nil
 		}
 		m.rec = msg.session
-		m.lvl = &levelMeter{hold: [2]float64{math.Inf(-1), math.Inf(-1)}, peak: [2]float64{math.Inf(-1), math.Inf(-1)}, top: math.Inf(-1)}
+		if m.lvl != nil && m.lvl.src != nil {
+			m.lvl.src.Stop() // the recording reads the input now
+		}
+		m.lvl = newLevelMeter()
 		m.log.Info("recording started", "path", msg.session.Path, "tool", msg.session.Tool)
 		m.message = "recording to " + display(msg.session.Path) + " (" + msg.session.Tool + "): Ctrl-R stops it"
 		if m.midi != nil {

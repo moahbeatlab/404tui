@@ -5770,7 +5770,9 @@ func TestPerformShowsThePatternThatPlaysAndWhatChangesInTheNext(t *testing.T) {
 	s.press("r", "7", "v")
 	s.shows("Perform", "chooses the pattern that is playing")
 	s.press("a", "enter")
-	s.shows("NOW", "A2", "3 tracks")
+	if s.m().perfNow == nil || *s.m().perfNow != pad(t, "A2") {
+		t.Fatalf("the pattern that plays is %v", s.m().perfNow)
+	}
 	// The next pattern: l goes to the next slot of the chooser.
 	s.press("n", "l", "enter")
 	s.shows("NEXT", "A3", "TAKE OUT", "A1 kick")
@@ -5827,7 +5829,7 @@ func TestPerformOpensOnTheBankTheUnitIsOnWithItsPadsBig(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	s.press("r", "7")
-	s.shows("Perform", "BANK A", "PATTERNS")
+	s.shows("Perform", "BANK A", "CLOCK", "LEVEL")
 	// The sample names are whole, in the terminal's own text: kick is on pad 1 and snare on pad 2.
 	s.shows("kick", "snare")
 	// The unit moves to another bank (it said so in a poll): the view follows it.
@@ -6282,8 +6284,6 @@ func TestARecordingWritesWhatTheUnitSendsToAnEventLogAndPerformShowsIt(t *testin
 	s.press("7")
 	s.shows("CONTROLS")
 	s.shows("1:74")
-	s.shows("LAST")
-	s.shows("bank C pad 2")
 	s.press("v")
 	s.shows("1:74")
 	// Config lists the messages.
@@ -6323,7 +6323,7 @@ func TestARecordingWritesWhatTheUnitSendsToAnEventLogAndPerformShowsIt(t *testin
 
 type Entry = perflog.Entry
 
-func TestTheEffectOfABusIsLearnedFromTheUnitAndShownWithItsKnobs(t *testing.T) {
+func TestTheEffectOfABusIsReadFromTheUnitAndShownWithItsKnobs(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	stopped := 0
@@ -6339,53 +6339,33 @@ func TestTheEffectOfABusIsLearnedFromTheUnitAndShownWithItsKnobs(t *testing.T) {
 		s.model = next
 	}
 	s.press("7")
-	s.shows("l L  learn on/off")
-	s.shows("l learns")
-	// l: the next controller is BUS 1's effect; it says on at once, and is not acted on otherwise.
-	s.press("l")
-	s.shows("LEARNING BUS 1")
-	feed(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: 62, Data2: 127}) // the control channel's note 62 is a note: this cc is not mapped
-	if s.m().fxLearn != 0 || s.m().mem.FxMsg[0] != "ch 16 cc 62" || !s.m().fxOn[0] {
-		t.Fatalf("learned %q learn %d on %v", s.m().mem.FxMsg[0], s.m().fxLearn, s.m().fxOn)
+	s.shows("BUS 1", "BUS 2", "effect not sent yet")
+	// CC 83 on a bus's channel is its effect, CC 19 switches it: 22 is Reverb.
+	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 83, Data2: 22})
+	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 19, Data2: 127})
+	s.shows("Reverb", "ON")
+	feed(midiin.Event{Kind: midiin.CC, Channel: 2, Data1: 83, Data2: 14})
+	feed(midiin.Event{Kind: midiin.CC, Channel: 2, Data1: 19, Data2: 0})
+	s.shows("Tape Echo", "off")
+	if !s.m().fx[0].on || s.m().fx[1].on {
+		t.Errorf("fx %+v", s.m().fx)
 	}
-	s.shows("ON")
-	feed(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: 62, Data2: 0})
-	if s.m().fxOn[0] {
-		t.Error("cc 62 at 0 did not switch it off")
+	// Other channels have no effect of a bus.
+	feed(midiin.Event{Kind: midiin.CC, Channel: 3, Data1: 19, Data2: 127})
+	if s.m().fx[0].num != 22 || s.m().fx[1].on {
+		t.Error("a message on channel 3 changed a bus")
 	}
-	s.shows("off")
-	// A pad's note is not taken for the effect: Esc leaves learning.
-	s.press("L")
-	s.shows("LEARNING BUS 2")
-	feed(midiin.Event{Kind: midiin.NoteOn, Channel: 1, Data1: 48, Data2: 100})
-	if s.m().fxLearn != 2 {
-		t.Error("a pad hit was taken as the effect")
-	}
-	s.press("esc")
-	if s.m().fxLearn != 0 || s.m().mem.FxMsg[1] != "" {
-		t.Error("esc did not leave learning")
-	}
-	// Notes work too: note on is on, note off is off.
-	s.press("L")
-	feed(midiin.Event{Kind: midiin.NoteOn, Channel: 12, Data1: 70, Data2: 100})
-	if s.m().mem.FxMsg[1] != "ch 12 note 70" || !s.m().fxOn[1] {
-		t.Fatalf("bus 2: %q %v", s.m().mem.FxMsg[1], s.m().fxOn)
-	}
-	feed(midiin.Event{Kind: midiin.NoteOff, Channel: 12, Data1: 70})
-	if s.m().fxOn[1] {
-		t.Error("note off did not switch it off")
-	}
-	// Knobs of BUS 1's effect: CC 16 to 18 on channel 1, shown with a fader each, with nothing learned.
+	// Knobs of BUS 1's effect: CC 16 to 18 on channel 1, shown with a fader each.
 	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 16, Data2: 80})
 	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 17, Data2: 20})
 	s.shows("1:16")
 	s.shows(" 80")
 	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 16, Data2: 100})
 	s.shows("100")
-	// A knob under an effect is not also in CONTROLS: a third controller is.
+	// A knob under an effect is not also in CONTROLS, nor are CC 19 and 83: another controller is.
 	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 74, Data2: 50})
-	if !s.m().isFxKnob(1, 16) || s.m().isFxKnob(1, 74) {
-		t.Error("which controllers are an effect's knobs")
+	if !s.m().isFxKnob(1, 16) || s.m().isFxKnob(1, 74) || !s.m().isFxSwitch(1, 83) || s.m().isFxSwitch(1, 74) {
+		t.Error("which controllers belong to an effect")
 	}
 	s.press("ctrl+r")
 	es, err := perflog.Read(perflog.PathFor(filepath.Join(s.m().recordDir(), "take.wav")))
@@ -6395,11 +6375,11 @@ func TestTheEffectOfABusIsLearnedFromTheUnitAndShownWithItsKnobs(t *testing.T) {
 	var fx []string
 	for _, e := range es {
 		if e["k"] == "fx" {
-			fx = append(fx, fmt.Sprint(e["bus"], e["on"]))
+			fx = append(fx, fmt.Sprintf("%v %v %v", e["bus"], e["on"], e["name"]))
 		}
 	}
-	// The learning message itself is not an event; only changes after it are.
-	if len(fx) != 2 || fx[0] != "1 false" || fx[1] != "2 false" {
+	// Each change of a bus's effect is an event with its name once it is known.
+	if len(fx) < 4 || fx[0] != "1 false Reverb" || fx[1] != "1 true Reverb" {
 		t.Errorf("fx events %v", fx)
 	}
 }
@@ -6418,7 +6398,9 @@ func TestPerformPlaysThePatternLikeTheSequencerAndShowsWhatIsMutedOnTheUnit(t *t
 	m.midi, m.midiSrc = link, &fakeMIDI{}
 	s.model = m
 	s.press("r", "7", "a", "enter")
-	s.shows("NOW", "A2", "3 tracks")
+	if s.m().perfNow == nil || *s.m().perfNow != pad(t, "A2") {
+		t.Fatalf("the pattern that plays is %v", s.m().perfNow)
+	}
 	s.press("p")
 	s.shows("Perform · player", "A1", "A3", "no clock")
 	// A clock that has run for a while: the playhead shows on its step.
@@ -6574,7 +6556,7 @@ func TestTheRecordingShowsItsLevelAndAClipLight(t *testing.T) {
 			t.Fatalf("%s: no level read", c.name)
 		}
 		s.press("7")
-		s.shows("REC LEVEL")
+		s.shows("RECORDING")
 		if c.clip {
 			s.shows("CLIP", "too loud")
 		} else {

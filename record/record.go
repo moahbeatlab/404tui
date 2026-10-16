@@ -241,28 +241,35 @@ func listOutput(bin string, args ...string) string {
 // ffmpegArgs are the arguments that make ffmpeg record the input that holds device into path:
 // 24-bit 48 kHz stereo WAV.
 func ffmpegArgs(goos, bin, device, path string) ([]string, error) {
-	out := []string{"-hide_banner", "-loglevel", "error", "-y"}
+	in, err := ffmpegInput(goos, bin, device)
+	if err != nil {
+		return nil, err
+	}
+	out := append([]string{"-hide_banner", "-loglevel", "error", "-y"}, in...)
+	return append(out, "-ac", "2", "-ar", "48000", "-c:a", "pcm_s24le", path), nil
+}
+
+// ffmpegInput are the arguments that make ffmpeg read the audio input whose name holds device.
+func ffmpegInput(goos, bin, device string) ([]string, error) {
 	switch goos {
 	case "darwin":
 		n := parseAVFoundation(listOutput(bin, "-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""), device)
 		if n < 0 {
 			return nil, fmt.Errorf("no audio input with %q in its name: is the unit plugged in and on?", device)
 		}
-		out = append(out, "-f", "avfoundation", "-i", fmt.Sprintf(":%d", n))
+		return []string{"-f", "avfoundation", "-i", fmt.Sprintf(":%d", n)}, nil
 	case "windows":
 		name := parseDShow(listOutput(bin, "-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy"), device)
 		if name == "" {
 			return nil, fmt.Errorf("no audio input with %q in its name: is the unit plugged in and on?", device)
 		}
-		out = append(out, "-f", "dshow", "-i", "audio="+name)
-	default:
-		src := parsePulseSources(listOutput("pactl", "list", "short", "sources"), device)
-		if src == "" {
-			return nil, fmt.Errorf("no audio input with %q in its name: is the unit plugged in and on?", device)
-		}
-		out = append(out, "-f", "pulse", "-i", src)
+		return []string{"-f", "dshow", "-i", "audio=" + name}, nil
 	}
-	return append(out, "-ac", "2", "-ar", "48000", "-c:a", "pcm_s24le", path), nil
+	src := parsePulseSources(listOutput("pactl", "list", "short", "sources"), device)
+	if src == "" {
+		return nil, fmt.Errorf("no audio input with %q in its name: is the unit plugged in and on?", device)
+	}
+	return []string{"-f", "pulse", "-i", src}, nil
 }
 
 // soxArgs are the arguments that make sox record a device into path. sox names the device the

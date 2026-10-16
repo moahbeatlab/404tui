@@ -40,20 +40,6 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 	case "x":
 		m.perfNext = nil
 		m.logCue()
-	case "l", "L":
-		bus := 1
-		if name == "L" {
-			bus = 2
-		}
-		m.fxLearn = bus
-		m.message = fmt.Sprintf("BUS %d: switch its effect on or off on the unit; Esc cancels", bus)
-	case "backspace":
-		switch {
-		case m.fxLearn != 0:
-			m.mem.FxMsg[m.fxLearn-1], m.fxOn[m.fxLearn-1] = "", false
-			m.message = fmt.Sprintf("BUS %d: effect message forgotten", m.fxLearn)
-			m.fxLearn = 0
-		}
 	case "p":
 		m.perfPlayer = !m.perfPlayer
 	case "s":
@@ -189,6 +175,10 @@ func (m Model) perfTile(row app.PadRow, w, h int) []string {
 		selected: m.hasSelected && m.selected == row.Pad,
 		bars:     m.padBars(row, w),
 		glow:     m.mon.glow(int(row.Pad.Bank()), int(row.Pad.Pad()), time.Now()),
+	}
+	if ts.empty {
+		// A pad without a sample makes no sound: the pattern playing it is nothing to see.
+		ts.glow = 0
 	}
 	// The tile as Pads draws it at four rows: number, name, settings, level.
 	parts := strings.Split(m.tile(w, 4, fmt.Sprint(row.Pad.Pad()+1), row.Name, row.Level, ts), "\n")
@@ -545,10 +535,9 @@ func (m Model) ccOf(ch, cc int) *ccState {
 	return m.mon.ccs[[2]int{ch, cc}]
 }
 
-// isFxSwitch is whether the controller is the message that says a bus's effect is on or off.
+// isFxSwitch is whether the controller is what says a bus's effect is on or off, or which it is.
 func (m Model) isFxSwitch(ch, cc int) bool {
-	text := fmt.Sprintf("ch %d cc %d", ch, cc)
-	return m.mem.FxMsg[0] == text || m.mem.FxMsg[1] == text
+	return (ch == 1 || ch == 2) && (cc == ccFxSwitch || cc == ccFxNumber)
 }
 
 // controlCell is a controller as three lines ten cells wide: a fader beside a dial, its value, and
@@ -641,87 +630,68 @@ func (m Model) perfTicker(loopBars int) string {
 	return b.String()
 }
 
-// fxMsg is the message that says an effect is on or off, from the setting: its kind, channel and
-// number.
-func fxMsg(text string) (kind midiin.Kind, ch, n int, ok bool) {
-	var word string
-	if _, err := fmt.Sscanf(text, "ch %d %s %d", &ch, &word, &n); err != nil {
-		return 0, 0, 0, false
-	}
-	switch word {
-	case "cc":
-		return midiin.CC, ch, n, true
-	case "note":
-		return midiin.NoteOn, ch, n, true
-	}
-	return 0, 0, 0, false
+// busFx is what the unit last said of a bus's effect.
+type busFx struct {
+	onSeen, on bool
+	numSeen    bool
+	num        int
 }
 
-// fxEvent takes a message from the unit for the effect of the buses: while one is being learned the
-// next controller or note is it; otherwise a message that was learned sets the bus on or off (a
-// controller from half up, a note on; a note off is off).
+// fxEvent takes a message from the unit about the effect of a bus: on channel 1 (bus 1) or 2 (bus 2)
+// CC 19 switches it and CC 83 says which effect it is.
 func (m Model) fxEvent(e midiin.Event) Model {
-	if m.fxLearn != 0 && (e.Kind == midiin.CC || e.Kind == midiin.NoteOn) {
-		if _, _, isPad := padOfEvent(e); !isPad {
-			word := "cc"
-			if e.Kind == midiin.NoteOn {
-				word = "note"
-			}
-			text := fmt.Sprintf("ch %d %s %d", e.Channel, word, e.Data1)
-			m.mem.FxMsg[m.fxLearn-1] = text
-			m.fxOn[m.fxLearn-1] = e.Kind == midiin.NoteOn || e.Data2 >= 64
-			m.message = fmt.Sprintf("BUS %d effect is %s", m.fxLearn, text)
-			m.fxLearn = 0
-			return m
-		}
+	if e.Kind != midiin.CC || e.Channel < 1 || e.Channel > 2 {
+		return m
 	}
-	for bus := 0; bus < 2; bus++ {
-		kind, ch, n, ok := fxMsg(m.mem.FxMsg[bus])
-		if !ok || e.Channel != ch || e.Data1 != n {
-			continue
-		}
-		var on bool
-		switch {
-		case kind == midiin.CC && e.Kind == midiin.CC:
-			on = e.Data2 >= 64
-		case kind == midiin.NoteOn && e.Kind == midiin.NoteOn:
-			on = true
-		case kind == midiin.NoteOn && e.Kind == midiin.NoteOff:
-			on = false
-		default:
-			continue
-		}
-		if on != m.fxOn[bus] {
-			m.perfLog.Add(e.At, "fx", perflog.P("bus", bus+1), perflog.P("on", on))
-		}
-		m.fxOn[bus] = on
+	bus := e.Channel - 1
+	f := m.fx[bus]
+	switch e.Data1 {
+	case ccFxSwitch:
+		f.on, f.onSeen = e.Data2 >= 64, true
+	case ccFxNumber:
+		f.num, f.numSeen = e.Data2, true
+	default:
+		return m
 	}
+	if f != m.fx[bus] {
+		ps := []perflog.Pair{perflog.P("bus", bus+1), perflog.P("on", f.on)}
+		if f.numSeen {
+			ps = append(ps, perflog.P("fx", f.num), perflog.P("name", fxName(f.num)))
+		}
+		m.perfLog.Add(e.At, "fx", ps...)
+	}
+	m.fx[bus] = f
 	return m
 }
 
-// perfFx is the line with the effect of each bus: on or off as the unit said (once it has been
-// learned which message that is), and what you noted for it.
+// fxState is a bus's effect for the screen: whether it is on, and its name when the unit has said.
+func (m Model) fxState(bus int) (state, name string) {
+	st := m.st
+	f := m.fx[bus]
+	switch {
+	case !f.onSeen:
+		state = st.dim.Render("?")
+	case f.on:
+		state = lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render("● ON")
+	default:
+		state = st.faint.Render("○ off")
+	}
+	if f.numSeen {
+		name = fxName(f.num)
+	}
+	return state, name
+}
+
+// perfFxHead is the line with the effect of each bus: on or off, its name, and what you noted for it.
 func (m Model) perfFxHead(width int) string {
 	st := m.st
-	if m.fxLearn != 0 {
-		return lipgloss.NewStyle().Foreground(st.th.warn).Bold(true).Render(fmt.Sprintf("FX  LEARNING BUS %d: switch its effect on or off on the unit   Esc cancels   Backspace forgets it", m.fxLearn))
-	}
 	text := st.dim.Render("FX  ")
-	for bus := int32(1); bus <= 2; bus++ {
-		colour, _ := st.th.busColour(bus)
+	for bus := 1; bus <= 2; bus++ {
+		colour, _ := st.th.busColour(int32(bus))
 		style := lipgloss.NewStyle().Foreground(colour).Bold(true)
-		state := st.dim.Render("? " + map[int32]string{1: "l", 2: "L"}[bus] + " learns")
-		if _, _, _, ok := fxMsg(m.mem.FxMsg[bus-1]); ok {
-			state = st.faint.Render("○ off")
-			if m.fxOn[bus-1] {
-				state = lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render("● ON")
-			}
-		}
+		state, name := m.fxState(bus - 1)
 		note := m.mem.BusNotes[bus-1]
-		if note == "" {
-			note = "—"
-		}
-		text += style.Render(fmt.Sprintf("BUS %d ", bus)) + state + st.text.Render("  "+note)
+		text += style.Render(fmt.Sprintf("BUS %d ", bus)) + state + st.text.Render("  "+strings.TrimSpace(name+"  "+note))
 		if bus == 1 {
 			text += "     "
 		}
