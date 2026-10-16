@@ -5593,3 +5593,28 @@ func TestHSetsUpPadsThatWereNeverSetUp(t *testing.T) {
 }
 
 func pad_(t *testing.T, name string) proto.PadIndex { return pad(t, name) }
+
+func TestTheDashboardShowsTheNameWhileWaitingForAUnit(t *testing.T) {
+	m := New(nil, nil, nil)
+	m.width, m.height = 100, 40
+	out := ansi.Strip(m.View())
+	for _, want := range []string{"m o a h b e a t l a b", "Waiting for an SP-404MKII", "sample · slice · sequence"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("no %q on the dashboard:\n%s", want, out)
+		}
+	}
+	// The light moves from frame to frame (in colour: the tiles are only colour), and a narrow
+	// screen gets the short form.
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(prev)
+	a := m.padGlow()
+	m.frame += 4
+	if strings.Join(a, "\n") == strings.Join(m.padGlow(), "\n") {
+		t.Error("the pads do not light up in turn")
+	}
+	m.width = 40
+	if narrow := ansi.Strip(m.View()); !strings.Contains(narrow, "404tui") {
+		t.Errorf("no name on a narrow screen:\n%s", narrow)
+	}
+}

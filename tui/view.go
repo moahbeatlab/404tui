@@ -114,6 +114,9 @@ func (m Model) View() string {
 		main = dialog(m.paletteBox())
 	case m.unit == nil:
 		main = m.center(m.waitingBox(), g.bodyH)
+	case m.busy != "" && m.snap == nil:
+		// The first read of the unit: the dashboard, with what is being read under it.
+		main = m.center(m.dashboard([]string{m.busyBox()}), g.bodyH)
 	case m.busy != "":
 		main = dialog(m.busyBox())
 	case m.snap == nil:
@@ -1721,7 +1724,7 @@ func (m Model) waitingBox() string {
 	st := m.st
 	title := "Waiting for an SP-404MKII"
 	lines := []string{
-		st.accent.Render(spinner[m.frame%len(spinner)]) + " " + st.bold.Render(title), "",
+		st.accent.Render(spinner[m.frame%len(spinner)]) + " " + st.bold.Render(title),
 		st.text.Render("Connect it with a USB-C cable and switch it on."),
 		st.dim.Render("Looking for USB 0582:02e7; it connects by itself."),
 	}
@@ -1735,7 +1738,7 @@ func (m Model) waitingBox() string {
 		lines = append(lines, "", st.text.Render("Not at the unit? ")+st.accent.Render("o")+st.text.Render(" works offline on a folder of projects on this computer."))
 	}
 	lines = append(lines, "", st.dim.Render("q quit  ·  ? help"))
-	return st.modal.Render(strings.Join(lines, "\n"))
+	return m.dashboard(lines)
 }
 
 // ---- overlays ----
