@@ -109,6 +109,10 @@ the input with `404` in its name (set in Config, `6`). What it does:
   `select`/`sound` from the polled pad, `pattern` for the cue). It is the base for replaying a
   performance.
 
+Run with `-v` to write a debug log (to the user cache folder, e.g. `~/Library/Caches/404tui/debug.log` on a
+Mac, or where `-log FILE` says): the MIDI input found or missed, every message the unit sends except the
+clock (which is summed up every 16 beats), pad codes, and the start and end of recordings.
+
 ### Connecting
 
 The UI starts even with no unit, shows a waiting screen, connects by itself when you plug

@@ -121,9 +121,13 @@ func waitMIDI(l *midiLink) tea.Cmd {
 func (m Model) midiOpened(msg midiOpenedMsg) (tea.Model, tea.Cmd) {
 	m.midiOpening = false
 	if msg.err != nil {
+		if msg.err.Error() != m.midiErr {
+			m.log.Debug("midi: not open", "err", msg.err)
+		}
 		m.midiErr = msg.err.Error()
 		return m, nil
 	}
+	m.log.Info("midi: listening", "input", msg.link.name)
 	m.midi, m.midiErr = msg.link, ""
 	return m, waitMIDI(msg.link)
 }
@@ -192,6 +196,11 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		m.mon = newMonitor()
 	}
 	m.mon.add(e)
+	if e.Kind != midiin.Clock {
+		m.log.Debug("midi: message", "msg", describeMIDI(e), "raw", e.String())
+	} else if (m.clock.ticks)%(24*16) == 0 {
+		m.log.Debug("midi: clock", "ticks", m.clock.ticks, "bpm", m.mon.bpm)
+	}
 	switch e.Kind {
 	case midiin.Clock:
 		m.clock.ticks++

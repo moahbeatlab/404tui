@@ -127,7 +127,9 @@ func (m Model) codeHit(pad int) (Model, tea.Cmd) {
 	if m.codes == nil {
 		m.codes = &codeState{}
 	}
-	switch m.codes.feed(pad, time.Now(), m.liveCode(), m.recCode()) {
+	hit := m.codes.feed(pad, time.Now(), m.liveCode(), m.recCode())
+	m.log.Debug("pad code: pad hit", "pad", pad, "code", hit)
+	switch hit {
 	case 0:
 		return m.toggleLive()
 	case 1:

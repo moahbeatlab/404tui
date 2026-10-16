@@ -1480,19 +1480,23 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.rec = msg.session
+		m.log.Info("recording started", "path", msg.session.Path, "tool", msg.session.Tool)
 		m.message = "recording to " + display(msg.session.Path) + " (" + msg.session.Tool + "): Ctrl-R stops it"
 		if m.midi != nil {
 			// What the unit sends goes into a log beside the audio.
 			l, note := m.startPerfLog(msg.session.Path, msg.session.Started)
 			m.perfLog = l
 			if note != "" {
+				m.log.Warn("event log", "err", note)
 				m.message = note
 			} else {
+				m.log.Info("event log started", "path", l.Path)
 				m.message += " · events to " + display(l.Path)
 			}
 		}
 		return m, waitRecording(msg.session)
 	case recEndedMsg:
+		m.log.Info("recording ended", "path", msg.path, "bytes", msg.size, "err", msg.err)
 		if m.rec == msg.session {
 			m.rec = nil
 			m.closePerfLog()
