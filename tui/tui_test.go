@@ -6444,3 +6444,68 @@ func TestPerformPlaysThePatternLikeTheSequencerAndShowsWhatIsMutedOnTheUnit(t *t
 		t.Error("muted with no pad heard")
 	}
 }
+
+func TestPlaybackNotesFindThePatternAndAreNotPadHits(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	one, _ := formats.StartPattern([]proto.PadIndex{pad(t, "A1"), pad(t, "A2"), pad(t, "A3")}, 1)
+	two, _ := formats.StartPattern([]proto.PadIndex{pad(t, "A2"), pad(t, "A3")}, 1)
+	for slot, data := range map[string][]byte{"A2": one, "A3": two} {
+		s.sim.AddFile(formats.PatternPath(1, pad(t, slot)), data)
+	}
+	s.sim.SetPattern(pad(t, "A2"), pad(t, "A1"))
+	s.sim.SetPattern(pad(t, "A3"), pad(t, "A2"))
+	link := &midiLink{ch: make(chan midiin.Event, 4)}
+	m := s.m()
+	m.midi, m.midiSrc = link, &fakeMIDI{}
+	s.model = m
+	s.press("r", "7")
+	feed := func(e midiin.Event) {
+		e.At = time.Now()
+		next, cmd := s.m().midiEvent(midiMsg{link: link, ev: e})
+		s.model = next
+		s.run(cmd)
+	}
+	note := func(n int) { feed(midiin.Event{Kind: midiin.NoteOn, Channel: 1, Data1: n, Data2: 127}) }
+	// The sequencer runs: pad 1 3 3 7 played by a pattern is no code.
+	// Which pads each pattern plays, as the unit reports them.
+	rows := s.m().patterns[0]
+	rows[1].Pads = []proto.PadIndex{pad(t, "A1"), pad(t, "A2"), pad(t, "A3")}
+	rows[2].Pads = []proto.PadIndex{pad(t, "A2"), pad(t, "A3")}
+	feed(midiin.Event{Kind: midiin.Start})
+	feed(midiin.Event{Kind: midiin.Clock})
+	for _, n := range []int{48, 50, 50} {
+		note(n)
+	}
+	if s.m().liveOn {
+		t.Error("notes of a playing pattern switched the live mode on")
+	}
+	if s.m().perfNow == nil || *s.m().perfNow != pad(t, "A2") || !s.m().perfAuto {
+		t.Fatalf("pattern %v auto %v, want A2 found from the notes", s.m().perfNow, s.m().perfAuto)
+	}
+	s.shows("heard from the unit")
+	// A start again: only pad 2 and 3 are heard, so the other pattern fits better.
+	feed(midiin.Event{Kind: midiin.Start})
+	feed(midiin.Event{Kind: midiin.Clock})
+	note(49)
+	note(50)
+	if s.m().perfNow == nil || *s.m().perfNow != pad(t, "A3") {
+		t.Errorf("pattern %v, want A3", s.m().perfNow)
+	}
+	// A choice by hand stays while it fits what is heard.
+	m = s.m()
+	three := pad(t, "A2")
+	m.perfNow, m.perfAuto = &three, false
+	s.model = m
+	if s.m().detectPattern().perfAuto {
+		t.Error("a pattern chosen by hand was replaced though it fits")
+	}
+	// Stopped, pad hits count for the codes again.
+	feed(midiin.Event{Kind: midiin.Stop})
+	for _, n := range []int{48, 50, 50, 46} {
+		note(n)
+	}
+	if !s.m().liveOn {
+		t.Error("1 3 3 7 hit by hand with the sequencer stopped did not switch the live mode on")
+	}
+}

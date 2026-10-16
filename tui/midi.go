@@ -213,6 +213,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		m.clock.ticks, m.clock.running, m.clock.at = 0, true, time.Now()
 		m.perfSync = 0
 		m.mon.beatAt = time.Time{}
+		m.mon.played = map[int]bool{}
 		m.logMIDI(e)
 		return m, next
 	case midiin.Continue:
@@ -253,6 +254,20 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 	if e.Kind == midiin.NoteOn && e.Channel >= 1 && e.Channel <= 10 {
 		if pad, ok := padOfNote(e.Data1); ok {
 			m.midiPadAt = time.Now()
+			if m.clock.running && time.Since(m.clock.at) < time.Second {
+				// The sequencer runs: these notes are what the pattern plays (the unit sends them
+				// over MIDI), not pads hit by hand. They find the pattern, not the pad codes.
+				if m.mon.played == nil {
+					m.mon.played = map[int]bool{}
+				}
+				m.mon.played[(e.Channel-1)*16+pad-1] = true
+				nm := m.detectPattern()
+				if nm.perfNow != m.perfNow {
+					// A new pattern: its notes are read for the Perform view.
+					return nm, tea.Batch(nm.wanted(), next)
+				}
+				return nm, next
+			}
 			nm, cmd := m.codeHit(pad)
 			return nm, tea.Batch(cmd, next)
 		}

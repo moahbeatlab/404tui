@@ -33,7 +33,7 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 			m.message = "no next pattern: n chooses it"
 			return m, nil
 		}
-		m.perfNow, m.perfNext = m.perfNext, nil
+		m.perfNow, m.perfNext, m.perfAuto = m.perfNext, nil, false
 		m.logCue()
 		return m, m.wanted()
 	case "x":
@@ -154,7 +154,11 @@ func (m Model) perfHead(label string, slot *proto.PadIndex, d *app.PatternDetail
 	if d == nil {
 		return style.Render(label) + "  " + st.bold.Render(slot.String()) + st.dim.Render("  reading…")
 	}
-	return style.Render(label) + "  " + st.bold.Render(slot.String()) +
+	heard := ""
+	if m.perfAuto && label == "NOW" {
+		heard = "  (heard from the unit)"
+	}
+	return style.Render(label) + "  " + st.bold.Render(slot.String()) + st.dim.Render(heard) +
 		st.dim.Render(fmt.Sprintf("   %.2f BPM  ·  %s  ·  %s", d.BankTempo, plural(d.Bars(), "bar"), plural(len(tracks), "track")))
 }
 

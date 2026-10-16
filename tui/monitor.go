@@ -50,6 +50,8 @@ type monitor struct {
 	seen   int
 	// padAt is when any pad of the unit was last heard.
 	padAt time.Time
+	// played holds the pads (bank*16 + pad) heard since the sequencer started: what a pattern plays.
+	played map[int]bool
 }
 
 func newMonitor() *monitor {

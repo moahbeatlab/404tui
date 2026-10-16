@@ -335,6 +335,8 @@ type Model struct {
 	// follows the MIDI clock; perfSync is the clock tick the loop began on.
 	perfPlayer bool
 	perfSync   int
+	// perfAuto is set when the pattern that plays was found from the notes the unit sends.
+	perfAuto bool
 	// report is a list of lines shown in a dialog until a key closes it.
 	report *report
 	// cfgAt is the row of the Config view the cursor is on.

@@ -159,7 +159,7 @@ func (m Model) patternChooserKey(a *addAsk, name string) (tea.Model, tea.Cmd) {
 		if a.perf != 0 {
 			slot := row.Slot
 			if a.perf == 1 {
-				m.perfNow = &slot
+				m.perfNow, m.perfAuto = &slot, false
 			} else {
 				m.perfNext = &slot
 			}
