@@ -1436,7 +1436,7 @@ func (m Model) patternHelp(d *app.PatternDetail) []helpGroup {
 		move,
 		{"velocity", []helpKey{{", .", "by 1"}, {"< >", "by 10"}, {"*", "pad's own level"}}},
 		{"length", []helpKey{{"+ -", "by a step"}}},
-		{"timing", []helpKey{{"H L", "nudge 5 ticks"}, {"( )", "1 tick"}, {"0", "back on the grid"}}},
+		{"timing", []helpKey{{"H L", "nudge 5 ticks"}, {"( )", "1 tick"}, {"0", "reset: one step long, on the grid"}}},
 		{"pad", []helpKey{{"m", "mute"}, {"s", "solo"}, {"S", "save as heard"}, {"B", "bounce to a pad"}}},
 		{"trig", []helpKey{{"c C", "condition"}, {"y", "roll the dice again"}}},
 		history,

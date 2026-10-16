@@ -396,20 +396,40 @@ type NoteEdit struct {
 	Snap uint32
 	// Delete takes the notes out.
 	Delete bool
+	// SetLength, when above 0, gives each note that length in ticks (within the pattern), in
+	// place of Length.
+	SetLength int
+}
+
+// PadTick names a note by its pad and the tick it starts at.
+type PadTick struct {
+	Pad  proto.PadIndex
+	Tick uint32
 }
 
 // EditNotes applies edit to the notes of pad that start at one of ticks, and returns the pattern;
 // everything else in it stays as it was. It says how many notes it changed.
 func EditNotes(b []byte, pad proto.PadIndex, ticks map[uint32]bool, edit NoteEdit) ([]byte, int, error) {
+	set := map[PadTick]bool{}
+	for t := range ticks {
+		set[PadTick{pad, t}] = true
+	}
+	return EditNoteSet(b, set, edit)
+}
+
+// EditNoteSet applies edit to the notes named by pad and start tick, on any number of tracks,
+// and returns the pattern; everything else in it stays as it was. It says how many notes it
+// changed.
+func EditNoteSet(b []byte, set map[PadTick]bool, edit NoteEdit) ([]byte, int, error) {
 	recs, length, trailer, err := readRecords(b)
 	if err != nil {
 		return nil, 0, err
 	}
-	in := OnlyPad(pad)
 	changed := 0
 	out := recs[:0:0]
 	for _, r := range recs {
-		if !r.note || !in.has(r) || !ticks[r.tick] {
+		pad, isPad := notePad(append([]byte{0}, r.bytes[:]...))
+		if !r.note || !isPad || !set[PadTick{pad, r.tick}] {
 			out = append(out, r)
 			continue
 		}
@@ -423,9 +443,13 @@ func EditNotes(b []byte, pad proto.PadIndex, ticks map[uint32]bool, edit NoteEdi
 		} else if edit.Velocity != 0 {
 			r.bytes[3] = byte(min(max(int(min(r.bytes[3], 127))+edit.Velocity, 1), 127))
 		}
-		if edit.Length != 0 {
+		if edit.Length != 0 || edit.SetLength > 0 {
 			n := int(r.bytes[5]) | int(r.bytes[6])<<8
-			n = min(max(n+edit.Length, 1), 65535)
+			if edit.SetLength > 0 {
+				n = min(max(edit.SetLength, 1), 65535)
+			} else {
+				n = min(max(n+edit.Length, 1), 65535)
+			}
 			if room := int(length) - int(r.tick); room >= 1 {
 				n = min(n, room)
 			}

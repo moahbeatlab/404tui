@@ -382,7 +382,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case secPads:
 		return m.padsKey(name)
 	case secPatterns:
-		if m.seqTab && name == "a" {
+		if m.seqTab && name == "a" && !m.selecting() {
 			// In the Sequencer, a chooses another pattern.
 			return m.openPatternAsk()
 		}
@@ -1058,7 +1058,7 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 			by := map[string]int{"H": -5, "L": 5, "(": -1, ")": 1}[name]
 			return m.nudgeNote(by, false)
 		case "0":
-			return m.nudgeNote(0, true)
+			return m.resetNote()
 		case " ":
 			return m.playPattern(m.pattern.Slot)
 		case "u":
@@ -3646,6 +3646,38 @@ func (m Model) nudgeNote(by int, snap bool) (tea.Model, tea.Cmd) {
 	note := fmt.Sprintf("%s: the note of %s moved %+d ticks, now %s", d.Slot, pad, to-int(from), offsetText(d, uint32(to)))
 	return m.editPatternBytes(func(b []byte) ([]byte, error) {
 		return formats.MoveNote(b, pad, from, by)
+	}, note)
+}
+
+// resetNote puts the notes at the cursor step back as a new note is: one step long, on the grid.
+func (m Model) resetNote() (tea.Model, tea.Cmd) {
+	pad, notes, ok := m.cellOfPattern()
+	if !ok {
+		return m, nil
+	}
+	if len(notes) == 0 {
+		m.message = "no note here to reset"
+		return m, nil
+	}
+	d := m.pattern
+	step := int(max(d.StepTicks(), 1))
+	set := map[formats.PadTick]bool{}
+	plain := true
+	for _, n := range notes {
+		set[formats.PadTick{Pad: pad, Tick: n.Tick}] = true
+		plain = plain && d.GridOffset(n.Tick) == 0 && int(n.Length) == step
+	}
+	if plain {
+		m.message = "that note is one step long and on the grid already"
+		return m, nil
+	}
+	if to := int64(notes[0].Tick) + int64(-d.GridOffset(notes[0].Tick)); to >= 0 {
+		m.patCol = clamp(int(uint64(to)*uint64(d.Grid.Steps)/uint64(max(d.Length, 1))), 0, d.Grid.Steps-1)
+	}
+	note := fmt.Sprintf("%s: the note of %s reset: one step long, on the grid", d.Slot, pad)
+	return m.editPatternBytes(func(b []byte) ([]byte, error) {
+		out, _, err := formats.EditNoteSet(b, set, formats.NoteEdit{Snap: uint32(step), SetLength: step})
+		return out, err
 	}, note)
 }
 

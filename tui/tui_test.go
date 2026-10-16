@@ -4778,12 +4778,13 @@ func TestSelectingNotesOfATrackChangesThemTogether(t *testing.T) {
 	s.shows("1 note of")
 	s.press("x", "l", "l", "x", "l", "l", "enter")
 	s.shows("4 notes of")
-	// j k stay out of it: a selection is of one track.
+	// j k move to the other tracks, and notes there can be chosen too; here they are let go
+	// again, so the rest of the test is about the one track.
 	s.press("j")
-	s.shows("not for a selection")
-	if s.m().patSel == nil || s.m().patSel.pad != pad0 {
-		t.Fatalf("the selection is %+v", s.m().patSel)
+	if s.m().patSel == nil || s.m().patRow != 1 || len(s.m().patSel.chosen) != 4 {
+		t.Fatalf("the selection is %+v on row %d", s.m().patSel, s.m().patRow)
 	}
+	s.press("k")
 	// A change goes to every chosen note, and the selection follows them.
 	s.press("<")
 	v, ticks := velocities()
@@ -5373,5 +5374,83 @@ func TestConfigSetsTheDrumWordsAndBusesAndAssignFollowsThem(t *testing.T) {
 	s.press("6", "j", "j", "j", "j", "enter")
 	if r := s.m().busRule(); r.DrumBus != 2 || r.OtherBus != 1 || len(r.DrumWords) < 10 {
 		t.Errorf("after the reset: %+v", r)
+	}
+}
+
+func TestASelectionCanHoldNotesOfSeveralTracks(t *testing.T) {
+	s := openConditionPattern(t)
+	d := s.m().pattern
+	if len(d.Grid.Rows) < 2 {
+		t.Fatalf("%d tracks", len(d.Grid.Rows))
+	}
+	pad0, pad1 := d.Grid.Rows[0].Pad, d.Grid.Rows[1].Pad
+	vel := func(pad proto.PadIndex) int {
+		for _, n := range s.m().pattern.Notes {
+			if n.Pad == pad {
+				return int(n.Velocity)
+			}
+		}
+		return -1
+	}
+	v0, v1 := vel(pad0), vel(pad1)
+	// V chooses the note under the cursor; j goes to the next track, where x chooses its note.
+	s.press("g", "V")
+	s.shows("SELECT", "1 note of")
+	s.press("j", "x")
+	s.shows("2 notes on 2 tracks chosen")
+	s.press("<")
+	if vel(pad0) != v0-10 || vel(pad1) != v1-10 {
+		t.Errorf("velocities %d, %d after <: want %d, %d", vel(pad0), vel(pad1), v0-10, v1-10)
+	}
+	if got := len(s.m().patSel.chosen); got != 2 {
+		t.Errorf("the selection holds %d notes after the edit, want 2", got)
+	}
+	// A takes every note of every track, a the track of the cursor.
+	s.press("A")
+	if got := len(s.m().patSel.chosen); got < 2 {
+		t.Errorf("A chose %d notes", got)
+	}
+	s.press("a")
+	cur := s.m().pattern.Grid.Rows[s.m().patRow].Pad
+	for k := range s.m().patSel.chosen {
+		if k.Pad != cur {
+			t.Errorf("a chose a note of %s, the cursor is on %s", k.Pad, cur)
+		}
+	}
+	if s.m().addAsk != nil {
+		t.Error("a in a selection opened the pattern chooser")
+	}
+	s.press("esc")
+}
+
+func TestZeroResetsANoteToOneStepOnTheGrid(t *testing.T) {
+	s := openConditionPattern(t)
+	d := s.m().pattern
+	pad0 := d.Grid.Rows[0].Pad
+	length := func() int {
+		for _, n := range s.m().pattern.Notes {
+			if n.Pad == pad0 {
+				return int(n.Length)
+			}
+		}
+		return -1
+	}
+	step := int(s.m().pattern.StepTicks())
+	// "All pads held": the note lasts the whole pattern; 0 brings it down to one step.
+	s.press("g")
+	if length() <= step {
+		t.Fatalf("the held note is %d ticks, a step is %d", length(), step)
+	}
+	s.press("0")
+	if got := length(); got != step {
+		t.Errorf("after 0 the note is %d ticks, want one step (%d)", got, step)
+	}
+	// Again: nothing to do.
+	s.press("0")
+	s.shows("one step long and on the grid already")
+	// In a selection, 0 does it to every chosen note.
+	s.press("g", "+", "+", "V", "a", "0")
+	if got := length(); got != step {
+		t.Errorf("after 0 in a selection the note is %d ticks, want %d", got, step)
 	}
 }

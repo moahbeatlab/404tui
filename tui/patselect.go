@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"maps"
-	"slices"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -12,12 +11,12 @@ import (
 	"github.com/moahbeatlab/404tui/proto"
 )
 
-// noteSelection is the notes of one track chosen to be changed together: V opens it, h and l
-// move the cursor over the track, and Enter chooses the note under it or lets it go again.
+// noteSelection is the notes chosen to be changed together, on any number of tracks: V opens it,
+// h j k l move the cursor over the pattern, and Enter chooses the note under it or lets it go
+// again.
 type noteSelection struct {
-	pad proto.PadIndex
-	// ticks are where the chosen notes start.
-	ticks map[uint32]bool
+	// chosen are the notes, each by its pad and the tick it starts at.
+	chosen map[formats.PadTick]bool
 }
 
 // selecting says whether a selection is open on the open pattern.
@@ -34,32 +33,52 @@ func noteCol(d *app.PatternDetail, tick uint32) int {
 // toggleChosen chooses the notes that start in the step under the cursor, or lets them go.
 func (m Model) toggleChosen() (tea.Model, tea.Cmd) {
 	s, d := m.patSel, m.pattern
-	notes := d.CellNotes(s.pad, m.patCol)
-	if len(notes) == 0 {
-		m.message = "no note starts here: h l go to one, x chooses it"
+	pad, _, ok := m.cellOfPattern()
+	if !ok {
 		return m, nil
 	}
-	if s.ticks[notes[0].Tick] {
+	notes := d.CellNotes(pad, m.patCol)
+	if len(notes) == 0 {
+		m.message = "no note starts here: h j k l go to one, x chooses it"
+		return m, nil
+	}
+	if s.chosen[formats.PadTick{Pad: pad, Tick: notes[0].Tick}] {
 		for _, n := range notes {
-			delete(s.ticks, n.Tick)
+			delete(s.chosen, formats.PadTick{Pad: pad, Tick: n.Tick})
 		}
 	} else {
 		for _, n := range notes {
-			s.ticks[n.Tick] = true
+			s.chosen[formats.PadTick{Pad: pad, Tick: n.Tick}] = true
 		}
 	}
-	m.message = fmt.Sprintf("%s of %s chosen", plural(len(m.chosenNotes()), "note"), s.pad)
+	m.message = m.chosenText()
 	return m, nil
+}
+
+// chosenText says how many notes are chosen, on how many tracks.
+func (m Model) chosenText() string {
+	pads := map[proto.PadIndex]bool{}
+	for k := range m.patSel.chosen {
+		pads[k.Pad] = true
+	}
+	notes := len(m.chosenNotes())
+	if len(pads) <= 1 {
+		for pad := range pads {
+			return fmt.Sprintf("%s of %s chosen", plural(notes, "note"), pad)
+		}
+		return "0 notes chosen"
+	}
+	return fmt.Sprintf("%s on %s chosen", plural(notes, "note"), plural(len(pads), "track"))
 }
 
 // selectedCols are the steps of a track where a chosen note starts, for drawing them.
 func (m Model) selectedCols(d *app.PatternDetail, pad proto.PadIndex) map[int]bool {
-	if !m.selecting() || d != m.pattern || m.patSel.pad != pad {
+	if !m.selecting() || d != m.pattern {
 		return nil
 	}
 	cols := map[int]bool{}
 	for _, n := range d.Notes {
-		if n.Pad == pad && m.patSel.ticks[n.Tick] {
+		if n.Pad == pad && m.patSel.chosen[formats.PadTick{Pad: pad, Tick: n.Tick}] {
 			cols[noteCol(d, n.Tick)] = true
 		}
 	}
@@ -72,26 +91,24 @@ func (m Model) startSelecting() (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	m.patSel = &noteSelection{pad: pad, ticks: map[uint32]bool{}}
+	m.patSel = &noteSelection{chosen: map[formats.PadTick]bool{}}
 	for _, n := range m.pattern.CellNotes(pad, m.patCol) {
-		m.patSel.ticks[n.Tick] = true
+		m.patSel.chosen[formats.PadTick{Pad: pad, Tick: n.Tick}] = true
 	}
-	m.message = "select: h l go to a note, x chooses it or lets it go, then change the chosen ones together"
+	m.message = "select: h j k l go to a note, on any track, x chooses it or lets it go, then change the chosen ones together"
 	return m, nil
 }
 
 // selectionLine says what is chosen, for the line under the grid.
 func (m Model) selectionLine() string {
-	s := m.patSel
-	n := len(m.chosenNotes())
-	return fmt.Sprintf("SELECT  %s of %s chosen", plural(n, "note"), s.pad)
+	return "SELECT  " + m.chosenText()
 }
 
 // chosenNotes are the notes of the open pattern that are chosen.
 func (m Model) chosenNotes() []formats.NoteRecord {
 	var out []formats.NoteRecord
 	for _, n := range m.pattern.Notes {
-		if n.Pad == m.patSel.pad && m.patSel.ticks[n.Tick] {
+		if m.patSel.chosen[formats.PadTick{Pad: n.Pad, Tick: n.Tick}] {
 			out = append(out, n)
 		}
 	}
@@ -101,10 +118,10 @@ func (m Model) chosenNotes() []formats.NoteRecord {
 // selectionHelp are the keys of the selection, in place of the pattern's own while it is open.
 func (m Model) selectionHelp() []helpGroup {
 	return []helpGroup{
-		{"select", []helpKey{{"h l", "move"}, {"x Enter", "choose / let go"}, {"a", "all of the track"}, {"Esc V", "leave"}}},
+		{"select", []helpKey{{"h j k l", "move"}, {"x Enter", "choose / let go"}, {"a", "all of the track"}, {"A", "all of every track"}, {"Esc V", "leave"}}},
 		{"velocity", []helpKey{{", .", "by 1"}, {"< >", "by 10"}, {"*", "pad's own level"}}},
 		{"length", []helpKey{{"+ -", "by a step"}}},
-		{"timing", []helpKey{{"H L", "nudge 5 ticks"}, {"( )", "1 tick"}, {"0", "back on the grid"}}},
+		{"timing", []helpKey{{"H L", "nudge 5 ticks"}, {"( )", "1 tick"}, {"0", "reset: one step long, on the grid"}}},
 		{"notes", []helpKey{{"d", "take them out"}, {"c C", "condition"}, {"m s", "mute, solo the track"}, {"B", "bounce to a pad"}}},
 		{"history", []helpKey{{"u", "undo"}, {"R", "redo"}, {"", m.patHistoryLabel()}}},
 	}
@@ -120,21 +137,25 @@ func (m Model) selectionKey(name string) (tea.Model, tea.Cmd, bool) {
 		m.patSel = nil
 		m.message = ""
 		return m, nil, true
-	case "h", "left", "l", "right", "g", "G", "{", "[", "}", "]":
+	case "h", "left", "l", "right", "j", "down", "k", "up", "g", "G", "{", "[", "}", "]":
 		// The cursor moves with the pattern's own keys; what is chosen stays.
 		next, cmd := m.patternsKeyMove(name)
 		return next, cmd, true
 	case "x", "enter":
 		next, cmd := m.toggleChosen()
 		return next, cmd, true
-	case "a":
-		s.ticks = map[uint32]bool{}
+	case "a", "A":
+		pad, _, ok := m.cellOfPattern()
+		if !ok {
+			return m, nil, true
+		}
+		s.chosen = map[formats.PadTick]bool{}
 		for _, n := range d.Notes {
-			if n.Pad == s.pad {
-				s.ticks[n.Tick] = true
+			if name == "A" || n.Pad == pad {
+				s.chosen[formats.PadTick{Pad: n.Pad, Tick: n.Tick}] = true
 			}
 		}
-		m.message = fmt.Sprintf("every note of %s is chosen: %s", s.pad, plural(len(s.ticks), "note"))
+		m.message = "every note chosen: " + m.chosenText()
 		return m, nil, true
 	case ",", ".", "<", ">", "*":
 		by := map[string]int{",": -1, ".": 1, "<": -10, ">": 10}[name]
@@ -157,7 +178,7 @@ func (m Model) selectionKey(name string) (tea.Model, tea.Cmd, bool) {
 		next, cmd := m.editSelection(formats.NoteEdit{Move: by}, fmt.Sprintf("moved %+d ticks", by))
 		return next, cmd, true
 	case "0":
-		next, cmd := m.editSelection(formats.NoteEdit{Snap: uint32(step)}, "back on the grid")
+		next, cmd := m.editSelection(formats.NoteEdit{Snap: uint32(step), SetLength: step}, "reset: one step long, on the grid")
 		return next, cmd, true
 	case "d", "backspace":
 		next, cmd := m.editSelection(formats.NoteEdit{Delete: true}, "taken out")
@@ -177,32 +198,44 @@ func (m Model) selectionKey(name string) (tea.Model, tea.Cmd, bool) {
 func (m Model) editSelection(edit formats.NoteEdit, what string) (tea.Model, tea.Cmd) {
 	s, d := m.patSel, m.pattern
 	if len(m.chosenNotes()) == 0 {
-		m.message = "no note is chosen: h l go to one, x chooses it, a takes them all"
+		m.message = "no note is chosen: h j k l go to one, x chooses it, a takes a track, A all"
 		return m, nil
 	}
-	ticks, pad := maps.Clone(s.ticks), s.pad
+	chosen := maps.Clone(s.chosen)
 	// Where the notes will be, for the selection to follow them.
-	next := map[uint32]bool{}
-	for t := range ticks {
+	next := map[formats.PadTick]bool{}
+	for k := range chosen {
 		if edit.Delete {
 			break
 		}
-		tick := int64(t)
+		tick := int64(k.Tick)
 		if edit.Snap > 0 {
 			g := int64(edit.Snap)
 			tick = (tick + g/2) / g * g
 		}
 		tick += int64(edit.Move)
-		next[uint32(min(max(tick, 0), int64(max(d.Length, 1))-1))] = true
+		next[formats.PadTick{Pad: k.Pad, Tick: uint32(min(max(tick, 0), int64(max(d.Length, 1))-1))}] = true
 	}
 	if edit.Delete {
 		m.patSel = nil
 	} else {
-		s.ticks = next
+		s.chosen = next
 	}
-	note := fmt.Sprintf("%s: %s of %s %s", d.Slot, plural(len(ticks), "note"), pad, what)
+	pads := map[proto.PadIndex]bool{}
+	for k := range chosen {
+		pads[k.Pad] = true
+	}
+	where := "of " + (func() string {
+		for pad := range pads {
+			if len(pads) == 1 {
+				return pad.String()
+			}
+		}
+		return plural(len(pads), "track")
+	})()
+	note := fmt.Sprintf("%s: %s %s %s", d.Slot, plural(len(chosen), "note"), where, what)
 	return m.editPatternBytes(func(b []byte) ([]byte, error) {
-		out, _, err := formats.EditNotes(b, pad, ticks, edit)
+		out, _, err := formats.EditNoteSet(b, chosen, edit)
 		return out, err
 	}, note)
 }
@@ -231,11 +264,6 @@ func (m Model) changeSelectionCondition(forward bool) (tea.Model, tea.Cmd) {
 	m.patConds = conds.PrunedTo(m.pattern.Notes)
 	m.saveConditions()
 	m.loopDirty = true
-	m.message = fmt.Sprintf("%s of %s: %s%s", plural(len(chosen), "note"), m.patSel.pad, next, m.cycleNote())
+	m.message = fmt.Sprintf("%s: %s%s", m.chosenText(), next, m.cycleNote())
 	return m, nil
-}
-
-// sortedTicks lists the chosen ticks in order, for messages and tests.
-func (s *noteSelection) sortedTicks() []uint32 {
-	return slices.Sorted(maps.Keys(s.ticks))
 }
