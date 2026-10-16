@@ -24,7 +24,7 @@ checks sequencing and data handling, not the unit's actual behaviour.
 The header says `404tui by moahbeatlab` and the project, then the state of the link and the version. The tabs are in the top right corner (on the row under the header when it is too narrow): **Pads** (`1`), **Files** (`2`), **Projects** (`3`), **Slicer** (`4`) and **Sequencer** (`5`); click one or press its number. A rail down the left lists the banks or file sources of the section you are in. Dialogs open over the
 screen. A History panel on the right keeps what happened, with times.
 
-`1`–`5` always change the view; the slicer and the Sequencer's pattern stay as they were when you come back (Esc closes them). In the Slicer tab, `a` chooses what to slice: `p` a pad (a list of the pads, over the tab) or `f` a new sample from the file view (`Z` slices it). The slicer opens over the tab, with the tab lit. In the Sequencer tab, `a` chooses `p` a pattern (the slots of a bank with a preview, `[ ]` for another bank; Enter opens it in the editor, Esc closes it) or `s` a sample for a pad; `N` makes a new pattern.
+`1`–`5` always change the view; the slicer and the Sequencer's pattern stay as they were when you come back (Esc closes them). In the Slicer tab, `a` chooses what to slice: `p` a pad (a list of the pads, over the tab) or `f` a new sample from the file view (`Z` slices it). The slicer opens over the tab, with the tab lit. In the Sequencer tab, `a` lists the slots of a bank with a preview of the one in front (`[ ]` for another bank; Enter opens it in the editor, Esc closes the editor); `a` in the editor chooses another pattern, and `N` makes a new one.
 
 ### Connecting
 
@@ -124,6 +124,8 @@ you left it. The keys are listed at the bottom of the dialog, in groups.
 
 **Per slice**
 
+- **Several slices at once:** `s` marks the slice in front (`y` all of them); while some are marked, the keys below and the envelope and roll keys change every marked slice, not only the one in front, in one undoable step.
+- **More edges inside a slice:** `/` cuts the slice in front in 2 equal parts, then 3, 4, 6, 8 on the next presses; `c` cuts it in two at the middle, `D` places edges by hand.
 - `r` reverse, `m` mute, `( )` chance, `< >` pitch in semitones, `- +` gain, `X` back to plain.
   Enter plays the slice once.
 - **Envelope** (`6 7` attack shorter/longer, `8 9` release shorter/longer; `1`–`5` always change the view): a fade in and out of

@@ -356,6 +356,10 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case secPads:
 		return m.padsKey(name)
 	case secPatterns:
+		if m.seqTab && name == "a" {
+			// In the Sequencer, a chooses another pattern.
+			return m.openPatternAsk()
+		}
 		return m.patternsKey(name)
 	case secSlicer:
 		return m.slicerTabKey(name)

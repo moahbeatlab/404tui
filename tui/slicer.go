@@ -28,6 +28,9 @@ var slicerTickEvery = 40 * time.Millisecond
 // slicerEqualCounts are the numbers of slices e steps through.
 var slicerEqualCounts = []int{4, 8, 16, 32}
 
+// slicerSplitCounts are the parts / cuts the slice in front into, one more press after another.
+var slicerSplitCounts = []int{2, 3, 4, 6, 8}
+
 // slicerSensitivities are the onset sensitivities t steps through.
 var slicerSensitivities = []float64{0.5, 0.7, 0.9, 0.3}
 
@@ -66,6 +69,8 @@ type slicer struct {
 	// were added with A.
 	srcs []slicerSource
 	sl   *formats.Slicing
+	// split is the press of / the slice in front is cut in parts by.
+	split int
 	// adding is set while the dialog is put aside so that the sample to add can be chosen on
 	// the main screen.
 	adding bool
@@ -685,6 +690,29 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			s.at = cut
 			m.message = fmt.Sprintf("cut: slice %d is new; [ ] move its start, { } its end", cut+1)
 		}
+	case "/":
+		// More edges inside the slice in front: equal parts, 2 then 3, 4, 6, 8 on the next presses.
+		n := slicerSplitCounts[s.split%len(slicerSplitCounts)]
+		s.split++
+		start, end, made := s.cur1().Start, s.cur1().End, 0
+		m.slicerChange(func(sl *formats.Slicing) {
+			for k := n - 1; k >= 1; k-- {
+				pos := start + (end-start)*k/n
+				if s.snap {
+					pos = s.src.ZeroCrossing(pos, 256)
+				}
+				if sl.Split(s.at, pos) >= 0 {
+					made++
+				}
+			}
+		})
+		if made == 0 {
+			m.slicerUndoLast()
+			m.message = "that slice is too short to cut in parts"
+		} else {
+			next := slicerSplitCounts[s.split%len(slicerSplitCounts)]
+			m.message = fmt.Sprintf("slice cut in %d parts; / again: %d, u undoes", made+1, next)
+		}
 	case "d":
 		removed := false
 		m.slicerChange(func(sl *formats.Slicing) { removed = sl.Remove(s.at) })
@@ -711,14 +739,15 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		s.at = 0
 		m.message = fmt.Sprintf("%d slices from the onsets, sensitivity %.1f (t again changes it, u undoes)", len(s.sl.Slices), sens)
 	case "r":
-		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Reverse = !sl.Slices[s.at].Reverse })
+		to := !s.cur1().Reverse
+		m.slicerEach(func(x *formats.Slice) { x.Reverse = to })
 	case "x":
 		next := formats.Rolls[(indexOf(formats.Rolls, s.cur1().Roll)+1)%len(formats.Rolls)]
-		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Roll = next })
+		m.slicerEach(func(x *formats.Slice) { x.Roll = next })
 		if next == 0 {
-			m.message = fmt.Sprintf("slice %d plays once", s.at+1)
+			m.message = fmt.Sprintf("%s plays once", s.targetText())
 		} else {
-			m.message = fmt.Sprintf("slice %d rolls: its start hits %d times in the time the slice has", s.at+1, next)
+			m.message = fmt.Sprintf("%s rolls: its start hits %d times in the time the slice has", s.targetText(), next)
 		}
 	case "j", "k":
 		if s.cur1().Roll < 2 {
@@ -729,9 +758,12 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if name == "j" {
 			by = -by
 		}
-		next := min(max(s.cur1().RollLoud+by, -formats.RollLoudMax), formats.RollLoudMax)
-		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].RollLoud = next })
-		m.message = "the roll's hits " + rollLoudText(next)
+		m.slicerEach(func(x *formats.Slice) {
+			if x.Roll >= 2 {
+				x.RollLoud = min(max(x.RollLoud+by, -formats.RollLoudMax), formats.RollLoudMax)
+			}
+		})
+		m.message = "the roll's hits " + rollLoudText(s.cur1().RollLoud)
 	case ";", "'":
 		if s.cur1().Roll < 2 {
 			m.message = "; ' set how a roll changes in pitch: x makes the slice roll first"
@@ -741,34 +773,34 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if name == ";" {
 			by = -1
 		}
-		next := min(max(s.cur1().RollPitch+by, -formats.RollPitchMax), formats.RollPitchMax)
-		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].RollPitch = next })
-		m.message = fmt.Sprintf("the roll's last hit is %+d semitones from its first", next)
-	case "m":
-		m.slicerChange(func(sl *formats.Slicing) {
-			if sl.Slices[s.at].Chance == 0 {
-				sl.Slices[s.at].Chance = 100
-			} else {
-				sl.Slices[s.at].Chance = 0
+		m.slicerEach(func(x *formats.Slice) {
+			if x.Roll >= 2 {
+				x.RollPitch = min(max(x.RollPitch+by, -formats.RollPitchMax), formats.RollPitchMax)
 			}
 		})
+		m.message = fmt.Sprintf("the roll's last hit is %+d semitones from its first", s.cur1().RollPitch)
+	case "m":
+		to := 0
+		if s.cur1().Chance == 0 {
+			to = 100
+		}
+		m.slicerEach(func(x *formats.Slice) { x.Chance = to })
 	case "(":
-		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Chance = max(sl.Slices[s.at].Chance-10, 0) })
+		m.slicerEach(func(x *formats.Slice) { x.Chance = max(x.Chance-10, 0) })
 	case ")":
-		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Chance = min(sl.Slices[s.at].Chance+10, 100) })
+		m.slicerEach(func(x *formats.Slice) { x.Chance = min(x.Chance+10, 100) })
 	case "<":
-		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Pitch = max(sl.Slices[s.at].Pitch-1, -24) })
+		m.slicerEach(func(x *formats.Slice) { x.Pitch = max(x.Pitch-1, -24) })
 	case ">":
-		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Pitch = min(sl.Slices[s.at].Pitch+1, 24) })
+		m.slicerEach(func(x *formats.Slice) { x.Pitch = min(x.Pitch+1, 24) })
 	case "-":
-		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Gain = max(sl.Slices[s.at].Gain-10, 0) })
+		m.slicerEach(func(x *formats.Slice) { x.Gain = max(x.Gain-10, 0) })
 	case "+", "=":
-		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Gain = min(sl.Slices[s.at].Gain+10, 400) })
+		m.slicerEach(func(x *formats.Slice) { x.Gain = min(x.Gain+10, 400) })
 	case "6", "7", "8", "9":
 		dir := map[string]int{"6": -1, "7": 1, "8": -1, "9": 1}[key.String()]
 		attack := key.String() <= "7"
-		m.slicerChange(func(sl *formats.Slicing) {
-			x := &sl.Slices[s.at]
+		m.slicerEach(func(x *formats.Slice) {
 			if attack {
 				x.Attack = formats.StepEnv(x.Attack, dir)
 			} else {
@@ -784,7 +816,7 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			s.marks[s.at] = true
 		}
-		m.message = fmt.Sprintf("%s marked; B puts each marked slice on its own pad", plural(len(s.marks), "slice"))
+		m.message = fmt.Sprintf("%s marked; the sound keys change all of them, B puts each on its own pad", plural(len(s.marks), "slice"))
 	case "y":
 		all := len(s.marks) < len(s.sl.Slices)
 		s.marks, s.marksOver = map[int]bool{}, len(s.sl.Slices)
@@ -800,13 +832,48 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "P":
 		return m.slicerChoosePattern()
 	case "X":
-		m.slicerChange(func(sl *formats.Slicing) {
-			x := sl.Slices[s.at]
-			sl.Slices[s.at] = formats.Slice{Start: x.Start, End: x.End, Chance: 100, Gain: 100}
+		m.slicerEach(func(x *formats.Slice) {
+			*x = formats.Slice{Start: x.Start, End: x.End, Chance: 100, Gain: 100}
 		})
-		m.message = fmt.Sprintf("slice %d back to its plain settings", s.at+1)
+		m.message = fmt.Sprintf("%s back to its plain settings", s.targetText())
 	}
 	return m, nil
+}
+
+// targets are the slices a setting of the sound row changes: the marked ones, else the one in
+// front.
+func (s *slicer) targets() []int {
+	if len(s.marks) == 0 {
+		return []int{s.at}
+	}
+	var out []int
+	for i := range s.sl.Slices {
+		if s.marks[i] {
+			out = append(out, i)
+		}
+	}
+	if len(out) == 0 {
+		return []int{s.at}
+	}
+	return out
+}
+
+// targetText names them for a message.
+func (s *slicer) targetText() string {
+	if t := s.targets(); len(s.marks) > 0 && len(t) > 1 {
+		return plural(len(t), "marked slice")
+	}
+	return fmt.Sprintf("slice %d", s.at+1)
+}
+
+// slicerEach changes a setting of every target slice, as one step that u undoes.
+func (m Model) slicerEach(f func(x *formats.Slice)) {
+	s := m.slicer
+	m.slicerChange(func(sl *formats.Slicing) {
+		for _, i := range s.targets() {
+			f(&sl.Slices[i])
+		}
+	})
 }
 
 // slicerTapStart plays the sample from its start so that slices can be marked as it goes by, the
@@ -1968,7 +2035,7 @@ func (s *slicer) slicerHelp() []helpGroup {
 		return []helpGroup{{"tap", []helpKey{{"Space", "cut here"}, {"u", "take the last cut back"}, {"p", "stop"}}}}
 	}
 	groups := []helpGroup{
-		{"slices", []helpKey{{"h l", "select"}, {"c", "cut"}, {"d", "delete"}, {"e", "equal"}, {"E", "random"}, {"t", "onsets"}, {"p", "tap"}, {"u U", "undo redo"}}},
+		{"slices", []helpKey{{"h l", "select"}, {"c", "cut in two"}, {"/", "cut in parts"}, {"d", "delete"}, {"e", "equal"}, {"E", "random"}, {"t", "onsets"}, {"p", "tap"}, {"u U", "undo redo"}}},
 		{"edges", []helpKey{{"[ ]", "start"}, {"{ }", "end"}, {"f", "coarse"}, {"z", "snap"}, {"i I", "zoom"}, {"D", "clear, by hand"}}},
 	}
 	if s.cutting {
@@ -2189,7 +2256,7 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 		}
 	}
 	if n := len(s.marks); n > 0 {
-		fourth += st.accent.Render("  ·  " + plural(n, "slice") + " marked")
+		fourth += st.accent.Render("  ·  " + plural(n, "slice") + " marked: the sound keys change all of them (s unmarks, y all)")
 	}
 	lines := []string{first, second, third, fourth}
 	if rich {

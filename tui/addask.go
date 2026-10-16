@@ -11,9 +11,9 @@ import (
 	"github.com/moahbeatlab/404tui/proto"
 )
 
-// addAsk is the dialog a opens on the Slicer and Sequencer tabs. The Slicer takes a pad or a
-// new sample from the file view, the Sequencer a pattern or a sample for a pad. The pads and
-// the patterns are chosen in a list of their own, drawn over the tab.
+// addAsk is the dialog a opens on the Slicer tab, which takes a pad or a new sample from the
+// file view, and the list of patterns a opens in the Sequencer. The pads and the patterns are
+// chosen in a list of their own, drawn over the tab.
 type addAsk struct {
 	// sec is the tab it was opened on.
 	sec int
@@ -41,7 +41,7 @@ func (m Model) slicerTabKey(name string) (tea.Model, tea.Cmd) {
 func (m Model) sequencerTabKey(name string) (tea.Model, tea.Cmd) {
 	switch name {
 	case "a", "enter":
-		m.addAsk = &addAsk{sec: secSequencer}
+		return m.openPatternAsk()
 	case "N":
 		// A new pattern opens in the editor, which is the Sequencer's.
 		m.section, m.seqTab = secPatterns, true
@@ -53,6 +53,21 @@ func (m Model) sequencerTabKey(name string) (tea.Model, tea.Cmd) {
 		return nm, cmd
 	}
 	return m, nil
+}
+
+// openPatternAsk opens the list of the patterns of a bank, to choose the one the Sequencer edits.
+func (m Model) openPatternAsk() (tea.Model, tea.Cmd) {
+	if m.unit == nil || m.snap == nil {
+		m.message = "no unit to read patterns from"
+		return m, nil
+	}
+	c := &patternChooser{bank: m.bank}
+	if err := m.loadChooser(c); err != nil {
+		m.message = "patterns: " + err.Error()
+		return m, nil
+	}
+	m.addAsk = &addAsk{sec: secSequencer, patterns: c}
+	return m, m.wanted()
 }
 
 // addAskKey takes every key while the dialog is open.
@@ -74,28 +89,12 @@ func (m Model) addAskKey(name string) (tea.Model, tea.Cmd) {
 			m.message = "choose an audio file and press Z"
 			return m.goTo(secFiles)
 		}
-	case "s":
-		if a.sec == secSequencer {
-			// A sample for the sequencer goes onto a pad, in the file dialog that a opens on Pads.
-			m.addAsk = nil
-			return m.openAssign(m.padRow().Pad)
-		}
 	case "p":
 		if m.unit == nil || m.snap == nil {
 			m.message = "no unit to read from"
 			return m, nil
 		}
-		if a.sec == secSlicer {
-			a.pads = &padChooser{bank: m.bank, cursor: m.pad}
-			return m, nil
-		}
-		c := &patternChooser{bank: m.bank}
-		if err := m.loadChooser(c); err != nil {
-			m.message = "patterns: " + err.Error()
-			return m, nil
-		}
-		a.patterns = c
-		return m, m.wanted()
+		a.pads = &padChooser{bank: m.bank, cursor: m.pad}
 	}
 	return m, nil
 }
@@ -141,8 +140,8 @@ func (m Model) patternChooserKey(a *addAsk, name string) (tea.Model, tea.Cmd) {
 		return m, m.wanted()
 	}
 	switch name {
-	case "esc", "q", "p":
-		a.patterns = nil
+	case "esc", "q", "a":
+		m.addAsk = nil
 	case "enter", " ":
 		row := c.rows[c.cursor]
 		if !row.Exists {
@@ -177,14 +176,6 @@ func (m Model) addAskBox() string {
 		st.accent.Render("p") + st.text.Render("  a pad  ") + st.dim.Render("one of the pads on the unit"),
 		st.accent.Render("f") + st.text.Render("  a new sample  ") + st.dim.Render("from the file view"), "",
 		st.dim.Render("Esc cancel"),
-	}
-	if a.sec == secSequencer {
-		lines = []string{
-			st.bold.Render("Sequencer: choose what to work on"), "",
-			st.accent.Render("p") + st.text.Render("  a pattern  ") + st.dim.Render("open it to edit"),
-			st.accent.Render("s") + st.text.Render("  a sample  ") + st.dim.Render("put it on a pad"), "",
-			st.dim.Render("Esc cancel"),
-		}
 	}
 	return st.modal.Render(strings.Join(lines, "\n"))
 }
@@ -289,7 +280,7 @@ func (m Model) sequencerTabBody(g geom) string {
 	key := func(k, what string) string { return st.accent.Render(fmt.Sprintf("%-8s", k)) + st.dim.Render(what) }
 	lines := []string{
 		st.dim.Render("Nothing is open in the sequencer."), "",
-		key("a", "choose a pattern to edit, or a sample to put on a pad"),
+		key("a", "choose a pattern to edit"),
 		key("N", "make a new pattern"),
 	}
 	return m.box("Sequencer", strings.Join(lines, "\n"), g.bodyW+g.bodyX-1, g.bodyH, true)

@@ -47,7 +47,7 @@ func (m Model) geom() geom {
 		g.railW = 12
 	}
 	g.bodyX = g.railW + 2
-	if m.section == secProjects || m.section == secSlicer || m.section == secSequencer {
+	if m.section == secProjects || m.section == secSlicer || m.section == secSequencer || (m.section == secPatterns && m.seqTab) {
 		// The projects have nothing to put on a rail: the list takes the width.
 		g.railW, g.bodyX = 0, 1
 	}

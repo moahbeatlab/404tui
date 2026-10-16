@@ -4002,7 +4002,7 @@ func TestPatternEditPagesPerBar(t *testing.T) {
 	s.press("N", "enter", "tab", "enter")
 	s.shows("Pattern A1", "Bars 1–2 / 2")
 	// Too narrow for two, the grid shows one bar at a time and pages.
-	s.send(tea.WindowSizeMsg{Width: 100, Height: 54})
+	s.send(tea.WindowSizeMsg{Width: 80, Height: 54})
 	s.shows("Bar 1 / 2")
 	spp := s.m().pattern.StepsPerPage()
 	if spp != 16 {
@@ -5103,7 +5103,7 @@ func TestSlicerAndSequencerTabsOfferWhatToAdd(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.sim.AddFile(formats.PatternPath(1, pad(t, "A2")), data)
-	s.press("r", "5", "a", "p")
+	s.press("r", "5", "a")
 	s.shows("Pattern  bank A", "arrows move")
 	s.press("enter")
 	if s.m().pattern == nil {
@@ -5126,12 +5126,17 @@ func TestSlicerAndSequencerTabsOfferWhatToAdd(t *testing.T) {
 		t.Errorf("Esc: pattern=%v section=%d", s.m().pattern != nil, s.m().section)
 	}
 
-	// Sequencer: s opens the file dialog for a pad.
+	// In an open pattern a chooses another one, and there is no rail of banks beside it.
+	s.press("5", "a")
+	s.press("enter")
+	if s.m().pattern == nil || s.m().geom().railW != 0 {
+		t.Fatalf("pattern open %v, rail %d", s.m().pattern != nil, s.m().geom().railW)
+	}
 	s.press("a")
-	s.shows("Sequencer: choose what to work on")
-	s.press("s")
-	if s.m().browser == nil {
-		t.Error("s in the Sequencer should open the file dialog")
+	s.shows("Pattern  bank A", "arrows move")
+	s.press("esc")
+	if s.m().addAsk != nil || s.m().pattern == nil {
+		t.Error("Esc in the chooser should leave the open pattern as it was")
 	}
 }
 

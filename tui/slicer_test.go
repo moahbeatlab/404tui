@@ -1487,3 +1487,56 @@ func TestAFolderInTheAssignDialogSaysWhereItsSamplesWereUsed(t *testing.T) {
 		t.Error("pads from other folders are counted")
 	}
 }
+
+func TestSlicerSoundKeysChangeEveryMarkedSlice(t *testing.T) {
+	s := slicerOpen(t)
+	// Slices 2 and 4 marked: the sound row changes both, and only them.
+	s.press("l", "s", "l", "l", "s")
+	s.shows("2 slices marked", "change all of them")
+	s.press("-", "-", "<", "7", "7", "m")
+	for i, x := range s.slicing().Slices {
+		marked := i == 1 || i == 3
+		if marked && (x.Gain != 80 || x.Pitch != -1 || x.Attack == 0 || x.Chance != 0) {
+			t.Errorf("slice %d: gain %d pitch %d attack %d chance %d", i+1, x.Gain, x.Pitch, x.Attack, x.Chance)
+		}
+		if !marked && (x.Gain != 100 || x.Pitch != 0 || x.Attack != 0 || x.Chance != 100) {
+			t.Errorf("slice %d was changed: %+v", i+1, x)
+		}
+	}
+	s.press("X")
+	if x := s.slicing().Slices[3]; x.Gain != 100 || x.Chance != 100 || x.Attack != 0 {
+		t.Errorf("X left %+v on a marked slice", x)
+	}
+	s.press("u")
+	if s.slicing().Slices[3].Gain != 80 {
+		t.Error("u did not undo the plain reset of all the marked slices in one step")
+	}
+}
+
+func TestSlicerSlashCutsTheSliceInFrontInPartsAndUndoes(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("l")
+	before, start, end := len(s.slicing().Slices), s.slicing().Slices[1].Start, s.slicing().Slices[1].End
+	s.press("/")
+	if got := len(s.slicing().Slices); got != before+1 {
+		t.Fatalf("/ made %d slices from %d, want one more", got, before)
+	}
+	s.shows("slice cut in 2 parts", "/ again: 3")
+	s.press("/")
+	if got := len(s.slicing().Slices); got != before+3 {
+		t.Errorf("the second / cut the left part in 3: %d slices, want %d", got, before+3)
+	}
+	first, last := s.slicing().Slices[1], s.slicing().Slices[1]
+	for _, x := range s.slicing().Slices {
+		if x.Start >= start && x.End <= end {
+			first.Start, last.End = min(first.Start, x.Start), max(last.End, x.End)
+		}
+	}
+	if first.Start != start || last.End != end {
+		t.Errorf("the parts cover %d-%d, the slice was %d-%d", first.Start, last.End, start, end)
+	}
+	s.press("u", "u")
+	if len(s.slicing().Slices) != before {
+		t.Errorf("two undos left %d slices, want %d", len(s.slicing().Slices), before)
+	}
+}

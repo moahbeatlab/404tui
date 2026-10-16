@@ -457,7 +457,11 @@ func (m Model) statusBar() string {
 	case secPads:
 		chips = []string{chip("Enter", "preview on "+map[bool]string{true: "computer", false: "unit"}[m.previewLocal]), chip("a", "assign"), chip("v", "mark"), chip("t", "set"), chip("c", "copy"), chip("d", "delete"), chip("Tab", "patterns"), chip("[ ]", "bank")}
 	case secPatterns:
-		chips = []string{chip("Enter", "open"), chip("a", "add sample or pattern"), chip("N", "new"), chip("P", "play"), chip("d", "delete"), chip("c", "copy"), chip("[ ]", "bank")}
+		if m.seqTab {
+			chips = []string{chip("a", "other pattern"), chip("P", "play"), chip("Esc", "close")}
+			break
+		}
+		chips = []string{chip("Enter", "open"), chip("N", "new"), chip("P", "play"), chip("d", "delete"), chip("c", "copy"), chip("[ ]", "bank")}
 	case secFiles:
 		if len(m.fileMarks) > 0 || len(m.clip) > 0 {
 			chips = []string{chip("Enter", "assign"), chip("d", "delete"), chip("c", "copy"), chip("x", "move"), chip("p", "paste"), chip("u", "unmark"), chip("Esc", "clear")}
@@ -467,7 +471,7 @@ func (m Model) statusBar() string {
 	case secSlicer:
 		chips = []string{chip("a", "choose a pad or a sample")}
 	case secSequencer:
-		chips = []string{chip("a", "choose a pattern or a sample"), chip("N", "new pattern")}
+		chips = []string{chip("a", "choose a pattern"), chip("N", "new pattern")}
 	case secProjects:
 		chips = []string{chip("Enter", "select"), chip("n", "rename"), chip("e", "export"), chip("R", "restore"), chip("X", "erase")}
 	}
@@ -1394,9 +1398,9 @@ func (m Model) patternHelp(d *app.PatternDetail) []helpGroup {
 		return m.selectionHelp()
 	}
 	move := helpGroup{"move", []helpKey{{"h j k l", "move"}, {"{ }", "turn page"}, {"v", "show/loop bars"}, {"Tab Enter", "open track"}, {"x", "note on/off"}, {"V", "select notes"}, {"D", "clear track here"},
-		{"t", "tools (this pad)"}, {"T", "tools: swing, quantize, shift, double, half"}, {"Space P", "play"}, {"Esc", "back"}}}
+		{"t", "tools (this pad)"}, {"T", "tools: swing, quantize, shift, double, half"}, {"Space P", "play"}, {"a", "other pattern"}, {"Esc", "close"}}}
 	if m.patFocus {
-		move = helpGroup{"track", []helpKey{{"h l", "step"}, {"j k", "other track"}, {"{ }", "turn page"}, {"Enter x", "note on/off"}, {"Space P", "play"}, {"Tab", "fold"}, {"Esc", "back"}}}
+		move = helpGroup{"track", []helpKey{{"h l", "step"}, {"j k", "other track"}, {"{ }", "turn page"}, {"Enter x", "note on/off"}, {"Space P", "play"}, {"Tab", "fold"}, {"a", "other pattern"}, {"Esc", "close"}}}
 	}
 	history := helpGroup{"history", []helpKey{{"u", "undo"}, {"R", "redo"}}}
 	if d.HasSourceBank {
