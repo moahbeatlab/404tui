@@ -288,6 +288,23 @@ func IndexFromTags(t *TagIndex, root string) *Index {
 	return ix
 }
 
+// IndexOfAll is the search index made from every file of the saved index, whatever source it
+// is on: the card, the unit's storage or this computer. Rel is the whole path.
+func IndexOfAll(t *TagIndex) *Index {
+	ix := &Index{Root: StorageRoot}
+	if t == nil {
+		return ix
+	}
+	dirs := map[string]bool{}
+	for path, tags := range t.Files {
+		ix.Files = append(ix.Files, IndexedFile{Path: path, Rel: path, lower: strings.ToLower(path) + " " + tags})
+		dirs[Dir(path)] = true
+	}
+	sort.Slice(ix.Files, func(i, j int) bool { return NaturalLess(ix.Files[i].lower, ix.Files[j].lower) })
+	ix.Folders, ix.Saved = len(dirs), t.Updated
+	return ix
+}
+
 // Retag works the tags out again from each file's path, with the rules of this version, so
 // that a better rule applies to what was indexed before without walking the card again.
 // A file is read as part of the indexed folder it is in (the deepest one). A placeholder is

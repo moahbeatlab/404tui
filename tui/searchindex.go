@@ -155,7 +155,6 @@ func (m Model) scanFolderUses() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) scanOriginsFor(banks bool) (tea.Model, tea.Cmd) {
-	ix := m.indexes[app.CardRoot]
 	rows, project, unit := m.snap.Pads, m.snap.Project, m.unit
 	withSample := 0
 	for _, r := range rows {
@@ -168,17 +167,18 @@ func (m Model) scanOriginsFor(banks bool) (tea.Model, tea.Cmd) {
 	m.busy = "finding where the samples came from"
 	return m, m.edit(func() tea.Msg {
 		defer prog.begin(0)
-		if ix == nil {
-			// The index is not in hand (it is made when the Files view is shown): the saved one is read.
-			saved, err := app.LoadTagIndex(unit)
-			if err != nil {
-				return doneMsg{message: "reading the saved index failed: " + err.Error()}
-			}
-			ix = app.IndexFromTags(saved, app.CardRoot)
+		// The saved index is read: it holds the files of every source that was indexed, the card
+		// and this computer alike.
+		saved, err := app.LoadTagIndex(unit)
+		if err != nil {
+			return doneMsg{message: "reading the saved index failed: " + err.Error()}
 		}
+		ix := app.IndexOfAll(saved)
 		if len(ix.Files) == 0 {
 			return doneMsg{message: "no index to look in: open the Files view and press i on the folders your samples are in"}
 		}
+		// Files on this computer are read from it, the pads from the unit.
+		reader := routedUnit{unit}
 		have, err := app.LoadOrigins(unit)
 		if err != nil {
 			return doneMsg{message: "reading the origins failed: " + err.Error()}
@@ -188,7 +188,7 @@ func (m Model) scanOriginsFor(banks bool) (tea.Model, tea.Cmd) {
 			if s, ok := lengths[path]; ok {
 				return s, s > 0
 			}
-			head, exists, err := unit.ReadPrefix(path, 512)
+			head, exists, err := reader.ReadPrefix(path, 512)
 			s := 0.0
 			if err == nil && exists {
 				s, _ = app.WAVSeconds(head)
@@ -202,7 +202,7 @@ func (m Model) scanOriginsFor(banks bool) (tea.Model, tea.Cmd) {
 		}
 		scan := app.ScanOrigins(rows, project, have, ix.Files, seconds, padSeconds, func(row app.PadRow, cands []string) []string {
 			prog.step(int(row.Pad.Index()), "comparing the audio of "+row.Pad.String()+" with "+plural(len(cands), "file"))
-			return app.MatchByContent(unit, row, cands)
+			return app.MatchByContent(reader, row, cands)
 		}, func(done, total int, line string) {
 			prog.step(done, line)
 			prog.logLine(line)
@@ -320,4 +320,15 @@ func (m Model) folderPadLines(folder string, width int) []string {
 		lines = append(lines, st.accent.Render("◆ ")+st.text.Render(ansi.Truncate(text, width-2, "…")))
 	}
 	return append(lines, "")
+}
+
+// routedUnit reads the files on this computer from it and everything else from the unit, so a
+// scan can look at the files of any indexed source.
+type routedUnit struct{ app.Unit }
+
+func (r routedUnit) ReadPrefix(path string, n uint32) ([]byte, bool, error) {
+	if app.IsLocal(path) {
+		return app.Local{}.ReadPrefix(path, n)
+	}
+	return r.Unit.ReadPrefix(path, n)
 }

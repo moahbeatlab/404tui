@@ -189,3 +189,22 @@ func TestTreeSiblingsAndChildren(t *testing.T) {
 		t.Error("no such row, no siblings")
 	}
 }
+
+func TestIndexOfAllHoldsTheFilesOfEverySource(t *testing.T) {
+	ix := IndexOfAll(&TagIndex{Files: map[string]string{
+		"SD:IMPORT/a.wav":         "a",
+		"/Volumes/X/Kit/b.wav":    "b",
+		"ROLAND/SP-404MKII/c.wav": "c",
+	}})
+	if len(ix.Files) != 3 {
+		t.Fatalf("%d files, want 3", len(ix.Files))
+	}
+	for _, f := range ix.Files {
+		if f.Path == "" || f.Rel != f.Path {
+			t.Errorf("bad entry %+v", f)
+		}
+	}
+	if got := IndexOfAll(nil); len(got.Files) != 0 {
+		t.Error("a missing index has files")
+	}
+}

@@ -269,7 +269,10 @@ pattern, from the grid or from an expanded track, back to the patterns under the
   `SD:404tui-folders.json`, one entry per project and bank, so it never holds more than 160.
   `W` in Pads goes the other way for the project in front: it finds where the samples came from
   (as `F` does), then notes, for every bank whose samples are mostly (and at least two) from
-  one folder, that the folder is on that bank. It needs the folders indexed with `i`.
+  one folder, that the folder is on that bank. It needs the folders indexed with `i` (on the
+  card or on this computer: it looks in everything that was indexed). Pads assigned from now on
+  note their file by themselves; `W` is for the ones assigned before. The `a` dialog shows both
+  for the folder in front: where it was restored, and which pads of which projects came from it.
 - **Finding:** `/` searches every audio file of the source by keyword, and `s` searches tags
   only, with the tags listed in a sidebar (`Tab` switches between the two). Enter assigns,
   `Ctrl-O` shows the file in the tree. `f` finds a folder by name; favourite folders come
