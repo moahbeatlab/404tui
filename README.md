@@ -128,8 +128,10 @@ the input with `404` in its name (set in Config, `6`). What it does:
   the right half, with their whole names in plain text, and the left half for what you read from afar: the
   beat of the bar as four big blocks, the cue (what plays, what is next, what comes in and goes out), the
   patterns of the bank the unit is on (four at most, the one that plays and the next first; it follows
-  when you switch bank), each bus's effect with a big ON/off and its knobs as tall faders, and the other
-  controllers as tall faders. Narrower screens get everything stacked.
+  when you switch bank), and a panel for each bus: a big ON/off, your note, and its three knobs C1 to C3
+  as tall faders in the bus colour that light up while you turn them. Under them the other controllers as
+  faders and the last MIDI messages. Everything sits in titled panels; the faders take the height that is
+  left. Narrower sides put clock and cue, then everything, one under the other.
 - **Pattern found from the unit:** while the unit's sequencer runs it sends every note its pattern plays
   over MIDI (channel = the pad's bank). 404tui takes those for what the pattern plays, not for pads hit
   by hand (so a pattern cannot trigger a pad code), and finds the pattern whose pads fit them: it becomes

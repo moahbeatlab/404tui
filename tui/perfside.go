@@ -17,27 +17,32 @@ import (
 
 const faderW = 7
 
-// bigFader is a controller as a tall bar rows high and three cells wide, its value under it and a
-// label under that; a line of faderW cells each. style lights the bar, st.faint draws its track.
-func (m Model) bigFader(val, rows int, style lipgloss.Style, valueText, label string) []string {
+// faderCell is how wide a fader is in a panel inner cells wide that holds n of them: wider when there is room.
+func faderCell(inner, n int) int { return clamp(inner/max(n, 1), faderW, 15) }
+
+// bigFader is a controller as a tall bar rows high and three cells wide, its value under it, a
+// label and a small line under that; a line of faderW cells each. style lights the bar, st.faint draws its track.
+func (m Model) bigFader(val, rows int, style lipgloss.Style, valueText, label, sub string, cw int) []string {
 	st := m.st
 	const blocks = " ▁▂▃▄▅▆▇█"
 	center := func(s string) string {
-		pad := max(faderW-ansi.StringWidth(s), 0)
+		pad := max(cw-ansi.StringWidth(s), 0)
 		return strings.Repeat(" ", pad/2) + s + strings.Repeat(" ", pad-pad/2)
 	}
 	fill := val * rows * 8 / 127
-	out := make([]string, 0, rows+2)
+	out := make([]string, 0, rows+3)
 	for r := 0; r < rows; r++ {
 		rem := clamp(fill-(rows-1-r)*8, 0, 8)
-		cell := st.faint.Render("╎ ╎")
+		bar := clamp(cw-4, 3, 9)
+		cell := st.faint.Render("╎" + strings.Repeat(" ", bar-2) + "╎")
 		if rem > 0 {
 			ch := string([]rune(blocks)[rem])
-			cell = style.Render(strings.Repeat(ch, 3))
+			cell = style.Render(strings.Repeat(ch, bar))
 		}
-		out = append(out, "  "+cell+"  ")
+		lead := (cw - bar) / 2
+		out = append(out, strings.Repeat(" ", lead)+cell+strings.Repeat(" ", cw-bar-lead))
 	}
-	out = append(out, style.Render(center(valueText)), st.dim.Render(center(ansi.Truncate(label, faderW, ""))))
+	out = append(out, style.Render(center(valueText)), style.Render(center(ansi.Truncate(label, cw, ""))), st.faint.Render(center(ansi.Truncate(sub, cw, ""))))
 	return out
 }
 
@@ -188,162 +193,235 @@ func (m Model) sidePatterns(bank int) []string {
 	return out
 }
 
-// sideFx draws the effect of each bus side by side: its name, a big ON or off, what you noted for it,
-// and its knobs as tall faders.
-func (m Model) sideFx(width, rows int, now time.Time) []string {
-	st := m.st
-	half := max((width-2)/2, faderW*3)
-	var cols [2][]string
-	for bus := 0; bus < 2; bus++ {
-		colour, _ := st.th.busColour(int32(bus + 1))
-		badge := lipgloss.NewStyle().Foreground(colour).Bold(true).Render(fmt.Sprintf("BUS %d ", bus+1))
-		state := st.dim.Render("?  " + map[int]string{0: "l", 1: "L"}[bus] + " learns")
-		if _, _, _, ok := fxMsg(m.mem.FxMsg[bus]); ok {
-			state = lipgloss.NewStyle().Background(st.th.faint).Foreground(st.th.text).Render("  off  ")
-			if m.fxOn[bus] {
-				state = lipgloss.NewStyle().Background(st.th.good).Foreground(st.th.cursorFg).Bold(true).Render("  ON   ")
-			}
-		}
-		note := m.mem.BusNotes[bus]
-		if note == "" {
-			note = "—"
-		}
-		col := []string{badge + state, st.text.Render(ansi.Truncate(note, half, "…"))}
-		knobs := m.mem.FxKnobs[bus]
-		cells := make([][]string, 0, 3)
-		for _, text := range knobs {
-			var ch, cc int
-			fmt.Sscanf(text, "ch %d cc %d", &ch, &cc)
-			c := m.mon.ccs[[2]int{ch, cc}]
-			val, style, vt := 0, st.faint, "-"
-			if c != nil {
-				val, vt = c.val, fmt.Sprint(c.val)
-				style = st.dim
-				if now.Sub(c.at) < monMoving {
-					style = st.accent
-				}
-			}
-			cells = append(cells, m.bigFader(val, rows, style, vt, fmt.Sprintf("%d:%d", ch, cc)))
-		}
-		if len(cells) == 0 {
-			key := map[int]string{0: "k", 1: "K"}[bus]
-			col = append(col, st.dim.Render(key+" assigns a knob"))
-		}
-		for r := 0; r < rows+2 && len(cells) > 0; r++ {
-			var b strings.Builder
-			for _, c := range cells {
-				b.WriteString(c[r])
-			}
-			col = append(col, b.String())
-		}
-		cols[bus] = col
+// panel draws lines in a rounded box w wide with its title in the top edge, in colour.
+func (m Model) panel(title string, colour lipgloss.Color, lines []string, w int) []string {
+	border := lipgloss.NewStyle().Foreground(colour)
+	inner := w - 4
+	label := " " + title + " "
+	top := border.Render("╭─") + lipgloss.NewStyle().Foreground(colour).Bold(true).Render(label) +
+		border.Render(strings.Repeat("─", max(w-3-ansi.StringWidth(label), 0))+"╮")
+	out := []string{top}
+	for _, l := range lines {
+		l = ansi.Truncate(l, inner, "…")
+		out = append(out, border.Render("│ ")+l+strings.Repeat(" ", max(inner-ansi.StringWidth(l), 0))+border.Render(" │"))
 	}
-	height := max(len(cols[0]), len(cols[1]))
-	out := make([]string, 0, height)
-	for i := 0; i < height; i++ {
+	return append(out, border.Render("╰"+strings.Repeat("─", w-2)+"╯"))
+}
+
+// besideEach puts two blocks of lines side by side, each padded to its width and the shorter one
+// to the height of the taller.
+func besideEach(a []string, wa int, b []string, wb int) []string {
+	n := max(len(a), len(b))
+	out := make([]string, n)
+	for i := range out {
 		var l, r string
-		if i < len(cols[0]) {
-			l = cols[0][i]
+		if i < len(a) {
+			l = a[i]
 		}
-		if i < len(cols[1]) {
-			r = cols[1][i]
+		if i < len(b) {
+			r = b[i]
 		}
-		out = append(out, l+strings.Repeat(" ", max(half-ansi.StringWidth(l), 0))+r)
+		out[i] = l + strings.Repeat(" ", max(wa-ansi.StringWidth(l), 0)) + r + strings.Repeat(" ", max(wb-ansi.StringWidth(r), 0))
 	}
 	return out
 }
 
-// sideControls draws the other controllers as tall faders in a row.
-func (m Model) sideControls(width, rows int, now time.Time) []string {
+// padLines adds blank lines to a block until it is n lines high.
+func padLines(lines []string, n int) []string {
+	for len(lines) < n {
+		lines = append(lines, "")
+	}
+	return lines
+}
+
+// fresh is how long a controller stays lit bright after it moved.
+const fresh = 1500 * time.Millisecond
+
+// faderRow lays out faders side by side, rows+3 lines high.
+func faderRow(cells [][]string) []string {
+	if len(cells) == 0 {
+		return nil
+	}
+	out := make([]string, len(cells[0]))
+	for _, c := range cells {
+		for r := range out {
+			out[r] += c[r]
+		}
+	}
+	return out
+}
+
+// fxPanel is a bus's effect: whether it is on, what you noted for it, and its three knobs, C1 to C3,
+// as tall faders that light up in the bus colour while you turn them.
+func (m Model) fxPanel(bus, w, rows int, now time.Time) (string, lipgloss.Color, []string) {
+	cw := faderCell(w-4, 3)
+	st := m.st
+	colour, _ := st.th.busColour(int32(bus + 1))
+	bold := lipgloss.NewStyle().Foreground(colour).Bold(true)
+	state := st.dim.Render("?  " + map[int]string{0: "l", 1: "L"}[bus] + " learns its on/off")
+	if _, _, _, ok := fxMsg(m.mem.FxMsg[bus]); ok {
+		state = lipgloss.NewStyle().Background(st.th.faint).Foreground(st.th.text).Render("  off  ")
+		if m.fxOn[bus] {
+			state = lipgloss.NewStyle().Background(st.th.good).Foreground(st.th.cursorFg).Bold(true).Render("  ON   ")
+		}
+	}
+	note := m.mem.BusNotes[bus]
+	if note == "" {
+		note = "no note (f F)"
+	}
+	lines := []string{state + "  " + st.text.Render(note)}
+	cells := make([][]string, 0, 3)
+	for k := 0; k < 3; k++ {
+		label := fmt.Sprintf("C%d", k+1)
+		if k >= len(m.mem.FxKnobs[bus]) {
+			cells = append(cells, m.bigFader(0, rows, st.faint, "-", label, "", cw))
+			continue
+		}
+		var ch, cc int
+		fmt.Sscanf(m.mem.FxKnobs[bus][k], "ch %d cc %d", &ch, &cc)
+		val, style, vt := 0, st.faint, "-"
+		if c := m.mon.ccs[[2]int{ch, cc}]; c != nil {
+			val, vt, style = c.val, fmt.Sprint(c.val), st.dim
+			if now.Sub(c.at) < fresh {
+				style = bold
+			}
+		}
+		cells = append(cells, m.bigFader(val, rows, style, vt, label, fmt.Sprintf("%d:%d", ch, cc), cw))
+	}
+	lines = append(lines, "")
+	lines = append(lines, faderRow(cells)...)
+	if len(m.mem.FxKnobs[bus]) == 0 {
+		lines = append(lines, st.dim.Render(map[int]string{0: "k", 1: "K"}[bus]+" assigns a knob"))
+	}
+	return fmt.Sprintf("BUS %d", bus+1), colour, lines
+}
+
+// controlsPanel draws the other controllers as tall faders.
+func (m Model) controlsPanel(w, rows int, now time.Time) (string, lipgloss.Color, []string) {
 	st := m.st
 	var all []*ccState
 	for _, c := range m.mon.controls() {
-		if !m.isFxKnob(c.ch, c.cc) {
+		if !m.isFxKnob(c.ch, c.cc) && !m.isFxSwitch(c.ch, c.cc) {
 			all = append(all, c)
 		}
 	}
-	head := st.bold.Render("CONTROLS")
 	if len(all) == 0 {
-		return []string{head, st.dim.Render("turn a knob or move a fader"), st.dim.Render("on the unit or its MIDI in")}
+		return "CONTROLS", st.th.accent, []string{st.dim.Render("turn a knob or move a fader"), st.dim.Render("on the unit or its MIDI in")}
 	}
-	n := max(width/faderW, 1)
-	shown := all
-	if len(shown) > n {
-		shown = shown[:n]
-		head += st.dim.Render(fmt.Sprintf("  +%d more", len(all)-n))
+	cw := 9
+	n := max((w-4)/cw, 1)
+	title := "CONTROLS"
+	if len(all) > n {
+		title += fmt.Sprintf("  +%d more", len(all)-n)
+		all = all[:n]
 	}
-	cells := make([][]string, 0, len(shown))
-	for _, c := range shown {
+	cells := make([][]string, 0, len(all))
+	for _, c := range all {
 		style := st.dim
-		if now.Sub(c.at) < monMoving {
+		if now.Sub(c.at) < fresh {
 			style = st.accent
 		}
-		cells = append(cells, m.bigFader(c.val, rows, style, fmt.Sprint(c.val), fmt.Sprintf("%d:%d", c.ch, c.cc)))
+		cells = append(cells, m.bigFader(c.val, rows, style, fmt.Sprint(c.val), fmt.Sprintf("%d:%d", c.ch, c.cc), "", cw))
 	}
-	out := []string{head}
-	for r := 0; r < rows+2; r++ {
-		var b strings.Builder
-		for _, c := range cells {
-			b.WriteString(c[r])
-		}
-		out = append(out, b.String())
-	}
-	return out
+	return title, st.th.accent, faderRow(cells)
 }
 
-// perfSidebar is the whole left side, h lines high and width cells wide.
+// perfSidebar is the whole left side, h lines high and width cells wide: panels for the clock, the
+// cue, the patterns, each bus's effect with its knobs, the other controllers, what came last and the
+// keys. From 76 cells wide two panels sit side by side.
 func (m Model) perfSidebar(width, h int) []string {
 	st := m.st
 	now := time.Now()
 	bank := m.perfBank()
-	rows := clamp((h-30)/2, 3, 7)
+	// Clock and cue need room side by side; the buses and the controllers fit from a narrower side.
+	wideTop, wide := width >= 76, width >= 52
+	half := width / 2
+	// The faders take the height that is left: the panels around them need about 30 lines side by
+	// side, and a recording adds its own.
+	spare, per := h-31, 2
+	if !wideTop {
+		spare -= 4
+	}
+	if !wide {
+		spare, per = h-51, 3
+	}
+	if m.rec != nil {
+		spare -= 6
+	}
+	rows := clamp(spare/per, 3, 14)
 	var out []string
 	add := func(l ...string) { out = append(out, l...) }
 	if rec := m.perfRecLine(); rec != "" {
 		add(rec)
 	}
+	if lines := m.levelLines(width - 4); lines != nil {
+		add(m.panel("RECORDING", st.th.hot, lines, width)...)
+	}
 	bars := 0
 	if d, _ := m.perfTracks(m.perfNow); d != nil {
 		bars = d.Bars()
 	}
-	head := lipgloss.NewStyle().Foreground(st.th.accent).Bold(true).Render(fmt.Sprintf("BANK %c", 'A'+bank)) +
-		st.dim.Render(fmt.Sprintf("   %.2f BPM", m.bankTempo(bank)))
-	add(head)
-	if lines := m.levelLines(width); lines != nil {
-		// While recording: how loud it is, and the clip light.
-		add(lines...)
-		add("")
+	pw, pt := width, width
+	if wide {
+		pw = half
 	}
-	if clock := m.clockText(bars); clock != "" {
-		add(lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render("♩ " + clock))
+	if wideTop {
+		pt = half
 	}
-	add(m.perfBeats()...)
-	add("")
-	add(m.sideCue()...)
-	add("")
-	add(m.sidePatterns(bank)...)
-	add("")
+	clock := []string{lipgloss.NewStyle().Foreground(st.th.accent).Bold(true).Render(fmt.Sprintf("BANK %c", 'A'+bank)) +
+		st.dim.Render(fmt.Sprintf("   %.2f BPM", m.bankTempo(bank)))}
+	if c := m.clockText(bars); c != "" {
+		clock = append(clock, lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render("♩ "+c))
+	} else {
+		clock = append(clock, "")
+	}
+	clock = append(clock, m.perfBeats()...)
+	cue := m.sideCue()
+	add(m.pairPanels(wideTop, pt, "CLOCK", st.th.accent, clock, width-pt*b2i(wideTop), "CUE", st.th.bus1, cue)...)
+	pats := m.sidePatterns(bank)
+	add(m.panel(fmt.Sprintf("PATTERNS · bank %c", 'A'+bank), st.th.good, pats[1:], width)...)
 	if m.midiSrc == nil {
 		add(st.dim.Render("no MIDI in this build: effects, knobs and the clock need it (make build)"))
 	} else {
 		if m.fxLearn != 0 || m.fxKnob != 0 {
 			add(m.perfFxHead(width))
 		}
-		add(m.sideFx(width, rows, now)...)
-		add("")
-		add(m.sideControls(width, rows, now)...)
-		if last := m.mon.last(2); len(last) > 0 {
-			var parts []string
-			for _, l := range last {
-				parts = append(parts, strings.Join(strings.Fields(l.text), " "))
-			}
-			add(st.dim.Render("LAST ") + st.text.Render(strings.Join(parts, " · ")))
+		w2 := width - pw*b2i(wide)
+		ta, ca, la := m.fxPanel(0, pw, rows, now)
+		tb, cb, lb := m.fxPanel(1, w2, rows, now)
+		add(m.pairPanels(wide, pw, ta, ca, la, w2, tb, cb, lb)...)
+		tc, cc, lc := m.controlsPanel(pw, rows, now)
+		var last []string
+		for _, l := range m.mon.last(max(rows, 3)) {
+			last = append(last, st.text.Render(strings.Join(strings.Fields(l.text), " ")))
 		}
+		if len(last) == 0 {
+			last = []string{st.dim.Render("nothing yet")}
+		}
+		add(m.pairPanels(wide, pw, tc, cc, lc, w2, "LAST MIDI", st.th.faint, last)...)
 	}
-	add("")
-	add(st.dim.Render("a n  cue   Space  next→now"), st.dim.Render("v  patterns   p  player"), st.dim.Render("f F  effect note   l L  learn on/off"), st.dim.Render("k K  its knobs   ^R  record"))
-	for i := range out {
-		out[i] = ansi.Truncate(out[i], width, "…")
+	add(m.panel("KEYS", st.th.faint, []string{
+		st.dim.Render("a n  cue   Space  next→now   v  patterns   p  player"),
+		st.dim.Render("f F  effect note   l L  learn on/off"),
+		st.dim.Render("k K  its knobs   ^R  record"),
+	}, width)...)
+	if len(out) > h {
+		out = out[:h]
 	}
 	return out
+}
+
+func (m Model) pairPanels(wide bool, wa int, ta string, ca lipgloss.Color, la []string, wb int, tb string, cb lipgloss.Color, lb []string) []string {
+	if !wide {
+		return append(m.panel(ta, ca, la, wa), m.panel(tb, cb, lb, wb)...)
+	}
+	n := max(len(la), len(lb))
+	return besideEach(m.panel(ta, ca, padLines(la, n), wa), wa, m.panel(tb, cb, padLines(lb, n), wb), wb)
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

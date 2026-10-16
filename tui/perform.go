@@ -543,6 +543,12 @@ func (m Model) isFxKnob(ch, cc int) bool {
 	return slices.Contains(m.mem.FxKnobs[0], text) || slices.Contains(m.mem.FxKnobs[1], text)
 }
 
+// isFxSwitch is whether the controller is the message that says a bus's effect is on or off.
+func (m Model) isFxSwitch(ch, cc int) bool {
+	text := fmt.Sprintf("ch %d cc %d", ch, cc)
+	return m.mem.FxMsg[0] == text || m.mem.FxMsg[1] == text
+}
+
 // controlCell is a controller as three lines ten cells wide: a fader beside a dial, its value, and
 // a label. One moved lately is in the accent colour, the others dimmed; c is nil for one that has
 // not sent anything yet.
