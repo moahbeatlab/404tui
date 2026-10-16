@@ -60,6 +60,12 @@ func TestBlockFieldsAndImportPatch(t *testing.T) {
 	if hold, ok := block.Param(0x7E); !ok || hold != HoldDefault {
 		t.Errorf("hold after an assign is %d, want %d", hold, HoldDefault)
 	}
+	if pan, ok := block.Param(0x78); !ok || pan != BalanceCentre {
+		t.Errorf("pan after an assign is %d, want the centre", pan)
+	}
+	if st, ok := block.Param(0x76); !ok || st != StretchDefault {
+		t.Errorf("time stretch after an assign is %d, want %d", st, StretchDefault)
+	}
 	if block.Name() != "spmk2_test_48k_stereo" {
 		t.Errorf("name = %q", block.Name())
 	}

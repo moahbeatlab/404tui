@@ -80,6 +80,9 @@ const (
 	// promptBusScan confirms setting the buses of the pads in prompt.buses; promptBusWords asks
 	// for the words of a bus.
 	promptBusScan
+	// promptRepairPads confirms setting the pads in prompt.pads, which were never set up, to
+	// the settings a new pad has.
+	promptRepairPads
 	promptBusWords
 	// promptDeleteFiles confirms deleting prompt.paths from the card; promptMkdir names a new
 	// folder in prompt.path.
@@ -163,6 +166,12 @@ type picker struct {
 	digits string
 	// confirm is set once the chosen pad holds a sample and the user has been told.
 	confirm bool
+}
+
+// report is a titled list of lines.
+type report struct {
+	title string
+	lines []string
 }
 
 type palette struct {
@@ -275,6 +284,8 @@ type Model struct {
 	// seqTab is set while a pattern that the Sequencer tab opened is in front: its tab is lit,
 	// and leaving the pattern goes back to that tab.
 	seqTab bool
+	// report is a list of lines shown in a dialog until a key closes it.
+	report *report
 	// cfgAt is the row of the Config view the cursor is on.
 	cfgAt int
 	// seqSlot is the pattern the Sequencer tab had open when it was left; it is read again when
@@ -723,6 +734,8 @@ type (
 		facts app.PadFacts
 		err   error
 	}
+	// checkMsg is what comparing samples with their files found, a line or two for each.
+	checkMsg struct{ lines []string }
 	usageMsg struct {
 		usage   map[proto.PadIndex][]proto.PadIndex
 		err     error
@@ -1390,6 +1403,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		m.prompt = &prompt{kind: promptConfirmRestore, plan: msg.plan}
+	case checkMsg:
+		m.busy = ""
+		m.report = &report{title: "Sample check", lines: msg.lines}
+		return m, nil
 	case factsMsg:
 		m.factsBusy = false
 		m.facts[msg.key] = padFacts{facts: msg.facts, err: msg.err}

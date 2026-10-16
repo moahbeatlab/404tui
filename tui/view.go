@@ -80,6 +80,8 @@ func (m Model) View() string {
 	switch {
 	case m.help:
 		main = dialog(m.helpBox())
+	case m.report != nil:
+		main = dialog(m.reportBox())
 	case m.palette != nil:
 		main = dialog(m.paletteBox())
 	case m.addAsk != nil:
@@ -462,7 +464,7 @@ func (m Model) statusBar() string {
 	// in the Details panel.
 	switch m.section {
 	case secPads:
-		chips = []string{chip("Enter", "preview on "+map[bool]string{true: "computer", false: "unit"}[m.previewLocal]), chip("a", "assign"), chip("v", "mark"), chip("t", "set"), chip("c", "copy"), chip("d", "delete"), chip("B", "buses by name"), chip("Tab", "patterns"), chip("[ ]", "bank")}
+		chips = []string{chip("Enter", "preview on "+map[bool]string{true: "computer", false: "unit"}[m.previewLocal]), chip("a", "assign"), chip("v", "mark"), chip("t", "set"), chip("c", "copy"), chip("d", "delete"), chip("B", "buses by name"), chip("K", "check sample"), chip("Tab", "patterns"), chip("[ ]", "bank")}
 	case secPatterns:
 		if m.seqTab {
 			chips = []string{chip("a", "other pattern"), chip("P", "play"), chip("Esc", "close")}
@@ -1980,6 +1982,8 @@ func (m Model) promptBox() string {
 				"\n\n" + st.dim.Render("y erase   n/Esc keep"))
 	case promptBusScan:
 		return m.busScanBox(p)
+	case promptRepairPads:
+		return m.repairBox(p)
 	case promptBusWords:
 		title, hint = fmt.Sprintf("Words for BUS %d", p.busOf), "separated by commas or spaces; a pad whose name holds one goes to the bus  ·  "
 	case promptDelete:

@@ -185,6 +185,12 @@ func (b *PadBlock) ChopPoints() []int32 {
 	return out
 }
 
+// BalanceCentre is the pan in the middle, StretchDefault the time stretch of 100%.
+const (
+	BalanceCentre  = 64
+	StretchDefault = 10000
+)
+
 // HoldDefault is the Hold of a pad whose sample was just assigned: the whole sample plays.
 const HoldDefault = 100
 
@@ -196,9 +202,16 @@ func (b *PadBlock) AssignSample(fileSize uint32, name string) {
 	b.SetField(padFieldEnd, fileSize)
 	b.SetField(padFieldLoopStart, SMPHeaderLen)
 	// A new sample starts with Hold at 100, all of it: a pad made offline has none set, and at 1
-	// the pad plays a sliver of its sample when it is pressed.
+	// the pad plays a sliver of its sample when it is pressed. A pad that was never set up has
+	// zero where the unit wants more: the pan at its centre, the time stretch at 100%.
 	if n, ok := blockField(0x7E); ok {
 		b.SetField(n, HoldDefault)
+	}
+	if n, ok := blockField(0x78); ok && b.Field(n) < 13 {
+		b.SetField(n, BalanceCentre)
+	}
+	if n, ok := blockField(0x76); ok && b.Field(n) < 5000 {
+		b.SetField(n, StretchDefault)
 	}
 	b.SetName(name)
 }

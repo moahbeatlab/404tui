@@ -39,6 +39,18 @@ already, `B` in Pads looks at the bank (or the marked pads) and asks before it s
 that are not on the one their name says; `p` there widens it to the whole project. The rule is kept
 with the rest of what 404tui remembers (`state.json` in the user's config folder, under `404tui`).
 
+### Checking and setting up pads
+
+`K` in Pads reads the sample of the pad (or of each marked pad) from the unit and compares it with
+the file it came from, converted the way an assign converts it (48 kHz, 16 bit): identical, or how
+many samples differ and by how much, or a different length or channel count. The file is the one
+noted when the pad was assigned, or found by `F` or `W`. A pad made in an offline project used to
+start with hold 1 and the pan at its far left end, which plays a sliver of the sample to one side;
+a new sample and a new pad now start with the pan in the centre, hold 100 and time stretch 100%, and
+`H` in Pads sets up the pads of the bank (or the marked ones) that still look that way, after asking.
+In the pad settings (`S`), a step stops on the default (the centre of the pan) and `0` puts the
+setting back to it.
+
 ### Connecting
 
 The UI starts even with no unit, shows a waiting screen, connects by itself when you plug

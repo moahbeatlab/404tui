@@ -122,8 +122,10 @@ func TestANewProjectsPadsHoldTheWholeSample(t *testing.T) {
 		p := formats.NewPadconf(template, "X")
 		for pad, block := range p.Blocks {
 			// Field 23 starts after the 3 bytes of the block header.
-			if got := binary.LittleEndian.Uint32(block[3+4*23:]); got != 100 {
-				t.Fatalf("pad %d hold = %d, want 100", pad, got)
+			for field, want := range map[int]uint32{23: 100, 18: 64, 16: 10000} {
+				if got := binary.LittleEndian.Uint32(block[3+4*field:]); got != want {
+					t.Fatalf("pad %d field %d = %d, want %d", pad, field, got, want)
+				}
 			}
 		}
 	}

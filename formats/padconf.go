@@ -145,6 +145,14 @@ func NewPadconf(template *Padconf, name string) *Padconf {
 	// Hold (field 23) is 100, all of the sample, in every pad: an empty pad has no hold of its own
 	// and a sample assigned to it would play a sliver.
 	empty[23] = 100
+	// The same for what else a pad that was never set up has at zero, out of its range: the pan
+	// (field 18, 13 to 115) and the time stretch (field 16, 5000 to 15000).
+	if empty[18] < 13 {
+		empty[18] = 64
+	}
+	if empty[16] < 5000 {
+		empty[16] = 10000
+	}
 	for pad := range p.Blocks {
 		block := EmptyPadBlock(uint16(pad))
 		for f, v := range empty {

@@ -5496,3 +5496,100 @@ func TestConfigRowsKeepTheirValuesApartFromTheLabels(t *testing.T) {
 		}
 	}
 }
+
+func TestKChecksASampleOnThePadAgainstItsFile(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.sim.AddFile("SD:IMPORT/boom hit.wav", wav(4800))
+	_, cmd := s.m().assign([]string{"SD:IMPORT/boom hit.wav"}, pad(t, "A5"))
+	s.send(cmd())
+	s.press("r")
+	if s.m().pad != 4 {
+		t.Fatalf("cursor on pad %d", s.m().pad)
+	}
+	s.press("K")
+	s.shows("Sample check", "A5", "boom hit.wav", "identical")
+	s.press("esc")
+	if s.m().report != nil {
+		t.Fatal("a key did not close the report")
+	}
+	// The pad now holds other audio under the same name: the check says so.
+	m := s.m()
+	if _, err := app.PutSample(m.unit, pad(t, "A5"), formats.Sample{Channels: 1, Samples: make([]int16, 9000)}, "boom hit"); err != nil {
+		t.Fatal(err)
+	}
+	s.press("r", "K")
+	s.shows("different")
+	s.press("esc")
+	// A pad with no file noted says how to find it.
+	s.press("g", "K")
+	s.shows("no file is noted")
+}
+
+func TestThePanStopsOnTheCentreAndZeroBringsTheDefaultsBack(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	bal := func() int32 { return s.m().snap.Pads[0].Params["balance"] }
+	hold := func() int32 { return s.m().snap.Pads[0].Params["hold"] }
+	// The pan at L3 (61): a step of 4 would jump to R1, so it stops on the centre.
+	if err := s.m().unit.SetParam(0x78, proto.TargetPad(pad(t, "A1")), 61); err != nil {
+		t.Fatal(err)
+	}
+	s.press("r", "S", "j")
+	s.shows("Pan", "L3")
+	s.press("l")
+	if got := bal(); got != 64 {
+		t.Errorf("one step up from L3 is %d, want the centre 64", got)
+	}
+	s.press("l")
+	if got := bal(); got != 68 {
+		t.Errorf("then %d, want 68 (R4)", got)
+	}
+	// 0 puts the pan back in the centre, the hold to all of the sample.
+	s.press("0")
+	if got := bal(); got != 64 {
+		t.Errorf("0 left the pan at %d", got)
+	}
+	s.press("G", "k", "0")
+	if got := hold(); got != 100 {
+		t.Errorf("0 on the hold gives %d, want 100", got)
+	}
+	s.press("esc")
+}
+
+func TestHSetsUpPadsThatWereNeverSetUp(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	m := s.m()
+	set := func(name string, id byte, pad string, v int32) {
+		if err := m.unit.SetParam(id, proto.TargetPad(pad_(t, pad)), v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A1 and A2 as a pad made offline had them; A3 has a pan of its own and is left alone.
+	set("hold", 0x7E, "A1", 1)
+	set("balance", 0x78, "A1", 13)
+	set("hold", 0x7E, "A2", 1)
+	set("balance", 0x78, "A2", 13)
+	set("balance", 0x78, "A3", 20)
+	set("hold", 0x7E, "A3", 1)
+	s.press("r", "H")
+	s.shows("Set up 2 pads", "A1 A2")
+	s.press("y")
+	s.shows("set up")
+	bank := s.m().snap.Bank(0)
+	for i, pd := range []string{"A1", "A2"} {
+		p := bank[i].Params
+		if p["balance"] != 64 || p["hold"] != 100 || p["time-stretch"] != 10000 {
+			t.Errorf("%s: balance %d hold %d stretch %d", pd, p["balance"], p["hold"], p["time-stretch"])
+		}
+	}
+	if bank[2].Params["balance"] != 20 {
+		t.Errorf("A3 was changed: balance %d", bank[2].Params["balance"])
+	}
+	// Nothing left to set up: it says so.
+	s.press("H")
+	s.shows("no pad here looks never set up")
+}
+
+func pad_(t *testing.T, name string) proto.PadIndex { return pad(t, name) }

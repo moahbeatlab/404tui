@@ -124,6 +124,8 @@ var commands = []command{
 	{"4", "Go to the Slicer; a there chooses a pad or a new sample to slice", nil},
 	{"5", "Go to the Sequencer; a there chooses a pattern to edit", nil},
 	{"6", "Go to Config: the words, colours and buses (inside the slicer 6 is an envelope key: use the tab)", nil},
+	{"H", "Set up pads that were never set up (hold 1, pan at its left end): pan in the centre, hold 100, time stretch 100%", []int{secPads}},
+	{"K", "Check the sample on the pad (or the marked pads) against the file it came from: same length, channels and samples?", []int{secPads}},
 	{"B", "Set the bus of the bank's pads (the marked ones; p: the whole project) by their names, as Config says", []int{secPads}},
 	{"j", "Config: the next setting; k the one before; h l change it, Enter edits the drum words", []int{secConfig}},
 	{"U", "Working offline: leave offline mode and connect to the unit once it is plugged in", nil},
@@ -235,6 +237,10 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch {
+	case m.report != nil:
+		// Any key closes a report; the arrows scroll nothing, it is short.
+		m.report = nil
+		return m, nil
 	case m.palette != nil:
 		return m.paletteKey(key)
 	case m.search != nil:
@@ -638,6 +644,10 @@ func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 		return m.scanFolderUses()
 	case "B":
 		return m.askBusScan(false)
+	case "K":
+		return m.checkSamples()
+	case "H":
+		return m.askRepairPads()
 	case "m":
 		return m.toggleMute(row.Pad)
 	case "M":
@@ -2885,7 +2895,7 @@ func (m Model) promptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if p.kind == promptDelete || p.kind == promptConfirmRestore || p.kind == promptDeleteFiles || p.kind == promptEraseProject || p.kind == promptDeletePatterns {
+	if p.kind == promptDelete || p.kind == promptRepairPads || p.kind == promptConfirmRestore || p.kind == promptDeleteFiles || p.kind == promptEraseProject || p.kind == promptDeletePatterns {
 		switch name {
 		case "y", "enter":
 			return m.apply()
@@ -3000,7 +3010,7 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			return doneMsg{message: fmt.Sprintf("project %d restored from %s", plan.Project+1, plan.Dir), reload: true}
 		})
 	}
-	if p.kind != promptDelete && p.kind != promptFindFolder && p.kind != promptBusWords && p.kind != promptBusScan && text == "" {
+	if p.kind != promptDelete && p.kind != promptFindFolder && p.kind != promptBusWords && p.kind != promptBusScan && p.kind != promptRepairPads && text == "" {
 		m.message = "nothing typed"
 		return m, nil
 	}
@@ -3069,6 +3079,22 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			message := fmt.Sprintf("%d pads renamed", renamed)
 			if len(failed) > 0 {
 				message = fmt.Sprintf("%d renamed, failed: %s", renamed, strings.Join(failed, ", "))
+			}
+			return doneMsg{message: message, reload: true}
+		})
+	case promptRepairPads:
+		pads := p.pads
+		m.busy = "setting the pads up"
+		return m, m.edit(func() tea.Msg {
+			failed := 0
+			for _, pad := range pads {
+				if err := app.SetUpPad(unit, pad); err != nil {
+					failed++
+				}
+			}
+			message := fmt.Sprintf("%s set up: pan in the centre, hold 100, time stretch 100%%", plural(len(pads)-failed, "pad"))
+			if failed > 0 {
+				message += fmt.Sprintf(", %d failed", failed)
 			}
 			return doneMsg{message: message, reload: true}
 		})

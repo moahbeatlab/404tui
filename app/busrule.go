@@ -129,3 +129,27 @@ func SetPadBus(p Pads, pad proto.PadIndex, bus int32) error {
 	}
 	return p.SetParam(info.ID, proto.TargetPad(pad), bus)
 }
+
+// NeverSetUp reports whether a pad's settings are the ones of a pad nobody set up, as one made in
+// a project offline had them: the hold and the pan both at the least the unit takes.
+func NeverSetUp(row PadRow) bool {
+	return row.HasSample && row.Params["hold"] <= 1 && row.Params["balance"] <= 13
+}
+
+// SetUpPad gives a pad the settings a new one has: the pan in the centre, the hold at 100 (all
+// of the sample) and the time stretch at 100%.
+func SetUpPad(p Pads, pad proto.PadIndex) error {
+	for _, set := range []struct {
+		name  string
+		value int32
+	}{{"balance", proto.BalanceCentre}, {"hold", proto.HoldDefault}, {"time-stretch", proto.StretchDefault}} {
+		info, ok := proto.ParamByName(set.name)
+		if !ok {
+			return fmt.Errorf("this version does not know %s", set.name)
+		}
+		if err := p.SetParam(info.ID, proto.TargetPad(pad), set.value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
