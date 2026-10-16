@@ -1602,7 +1602,6 @@ func (m Model) fileDetail(height, width int) string {
 	case node.Dir:
 		lines = append(lines, m.folderUseLines(node.Path, width)...)
 		lines = append(lines, m.folderPadLines(node.Path, width)...)
-		lines = append(lines, m.folderPadLines(node.Path, width)...)
 		lines = append(lines, st.dim.Render("R restores pads from an export here; you choose the bank"))
 	}
 	return strings.Join(lines, "\n")
