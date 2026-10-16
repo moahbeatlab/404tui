@@ -28,6 +28,9 @@ const (
 	browseProjectRestore
 	// browseOffline chooses the folder of projects on this computer to work on offline.
 	browseOffline
+	// browseScan chooses the folder whose indexed files a scan looks in for where the samples
+	// of the pads came from.
+	browseScan
 )
 
 // browser is the dialog built on the same tree as the Files section, over the SD card, the
@@ -48,10 +51,12 @@ type browser struct {
 	project uint8
 	// finding is set while a folder name is being typed (f); findText is what is typed and
 	// findNote says what the last search did.
-	finding  bool
-	findText string
-	findAt   int
-	findNote string
+	// scanBanks is set when the scan also notes which folder is on which bank (W, not F).
+	scanBanks bool
+	finding   bool
+	findText  string
+	findAt    int
+	findNote  string
 }
 
 // openBrowser opens the chooser on root with the given folders open, and the cursor on
@@ -402,6 +407,9 @@ func (m Model) dialogDelete(b *browser, node app.Node) (tea.Model, tea.Cmd) {
 func (m Model) chosen(b *browser, dir string) (tea.Model, tea.Cmd) {
 	m.browser = nil
 	switch b.kind {
+	case browseScan:
+		m.mem.ScanDir = dir
+		return m.scanOriginsFor(b.scanBanks, dir)
 	case browseRestore:
 		return m.restoreFrom(dir)
 	case browseProjectRestore:
@@ -447,6 +455,9 @@ func (m Model) browserBox(g geom) string {
 	case browseProjectRestore:
 		title = fmt.Sprintf("Restore project %d from the backup folder…", b.project+1)
 		enter = "Enter reads the backup in the folder in front (the one holding PADCONF.BIN)"
+	case browseScan:
+		title = "Look for where the samples came from in…"
+		enter = "Enter looks in the files of the folder in front, as far as they are indexed (i in the Files view indexes a folder)"
 	case browseOffline:
 		title = "Work offline on the projects in…"
 		enter = "Enter opens the folder in front: one holding exported projects (each a folder with PADCONF.BIN), or one project.\nAn empty folder works too: new projects are made in it."

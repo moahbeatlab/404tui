@@ -3485,7 +3485,9 @@ func TestFindTheOriginsOfPadsWhenTheNoteIsMissing(t *testing.T) {
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	// Without an index there is nothing to look in, and it says how to make one.
 	s.press("F")
-	s.shows("no index to look in")
+	s.shows("Look for where the samples came from in")
+	s.press("enter")
+	s.shows("no indexed files")
 	s.sim.AddFile("SD:IMPORT/Great Kit/Loop 9.wav", wav(2400))
 	s.press("2", "tab", "i")
 	s.shows("indexed")
@@ -3496,6 +3498,8 @@ func TestFindTheOriginsOfPadsWhenTheNoteIsMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.press("r", "G", "F")
+	s.shows("Look for where the samples came from in")
+	s.press("enter")
 	s.shows("origins:", "found")
 	data, ok := s.sim.File("SD:404tui-origins.json")
 	if !ok || !strings.Contains(string(data), "Great Kit/Loop 9.wav") || !strings.Contains(string(data), `"matched": true`) {
@@ -4970,6 +4974,8 @@ func TestWFindsTheFolderEachBankWasFilledFrom(t *testing.T) {
 		}
 	}
 	s.press("r", "W")
+	s.shows("Look for where the samples came from in")
+	s.press("enter")
 	s.shows("folders found for bank G")
 	data, ok := s.sim.File("SD:404tui-folders.json")
 	if !ok || !strings.Contains(string(data), `"1/G"`) || !strings.Contains(string(data), `"matched": true`) {

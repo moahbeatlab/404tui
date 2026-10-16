@@ -35,6 +35,9 @@ type State struct {
 	// on offline), as its number from 1: a folder opened offline goes back to it.
 	Projects map[string]int `json:"projects,omitempty"`
 
+	// ScanDir is the folder the last scan for where the samples came from looked in.
+	ScanDir string `json:"scanDir,omitempty"`
+
 	AssignRoot     string   `json:"assignRoot"`
 	AssignExpanded []string `json:"assignExpanded"`
 	AssignAt       string   `json:"assignAt"`

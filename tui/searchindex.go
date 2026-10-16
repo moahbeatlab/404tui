@@ -145,16 +145,34 @@ func indexBarLines(st styles, job *tagJob, width int) []string {
 // have no origin noted, by matching their names and lengths against the search index of the
 // card; what is certain is noted and saved. Pads that fit several files, or none, are told.
 func (m Model) scanOrigins() (tea.Model, tea.Cmd) {
-	return m.scanOriginsFor(false)
+	return m.askScanFolder(false)
 }
 
 // scanFolderUses finds the origins of the pads like scanOrigins, then notes, for each bank
 // of the project, the folder most of its samples came from.
 func (m Model) scanFolderUses() (tea.Model, tea.Cmd) {
-	return m.scanOriginsFor(true)
+	return m.askScanFolder(true)
 }
 
-func (m Model) scanOriginsFor(banks bool) (tea.Model, tea.Cmd) {
+// askScanFolder opens the folder dialog where the scan is to look, on the folder it looked in
+// last time.
+func (m Model) askScanFolder(banks bool) (tea.Model, tea.Cmd) {
+	root, dir := app.CardRoot, m.mem.ScanDir
+	if strings.HasPrefix(dir, "/") {
+		root = localRoot()
+	}
+	var expanded []string
+	if dir != "" {
+		expanded = app.Ancestors(root, dir)
+	}
+	next, cmd := m.openBrowser(browseScan, root, expanded, dir)
+	next.(Model).browser.scanBanks = banks
+	return next, cmd
+}
+
+// scanOriginsFor looks for where the pads' samples came from among the indexed files under
+// folder (all of them when it is empty).
+func (m Model) scanOriginsFor(banks bool, folder string) (tea.Model, tea.Cmd) {
 	rows, project, unit := m.snap.Pads, m.snap.Project, m.unit
 	withSample := 0
 	for _, r := range rows {
@@ -174,8 +192,25 @@ func (m Model) scanOriginsFor(banks bool) (tea.Model, tea.Cmd) {
 			return doneMsg{message: "reading the saved index failed: " + err.Error()}
 		}
 		ix := app.IndexOfAll(saved)
+		if folder != "" {
+			under := folder + "/"
+			if folder == app.CardRoot || folder == app.StorageRoot {
+				under = folder
+			}
+			var files []app.IndexedFile
+			for _, f := range ix.Files {
+				if strings.HasPrefix(f.Path, under) {
+					files = append(files, f)
+				}
+			}
+			ix.Files = files
+		}
 		if len(ix.Files) == 0 {
-			return doneMsg{message: "no index to look in: open the Files view and press i on the folders your samples are in"}
+			where := ""
+			if folder != "" {
+				where = " under " + display(folder)
+			}
+			return doneMsg{message: "no indexed files" + where + ": open the Files view and press i on the folders your samples are in"}
 		}
 		// Files on this computer are read from it, the pads from the unit.
 		reader := routedUnit{unit}
