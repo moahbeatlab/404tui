@@ -817,17 +817,17 @@ func TestSlicerOrderLaneMarksTheSelectedSlice(t *testing.T) {
 
 func TestSlicerEnvelopeKeys(t *testing.T) {
 	s := slicerOpen(t)
-	s.press("l", "2", "2", "4")
+	s.press("l", "7", "7", "9")
 	x := s.slicing().Slices[1]
 	if x.Attack != 5 || x.Release != 2 {
 		t.Errorf("attack %d release %d", x.Attack, x.Release)
 	}
 	s.shows("attack", "5 ms", "release", "2 ms")
-	s.press("1", "3")
+	s.press("6", "8")
 	if x := s.slicing().Slices[1]; x.Attack != 2 || x.Release != 0 {
 		t.Errorf("attack %d release %d after stepping back", x.Attack, x.Release)
 	}
-	s.press("2", "4", "X")
+	s.press("7", "9", "X")
 	if x := s.slicing().Slices[1]; x.Attack != 0 || x.Release != 0 {
 		t.Errorf("X left an envelope: %+v", x)
 	}
@@ -1080,7 +1080,7 @@ func TestSlicerAddOpensTheFileBrowser(t *testing.T) {
 		t.Fatalf("1 did not go to the pads: section %d", s.m().section)
 	}
 	s.press("esc")
-	if s.m().slicer.adding || s.m().section != secPads {
+	if s.m().slicer.adding || s.m().section != secSlicer {
 		t.Errorf("Esc: adding %v, section %d", s.m().slicer.adding, s.m().section)
 	}
 	s.press("A", "1", "Z")
@@ -1401,14 +1401,14 @@ func TestSlicerAuditionHasTheRollOfTheSlice(t *testing.T) {
 func TestSlicerRollSliders(t *testing.T) {
 	s := slicerOpen(t)
 	s.send(tea.WindowSizeMsg{Width: 140, Height: 50})
-	s.press("5")
+	s.press("j")
 	s.shows("x makes the slice roll first")
-	s.press("x", "5", "5", "5")
+	s.press("x", "j", "j", "j")
 	if got := s.m().slicer.cur1().RollLoud; got != -75 {
 		t.Fatalf("loudness %d, want -75", got)
 	}
 	s.shows("quieter, from 100% down to 25%", "-75%")
-	s.press("8", "8", "8")
+	s.press("'", "'", "'")
 	if got := s.m().slicer.cur1().RollPitch; got != 3 {
 		t.Errorf("pitch %d, want 3", got)
 	}
@@ -1435,5 +1435,55 @@ func TestSlicerFillsThePageAtAnySize(t *testing.T) {
 				t.Errorf("%dx%d: the box is %d lines of %d wide, the page %d lines of %d", w, h, len(box), wide, body, w)
 			}
 		}
+	}
+}
+
+func TestSlicerZoomedHAndLZoomOutFirstAndEdgesMoveInAStillView(t *testing.T) {
+	s := slicerOpen(t)
+	s.press("l", "i")
+	if !s.m().slicer.zoomed || s.m().slicer.at != 1 {
+		t.Fatalf("zoomed %v at %d", s.m().slicer.zoomed, s.m().slicer.at)
+	}
+	from, to := s.m().slicer.view()
+	// Moving the start of the slice does not move the waveform: only the edge moves.
+	s.press("[", "[", "[", "]", "]")
+	if f, tt := s.m().slicer.view(); f != from || tt != to {
+		t.Errorf("the view moved from %d-%d to %d-%d", from, to, f, tt)
+	}
+	// h first zooms out, without leaving the slice; the next h moves to the other slice.
+	s.press("h")
+	if s.m().slicer.zoomed || s.m().slicer.at != 1 {
+		t.Errorf("after h: zoomed %v, slice %d", s.m().slicer.zoomed, s.m().slicer.at)
+	}
+	s.press("h")
+	if s.m().slicer.at != 0 {
+		t.Errorf("the second h left us on slice %d", s.m().slicer.at)
+	}
+	// Another slice zoomed gets a view of its own.
+	s.press("i")
+	f0, _ := s.m().slicer.view()
+	s.press("0", "l", "i")
+	if f1, _ := s.m().slicer.view(); f1 == f0 {
+		t.Error("the next slice shows the same part")
+	}
+}
+
+func TestAFolderInTheAssignDialogSaysWhereItsSamplesWereUsed(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	m.origins = &app.Origins{Pads: map[string]app.Origin{
+		"1/A5": {Path: "SD:IMPORT/Kit/kick.wav", Name: "kick"},
+		"1/B2": {Path: "SD:IMPORT/Kit/snare.wav", Name: "snare"},
+		"2/C1": {Path: "SD:IMPORT/Kit/hat.wav", Name: "hat"},
+		"2/C2": {Path: "SD:IMPORT/Other/hat.wav", Name: "hat"},
+	}}
+	got := ansi.Strip(strings.Join(m.folderPadLines("SD:IMPORT/Kit", 80), "\n"))
+	for _, want := range []string{"Project 1: 2 pads  A5 B2", "Project 2: 1 pad  C1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("no %q in\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "Other") || len(m.folderPadLines("SD:IMPORT/None", 80)) != 0 {
+		t.Error("pads from other folders are counted")
 	}
 }

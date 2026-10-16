@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -277,6 +279,45 @@ func (m Model) folderUseLines(folder string, width int) []string {
 			text += fmt.Sprintf(" and %d more", n-6)
 		}
 		lines = append(lines, st.dim.Render("◆ "+ansi.Truncate(text, width-2, "…")))
+	}
+	return append(lines, "")
+}
+
+// folderPadLines say which pads, in which projects, hold a sample that came from a folder: the
+// notes of where the samples were assigned from, under the folder.
+func (m Model) folderPadLines(folder string, width int) []string {
+	if m.origins == nil {
+		return nil
+	}
+	byProject := map[string][]string{}
+	var order []string
+	for key, o := range m.origins.Pads {
+		if !strings.HasPrefix(o.Path, folder+"/") {
+			continue
+		}
+		project, pad, ok := strings.Cut(key, "/")
+		if !ok {
+			continue
+		}
+		if _, seen := byProject[project]; !seen {
+			order = append(order, project)
+		}
+		byProject[project] = append(byProject[project], pad)
+	}
+	if len(order) == 0 {
+		return nil
+	}
+	slices.SortFunc(order, func(a, b string) int { return cmp.Compare(a, b) })
+	st := m.st
+	var lines []string
+	for _, project := range order {
+		pads := byProject[project]
+		slices.Sort(pads)
+		text := fmt.Sprintf("Project %s: %s", project, plural(len(pads), "pad")) + "  " + strings.Join(pads[:min(len(pads), 12)], " ")
+		if len(pads) > 12 {
+			text += fmt.Sprintf(" and %d more", len(pads)-12)
+		}
+		lines = append(lines, st.accent.Render("◆ ")+st.text.Render(ansi.Truncate(text, width-2, "…")))
 	}
 	return append(lines, "")
 }

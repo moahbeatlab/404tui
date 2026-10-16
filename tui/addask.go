@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/proto"
 )
 
@@ -18,22 +17,16 @@ import (
 type addAsk struct {
 	// sec is the tab it was opened on.
 	sec int
-	// pads is set once a pad is being chosen (Slicer), list once a pattern is (Sequencer).
-	pads *padChooser
-	list *patternList
+	// pads is set once a pad is being chosen (Slicer), patterns once a pattern is (Sequencer).
+	pads     *padChooser
+	patterns *patternChooser
 }
 
 // chooser reports whether a pad or a pattern is being chosen, not yet what to choose.
-func (a *addAsk) chooser() bool { return a.pads != nil || a.list != nil }
+func (a *addAsk) chooser() bool { return a.pads != nil || a.patterns != nil }
 
 // padChooser is the 16 pads of a bank, laid out like the pads.
 type padChooser struct{ bank, cursor int }
-
-// patternList is every pattern on the unit, in the order of the banks.
-type patternList struct {
-	rows   []app.PatternRow
-	cursor int
-}
 
 // slicerTabKey takes the keys of the Slicer tab, where nothing is open yet.
 func (m Model) slicerTabKey(name string) (tea.Model, tea.Cmd) {
@@ -62,37 +55,14 @@ func (m Model) sequencerTabKey(name string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// addAllPatterns reads the patterns of every bank (the ones read before are not read again).
-func (m Model) allPatterns() ([]app.PatternRow, error) {
-	var out []app.PatternRow
-	for b := 0; b < proto.Banks; b++ {
-		rows := m.patterns[b]
-		if rows == nil {
-			var err error
-			m.ops.Lock()
-			rows, err = app.LoadPatterns(m.unit, b)
-			m.ops.Unlock()
-			if err != nil {
-				return nil, err
-			}
-		}
-		for _, r := range rows {
-			if r.Exists {
-				out = append(out, r)
-			}
-		}
-	}
-	return out, nil
-}
-
 // addAskKey takes every key while the dialog is open.
 func (m Model) addAskKey(name string) (tea.Model, tea.Cmd) {
 	a := m.addAsk
 	switch {
 	case a.pads != nil:
 		return m.padChooserKey(a, name)
-	case a.list != nil:
-		return m.patternListKey(a, name)
+	case a.patterns != nil:
+		return m.patternChooserKey(a, name)
 	}
 	switch name {
 	case "esc", "q", "a":
@@ -119,16 +89,13 @@ func (m Model) addAskKey(name string) (tea.Model, tea.Cmd) {
 			a.pads = &padChooser{bank: m.bank, cursor: m.pad}
 			return m, nil
 		}
-		rows, err := m.allPatterns()
-		if err != nil {
+		c := &patternChooser{bank: m.bank}
+		if err := m.loadChooser(c); err != nil {
 			m.message = "patterns: " + err.Error()
 			return m, nil
 		}
-		if len(rows) == 0 {
-			m.message = "there is no pattern on the unit yet: N makes one"
-			return m, nil
-		}
-		a.list = &patternList{rows: rows}
+		a.patterns = c
+		return m, m.wanted()
 	}
 	return m, nil
 }
@@ -163,35 +130,37 @@ func (m Model) padChooserKey(a *addAsk, name string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// patternListKey moves over the patterns; Enter opens the one in front in the editor, on the
-// Sequencer tab.
-func (m Model) patternListKey(a *addAsk, name string) (tea.Model, tea.Cmd) {
-	l := a.list
-	page := max(min(m.geom().bodyH-12, 20), 4)
+// patternChooserKey moves over the patterns of a bank, with [ ] for another; Enter opens the
+// one in front in the editor, on the Sequencer tab.
+func (m Model) patternChooserKey(a *addAsk, name string) (tea.Model, tea.Cmd) {
+	c := a.patterns
+	if moved, note := m.chooserMove(c, name); moved {
+		if note != "" {
+			m.message = note
+		}
+		return m, m.wanted()
+	}
 	switch name {
 	case "esc", "q", "p":
-		a.list = nil
-	case "j", "down":
-		l.cursor = clamp(l.cursor+1, 0, len(l.rows)-1)
-	case "k", "up":
-		l.cursor = clamp(l.cursor-1, 0, len(l.rows)-1)
-	case "g":
-		l.cursor = 0
-	case "G":
-		l.cursor = len(l.rows) - 1
-	case "ctrl+d", "pgdown":
-		l.cursor = clamp(l.cursor+page, 0, len(l.rows)-1)
-	case "ctrl+u", "pgup":
-		l.cursor = clamp(l.cursor-page, 0, len(l.rows)-1)
+		a.patterns = nil
 	case "enter", " ":
-		row := l.rows[l.cursor]
+		row := c.rows[c.cursor]
+		if !row.Exists {
+			m.message = "that pattern slot is empty"
+			return m, nil
+		}
 		m.addAsk = nil
-		m.section, m.seqTab = secPatterns, true
-		m.bank, m.patternCursor = int(row.Slot.Bank()), int(row.Slot.Pad())
-		m.busy = "reading the pattern"
-		return m, m.openPattern(row.Slot, "")
+		return m.openSequencerPattern(row.Slot)
 	}
 	return m, nil
+}
+
+// openSequencerPattern opens a pattern in the editor, on the Sequencer tab.
+func (m Model) openSequencerPattern(slot proto.PadIndex) (tea.Model, tea.Cmd) {
+	m.section, m.seqTab, m.seqSlot = secPatterns, true, nil
+	m.bank, m.patternCursor = int(slot.Bank()), int(slot.Pad())
+	m.busy = "reading the pattern"
+	return m, m.openPattern(slot, "")
 }
 
 // addAskBox draws the dialog: the choices, the pads, or the patterns.
@@ -200,8 +169,8 @@ func (m Model) addAskBox() string {
 	switch {
 	case a.pads != nil:
 		return m.padChooserBox(a.pads)
-	case a.list != nil:
-		return m.patternListBox(a.list)
+	case a.patterns != nil:
+		return m.patternChooserBox(a.patterns)
 	}
 	lines := []string{
 		st.bold.Render("Slicer: choose what to slice"), "",
@@ -251,35 +220,56 @@ func (m Model) padChooserBox(c *padChooser) string {
 	return st.modal.Render(strings.Join(lines, "\n"))
 }
 
-// patternListBox draws every pattern, a page of them, the one in front lit. The box is as tall
-// as the page of the list whatever there is to show.
-func (m Model) patternListBox(l *patternList) string {
+// patternChooserBox draws the slots of a bank as the pads lie, and under them the pattern in
+// front, as the patterns panel shows it. The box has the same size whatever is in it.
+func (m Model) patternChooserBox(c *patternChooser) string {
 	st := m.st
-	height := max(min(m.geom().bodyH-12, 20), 4)
-	width := clamp(m.width*50/100, 62, 90)
-	lines := []string{st.bold.Render(fmt.Sprintf("Pattern  %d on the unit", len(l.rows))) + st.dim.Render("   ↑ ↓ move  Enter open  Esc"), ""}
-	from, to := window(len(l.rows), l.cursor, height)
-	for i := from; i < from+height; i++ {
-		if i >= to {
-			lines = append(lines, "")
-			continue
-		}
-		r := l.rows[i]
-		var pads []string
-		for _, p := range r.Pads {
-			pads = append(pads, p.String())
-		}
-		text := fmt.Sprintf(" %-4s %2s  %s", r.Slot.String(), fmt.Sprintf("%d", len(r.Pads)), strings.Join(pads, " "))
-		text = ansi.Truncate(text, width-2, "…")
-		text += strings.Repeat(" ", max(width-2-ansi.StringWidth(text), 0))
-		if i == l.cursor {
-			text = lipgloss.NewStyle().Background(st.th.accent).Foreground(st.th.cursorFg).Bold(true).Render(text)
-		} else {
-			text = st.text.Render(text)
-		}
-		lines = append(lines, text)
+	width := clamp(m.width*80/100, 60, 130)
+	room := max(m.geom().bodyH-14, 6)
+	lines := m.chooserGrid(c, nil, width-2, "   arrows move  [ ] bank  Enter open  Esc back")
+	lines = append(lines, "")
+	var preview []string
+	if r := c.rows[c.cursor]; r.Exists {
+		preview = m.patternPreviewLines(r.Slot, width-2, room)
+	} else {
+		preview = []string{st.faint.Render("empty slot")}
 	}
+	for len(preview) < room {
+		preview = append(preview, "")
+	}
+	lines = append(lines, preview[:room]...)
 	return st.modal.Width(width).Render(strings.Join(lines, "\n"))
+}
+
+// patternPreviewLines show a pattern's first page of steps: a heading, the ruler, and a row of
+// notes for each track.
+func (m Model) patternPreviewLines(slot proto.PadIndex, width, room int) []string {
+	st := m.st
+	d := m.patPreview[slot]
+	if d == nil {
+		if m.patUnread[slot] {
+			return []string{st.faint.Render("pattern " + slot.String() + " cannot be shown")}
+		}
+		return []string{st.faint.Render("reading pattern " + slot.String() + "…")}
+	}
+	sp := spanFor(d, 0, width, 1, 4, gridGapW)
+	tracks := len(d.Grid.Rows)
+	shown := min(tracks, max(room-3, 1))
+	head := st.bold.Render("Pattern "+slot.String()) +
+		st.dim.Render(fmt.Sprintf("  %.2f BPM  ·  %d/4  ·  %s  ·  %s", d.BankTempo, d.Beats, plural(d.Bars(), "bar"), plural(len(d.PadsUsed), "pad")))
+	lines := []string{head + "  " + m.spanHeader(d, sp), m.stepRuler(d, sp)}
+	if tracks == 0 {
+		lines = append(lines, st.dim.Render("  (no notes)"))
+	}
+	for _, row := range d.Grid.Rows[:shown] {
+		name := m.snap.Pads[row.Pad.Index()].Name
+		label := fmt.Sprintf("%-4s %-14s", row.Pad, ansi.Truncate(name, 14, "…"))
+		lines = append(lines, m.rowLabel(row.Pad, label, st.bold)+" "+m.noteRow(d, row.Pad, false, sp))
+	}
+	if shown < tracks {
+		lines = append(lines, st.faint.Render(fmt.Sprintf("  … and %s more", plural(tracks-shown, "track"))))
+	}
+	return lines
 }
 
 // slicerTabBody is the Slicer tab while no slicer is open: what to do to open one.

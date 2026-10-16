@@ -93,7 +93,7 @@ func (m Model) View() string {
 		main = dialog(m.promptBox())
 	case m.picker != nil:
 		main = dialog(m.pickerBox())
-	case m.slicer != nil && !m.slicer.adding && m.busy == "":
+	case m.slicer != nil && !m.slicer.adding && m.section == secSlicer && m.busy == "":
 		main = m.center(m.slicerBox(), g.bodyH)
 	case m.toggles != nil:
 		main = dialog(m.togglesBox())
@@ -219,11 +219,10 @@ func (m Model) tabAt(x, y int) (int, bool) {
 	return 0, false
 }
 
-// activeTab is the section whose tab is lit: the slicer's while one is in front.
+// activeTab is the section whose tab is lit: the Sequencer's for a pattern it opened, the
+// Pads' for the patterns panel under them.
 func (m Model) activeTab() int {
 	switch {
-	case m.slicer != nil && !m.slicer.adding:
-		return secSlicer
 	case m.section == secPatterns && m.seqTab:
 		return secSequencer
 	case m.section == secPatterns:

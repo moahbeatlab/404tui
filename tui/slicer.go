@@ -71,6 +71,9 @@ type slicer struct {
 	adding bool
 	// backTo is the part of the main screen A was pressed in, to go back to.
 	backTo int
+	// from is the section the slicer was opened from, where Esc goes back to; -1 when it was
+	// opened on its own tab.
+	from int
 	// tap is set while the sample plays for markers to be put on it.
 	tap *slicerTap
 	// takes is how many bounces a b makes, each from its own rounds.
@@ -95,6 +98,12 @@ type slicer struct {
 	// view is the part of the sample on screen: the whole of it, or one slice and its
 	// surroundings.
 	zoomed bool
+	// win is the part of the sample the zoom shows, kept while the edges of the slice in front
+	// move, so the waveform stays where it is and only the edges do; winAt is the slice it was
+	// made for.
+	win    [2]int
+	winAt  int
+	winSet bool
 	// snap makes a moved start settle on a zero crossing, so the cut does not click.
 	snap   bool
 	coarse bool
@@ -213,7 +222,11 @@ func (m Model) openSlicer(key, title, name string, sample formats.Sample) (tea.M
 	}
 	base := key
 	key = fmt.Sprintf("%s|%d", key, sample.Frames())
-	s := &slicer{title: title, name: name, key: key, src: sample, snap: true, rounds: 1, takes: 1,
+	from := m.section
+	if from == secSlicer {
+		from = -1
+	}
+	s := &slicer{title: title, name: name, key: key, src: sample, snap: true, rounds: 1, takes: 1, from: from,
 		srcs: []slicerSource{{key: base, name: name}}}
 	if m.slices != nil {
 		if saved, ok := m.slices.load(key); ok && saved.Frames == sample.Frames() && saved.Validate() == nil {
@@ -227,6 +240,8 @@ func (m Model) openSlicer(key, title, name string, sample formats.Sample) (tea.M
 	s.findPeak()
 	m.slicer = s
 	m.sliceWant = false
+	// The slicer is the Slicer tab's: opening it from anywhere goes there.
+	m.section = secSlicer
 	m.message = ""
 	return m, nil
 }
@@ -370,8 +385,12 @@ func (s *slicer) view() (from, to int) {
 		return 0, s.sl.Frames
 	}
 	start, end := s.sl.Slices[s.at].Start, s.sl.End(s.at)
-	margin := max((end-start)/4, 512)
-	return max(start-margin, 0), min(end+margin, s.sl.Frames)
+	if !s.winSet || s.winAt != s.at || start < s.win[0] || end > s.win[1] {
+		margin := max((end-start)/4, 512)
+		s.win = [2]int{max(start-margin, 0), min(end+margin, s.sl.Frames)}
+		s.winAt, s.winSet = s.at, true
+	}
+	return s.win[0], s.win[1]
 }
 
 // slicerCols is how many dots wide the waveform is.
@@ -441,6 +460,9 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		s.playing = false
 		m.stopListening()
 		m.slicer = nil
+		if s.from >= 0 {
+			m.section = s.from
+		}
 		return m, nil
 	case " ":
 		return m.slicerTogglePlay()
@@ -609,7 +631,7 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		s.zoomed = false
 		return m, nil
 	case "i":
-		s.zoomed = true
+		s.zoomed, s.winSet = true, false
 		return m, nil
 	case "z":
 		s.snap = !s.snap
@@ -620,6 +642,11 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	n := len(s.sl.Slices)
+	if s.zoomed && (name == "h" || name == "left" || name == "l" || name == "right") {
+		// Zoomed in, h and l first zoom out; the next ones move to the other slices.
+		s.zoomed = false
+		return m, nil
+	}
 	switch name {
 	case "h", "left":
 		s.at = (s.at + n - 1) % n
@@ -693,25 +720,25 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			m.message = fmt.Sprintf("slice %d rolls: its start hits %d times in the time the slice has", s.at+1, next)
 		}
-	case "5", "6":
+	case "j", "k":
 		if s.cur1().Roll < 2 {
-			m.message = "5 6 set how a roll gets louder or quieter: x makes the slice roll first"
+			m.message = "j k set how a roll gets louder or quieter: x makes the slice roll first"
 			return m, nil
 		}
 		by := formats.RollLoudStep
-		if name == "5" {
+		if name == "j" {
 			by = -by
 		}
 		next := min(max(s.cur1().RollLoud+by, -formats.RollLoudMax), formats.RollLoudMax)
 		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].RollLoud = next })
 		m.message = "the roll's hits " + rollLoudText(next)
-	case "7", "8":
+	case ";", "'":
 		if s.cur1().Roll < 2 {
-			m.message = "7 8 set how a roll changes in pitch: x makes the slice roll first"
+			m.message = "; ' set how a roll changes in pitch: x makes the slice roll first"
 			return m, nil
 		}
 		by := 1
-		if name == "7" {
+		if name == ";" {
 			by = -1
 		}
 		next := min(max(s.cur1().RollPitch+by, -formats.RollPitchMax), formats.RollPitchMax)
@@ -737,9 +764,9 @@ func (m Model) slicerKeyDo(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Gain = max(sl.Slices[s.at].Gain-10, 0) })
 	case "+", "=":
 		m.slicerChange(func(sl *formats.Slicing) { sl.Slices[s.at].Gain = min(sl.Slices[s.at].Gain+10, 400) })
-	case "1", "2", "3", "4":
-		dir := map[string]int{"1": -1, "2": 1, "3": -1, "4": 1}[key.String()]
-		attack := key.String() <= "2"
+	case "6", "7", "8", "9":
+		dir := map[string]int{"6": -1, "7": 1, "8": -1, "9": 1}[key.String()]
+		attack := key.String() <= "7"
 		m.slicerChange(func(sl *formats.Slicing) {
 			x := &sl.Slices[s.at]
 			if attack {
@@ -1953,7 +1980,7 @@ func (s *slicer) slicerHelp() []helpGroup {
 		}
 	}
 	return append(groups,
-		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x", "roll"}, {"5-8", "roll shape"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"1 2", "attack"}, {"3 4", "release"}, {"X", "plain"}}},
+		helpGroup{"sound", []helpKey{{"r", "reverse"}, {"x", "roll"}, {"j k ; '", "roll shape"}, {"m", "mute"}, {"( )", "chance"}, {"< >", "pitch"}, {"- +", "gain"}, {"6 7", "attack"}, {"8 9", "release"}, {"X", "plain"}}},
 		helpGroup{"feel", []helpKey{{"T", "grid"}, {", .", "tempo"}, {"F", "fit"}, {"C", "cut on grid"}, {"w", "swing"}, {"W", "humanize"}}},
 		helpGroup{"play", []helpKey{{"Space", "play"}, {"Enter", "hear slice"}, {"P", "pattern"}, {"V", "pattern bars"}, {"M", "mode"}, {"S", "new seed"}, {"Tab", "order lane"}}},
 		helpGroup{"bounce", []helpKey{{"b", "to a pad"}, {"K", "stretch to bars"}, {"s y", "mark"}, {"B", "marked to pads"}, {"n N", "rounds"}, {"v", "takes"}, {"A", "add sample"}, {"Esc", "close"}}},
@@ -2113,14 +2140,14 @@ func (m Model) sliceInfo(from, to, cols int) []string {
 		key := func(k string) string { return st.faint.Render(k) + " " }
 		rollText := "off"
 		if x.Roll > 1 {
-			rollText = fmt.Sprintf("x%d", x.Roll) + st.dim.Render("  loudness ") + key("5 6") + st.accent.Render(slider(x.RollLoud, formats.RollLoudMax, w)+fmt.Sprintf(" %+d%%", x.RollLoud)) +
-				st.dim.Render("  pitch ") + key("7 8") + st.accent.Render(slider(x.RollPitch, formats.RollPitchMax, w)+fmt.Sprintf(" %+d", x.RollPitch))
+			rollText = fmt.Sprintf("x%d", x.Roll) + st.dim.Render("  loudness ") + key("j k") + st.accent.Render(slider(x.RollLoud, formats.RollLoudMax, w)+fmt.Sprintf(" %+d%%", x.RollLoud)) +
+				st.dim.Render("  pitch ") + key("; '") + st.accent.Render(slider(x.RollPitch, formats.RollPitchMax, w)+fmt.Sprintf(" %+d", x.RollPitch))
 		}
 		second := st.dim.Render("chance ") + key("( )") + st.accent.Render(chance) + "   " +
 			st.dim.Render("gain ") + key("- +") + st.accent.Render(track(x.Gain, 0, 400, w)+fmt.Sprintf(" %d%%", x.Gain)) + "   " +
 			st.dim.Render("pitch ") + key("< >") + st.accent.Render(slider(x.Pitch, 24, w)+fmt.Sprintf(" %+d", x.Pitch))
-		envLine := st.dim.Render("attack ") + key("1 2") + st.accent.Render(track(indexOf(formats.EnvSteps, x.Attack), 0, len(formats.EnvSteps)-1, w)+fmt.Sprintf(" %d ms", x.Attack)) + "   " +
-			st.dim.Render("release ") + key("3 4") + st.accent.Render(track(indexOf(formats.EnvSteps, x.Release), 0, len(formats.EnvSteps)-1, w)+fmt.Sprintf(" %d ms", x.Release)) + "   " +
+		envLine := st.dim.Render("attack ") + key("6 7") + st.accent.Render(track(indexOf(formats.EnvSteps, x.Attack), 0, len(formats.EnvSteps)-1, w)+fmt.Sprintf(" %d ms", x.Attack)) + "   " +
+			st.dim.Render("release ") + key("8 9") + st.accent.Render(track(indexOf(formats.EnvSteps, x.Release), 0, len(formats.EnvSteps)-1, w)+fmt.Sprintf(" %d ms", x.Release)) + "   " +
 			st.dim.Render("play ") + key("r") + st.accent.Render(dir) + "   " +
 			st.dim.Render("roll ") + key("x") + st.accent.Render("") + rollText
 		extra = []string{second, envLine}

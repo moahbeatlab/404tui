@@ -257,7 +257,10 @@ type Model struct {
 	// seqTab is set while a pattern that the Sequencer tab opened is in front: its tab is lit,
 	// and leaving the pattern goes back to that tab.
 	seqTab bool
-	slices sliceStore
+	// seqSlot is the pattern the Sequencer tab had open when it was left; it is read again when
+	// the tab is back.
+	seqSlot *proto.PadIndex
+	slices  sliceStore
 	// conds keeps the conditions of the patterns' notes (when a note plays over the loops);
 	// patConds and patSeed are those of the open pattern, read when it was opened.
 	conds    condStore
@@ -1070,7 +1073,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.folderUses = msg.folderUses
 		}
 		if msg.focus != nil {
-			m.section, m.bank, m.pad = secPads, int(msg.focus.Bank()), int(msg.focus.Pad())
+			if m.slicer == nil || m.section != secSlicer {
+				// A slicer in front stays in front: its bounce lands on the pad without a change of view.
+				m.section = secPads
+			}
+			m.bank, m.pad = int(msg.focus.Bank()), int(msg.focus.Pad())
 			if msg.assigned {
 				m.lastAssigned, m.hasLast = *msg.focus, true
 				m.target = int(msg.focus.Bank())
@@ -1517,11 +1524,29 @@ func (m *Model) wanted() tea.Cmd {
 			}
 		}
 	}
+	if b := m.browser; b != nil && b.kind == browseAssign {
+		// A folder in the dialog says where its samples were used: the notes are read for that.
+		if m.folderUses == nil && !m.folderUsesBusy {
+			m.folderUsesBusy = true
+			return m.loadFolderUses()
+		}
+		if m.origins == nil && !m.originsBusy {
+			m.originsBusy = true
+			return m.loadOrigins()
+		}
+	}
 	if b := m.browser; b != nil && b.kind == browseAssign && b.tree != nil && b.at < len(b.tree.Rows()) && !m.infoBusy {
 		node := b.tree.Rows()[b.at]
 		if _, have := m.infos[node.Path]; !node.Dir && isAudio(node.Name) && !have {
 			m.infoBusy = true
 			return m.fileInfoCmd(node.Path)
+		}
+	}
+	if a := m.addAsk; a != nil && a.patterns != nil && !m.previewBusy {
+		// The pattern the Sequencer's chooser is on is read to be shown under the slots.
+		if r := a.patterns.rows[a.patterns.cursor]; r.Exists && m.patPreview[r.Slot] == nil && !m.patUnread[r.Slot] {
+			m.previewBusy = true
+			return m.loadPreview(r.Slot)
 		}
 	}
 	if s := m.slicer; s != nil && !m.previewBusy {

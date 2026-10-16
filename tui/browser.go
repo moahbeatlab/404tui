@@ -529,7 +529,10 @@ func (m Model) assignBox(g geom) string {
 			lines = append(lines, "")
 			lines = append(lines, m.audioInfo(node, width-leftW-6)...)
 		case node.Dir:
-			lines = append(lines, st.dim.Render("Folder"))
+			lines = append(lines, st.dim.Render("Folder"), "")
+			// Whether its samples were used already, and where.
+			lines = append(lines, m.folderUseLines(node.Path, width-leftW-6)...)
+			lines = append(lines, m.folderPadLines(node.Path, width-leftW-6)...)
 		}
 		right = strings.Join(lines, "\n")
 	}

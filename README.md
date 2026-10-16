@@ -24,7 +24,7 @@ checks sequencing and data handling, not the unit's actual behaviour.
 The header says `404tui by moahbeatlab` and the project, then the state of the link and the version. The tabs are in the top right corner (on the row under the header when it is too narrow): **Pads** (`1`), **Files** (`2`), **Projects** (`3`), **Slicer** (`4`) and **Sequencer** (`5`); click one or press its number. A rail down the left lists the banks or file sources of the section you are in. Dialogs open over the
 screen. A History panel on the right keeps what happened, with times.
 
-In the Slicer tab, `a` chooses what to slice: `p` a pad (a list of the pads, over the tab) or `f` a new sample from the file view (`Z` slices it). The slicer opens over the tab, with the tab lit. In the Sequencer tab, `a` chooses `p` a pattern (a list of the patterns of every bank; Enter opens it in the editor, Esc comes back) or `s` a sample for a pad; `N` makes a new pattern.
+`1`–`5` always change the view; the slicer and the Sequencer's pattern stay as they were when you come back (Esc closes them). In the Slicer tab, `a` chooses what to slice: `p` a pad (a list of the pads, over the tab) or `f` a new sample from the file view (`Z` slices it). The slicer opens over the tab, with the tab lit. In the Sequencer tab, `a` chooses `p` a pattern (the slots of a bank with a preview, `[ ]` for another bank; Enter opens it in the editor, Esc closes it) or `s` a sample for a pad; `N` makes a new pattern.
 
 ### Connecting
 
@@ -126,7 +126,7 @@ you left it. The keys are listed at the bottom of the dialog, in groups.
 
 - `r` reverse, `m` mute, `( )` chance, `< >` pitch in semitones, `- +` gain, `X` back to plain.
   Enter plays the slice once.
-- **Envelope** (`1 2` attack shorter/longer, `3 4` release shorter/longer): a fade in and out of
+- **Envelope** (`6 7` attack shorter/longer, `8 9` release shorter/longer; `1`–`5` always change the view): a fade in and out of
   the slice, from 0 up to 2 s, baked into its audio, so it sounds the same on every pad and in the
   computer's playback. 0 leaves only the short fade that stops a cut from clicking.
 - **Slices to pads** (`s` marks the slice in front, `y` marks all or none, `B`): each marked slice
@@ -183,8 +183,8 @@ you left it. The keys are listed at the bottom of the dialog, in groups.
   whole number of pattern loops, and `N` sets exactly that many, so the bounce loops cleanly
   against the pattern. `V` limits the pattern under the slices to one bar, two bars, or all of
   it (like `v` in the pattern editor); the view and the loop follow.
-- **Roll shapes:** `x` makes a slice roll; `5 6` make its hits quieter or louder from the first to the
-  last (a small slider shows it), and `7 8` make the last hit lower or higher in pitch, up to 12
+- **Roll shapes:** `x` makes a slice roll; `j k` make its hits quieter or louder from the first to the
+  last (a small slider shows it), and `;` `'` make the last hit lower or higher in pitch, up to 12
   semitones: a fade-out stutter, a swell, or a riser. **Stretch:** `K` puts the whole sample, stretched without a change of
   pitch to a whole number of bars at the grid's (or the pattern's, or the bank's) tempo, on a
   pad; slice that pad at the tempo. `F` fits the grid tempo to the sample instead.

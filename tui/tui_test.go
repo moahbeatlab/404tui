@@ -778,7 +778,7 @@ func TestPatternsOpenAndRetarget(t *testing.T) {
 	s.shows("2 note(s) moved from bank A to bank D", "D1", "D2")
 	// After the move the pads are in one bank D, so the pattern still retargets.
 	s.press("esc")
-	s.shows("Pattern B2")
+	s.shows("Nothing is open in the sequencer")
 	if _, err := app.OpenPattern(s.m().unit, pad(t, "B2")); err != nil {
 		t.Error(err)
 	}
@@ -3659,7 +3659,7 @@ func TestAPadKeepsItsRowSpaceDoesNotEditAndUUndoes(t *testing.T) {
 	if _, err := app.Assign(m.unit, m.unit, pad(t, "A5"), "SD:IMPORT/loop.wav"); err != nil {
 		t.Fatal(err)
 	}
-	s.press("esc", "esc", "r", "tab", "enter")
+	s.press("esc", "1", "r", "tab", "enter")
 	found := false
 	for _, r := range s.m().pattern.Grid.Rows {
 		found = found || r.Pad == pad(t, "A5")
@@ -3923,7 +3923,7 @@ func TestAChangeIsHeardAtOnceInALoopingPattern(t *testing.T) {
 		t.Errorf("queued %d after undo and a velocity", len(s.player.replaced))
 	}
 	// A pad setting: its level, in the Pads view, while the pattern plays.
-	s.press("esc", "esc")
+	s.press("esc", "1")
 	n := len(s.player.replaced)
 	s.press(",")
 	if len(s.player.replaced) != n+1 {
@@ -4094,11 +4094,12 @@ func TestEnterExpandsATrackAndEscCollapsesIt(t *testing.T) {
 	if !s.m().patFocus || s.m().patRow != 2 {
 		t.Fatalf("Tab did not expand the track on the cursor row: focus %v, row %d", s.m().patFocus, s.m().patRow)
 	}
-	// Esc goes back to the patterns under the pads, even from an expanded track.
+	// Esc closes the pattern, even from an expanded track, and goes back to the Sequencer tab.
 	s.press("esc")
-	if s.m().pattern != nil || s.m().patFocus || s.m().section != secPatterns {
+	if s.m().pattern != nil || s.m().patFocus || s.m().section != secSequencer {
 		t.Fatalf("Esc: pattern open %v, focus %v, section %d", s.m().pattern != nil, s.m().patFocus, s.m().section)
 	}
+	s.press("1", "tab")
 	s.shows("Patterns · bank A")
 	// From the grid too; and it opens folded again.
 	s.press("enter")
@@ -5080,6 +5081,15 @@ func TestSlicerAndSequencerTabsOfferWhatToAdd(t *testing.T) {
 	if s.m().activeTab() != secSlicer {
 		t.Error("the Slicer tab is not lit while the slicer is open")
 	}
+	// 1 to 5 change the view from the slicer; it is still open when the tab is back.
+	s.press("1")
+	if s.m().section != secPads || s.m().slicer == nil {
+		t.Fatalf("1 in the slicer: section %d, slicer open %v", s.m().section, s.m().slicer != nil)
+	}
+	s.press("4")
+	if s.m().section != secSlicer || s.m().slicer == nil {
+		t.Fatalf("4 did not bring the slicer back: section %d", s.m().section)
+	}
 	s.press("esc")
 	s.shows("Nothing is open in the slicer")
 
@@ -5094,13 +5104,22 @@ func TestSlicerAndSequencerTabsOfferWhatToAdd(t *testing.T) {
 	}
 	s.sim.AddFile(formats.PatternPath(1, pad(t, "A2")), data)
 	s.press("r", "5", "a", "p")
-	s.shows("on the unit", "A2")
+	s.shows("Pattern  bank A", "arrows move")
 	s.press("enter")
 	if s.m().pattern == nil {
 		t.Fatalf("the pattern did not open: %q", s.m().message)
 	}
 	if s.m().activeTab() != secSequencer {
 		t.Error("the Sequencer tab is not lit while its pattern is open")
+	}
+	// 1 to 5 change the view, and the pattern is still there when the tab is back.
+	s.press("1")
+	if s.m().section != secPads {
+		t.Fatalf("1 in the editor went to section %d", s.m().section)
+	}
+	s.press("5")
+	if s.m().pattern == nil || s.m().pattern.Slot != pad(t, "A2") || s.m().activeTab() != secSequencer {
+		t.Fatalf("the pattern was not back with the tab: %v", s.m().pattern)
 	}
 	s.press("esc")
 	if s.m().pattern != nil || s.m().section != secSequencer {

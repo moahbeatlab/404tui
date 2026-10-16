@@ -225,7 +225,11 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.promptKey(key)
 	case m.picker != nil:
 		return m.pickerKey(key)
-	case m.slicer != nil && !m.slicer.adding:
+	case m.slicer != nil && !m.slicer.adding && m.section == secSlicer:
+		// 1 to 5 always change the view; the slicer stays open under its tab.
+		if len(name) == 1 && name >= "1" && name <= "5" {
+			return m.goTo(railSections[int(name[0]-'1')])
+		}
 		return m.slicerKey(key)
 	case m.toggles != nil:
 		return m.togglesKey(key)
@@ -375,7 +379,7 @@ func (m Model) escape() (tea.Model, tea.Cmd) {
 		// Sequencer tab when that is where the pattern was opened.
 		m.pattern, m.patRange, m.patFocus, m.patSel = nil, nil, false, nil
 		if m.seqTab {
-			m.section, m.seqTab = secSequencer, false
+			m.section, m.seqTab, m.seqSlot = secSequencer, false, nil
 		}
 	case m.section == secPatterns && m.patHolding:
 		m.patHolding = false
@@ -418,6 +422,21 @@ func (m Model) askQuit() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) goTo(section int) (tea.Model, tea.Cmd) {
+	if m.section == secPatterns && m.seqTab && m.pattern != nil && section != secPatterns {
+		// The pattern of the Sequencer tab stays: it is read again when the tab is back.
+		slot := m.pattern.Slot
+		m.seqSlot = &slot
+		m.pattern, m.patRange, m.patFocus, m.patSel = nil, nil, false, nil
+	}
+	if m.section == secSlicer && section != secSlicer && m.slicer != nil && m.slicer.playing {
+		// The slicer stays open under its tab, but silent.
+		m.slicer.playing = false
+		m.stopListening()
+	}
+	if section == secSequencer && m.seqSlot != nil {
+		slot := *m.seqSlot
+		return m.openSequencerPattern(slot)
+	}
 	m.section, m.seqTab = section, false
 	cmd := m.wanted()
 	return m, cmd
@@ -1109,6 +1128,8 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 			m.message = "that pattern slot is empty"
 			break
 		}
+		// A pattern opened from the panel under the pads is the Sequencer's too.
+		m.seqTab, m.seqSlot = true, nil
 		m.busy = "reading the pattern"
 		return m, m.openPattern(rows[m.patternCursor].Slot, "")
 	}
