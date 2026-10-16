@@ -47,27 +47,12 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 		}
 		m.fxLearn = bus
 		m.message = fmt.Sprintf("BUS %d: switch its effect on or off on the unit; Esc cancels", bus)
-	case "k", "K":
-		bus := 1
-		if name == "K" {
-			bus = 2
-		}
-		m.fxKnob = bus
-		if len(m.mem.FxKnobs[bus-1]) >= 3 {
-			// Three are known already: learn them again, from C1.
-			m.mem.FxKnobs[bus-1] = nil
-		}
-		m.message = fmt.Sprintf("BUS %d: turn C%d on the unit, then C%d and C%d; Esc stops", bus, len(m.mem.FxKnobs[bus-1])+1, len(m.mem.FxKnobs[bus-1])+2, len(m.mem.FxKnobs[bus-1])+3)
 	case "backspace":
 		switch {
 		case m.fxLearn != 0:
 			m.mem.FxMsg[m.fxLearn-1], m.fxOn[m.fxLearn-1] = "", false
 			m.message = fmt.Sprintf("BUS %d: effect message forgotten", m.fxLearn)
 			m.fxLearn = 0
-		case m.fxKnob != 0:
-			m.mem.FxKnobs[m.fxKnob-1] = nil
-			m.message = fmt.Sprintf("BUS %d: knobs forgotten", m.fxKnob)
-			m.fxKnob = 0
 		}
 	case "p":
 		m.perfPlayer = !m.perfPlayer
@@ -277,7 +262,7 @@ func (m Model) perfBankBody(g geom) string {
 	}
 	bottom = append(bottom, m.perfFxLines(width)...)
 	bottom = append(bottom, m.perfMovement(width)...)
-	bottom = append(bottom, st.dim.Render("a n cue   Space next→now   v patterns   p player   f F note the effect   l L learn its on/off   k K its knobs   ^R rec"))
+	bottom = append(bottom, st.dim.Render("a n cue   Space next→now   v patterns   p player   f F note the effect   l L learn its on/off   ^R rec"))
 	// The tiles take what is left.
 	avail := g.bodyH - 2 - len(top) - len(bottom) - 2 - 3
 	tileH := max(avail/4, 3)
@@ -547,12 +532,8 @@ func (m Model) isFxKnob(ch, cc int) bool {
 	return slices.Contains(m.fxKnobList(0), text) || slices.Contains(m.fxKnobList(1), text)
 }
 
-// fxKnobList is the controllers of a bus's effect (bus 0 or 1): the ones learned with k or K, else
-// the unit's own: CTRL 1 to 3 send CC 16 to 18 on channel 1 for bus 1 and channel 2 for bus 2.
+// fxKnobList is the controllers of a bus's effect (bus 0 or 1): the unit's CTRL 1 to 3 send CC 16 to 18 on channel 1 for bus 1 and channel 2 for bus 2.
 func (m Model) fxKnobList(bus int) []string {
-	if k := m.mem.FxKnobs[bus]; len(k) > 0 {
-		return k
-	}
 	return []string{fmt.Sprintf("ch %d cc 16", bus+1), fmt.Sprintf("ch %d cc 17", bus+1), fmt.Sprintf("ch %d cc 18", bus+1)}
 }
 
@@ -694,27 +675,6 @@ func (m Model) fxEvent(e midiin.Event) Model {
 			return m
 		}
 	}
-	if m.fxKnob != 0 && e.Kind == midiin.CC {
-		text := fmt.Sprintf("ch %d cc %d", e.Channel, e.Data1)
-		knobs := m.mem.FxKnobs[m.fxKnob-1]
-		if slices.Contains(knobs, text) {
-			return m
-		}
-		if len(knobs) >= 3 {
-			knobs = knobs[1:]
-		}
-		// A copy, so the saved state before this one is not changed under it.
-		m.mem.FxKnobs[m.fxKnob-1] = append(slices.Clone(knobs), text)
-		got := len(m.mem.FxKnobs[m.fxKnob-1])
-		if got >= 3 {
-			m.message = fmt.Sprintf("BUS %d: %s is C%d, all three knobs found", m.fxKnob, text, got)
-			m.fxKnob = 0
-		} else {
-			// Still listening: the next knob you turn is the next one.
-			m.message = fmt.Sprintf("BUS %d: %s is C%d, turn C%d (Esc stops)", m.fxKnob, text, got, got+1)
-		}
-		return m
-	}
 	for bus := 0; bus < 2; bus++ {
 		kind, ch, n, ok := fxMsg(m.mem.FxMsg[bus])
 		if !ok || e.Channel != ch || e.Data1 != n {
@@ -745,9 +705,6 @@ func (m Model) perfFxHead(width int) string {
 	st := m.st
 	if m.fxLearn != 0 {
 		return lipgloss.NewStyle().Foreground(st.th.warn).Bold(true).Render(fmt.Sprintf("FX  LEARNING BUS %d: switch its effect on or off on the unit   Esc cancels   Backspace forgets it", m.fxLearn))
-	}
-	if m.fxKnob != 0 {
-		return lipgloss.NewStyle().Foreground(st.th.warn).Bold(true).Render(fmt.Sprintf("FX  LEARNING THE KNOBS OF BUS %d: turn C1, then C2, then C3 on the unit   Esc stops   Backspace forgets them", m.fxKnob))
 	}
 	text := st.dim.Render("FX  ")
 	for bus := int32(1); bus <= 2; bus++ {

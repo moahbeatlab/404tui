@@ -226,9 +226,9 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		return m, next
 	}
 	m.logMIDI(e)
-	if learning := m.fxLearn != 0 || m.fxKnob != 0; learning {
+	if learning := m.fxLearn != 0; learning {
 		m = m.fxEvent(e)
-		if m.fxLearn == 0 && m.fxKnob == 0 {
+		if m.fxLearn == 0 {
 			return m, next // taken as the effect's message, not acted on
 		}
 	} else {

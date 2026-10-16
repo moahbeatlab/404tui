@@ -418,8 +418,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 // escape backs out of the innermost thing: a pattern, a pick-up, marks; else it quits.
 func (m Model) escape() (tea.Model, tea.Cmd) {
 	switch {
-	case m.fxLearn != 0 || m.fxKnob != 0:
-		m.fxLearn, m.fxKnob = 0, 0
+	case m.fxLearn != 0:
+		m.fxLearn = 0
 		m.message = "nothing learned"
 	case m.selecting() && m.section == secPatterns:
 		// Esc ends a selection of notes before it leaves the pattern.

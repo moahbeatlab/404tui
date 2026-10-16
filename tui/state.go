@@ -61,9 +61,6 @@ type State struct {
 	// FxMsg is the MIDI message that says a bus's effect is on or off ("ch 1 cc 83" or "ch 1 note 60"),
 	// learned from the unit in the Perform view.
 	FxMsg [2]string `json:"fxMsg,omitempty"`
-	// FxKnobs are the controllers ("ch 1 cc 16") shown as faders and dials under each bus's effect,
-	// up to three a bus, learned from the unit.
-	FxKnobs [2][]string `json:"fxKnobs,omitempty"`
 
 	// ScanDir is the folder the last scan for where the samples came from looked in.
 	ScanDir string `json:"scanDir,omitempty"`

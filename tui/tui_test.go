@@ -6375,21 +6375,9 @@ func TestTheEffectOfABusIsLearnedFromTheUnitAndShownWithItsKnobs(t *testing.T) {
 	if s.m().fxOn[1] {
 		t.Error("note off did not switch it off")
 	}
-	// Knobs of BUS 1's effect: the next controllers moved, shown with a fader and a dial each.
-	s.press("k")
-	s.shows("LEARNING THE KNOBS OF BUS 1")
+	// Knobs of BUS 1's effect: CC 16 to 18 on channel 1, shown with a fader each, with nothing learned.
 	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 16, Data2: 80})
-	if s.m().fxKnob != 1 {
-		t.Error("learning stopped after the first knob")
-	}
 	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 17, Data2: 20})
-	s.press("esc") // two of three found: Esc stops
-	if s.m().fxKnob != 0 {
-		t.Error("esc did not stop learning knobs")
-	}
-	if got := s.m().mem.FxKnobs[0]; len(got) != 2 || got[0] != "ch 1 cc 16" || got[1] != "ch 1 cc 17" {
-		t.Fatalf("knobs %v", got)
-	}
 	s.shows("1:16")
 	s.shows(" 80")
 	feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 16, Data2: 100})
@@ -6607,9 +6595,8 @@ func TestTheRecordingShowsItsLevelAndAClipLight(t *testing.T) {
 	}
 }
 
-// CTRL 1 to 3 of a bus send CC 16 to 18 on the bus's channel: they are its knobs without learning, and
-// what is learned takes their place.
-func TestABusKnobsAreItsChannelsCC16To18UntilLearned(t *testing.T) {
+// CTRL 1 to 3 of a bus send CC 16 to 18 on the bus's channel: they are its knobs, nothing else is.
+func TestABusKnobsAreItsChannelsCC16To18(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	m := s.m()
@@ -6622,10 +6609,6 @@ func TestABusKnobsAreItsChannelsCC16To18UntilLearned(t *testing.T) {
 	}
 	if m.isFxKnob(1, 74) || m.isFxKnob(3, 16) {
 		t.Error("another controller was taken for a bus knob")
-	}
-	m.mem.FxKnobs[1] = []string{"ch 5 cc 20"}
-	if !m.isFxKnob(5, 20) || m.isFxKnob(2, 16) {
-		t.Error("learned knobs did not replace the defaults")
 	}
 	s.model = m
 	s.press("7") // the view draws without a MIDI monitor too

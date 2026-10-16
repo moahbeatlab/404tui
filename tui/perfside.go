@@ -290,9 +290,6 @@ func (m Model) fxPanel(bus, w, rows int, now time.Time) (string, lipgloss.Color,
 	}
 	lines = append(lines, "")
 	lines = append(lines, faderRow(cells)...)
-	if len(m.mem.FxKnobs[bus]) == 0 {
-		lines = append(lines, st.dim.Render(fmt.Sprintf("ch %d cc 16-18   %s learns other knobs", bus+1, map[int]string{0: "k", 1: "K"}[bus])))
-	}
 	return fmt.Sprintf("BUS %d", bus+1), colour, lines
 }
 
@@ -338,12 +335,12 @@ func (m Model) perfSidebar(width, h int) []string {
 	half := width / 2
 	// The faders take the height that is left: the panels around them need about 30 lines side by
 	// side, and a recording adds its own.
-	spare, per := h-31, 2
+	spare, per := h-30, 2
 	if !wideTop {
 		spare -= 4
 	}
 	if !wide {
-		spare, per = h-51, 3
+		spare, per = h-50, 3
 	}
 	if m.rec != nil {
 		spare -= 6
@@ -383,7 +380,7 @@ func (m Model) perfSidebar(width, h int) []string {
 	if m.midiSrc == nil {
 		add(st.dim.Render("no MIDI in this build: effects, knobs and the clock need it (make build)"))
 	} else {
-		if m.fxLearn != 0 || m.fxKnob != 0 {
+		if m.fxLearn != 0 {
 			add(m.perfFxHead(width))
 		}
 		w2 := width - pw*b2i(wide)
@@ -402,8 +399,7 @@ func (m Model) perfSidebar(width, h int) []string {
 	}
 	add(m.panel("KEYS", st.th.faint, []string{
 		st.dim.Render("a n  cue   Space  next→now   v  patterns   p  player"),
-		st.dim.Render("f F  effect note   l L  learn on/off"),
-		st.dim.Render("k K  its knobs   ^R  record"),
+		st.dim.Render("f F  effect note   l L  learn on/off   ^R  record"),
 	}, width)...)
 	if len(out) > h {
 		out = out[:h]

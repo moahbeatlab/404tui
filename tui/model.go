@@ -323,9 +323,6 @@ type Model struct {
 	// fxOn is whether each bus's effect was last said to be on.
 	fxLearn int
 	fxOn    [2]bool
-	// fxKnob is the bus (1 or 2) a knob is being learned for: the next controller moved joins its
-	// effect's knobs.
-	fxKnob int
 	// codes holds the pads hit lately, for the codes that start the live mode and a recording;
 	// liveOn is set while the live mode is on, liveBack the view it goes back to.
 	codes    *codeState
