@@ -5609,6 +5609,9 @@ func TestTheDashboardShowsTheNameWhileWaitingForAUnit(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.ANSI256)
 	defer lipgloss.SetColorProfile(prev)
 	a := m.padGlow()
+	if glow := ansi.Strip(strings.Join(a, "\n")); !strings.Contains(glow, " 1 ") || !strings.Contains(glow, " 16 ") {
+		t.Errorf("the pads on the dashboard have no numbers:\n%s", glow)
+	}
 	m.frame += 4
 	if strings.Join(a, "\n") == strings.Join(m.padGlow(), "\n") {
 		t.Error("the pads do not light up in turn")
