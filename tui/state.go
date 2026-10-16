@@ -39,6 +39,11 @@ type State struct {
 	// the default.
 	Buses *app.BusRule `json:"buses,omitempty"`
 
+	// RecordDir is the folder recordings go into, RecordDevice a part of the name of the input to
+	// record; empty means the defaults.
+	RecordDir    string `json:"recordDir,omitempty"`
+	RecordDevice string `json:"recordDevice,omitempty"`
+
 	// ScanDir is the folder the last scan for where the samples came from looked in.
 	ScanDir string `json:"scanDir,omitempty"`
 

@@ -129,6 +129,7 @@ var commands = []command{
 	{"B", "Set the bus of the bank's pads (the marked ones; p: the whole project) by their names, as Config says", []int{secPads}},
 	{"j", "Config: the next setting; k the one before; h l change it, Enter edits the drum words", []int{secConfig}},
 	{"U", "Working offline: leave offline mode and connect to the unit once it is plugged in", nil},
+	{"ctrl+r", "Record the unit's audio input to a WAV file in the folder set in Config; again stops it", nil},
 	{"ctrl+t", "Next colour theme", nil},
 	{"r", "Refresh from the unit", nil},
 	{"?", "Keybindings", nil},
@@ -169,6 +170,8 @@ func keyFor(name string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}}
 	case "ctrl+a":
 		return tea.KeyMsg{Type: tea.KeyCtrlA}
+	case "ctrl+r":
+		return tea.KeyMsg{Type: tea.KeyCtrlR}
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(name)}
 }
@@ -215,7 +218,12 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	name := key.String()
 	if name == "ctrl+c" {
 		m.stopListening()
+		m.stopRecordingNow()
 		return m, tea.Quit
+	}
+	// Ctrl-R records the unit's audio from anywhere, in a dialog too.
+	if name == "ctrl+r" && !m.typingText() && m.palette == nil {
+		return m.toggleRecording()
 	}
 	// ? lists what can be done with the view or dialog in front, searchable, wherever it is; in a
 	// text being typed it is a letter.
@@ -2873,6 +2881,7 @@ func (m Model) promptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.prompt = nil
 		if name == "y" || name == "enter" || name == "q" {
 			m.stopListening()
+			m.stopRecordingNow()
 			return m, tea.Quit
 		}
 		return m, nil
@@ -2926,7 +2935,7 @@ func (m Model) promptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Type == tea.KeyRunes || key.Type == tea.KeySpace:
 		for _, r := range key.Runes {
 			// The unit only accepts printable ASCII in names; paths and searches can hold more.
-			if r >= ' ' && (r <= '~' || p.kind == promptExport || p.kind == promptRestore || p.kind == promptSearch || p.kind == promptExportName || p.kind == promptAssignFile || p.kind == promptMkdir || p.kind == promptFindFolder || p.kind == promptProjectExport || p.kind == promptProjectExportName || p.kind == promptProjectRestore) {
+			if r >= ' ' && (r <= '~' || p.kind == promptExport || p.kind == promptRestore || p.kind == promptSearch || p.kind == promptExportName || p.kind == promptAssignFile || p.kind == promptMkdir || p.kind == promptFindFolder || p.kind == promptProjectExport || p.kind == promptProjectExportName || p.kind == promptProjectRestore || p.kind == promptRecDir) {
 				p.insert(string(r))
 			}
 		}
@@ -3010,7 +3019,7 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			return doneMsg{message: fmt.Sprintf("project %d restored from %s", plan.Project+1, plan.Dir), reload: true}
 		})
 	}
-	if p.kind != promptDelete && p.kind != promptFindFolder && p.kind != promptBusWords && p.kind != promptBusScan && p.kind != promptRepairPads && text == "" {
+	if p.kind != promptDelete && p.kind != promptFindFolder && p.kind != promptBusWords && p.kind != promptBusScan && p.kind != promptRepairPads && p.kind != promptRecDir && p.kind != promptRecDevice && text == "" {
 		m.message = "nothing typed"
 		return m, nil
 	}
@@ -3082,6 +3091,14 @@ func (m Model) apply() (tea.Model, tea.Cmd) {
 			}
 			return doneMsg{message: message, reload: true}
 		})
+	case promptRecDir:
+		m.mem.RecordDir = text
+		m.message = "recordings go to " + display(m.recordDir())
+		return m, nil
+	case promptRecDevice:
+		m.mem.RecordDevice = text
+		m.message = fmt.Sprintf("the input to record has %q in its name", m.recordDevice())
+		return m, nil
 	case promptRepairPads:
 		pads := p.pads
 		m.busy = "setting the pads up"

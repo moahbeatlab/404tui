@@ -22,6 +22,7 @@ import (
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/proto/fileapi"
+	"github.com/moahbeatlab/404tui/record"
 )
 
 // The sections, in the order of their number keys.
@@ -84,6 +85,10 @@ const (
 	// the settings a new pad has.
 	promptRepairPads
 	promptBusWords
+	// promptRecDir asks for the folder recordings go into, promptRecDevice for a part of the name
+	// of the input to record.
+	promptRecDir
+	promptRecDevice
 	// promptDeleteFiles confirms deleting prompt.paths from the card; promptMkdir names a new
 	// folder in prompt.path.
 	promptDeleteFiles
@@ -284,6 +289,9 @@ type Model struct {
 	// seqTab is set while a pattern that the Sequencer tab opened is in front: its tab is lit,
 	// and leaving the pattern goes back to that tab.
 	seqTab bool
+	// recorder starts recordings of the unit's audio input; rec is the one running.
+	recorder record.Backend
+	rec      *record.Session
 	// report is a list of lines shown in a dialog until a key closes it.
 	report *report
 	// cfgAt is the row of the Config view the cursor is on.
@@ -733,6 +741,18 @@ type (
 		key   factKey
 		facts app.PadFacts
 		err   error
+	}
+	// recStartedMsg and recEndedMsg: a recording began (or could not), or it is over.
+	recStartedMsg struct {
+		session *record.Session
+		err     error
+	}
+	recEndedMsg struct {
+		session   *record.Session
+		path      string
+		size      int64
+		err       error
+		onPurpose bool
 	}
 	// checkMsg is what comparing samples with their files found, a line or two for each.
 	checkMsg struct{ lines []string }
@@ -1403,6 +1423,27 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		m.prompt = &prompt{kind: promptConfirmRestore, plan: msg.plan}
+	case recStartedMsg:
+		if msg.err != nil {
+			m.message = "recording did not start: " + msg.err.Error()
+			return m, nil
+		}
+		m.rec = msg.session
+		m.message = "recording to " + display(msg.session.Path) + " (" + msg.session.Tool + "): Ctrl-R stops it"
+		return m, waitRecording(msg.session)
+	case recEndedMsg:
+		if m.rec == msg.session {
+			m.rec = nil
+		}
+		switch {
+		case msg.err != nil && !msg.onPurpose:
+			m.message = "the recording stopped: " + msg.err.Error()
+		case msg.size == 0:
+			m.message = "the recording is empty: " + display(msg.path)
+		default:
+			m.message = fmt.Sprintf("recorded %s to %s", humanBytes(msg.size), display(msg.path))
+		}
+		return m, nil
 	case checkMsg:
 		m.busy = ""
 		m.report = &report{title: "Sample check", lines: msg.lines}

@@ -51,6 +51,16 @@ a new sample and a new pad now start with the pan in the centre, hold 100 and ti
 In the pad settings (`S`), a step stops on the default (the centre of the pan) and `0` puts the
 setting back to it.
 
+### Recording
+
+`Ctrl-R` anywhere (in a dialog too) records the unit's audio, which it sends over USB as an audio
+interface, to a WAV file (24-bit, 48 kHz, stereo) named by the date and time, and `Ctrl-R` again
+stops it. While it runs the header shows a red, blinking `● REC 02:13  23.1 MB` on every tab, and
+quitting stops it first. It runs `ffmpeg` (or `sox` where there is no ffmpeg), which must be
+installed; it finds the input by a part of its name (`404` by default). **Config** (`6`) sets the
+folder (`~/Music/404tui` by default) and that part of the name. It works on macOS, Linux (through
+PulseAudio or PipeWire) and Windows (DirectShow, ffmpeg only).
+
 ### Connecting
 
 The UI starts even with no unit, shows a waiting screen, connects by itself when you plug

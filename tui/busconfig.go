@@ -11,6 +11,7 @@ import (
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/proto"
+	"github.com/moahbeatlab/404tui/record"
 )
 
 // busRule is the rule that sends a pad to a bus by its name: the one set in the Config view, or
@@ -71,6 +72,8 @@ const (
 	cfgOther
 	cfgOnAssign
 	cfgReset
+	cfgRecDir
+	cfgRecDevice
 	cfgRows
 )
 
@@ -124,6 +127,16 @@ func (m Model) configKey(name string) (tea.Model, tea.Cmd) {
 			}
 			rule = app.DefaultBusRule()
 			m.message = "the bus rule and colours are back to their defaults"
+		case cfgRecDir:
+			if name == " " || name == "enter" {
+				m.prompt = &prompt{kind: promptRecDir, buffer: m.mem.RecordDir}
+			}
+			return m, nil
+		case cfgRecDevice:
+			if name == " " || name == "enter" {
+				m.prompt = &prompt{kind: promptRecDevice, buffer: m.recordDevice()}
+			}
+			return m, nil
 		}
 		m.setBusRule(rule)
 	}
@@ -175,6 +188,11 @@ func (m Model) configBody(g geom) string {
 		row(cfgOther, "A name with none of the words", other, "h l change"),
 		row(cfgOnAssign, "Set the bus when a file is assigned", st.text.Render(onOff[rule.OnAssign]), "Space toggles"),
 		row(cfgReset, "Back to the defaults", "", "Enter"),
+		"",
+		st.bold.Render("Recorder"),
+		row(cfgRecDir, "Record into folder", st.text.Render(display(m.recordDir())), "Enter edits"),
+		row(cfgRecDevice, "Input with this in its name", st.text.Render(m.recordDevice()), "Enter edits"),
+		st.dim.Render(m.recorderLine()),
 		"",
 		st.dim.Render("A word matches a word of the pad's name (Kick_125, OHat, DrumLoop, 14_Perc1) and a longer one by its start;"),
 		st.dim.Render("where a name has words of both, BUS 1 wins. B in Pads sets the buses of the bank, the marked pads or the project."),
@@ -314,4 +332,13 @@ func (m Model) busScanBox(p *prompt) string {
 	}
 	lines = append(lines, "", st.dim.Render("y apply   p "+other+" instead   n/Esc leave them   (the words are in Config, 6)"))
 	return st.modal.Render(strings.Join(lines, "\n"))
+}
+
+// recorderLine says how recording works, and whether this computer can do it.
+func (m Model) recorderLine() string {
+	tool := record.Tool(m.recorder)
+	if tool == "" {
+		return "Ctrl-R records the unit's audio to a WAV file, from anywhere. No recorder is installed: install ffmpeg (or sox)."
+	}
+	return "Ctrl-R starts and stops a recording of the unit's audio (as 24-bit 48 kHz WAV, with " + tool + ") from anywhere; the header shows it."
 }

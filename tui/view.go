@@ -207,6 +207,9 @@ func (m Model) tabLayout() (row int, spans [][2]int) {
 		return spans, total
 	}
 	left, status := m.headerParts()
+	if badge := m.recBadge(); badge != "" {
+		status = badge + "  " + status
+	}
 	spans, total := place(headTabFormat, headTabGap)
 	if ansi.StringWidth(left)+2+ansi.StringWidth(status)+3+total+1 <= m.width {
 		return rowHeader, spans
@@ -353,6 +356,10 @@ func (m Model) body(g geom) string {
 
 func (m Model) header() string {
 	left, status := m.headerParts()
+	if badge := m.recBadge(); badge != "" {
+		// A recording is shown first, where it cannot be missed, whatever else the header says.
+		status = badge + "  " + status
+	}
 	line := left
 	if status != "" {
 		line += "  " + status
@@ -499,7 +506,11 @@ func (m Model) statusBar() string {
 	case m.sliceWant:
 		chips = []string{chip("Z", "slice the file or pad under the cursor"), chip("1 2", "pads or files"), chip("Esc", "cancel")}
 	}
-	chips = append(chips, chip("?", "all keys"), chip("q", "quit"))
+	rec := chip("^R", "record")
+	if m.rec != nil {
+		rec = chip("^R", "stop recording")
+	}
+	chips = append(chips, rec, chip("?", "all keys"), chip("q", "quit"))
 	line := strings.Join(chips, st.faint.Render("  "))
 	if m.autoplay {
 		line = st.good.Render("♫ autoplay") + st.faint.Render("  │  ") + line
@@ -1987,6 +1998,10 @@ func (m Model) promptBox() string {
 		return m.busScanBox(p)
 	case promptRepairPads:
 		return m.repairBox(p)
+	case promptRecDir:
+		title, hint = "Record into folder", "empty for the default, Music/404tui  ·  "
+	case promptRecDevice:
+		title, hint = "Input to record", "a part of its name; the unit's is SP-404MKII, so 404  ·  "
 	case promptBusWords:
 		title, hint = fmt.Sprintf("Words for BUS %d", p.busOf), "separated by commas or spaces; a pad whose name holds one goes to the bus  ·  "
 	case promptDelete:

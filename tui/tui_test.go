@@ -26,6 +26,7 @@ import (
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/proto"
+	"github.com/moahbeatlab/404tui/record"
 	"github.com/moahbeatlab/404tui/sim"
 	"github.com/moahbeatlab/404tui/version"
 )
@@ -140,7 +141,16 @@ func (s *screen) run(cmd tea.Cmd) {
 	if cmd == nil {
 		return
 	}
-	switch msg := cmd().(type) {
+	// A command that waits for something outside (a recording to end) is let go after a moment.
+	got := make(chan tea.Msg, 1)
+	go func() { got <- cmd() }()
+	var result tea.Msg
+	select {
+	case result = <-got:
+	case <-time.After(400 * time.Millisecond):
+		return
+	}
+	switch msg := result.(type) {
 	case nil, tickMsg, slicerTickMsg:
 	case tea.BatchMsg:
 		for _, c := range msg {
@@ -170,6 +180,7 @@ func (s *screen) press(keys ...string) {
 		"ctrl+l":    {Type: tea.KeyCtrlL},
 		"ctrl+o":    {Type: tea.KeyCtrlO},
 		"ctrl+t":    {Type: tea.KeyCtrlT},
+		"ctrl+r":    {Type: tea.KeyCtrlR},
 		"up":        {Type: tea.KeyUp},
 		"down":      {Type: tea.KeyDown},
 	}
@@ -5396,7 +5407,7 @@ func TestConfigSetsTheWordsColoursAndBusesAndAssignFollowsThem(t *testing.T) {
 		t.Errorf("the pad with no word is on bus %d, want none", got)
 	}
 	// Reset brings the defaults back.
-	s.press("6", "j", "j", "j", "j", "j", "j", "enter")
+	s.press("6", "g", "j", "j", "j", "j", "j", "j", "enter")
 	if r := s.m().busRule(); r.Other != 1 || r.Bus1Colour != "" || len(r.Bus2Words) < 10 {
 		t.Errorf("after the reset: %+v", r)
 	}
@@ -5620,4 +5631,65 @@ func TestTheDashboardShowsTheNameWhileWaitingForAUnit(t *testing.T) {
 	if narrow := ansi.Strip(m.View()); !strings.Contains(narrow, "404tui") {
 		t.Errorf("no name on a narrow screen:\n%s", narrow)
 	}
+}
+
+// fakeRecorder is a backend whose recordings are sessions with nothing behind them.
+type fakeRecorder struct {
+	dir, device string
+	started     int
+	err         error
+	stopped     *int
+}
+
+func (f *fakeRecorder) Start(dir, device string) (*record.Session, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	f.dir, f.device = dir, device
+	f.started++
+	path := filepath.Join(dir, "take.wav")
+	_ = os.MkdirAll(dir, 0o755)
+	_ = os.WriteFile(path, make([]byte, 3<<20), 0o644)
+	return record.NewSession(path, "fake", func() error { *f.stopped++; return nil }), nil
+}
+
+func TestCtrlRRecordsWithAClearSignAndStops(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 200, Height: 40})
+	stopped := 0
+	dir := t.TempDir()
+	fake := &fakeRecorder{stopped: &stopped}
+	s.model = s.m().WithRecorder(fake)
+	m := s.m()
+	m.mem.RecordDir, m.mem.RecordDevice = dir, "SP-404"
+	s.model = m
+	// Ctrl-R starts: the header says REC, with the size, wherever the user goes.
+	s.press("ctrl+r")
+	s.shows("REC", "3.0 MB")
+	if fake.started != 1 || fake.dir != dir || fake.device != "SP-404" {
+		t.Fatalf("started %d in %q for %q", fake.started, fake.dir, fake.device)
+	}
+	s.press("6")
+	s.shows("REC")
+	s.press("1", "?")
+	s.shows("REC")
+	s.press("esc")
+	// Ctrl-R again stops it and says where the file is.
+	s.press("ctrl+r")
+	if stopped != 1 || s.m().rec != nil {
+		t.Fatalf("stopped %d times, still recording %v", stopped, s.m().rec != nil)
+	}
+	s.shows("recorded 3.0 MB")
+	s.hides("REC 0")
+	// A recorder that cannot start says why, and nothing is shown as recording.
+	fake.err = errors.New("no audio input with \"SP-404\" in its name")
+	s.press("ctrl+r")
+	s.shows("recording did not start", "no audio input")
+	if s.m().rec != nil {
+		t.Error("a recording that did not start is shown")
+	}
+	// With no recorder at all, it says what to install.
+	s.model = s.m().WithRecorder(nil)
+	s.press("ctrl+r")
+	s.shows("install ffmpeg")
 }
