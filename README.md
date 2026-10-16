@@ -111,6 +111,13 @@ the input with `404` in its name (set in Config, `6`). What it does:
   noted for the bus (`f`/`F`). `k` or `K` learns up to three knobs or faders for the bus's effect (move
   one on the unit), shown under it as a fader and a dial with the value. Esc cancels learning, Backspace
   forgets what is learned. Changes of an effect go to the event log as `fx`.
+- **Pattern player:** `p` in Perform shows the pattern you said plays (`a`) as the Sequencer draws it, a row
+  per track with its notes over the bars the playhead is in, and a ▼ playhead that follows the unit's MIDI
+  clock. The clock starts at the unit's Start; if the pattern began later, `s` says "the loop starts now".
+- **Mutes on the unit:** the unit does not report them. A track that has notes in the pattern that plays but
+  has not been heard on MIDI for a whole round, while other pads have, is shown as MUTED (a × on its tile,
+  MUTED in the player and in the patterns view). It works only if the unit sends its pad notes over MIDI
+  while a pattern plays; check the MIDI monitor in Config while one runs.
 - **Ticker:** a line in Perform keeps time with the unit's MIDI clock: the sixteen steps of the bar, the
   beat, and where the loop is.
 - **Event log:** while Ctrl-R records the unit's audio, everything above is also written beside the WAV

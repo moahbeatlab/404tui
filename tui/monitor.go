@@ -2,12 +2,16 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/moahbeatlab/404tui/app"
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/perflog"
+	"github.com/moahbeatlab/404tui/proto"
 )
 
 // The monitor keeps what the MIDI input said lately: the Perform view shows the pads that are hit
@@ -44,6 +48,8 @@ type monitor struct {
 	beatAt time.Time
 	bpm    float64
 	seen   int
+	// padAt is when any pad of the unit was last heard.
+	padAt time.Time
 }
 
 func newMonitor() *monitor {
@@ -107,6 +113,7 @@ func (mo *monitor) add(e midiin.Event) {
 		key := bank*16 + pad
 		if e.Kind == midiin.NoteOn {
 			mo.hits[key], mo.held[key], mo.vel[key] = at, true, e.Data2
+			mo.padAt = at
 		} else {
 			delete(mo.held, key)
 			mo.offs[key] = at
@@ -307,4 +314,59 @@ func (mo *monitor) controls() []*ccState {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].first < out[j].first })
 	return out
+}
+
+// unitMuted says whether a track of the pattern that plays looks muted on the unit: the unit does not
+// say, but a pad that has notes in the pattern and has not been heard on MIDI for a whole round of
+// the pattern, while other pads have been, is silent. It needs the clock running for a round first,
+// and says false when nothing of the unit's playing comes over MIDI at all.
+func (m Model) unitMuted(d *app.PatternDetail, pad proto.PadIndex, now time.Time) bool {
+	c, mo := m.clock, m.mon
+	if mo == nil || c == nil || !c.running || time.Since(c.at) > 2*time.Second || d == nil || d.Length == 0 {
+		return false
+	}
+	bpm := mo.bpm
+	if bpm <= 0 {
+		bpm = m.bankTempo(int(pad.Bank()))
+	}
+	if bpm <= 0 {
+		return false
+	}
+	round := time.Duration(float64(d.Length) / formats.PPQ * 60 / bpm * float64(time.Second))
+	if round < time.Second {
+		return false
+	}
+	// A round has gone by since the loop began.
+	if float64(c.ticks-m.perfSync)/24*60/bpm < round.Seconds() {
+		return false
+	}
+	// Pads are being heard.
+	if now.Sub(mo.padAt) > round {
+		return false
+	}
+	has := false
+	for _, r := range d.Grid.Rows {
+		if r.Pad == pad && slices.Contains(r.Hits, true) {
+			has = true
+		}
+	}
+	if !has {
+		return false
+	}
+	key := int(pad.Bank())*16 + int(pad.Pad())
+	last, ok := mo.hits[key]
+	return !ok || now.Sub(last) > round+time.Second
+}
+
+// padMuted says whether a pad is muted: in the mix on this computer, or silent on the unit in the
+// pattern that plays (see unitMuted).
+func (m Model) padMuted(pad proto.PadIndex) bool {
+	if m.muted[pad] {
+		return true
+	}
+	if m.perfNow == nil {
+		return false
+	}
+	d, _ := m.perfTracks(m.perfNow)
+	return m.unitMuted(d, pad, time.Now())
 }

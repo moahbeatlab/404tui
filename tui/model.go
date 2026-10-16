@@ -331,6 +331,10 @@ type Model struct {
 	liveBack int
 	// perfPatterns shows the Perform view's patterns, big, in place of the pads of the bank.
 	perfPatterns bool
+	// perfPlayer shows the pattern that plays as the Sequencer draws it, with a playhead that
+	// follows the MIDI clock; perfSync is the clock tick the loop began on.
+	perfPlayer bool
+	perfSync   int
 	// report is a list of lines shown in a dialog until a key closes it.
 	report *report
 	// cfgAt is the row of the Config view the cursor is on.

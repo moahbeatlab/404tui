@@ -211,6 +211,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		return m, next
 	case midiin.Start:
 		m.clock.ticks, m.clock.running, m.clock.at = 0, true, time.Now()
+		m.perfSync = 0
 		m.mon.beatAt = time.Time{}
 		m.logMIDI(e)
 		return m, next

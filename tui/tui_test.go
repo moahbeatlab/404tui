@@ -6376,3 +6376,71 @@ func TestTheEffectOfABusIsLearnedFromTheUnitAndShownWithItsKnobs(t *testing.T) {
 		t.Errorf("fx events %v", fx)
 	}
 }
+
+func TestPerformPlaysThePatternLikeTheSequencerAndShowsWhatIsMutedOnTheUnit(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	one, err := formats.StartPattern([]proto.PadIndex{pad(t, "A1"), pad(t, "A2"), pad(t, "A3")}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.sim.SetPattern(pad(t, "A2"), pad(t, "A1"))
+	s.sim.AddFile(formats.PatternPath(1, pad(t, "A2")), one)
+	link := &midiLink{ch: make(chan midiin.Event, 4)}
+	m := s.m()
+	m.midi, m.midiSrc = link, &fakeMIDI{}
+	s.model = m
+	s.press("r", "7", "a", "enter")
+	s.shows("NOW", "A2", "3 tracks")
+	s.press("p")
+	s.shows("Perform · player", "A1", "A3", "no clock")
+	// A clock that has run for a while: the playhead shows on its step.
+	feed := func(e midiin.Event) {
+		e.At = time.Now()
+		next, _ := s.m().midiEvent(midiMsg{link: link, ev: e})
+		s.model = next
+	}
+	feed(midiin.Event{Kind: midiin.Start})
+	for i := 0; i < 24*2+6; i++ {
+		feed(midiin.Event{Kind: midiin.Clock})
+	}
+	s.shows("▼", "BEAT 3")
+	// s: the loop starts now, the playhead goes back to the first step.
+	s.press("s")
+	if s.m().perfSync != 24*2+6-1 {
+		t.Errorf("sync %d", s.m().perfSync)
+	}
+	s.press("p")
+	s.shows("A1")
+	// Muted on the unit: pads A1 and A2 are heard, A3 has not been for longer than a round.
+	m = s.m()
+	now := time.Now()
+	m.mon.bpm, m.perfSync = 120, 0
+	m.clock.ticks, m.clock.running, m.clock.at = 400, true, now
+	m.mon.padAt = now
+	for pad, ago := range map[int]time.Duration{0: 500 * time.Millisecond, 1: 800 * time.Millisecond, 2: 10 * time.Second} {
+		m.mon.hits[pad] = now.Add(-ago)
+	}
+	s.model = m
+	d, _ := m.perfTracks(m.perfNow)
+	if d == nil {
+		t.Fatal("pattern not read")
+	}
+	if m.unitMuted(d, pad(t, "A1"), now) || m.unitMuted(d, pad(t, "A2"), now) {
+		t.Error("heard pads are muted")
+	}
+	if !m.unitMuted(d, pad(t, "A3"), now) {
+		t.Error("the silent pad is not muted")
+	}
+	s.shows("×")
+	s.press("p", "v")
+	s.shows("MUTED")
+	s.press("p") // the patterns view (v is still on), without the player
+	s.shows("MUTED")
+	// With nothing heard at all, nothing is called muted.
+	m = s.m()
+	m.mon.padAt = now.Add(-time.Minute)
+	if m.unitMuted(d, pad(t, "A3"), now) {
+		t.Error("muted with no pad heard")
+	}
+}
