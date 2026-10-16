@@ -5792,11 +5792,8 @@ func TestPerformOpensOnTheBankTheUnitIsOnWithItsPadsBig(t *testing.T) {
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	s.press("r", "7")
 	s.shows("Perform", "BANK A", "PATTERNS")
-	// The sample names are in block letters; kick is on pad 1 and snare on pad 2.
-	view := ansi.Strip(s.m().View())
-	if !strings.ContainsAny(view, "▀▄█") {
-		t.Errorf("no big letters on the view:\n%s", view)
-	}
+	// The sample names are whole, in the terminal's own text: kick is on pad 1 and snare on pad 2.
+	s.shows("kick", "snare")
 	// The unit moves to another bank (it said so in a poll): the view follows it.
 	m := s.m()
 	m.selected, m.hasSelected = pad(t, "C3"), true
@@ -6306,7 +6303,7 @@ func TestTheEffectOfABusIsLearnedFromTheUnitAndShownWithItsKnobs(t *testing.T) {
 		s.model = next
 	}
 	s.press("7")
-	s.shows("l L learn its on/off")
+	s.shows("l L  learn on/off")
 	s.shows("l learns")
 	// l: the next controller is BUS 1's effect; it says on at once, and is not acted on otherwise.
 	s.press("l")
@@ -6315,12 +6312,12 @@ func TestTheEffectOfABusIsLearnedFromTheUnitAndShownWithItsKnobs(t *testing.T) {
 	if s.m().fxLearn != 0 || s.m().mem.FxMsg[0] != "ch 16 cc 62" || !s.m().fxOn[0] {
 		t.Fatalf("learned %q learn %d on %v", s.m().mem.FxMsg[0], s.m().fxLearn, s.m().fxOn)
 	}
-	s.shows("● ON")
+	s.shows("ON")
 	feed(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: 62, Data2: 0})
 	if s.m().fxOn[0] {
 		t.Error("cc 62 at 0 did not switch it off")
 	}
-	s.shows("○ off")
+	s.shows("off")
 	// A pad's note is not taken for the effect: Esc leaves learning.
 	s.press("L")
 	s.shows("LEARNING BUS 2")
@@ -6507,5 +6504,23 @@ func TestPlaybackNotesFindThePatternAndAreNotPadHits(t *testing.T) {
 	}
 	if !s.m().liveOn {
 		t.Error("1 3 3 7 hit by hand with the sequencer stopped did not switch the live mode on")
+	}
+}
+
+func TestWrapNameKeepsTheWholeNameWhenThereIsRoom(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		w, n int
+		want []string
+	}{
+		{"kick", 20, 3, []string{"kick"}},
+		{"06_LEAD_125_G_Min", 12, 3, []string{"06_LEAD_125_", "G_Min"}},
+		{"Supercalifragilistic", 8, 3, []string{"Supercal", "ifragili", "stic"}},
+		{"a_very_long_name_that_goes_on_and_on_and_on", 10, 2, []string{"a_very_", "long_name…"}},
+	} {
+		got := wrapName(c.name, c.w, c.n)
+		if strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("wrapName(%q, %d, %d) = %q, want %q", c.name, c.w, c.n, got, c.want)
+		}
 	}
 }

@@ -211,22 +211,14 @@ func (m Model) perfTile(row app.PadRow, w, h int) []string {
 	for i := range mid {
 		mid[i] = line("")
 	}
-	if !ts.empty && body >= 3 {
-		name := strings.TrimSpace(row.Name)
-		scale := 1
-		if bigWidth(name, 2) <= w-2 {
-			scale = 2
+	if !ts.empty {
+		// The whole name, in the terminal's own bold text, broken after _ - or a space when it is
+		// longer than the tile, and in the middle of the tile.
+		lines := wrapName(strings.TrimSpace(row.Name), w-2, body)
+		above := (body - len(lines)) / 2
+		for i, l := range lines {
+			mid[above+i] = line(" " + l)
 		}
-		if maxChars := (w - 2 + scale) / (4 * scale); len([]rune(name)) > maxChars {
-			name = string([]rune(name)[:max(maxChars, 1)])
-		}
-		bt := bigText(name, scale)
-		above := (body - 3) / 2
-		for i := 0; i < 3; i++ {
-			mid[above+i] = line(" " + bt[i])
-		}
-	} else if !ts.empty {
-		mid[0] = line(" " + ansi.Truncate(row.Name, w-2, "…"))
 	}
 	out := []string{parts[0]}
 	out = append(out, mid...)
@@ -239,6 +231,9 @@ func (m Model) perfBankBody(g geom) string {
 	st := m.st
 	bank := m.perfBank()
 	width := g.bodyW + g.bodyX - 3
+	if width >= 110 {
+		return m.perfSplitBody(g, width)
+	}
 	var top []string
 	if rec := m.perfRecLine(); rec != "" {
 		top = append(top, rec)
@@ -399,18 +394,14 @@ func (m Model) perfPatternBody(g geom) string {
 			}
 			name := strings.TrimSpace(t.name)
 			if big {
-				scale := 1
-				if bigWidth(name, 2) <= colW {
-					scale = 2
-				}
-				maxChars := (colW + scale) / (4 * scale)
-				if r := []rune(name); len(r) > maxChars {
-					name = string(r[:max(maxChars, 1)])
-				}
-				bt := bigText(name, scale)
+				wrapped := wrapName(name, colW, 3)
 				cells[0] = append(cells[0], lipgloss.NewStyle().Width(colW+2).Render(label))
 				for k := 0; k < 3; k++ {
-					cells[k+1] = append(cells[k+1], lipgloss.NewStyle().Width(colW+2).Foreground(st.th.text).Bold(true).Render(bt[k]))
+					text := ""
+					if k < len(wrapped) {
+						text = wrapped[k]
+					}
+					cells[k+1] = append(cells[k+1], lipgloss.NewStyle().Width(colW+2).Foreground(st.th.text).Bold(true).Render(text))
 				}
 				cells[4] = append(cells[4], strings.Repeat(" ", colW+2))
 			} else {
@@ -863,4 +854,68 @@ func (m Model) perfPlayerBody(g geom) string {
 	lines = append(lines, "", m.perfFxLines(width)[0])
 	lines = append(lines, st.dim.Render("p  back to the pads   s  the pattern starts now   a n  cue   Space  next→now   ^R  record"))
 	return m.box("Perform · player", strings.Join(lines, "\n"), g.bodyW+g.bodyX-1, g.bodyH, true)
+}
+
+// wrapName breaks a pad name into at most max lines of w cells: after an underscore, hyphen or space
+// where it can, anywhere when a piece is longer than a line. What does not fit the last line is cut
+// with an ellipsis, so the name is whole whenever the tile has room for it.
+func wrapName(name string, w, max int) []string {
+	w = maxInt(w, 4)
+	var pieces []string
+	cur := ""
+	for _, r := range name {
+		cur += string(r)
+		if r == '_' || r == '-' || r == ' ' {
+			pieces = append(pieces, cur)
+			cur = ""
+		}
+	}
+	if cur != "" {
+		pieces = append(pieces, cur)
+	}
+	var lines []string
+	line := ""
+	flush := func() {
+		if line != "" {
+			lines = append(lines, strings.TrimRight(line, " "))
+		}
+		line = ""
+	}
+	for _, p := range pieces {
+		for ansi.StringWidth(p) > w {
+			// A piece longer than a line is cut where the line ends.
+			flush()
+			head := ansi.Truncate(p, w, "")
+			lines = append(lines, head)
+			p = strings.TrimPrefix(p, head)
+		}
+		if ansi.StringWidth(line)+ansi.StringWidth(p) > w {
+			flush()
+		}
+		line += p
+	}
+	flush()
+	if len(lines) > max {
+		lines = lines[:max]
+		lines[max-1] = ansi.Truncate(lines[max-1]+"…", w, "…")
+	}
+	return lines
+}
+
+// perfSplitBody is the Perform view on a wide screen: the left 30% for what is read from afar (the
+// beat, the cue, the patterns of the bank, the effects and the knobs), the pads on the right.
+func (m Model) perfSplitBody(g geom, width int) string {
+	bank := m.perfBank()
+	side := max(width*30/100, 44)
+	gridW := width - side - 2
+	inner := g.bodyH - 2
+	tileW := max((gridW-3)/4, 10)
+	tileH := max((inner-3)/4, 3)
+	rows := m.snap.Bank(bank)
+	grid := m.grid(g, func(p int) string {
+		return strings.Join(m.perfTile(rows[p], tileW, tileH), "\n")
+	})
+	left := lipgloss.NewStyle().Width(side).Render(strings.Join(m.perfSidebar(side, inner), "\n"))
+	body := lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", grid)
+	return m.box("Perform", body, g.bodyW+g.bodyX-1, g.bodyH, true)
 }

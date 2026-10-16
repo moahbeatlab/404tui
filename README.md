@@ -118,6 +118,16 @@ the input with `404` in its name (set in Config, `6`). What it does:
   has not been heard on MIDI for a whole round, while other pads have, is shown as MUTED (a × on its tile,
   MUTED in the player and in the patterns view). It works only if the unit sends its pad notes over MIDI
   while a pattern plays; check the MIDI monitor in Config while one runs.
+- **Layout:** on a wide screen (110 columns and up) Perform is split: the pads of the bank the unit is on in
+  the right 70%, with their whole names in plain text, and the left 30% for what you read from afar: the
+  beat of the bar as four big blocks, the cue (what plays, what is next, what comes in and goes out), the
+  patterns of the bank the unit is on (four at most, the one that plays and the next first; it follows
+  when you switch bank), each bus's effect with a big ON/off and its knobs as tall faders, and the other
+  controllers as tall faders. Narrower screens get everything stacked.
+- **Pattern found from the unit:** while the unit's sequencer runs it sends every note its pattern plays
+  over MIDI (channel = the pad's bank). 404tui takes those for what the pattern plays, not for pads hit
+  by hand (so a pattern cannot trigger a pad code), and finds the pattern whose pads fit them: it becomes
+  NOW, marked "heard". Choosing one by hand (`a`) stays while it fits.
 - **Ticker:** a line in Perform keeps time with the unit's MIDI clock: the sixteen steps of the bar, the
   beat, and where the loop is.
 - **Event log:** while Ctrl-R records the unit's audio, everything above is also written beside the WAV
