@@ -187,7 +187,7 @@ func (m Model) browserKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+d", "ctrl+u", "pgdown", "pgup":
 		height := max(min(m.geom().bodyH-10, 20), 5)
 		if b.kind == browseAssign {
-			height = max(min(m.geom().bodyH-10, 22), 6)
+			height = max(m.geom().bodyH-9, 8)
 		}
 		b.at = clamp(b.at+m.pageStep(name, height), 0, len(rows)-1)
 	case "}", "{", "alt+n", "alt+p":
@@ -501,9 +501,11 @@ func (m Model) assignBox(g geom) string {
 	if n := len(b.marks); n > 0 {
 		target = st.good.Render(fmt.Sprintf("%d files marked — Enter %s", n, m.assignHow(b.pad)))
 	}
-	width := min(m.width-6, 110)
+	// The dialog is as large as the page lets it be, always: a size that followed what is in
+	// front made it jump as the cursor moved.
+	width := clamp(m.width*94/100, 70, 170)
 	leftW := width * 11 / 20
-	height := max(min(g.bodyH-10, 22), 6)
+	height := max(g.bodyH-9, 8)
 	mark := func(n app.Node) string {
 		switch {
 		case b.marks[n.Path]:
@@ -532,15 +534,20 @@ func (m Model) assignBox(g geom) string {
 		right = strings.Join(lines, "\n")
 	}
 	rightW := width - leftW - 4
-	right += "\n\n" + m.assignKeys(b, rightW)
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, " ", lipgloss.NewStyle().Width(rightW).Render(right))
+	// The keys keep the foot of the column; the file in front has the room above them.
+	keys := m.assignKeys(b, rightW)
+	room := max(height-strings.Count(keys, "\n")-2, 1)
+	right = fit(right, room) + "\n\n" + keys
+	body := lipgloss.JoinHorizontal(lipgloss.Top, left, " ", lipgloss.NewStyle().Width(rightW).Render(fit(right, height)))
 	// The title is a bar in the accent colour with the pad in a lighter block, at the top of the
 	// frame above the sources: it says where the files go, and it should not be missed.
 	th := st.th
 	bar := lipgloss.NewStyle().Background(th.accent).Foreground(th.cursorFg).Bold(true)
 	padBlock := lipgloss.NewStyle().Background(th.text).Foreground(th.cursorFg).Bold(true)
 	title := bar.Render(" Assign a file to ") + padBlock.Render(b.pad.String()+" ")
-	lines := []string{title, target, "", m.sourceTabs(b.root), "", body}
+	// What the dialog is for and what the pad holds are in its top right corner.
+	corner := func(s string) string { return lipgloss.PlaceHorizontal(width-2, lipgloss.Right, s) }
+	lines := []string{corner(title), corner(target), "", m.sourceTabs(b.root), "", body}
 	return st.modal.Width(width).Render(strings.Join(lines, "\n"))
 }
 

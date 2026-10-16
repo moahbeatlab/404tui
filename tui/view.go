@@ -161,10 +161,9 @@ func (m Model) withRail(g geom, body string) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, rail, rule, "  ", body)
 }
 
-// How the tabs sit on the row under the header, when the header has no room for them: the
-// rule before the first, each tab's label with room around it, and the rule between two tabs.
+// How the tabs sit on the row under the header, when the header has no room for them: each
+// tab's label with room around it, and the rule between two tabs.
 const (
-	tabLead   = 3
 	tabGap    = 3
 	tabFormat = "  %d %s  "
 )
@@ -173,33 +172,36 @@ const (
 const (
 	headTabFormat = " %d %s "
 	headTabGap    = 2
-	headTabLead   = 4
 )
 
 // tabLayout is the row the tabs are on and the columns each covers, as start and end (end not
-// in). They go in the header, after the project, when it has the room, else on the row under it.
-// Before there is a unit to show, there are none.
+// in). They are right-aligned: in the header when it has the room after the project and the
+// state of the link, else on the row under it. Before there is a unit to show, there are none.
 func (m Model) tabLayout() (row int, spans [][2]int) {
 	if m.unit == nil || m.snap == nil {
 		return rowRule, nil
 	}
-	left, right := m.headerParts()
-	x := ansi.StringWidth(left) + headTabLead
-	for i, s := range railSections {
-		w := len(fmt.Sprintf(headTabFormat, i+1, sectionNames[s]))
-		spans = append(spans, [2]int{x, x + w})
-		x += w + headTabGap
+	place := func(format string, gap int) (spans [][2]int, total int) {
+		for i, s := range railSections {
+			total += len(fmt.Sprintf(format, i+1, sectionNames[s]))
+			if i > 0 {
+				total += gap
+			}
+		}
+		x := m.width - total - 1
+		for i, s := range railSections {
+			w := len(fmt.Sprintf(format, i+1, sectionNames[s]))
+			spans = append(spans, [2]int{x, x + w})
+			x += w + gap
+		}
+		return spans, total
 	}
-	if x-headTabGap+2+ansi.StringWidth(right) <= m.width {
+	left, status := m.headerParts()
+	spans, total := place(headTabFormat, headTabGap)
+	if ansi.StringWidth(left)+2+ansi.StringWidth(status)+3+total+1 <= m.width {
 		return rowHeader, spans
 	}
-	spans = spans[:0]
-	x = tabLead
-	for i, s := range railSections {
-		w := len(fmt.Sprintf(tabFormat, i+1, sectionNames[s]))
-		spans = append(spans, [2]int{x, x + w})
-		x += w + tabGap
-	}
+	spans, _ = place(tabFormat, tabGap)
 	return rowRule, spans
 }
 
@@ -219,8 +221,13 @@ func (m Model) tabAt(x, y int) (int, bool) {
 
 // activeTab is the section whose tab is lit: the slicer's while one is in front.
 func (m Model) activeTab() int {
-	if m.slicer != nil && !m.slicer.adding {
+	switch {
+	case m.slicer != nil && !m.slicer.adding:
 		return secSlicer
+	case m.section == secPatterns && m.seqTab:
+		return secSequencer
+	case m.section == secPatterns:
+		return secPads
 	}
 	return m.section
 }
@@ -259,11 +266,9 @@ func (m Model) tabBar() string {
 	if row == rowHeader || len(spans) == 0 {
 		return m.rule()
 	}
-	line := m.st.faint.Render(strings.Repeat("─", tabLead)) + m.tabsText(spans, false)
-	if rest := m.width - ansi.StringWidth(line); rest > 0 {
-		line += m.st.faint.Render(strings.Repeat("─", rest))
-	}
-	return line
+	tabs := m.tabsText(spans, false)
+	rest := max(spans[0][0], 0)
+	return m.st.faint.Render(strings.Repeat("─", rest)) + tabs + m.st.faint.Render("─")
 }
 
 // rule is the line under the header.
@@ -327,6 +332,8 @@ func (m Model) body(g geom) string {
 		return m.filesBody(g)
 	case secSlicer:
 		return m.slicerTabBody(g)
+	case secSequencer:
+		return m.sequencerTabBody(g)
 	}
 	return m.projectsBody(g)
 }
@@ -334,26 +341,29 @@ func (m Model) body(g geom) string {
 // ---- chrome ----
 
 func (m Model) header() string {
-	left, right := m.headerParts()
-	if row, spans := m.tabLayout(); row == rowHeader && len(spans) > 0 {
-		// The tabs sit in the header, between the project and the status on the right.
-		left += strings.Repeat(" ", spans[0][0]-ansi.StringWidth(left)) + m.tabsText(spans, true)
+	left, status := m.headerParts()
+	line := left
+	if status != "" {
+		line += "  " + status
 	}
-	return spaceBetween(left, right, m.width)
+	if row, spans := m.tabLayout(); row == rowHeader && len(spans) > 0 {
+		// The tabs are in the top right corner; the state of the link is after the project.
+		line += strings.Repeat(" ", max(spans[0][0]-ansi.StringWidth(line), 1)) + m.tabsText(spans, true)
+	}
+	return ansi.Truncate(line, m.width, "…")
 }
 
-// headerParts are the left and the right of the header: the name and project, and the state of
-// the link and the version, which is in the top right corner whatever else the header says.
-// Before there is a unit to show the left is only the name.
+// headerParts are the name and project, and after them the state of the link and the version.
+// Before there is a unit to show there is only the name.
 func (m Model) headerParts() (left, right string) {
 	st := m.st
 	badge := lipgloss.NewStyle().Background(st.th.accent).Foreground(st.th.cursorFg).Bold(true).Render(" 404tui by moahbeatlab ")
 	ver := st.faint.Render("v" + version.Version)
 	if m.unit == nil {
-		return badge, st.warn.Render("○ no unit") + "  " + ver + " "
+		return badge, st.warn.Render("○ no unit") + "  " + ver
 	}
 	if m.snap == nil {
-		return badge, ver + " "
+		return badge, ver
 	}
 	label := fmt.Sprintf("  PROJECT %d", m.snap.Project+1)
 	if m.snap.ProjectName != "" {
@@ -384,7 +394,7 @@ func (m Model) headerParts() (left, right string) {
 	} else if m.hasSelected {
 		right = st.dim.Render(fmt.Sprintf("◆ %s  ", m.selected)) + right
 	}
-	return left, right + "  " + ver + " "
+	return left, right + "  " + ver
 }
 
 func spaceBetween(left, right string, width int) string {
@@ -457,14 +467,16 @@ func (m Model) statusBar() string {
 		chips = []string{chip("Enter", "assign"), chip("v", "mark"), chip("*", "favourite"), chip("/", "search"), chip("s", "tags"), chip("f", "folder"), chip("i", "index"), chip("w", "view"), chip("Space", "listen")}
 	case secSlicer:
 		chips = []string{chip("a", "choose a pad or a sample")}
+	case secSequencer:
+		chips = []string{chip("a", "choose a pattern or a sample"), chip("N", "new pattern")}
 	case secProjects:
 		chips = []string{chip("Enter", "select"), chip("n", "rename"), chip("e", "export"), chip("R", "restore"), chip("X", "erase")}
 	}
 	switch {
 	case m.addAsk != nil && m.addAsk.sec == secSlicer:
 		chips = []string{chip("p", "pad"), chip("f", "new sample"), chip("Esc", "cancel")}
-	case m.addAsk != nil && m.addAsk.chooser != nil:
-		chips = []string{chip("Enter", "open"), chip("[ ]", "bank"), chip("Esc", "back")}
+	case m.addAsk != nil && m.addAsk.chooser():
+		chips = []string{chip("Enter", "take it"), chip("↑ ↓", "move"), chip("[ ]", "bank"), chip("Esc", "back")}
 	case m.addAsk != nil:
 		chips = []string{chip("s", "sample"), chip("p", "pattern"), chip("Esc", "cancel")}
 	case m.sliceWant:

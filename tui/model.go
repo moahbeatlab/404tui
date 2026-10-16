@@ -31,10 +31,11 @@ const (
 	secFiles
 	secProjects
 	secSlicer
+	secSequencer
 	secCount
 )
 
-var sectionNames = [secCount]string{"Pads", "Sequencer", "Files", "Projects", "Slicer"}
+var sectionNames = [secCount]string{"Pads", "Patterns", "Files", "Projects", "Slicer", "Sequencer"}
 
 // previewStopAfter is how long a preview plays before it is stopped; tests shorten it.
 var previewStopAfter = func(d time.Duration) time.Duration { return d }
@@ -253,7 +254,10 @@ type Model struct {
 	// sliceWant is set while a sample is being chosen for a new slicer on the Pads or Files
 	// screen (Z takes the one under the cursor).
 	sliceWant bool
-	slices    sliceStore
+	// seqTab is set while a pattern that the Sequencer tab opened is in front: its tab is lit,
+	// and leaving the pattern goes back to that tab.
+	seqTab bool
+	slices sliceStore
 	// conds keeps the conditions of the patterns' notes (when a note plays over the loops);
 	// patConds and patSeed are those of the open pattern, read when it was opened.
 	conds    condStore

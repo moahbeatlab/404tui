@@ -5061,43 +5061,55 @@ func TestSlicerAndSequencerTabsOfferWhatToAdd(t *testing.T) {
 		t.Errorf("Esc left sliceWant=%v section=%d", s.m().sliceWant, s.m().section)
 	}
 
-	// Slicer: p goes to the pads, and Z there opens the slicer with the Slicer tab lit.
+	// Slicer: p opens the pad chooser over the tab; Enter on a pad with a sample opens the
+	// slicer, and its tab is lit while it is open.
 	m := s.m()
 	s.sim.AddFile("SD:IMPORT/drums.wav", drums())
 	if _, err := app.Assign(m.unit, m.unit, pad(t, "A5"), "SD:IMPORT/drums.wav"); err != nil {
 		t.Fatal(err)
 	}
 	s.press("r", "4", "a", "p")
-	if !s.m().sliceWant || s.m().section != secPads {
-		t.Fatalf("after p: sliceWant=%v section=%d", s.m().sliceWant, s.m().section)
+	s.shows("Pad  bank A")
+	if s.m().section != secSlicer {
+		t.Fatalf("the pad chooser left the Slicer tab for section %d", s.m().section)
 	}
-	s.press("j", "Z")
-	if s.m().slicer == nil || s.m().sliceWant {
-		t.Fatalf("Z: slicer=%v sliceWant=%v", s.m().slicer != nil, s.m().sliceWant)
+	s.press("j", "enter")
+	if s.m().slicer == nil || s.m().addAsk != nil {
+		t.Fatalf("Enter on A5: slicer=%v ask=%v msg=%q", s.m().slicer != nil, s.m().addAsk != nil, s.m().message)
 	}
 	if s.m().activeTab() != secSlicer {
 		t.Error("the Slicer tab is not lit while the slicer is open")
 	}
-	if s.m().section == secSlicer {
-		t.Error("the slicer should leave the screen it was opened from where it was")
+	s.press("esc")
+	s.shows("Nothing is open in the slicer")
+
+	// Sequencer: a is a landing page too; p lists the patterns of every bank, Enter opens one
+	// in the editor with the Sequencer tab lit, and Esc comes back to the landing page.
+	s.press("5")
+	s.shows("Nothing is open in the sequencer")
+	s.sim.SetPattern(pad(t, "A2"), pad(t, "A5"))
+	data, err := formats.StartPattern([]proto.PadIndex{pad(t, "A5")}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.sim.AddFile(formats.PatternPath(1, pad(t, "A2")), data)
+	s.press("r", "5", "a", "p")
+	s.shows("on the unit", "A2")
+	s.press("enter")
+	if s.m().pattern == nil {
+		t.Fatalf("the pattern did not open: %q", s.m().message)
+	}
+	if s.m().activeTab() != secSequencer {
+		t.Error("the Sequencer tab is not lit while its pattern is open")
 	}
 	s.press("esc")
-
-	// Sequencer: p shows the patterns of a bank; an empty slot is refused.
-	s.press("5", "a", "p")
-	s.shows("Pattern  bank A")
-	s.press("enter")
-	if s.m().addAsk == nil {
-		t.Error("an empty slot was taken")
-	}
-	s.press("esc", "esc")
-	if s.m().addAsk != nil {
-		t.Error("Esc twice should close the dialog")
+	if s.m().pattern != nil || s.m().section != secSequencer {
+		t.Errorf("Esc: pattern=%v section=%d", s.m().pattern != nil, s.m().section)
 	}
 
 	// Sequencer: s opens the file dialog for a pad.
 	s.press("a")
-	s.shows("Sequencer: add a sample or a pattern")
+	s.shows("Sequencer: choose what to work on")
 	s.press("s")
 	if s.m().browser == nil {
 		t.Error("s in the Sequencer should open the file dialog")

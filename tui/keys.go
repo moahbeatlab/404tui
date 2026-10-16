@@ -115,8 +115,8 @@ var commands = []command{
 	{"1", "Go to Pads", nil},
 	{"2", "Go to Files", nil},
 	{"3", "Go to Projects", nil},
-	{"4", "Go to the Slicer; a there (and in the Sequencer) adds a sample or a pattern", nil},
-	{"5", "Go to the Sequencer (the patterns)", nil},
+	{"4", "Go to the Slicer; a there chooses a pad or a new sample to slice", nil},
+	{"5", "Go to the Sequencer; a there chooses a pattern to edit (or a sample for a pad)", nil},
 	{"U", "Working offline: leave offline mode and connect to the unit once it is plugged in", nil},
 	{"ctrl+t", "Next colour theme", nil},
 	{"r", "Refresh from the unit", nil},
@@ -352,13 +352,11 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case secPads:
 		return m.padsKey(name)
 	case secPatterns:
-		if m.pattern == nil && name == "a" {
-			m.addAsk = &addAsk{sec: secPatterns}
-			return m, nil
-		}
 		return m.patternsKey(name)
 	case secSlicer:
 		return m.slicerTabKey(name)
+	case secSequencer:
+		return m.sequencerTabKey(name)
 	case secFiles:
 		return m.filesKey(name)
 	}
@@ -373,8 +371,12 @@ func (m Model) escape() (tea.Model, tea.Cmd) {
 		m.patSel = nil
 		m.message = ""
 	case m.pattern != nil && m.section == secPatterns:
-		// Back to the patterns under the pads, from the grid or from an expanded track.
+		// Back to the patterns under the pads, from the grid or from an expanded track; to the
+		// Sequencer tab when that is where the pattern was opened.
 		m.pattern, m.patRange, m.patFocus, m.patSel = nil, nil, false, nil
+		if m.seqTab {
+			m.section, m.seqTab = secSequencer, false
+		}
 	case m.section == secPatterns && m.patHolding:
 		m.patHolding = false
 	case m.section == secPatterns && len(m.patMarks) > 0:
@@ -416,7 +418,7 @@ func (m Model) askQuit() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) goTo(section int) (tea.Model, tea.Cmd) {
-	m.section = section
+	m.section, m.seqTab = section, false
 	cmd := m.wanted()
 	return m, cmd
 }
