@@ -309,8 +309,11 @@ Away from the unit, keep working on your projects on this computer:
    folder in it), or start with `sp404 -offline ~/404-projects`. A yellow **◌ OFFLINE**
    badge stays in the header for as long as you work this way.
 3. Everything works as usual on those projects: assign, pad settings, patterns, playback on
-   this computer. Each project folder is a project slot, in the order of the folder names,
-   and an empty slot becomes a new folder (`PROJECT_02`, …) once you put something in it.
+   this computer. Each project folder is a project slot, and is named for it: the slot number and
+   the project's name (`02 Flavors`), renamed for you when the project is renamed or when the
+   folder is opened (a folder that starts with its number keeps that slot; the others fill the free
+   slots in the order of their names). An empty slot becomes a new folder (`PROJECT_02`, …) once you
+   put something in it, and takes the project's name along once it has one.
    Every change is saved to the folders as you make it. Samples to assign can be anywhere
    on this computer; the `SD/` folder next to the projects stands in for the SD card.
 4. Back at the unit, plug it in: the header says so, and `U` leaves offline mode and

@@ -78,7 +78,7 @@ func TestWorkingOfflineOnFoldersOfProjects(t *testing.T) {
 	if err := app.SetBankTempo(d, 2, 98.5); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(lib, "MyBeat", "SMPL", "BANK1-02.SMP")); err != nil {
+	if _, err := os.Stat(filepath.Join(lib, "01 MY BEAT", "SMPL", "BANK1-02.SMP")); err != nil {
 		t.Errorf("the sample was not written to the project folder: %v", err)
 	}
 
@@ -99,7 +99,7 @@ func TestWorkingOfflineOnFoldersOfProjects(t *testing.T) {
 	d.Close()
 
 	// Opened again, everything is still there.
-	d, f = openOffline(t, filepath.Join(lib, "MyBeat"))
+	d, f = openOffline(t, filepath.Join(lib, "01 MY BEAT"))
 	defer d.Close()
 	if len(f.Projects) != 2 {
 		t.Fatalf("projects after reopening: %v", f.Projects)

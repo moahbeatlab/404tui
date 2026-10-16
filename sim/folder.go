@@ -83,10 +83,32 @@ func OpenFolder(dir string) (*Sim, Folder, error) {
 		}
 	}
 	sort.Strings(found)
-	if start != "" && !contains(found[:min(len(found), 16)], start) {
+	if start != "" && !contains(found, start) {
 		found = append([]string{start}, found...)
 	}
-	found = found[:min(len(found), 16)]
+	slots := placeProjects(found)
+	// A folder is named for its project: the number of the slot and the project's name. A folder
+	// whose project was renamed meanwhile, or was exported under another name, is renamed now,
+	// before anything of it is read.
+	for i, p := range slots {
+		if p == "" {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(p, "PADCONF.BIN"))
+		if err != nil {
+			continue
+		}
+		conf, err := formats.ParsePadconf(raw)
+		if err != nil || conf.Name == "" {
+			continue
+		}
+		if now := renameProjectFolder(p, i, conf.Name); now != p {
+			if p == start {
+				start = now
+			}
+			slots[i] = now
+		}
+	}
 
 	s := New()
 	d := &folder{lib: lib, sd: filepath.Join(lib, "SD"), dirty: map[string]bool{}, dirs: map[string]bool{},
@@ -96,7 +118,10 @@ func OpenFolder(dir string) (*Sim, Folder, error) {
 	for i := range s.names {
 		d.words[i] = formats.NewPadconf(nil, "").Settings
 	}
-	for i, p := range found {
+	for i, p := range slots {
+		if p == "" {
+			continue
+		}
 		raw, err := os.ReadFile(filepath.Join(p, "PADCONF.BIN"))
 		if err != nil {
 			return nil, Folder{}, err
@@ -130,6 +155,72 @@ func OpenFolder(dir string) (*Sim, Folder, error) {
 	out.Template = d.template != nil
 	s.loadProject()
 	return s, out, nil
+}
+
+// slotPrefix is the number a project's folder starts with ("02 " in "02 Flavors"), 1 to 16, or 0.
+var slotPrefix = regexp.MustCompile(`^(\d\d) `)
+
+// safeName makes a project's name fit a folder name: what a file name cannot hold becomes _.
+func safeName(name string) string {
+	name = strings.Map(func(r rune) rune {
+		if strings.ContainsRune(`/\:*?"<>|`, r) || r < ' ' {
+			return '_'
+		}
+		return r
+	}, strings.TrimSpace(name))
+	return strings.Trim(name, ". ")
+}
+
+// folderFor is what the folder of the project in slot (0-based) is called: the slot number and
+// the project's name, so that the order of the folder names is the order of the slots whatever
+// the projects are called. A project that still has its default name keeps PROJECT_NN.
+func folderFor(slot int, name string) string {
+	safe := safeName(name)
+	if safe == "" || safe == fmt.Sprintf("PROJECT_%02d", slot+1) {
+		return fmt.Sprintf("PROJECT_%02d", slot+1)
+	}
+	return fmt.Sprintf("%02d %s", slot+1, safe)
+}
+
+// placeProjects puts the project folders in their slots: one that starts with its number goes
+// there, and the rest, in the order of their names, fill the slots that are free.
+func placeProjects(found []string) [16]string {
+	var slots [16]string
+	var rest []string
+	for _, p := range found {
+		if m := slotPrefix.FindStringSubmatch(filepath.Base(p)); m != nil {
+			if n, _ := strconv.Atoi(m[1]); n >= 1 && n <= 16 && slots[n-1] == "" {
+				slots[n-1] = p
+				continue
+			}
+		}
+		rest = append(rest, p)
+	}
+	for _, p := range rest {
+		for i := range slots {
+			if slots[i] == "" {
+				slots[i] = p
+				break
+			}
+		}
+	}
+	return slots
+}
+
+// renameProjectFolder gives the folder of a project the name that goes with the project's name,
+// when it has another and nothing is in the way. It returns where the folder is now.
+func renameProjectFolder(dir string, slot int, name string) string {
+	want := filepath.Join(filepath.Dir(dir), folderFor(slot, name))
+	if want == dir {
+		return dir
+	}
+	if _, err := os.Stat(want); err == nil {
+		return dir
+	}
+	if os.Rename(dir, want) != nil {
+		return dir
+	}
+	return want
 }
 
 func isProject(dir string) bool {
@@ -334,6 +425,17 @@ func (s *Sim) flushPadconf() {
 		d.conf[p] = conf
 	}
 	conf.Settings, conf.Name = d.words[p], s.names[p]
+	// A project that is renamed takes its folder's name along.
+	if old := d.slots[p]; old != "" && s.names[p] != "" {
+		if now := renameProjectFolder(old, p, s.names[p]); now != old {
+			d.slots[p] = now
+			for k, v := range d.lazy {
+				if rel, ok := strings.CutPrefix(v, old+string(filepath.Separator)); ok {
+					d.lazy[k] = filepath.Join(now, rel)
+				}
+			}
+		}
+	}
 	for i := range s.blocks {
 		conf.Blocks[i] = s.blocks[i]
 	}
