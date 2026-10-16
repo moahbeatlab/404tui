@@ -1671,6 +1671,8 @@ type cellStyle struct {
 	slice int
 	// selected and playing are the states of that slice; end marks the end edge of a slice.
 	selected, playing, end bool
+	// marked is set for a slice marked with s: it has the same ground as the one in front.
+	marked bool
 }
 
 // edgeInfo is a slice's edge at a dot of the waveform: slice is its number, 0 for none. Where
@@ -1712,7 +1714,7 @@ func (m Model) slicerStyle(c cellStyle) lipgloss.Style {
 	switch {
 	case c.playing:
 		style = style.Foreground(st.th.hot).Background(st.th.tile)
-	case c.selected:
+	case c.selected, c.marked:
 		style = style.Background(st.th.tile)
 	}
 	return style
@@ -1795,7 +1797,7 @@ func (m Model) slicerBox() string {
 				i = k
 			}
 		}
-		return cellStyle{kind: cellSlice, slice: i, selected: i == s.at, playing: headSlice == i}
+		return cellStyle{kind: cellSlice, slice: i, selected: i == s.at, playing: headSlice == i, marked: i >= 0 && s.marks[i]}
 	}
 	colOf := func(frame int) int { return int(int64(frame-from) * int64(cols) / int64(span)) }
 

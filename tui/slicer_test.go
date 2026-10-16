@@ -1540,3 +1540,14 @@ func TestSlicerSlashCutsTheSliceInFrontInPartsAndUndoes(t *testing.T) {
 		t.Errorf("two undos left %d slices, want %d", len(s.slicing().Slices), before)
 	}
 }
+
+func TestMarkedSlicesHaveTheGroundOfTheSliceInFront(t *testing.T) {
+	s := slicerOpen(t)
+	m := s.m()
+	plain := m.slicerStyle(cellStyle{kind: cellSlice, slice: 3})
+	marked := m.slicerStyle(cellStyle{kind: cellSlice, slice: 3, marked: true})
+	front := m.slicerStyle(cellStyle{kind: cellSlice, slice: 3, selected: true})
+	if marked.GetBackground() != front.GetBackground() || marked.GetBackground() == plain.GetBackground() {
+		t.Errorf("grounds: plain %v, marked %v, in front %v", plain.GetBackground(), marked.GetBackground(), front.GetBackground())
+	}
+}
