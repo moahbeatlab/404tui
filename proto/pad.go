@@ -185,6 +185,9 @@ func (b *PadBlock) ChopPoints() []int32 {
 	return out
 }
 
+// HoldDefault is the Hold of a pad whose sample was just assigned: the whole sample plays.
+const HoldDefault = 100
+
 // AssignSample points the block at a freshly written SMP file of fileSize bytes, as the
 // official app does on import.
 func (b *PadBlock) AssignSample(fileSize uint32, name string) {
@@ -192,6 +195,11 @@ func (b *PadBlock) AssignSample(fileSize uint32, name string) {
 	b.SetField(padFieldStart, SMPHeaderLen)
 	b.SetField(padFieldEnd, fileSize)
 	b.SetField(padFieldLoopStart, SMPHeaderLen)
+	// A new sample starts with Hold at 100, all of it: a pad made offline has none set, and at 1
+	// the pad plays a sliver of its sample when it is pressed.
+	if n, ok := blockField(0x7E); ok {
+		b.SetField(n, HoldDefault)
+	}
 	b.SetName(name)
 }
 

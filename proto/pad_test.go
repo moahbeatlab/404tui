@@ -57,6 +57,9 @@ func TestBlockFieldsAndImportPatch(t *testing.T) {
 	if start, end := block.StartEndBytes(); start != 512 || end != 576_512 {
 		t.Errorf("start/end = %d/%d", start, end)
 	}
+	if hold, ok := block.Param(0x7E); !ok || hold != HoldDefault {
+		t.Errorf("hold after an assign is %d, want %d", hold, HoldDefault)
+	}
 	if block.Name() != "spmk2_test_48k_stereo" {
 		t.Errorf("name = %q", block.Name())
 	}

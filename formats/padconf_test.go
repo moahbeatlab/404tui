@@ -116,3 +116,15 @@ func TestNewPadconfFollowsItsTemplate(t *testing.T) {
 		t.Errorf("bare file: %v %+v", err, back)
 	}
 }
+
+func TestANewProjectsPadsHoldTheWholeSample(t *testing.T) {
+	for _, template := range []*formats.Padconf{nil, formats.NewPadconf(nil, "T")} {
+		p := formats.NewPadconf(template, "X")
+		for pad, block := range p.Blocks {
+			// Field 23 starts after the 3 bytes of the block header.
+			if got := binary.LittleEndian.Uint32(block[3+4*23:]); got != 100 {
+				t.Fatalf("pad %d hold = %d, want 100", pad, got)
+			}
+		}
+	}
+}
