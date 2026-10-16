@@ -2746,7 +2746,7 @@ func TestAssignDialogMarksAFolder(t *testing.T) {
 
 func TestNewPatternFromTheBank(t *testing.T) {
 	s := open(t)
-	s.press("N", "enter")
+	s.press("N", "enter", "enter")
 	s.shows("made", "on beat 1, 2 bars")
 }
 
@@ -2766,7 +2766,7 @@ func TestNewPatternBlankTemplateWritesAnEmptyPattern(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	// All pads held, Blank: pick the second row.
-	s.press("N", "j", "enter")
+	s.press("N", "j", "enter", "enter")
 	s.shows("made", "blank")
 	data, ok := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
 	if !ok {
@@ -2791,7 +2791,7 @@ func TestNewPatternHipHopGrooveConfirmsLanesThenWrites(t *testing.T) {
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	// The fixture pads are A1=kick, A2=snare, A3=hat; Hip-hop uses all three.
 	// Picker rows: All pads held, Blank, House, Tech house, Hip-hop -> 4 downs to Hip-hop.
-	s.press("N", "j", "j", "j", "j", "j", "j", "j", "enter")
+	s.press("N", "j", "j", "j", "j", "j", "j", "j", "enter", "enter")
 	s.shows("Hip-hop", "Kick", "Snare", "Closed hat")
 	// The lanes are pre-filled by guessing from the names.
 	s.shows("A1", "A2", "A3")
@@ -2837,7 +2837,7 @@ func TestNewPatternLaneReassignedThroughTheChooser(t *testing.T) {
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	// House: kick/clap/open hat/closed hat. The fixture has kick, snare, hat; "hat" guesses as
 	// the closed hat, so the open hat starts skipped. Row order: Kick, Clap, Open hat, Closed hat.
-	s.press("N", "j", "j", "enter") // All pads held, Blank, House
+	s.press("N", "j", "j", "enter", "enter") // All pads held, Blank, House
 	s.shows("House", "Open hat", "Closed hat")
 	// Move to the Open hat row (down twice from Kick) and open its chooser.
 	s.press("j", "j", "enter")
@@ -2869,7 +2869,7 @@ func TestNewPatternLaneCanBeSkipped(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	// Hip-hop, then on the kick row cycle its pad left until it reads "skip".
-	s.press("N", "j", "j", "j", "j", "j", "j", "j", "enter")
+	s.press("N", "j", "j", "j", "j", "j", "j", "j", "enter", "enter")
 	s.shows("Hip-hop")
 	// Kick is the first lane (cursor 0). Left past A1 wraps to "skip".
 	s.press("h")
@@ -2888,7 +2888,7 @@ func TestNewPatternLaneCanBeSkipped(t *testing.T) {
 
 func TestPatternsCopyMoveDelete(t *testing.T) {
 	s := open(t)
-	s.press("N", "enter")
+	s.press("N", "enter", "enter")
 	s.shows("made")
 	s.press("tab")
 	s.press("c", "l", "p")
@@ -2944,10 +2944,10 @@ func TestWholeBankToggleSetsTheBusOnEveryPad(t *testing.T) {
 func TestHistoryKeepsWhatHappened(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 180, Height: 50})
-	s.press("N", "enter")
+	s.press("N", "enter", "enter")
 	s.shows("History", "pattern A")
 	s.press("t", "g")
-	s.press("N", "enter")
+	s.press("N", "enter", "enter")
 	s.shows("gate")
 	if n := len(s.m().history); n < 2 {
 		t.Errorf("history has %d lines", n)
@@ -3108,7 +3108,7 @@ func TestAPatternPlaysInALoopUntilStopped(t *testing.T) {
 	if _, err := app.Assign(m.unit, m.unit, pad(t, "C1"), "SD:IMPORT/kick.wav"); err != nil {
 		t.Fatal(err)
 	}
-	s.press("r", "]", "]", "N", "enter", "tab")
+	s.press("r", "]", "]", "N", "enter", "enter", "tab")
 	s.press("P")
 	if len(s.player.looped) != 1 || len(s.player.played) != 0 {
 		t.Fatalf("looped %d, played %d: %s", len(s.player.looped), len(s.player.played), s.m().message)
@@ -3304,7 +3304,7 @@ func TestFavouriteAFolderAndEveryFileInItHasTheTag(t *testing.T) {
 func TestPatternsOfTheBankShowUnderThePadsAndPickOutTheOnesThatPlayThePad(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 48})
-	s.press("N", "enter")
+	s.press("N", "enter", "enter")
 	// They are read quietly, without holding the screen, and listed under the pads.
 	s.shows("Pads · bank A", "Patterns · bank A", "3 pads")
 	if s.m().busy != "" {
@@ -3356,7 +3356,7 @@ func TestTabMovesBetweenThePadsAndThePatternsPanelAndTheRailHasNoPatterns(t *tes
 	if s.m().section != secPatterns {
 		t.Fatal("the focus did not move to the patterns")
 	}
-	s.press("N", "enter")
+	s.press("N", "enter", "enter")
 	s.shows("pattern A")
 	// Esc comes back to the pads without leaving the program.
 	s.press("esc")
@@ -3567,7 +3567,7 @@ func TestEditTheNotesOfAPattern(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	// A pattern with every pad of bank A on beat 1, then open it.
-	s.press("N", "enter", "tab", "enter")
+	s.press("N", "enter", "enter", "tab", "enter")
 	s.shows("Pattern A1", "vel 127", "on the grid", "x note on/off")
 	notesOf := func() []formats.NoteRecord {
 		t.Helper()
@@ -3625,7 +3625,7 @@ func TestEditTheNotesOfAPattern(t *testing.T) {
 func TestAPadKeepsItsRowSpaceDoesNotEditAndUUndoes(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("N", "enter", "tab", "enter")
+	s.press("N", "enter", "enter", "tab", "enter")
 	s.shows("Pattern A1")
 	countNotes := func() int {
 		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
@@ -3679,7 +3679,7 @@ func TestAPadKeepsItsRowSpaceDoesNotEditAndUUndoes(t *testing.T) {
 func TestUndoRedoStackGoesManyStepsBack(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("N", "enter", "tab", "enter")
+	s.press("N", "enter", "enter", "tab", "enter")
 	s.shows("Pattern A1")
 	countNotes := func() int {
 		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
@@ -3721,7 +3721,7 @@ func TestUndoRedoStackGoesManyStepsBack(t *testing.T) {
 func TestPatternToolsMenuSwingsTheWholePattern(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("N", "enter", "tab", "enter")
+	s.press("N", "enter", "enter", "tab", "enter")
 	s.shows("Pattern A1")
 	ticksBefore := func() []uint32 {
 		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
@@ -3767,7 +3767,7 @@ func TestNotesAreGlyphsAsBrightAsTheirVelocityAndDashedAsLongAsTheyLast(t *testi
 	}
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("N", "enter", "tab", "enter")
+	s.press("N", "enter", "enter", "tab", "enter")
 	m := s.m()
 	// The pattern N makes holds every pad for the whole pattern: a loud mark, then dashes on.
 	row := strings.TrimRight(ansi.Strip(m.noteRow(m.pattern, m.pattern.Grid.Rows[1].Pad, false, m.patSpan(m.pattern, 60))), " ")
@@ -3801,7 +3801,7 @@ func TestThePatternThatPlaysIsMarkedWhereverTheCursorIs(t *testing.T) {
 	if err := m.unit.SetParam(level.ID, proto.TargetPad(pad(t, "C1")), 127); err != nil {
 		t.Fatal(err)
 	}
-	s.press("r", "]", "]", "N", "enter", "tab", "P")
+	s.press("r", "]", "]", "N", "enter", "enter", "tab", "P")
 	if !s.m().looping() {
 		t.Fatalf("nothing loops: %s", s.m().message)
 	}
@@ -3832,7 +3832,7 @@ func TestASampleIsTriedInTheLoopAndAssignedWithoutStoppingIt(t *testing.T) {
 		}
 	}
 	// A pattern of bank C loops.
-	s.press("r", "]", "]", "N", "enter", "tab", "P")
+	s.press("r", "]", "]", "N", "enter", "enter", "tab", "P")
 	if len(s.player.looped) != 1 || !s.m().looping() {
 		t.Fatalf("the pattern does not loop: %s", s.m().message)
 	}
@@ -3892,7 +3892,7 @@ func TestAChangeIsHeardAtOnceInALoopingPattern(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	s.press("r", "]", "]", "N", "enter", "tab", "enter")
+	s.press("r", "]", "]", "N", "enter", "enter", "tab", "enter")
 	s.press("P")
 	if len(s.player.looped) != 1 {
 		t.Fatalf("looped %d: %s", len(s.player.looped), s.m().message)
@@ -3958,7 +3958,7 @@ func peak(s formats.Sample) int {
 func TestTheLengthOfANoteChangesByAStep(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("N", "enter", "tab", "enter")
+	s.press("N", "enter", "enter", "tab", "enter")
 	notesOf := func() []formats.NoteRecord {
 		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
 		notes, _ := formats.NoteRecords(data)
@@ -4006,7 +4006,7 @@ func TestPatternEditPagesPerBar(t *testing.T) {
 	s := open(t)
 	// Wide enough, every bar is on show side by side.
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("N", "enter", "tab", "enter")
+	s.press("N", "enter", "enter", "tab", "enter")
 	s.shows("Pattern A1", "Bars 1–2 / 2")
 	// Too narrow for two, the grid shows one bar at a time and pages.
 	s.send(tea.WindowSizeMsg{Width: 80, Height: 54})
@@ -4062,7 +4062,7 @@ func TestPatternEditPagesPerBar(t *testing.T) {
 func TestEnterExpandsATrackAndEscCollapsesIt(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("N", "enter", "tab", "enter")
+	s.press("N", "enter", "enter", "tab", "enter")
 	notes := func() int {
 		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
 		n, _ := formats.NoteRecords(data)
@@ -4122,7 +4122,7 @@ func TestEnterExpandsATrackAndEscCollapsesIt(t *testing.T) {
 func TestANoteIsNudgedByTicksAndSnappedBack(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("N", "enter", "tab", "enter")
+	s.press("N", "enter", "enter", "tab", "enter")
 	pad := s.m().pattern.Grid.Rows[0].Pad
 	tickOf := func() int {
 		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
@@ -4163,7 +4163,7 @@ func TestANoteIsNudgedByTicksAndSnappedBack(t *testing.T) {
 func TestAPatternIsDoubledAndHalvedFromTheTools(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("N", "enter", "tab", "enter")
+	s.press("N", "enter", "enter", "tab", "enter")
 	if bars := s.m().pattern.Bars(); bars != 2 {
 		t.Fatalf("the new pattern is %d bars", bars)
 	}
@@ -4182,7 +4182,7 @@ func TestAPatternIsDoubledAndHalvedFromTheTools(t *testing.T) {
 		t.Fatalf("after DOUBLE: %d bars, %d notes (was %d)", bars, notes(), before)
 	}
 	// HALF takes it back to 2 bars.
-	s.press("T", "j", "j", "j", "j", "j", "j", "enter")
+	s.press("T", "j", "j", "j", "j", "j", "j", "j", "enter")
 	s.shows("halved: 4 bars → 2 bars")
 	if bars := s.m().pattern.Bars(); bars != 2 || notes() != before {
 		t.Fatalf("after HALF: %d bars, %d notes (want %d)", bars, notes(), before)
@@ -4192,13 +4192,19 @@ func TestAPatternIsDoubledAndHalvedFromTheTools(t *testing.T) {
 	if bars := s.m().pattern.Bars(); bars != 4 {
 		t.Errorf("undoing HALF left %d bars, want 4", bars)
 	}
+	// EXTEND doubles the length with nothing in the new half: the notes stay as they are.
+	s.press("T", "j", "j", "j", "j", "j", "j", "enter")
+	s.shows("extended: 4 bars → 8 bars, the new half empty")
+	if bars := s.m().pattern.Bars(); bars != 8 || notes() != 2*before {
+		t.Fatalf("after EXTEND: %d bars, %d notes (want %d)", bars, notes(), 2*before)
+	}
 }
 
 func TestALongPatternShowsTwoBarsAPageAndWhatComesNext(t *testing.T) {
 	s := open(t)
 	// Room for three bars and more: still only two are shown, stretched.
 	s.send(tea.WindowSizeMsg{Width: 220, Height: 54})
-	s.press("N", "enter", "tab", "enter")
+	s.press("N", "enter", "enter", "tab", "enter")
 	s.press("T", "j", "j", "j", "j", "j", "enter") // DOUBLE: 4 bars
 	if bars := s.m().pattern.Bars(); bars != 4 {
 		t.Fatalf("%d bars after DOUBLE", bars)
@@ -4231,7 +4237,7 @@ func TestARangeOfBarsIsShownEditedAndLoopedAlone(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	s.press("r", "]", "]", "N", "enter", "tab", "enter")
+	s.press("r", "]", "]", "N", "enter", "enter", "tab", "enter")
 	s.press("T", "j", "j", "j", "j", "j", "enter") // DOUBLE: 4 bars
 	s.press("P")
 	whole := s.player.looped[len(s.player.looped)-1].Frames()
@@ -4276,7 +4282,7 @@ func TestThePatternInFrontShowsItsStepsBesideAndSessionIsGone(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 180, Height: 56})
 	s.hides("Session")
-	s.press("N", "enter", "tab")
+	s.press("N", "enter", "enter", "tab")
 	// Without Enter: the panel beside shows the steps of the pattern in front.
 	s.shows("Pattern A1", "120.00 BPM", "A1   kick", "Enter edits the steps")
 	if s.m().patPreview[s.m().patterns[0][0].Slot] == nil {
@@ -4303,7 +4309,7 @@ func TestMuteAndSoloChangeWhatThisComputerPlays(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	s.press("r", "]", "]", "N", "enter", "tab", "P")
+	s.press("r", "]", "]", "N", "enter", "enter", "tab", "P")
 	if len(s.player.looped) != 1 {
 		t.Fatalf("not looping: %s", s.m().message)
 	}
@@ -4505,7 +4511,7 @@ func TestPatternPanelKeepsRoomForSixteenTracks(t *testing.T) {
 	for _, size := range [][2]int{{170, 70}, {100, 60}, {170, 34}} {
 		s := open(t)
 		s.send(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
-		s.press("N", "enter", "tab")
+		s.press("N", "enter", "enter", "tab")
 		s.shows("Pattern A")
 		g := s.m().geom()
 		panel := s.m().patternSlotDetail(g)
@@ -4547,7 +4553,7 @@ func TestAPatternIsBouncedToAPadAsItIsHeard(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	s.press("r", "]", "]", "N", "enter", "tab", "enter") // the pattern of bank C is open
+	s.press("r", "]", "]", "N", "enter", "enter", "tab", "enter") // the pattern of bank C is open
 	if s.m().pattern == nil || len(s.m().pattern.PadsUsed) != 2 {
 		t.Fatalf("the pattern: %+v: %q", s.m().pattern, s.m().message)
 	}
@@ -4619,7 +4625,7 @@ func openConditionPattern(t *testing.T) *screen {
 			t.Fatal(err)
 		}
 	}
-	s.press("r", "]", "]", "N", "enter", "tab", "enter")
+	s.press("r", "]", "]", "N", "enter", "enter", "tab", "enter")
 	if s.m().pattern == nil || len(s.m().pattern.PadsUsed) != 2 {
 		t.Fatalf("the pattern: %+v: %q", s.m().pattern, s.m().message)
 	}
@@ -5230,5 +5236,62 @@ func TestQuestionMarkListsTheCommandsOfTheDialogInFront(t *testing.T) {
 		if s.m().palette != nil {
 			t.Error("? opened the list inside a text prompt")
 		}
+	}
+}
+
+func TestAPadTileSaysHowManyBarsItsSampleIs(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 200, Height: 54})
+	m := s.m()
+	// At 120 BPM a bar is 2 s: a 4 s loop is 2 bars, 2.2 s is a bit over one.
+	s.sim.AddFile("SD:IMPORT/loop.wav", wav(4*48000))
+	s.sim.AddFile("SD:IMPORT/odd.wav", wav(105600))
+	for name, file := range map[string]string{"A5": "SD:IMPORT/loop.wav", "A6": "SD:IMPORT/odd.wav"} {
+		if _, err := app.Assign(m.unit, m.unit, pad(t, name), file); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.press("r")
+	s.shows("2 bars", "1.1 bars")
+	// The one-shots of the bank say nothing.
+	if got := s.m().padBars(s.m().snap.Bank(0)[0], 24); got != "" {
+		t.Errorf("a one-shot says %q", got)
+	}
+	// On a narrow tile there is no room for it.
+	if got := s.m().padBars(s.m().snap.Bank(0)[4], 10); got != "" {
+		t.Errorf("a narrow tile says %q", got)
+	}
+}
+
+func TestANewPatternAsksHowLongItIs(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "enter")
+	s.shows("How long is the pattern?", "at 120.00 BPM is")
+	// h and l change it, a digit sets it, Esc goes back to the templates.
+	s.press("l", "l")
+	if got := s.m().lenPick.bars; got != 4 {
+		t.Errorf("two l from 2 bars: %d", got)
+	}
+	s.press("esc")
+	s.shows("New pattern")
+	s.press("enter", "1")
+	if got := s.m().lenPick.bars; got != 1 {
+		t.Errorf("1 sets %d bars", got)
+	}
+	s.press("8", "enter", "tab", "enter")
+	if bars := s.m().pattern.Bars(); bars != 8 {
+		t.Errorf("an 8-bar pattern came out %d bars", bars)
+	}
+}
+
+func TestAGrooveTemplateIsAskedLengthToo(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "j", "j", "enter") // House: 2 bars
+	s.shows("How long is the pattern?", "House")
+	s.press("4", "enter")
+	if s.m().laneMap == nil || s.m().laneMap.bars != 4 {
+		t.Fatalf("the lane dialog is not for 4 bars: %+v", s.m().laneMap)
 	}
 }

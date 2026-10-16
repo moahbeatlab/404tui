@@ -172,8 +172,9 @@ const (
 	toolShift
 	toolReverse
 	toolHumanize
-	// toolDouble and toolHalve change the pattern's length: always the whole pattern.
+	// toolDouble, toolExtend and toolHalve change the pattern's length: always the whole pattern.
 	toolDouble
+	toolExtend
 	toolHalve
 )
 
@@ -244,10 +245,12 @@ type Model struct {
 	// tmplPicker is the "new pattern" template list (N); laneMap is the lane->pad confirm dialog
 	// a genre template opens before it is written. Both are nil when closed.
 	tmplPicker *templatePicker
-	laneMap    *laneAssign
-	browser    *browser
-	search     *search
-	editor     *editor
+	// lenPick is the question of how long a new pattern is, asked after its template.
+	lenPick *lengthPick
+	laneMap *laneAssign
+	browser *browser
+	search  *search
+	editor  *editor
 	// chromatic is the dialog that plays a pad as notes from the keyboard.
 	chromatic *chromatic
 	// slicer is the dialog that cuts a sample into slices and plays them in an order or at
@@ -1602,6 +1605,20 @@ func (m *Model) wanted() tea.Cmd {
 			if _, have := m.facts[key]; !have {
 				m.factsBusy = true
 				return m.padFactsCmd(key, row)
+			}
+		}
+		// The other pads of the bank are read one after another: the tiles say how many bars
+		// each sample is.
+		if !m.factsBusy {
+			for _, row := range m.snap.Bank(m.bank) {
+				if !row.HasSample {
+					continue
+				}
+				key := factKey{row.Pad, row.Size, row.Name}
+				if _, have := m.facts[key]; !have {
+					m.factsBusy = true
+					return m.padFactsCmd(key, row)
+				}
 			}
 		}
 		if m.usageState == 0 {

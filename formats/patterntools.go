@@ -326,6 +326,24 @@ func DoublePattern(b []byte) ([]byte, error) {
 	return writeRecords(recs, 2*length, withBars(trailer, bars, 2*bars)), nil
 }
 
+// ExtendPattern makes the pattern twice as long with nothing in the new half: the notes stay
+// where they are and the second half is silent, for a loop that is twice as long as the
+// pattern. It returns the extended pattern.
+func ExtendPattern(b []byte) ([]byte, error) {
+	recs, length, trailer, err := readRecords(b)
+	if err != nil {
+		return nil, err
+	}
+	bars, _, err := patternBars(b, length)
+	if err != nil {
+		return nil, err
+	}
+	if bars*2 > MaxPatternBars {
+		return nil, fmt.Errorf("%d bars doubled is more than the %d a pattern can be", bars, MaxPatternBars)
+	}
+	return writeRecords(recs, 2*length, withBars(trailer, bars, 2*bars)), nil
+}
+
 // HalvePattern keeps the first half of the pattern: it is half as long, and what played in the
 // second half is gone. A pattern of one bar, or an odd number of bars, cannot be halved into whole
 // bars. It returns the halved pattern.

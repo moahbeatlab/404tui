@@ -254,6 +254,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.slicerKey(key)
 	case m.toggles != nil:
 		return m.togglesKey(key)
+	case m.lenPick != nil:
+		return m.lengthPickKey(name)
 	case m.tmplPicker != nil:
 		return m.templatePickerKey(name)
 	case m.rangePick != nil:
@@ -1720,17 +1722,33 @@ func (m Model) templatePickerKey(name string) (tea.Model, tea.Cmd) {
 // groove opens the lane confirm dialog.
 func (m Model) chooseTemplate(row int) (tea.Model, tea.Cmd) {
 	m.tmplPicker = nil
+	bars := app.StartBars
+	if g, ok := grooveAt(row); ok {
+		bars = g.Bars()
+	} else if row > 1 {
+		return m, nil
+	}
+	return m.askPatternLength(row, bars)
+}
+
+// buildPattern makes what the template row stands for, bars long.
+func (m Model) buildPattern(row, bars int) (tea.Model, tea.Cmd) {
 	switch row {
 	case 0:
-		return m.newStartPattern()
+		return m.newStartPattern(bars)
 	case 1:
-		return m.newBlankPattern()
+		return m.newBlankPattern(bars)
 	}
 	g, ok := grooveAt(row)
 	if !ok {
 		return m, nil
 	}
-	return m.openLaneAssign(g)
+	next, cmd := m.openLaneAssign(g)
+	if nm, ok := next.(Model); ok && nm.laneMap != nil {
+		nm.laneMap.bars = bars
+		return nm, cmd
+	}
+	return next, cmd
 }
 
 // bankSampledPads are the pads of the bank on show that hold a sample, in pad order.
@@ -1746,7 +1764,7 @@ func (m Model) bankSampledPads() []proto.PadIndex {
 
 // newBlankPattern writes an empty pattern into the first free slot of the bank on show, to be
 // programmed by hand.
-func (m Model) newBlankPattern() (tea.Model, tea.Cmd) {
+func (m Model) newBlankPattern(bars int) (tea.Model, tea.Cmd) {
 	unit, bank := m.unit, m.bank
 	m.busy = "making a pattern"
 	return m, m.edit(func() tea.Msg {
@@ -1754,7 +1772,7 @@ func (m Model) newBlankPattern() (tea.Model, tea.Cmd) {
 		if err != nil {
 			return doneMsg{message: err.Error()}
 		}
-		built, err := formats.BlankPattern(app.StartBars)
+		built, err := formats.BlankPattern(bars)
 		if err != nil {
 			return doneMsg{message: "the pattern was not made: " + err.Error()}
 		}
@@ -1762,7 +1780,7 @@ func (m Model) newBlankPattern() (tea.Model, tea.Cmd) {
 			return doneMsg{message: "the pattern was not made: " + err.Error()}
 		}
 		return doneMsg{
-			message:  fmt.Sprintf("pattern %s made: blank, %d bars", slot, app.StartBars),
+			message:  fmt.Sprintf("pattern %s made: blank, %d bars", slot, bars),
 			reload:   true,
 			patterns: true,
 		}
@@ -1796,6 +1814,8 @@ type laneAssign struct {
 	pads     []proto.PadIndex
 	choosing bool
 	chooseAt int
+	// bars is how long the pattern is (0: the groove's own phrase).
+	bars int
 }
 
 // openLaneAssign opens the lane confirm dialog for a genre groove, pre-filled by guessing the
@@ -1932,7 +1952,10 @@ func (m Model) writeGroovePattern() (tea.Model, tea.Cmd) {
 		m.message = "assign at least one lane to a pad first"
 		return m, nil
 	}
-	g := a.tmpl
+	g, bars := a.tmpl, a.bars
+	if bars == 0 {
+		bars = g.Bars()
+	}
 	m.laneMap = nil
 	unit, bank := m.unit, m.bank
 	m.busy = "making a pattern"
@@ -1941,8 +1964,8 @@ func (m Model) writeGroovePattern() (tea.Model, tea.Cmd) {
 		if err != nil {
 			return doneMsg{message: err.Error()}
 		}
-		// A groove is as long as its phrase: a 4-bar one keeps its fill at the end of bar 4.
-		built, err := g.BuildGroove(pads, 0)
+		// The phrase plays over and over to the length asked for.
+		built, err := g.BuildGroove(pads, bars)
 		if err != nil {
 			return doneMsg{message: "the pattern was not made: " + err.Error()}
 		}
@@ -1950,7 +1973,7 @@ func (m Model) writeGroovePattern() (tea.Model, tea.Cmd) {
 			return doneMsg{message: "the pattern was not made: " + err.Error()}
 		}
 		return doneMsg{
-			message:  fmt.Sprintf("pattern %s made: %s, %d lanes, %d bars", slot, g.Name, len(pads), app.StartBars),
+			message:  fmt.Sprintf("pattern %s made: %s, %d lanes, %d bars", slot, g.Name, len(pads), bars),
 			reload:   true,
 			patterns: true,
 		}
@@ -1959,7 +1982,7 @@ func (m Model) writeGroovePattern() (tea.Model, tea.Cmd) {
 
 // newStartPattern makes a pattern in the first free slot of the bank on show: every pad of
 // the bank that holds a sample starts on beat 1 and is held for app.StartBars bars.
-func (m Model) newStartPattern() (tea.Model, tea.Cmd) {
+func (m Model) newStartPattern(bars int) (tea.Model, tea.Cmd) {
 	var pads []proto.PadIndex
 	for _, pad := range proto.AllPads()[m.bank*proto.PadsPerBank : (m.bank+1)*proto.PadsPerBank] {
 		if m.snap.Pads[pad.Index()].HasSample {
@@ -1982,11 +2005,11 @@ func (m Model) newStartPattern() (tea.Model, tea.Cmd) {
 			return doneMsg{message: fmt.Sprintf("every pattern slot of bank %c is taken", 'A'+bank)}
 		}
 		slot := rows[free].Slot
-		if err := app.WriteStartPattern(unit, slot, pads, app.StartBars); err != nil {
+		if err := app.WriteStartPattern(unit, slot, pads, bars); err != nil {
 			return doneMsg{message: "the pattern was not made: " + err.Error()}
 		}
 		return doneMsg{
-			message:  fmt.Sprintf("pattern %s made: %d pads on beat 1, %d bars", slot, len(pads), app.StartBars),
+			message:  fmt.Sprintf("pattern %s made: %d pads on beat 1, %d bars", slot, len(pads), bars),
 			reload:   true,
 			patterns: true,
 		}
@@ -3681,7 +3704,7 @@ func (m Model) applyPatternSnapshot(snap []byte, note string, op patEditOp) (tea
 }
 
 // patToolCount is how many groove tools the menu offers.
-const patToolCount = 7
+const patToolCount = 8
 
 // newPatTool starts the groove-tools menu with sensible amounts. pad scopes it to one track; nil
 // is the whole pattern.
@@ -3782,11 +3805,15 @@ func (m Model) applyPatTool() (tea.Model, tea.Cmd) {
 			return formats.Humanize(b, uint32(amt), uint8(amt), nil, scope, rng)
 		}
 		note = fmt.Sprintf("humanize %d", t.human)
-	case toolDouble, toolHalve:
+	case toolDouble, toolExtend, toolHalve:
 		// A pattern is one length for all its tracks, so these work on all of it.
 		d := m.pattern
 		edit, where = formats.DoublePattern, "all pads"
 		note = fmt.Sprintf("doubled: %s → %s", plural(d.Bars(), "bar"), plural(d.Bars()*2, "bar"))
+		if t.kind == toolExtend {
+			edit = formats.ExtendPattern
+			note = fmt.Sprintf("extended: %s → %s, the new half empty", plural(d.Bars(), "bar"), plural(d.Bars()*2, "bar"))
+		}
 		if t.kind == toolHalve {
 			edit = formats.HalvePattern
 			note = fmt.Sprintf("halved: %s → %s, the second half gone", plural(d.Bars(), "bar"), plural(max(d.Bars()/2, 1), "bar"))

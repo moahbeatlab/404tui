@@ -402,3 +402,35 @@ func slicesContainsFunc[S ~[]E, E any](s S, f func(E) bool) bool {
 	}
 	return false
 }
+
+func TestExtendPatternDoublesTheLengthAndLeavesTheNewHalfEmpty(t *testing.T) {
+	b := toolPattern(t, 0, 600, 1920) // 2 bars
+	after, err := formats.ExtendPattern(bytes.Clone(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := formats.ParsePattern(after)
+	if err != nil {
+		t.Fatalf("the extended pattern does not parse: %v", err)
+	}
+	if p.Length != 7680 || p.Trailer[0] != 4 {
+		t.Errorf("extended: length %d, %d bars in the trailer; want 7680 and 4", p.Length, p.Trailer[0])
+	}
+	want := []uint32{0, 600, 1920}
+	if got := tickSet(t, after); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("extended ticks %v, want %v: nothing may play in the new half", got, want)
+	}
+	// Twice more is 8 bars; past the most a pattern can be it is refused.
+	long := toolPattern(t, 0)
+	for i := 0; i < 8; i++ {
+		next, err := formats.ExtendPattern(long)
+		if err != nil {
+			if i < 3 {
+				t.Fatalf("extending step %d: %v", i, err)
+			}
+			return
+		}
+		long = next
+	}
+	t.Error("a pattern was extended past the longest there is")
+}

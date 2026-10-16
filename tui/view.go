@@ -99,6 +99,8 @@ func (m Model) View() string {
 		main = m.center(m.slicerBox(), g.bodyH)
 	case m.toggles != nil:
 		main = dialog(m.togglesBox())
+	case m.lenPick != nil:
+		main = dialog(m.lengthPickBox())
 	case m.tmplPicker != nil:
 		main = dialog(m.templatePickerBox())
 	case m.rangePick != nil:
@@ -571,6 +573,9 @@ type tileState struct {
 	// from 0 to 1, draws how far through its round it is instead; below 0 there is none.
 	noLevel  bool
 	progress float64
+	// bars is how long the pad's sample is in bars at the bank's tempo, when it is a loop of
+	// them; empty otherwise.
+	bars string
 }
 
 // tile draws one pad of the grid: its number, name and level, on a background that says
@@ -634,6 +639,12 @@ func (m Model) tile(w, h int, num, name string, level int32, ts tileState) strin
 	} else {
 		mixMark = ""
 	}
+	// The length in bars goes before the other corner marks; its place is kept in right.
+	barsText := ""
+	if ts.bars != "" && !ts.empty {
+		barsText = ts.bars
+		right = strings.Repeat(" ", ansi.StringWidth(barsText)+1) + right
+	}
 	// line puts text at the left and the corner marks at the right, to exactly the tile's width.
 	// A setting that is on is lit, one that is off is faint, so the letters are always there.
 	onStyle := lipgloss.NewStyle().Background(bg).Foreground(th.good).Bold(true)
@@ -664,6 +675,13 @@ func (m Model) tile(w, h int, num, name string, level int32, ts tileState) strin
 		}
 		gap := max(w-ansi.StringWidth(left)-extraW-ansi.StringWidth(right)-1, 1)
 		out := pieceBold.Render(left) + extra + piece.Render(strings.Repeat(" ", gap))
+		if barsText != "" {
+			barsStyle := piece.Foreground(th.dim)
+			if ts.cursor || ts.playing {
+				barsStyle = piece.Faint(true)
+			}
+			out += barsStyle.Render(barsText) + piece.Render(" ")
+		}
 		if mixMark != "" {
 			markStyle := lipgloss.NewStyle().Background(bg).Foreground(th.bad).Bold(true)
 			if ts.solo {
@@ -791,6 +809,7 @@ func (m Model) padsBody(g geom) string {
 			playing:  m.playing && m.playingPad == row.Pad,
 			selected: m.hasSelected && m.selected == row.Pad,
 			moving:   m.hasMoving && m.moving == row.Pad,
+			bars:     m.padBars(row, g.tileW),
 		})
 	})
 	onPatterns := m.section == secPatterns
@@ -1400,7 +1419,7 @@ func (m Model) patternHelp(d *app.PatternDetail) []helpGroup {
 		return m.selectionHelp()
 	}
 	move := helpGroup{"move", []helpKey{{"h j k l", "move"}, {"{ }", "turn page"}, {"v", "show/loop bars"}, {"Tab Enter", "open track"}, {"x", "note on/off"}, {"V", "select notes"}, {"D", "clear track here"},
-		{"t", "tools (this pad)"}, {"T", "tools: swing, quantize, shift, double, half"}, {"Space P", "play"}, {"a", "other pattern"}, {"Esc", "close"}}}
+		{"t", "tools (this pad)"}, {"T", "tools: swing, quantize, shift, double, extend, half"}, {"Space P", "play"}, {"a", "other pattern"}, {"Esc", "close"}}}
 	if m.patFocus {
 		move = helpGroup{"track", []helpKey{{"h l", "step"}, {"j k", "other track"}, {"{ }", "turn page"}, {"Enter x", "note on/off"}, {"Space P", "play"}, {"Tab", "fold"}, {"a", "other pattern"}, {"Esc", "close"}}}
 	}
@@ -1464,6 +1483,7 @@ func (m Model) patToolMenu() string {
 		{toolReverse, "REVERSE", "—"},
 		{toolHumanize, "HUMANIZE", fmt.Sprintf("%d", t.human)},
 		{toolDouble, "DOUBLE", fmt.Sprintf("%s → %s, played again", plural(m.pattern.Bars(), "bar"), plural(m.pattern.Bars()*2, "bar"))},
+		{toolExtend, "EXTEND", fmt.Sprintf("%s → %s, the new half empty", plural(m.pattern.Bars(), "bar"), plural(m.pattern.Bars()*2, "bar"))},
 		{toolHalve, "HALF", fmt.Sprintf("%s → %s, first half kept", plural(m.pattern.Bars(), "bar"), plural(max(m.pattern.Bars()/2, 1), "bar"))},
 	}
 	var out []string
@@ -3000,4 +3020,25 @@ func (m Model) rowLabel(pad proto.PadIndex, label string, style lipgloss.Style) 
 		style = m.st.faint
 	}
 	return style.Render(label)
+}
+
+// padBars says how long the pad's sample is in bars at the bank's tempo: "4 bars" when whole,
+// "3.6 bars" when not, and nothing for a sample shorter than about a bar, or before its length is
+// known, or on a tile too narrow for it.
+func (m Model) padBars(row app.PadRow, tileW int) string {
+	if !row.HasSample || tileW < 14 {
+		return ""
+	}
+	f, ok := m.facts[factKey{row.Pad, row.Size, row.Name}]
+	if !ok || f.err != nil {
+		return ""
+	}
+	b := loopBars(f.facts.Seconds, m.bankTempo(int(row.Pad.Bank())))
+	switch {
+	case b < 0.9:
+		return ""
+	case math.Abs(b-math.Round(b)) < 0.06:
+		return plural(int(math.Round(b)), "bar")
+	}
+	return fmt.Sprintf("%.1f bars", b)
 }
