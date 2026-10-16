@@ -33,6 +33,8 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 		return m, m.wanted()
 	case "x":
 		m.perfNext = nil
+	case "v":
+		m.perfPatterns = !m.perfPatterns
 	case "f", "F":
 		bus := 1
 		if name == "F" {
@@ -116,7 +118,215 @@ func (m Model) perfHead(label string, slot *proto.PadIndex, d *app.PatternDetail
 		st.dim.Render(fmt.Sprintf("   %.2f BPM  ·  %s  ·  %s", d.BankTempo, plural(d.Bars(), "bar"), plural(len(tracks), "track")))
 }
 
+// perfBank is the bank the unit is on, as it last said, else the one on show.
+func (m Model) perfBank() int {
+	if m.hasSelected {
+		return int(m.selected.Bank())
+	}
+	return m.bank
+}
+
 func (m Model) perfBody(g geom) string {
+	if !m.perfPatterns {
+		return m.perfBankBody(g)
+	}
+	return m.perfPatternBody(g)
+}
+
+// perfTile is one pad of the bank as a big tile: its number and length in bars, the name in block
+// letters, and a bar under it that fills while it sounds. The pad the unit has selected is in the
+// accent colour, the one that sounds in the hot one.
+func (m Model) perfTile(row app.PadRow, w, h int) []string {
+	st := m.st
+	selected := m.hasSelected && m.selected == row.Pad
+	sounding := m.playing && m.playingPad == row.Pad
+	bg, fg := st.th.tile, st.th.text
+	switch {
+	case !row.HasSample:
+		bg, fg = st.th.tileEmpty, st.th.faint
+	case sounding:
+		bg, fg = st.th.hot, st.th.cursorFg
+	case selected:
+		bg, fg = st.th.accent, st.th.cursorFg
+	}
+	style := lipgloss.NewStyle().Background(bg).Foreground(fg).Bold(true)
+	line := func(text string) string {
+		pad := max(w-ansi.StringWidth(text), 0)
+		return style.Render(text + strings.Repeat(" ", pad))
+	}
+	num := fmt.Sprint(row.Pad.Pad() + 1)
+	head := " " + num
+	if row.HasSample {
+		if bars := m.padBars(row, 99); bars != "" {
+			head += strings.Repeat(" ", max(w-len(head)-len(bars)-2, 1)) + bars
+		}
+		if bus := row.Params["bus-fx"]; bus == 1 || bus == 2 {
+			colour, _ := st.th.busColour(bus)
+			if len(head) < w-2 {
+				head = lipgloss.NewStyle().Background(bg).Foreground(colour).Bold(true).Render(busBadge(bus)) + style.Render(" ") + style.Render(strings.TrimPrefix(head, " "))
+			}
+		}
+	}
+	out := []string{line(head)}
+	body := h - 2
+	switch {
+	case !row.HasSample:
+		for i := 0; i < body; i++ {
+			out = append(out, line(""))
+		}
+	case body >= 3:
+		name := strings.TrimSpace(row.Name)
+		scale := 1
+		if bigWidth(name, 2) <= w-2 {
+			scale = 2
+		}
+		if maxChars := (w - 2 + scale) / (4 * scale); len([]rune(name)) > maxChars {
+			name = string([]rune(name)[:max(maxChars, 1)])
+		}
+		bt := bigText(name, scale)
+		// The name sits in the middle of the tile.
+		above := (body - 3) / 2
+		for i := 0; i < above; i++ {
+			out = append(out, line(""))
+		}
+		for i := 0; i < 3; i++ {
+			out = append(out, line(" "+bt[i]))
+		}
+		for i := above + 3; i < body; i++ {
+			out = append(out, line(""))
+		}
+	default:
+		out = append(out, line(" "+ansi.Truncate(row.Name, w-2, "…")))
+	}
+	// The bar under the name: how far the sounding sample has gone.
+	bar := line("")
+	if sounding {
+		if f, ok := m.facts[factKey{row.Pad, row.Size, row.Name}]; ok && f.err == nil && f.facts.Frames > 0 {
+			bar = style.Render(" " + levelBar(w-2, int(min(m.playPos, f.facts.Frames)), int(f.facts.Frames)) + " ")
+		}
+	}
+	return append(out, bar)
+}
+
+// perfBankBody is the Perform view as it opens: the 16 pads of the bank the unit is on, as big as the
+// screen allows, with a line over them for the bank and the cue, and one under for its patterns.
+func (m Model) perfBankBody(g geom) string {
+	st := m.st
+	bank := m.perfBank()
+	width := g.bodyW + g.bodyX - 3
+	var top []string
+	if rec := m.perfRecLine(); rec != "" {
+		top = append(top, rec)
+	}
+	head := lipgloss.NewStyle().Foreground(st.th.accent).Bold(true).Render(fmt.Sprintf("BANK %c", 'A'+bank)) +
+		st.dim.Render(fmt.Sprintf("   %.2f BPM", m.bankTempo(bank)))
+	if m.playing {
+		head += st.dim.Render("   ▶ " + m.playingPad.String() + " " + m.snap.Pads[m.playingPad.Index()].Name)
+	}
+	top = append(top, head, m.perfCue(width))
+	// Patterns of the bank, under the pads.
+	var bottom []string
+	if rows := m.patterns[bank]; rows != nil {
+		var parts []string
+		for i, r := range rows {
+			if r.Exists {
+				parts = append(parts, fmt.Sprintf("%d·%s", i+1, plural(len(r.Pads), "pad")))
+			}
+		}
+		line := "no patterns in this bank"
+		if len(parts) > 0 {
+			line = strings.Join(parts, "   ")
+		}
+		bottom = append(bottom, st.dim.Render("PATTERNS  ")+st.text.Render(ansi.Truncate(line, width-12, "…")))
+	}
+	bottom = append(bottom, st.dim.Render("a n  cue the patterns   Space  next becomes now   v  patterns big   f F  note a bus effect   Ctrl-R  record"))
+	// The tiles take what is left.
+	avail := g.bodyH - 2 - len(top) - len(bottom) - 2 - 3
+	tileH := max(avail/4, 3)
+	tileW := max((width-3*2)/4, 10)
+	rows := m.snap.Bank(bank)
+	var lines []string
+	lines = append(lines, top...)
+	lines = append(lines, "")
+	for r := 0; r < 4; r++ {
+		tiles := make([][]string, 4)
+		for c := 0; c < 4; c++ {
+			tiles[c] = m.perfTile(rows[r*4+c], tileW, tileH)
+		}
+		for l := 0; l < tileH; l++ {
+			var b strings.Builder
+			for c := 0; c < 4; c++ {
+				b.WriteString(tiles[c][l])
+				if c < 3 {
+					b.WriteString("  ")
+				}
+			}
+			lines = append(lines, b.String())
+		}
+		if r < 3 {
+			lines = append(lines, "")
+		}
+	}
+	lines = append(lines, "")
+	lines = append(lines, bottom...)
+	return m.box("Perform", strings.Join(lines, "\n"), g.bodyW+g.bodyX-1, g.bodyH, true)
+}
+
+// perfCue is one line about the cue: the pattern that plays, the next, and what changes.
+func (m Model) perfCue(width int) string {
+	st := m.st
+	if m.perfNow == nil && m.perfNext == nil {
+		return st.dim.Render("cue: a chooses the pattern that plays, n the next one (the unit does not say which runs)")
+	}
+	nowD, now := m.perfTracks(m.perfNow)
+	nextD, next := m.perfTracks(m.perfNext)
+	var b strings.Builder
+	b.WriteString(st.accent.Render("NOW ") + st.bold.Render(slotText(m.perfNow)))
+	if nowD != nil {
+		b.WriteString(st.dim.Render(fmt.Sprintf(" %s", plural(len(now), "track"))))
+	}
+	if m.perfNext != nil {
+		b.WriteString(lipgloss.NewStyle().Foreground(st.th.bus1).Bold(true).Render("   NEXT ") + st.bold.Render(slotText(m.perfNext)))
+		if nextD != nil && nowD != nil {
+			inNow, inNext := map[proto.PadIndex]bool{}, map[proto.PadIndex]bool{}
+			for _, t := range now {
+				inNow[t.pad] = true
+			}
+			for _, t := range next {
+				inNext[t.pad] = true
+			}
+			var on, off []string
+			for _, t := range next {
+				if !inNow[t.pad] {
+					on = append(on, t.name)
+				}
+			}
+			for _, t := range now {
+				if !inNext[t.pad] {
+					off = append(off, t.name)
+				}
+			}
+			if len(on) > 0 {
+				b.WriteString(lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render("   IN ") + st.text.Render(strings.Join(on, ", ")))
+			}
+			if len(off) > 0 {
+				b.WriteString(lipgloss.NewStyle().Foreground(st.th.hot).Bold(true).Render("   OUT ") + st.text.Render(strings.Join(off, ", ")))
+			}
+		}
+	}
+	return ansi.Truncate(b.String(), width, "…")
+}
+
+func slotText(p *proto.PadIndex) string {
+	if p == nil {
+		return "—"
+	}
+	return p.String()
+}
+
+// perfPatternBody is the other Perform view, v: the samples of the pattern that plays, big, and
+// the next pattern's changes.
+func (m Model) perfPatternBody(g geom) string {
 	st := m.st
 	nowD, now := m.perfTracks(m.perfNow)
 	nextD, next := m.perfTracks(m.perfNext)

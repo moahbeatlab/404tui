@@ -5728,7 +5728,7 @@ func TestPerformShowsThePatternThatPlaysAndWhatChangesInTheNext(t *testing.T) {
 		s.sim.SetPattern(pad(t, slot), pad(t, "A1"))
 		s.sim.AddFile(formats.PatternPath(1, pad(t, slot)), data)
 	}
-	s.press("r", "7")
+	s.press("r", "7", "v")
 	s.shows("Perform", "chooses the pattern that is playing")
 	s.press("a", "enter")
 	s.shows("NOW", "A2", "3 tracks")
@@ -5763,7 +5763,7 @@ func TestPerformListsWhatGoesToEachBusAndShowsARecording(t *testing.T) {
 	}
 	s.sim.SetPattern(pad(t, "A2"), pad(t, "A1"))
 	s.sim.AddFile(formats.PatternPath(1, pad(t, "A2")), one)
-	s.press("r", "7", "a", "enter")
+	s.press("r", "7", "v", "a", "enter")
 	s.shows("BUS 1", "BUS 2", "hat", "kick  ·  snare", "f notes the effect")
 	// The effect of a bus is what the user writes: the unit does not say.
 	s.press("f")
@@ -5782,4 +5782,31 @@ func TestPerformListsWhatGoesToEachBusAndShowsARecording(t *testing.T) {
 	s.shows("RECORDING", "take.wav")
 	s.press("ctrl+r")
 	s.hides("RECORDING")
+}
+
+func TestPerformOpensOnTheBankTheUnitIsOnWithItsPadsBig(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("r", "7")
+	s.shows("Perform", "BANK A", "PATTERNS")
+	// The sample names are in block letters; kick is on pad 1 and snare on pad 2.
+	view := ansi.Strip(s.m().View())
+	if !strings.ContainsAny(view, "▀▄█") {
+		t.Errorf("no big letters on the view:\n%s", view)
+	}
+	// The unit moves to another bank (it said so in a poll): the view follows it.
+	m := s.m()
+	m.selected, m.hasSelected = pad(t, "C3"), true
+	s.model = m
+	s.shows("BANK C")
+	// A pad that sounds shows in the line over the pads.
+	m = s.m()
+	m.playing, m.playingPad = true, pad(t, "C3")
+	s.model = m
+	s.shows("▶ C3")
+	// v swaps to the patterns view and back.
+	s.press("v")
+	s.shows("NOW")
+	s.press("v")
+	s.shows("BANK C")
 }

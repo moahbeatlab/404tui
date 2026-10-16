@@ -298,6 +298,8 @@ type Model struct {
 	// perfNow and perfNext are the pattern that plays and the one that comes next, as the
 	// Perform view shows them: what the user says, the unit does not tell.
 	perfNow, perfNext *proto.PadIndex
+	// perfPatterns shows the Perform view's patterns, big, in place of the pads of the bank.
+	perfPatterns bool
 	// report is a list of lines shown in a dialog until a key closes it.
 	report *report
 	// cfgAt is the row of the Config view the cursor is on.
@@ -1624,6 +1626,26 @@ func (m *Model) wanted() tea.Cmd {
 		if _, have := m.infos[node.Path]; !node.Dir && isAudio(node.Name) && !have {
 			m.infoBusy = true
 			return m.fileInfoCmd(node.Path)
+		}
+	}
+	if m.section == secPerform && m.snap != nil {
+		// The bank the unit is on: the lengths of its samples, and its patterns, are read for the tiles.
+		bank := m.perfBank()
+		if !m.factsBusy {
+			for _, row := range m.snap.Bank(bank) {
+				if !row.HasSample {
+					continue
+				}
+				key := factKey{row.Pad, row.Size, row.Name}
+				if _, have := m.facts[key]; !have {
+					m.factsBusy = true
+					return m.padFactsCmd(key, row)
+				}
+			}
+		}
+		if m.patterns[bank] == nil && !m.stripBusy {
+			m.stripBusy = true
+			return m.loadPatternsQuietly(bank)
 		}
 	}
 	if m.section == secPerform && !m.previewBusy {
