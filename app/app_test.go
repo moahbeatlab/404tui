@@ -191,7 +191,7 @@ func TestTreeSiblingsAndChildren(t *testing.T) {
 }
 
 func TestIndexOfAllHoldsTheFilesOfEverySource(t *testing.T) {
-	ix := IndexOfAll(&TagIndex{Files: map[string]string{
+	ix := app.IndexOfAll(&app.TagIndex{Files: map[string]string{
 		"SD:IMPORT/a.wav":         "a",
 		"/Volumes/X/Kit/b.wav":    "b",
 		"ROLAND/SP-404MKII/c.wav": "c",
@@ -204,7 +204,7 @@ func TestIndexOfAllHoldsTheFilesOfEverySource(t *testing.T) {
 			t.Errorf("bad entry %+v", f)
 		}
 	}
-	if got := IndexOfAll(nil); len(got.Files) != 0 {
+	if got := app.IndexOfAll(nil); len(got.Files) != 0 {
 		t.Error("a missing index has files")
 	}
 }
