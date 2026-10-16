@@ -871,7 +871,7 @@ func wrapName(name string, w, max int) []string {
 // beat, the cue, the patterns of the bank, the effects and the knobs), the pads on the right.
 func (m Model) perfSplitBody(g geom, width int) string {
 	bank := m.perfBank()
-	side := max(width*50/100, 44)
+	side := max(width*40/100, 44)
 	gridW := width - side - 2
 	inner := g.bodyH - 2
 	tileW := max((gridW-3)/4, 10)

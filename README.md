@@ -125,8 +125,8 @@ the input with `404` in its name (set in Config, `6`). What it does:
   five seconds: it means the sound is distorted, so turn the unit's volume or the pad levels down. The
   first time, macOS may ask to let the terminal use the microphone.
 - **Layout:** on a wide screen (110 columns and up) Perform is split: the pads of the bank the unit is on in
-  the right half, with their whole names in plain text (pads without a sample do not light up), and the
-  left half in titled panels: the beat of the bar as four big blocks, the level, a panel for each bus (ON
+  the right 60%, with their whole names in plain text (pads without a sample do not light up), and the
+  left 40% in titled panels: the beat of the bar as four big blocks, the level, a panel for each bus (ON
   or off, the effect's name, your note, its knobs C1 to C3 as tall faders in the bus colour that light up
   while you turn them), the other controllers as faders, and the keys. The faders take the height that is
   left. Narrower sides put the panels one under the other.
