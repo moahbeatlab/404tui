@@ -265,7 +265,7 @@ pattern, from the grid or from an expanded track, back to the patterns under the
   folders, and `+` adds your own tags (a word with `-` in front takes one off). The same keys
   work in the `a` dialog.
 - **Used folders:** a folder restored onto a bank with `R` gets a `◆` in the tree (and so do the
-  folders above it), and its details say "Used in project 1, bank C". The notes are in
+  folders above it), and its details say "Used already: restored onto project 1, bank C", then list the pads of each project, bank by bank, that hold a sample from the folder. The notes are in
   `SD:404tui-folders.json`, one entry per project and bank, so it never holds more than 160.
   `W` in Pads goes the other way for the project in front: it finds where the samples came from
   (as `F` does), then notes, for every bank whose samples are mostly (and at least two) from

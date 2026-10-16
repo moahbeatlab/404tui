@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -289,75 +290,6 @@ func (m Model) scanOriginsFor(banks bool, folder string) (tea.Model, tea.Cmd) {
 	})
 }
 
-// folderUseLines say where a folder was put: which project and bank, and the folders inside it.
-func (m Model) folderUseLines(folder string, width int) []string {
-	st := m.st
-	own, inside := m.folderUses.Of(folder)
-	if len(own)+len(inside) == 0 {
-		return nil
-	}
-	var lines []string
-	for _, u := range own {
-		how := "restored"
-		if u.Matched {
-			how = "found"
-		}
-		lines = append(lines, st.accent.Render("◆ ")+st.text.Render(fmt.Sprintf("Used in project %d, bank %c", u.Project, 'A'+u.Bank))+
-			st.dim.Render(fmt.Sprintf("  ·  %s, %s, %s", plural(u.Pads, "pad"), how, u.At)))
-	}
-	if n := len(inside); n > 0 {
-		var where []string
-		for _, u := range inside[:min(n, 6)] {
-			where = append(where, fmt.Sprintf("%d·%c", u.Project, 'A'+u.Bank))
-		}
-		text := "Folders inside it are on " + strings.Join(where, " ")
-		if n > 6 {
-			text += fmt.Sprintf(" and %d more", n-6)
-		}
-		lines = append(lines, st.dim.Render("◆ "+ansi.Truncate(text, width-2, "…")))
-	}
-	return append(lines, "")
-}
-
-// folderPadLines say which pads, in which projects, hold a sample that came from a folder: the
-// notes of where the samples were assigned from, under the folder.
-func (m Model) folderPadLines(folder string, width int) []string {
-	if m.origins == nil {
-		return nil
-	}
-	byProject := map[string][]string{}
-	var order []string
-	for key, o := range m.origins.Pads {
-		if !strings.HasPrefix(o.Path, folder+"/") {
-			continue
-		}
-		project, pad, ok := strings.Cut(key, "/")
-		if !ok {
-			continue
-		}
-		if _, seen := byProject[project]; !seen {
-			order = append(order, project)
-		}
-		byProject[project] = append(byProject[project], pad)
-	}
-	if len(order) == 0 {
-		return nil
-	}
-	slices.SortFunc(order, func(a, b string) int { return cmp.Compare(a, b) })
-	st := m.st
-	var lines []string
-	for _, project := range order {
-		pads := byProject[project]
-		slices.Sort(pads)
-		text := fmt.Sprintf("Project %s: %s", project, plural(len(pads), "pad")) + "  " + strings.Join(pads[:min(len(pads), 12)], " ")
-		if len(pads) > 12 {
-			text += fmt.Sprintf(" and %d more", len(pads)-12)
-		}
-		lines = append(lines, st.accent.Render("◆ ")+st.text.Render(ansi.Truncate(text, width-2, "…")))
-	}
-	return append(lines, "")
-}
-
 // routedUnit reads the files on this computer from it and everything else from the unit, so a
 // scan can look at the files of any indexed source.
 type routedUnit struct{ app.Unit }
@@ -391,4 +323,115 @@ func (m Model) folderUsed(path string) bool {
 // colour of conditions, which no other mark has.
 func (m Model) usedMark() string {
 	return lipgloss.NewStyle().Foreground(m.st.th.cond).Bold(true).Render("◆")
+}
+
+// folderUsage says, for a folder, whether it was used and where: onto which bank it was
+// restored, which restored folders are inside it, and the pads of each project that hold a
+// sample from it, bank by bank. It is empty for a folder nothing came from.
+func (m Model) folderUsage(folder string, width int) []string {
+	st := m.st
+	own, inside := m.folderUses.Of(folder)
+	byProject := m.padsFromFolder(folder)
+	if len(own)+len(inside)+len(byProject) == 0 {
+		return nil
+	}
+	lines := []string{m.usedMark() + " " + st.bold.Render("Used already")}
+	row := func(indent int, text string) {
+		lines = append(lines, strings.Repeat(" ", indent)+ansi.Truncate(text, width-indent, "…"))
+	}
+	for _, u := range own {
+		how := "restored"
+		if u.Matched {
+			how = "found"
+		}
+		row(2, st.text.Render(fmt.Sprintf("%s onto project %d, bank %c", how, u.Project, 'A'+u.Bank))+st.dim.Render(fmt.Sprintf("  ·  %s  ·  %s", plural(u.Pads, "pad"), u.At)))
+	}
+	if len(inside) > 0 {
+		banks := map[int][]string{}
+		var order []int
+		for _, u := range inside {
+			if _, seen := banks[u.Project]; !seen {
+				order = append(order, int(u.Project))
+			}
+			banks[int(u.Project)] = append(banks[int(u.Project)], fmt.Sprintf("%c", 'A'+u.Bank))
+		}
+		slices.Sort(order)
+		var parts []string
+		for _, p := range order {
+			parts = append(parts, fmt.Sprintf("project %d bank %s", p, strings.Join(banks[p], " ")))
+		}
+		row(2, st.dim.Render("folders inside it were restored onto ")+st.text.Render(strings.Join(parts, ", ")))
+	}
+	for _, pr := range byProject {
+		row(2, st.text.Render(fmt.Sprintf("project %d", pr.project))+st.dim.Render(fmt.Sprintf("  ·  %s with samples from it", plural(pr.n, "pad"))))
+		for _, b := range pr.banks {
+			shown := b.pads
+			more := ""
+			// A bank has 16 pads: the list fits on a line of any reasonable width.
+			label := st.accent.Render(fmt.Sprintf("bank %s", b.bank)) + "  "
+			if len(shown) > 12 {
+				more = fmt.Sprintf(" and %d more", len(shown)-12)
+				shown = shown[:12]
+			}
+			row(4, label+st.text.Render(strings.Join(shown, " "))+st.dim.Render(more))
+		}
+	}
+	return append(lines, "")
+}
+
+// folderBank is the pads of one bank that hold samples from a folder, in pad order.
+type folderBank struct {
+	bank string
+	pads []string
+}
+
+// folderProject is what a folder gave to one project.
+type folderProject struct {
+	project int
+	n       int
+	banks   []folderBank
+}
+
+// padsFromFolder reads the notes of where samples came from: the pads of each project, by bank,
+// that were assigned from a file under the folder.
+func (m Model) padsFromFolder(folder string) []folderProject {
+	if m.origins == nil {
+		return nil
+	}
+	type key struct {
+		project int
+		bank    string
+	}
+	pads := map[key][]string{}
+	for k, o := range m.origins.Pads {
+		if !strings.HasPrefix(o.Path, folder+"/") {
+			continue
+		}
+		proj, pad, ok := strings.Cut(k, "/")
+		n, err := strconv.Atoi(proj)
+		if !ok || err != nil || len(pad) < 2 {
+			continue
+		}
+		kk := key{n, pad[:1]}
+		pads[kk] = append(pads[kk], pad)
+	}
+	padNumber := func(p string) int { n, _ := strconv.Atoi(p[1:]); return n }
+	var keys []key
+	for k, v := range pads {
+		keys = append(keys, k)
+		slices.SortFunc(v, func(a, b string) int { return cmp.Compare(padNumber(a), padNumber(b)) })
+	}
+	slices.SortFunc(keys, func(a, b key) int {
+		return cmp.Or(cmp.Compare(a.project, b.project), cmp.Compare(a.bank, b.bank))
+	})
+	var out []folderProject
+	for _, k := range keys {
+		if len(out) == 0 || out[len(out)-1].project != k.project {
+			out = append(out, folderProject{project: k.project})
+		}
+		cur := &out[len(out)-1]
+		cur.banks = append(cur.banks, folderBank{bank: k.bank, pads: pads[k]})
+		cur.n += len(pads[k])
+	}
+	return out
 }

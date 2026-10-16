@@ -944,7 +944,7 @@ func TestExportAndRestoreThroughTheFolderBrowser(t *testing.T) {
 	s.press("2")
 	s.shows("◆▾ IMPORT/", "◆  ▾ PROJECT_01-A/")
 	s.press("k", "k", "k", "k")
-	s.shows("Used in project 1, bank A")
+	s.shows("Used already", "restored onto project 1, bank A")
 }
 
 func TestThemesAndNarrowScreens(t *testing.T) {

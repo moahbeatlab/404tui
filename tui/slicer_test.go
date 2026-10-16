@@ -1472,19 +1472,23 @@ func TestAFolderInTheAssignDialogSaysWhereItsSamplesWereUsed(t *testing.T) {
 	s := open(t)
 	m := s.m()
 	m.origins = &app.Origins{Pads: map[string]app.Origin{
-		"1/A5": {Path: "SD:IMPORT/Kit/kick.wav", Name: "kick"},
-		"1/B2": {Path: "SD:IMPORT/Kit/snare.wav", Name: "snare"},
-		"2/C1": {Path: "SD:IMPORT/Kit/hat.wav", Name: "hat"},
-		"2/C2": {Path: "SD:IMPORT/Other/hat.wav", Name: "hat"},
+		"1/A5":  {Path: "SD:IMPORT/Kit/kick.wav", Name: "kick"},
+		"1/A14": {Path: "SD:IMPORT/Kit/Sub/snare.wav", Name: "snare"},
+		"1/B2":  {Path: "SD:IMPORT/Kit/snare.wav", Name: "snare"},
+		"2/C1":  {Path: "SD:IMPORT/Kit/hat.wav", Name: "hat"},
+		"2/C2":  {Path: "SD:IMPORT/Other/hat.wav", Name: "hat"},
 	}}
-	got := ansi.Strip(strings.Join(m.folderPadLines("SD:IMPORT/Kit", 80), "\n"))
-	for _, want := range []string{"Project 1: 2 pads  A5 B2", "Project 2: 1 pad  C1"} {
+	got := ansi.Strip(strings.Join(m.folderUsage("SD:IMPORT/Kit", 80), "\n"))
+	for _, want := range []string{"Used already", "project 1  ·  3 pads with samples from it", "bank A  A5 A14", "bank B  B2", "project 2  ·  1 pad", "bank C  C1"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("no %q in\n%s", want, got)
 		}
 	}
-	if strings.Contains(got, "Other") || len(m.folderPadLines("SD:IMPORT/None", 80)) != 0 {
+	if strings.Contains(got, "Other") || len(m.folderUsage("SD:IMPORT/None", 80)) != 0 {
 		t.Error("pads from other folders are counted")
+	}
+	if strings.Count(got, "project 1") != 1 {
+		t.Errorf("a project is listed more than once:\n%s", got)
 	}
 }
 

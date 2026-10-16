@@ -176,8 +176,7 @@ func (m Model) rangerBody(g geom) string {
 	title := node.Name
 	switch {
 	case node.Dir && node.Expanded:
-		preview = append(preview, m.folderUseLines(node.Path, prevW-2)...)
-		preview = append(preview, m.folderPadLines(node.Path, prevW-2)...)
+		preview = append(preview, m.folderUsage(node.Path, prevW-2)...)
 		kids := m.tree.Children(at)
 		if len(kids) == 0 {
 			preview = append(preview, st.dim.Render(" (empty)"))
