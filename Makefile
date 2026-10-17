@@ -56,8 +56,15 @@ linux: $(addprefix $(DIST)/$(BIN)-,$(LINUX))
 
 windows: $(addprefix $(DIST)/$(BIN)-,$(addsuffix .exe,$(WINDOWS)))
 
+# The Linux build for this computer's own architecture has MIDI when the ALSA headers are installed (it
+# needs cgo); the other architecture is cross-built without cgo, so without MIDI.
 $(DIST)/$(BIN)-linux-%: FORCE
-	CGO_ENABLED=0 GOOS=linux GOARCH=$* $(GOBUILD) -o $@ $(PKG)
+	@if [ "$$(uname -s)" = Linux ] && [ "$$(go env GOARCH)" = "$*" ] && pkg-config --exists alsa 2>/dev/null; then \
+		echo "linux-$* with MIDI"; CGO_ENABLED=1 GOOS=linux GOARCH=$* $(GOBUILD) -tags midi -o $@ $(PKG); \
+	else \
+		echo "linux-$* without MIDI (needs cgo and the ALSA headers on a Linux computer of that architecture)"; \
+		CGO_ENABLED=0 GOOS=linux GOARCH=$* $(GOBUILD) -o $@ $(PKG); \
+	fi
 
 $(DIST)/$(BIN)-windows-%.exe: FORCE
 	CGO_ENABLED=0 GOOS=windows GOARCH=$* $(GOBUILD) -o $@ $(PKG)
