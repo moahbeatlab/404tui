@@ -303,7 +303,7 @@ func (m Model) motionLines(width int) ([]string, []btn) {
 	st := m.st
 	var lines []string
 	var btns []btn
-	slotW := max((width-motionSlots-8)/(motionSlots+1), 8)
+	slotW := max((width-6)/(motionSlots+3), 7)
 	// How long a motion is, in bars.
 	sc := m.scenes()
 	bb := newRowBuilder(st, m.motionH)
@@ -327,13 +327,16 @@ func (m Model) motionLines(width int) ([]string, []btn) {
 		for slot := range specs {
 			specs[slot] = m.motionSpec(bus, slot)
 		}
-		b.row(slotW, specs...)
-		b.gap(1)
 		mo := m.scenes().bus[bus].mo[m.scenes().bus[bus].sel]
-		b.stackN(slotW,
-			btnSpec{label: "speed " + speedText(mo.rate()), on: mo.rate() != 1, act: "mspeed", arg: bus},
-			btnSpec{label: "reverse", on: mo.rev, act: "mrev", arg: bus},
-			btnSpec{label: "clear", act: "mclear", arg: bus})
+		rev := "fwd"
+		if mo.rev {
+			rev = "◀ back"
+		}
+		specs = append(specs,
+			btnSpec{label: "speed", detail: speedText(mo.rate()), on: mo.rate() != 1, act: "mspeed", arg: bus},
+			btnSpec{label: "reverse", detail: rev, on: mo.rev, act: "mrev", arg: bus},
+			btnSpec{label: "clear", detail: fmt.Sprintf("slot %d", m.scenes().bus[bus].sel+1), act: "mclear", arg: bus})
+		b.row(slotW, specs...)
 		l, bt := b.rows(len(lines))
 		lines = append(lines, l...)
 		btns = append(btns, bt...)
