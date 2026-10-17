@@ -129,12 +129,8 @@ the input with `404` in its name (set in Config, `6`). What it does:
   its knobs CTRL 1 to 3, shown as faders C1 to C3 with the value. Nothing to set up; until the unit has sent
   an effect, the bus says so. `f`/`F` notes what you use a bus for. Changes of an effect go to the event
   log as `fx`, with the effect's name.
-- **Pattern player:** `p` in Perform shows the pattern you said plays (`a`) as the Sequencer draws it, a row
-  per track with its notes over the bars the playhead is in, and a ▼ playhead that follows the unit's MIDI
-  clock. The clock starts at the unit's Start; if the pattern began later, `s` says "the loop starts now".
 - **Mutes on the unit:** the unit does not report them. A track that has notes in the pattern that plays but
-  has not been heard on MIDI for a whole round, while other pads have, is shown as MUTED (a × on its tile,
-  MUTED in the player and in the patterns view). It works only if the unit sends its pad notes over MIDI
+  has not been heard on MIDI for a whole round, while other pads have, is shown with a × on its tile. It works only if the unit sends its pad notes over MIDI
   while a pattern plays; check the MIDI monitor in Config while one runs.
 - **Level:** the Perform view always shows how loud the unit is: a big stereo meter (L and R bars from
   -60 to 0 dB, green, then yellow, then red near the top, with the highest peak held for a moment), the

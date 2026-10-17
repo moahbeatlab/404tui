@@ -6415,9 +6415,6 @@ func TestPerformPlaysThePatternLikeTheSequencerAndShowsWhatIsMutedOnTheUnit(t *t
 	if s.m().perfNow == nil || *s.m().perfNow != pad(t, "A2") {
 		t.Fatalf("the pattern that plays is %v", s.m().perfNow)
 	}
-	s.press("p")
-	s.shows("Perform · player", "A1", "A3", "no clock")
-	// A clock that has run for a while: the playhead shows on its step.
 	feed := func(e midiin.Event) {
 		e.At = time.Now()
 		next, _ := s.m().midiEvent(midiMsg{link: link, ev: e})
@@ -6427,14 +6424,6 @@ func TestPerformPlaysThePatternLikeTheSequencerAndShowsWhatIsMutedOnTheUnit(t *t
 	for i := 0; i < 24*2+6; i++ {
 		feed(midiin.Event{Kind: midiin.Clock})
 	}
-	s.shows("▼", "BEAT 3")
-	// s: the loop starts now, the playhead goes back to the first step.
-	s.press("s")
-	if s.m().perfSync != 24*2+6-1 {
-		t.Errorf("sync %d", s.m().perfSync)
-	}
-	s.press("p")
-	s.shows("A1")
 	// Muted on the unit: pads A1 and A2 are heard, A3 has not been for longer than a round.
 	m = s.m()
 	now := time.Now()
@@ -6456,7 +6445,6 @@ func TestPerformPlaysThePatternLikeTheSequencerAndShowsWhatIsMutedOnTheUnit(t *t
 		t.Error("the silent pad is not muted")
 	}
 	s.shows("×")
-	s.press("p")
 	// With nothing heard at all, nothing is called muted.
 	m = s.m()
 	m.mon.padAt = now.Add(-time.Minute)
@@ -7034,14 +7022,4 @@ func TestAPadOfAnEarlierPatternIsNotShownAsPlayedInTheCurrentOne(t *testing.T) {
 	if m.mon.played[0] {
 		t.Error("a pad last heard nine bars ago is still held as played")
 	}
-}
-
-func TestThePerformPlayerHasNoButtonsAndGoesBackWithATap(t *testing.T) {
-	s := open(t)
-	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("7")
-	s.clickOn("player")
-	s.shows("Perform · player")
-	s.send(tea.MouseMsg{X: 50, Y: 20, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
-	s.hides("Perform · player")
 }

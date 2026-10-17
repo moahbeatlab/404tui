@@ -410,3 +410,14 @@ func (mo *monitor) heardWithin(tick, ticks int) map[int]bool {
 	}
 	return out
 }
+
+// setCC notes a controller value that this program sent to the unit, so the faders show it as they
+// would when the unit says it.
+func (mo *monitor) setCC(ch, cc, val int, at time.Time) {
+	k := [2]int{ch, cc}
+	if mo.ccs[k] == nil {
+		mo.seen++
+		mo.ccs[k] = &ccState{ch: ch, cc: cc, first: mo.seen}
+	}
+	mo.ccs[k].val, mo.ccs[k].at = val, at
+}

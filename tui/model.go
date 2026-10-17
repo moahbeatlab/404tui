@@ -332,10 +332,8 @@ type Model struct {
 	codes    *codeState
 	liveOn   bool
 	liveBack int
-	// perfPlayer shows the pattern that plays as the Sequencer draws it, with a playhead that
-	// follows the MIDI clock; perfSync is the clock tick the loop began on.
-	perfPlayer bool
-	perfSync   int
+	// perfSync is the clock tick the loop began on.
+	perfSync int
 	// perfAuto is set when the pattern that plays was found from the notes the unit sends.
 	perfAuto bool
 	// report is a list of lines shown in a dialog until a key closes it.

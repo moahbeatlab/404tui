@@ -303,11 +303,6 @@ func (m Model) clickBody(x, y int, g geom) (tea.Model, tea.Cmd) {
 		next := model.(Model)
 		return next, tea.Batch(cmd, next.wanted())
 	case secPerform:
-		if m.perfPlayer {
-			// These views have no buttons: a tap anywhere goes back to the pads.
-			m.perfPlayer = false
-			return m, nil
-		}
 		return m.clickPerform(x, y)
 	case secFiles:
 		if m.tree == nil || x >= g.listW {

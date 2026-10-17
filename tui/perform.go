@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moahbeatlab/404tui/app"
-	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/perflog"
 	"github.com/moahbeatlab/404tui/proto"
@@ -49,15 +48,6 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 	case "x":
 		m.perfNext = nil
 		m.logCue()
-	case "p":
-		m.perfPlayer = !m.perfPlayer
-	case "s":
-		if c := m.clock; c != nil && time.Since(c.at) < 2*time.Second {
-			m.perfSync = max(c.ticks-1, 0)
-			m.message = "the pattern starts now: the playhead is back at its beginning"
-		} else {
-			m.message = "no clock to follow: the unit sends it when it plays"
-		}
 	case "f", "F":
 		bus := 1
 		if name == "F" {
@@ -160,9 +150,6 @@ func (m Model) perfBank() int {
 func (m Model) perfBody(g geom) string {
 	if m.vc != nil {
 		m.vc.hit = perfHit{}
-	}
-	if m.perfPlayer {
-		return m.perfPlayerBody(g)
 	}
 	return m.perfBankBody(g)
 }
@@ -620,95 +607,6 @@ func (m Model) perfFxLines(width int) []string {
 	return []string{head, rows[0], rows[1], rows[2]}
 }
 
-// patternTick is where the playhead is in the pattern d, in its own ticks, from the MIDI clock: the
-// clock counts 24 to a quarter note and the pattern 480. It says false when no clock is running.
-func (m Model) patternTick(d *app.PatternDetail) (uint32, bool) {
-	c := m.clock
-	if c == nil || !c.running || time.Since(c.at) > 2*time.Second || d == nil || d.Length == 0 {
-		return 0, false
-	}
-	pos := max(c.ticks-1-m.perfSync, 0)
-	return uint32(pos*(formats.PPQ/24)) % d.Length, true
-}
-
-// perfPlayerBody is the pattern that plays as the Sequencer draws it: a row for every track with its
-// notes, over the bars the playhead is in, and the playhead above them moving with the unit's clock.
-func (m Model) perfPlayerBody(g geom) string {
-	st := m.st
-	width := g.bodyW + g.bodyX - 3
-	var lines []string
-	if rec := m.perfRecLine(); rec != "" {
-		lines = append(lines, rec)
-	}
-	d, tracks := m.perfTracks(m.perfNow)
-	bank := m.perfBank()
-	head := lipgloss.NewStyle().Foreground(st.th.accent).Bold(true).Render(fmt.Sprintf("BANK %c", 'A'+bank)) +
-		st.dim.Render(fmt.Sprintf("   %.2f BPM", m.bankTempo(bank)))
-	if clock := m.clockText(nowBars(d)); clock != "" {
-		head += "   " + lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render("♩ "+clock)
-	}
-	lines = append(lines, head, m.perfTicker(nowBars(d)), "")
-	switch {
-	case m.perfNow == nil:
-		lines = append(lines, st.dim.Render("a  chooses the pattern that is playing: the unit does not say which one runs"))
-	case d == nil:
-		lines = append(lines, st.bold.Render(m.perfNow.String())+st.dim.Render("  reading…"))
-	default:
-		tick, running := m.patternTick(d)
-		cur := -1
-		if running {
-			cur = min(int(uint64(tick)*uint64(d.Grid.Steps)/uint64(d.Length)), d.Grid.Steps-1)
-		}
-		// The bars the playhead is in; with no clock, the first.
-		page := 0
-		if cur >= 0 {
-			page = cur / d.StepsPerPage()
-		}
-		sp := spanFor(d, page, width, 1, 4, gridGapW)
-		lines = append(lines, m.perfHead("NOW", m.perfNow, d, tracks, st.accent), st.bold.Render(spanLabel(d, sp)), "")
-		// The playhead: a mark over the step that is playing, on the same places as the notes.
-		var ph strings.Builder
-		ph.WriteString(strings.Repeat(" ", 21))
-		hot := lipgloss.NewStyle().Foreground(st.th.hot).Bold(true)
-		for c := sp.lo; c < sp.hi; c++ {
-			cell := strings.Repeat(" ", max(sp.w, 1))
-			if c == cur {
-				cell = hot.Render("▼") + strings.Repeat(" ", max(sp.w, 1)-1)
-			}
-			ph.WriteString(cell)
-			if c+1 < sp.hi {
-				ph.WriteString(strings.Map(func(r rune) rune {
-					if r == '│' {
-						return ' '
-					}
-					return r
-				}, sp.gap(c-sp.lo)))
-			}
-		}
-		lines = append(lines, ph.String())
-		for _, row := range d.Grid.Rows {
-			name := m.snap.Pads[row.Pad.Index()].Name
-			label := fmt.Sprintf("%-4s %-14s", row.Pad, ansi.Truncate(name, 14, "…"))
-			style := st.bold
-			if !slices.Contains(row.Hits, true) {
-				style = st.dim
-			}
-			if m.unitMuted(d, row.Pad, time.Now()) {
-				// The label says it, where the long notes of the row cannot push it out of the box.
-				label = fmt.Sprintf("%-4s %-8s MUTED", row.Pad, ansi.Truncate(name, 8, "…"))
-				style = lipgloss.NewStyle().Foreground(st.th.bad).Bold(true)
-			}
-			lines = append(lines, m.rowLabel(row.Pad, label, style)+" "+m.noteRow(d, row.Pad, false, sp))
-		}
-		if !running {
-			lines = append(lines, "", st.dim.Render("no clock: the playhead follows the unit's MIDI clock while it plays"))
-		}
-	}
-	lines = append(lines, "", m.perfFxLines(width)[0])
-	lines = append(lines, st.dim.Render("tap anywhere or p  back to the pads   s  the pattern starts now   a n  cue   Space  next→now   ^R  record"))
-	return m.box("Perform · player", strings.Join(lines, "\n"), g.bodyW+g.bodyX-1, g.bodyH, true)
-}
-
 // wrapName breaks a pad name into at most max lines of w cells: after an underscore, hyphen or space
 // where it can, anywhere when a piece is longer than a line. What does not fit the last line is cut
 // with an ellipsis, so the name is whole whenever the tile has room for it.
@@ -831,10 +729,7 @@ func (m Model) perfButton(b hitBtn, x int) (tea.Model, tea.Cmd) {
 	case "bars":
 		return m.sceneAct("bars", b.arg, 0), nil
 	case "view":
-		switch b.arg {
-		case 0:
-			return m.perfKey("p")
-		case 1:
+		if b.arg == 0 {
 			return m.toggleRecording()
 		}
 		return m.toggleFullScreen()
