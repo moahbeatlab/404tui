@@ -104,7 +104,7 @@ func (m Model) sceneAct(act string, bus int, pos float64) Model {
 		}
 		m.message = fmt.Sprintf("BUS %d: scene %s saved: %s", bus+1, strings.ToUpper(act), sceneDetail(scene))
 	case "fade":
-		bs.mix, bs.glide = math.Round(pos*20)/20, nil
+		bs.mix, bs.glide = math.Max(math.Min(math.Round(pos*20)/20, 1), 0), nil
 		m = m.sceneApply(sc, bus)
 	case "jumpa", "jumpb":
 		bs.mix, bs.glide = map[string]float64{"jumpa": 0, "jumpb": 1}[act], nil

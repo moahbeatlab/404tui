@@ -7023,3 +7023,20 @@ func TestAPadOfAnEarlierPatternIsNotShownAsPlayedInTheCurrentOne(t *testing.T) {
 		t.Error("a pad last heard nine bars ago is still held as played")
 	}
 }
+
+func TestAClickPastTheEndOfTheFadeBarStaysInsideIt(t *testing.T) {
+	m := open(t).m()
+	m = m.sceneAct("fade", 0, 1.4)
+	if got := m.sc.bus[0].mix; got != 1 {
+		t.Errorf("a click past the end puts the fade at %v, want 1", got)
+	}
+	m = m.sceneAct("fade", 0, -0.3)
+	if got := m.sc.bus[0].mix; got != 0 {
+		t.Errorf("a click before the start puts the fade at %v, want 0", got)
+	}
+	// Whatever the position, the bar can be drawn.
+	b := newRowBuilder(m.st, 3)
+	for _, f := range []float64{-1, 0, 0.5, 1, 1.05, 7} {
+		b.bar(20, f, m.st.th.accent, "fade", 0)
+	}
+}

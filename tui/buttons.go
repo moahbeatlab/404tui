@@ -92,7 +92,7 @@ func (b *rowBuilder) button(label string, on bool, act string, arg, minW int) {
 
 // bar draws a bar w wide that is filled from the left to frac, and is a button: a tap sets where.
 func (b *rowBuilder) bar(w int, frac float64, colour lipgloss.Color, act string, arg int) {
-	filled := int(frac*float64(w) + 0.5)
+	filled := clamp(int(frac*float64(w)+0.5), 0, w)
 	line := lipgloss.NewStyle().Foreground(colour).Render(strings.Repeat("█", filled)) + b.st.faint.Render(strings.Repeat("░", w-filled))
 	b.btns = append(b.btns, btn{col: b.w, w: w, h: b.n, act: act, arg: arg})
 	b.add(b.filled(line, ""), w)
