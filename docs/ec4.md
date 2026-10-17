@@ -20,16 +20,36 @@ slot of that bus tapped last (by a push or by the mouse). *Focus* is the switch 
 
 ## Setting up the EC4
 
-In the EC4 editor (or on the unit) make a group, name it `404tui`, and for each of the 16 encoders set its
-**push** to send a **note**, on **channel 16**, with the note number of the table (60 for E1, 61 for E2 …
-75 for E16), velocity 127. What the encoders do when turned is free: leave it, or use it for something
-else on the unit, since 404tui does not read it for this map. Other settings, such as the LED ring, do
-not matter for 404tui.
+The EC4 sends a push as a **note with the same channel and number as the encoder's own command** (that is
+how its *Push* setting **Note** works; the manual, "Push functions"). So each encoder is set once, and
+what it sends turned is the CC of that number, pushed the note of that number:
 
-The EC4's output has to reach 404tui: either plug it into the SP-404MKII's MIDI input and let the unit
-pass it on over USB (the unit sends what it receives on its MIDI input to the computer), or plug it into
-the computer. 404tui listens to the input with `404` in its name (Config); see the MIDI monitor in
-Config to check that the pushes arrive: a push should show `note on ch 16 64 …`.
+| encoder | turn sends | push sends |
+| --- | --- | --- |
+| E1 | CC 60 | Note 60 |
+| E2 | CC 61 | Note 61 |
+| … | … | … |
+| E16 | CC 75 | Note 75 |
+
+In the EC4 (the numbers of the manual's *Edit mode* and *Setup mode*):
+
+1. **Setup mode** (hold FUNC, press encoder 4): turn **encoder 16** (*Push functions*) to **Note**. Turn
+   **encoder 2** (*Routing*) to what your cable needs: with the EC4 on USB to the computer, any that keeps USB
+   out (e.g. `MMMU`, the factory one).
+2. **Edit mode** (hold FUNC, press encoder 8). Choose one group (and name it `404t` in Name mode, 4 letters).
+3. For the encoders of the group: **command type** (encoder 10) **CCr2** (relative 63/65); **channel**
+   (encoder 4) **16**, with *Copy channel number to all encoders in the group* from its options menu (press
+   encoder 4, hold encoder 4 while the bars run); **mode** (encoder 14) **Acc0** (no acceleration; Acc1 if
+   you like to turn fast); **number** (encoder 7 or 8) of E1 **60**, then *Fill command numbers in the same
+   group with ascending numbers* (press encoder 7 quickly, hold encoder 8 while the bars run): E1 is 60,
+   E2 61 … E16 75.
+4. Leave edit mode the same way as you got in (the setup is saved by itself).
+
+Without the Levels view only the pushes are used; turns are ignored in Stage. In Perform the notes arrive
+as `note on ch 16 64 …`, a turn as `cc ch 16 60 …` — the MIDI monitor in Config shows both. The EC4's output
+has to reach 404tui: plug it into the computer by USB (404tui listens to the input with `404` in its name,
+Config: change the part of the name to match the EC4, e.g. `EC4`, or `faderfox`), or plug it into the
+SP-404MKII's MIDI input and let the unit pass it on over USB.
 
 The messages of Config (live mode, recording, next becomes now) are the first, third and fifteenth push
 by default; changing them there moves those away from the map, the rest of the table stays. *Clear next
@@ -42,11 +62,11 @@ is a bar, as high as the pad's volume. While it is on, the same channel means so
 
 | | on the EC4 |
 | --- | --- |
-| **turn** encoder 1 to 16 | the level of pad 1 to 16 of the bank, **relative** (a turn sends CC 20 to 35: 64 is none, above up, below down, by the distance) |
+| **turn** encoder 1 to 16 | the level of pad 1 to 16 of the bank, **relative** (a turn sends CC 60 to 75: 64 is none, above up, below down, by the distance) |
 | **push** E1 to E15 | mute that pad (level 0), a second push brings back the level it had; turning a muted pad starts from 0 |
 | **push** E16 | back to Stage |
 
-Set the 16 encoders of the group to send **CC 20 to 35**, relative (centred on 64), on channel 16. Levels are
+The encoders are set up as above (CCr2, channel 16, numbers 60 to 75). Levels are
 written to the unit's pad volume itself (the same setting as Level in the pad settings), so they stay when
 404tui is closed. A click on a pad in Levels mutes it as well. In Stage the encoders' turns do nothing.
 

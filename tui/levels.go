@@ -15,9 +15,9 @@ import (
 // the levels of the 16 pads and their pushes mute (level 0) and bring back; the view itself is switched
 // by the push of E16 (see ec4.go), the button in VIEW, or v.
 
-// ec4FirstCC is the controller of the first encoder's turn: 20 to 35 on the control channel, relative
+// ec4FirstCC is the controller of the first encoder's turn: 60 to 75 on the control channel, relative
 // (64 is no turn, above it up, below it down).
-const ec4FirstCC = 20
+const ec4FirstCC = 60
 
 func (m Model) toggleLevels() Model {
 	m.perfLevels = !m.perfLevels
@@ -90,7 +90,7 @@ func (m Model) levelSet(pad proto.PadIndex, v int32) (Model, tea.Cmd) {
 }
 
 // levelEvent handles a message of the control channel while the Levels view is on: a turn of an encoder
-// (CC 20 to 35) and a push (notes 60 to 74; 75 leaves the view).
+// (CC 60 to 75) and a push (notes 60 to 74; 75 leaves the view).
 func (m Model) levelEvent(e midiin.Event) (Model, tea.Cmd, bool) {
 	switch e.Kind {
 	case midiin.CC:
