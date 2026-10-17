@@ -2747,7 +2747,7 @@ func cellSplits(d *app.PatternDetail, pad proto.PadIndex) []int {
 // substepHint tells what the keys do for a split step.
 func (m Model) substepHint() string {
 	if m.patSubMode {
-		return fmt.Sprintf(" part %d  ·  h l part  x on/off  i 2/3/4  e leave substep mode", m.patSub+1)
+		return fmt.Sprintf(" part %d  ·  h l part  x on/off  i 2/3/4/1  e leave substep mode", m.patSub+1)
 	}
 	return "  ·  e edits the parts"
 }

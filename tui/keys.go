@@ -3546,8 +3546,8 @@ func (m Model) cycleSubsteps() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	cur, _ := m.pattern.Split(pad, m.patCol)
-	n := cur + 1
-	if n > 4 {
+	n := cur%4 + 1 // 2, 3, 4, then back to one note, then 2 again
+	if len(m.pattern.CellNotes(pad, m.patCol)) == 0 {
 		n = 2
 	}
 	on := make([]bool, n)
@@ -3575,7 +3575,7 @@ func (m Model) substepKey(name string) (tea.Model, tea.Cmd, bool) {
 			m.message = "substep mode off"
 			return m, nil, true
 		}
-		m.message = "substep mode: h l part, x on/off, i 2/3/4 parts, e leaves it"
+		m.message = "substep mode: h l part, x on/off, i 2/3/4/1 parts, e leaves it"
 		if n < 2 {
 			nm, cmd := m.cycleSubsteps()
 			return nm, cmd, true

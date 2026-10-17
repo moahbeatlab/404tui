@@ -6622,7 +6622,7 @@ func TestESubstepModeSplitsAStepAndTheGridCountsThem(t *testing.T) {
 	for _, c := range []struct {
 		want  int
 		ticks []uint32
-	}{{2, []uint32{0, step / 2}}, {3, []uint32{0, step / 3, 2 * (step / 3)}}, {4, []uint32{0, step / 4, step / 2, 3 * step / 4}}, {2, []uint32{0, step / 2}}} {
+	}{{2, []uint32{0, step / 2}}, {3, []uint32{0, step / 3, 2 * (step / 3)}}, {4, []uint32{0, step / 4, step / 2, 3 * step / 4}}, {1, []uint32{0}}, {2, []uint32{0, step / 2}}} {
 		got := inStep()
 		if len(got) != len(c.ticks) {
 			t.Fatalf("%d parts: notes at %v", c.want, got)
@@ -6632,7 +6632,9 @@ func TestESubstepModeSplitsAStepAndTheGridCountsThem(t *testing.T) {
 				t.Errorf("%d parts: notes at %v, want %v", c.want, got, c.ticks)
 			}
 		}
-		s.shows(fmt.Sprintf("SUBSTEP %d", c.want))
+		if c.want > 1 {
+			s.shows(fmt.Sprintf("SUBSTEP %d", c.want))
+		}
 		s.press("i")
 	}
 	s.press("e") // off

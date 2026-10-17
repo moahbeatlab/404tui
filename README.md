@@ -358,7 +358,7 @@ pattern, from the grid or from an expanded track, back to the patterns under the
   they last. `h j k l` move, Enter puts a note in or takes it out, `,` `.` change the
   velocity by 1 and `<` `>` by 10, `*` sets it to 127, `+` `-` make a note a step longer or
   shorter, and `u` undoes. `e` turns on **substep mode** and `e` again turns it off: the step at the cursor is divided into
-  two parts, like the unit's SUBSTEP; `i` changes it to 3 (a triplet), 4 and back to 2, `h` `l` go
+  two parts, like the unit's SUBSTEP; `i` changes it to 3 (a triplet), 4, back to one note and then 2 again, `h` `l` go
   through the parts, and `x` (or Enter) switches the part on or off. The detail line shows a box
   for each part, filled when it sounds. Outside the mode the keys are the plain ones. A split step
   keeps its note's mark in the grid, with the number of its parts after it. `b` moves the pattern's pads to another bank.
