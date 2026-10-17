@@ -234,10 +234,11 @@ func (m Model) sceneLines(width int) ([]string, []btn) {
 		btns = append(btns, bt...)
 	}
 	// How long a glide takes.
-	b := &rowBuilder{st: st}
+	b := newRowBuilder(st, m.btnH)
 	b.text(st.dim.Render("glide takes "))
+	barBtn := max((width-12-5-4)/4, 5)
 	for _, n := range []int{1, 2, 4, 8} {
-		b.button(fmt.Sprint(n), n == sc.bars, "bars", n, 5)
+		b.button(fmt.Sprint(n), n == sc.bars, "bars", n, barBtn)
 		b.gap(1)
 	}
 	b.text(st.dim.Render("bars"))
@@ -257,14 +258,14 @@ func (m Model) sceneLines(width int) ([]string, []btn) {
 		case bs.glide != nil:
 			label = "gliding… stop"
 		}
-		b := &rowBuilder{st: st}
-		b.button("save A", bs.a.set, "a", bus, 9)
+		b := newRowBuilder(st, m.btnH)
+		b.button("save A", bs.a.set, "a", bus, 14)
 		b.gap(1)
-		glideW := max(ansi.StringWidth(label)+6, 14)
-		barW := max(width-12-12-glideW-3, 6)
+		glideW := max(ansi.StringWidth(label)+6, 20)
+		barW := max(width-14-14-glideW-3, 6)
 		b.bar(barW, bs.mix, colour, "fade", bus)
 		b.gap(1)
-		b.button("save B", bs.b.set, "b", bus, 9)
+		b.button("save B", bs.b.set, "b", bus, 14)
 		b.gap(1)
 		b.button(label, bs.glide != nil, "glide", bus, glideW)
 		band(b)

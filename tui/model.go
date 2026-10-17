@@ -435,6 +435,7 @@ type Model struct {
 	// iso is what Perform has isolated; clickPadAt and clickAt find a double click.
 	iso        *isolation
 	sc         *sceneState
+	btnH       int // how tall the buttons of Perform are
 	clickPadAt proto.PadIndex
 	clickAt    time.Time
 	// loopStart is when the looping pattern started, and loopRound how long a round lasts.

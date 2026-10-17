@@ -200,7 +200,7 @@ func (m Model) clickPad(pad proto.PadIndex) (tea.Model, tea.Cmd) {
 // isolateLines are the ISOLATE panel of the Perform sidebar: a switch, and what it does now.
 func (m Model) isolateLines() ([]string, []btn) {
 	st := m.st
-	b := &rowBuilder{st: st}
+	b := newRowBuilder(st, m.btnH)
 	b.toggle(m.iso != nil, "ISOLATE", "iso", 0)
 	lines, btns := b.rows(0)
 	var names []string
@@ -224,9 +224,7 @@ func (m Model) isolateLines() ([]string, []btn) {
 			st.hot.Bold(true).Render(strings.Join(names, " ")+" alone")+st.text.Render("  ·  "+plural(len(m.iso.was), "pad")+" dry"),
 			st.dim.Render("double tap it, or switch off: all back"))
 	default:
-		lines = append(lines,
-			st.dim.Render("switch on, then tap the pads that keep their bus,"),
-			st.dim.Render("or double tap a pad.  One tap mutes a pad."))
+		lines = append(lines, st.dim.Render("switch on and tap the pads that keep their bus, or double tap one pad"))
 	}
 	return lines, btns
 }
