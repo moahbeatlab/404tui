@@ -427,6 +427,8 @@ type Model struct {
 	previewBusy bool
 	loopSlot    *proto.PadIndex
 	loopDirty   bool
+	// full is full-screen mode: the header and the tabs are away, the body has the room.
+	full bool
 	// muted and soloed are pads silenced, or alone to sound, in the mix played on this computer.
 	muted, soloed map[proto.PadIndex]bool
 	// loopStart is when the looping pattern started, and loopRound how long a round lasts.

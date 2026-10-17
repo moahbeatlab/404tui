@@ -53,6 +53,10 @@ setting back to it.
 
 ### Recording
 
+`Ctrl-F` goes full screen from anywhere but a text being typed: the header and the tabs go and the view gets
+their rows (`Ctrl-F` again brings them back). A program cannot make its terminal window full screen in
+general, so for that use the terminal's own key (F11, or Ctrl-Cmd-F on a Mac); xterm is asked too.
+
 `Ctrl-R` anywhere (in a dialog too) records the unit's audio, which it sends over USB as an audio
 interface, to a WAV file (24-bit, 48 kHz, stereo) named by the date and time, and `Ctrl-R` again
 stops it. While it runs the header shows a red, blinking `● REC 02:13  23.1 MB` on every tab, and

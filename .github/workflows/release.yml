@@ -1,0 +1,113 @@
+name: release
+
+# A tag like v0.2.0 builds sp404 for Linux, macOS and Windows and publishes a GitHub release with
+# the archives and their checksums. "Run workflow" builds the same archives without publishing
+# (they are in the run's artifacts).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PKG: ./cmd/sp404
+  MOD: github.com/moahbeatlab/404tui
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test ./...
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # MIDI input needs cgo and the platform's MIDI library: ALSA on Linux, CoreMIDI on a Mac,
+          # winmm on Windows. Each is built on its own kind of computer for that.
+          - { name: linux-amd64, os: ubuntu-latest, goos: linux, goarch: amd64, midi: true }
+          - { name: linux-arm64, os: ubuntu-24.04-arm, goos: linux, goarch: arm64, midi: true }
+          - { name: darwin-universal, os: macos-latest, goos: darwin, midi: true }
+          - { name: windows-amd64, os: windows-latest, goos: windows, goarch: amd64, midi: true }
+          # No cgo toolchain for ARM Windows here: this one has no MIDI input.
+          - { name: windows-arm64, os: windows-latest, goos: windows, goarch: arm64, midi: false }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then v="${GITHUB_REF_NAME#v}"; else v="dev-${GITHUB_SHA::7}"; fi
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: ALSA headers (Linux MIDI)
+        if: matrix.goos == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
+      - name: Build
+        run: |
+          mkdir -p out
+          ldflags="-s -w -X ${MOD}/version.Version=${VERSION}"
+          tags=""; [ "${{ matrix.midi }}" = true ] && tags="-tags midi"
+          ext=""; [ "${{ matrix.goos }}" = windows ] && ext=".exe"
+          if [ "${{ matrix.goos }}" = darwin ]; then
+            for arch in amd64 arm64; do
+              CGO_ENABLED=1 GOOS=darwin GOARCH=$arch go build -trimpath $tags -ldflags "$ldflags" -o out/sp404-$arch $PKG
+            done
+            lipo -create -output out/sp404 out/sp404-amd64 out/sp404-arm64
+            rm out/sp404-amd64 out/sp404-arm64
+            codesign --force -s - out/sp404   # ad hoc: Apple Silicon will not run an unsigned binary
+          else
+            cgo=1; [ "${{ matrix.midi }}" = true ] || cgo=0
+            CGO_ENABLED=$cgo GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -trimpath $tags -ldflags "$ldflags" -o out/sp404$ext $PKG
+          fi
+          cp README.md LICENSE out/
+
+      - name: Archive
+        run: |
+          base="sp404_${VERSION}_${{ matrix.name }}"
+          mkdir -p dist
+          if [ "${{ matrix.goos }}" = windows ]; then
+            (cd out && 7z a -tzip "../dist/$base.zip" sp404.exe README.md LICENSE)
+          else
+            tar -C out -czf "dist/$base.tar.gz" sp404 README.md LICENSE
+          fi
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/*
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""; case "$GITHUB_REF_NAME" in *-*) pre="--prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes $pre

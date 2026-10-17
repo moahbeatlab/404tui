@@ -184,6 +184,7 @@ func (s *screen) press(keys ...string) {
 		"ctrl+o":    {Type: tea.KeyCtrlO},
 		"ctrl+t":    {Type: tea.KeyCtrlT},
 		"ctrl+r":    {Type: tea.KeyCtrlR},
+		"ctrl+f":    {Type: tea.KeyCtrlF},
 		"up":        {Type: tea.KeyUp},
 		"down":      {Type: tea.KeyDown},
 	}
@@ -6690,4 +6691,19 @@ func TestASoloInOnePatternDoesNotSilenceAnother(t *testing.T) {
 	if !heard(pad(5), nil, m.soloFor(without)) || !heard(pad(6), nil, m.soloFor(without)) {
 		t.Error("a pattern without the soloed pad plays as it is")
 	}
+}
+
+func TestCtrlFGoesFullScreenAndBack(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 140, Height: 40})
+	s.shows("404tui by moahbeatlab")
+	rows := len(strings.Split(s.m().View(), "\n"))
+	s.press("ctrl+f")
+	s.hides("404tui by moahbeatlab")
+	s.shows("full screen")
+	if got := len(strings.Split(s.m().View(), "\n")); got > rows {
+		t.Errorf("full screen has %d rows, more than the %d before", got, rows)
+	}
+	s.press("ctrl+f")
+	s.shows("404tui by moahbeatlab")
 }

@@ -125,6 +125,9 @@ func (m Model) View() string {
 		main = m.withRail(g, fit(m.body(g), g.bodyH))
 	}
 	parts := []string{m.header(), m.tabBar(), fit(main, g.bodyH)}
+	if m.full {
+		parts = parts[2:]
+	}
 	if m.tagJob.active() {
 		parts = append(parts, m.indexBar())
 	}

@@ -129,6 +129,7 @@ var commands = []command{
 	{"B", "Set the bus of the bank's pads (the marked ones; p: the whole project) by their names, as Config says", []int{secPads}},
 	{"j", "Config: the next setting; k the one before; h l change it, Enter edits the drum words", []int{secConfig}},
 	{"U", "Working offline: leave offline mode and connect to the unit once it is plugged in", nil},
+	{"ctrl+f", "Full screen: the header and the tabs go and the view gets their rows; again brings them back", nil},
 	{"ctrl+r", "Record the unit's audio input to a WAV file in the folder set in Config; again stops it", nil},
 	{"ctrl+t", "Next colour theme", nil},
 	{"r", "Refresh from the unit", nil},
@@ -172,6 +173,8 @@ func keyFor(name string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyCtrlA}
 	case "ctrl+r":
 		return tea.KeyMsg{Type: tea.KeyCtrlR}
+	case "ctrl+f":
+		return tea.KeyMsg{Type: tea.KeyCtrlF}
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(name)}
 }
@@ -220,6 +223,10 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.stopListening()
 		m.stopRecordingNow()
 		return m, tea.Quit
+	}
+	// Ctrl-F goes full screen from anywhere but a text being typed (where it is the cursor key).
+	if name == "ctrl+f" && !m.typingText() && m.palette == nil {
+		return m.toggleFullScreen()
 	}
 	// Ctrl-R records the unit's audio from anywhere, in a dialog too.
 	if name == "ctrl+r" && !m.typingText() && m.palette == nil {

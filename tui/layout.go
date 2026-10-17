@@ -39,6 +39,9 @@ type geom struct {
 
 func (m Model) geom() geom {
 	rows := chrome
+	if m.full {
+		rows -= 2 // the header and the tabs are away: the status bar is what stays
+	}
 	if m.tagJob.active() {
 		rows++
 	}
@@ -188,16 +191,20 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if wheel != 0 {
 		return m.wheel(wheel)
 	}
+	top := rowBody
+	if m.full {
+		top = 0
+	}
 	switch {
-	case msg.Y == rowRule || msg.Y == rowHeader:
+	case !m.full && (msg.Y == rowRule || msg.Y == rowHeader):
 		if section, ok := m.tabAt(msg.X, msg.Y); ok {
 			return m.goTo(section)
 		}
 		return m, nil
-	case msg.X < g.railW && msg.Y >= rowBody:
-		return m.clickRail(msg.Y-rowBody, g)
-	case msg.X >= g.bodyX && msg.Y >= rowBody:
-		return m.clickBody(msg.X-g.bodyX, msg.Y-rowBody, g)
+	case msg.X < g.railW && msg.Y >= top:
+		return m.clickRail(msg.Y-top, g)
+	case msg.X >= g.bodyX && msg.Y >= top:
+		return m.clickBody(msg.X-g.bodyX, msg.Y-top, g)
 	}
 	return m, nil
 }
