@@ -58,9 +58,6 @@ type State struct {
 	// BusNotes are what the user wrote of the effect on each bus (the unit does not say), shown in
 	// the Perform view.
 	BusNotes [2]string `json:"busNotes,omitempty"`
-	// LaneStems draws the expanded track the first way, a stem for the loudness and a line for the
-	// length, instead of the roll (a block as wide as the note lasts and as tall as it is loud).
-	LaneStems bool `json:"laneStems,omitempty"`
 
 	// ScanDir is the folder the last scan for where the samples came from looked in.
 	ScanDir string `json:"scanDir,omitempty"`

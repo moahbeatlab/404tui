@@ -1405,18 +1405,13 @@ func (m Model) patternDetail(g geom) string {
 			pad := strings.Repeat(" ", 20)
 			rule := st.accent.Render(strings.Repeat("─", lipgloss.Width(lane[1])))
 			// The name sits on the rule over the lane, like a heading for it.
-			head := []string{m.rowLabel(row.Pad, focused, lit) + " " + rule + m.mixBadge(row.Pad), pad + lane[0], pad + lane[1]}
-			// The rows after those say what they show: the roll's height and width.
-			labels := m.focusLabels()
-			for i, l := range lane[2:] {
-				label := pad
-				if i < len(labels) && labels[i] != "" {
-					label = st.dim.Render(fmt.Sprintf("%-20s", "  "+labels[i]))
-				}
-				head = append(head, label+l)
-			}
-			lines = append(lines, head...)
-			lines = append(lines, pad+rule)
+			// The two strips say what they show: how loud each note is, and how long it lasts.
+			loud := st.dim.Render(fmt.Sprintf("%-20s", "  loudness ▁▃▅█"))
+			long := st.dim.Render(fmt.Sprintf("%-20s", "  length ├──┤"))
+			lines = append(lines, m.rowLabel(row.Pad, focused, lit)+" "+rule+m.mixBadge(row.Pad),
+				pad+lane[0],
+				pad+lane[1],
+				loud+lane[2], long+lane[3], pad+rule)
 			continue
 		}
 		if !m.patFocus && r == m.patRow {
@@ -3044,112 +3039,6 @@ func laneCover(d *app.PatternDetail, pad proto.PadIndex) (cover, owner []int, st
 // compact step and the gap after it, the mark at its left like a compact row's. The lines are
 // meant to sit right of the 20-cell label column.
 func (m Model) focusLane(d *app.PatternDetail, pad proto.PadIndex, sp stepSpan) []string {
-	if m.mem.LaneStems {
-		return m.focusLaneStems(d, pad, sp)
-	}
-	st := m.st
-	cover, _, start := laneCover(d, pad)
-	cursorStyle := lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
-	chosen := m.selectedCols(d, pad)
-	chosenStyle := lipgloss.NewStyle().Background(st.th.markedBg).Foreground(st.th.text).Bold(true)
-	w := max(sp.w, 1) + 1
-	var nums, notes strings.Builder
-	rolls := make([]strings.Builder, rollRows)
-	for c := sp.lo; c < sp.hi; c++ {
-		i := c - sp.lo
-		num := st.faint
-		if i%4 == 0 {
-			num = st.bold
-		}
-		n := fmt.Sprint(i%d.StepsPerPage() + 1)
-		if len(n) >= w && i%4 != 0 {
-			n = "·"
-		}
-		nums.WriteString(num.Render(n + strings.Repeat(" ", max(w-len([]rune(n)), 0))))
-		sustained := cover[c] > 0 && !start[c]
-		carries := cover[c] > 0 && c+1 < len(cover) && cover[c+1] > 0 && !start[c+1]
-		mark, style := "·", st.faint
-		rollStyle := st.accent
-		if cover[c] > 0 && !sustained {
-			mark, style = m.noteGlyph(cover[c])
-		}
-		if cover[c] > 0 && d == m.pattern && m.conditioned(d, pad, c) {
-			if !sustained {
-				mark, style = "◐", lipgloss.NewStyle().Foreground(st.th.cond).Bold(true)
-			}
-			rollStyle = lipgloss.NewStyle().Foreground(st.th.cond)
-		}
-		switch {
-		case c == m.patCol:
-			notes.WriteString(cursorStyle.Render(mark + strings.Repeat(" ", w-1)))
-		case chosen[c] && !sustained:
-			notes.WriteString(chosenStyle.Render(mark + strings.Repeat(" ", w-1)))
-		default:
-			notes.WriteString(style.Render(mark) + strings.Repeat(" ", w-1))
-		}
-		// The roll: a note is a block as wide as it lasts and as tall as it is loud. The last
-		// column of a note's last step stays empty, so two notes that touch are two.
-		for r := range rollRows {
-			cell := strings.Repeat(" ", w)
-			if cover[c] > 0 {
-				full := rollGlyph(cover[c], r)
-				if carries {
-					cell = strings.Repeat(full, w)
-				} else {
-					cell = strings.Repeat(full, w-1) + " "
-				}
-			}
-			rolls[r].WriteString(rollStyle.Render(cell))
-		}
-		if c+1 < sp.hi {
-			gap := strings.TrimPrefix(sp.gap(i), " ")
-			g := st.faint.Render(gap)
-			nums.WriteString(g)
-			notes.WriteString(g)
-			for r := range rollRows {
-				if carries {
-					rolls[r].WriteString(m.fillGap(gap, rollGlyph(cover[c], r), rollStyle))
-				} else {
-					rolls[r].WriteString(g)
-				}
-			}
-		}
-	}
-	out := []string{nums.String(), notes.String()}
-	for r := rollRows - 1; r >= 0; r-- {
-		out = append(out, rolls[r].String())
-	}
-	return out
-}
-
-// rollRows is how tall the roll of the expanded track is.
-const rollRows = 3
-
-// rollBlocks are the eight heights of a cell, from a sliver to full.
-var rollBlocks = []string{"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
-
-// rollGlyph is what row r (0 the lowest) of a note of velocity vel shows: full below its top,
-// the part of a block at it, nothing above.
-func rollGlyph(vel, r int) string {
-	level := max(vel, 1)*rollRows*8/128 + 1 // 1 to rollRows*8
-	switch eighths := level - r*8; {
-	case eighths >= 8:
-		return "█"
-	case eighths >= 1:
-		return rollBlocks[eighths-1]
-	}
-	return " "
-}
-
-// focusLabels name the rows focusLane gives after the step numbers and the notes; "" for none.
-func (m Model) focusLabels() []string {
-	if m.mem.LaneStems {
-		return []string{"", ""}
-	}
-	return []string{"height: loudness", "width: length", ""}
-}
-
-func (m Model) focusLaneStems(d *app.PatternDetail, pad proto.PadIndex, sp stepSpan) []string {
 	st := m.st
 	cover, _, start := laneCover(d, pad)
 	cursorStyle := lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
@@ -3179,9 +3068,20 @@ func (m Model) focusLaneStems(d *app.PatternDetail, pad proto.PadIndex, sp stepS
 		length := strings.Repeat(" ", w)
 		switch {
 		case sustained:
-			length = st.accent.Render(strings.Repeat("━", w))
+			// Under a note that goes on: its line, closed with ┤ in the last step it covers.
+			if carries {
+				length = st.accent.Render(strings.Repeat("─", w))
+			} else {
+				length = st.accent.Render(strings.Repeat("─", w-1) + "┤")
+			}
 		case cover[c] > 0:
-			length = st.accent.Render("┣" + strings.Repeat(map[bool]string{true: "━", false: " "}[carries], w-1))
+			// The length is a bracket from the step the note starts in to the last it covers:
+			// ├────┤. A note of one step is ├┤.
+			if carries {
+				length = st.accent.Render("├" + strings.Repeat("─", w-1))
+			} else {
+				length = st.accent.Render("├" + strings.Repeat("─", w-2) + "┤")
+			}
 			mark, style = m.noteGlyph(cover[c])
 			vel = st.accent.Render(noteBlock(cover[c]) + strings.Repeat(" ", w-1))
 			if d == m.pattern && m.conditioned(d, pad, c) {
@@ -3208,7 +3108,7 @@ func (m Model) focusLaneStems(d *app.PatternDetail, pad proto.PadIndex, sp stepS
 			vels.WriteString(g)
 			notes.WriteString(g)
 			if carries {
-				lens.WriteString(m.fillGap(gap, "━", st.accent))
+				lens.WriteString(m.fillGap(gap, "─", st.accent))
 			} else {
 				lens.WriteString(g)
 			}
