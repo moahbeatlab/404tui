@@ -340,12 +340,12 @@ func (m Model) perfSidebar(width, h int) []string {
 	half := width / 2
 	// The faders take the height that is left: the other panels need about 24 lines side by side, a
 	// little more stacked, and the banner of a recording one more.
-	spare, per := h-24, 2
+	spare, per := h-29, 2
 	if !wideTop {
 		spare -= 6
 	}
 	if !wide {
-		spare, per = h-40, 3
+		spare, per = h-45, 3
 	}
 	if m.rec != nil {
 		spare--
@@ -356,6 +356,15 @@ func (m Model) perfSidebar(width, h int) []string {
 	if rec := m.perfRecLine(); rec != "" {
 		add(rec)
 	}
+	iso := m.isolateLines()
+	if m.vc != nil && m.vc.hit.ok {
+		m.vc.hit.panelY, m.vc.hit.panelH = 1+len(out), len(iso)+2
+	}
+	isoColour := st.th.faint
+	if m.iso != nil {
+		isoColour = st.th.hot
+	}
+	add(m.panel("ISOLATE", isoColour, iso, width)...)
 	pw, pt := width, width
 	if wide {
 		pw = half
@@ -392,6 +401,7 @@ func (m Model) perfSidebar(width, h int) []string {
 	}
 	add(m.panel("KEYS", st.th.faint, []string{
 		st.dim.Render("p  player   v  patterns   f F  note the effect   ^R  record   ?  all keys"),
+		st.dim.Render("pad colours:  ") + lipgloss.NewStyle().Foreground(st.th.good).Render("green") + st.dim.Render(" heard in this pattern  ·  ") + lipgloss.NewStyle().Foreground(st.th.accent).Render("tinted") + st.dim.Render(" in it, not heard yet"),
 	}, width)...)
 	if len(out) > h {
 		out = out[:h]

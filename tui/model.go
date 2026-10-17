@@ -432,6 +432,10 @@ type Model struct {
 	full bool
 	// muted and soloed are pads silenced, or alone to sound, in the mix played on this computer.
 	muted, soloed map[proto.PadIndex]bool
+	// iso is what Perform has isolated; clickPadAt and clickAt find a double click.
+	iso        *isolation
+	clickPadAt proto.PadIndex
+	clickAt    time.Time
 	// loopStart is when the looping pattern started, and loopRound how long a round lasts.
 	loopStart time.Time
 	loopRound time.Duration
@@ -1087,6 +1091,17 @@ func columns(samples []int16, channels, n int) []int16 {
 type viewCache struct {
 	out  string
 	keep bool
+	// hit is where the last drawing of the Perform view put its pads and its ISOLATE panel, for the
+	// mouse (counted from the corner of the view's frame).
+	hit perfHit
+}
+
+// perfHit is the place of the clickable things of the wide Perform view.
+type perfHit struct {
+	ok             bool
+	gx, gy, tw, th int // the pad grid: its corner and the size of a tile
+	sideW          int // the width of the sidebar, which starts at column 1
+	panelY, panelH int // the ISOLATE panel in the sidebar
 }
 
 // ---- update ----

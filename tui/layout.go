@@ -302,6 +302,11 @@ func (m Model) clickBody(x, y int, g geom) (tea.Model, tea.Cmd) {
 		model, cmd := m.padsKey("enter")
 		next := model.(Model)
 		return next, tea.Batch(cmd, next.wanted())
+	case secPerform:
+		if m.perfPlayer || m.perfPatterns {
+			return m, nil
+		}
+		return m.clickPerform(x, y)
 	case secFiles:
 		if m.tree == nil || x >= g.listW {
 			return m, nil

@@ -35,8 +35,17 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.perfNow, m.perfNext, m.perfAuto = m.perfNext, nil, false
+		if m.mon != nil {
+			m.mon.played = map[int]bool{} // the new pattern starts with nothing heard
+		}
 		m.logCue()
 		return m, m.wanted()
+	case "i":
+		return m.isolateButton()
+	case "esc":
+		if m.iso != nil {
+			return m.isolateOff()
+		}
 	case "x":
 		m.perfNext = nil
 		m.logCue()
@@ -151,6 +160,9 @@ func (m Model) perfBank() int {
 }
 
 func (m Model) perfBody(g geom) string {
+	if m.vc != nil {
+		m.vc.hit = perfHit{}
+	}
 	if m.perfPlayer {
 		return m.perfPlayerBody(g)
 	}
@@ -176,6 +188,7 @@ func (m Model) perfTile(row app.PadRow, w, h int) []string {
 		bars:     m.padBars(row, w),
 		glow:     m.mon.glow(int(row.Pad.Bank()), int(row.Pad.Pad()), time.Now()),
 	}
+	ts.used, ts.inPattern = m.padUsed(row.Pad)
 	if ts.empty {
 		// A pad without a sample makes no sound: the pattern playing it is nothing to see.
 		ts.glow = 0
@@ -877,10 +890,48 @@ func (m Model) perfSplitBody(g geom, width int) string {
 	tileW := max((gridW-3)/4, 10)
 	tileH := max((inner-3)/4, 3)
 	rows := m.snap.Bank(bank)
+	if m.vc != nil {
+		m.vc.hit = perfHit{ok: true, gx: 1 + side + 2, gy: 1, tw: tileW, th: tileH, sideW: side}
+	}
 	grid := m.grid(g, func(p int) string {
 		return strings.Join(m.perfTile(rows[p], tileW, tileH), "\n")
 	})
 	left := lipgloss.NewStyle().Width(side).Render(strings.Join(m.perfSidebar(side, inner), "\n"))
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", grid)
 	return m.box("Perform", body, g.bodyW+g.bodyX-1, g.bodyH, true)
+}
+
+// padUsed says whether a pad was heard in the pattern that plays (it stays lit, where the glow of a
+// hit is gone in a moment) and whether the pattern plays it at all.
+func (m Model) padUsed(pad proto.PadIndex) (heard, inPattern bool) {
+	if m.perfNow == nil {
+		return false, false
+	}
+	if d := m.patPreview[*m.perfNow]; d != nil {
+		inPattern = slices.Contains(d.PadsUsed, pad)
+	}
+	if m.mon != nil {
+		heard = m.mon.played[int(pad.Bank())*16+int(pad.Pad())]
+	}
+	return heard, inPattern && !heard
+}
+
+// clickPerform handles a click in the wide Perform view: on a pad, or on the ISOLATE panel.
+func (m Model) clickPerform(x, y int) (tea.Model, tea.Cmd) {
+	if m.vc == nil || !m.vc.hit.ok {
+		return m, nil
+	}
+	h := m.vc.hit
+	if x >= 1 && x < 1+h.sideW && y >= h.panelY && y < h.panelY+h.panelH {
+		return m.isolateButton()
+	}
+	x, y = x-h.gx, y-h.gy
+	if x < 0 || y < 0 || x%(h.tw+1) >= h.tw || y%(h.th+1) >= h.th {
+		return m, nil
+	}
+	col, row := x/(h.tw+1), y/(h.th+1)
+	if col > 3 || row > 3 {
+		return m, nil
+	}
+	return m.clickPad(m.snap.Bank(m.perfBank())[row*4+col].Pad)
 }

@@ -6770,3 +6770,96 @@ func TestAPatternEditedOnTheUnitIsReadAgainWhenTheUnitSaysSo(t *testing.T) {
 		t.Errorf("the open pattern has %d notes, want the 1 the unit has now", n)
 	}
 }
+
+// clickOn clicks the screen where the text is drawn.
+func (s *screen) clickOn(text string) {
+	s.t.Helper()
+	for y, line := range strings.Split(ansi.Strip(s.m().View()), "\n") {
+		if at := strings.Index(line, text); at >= 0 {
+			x := len([]rune(line[:at])) + 1
+			s.send(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+			return
+		}
+	}
+	s.t.Fatalf("no %q on the screen", text)
+}
+
+func TestPerformClicksMuteIsolateAndBringTheOthersBack(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	bus, _ := proto.ParamByName("bus-fx")
+	for i, v := range []int32{1, 1, 2} {
+		p, _ := proto.NewPadIndex(uint16(i))
+		if err := s.m().unit.SetParam(bus.ID, proto.TargetPad(p), v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.press("r")
+	s.press("7")
+	busOf := func(name string) int32 { return s.m().snap.Pads[pad(t, name).Index()].Params["bus-fx"] }
+	// What the unit holds is read again from it.
+	unitBus := func(name string) int32 {
+		s.press("r")
+		return busOf(name)
+	}
+	if busOf("A1") != 1 || busOf("A2") != 1 || busOf("A3") != 2 {
+		t.Fatalf("buses %d %d %d", busOf("A1"), busOf("A2"), busOf("A3"))
+	}
+	// One click mutes the pad (here); another unmutes it.
+	s.clickOn("kick")
+	if !s.m().muted[pad(t, "A1")] {
+		t.Error("one click did not mute the pad")
+	}
+	time.Sleep(doubleClick + 50*time.Millisecond)
+	s.clickOn("kick")
+	if s.m().muted[pad(t, "A1")] {
+		t.Error("a second, slow click did not unmute the pad")
+	}
+	// A double click: A1 keeps BUS 1, A2 (also on BUS 1) goes dry, A3 (BUS 2) is left alone; the
+	// first click's mute is undone.
+	time.Sleep(doubleClick + 50*time.Millisecond)
+	s.clickOn("kick")
+	s.clickOn("kick")
+	if s.m().muted[pad(t, "A1")] {
+		t.Error("the double click left the pad muted")
+	}
+	s.run(nil)
+	if unitBus("A1") != 1 || unitBus("A2") != 0 || unitBus("A3") != 2 {
+		t.Errorf("after isolating A1 the buses are %d %d %d, want 1 0 2", busOf("A1"), busOf("A2"), busOf("A3"))
+	}
+	s.shows("ISOLATED", "A1")
+	// A double click again brings it back.
+	time.Sleep(doubleClick + 50*time.Millisecond)
+	s.clickOn("kick")
+	s.clickOn("kick")
+	if unitBus("A1") != 1 || unitBus("A2") != 1 || unitBus("A3") != 2 {
+		t.Errorf("after the second double click the buses are %d %d %d, want 1 1 2", busOf("A1"), busOf("A2"), busOf("A3"))
+	}
+	// The button: the pads clicked keep their buses, leaving it puts everything back.
+	s.press("i")
+	s.shows("ISOLATE", "click pads")
+	s.clickOn("snare")
+	if unitBus("A1") != 0 || unitBus("A2") != 1 {
+		t.Errorf("with A2 chosen the buses are %d %d, want 0 1", busOf("A1"), busOf("A2"))
+	}
+	s.press("i")
+	if unitBus("A1") != 1 || unitBus("A2") != 1 {
+		t.Errorf("after the button the buses are %d %d, want 1 1", busOf("A1"), busOf("A2"))
+	}
+}
+
+func TestPadsHeardInThePatternKeepADifferentColour(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	plain, _ := m.tileColours(tileState{})
+	heard, _ := m.tileColours(tileState{used: true})
+	inIt, _ := m.tileColours(tileState{inPattern: true})
+	if heard == plain || inIt == plain || heard == inIt {
+		t.Errorf("colours: plain %s, heard %s, in the pattern %s", plain, heard, inIt)
+	}
+	// A bright state wins: the glow of a hit and the cursor are not hidden by the colour.
+	glow, _ := m.tileColours(tileState{used: true, glow: 1})
+	if glow == heard {
+		t.Error("a pad that is hit now does not glow")
+	}
+}

@@ -626,6 +626,9 @@ type tileState struct {
 	// glow, from 0 to 1, lights the tile as a pad hit on the unit does: by how hard it was hit,
 	// fading as it dies away.
 	glow float64
+	// used is a pad heard in the pattern that plays (kept lit, unlike glow); inPattern is one the
+	// pattern plays that has not been heard yet.
+	used, inPattern bool
 }
 
 // tileColours are the background and text colours of a tile for its state.
@@ -642,6 +645,10 @@ func (m Model) tileColours(ts tileState) (bg, fg lipgloss.Color) {
 		if ts.glow > 0.5 {
 			fg = th.cursorFg
 		}
+	case ts.used && !ts.empty:
+		bg = blend(th.tile, th.good, 0.5)
+	case ts.inPattern && !ts.empty:
+		bg = blend(th.tile, th.accent, 0.2)
 	case ts.marked:
 		bg = th.markedBg
 	case ts.empty:

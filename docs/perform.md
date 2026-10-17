@@ -39,6 +39,7 @@ Narrower screens put the same panels one under the other.
 | `n` | choose the next pattern |
 | `Space` | the next pattern becomes the one that plays |
 | `x` | clear the next pattern |
+| `i` | the ISOLATE button (see below); `Esc` puts everything back |
 | `f` `F` | note what BUS 1 / BUS 2 is used for (the unit does not tell the effect by itself) |
 | `Ctrl-R` | start / stop a recording |
 | `Ctrl-F` | full screen |
@@ -46,6 +47,28 @@ Narrower screens put the same panels one under the other.
 
 The control channel does the same from a controller: notes 60–63 (live mode, recording, next becomes now,
 clear next), see [config.md](config.md).
+
+## Isolating a pad (mouse)
+
+The unit has one effect on each bus; to hear what a bus does to a single sound, the other pads on it have
+to go dry. In the wide layout:
+
+- **One click** on a pad mutes it (a × on the tile). It mutes on this computer only; the unit has no mute to
+  set from here.
+- **Double click** a pad: it alone keeps its own bus, every other pad on the same bus is set dry (bus off).
+  The ISOLATE panel says `ISOLATED`. Double click again (or `Esc`) puts every pad back on the bus it had.
+- **The ISOLATE button** (`i`, or a click on its panel in the sidebar): click several pads to add them or
+  take them out; each keeps its bus and the others on those buses go dry. `i`, `Esc` or a click on the panel
+  again puts everything back.
+
+These are real changes to the pads' bus setting on the unit, saved in the project, until they are put back (quitting with `q` or `Ctrl-C` puts them back first; if the program is killed or the
+unit unplugged, they stay as they were set).
+
+## Pad colours
+
+A pad keeps a **green** tint once it has been heard in the pattern that plays (since the unit's Start, or
+since you made the next pattern the one that plays); a pad the pattern plays but that has not been heard
+yet is **tinted** in the accent colour. A hit still flashes on top of that.
 
 ## What it works out by itself
 
