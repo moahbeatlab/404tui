@@ -15,6 +15,8 @@ simulated device in this repo. None of it has been **verified against real hardw
 yet. The simulator encodes the protocol as read from SparkyMK2's code and docs, so it
 checks sequencing and data handling, not the unit's actual behaviour.
 
+Documentation per tab, with all keys and modes: [`docs/`](docs/README.md).
+
 ## Usage
 
     go run ./cmd/sp404                 # the terminal UI (same as `menu`)
