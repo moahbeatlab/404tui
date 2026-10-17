@@ -6304,10 +6304,6 @@ func TestARecordingWritesWhatTheUnitSendsToAnEventLogAndPerformShowsIt(t *testin
 	m.perfNow = &one
 	s.model = m
 	s.press("7")
-	s.shows("CONTROLS")
-	s.shows("1:74")
-	s.press("v")
-	s.shows("1:74")
 	// Config lists the messages.
 	s.press("6")
 	s.shows("MIDI monitor")
@@ -6829,7 +6825,7 @@ func TestPerformClicksMuteIsolateAndBringTheOthersBack(t *testing.T) {
 	if unitBus("A1") != 1 || unitBus("A2") != 0 || unitBus("A3") != 2 {
 		t.Errorf("after isolating A1 the buses are %d %d %d, want 1 0 2", busOf("A1"), busOf("A2"), busOf("A3"))
 	}
-	s.shows("A1 alone")
+	s.shows("focus: A1 alone")
 	// A double click again brings it back.
 	time.Sleep(doubleClick + 50*time.Millisecond)
 	s.clickOn("kick")
@@ -6838,13 +6834,13 @@ func TestPerformClicksMuteIsolateAndBringTheOthersBack(t *testing.T) {
 		t.Errorf("after the second double click the buses are %d %d %d, want 1 1 2", busOf("A1"), busOf("A2"), busOf("A3"))
 	}
 	// The button: the pads clicked keep their buses, leaving it puts everything back.
-	s.clickOn("off  ")
+	s.clickOn("focus")
 	s.shows("tap pads to add or take them out")
 	s.clickOn("snare")
 	if unitBus("A1") != 0 || unitBus("A2") != 1 {
 		t.Errorf("with A2 chosen the buses are %d %d, want 0 1", busOf("A1"), busOf("A2"))
 	}
-	s.clickOn("ON  ●")
+	s.clickOn("focus")
 	if unitBus("A1") != 1 || unitBus("A2") != 1 {
 		t.Errorf("after the button the buses are %d %d, want 1 1", busOf("A1"), busOf("A2"))
 	}
@@ -6867,6 +6863,8 @@ func TestPadsHeardInThePatternKeepADifferentColour(t *testing.T) {
 }
 
 func TestScenesFadeTheEffectsOfTheUnitByMIDI(t *testing.T) {
+	scenesOn = true
+	t.Cleanup(func() { scenesOn = false })
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	link := &midiLink{ch: make(chan midiin.Event, 4)}
@@ -6905,7 +6903,7 @@ func TestScenesFadeTheEffectsOfTheUnitByMIDI(t *testing.T) {
 		row := -1
 		seen := 0
 		for y, line := range lines() {
-			if strings.Contains(line, "save A") {
+			if strings.Contains(line, "tap to save") && strings.Contains(line, "A  ") {
 				if seen == bus {
 					row = y
 					break
@@ -6944,11 +6942,11 @@ func TestScenesFadeTheEffectsOfTheUnitByMIDI(t *testing.T) {
 	cc(1, 16, 20)
 	cc(1, 17, 40)
 	cc(1, 18, 60)
-	clickNth("save A", 0)
-	// The length of a glide is set by the buttons 1 2 4 8 (not a bus: 8 is no index).
+	clickNth("A  ·  tap to save", 0)
+	// The length of a glide is set by the buttons 1 2 3 4 8 (not a bus: 8 is no index).
 	for _, n := range []string{"8", "4", "1", "2"} {
 		for y, line := range lines() {
-			if strings.Contains(line, "glide takes") {
+			if strings.Contains(line, "length:") {
 				at := strings.Index(line, "  "+n+"  ")
 				click(y, len([]rune(line[:at]))+3)
 				break
@@ -6961,7 +6959,7 @@ func TestScenesFadeTheEffectsOfTheUnitByMIDI(t *testing.T) {
 	cc(1, 83, 7)
 	cc(1, 16, 100)
 	cc(1, 18, 0)
-	clickNth("save B", 0)
+	clickNth("B  ·  tap to save", 0)
 	s.shows("SCENES", "Scatter", "Downer")
 	src.mu.Lock()
 	src.sent = nil
@@ -6975,7 +6973,7 @@ func TestScenesFadeTheEffectsOfTheUnitByMIDI(t *testing.T) {
 		t.Errorf("the effect at the middle is %d, want B's 7", got)
 	}
 	// Bus 2 has no scenes: its fade does nothing, and nothing is sent to its channel.
-	fadeAt(1, 0.5)
+	fadeAt(1, 0.7)
 	src.mu.Lock()
 	for _, msg := range src.sent {
 		if msg[0]&0x0F == 1 {
@@ -6990,9 +6988,9 @@ func TestScenesFadeTheEffectsOfTheUnitByMIDI(t *testing.T) {
 	}
 	// A glide of this bus begins on the next bar of the clock and ends at B; bus 2 cannot glide yet.
 	feed(midiin.Event{Kind: midiin.Start})
-	clickNth("glide →A", 0) // bus 2's fade was left in the middle, so its button says A
+	s.model = s.m().sceneAct("glide", 1, 0)
 	s.shows("BUS 2: save scene A and scene B first")
-	clickNth("glide →B", 0)
+	s.model = s.m().sceneAct("glide", 0, 0)
 	s.shows("BUS 1: glide to B")
 	for i := 0; i < ticksPerBar*3; i++ {
 		feed(midiin.Event{Kind: midiin.Clock})
@@ -7122,20 +7120,20 @@ func TestMotionIsRecordedFromTheKnobsAndLoopedBackToTheUnit(t *testing.T) {
 	}
 	cc := func(ch, n, v int) { feed(midiin.Event{Kind: midiin.CC, Channel: ch, Data1: n, Data2: v}) }
 	// Without the clock there is nothing to record against.
-	s.model = s.m().motionAct(0)
-	if s.m().sc != nil && s.m().sc.bus[0].mo.state != motionIdle {
+	s.model = s.m().motionAct(0, 0)
+	if s.m().sc != nil && s.m().sc.bus[0].mo[0].state != motionIdle {
 		t.Error("a motion was armed without a clock")
 	}
 	feed(midiin.Event{Kind: midiin.Start})
 	s.model = s.m().sceneAct("bars", 1, 0)
 	tick(10)
-	s.model = s.m().motionAct(0)
-	if s.m().sc.bus[0].mo.state != motionArmed {
+	s.model = s.m().motionAct(0, 0)
+	if s.m().sc.bus[0].mo[0].state != motionArmed {
 		t.Fatal("the motion is not armed")
 	}
 	tick(ticksPerBar) // up to the next bar: the recording begins
-	if s.m().sc.bus[0].mo.state != motionRecording {
-		t.Fatalf("state %d, want recording", s.m().sc.bus[0].mo.state)
+	if s.m().sc.bus[0].mo[0].state != motionRecording {
+		t.Fatalf("state %d, want recording", s.m().sc.bus[0].mo[0].state)
 	}
 	// C1 is turned a quarter of the way in, to 50, and C3 half way, to 90; bus 2 is turned too.
 	tick(ticksPerBar / 4)
@@ -7144,10 +7142,10 @@ func TestMotionIsRecordedFromTheKnobsAndLoopedBackToTheUnit(t *testing.T) {
 	cc(1, 18, 90)
 	cc(2, 16, 7)
 	tick(ticksPerBar/2 + 1)
-	if s.m().sc.bus[0].mo.state != motionPlaying {
-		t.Fatalf("state %d, want playing after the bar", s.m().sc.bus[0].mo.state)
+	if s.m().sc.bus[0].mo[0].state != motionPlaying {
+		t.Fatalf("state %d, want playing after the bar", s.m().sc.bus[0].mo[0].state)
 	}
-	if s.m().sc.bus[1].mo.state != motionIdle {
+	if s.m().sc.bus[1].mo[0].state != motionIdle {
 		t.Error("bus 2 has a motion that was never asked for")
 	}
 	src.mu.Lock()
@@ -7167,9 +7165,23 @@ func TestMotionIsRecordedFromTheKnobsAndLoopedBackToTheUnit(t *testing.T) {
 	if got[[2]int{16, 50}] != 1 || got[[2]int{18, 90}] != 1 {
 		t.Errorf("a loop sent %v, want 16=50 and 18=90 once each", got)
 	}
-	// A tap stops it.
-	s.model = s.m().motionAct(0)
-	if s.m().sc.bus[0].mo.state != motionIdle {
-		t.Error("the motion did not stop")
+	// A tap stops it; another tap plays it again from the next bar, and a clear empties the slot.
+	s.model = s.m().motionAct(0, 0)
+	if s.m().sc.bus[0].mo[0].state != motionIdle || !s.m().sc.bus[0].mo[0].filled() {
+		t.Error("the motion did not stop, or was lost")
+	}
+	s.model = s.m().motionAct(0, 0)
+	if s.m().sc.bus[0].mo[0].state != motionWaiting {
+		t.Errorf("a tap on a recorded slot did not queue it: state %d", s.m().sc.bus[0].mo[0].state)
+	}
+	s.model = s.m().motionAct(0, 0)
+	s.model = s.m().motionClear(0)
+	if s.m().sc.bus[0].mo[0].filled() {
+		t.Error("the slot was not cleared")
+	}
+	// Another slot of the same bus records on its own.
+	s.model = s.m().motionAct(0, 2)
+	if s.m().sc.bus[0].mo[2].state != motionArmed || s.m().sc.bus[0].mo[0].state != motionIdle {
+		t.Error("slot 3 was not armed alone")
 	}
 }

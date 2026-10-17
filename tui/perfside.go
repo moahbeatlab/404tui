@@ -341,12 +341,12 @@ func (m Model) perfSidebar(width, h int) []string {
 	// The faders take the height that is left: the other panels need about 24 lines side by side, a
 	// little more stacked, and the banner of a recording one more.
 	m.btnH = btnRows(h)
-	spare, per := h-(42+6*m.btnH), 2
+	spare, per := h-(34+4*m.btnH), 2
 	if !wideTop {
 		spare -= 6
 	}
 	if !wide {
-		spare, per = h-(58+6*m.btnH), 3
+		spare, per = h-(50+4*m.btnH), 3
 	}
 	if m.rec != nil {
 		spare--
@@ -369,20 +369,19 @@ func (m Model) perfSidebar(width, h int) []string {
 		add(m.panel(title, colour, lines, width)...)
 	}
 	vb := newRowBuilder(st, m.btnH)
-	vw := max((width-4-1)/2, 8)
+	vw := max((width-4-2)/3, 8)
 	vb.button(map[bool]string{true: "■ stop rec", false: "● record"}[m.rec != nil], m.rec != nil, "view", 0, vw)
 	vb.gap(1)
 	vb.button("full screen", m.full, "view", 1, vw)
+	vb.gap(1)
+	vb.button("focus", m.iso != nil, "iso", 0, vw)
 	viewLines, viewBtns := vb.rows(0)
+	viewLines = append(viewLines, m.isolateStatus()...)
 	panelWithButtons("VIEW", st.th.faint, viewLines, viewBtns)
-	isoLines, isoBtns := m.isolateLines()
-	isoColour := st.th.faint
-	if m.iso != nil {
-		isoColour = st.th.hot
+	if scenesOn {
+		sceneLines, sceneBtns := m.sceneLines(width - 4)
+		panelWithButtons("SCENES", st.th.accent, sceneLines, sceneBtns)
 	}
-	panelWithButtons("ISOLATE", isoColour, isoLines, isoBtns)
-	sceneLines, sceneBtns := m.sceneLines(width - 4)
-	panelWithButtons("SCENES", st.th.accent, sceneLines, sceneBtns)
 	motionLines, motionBtns := m.motionLines(width - 4)
 	panelWithButtons("MOTION", st.th.accent, motionLines, motionBtns)
 	pw, pt := width, width
@@ -416,8 +415,6 @@ func (m Model) perfSidebar(width, h int) []string {
 		ta, ca, la := m.fxPanel(0, pw, rows, now)
 		tb, cb, lb := m.fxPanel(1, w2, rows, now)
 		add(m.pairPanels(wide, pw, ta, ca, la, w2, tb, cb, lb)...)
-		tc, cc, lc := m.controlsPanel(width, max(rows*2/3, 3), now)
-		add(m.panel(tc, cc, lc, width)...)
 	}
 	add(st.dim.Render("pad colours:  ") + lipgloss.NewStyle().Foreground(st.th.good).Render("green") + st.dim.Render(" heard in this pattern  ·  ") + lipgloss.NewStyle().Foreground(st.th.accent).Render("tinted") + st.dim.Render(" in it, not heard yet"))
 	if len(out) > h {

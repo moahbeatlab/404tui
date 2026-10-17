@@ -385,7 +385,7 @@ func TestScenesAndMotionSurviveRandomPlay(t *testing.T) {
 				case 7:
 					r.act("bars", []int{1, 2, 4, 8}[rng.Intn(4)])
 				case 8:
-					r.s.model = r.s.m().motionAct(rng.Intn(2))
+					r.s.model = r.s.m().motionAct(rng.Intn(2), rng.Intn(motionSlots))
 				case 9:
 					r.feed(midiin.Event{Kind: midiin.Start})
 				case 10:
@@ -456,5 +456,58 @@ func TestTheScenePanelsDrawAtAnySize(t *testing.T) {
 				r.s.m().View()
 			}
 		}
+	}
+}
+
+func TestFourMotionSlotsPerBusAreButtonsThatShowTheirCurve(t *testing.T) {
+	r := newPerfRig(t, 170, 80)
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.act("bars", 1)
+	lines := func() []string { return strings.Split(ansi.Strip(r.s.m().View()), "\n") }
+	// Four empty slots on each bus, side by side.
+	empty := 0
+	for _, l := range lines() {
+		empty += strings.Count(l, "empty")
+	}
+	if empty != 8 {
+		t.Fatalf("%d empty slots on the screen, want 8", empty)
+	}
+	// tapSlot taps the slot (0 to 3) of the first line of slots on the screen, found by its "empty".
+	tapSlot := func(slot int) {
+		t.Helper()
+		for y, l := range lines() {
+			if at := strings.Index(l, "empty"); at >= 0 {
+				x := len([]rune(l[:at])) + 1 + slot*11
+				r.s.send(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+				return
+			}
+		}
+		t.Fatal("no empty slot on the screen")
+	}
+	// A tap on the second slot of bus 1 records into it.
+	tapSlot(1)
+	if s := r.sc().bus[0]; s.mo[1].state != motionArmed || s.mo[0].state != motionIdle {
+		t.Fatalf("slot 2 state %d, slot 1 state %d", s.mo[1].state, s.mo[0].state)
+	}
+	r.tick(ticksPerBar)
+	// C2 is turned up over the bar: a rising curve.
+	for i := 0; i < 8; i++ {
+		r.cc(1, 17, i*16)
+		r.tick(ticksPerBar / 8)
+	}
+	r.tick(2)
+	if r.sc().bus[0].mo[1].state != motionPlaying {
+		t.Fatalf("slot 2 is %d after its bar", r.sc().bus[0].mo[1].state)
+	}
+	spark := r.sc().bus[0].mo[1].sparkline(8)
+	if !strings.HasPrefix(spark, "C2 ") || !strings.Contains(spark, "▁") || !strings.Contains(spark, "▇") {
+		t.Errorf("curve %q does not rise from low to high on C2", spark)
+	}
+	r.s.send(tea.WindowSizeMsg{Width: 170, Height: 80}) // a redraw: the view is kept over quiet clock ticks
+	r.s.shows("▶ C2")
+	// Another slot of the same bus cannot play at the same time.
+	tapSlot(0)
+	if r.sc().bus[0].mo[1].state == motionPlaying || r.sc().bus[0].mo[0].state != motionArmed {
+		t.Error("two slots armed or playing on one bus")
 	}
 }

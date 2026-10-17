@@ -47,65 +47,51 @@ clear next), see [config.md](config.md).
 
 ## Mouse and touch
 
-Perform is made to be used without the keyboard: everything below is a big button (as tall as the screen allows, 3 to 7 rows) or a pad to tap (a touch
-screen sends taps as clicks). In the wide layout the left side has, from the top:
+Perform is made to be used without the keyboard: everything below is a big button (as tall as the screen
+allows) or a pad to tap; a touch screen sends taps as clicks. In the wide layout the left side has, from
+the top:
 
-- **VIEW**: *● record* / *■ stop recording* and *full screen*.
-- **ISOLATE**: a switch. See below.
-- **SCENES**: the effects of each bus, saved and faded. See below.
+- **VIEW**: *● record* / *■ stop rec*, *full screen* and *focus* (see below).
+- **MOTION**: the length in bars, and for each bus four slots to keep a motion in.
+- the clock, the level, and BUS 1 / BUS 2 with their knobs C1–C3 as they are on the unit.
 
-## Isolating a pad
+## Focus: hear one pad's bus alone
 
-The unit has one effect on each bus; to hear what a bus does to one sound, the other pads on it have to
-go dry.
+The unit has one effect on each bus; to hear what a bus does to one sound, the other pads on it have to go
+dry.
 
 - **Tap a pad** once: it is muted (a × on the tile). It mutes on this computer only; the unit has no mute
   to set from here.
 - **Double tap a pad**: it alone keeps its own bus, every other pad on the same bus is set dry (bus off).
-  The ISOLATE switch turns on and says which pad is alone. Double tap it again, or switch ISOLATE off,
-  and every pad is back on the bus it had.
-- **The ISOLATE switch**: switch it on, then tap pads to add them or take them out; each keeps its bus and
-  the others on those buses go dry. Switch it off and everything is put back.
+  *focus* lights and says which pad is alone. Double tap it again, or tap *focus*, and every pad is back on
+  the bus it had.
+- **The focus button**: tap it, then tap pads to add them or take them out; each keeps its bus and the
+  others on those buses go dry. Tap it again and everything is put back.
 
 These are real changes to the pads' bus setting on the unit, saved in the project, until they are put
 back (quitting puts them back first; if the program is killed or the unit unplugged, they stay as they
 were set). A pad that goes to no bus has nothing to isolate.
 
-## Scenes: fading each bus's effect from one state to another
+## Motion: record the knobs, loop them
 
-Every bus has its own two scenes, **A** and **B**, and its own fade, so one bus can glide while the other
-stays. Set the effect on the unit, tap *save A* on that bus; change it, tap *save B*. A scene holds
-whether the effect is on, which effect it is and the three knobs C1–C3, all as the unit last said them over
-MIDI, so touch each knob once first (a knob it never sent is left alone). The fade is sent back to the
-unit as MIDI controllers (CC 16–18, 19 and 83 on channel 1 for BUS 1 and channel 2 for BUS 2), so the
-unit's own knobs follow.
+Each bus has four slots, and a length (*1 2 3 4 8* bars) at the top of the panel. The unit's sequencer must
+run: motion follows its MIDI clock.
 
-Per bus, in the SCENES panel:
-
-| Button | What |
+| Tap on | What happens |
 | --- | --- |
-| *save A* / *save B* | save the effect as that scene |
-| the bar (tap anywhere on it) | fade to that point, from A at the left to B at the right |
-| *A* / *B* | jump to that scene |
-| *glide →B* / *glide →A* | glide to the other scene over the number of bars set at the top, beginning on the next bar of the unit's clock (so the unit's sequencer must run); tap again to stop where it is |
+| an **empty** slot | it records the length you set, from the next bar: turn C1–C3 of that bus on the unit. Then it plays the loop at once |
+| a slot that **holds** a motion | it plays in a loop from the next bar (another slot of the bus that plays stops) |
+| the slot that **plays** | it stops (the motion is kept) |
+| a slot that waits or records | cancels it |
+| *clear* | empties the slot that was tapped last on that bus |
 
-*1 2 4 8* at the top is how long a glide takes. The knobs move smoothly; the effect and the on/off switch
-change at the middle of the fade (an effect cannot be half another). A bus with only one scene saved is left
-alone. It needs a MIDI output to the unit, found by the same name as the input (Config); where it cannot be
-opened the panel says why.
+The loop is sent to the unit as MIDI controllers (CC 16–18 on channel 1 for BUS 1, 2 for BUS 2), and begins
+where the knobs stood when the recording began. A slot that holds a motion shows its length and, small, the
+curve of the knob that moved the most (`C2 ▁▃▆█▆▃▁`). Turning a knob while a loop plays moves it until the
+loop comes round to it again. Motions are not saved: they are gone when the program ends. The panel also
+shows the last message sent to the unit, or why none can be sent (no MIDI output).
 
-## Motion: recording the knobs and looping them
-
-The MOTION panel has a button for each bus. Tap it: it waits for the next bar of the unit's clock (so its
-sequencer must run), then records everything you do to C1–C3 of that bus on the unit for the number of bars
-set at the top of SCENES (*1 2 4 8*, the same setting as a glide), and then plays it back in a loop by
-sending the same controllers to the unit. The loop begins where the knobs stood when the recording began.
-Tap the button again to stop it; while it waits or records, a tap cancels. A bus with a motion is not moved
-by its scenes, and its glide button asks you to stop the motion first. Each bus has its own motion, so one
-can loop while you play with the other.
-
-The motion is not saved: it is gone when the program ends. Turning a knob while a loop plays moves the
-knob until the loop comes round to it again.
+The glide between two snapshots of an effect ("scenes") is built but switched off for now.
 
 ## Pad colours
 

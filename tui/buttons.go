@@ -8,12 +8,12 @@ import (
 )
 
 // The Perform view is meant to be used with a mouse or a touch screen: what can be done is drawn as
-// big buttons, as tall as the screen allows (3 to 7 rows), and the places they were drawn at are kept
+// big buttons, as tall as the screen allows (2 to 7 rows), and the places they were drawn at are kept
 // for the clicks.
 
-// btnRows is how tall the buttons are for a sidebar h rows high: the other panels need about 45 rows
-// and the buttons use 6 times their height, so a taller screen makes bigger buttons.
-func btnRows(h int) int { return clamp((h-45)/6, 3, 7) }
+// btnRows is how tall the buttons are for a sidebar h rows high: the other panels need about 41 rows
+// and the buttons use 5 times their height, so a taller screen makes bigger buttons.
+func btnRows(h int) int { return clamp((h-41)/5, 2, 7) }
 
 // btn is a place of a panel that does something when it is clicked: its column, width and height,
 // counted from the start of the panel's text, and the row where it starts.
@@ -128,8 +128,62 @@ func (b *rowBuilder) rows(first int) ([]string, []btn) {
 	}
 	btns := make([]btn, len(b.btns))
 	for i, x := range b.btns {
-		x.row = first
+		x.row += first
 		btns[i] = x
 	}
 	return out, btns
+}
+
+// btnSpec is a button of two lines: a label and a line of detail under it.
+type btnSpec struct {
+	label, detail string
+	on            bool
+	act           string
+	arg           int
+}
+
+// twoLine draws a button rows tall with its label and, under it, a line of detail.
+func (b *rowBuilder) twoLine(rows, w int, sp btnSpec) []string {
+	th := b.st.th
+	style := lipgloss.NewStyle().Background(th.tile).Foreground(th.text).Bold(true)
+	faint := lipgloss.NewStyle().Background(th.tile).Foreground(th.faint)
+	if sp.on {
+		style = lipgloss.NewStyle().Background(th.accent).Foreground(th.cursorFg).Bold(true)
+		faint = lipgloss.NewStyle().Background(th.accent).Foreground(th.cursorFg)
+	}
+	centre := func(st lipgloss.Style, text string) string {
+		text = ansi.Truncate(text, w, "…")
+		left := (w - ansi.StringWidth(text)) / 2
+		return st.Render(strings.Repeat(" ", left) + text + strings.Repeat(" ", w-left-ansi.StringWidth(text)))
+	}
+	out := make([]string, rows)
+	for i := range out {
+		out[i] = style.Render(strings.Repeat(" ", w))
+	}
+	at := (rows - 2) / 2
+	out[at] = centre(style, sp.label)
+	out[at+1] = centre(faint, sp.detail)
+	return out
+}
+
+// stack puts two two-line buttons one above the other in a column w wide: each is half the height of
+// the band.
+func (b *rowBuilder) stack(w int, top, bottom btnSpec) {
+	half := b.n / 2
+	blk := append(b.twoLine(half, w, top), b.twoLine(b.n-half, w, bottom)...)
+	b.btns = append(b.btns,
+		btn{col: b.w, w: w, h: half, act: top.act, arg: top.arg},
+		btn{row: half, col: b.w, w: w, h: b.n - half, act: bottom.act, arg: bottom.arg})
+	b.add(blk, w)
+}
+
+// row puts a run of two-line buttons side by side, each w wide, with a gap of one between.
+func (b *rowBuilder) row(w int, specs ...btnSpec) {
+	for i, sp := range specs {
+		if i > 0 {
+			b.gap(1)
+		}
+		b.btns = append(b.btns, btn{col: b.w, w: w, h: b.n, act: sp.act, arg: sp.arg})
+		b.add(b.twoLine(b.n, w, sp), w)
+	}
 }

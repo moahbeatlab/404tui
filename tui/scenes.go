@@ -33,7 +33,8 @@ type busScene struct {
 	mix   float64
 	glide *glide
 	sent  fxScene
-	mo    motion
+	mo    [motionSlots]motion
+	sel   int // the slot of the motion tapped last
 }
 
 // sceneState is the scenes of both buses and the output they are sent on. It is shared by the copies
@@ -87,6 +88,9 @@ func (m Model) sceneAct(act string, bus int, pos float64) Model {
 	sc := m.scenes()
 	if act == "bars" {
 		// Here bus is the number of bars, not a bus.
+		if bus < 1 || bus > 8 {
+			return m
+		}
 		sc.bars = bus
 		m.sc = sc
 		m.message = fmt.Sprintf("a glide takes %s", plural(sc.bars, "bar"))
@@ -113,7 +117,7 @@ func (m Model) sceneAct(act string, bus int, pos float64) Model {
 		m = m.sceneApply(sc, bus)
 	case "glide":
 		switch {
-		case bs.mo.state != motionIdle:
+		case bs.motionBusy():
 			m.message = fmt.Sprintf("BUS %d: a motion is on: stop it first", bus+1)
 		case bs.glide != nil:
 			bs.glide = nil
@@ -171,7 +175,7 @@ func (m Model) sceneTick() Model {
 func (m Model) sceneApply(sc *sceneState, bus int) Model {
 	bs := &sc.bus[bus]
 	a, b := bs.a, bs.b
-	if !a.set || !b.set || bs.mo.state != motionIdle {
+	if !a.set || !b.set || bs.motionBusy() {
 		return m
 	}
 	pick := a
@@ -244,7 +248,8 @@ func (m Model) closeScenes() {
 	}
 }
 
-// sceneLines are the SCENES panel of the Perform sidebar, with its big buttons.
+// sceneLines are the SCENES panel of the Perform sidebar, with its big buttons: for each bus the two
+// snapshots one above the other, each showing what it holds, then the fade bar and the glide button.
 func (m Model) sceneLines(width int) ([]string, []btn) {
 	st := m.st
 	sc := m.scenes()
@@ -255,21 +260,14 @@ func (m Model) sceneLines(width int) ([]string, []btn) {
 		lines = append(lines, l...)
 		btns = append(btns, bt...)
 	}
-	// How long a glide takes.
-	b := newRowBuilder(st, m.btnH)
-	b.text(st.dim.Render("glide or motion: "))
-	barBtn := max((width-12-5-4)/4, 5)
-	for _, n := range []int{1, 2, 4, 8} {
-		b.button(fmt.Sprint(n), n == sc.bars, "bars", n, barBtn)
-		b.gap(1)
-	}
-	b.text(st.dim.Render("bars"))
-	band(b)
 	for bus := range 2 {
 		bs := sc.bus[bus]
 		colour, _ := st.th.busColour(int32(bus + 1))
-		head := lipgloss.NewStyle().Foreground(colour).Bold(true).Render(fmt.Sprintf("BUS %d", bus+1))
-		lines = append(lines, head+st.dim.Render("   A: ")+st.text.Render(sceneText(bs.a))+st.dim.Render("   B: ")+st.text.Render(sceneText(bs.b)))
+		lines = append(lines, lipgloss.NewStyle().Foreground(colour).Bold(true).Render(fmt.Sprintf("BUS %d", bus+1)))
+		b := newRowBuilder(st, 2*m.btnH)
+		snapW := max(width/2, 22)
+		b.stack(snapW, snapshotSpec("A", bs.a, "a", bus), snapshotSpec("B", bs.b, "b", bus))
+		b.gap(1)
 		label := "glide →B"
 		if bs.mix >= 0.5 {
 			label = "glide →A"
@@ -280,29 +278,42 @@ func (m Model) sceneLines(width int) ([]string, []btn) {
 		case bs.glide != nil:
 			label = "gliding… stop"
 		}
-		b := newRowBuilder(st, m.btnH)
-		b.button("save A", bs.a.set, "a", bus, 14)
-		b.gap(1)
-		glideW := max(ansi.StringWidth(label)+6, 20)
-		barW := max(width-14-14-glideW-3, 6)
+		glideW := max(ansi.StringWidth(label)+4, 16)
+		barW := max(width-snapW-glideW-2, 6)
 		b.bar(barW, bs.mix, colour, "fade", bus)
-		b.gap(1)
-		b.button("save B", bs.b.set, "b", bus, 14)
 		b.gap(1)
 		b.button(label, bs.glide != nil, "glide", bus, glideW)
 		band(b)
 	}
-	switch {
-	case sc.outErr != "":
-		lines = append(lines, st.warn.Render("cannot send to the unit: "+sc.outErr))
-	case sc.last != "":
-		lines = append(lines, st.dim.Render("last sent to the unit: "+sc.last))
-	}
-	if sc.outErr != "" {
-	} else if _, ok := m.midiSrc.(midiin.Outputs); !ok {
-		lines = append(lines, st.warn.Render("no MIDI output in this build"))
-	}
 	return lines, btns
+}
+
+// snapshotSpec is the button of a snapshot: lit when something is saved, showing the effect and the
+// three knobs.
+func snapshotSpec(name string, s fxScene, act string, bus int) btnSpec {
+	sp := btnSpec{label: name + "  ·  tap to save", detail: "empty", act: act, arg: bus}
+	if !s.set {
+		return sp
+	}
+	sp.on = true
+	sp.label = name + "  ✓  tap to save again"
+	var parts []string
+	if s.num >= 0 {
+		parts = append(parts, fxName(s.num))
+	}
+	if s.onKnown && !s.on {
+		parts = append(parts, "off")
+	}
+	knobs := make([]string, 3)
+	for k, v := range s.knobs {
+		knobs[k] = "–"
+		if v >= 0 {
+			knobs[k] = fmt.Sprint(v)
+		}
+	}
+	parts = append(parts, strings.Join(knobs, " · "))
+	sp.detail = strings.Join(parts, "   ")
+	return sp
 }
 
 func sceneText(s fxScene) string {
@@ -363,3 +374,7 @@ func sceneDetail(s fxScene) string {
 	}
 	return text
 }
+
+// scenesOn says whether the scenes (the snapshots A and B of a bus and the glide between them) are
+// shown. They are switched off for now: the motions are what is used.
+var scenesOn = false

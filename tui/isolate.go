@@ -197,12 +197,9 @@ func (m Model) clickPad(pad proto.PadIndex) (tea.Model, tea.Cmd) {
 	return m.setIsolated(map[proto.PadIndex]bool{pad: true})
 }
 
-// isolateLines are the ISOLATE panel of the Perform sidebar: a switch, and what it does now.
-func (m Model) isolateLines() ([]string, []btn) {
+// isolateStatus says what the focus does now, for under the buttons of the VIEW panel.
+func (m Model) isolateStatus() []string {
 	st := m.st
-	b := newRowBuilder(st, m.btnH)
-	b.toggle(m.iso != nil, "ISOLATE", "iso", 0)
-	lines, btns := b.rows(0)
 	var names []string
 	if m.iso != nil {
 		for p := range m.iso.pads {
@@ -216,17 +213,17 @@ func (m Model) isolateLines() ([]string, []btn) {
 		if len(names) > 0 {
 			list = strings.Join(names, " ")
 		}
-		lines = append(lines,
-			st.hot.Bold(true).Render("keeping "+list)+st.text.Render("  ·  "+plural(len(m.iso.was), "pad")+" dry"),
-			st.dim.Render("tap pads to add or take them out; switch off: all back"))
+		return []string{
+			st.hot.Bold(true).Render("focus: keeping "+list) + st.text.Render("  ·  "+plural(len(m.iso.was), "pad")+" dry"),
+			st.dim.Render("tap pads to add or take them out; tap focus again: all back"),
+		}
 	case m.iso != nil:
-		lines = append(lines,
-			st.hot.Bold(true).Render(strings.Join(names, " ")+" alone")+st.text.Render("  ·  "+plural(len(m.iso.was), "pad")+" dry"),
-			st.dim.Render("double tap it, or switch off: all back"))
-	default:
-		lines = append(lines, st.dim.Render("switch on and tap the pads that keep their bus, or double tap one pad"))
+		return []string{
+			st.hot.Bold(true).Render("focus: "+strings.Join(names, " ")+" alone") + st.text.Render("  ·  "+plural(len(m.iso.was), "pad")+" dry"),
+			st.dim.Render("double tap it, or tap focus: all back"),
+		}
 	}
-	return lines, btns
+	return []string{st.dim.Render("focus: tap it, then the pads that keep their bus (or double tap a pad)")}
 }
 
 // restoreIsolationNow puts the buses back before the program ends, so a pad is not left dry.
