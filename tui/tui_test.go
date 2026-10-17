@@ -6339,7 +6339,7 @@ type Entry = perflog.Entry
 
 func TestTheEffectOfABusIsReadFromTheUnitAndShownWithItsKnobs(t *testing.T) {
 	s := open(t)
-	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 100})
 	stopped := 0
 	m := s.m().WithRecorder(&fakeRecorder{stopped: &stopped})
 	m.mem.RecordDir = t.TempDir()
