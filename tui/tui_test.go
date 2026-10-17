@@ -6670,3 +6670,24 @@ func TestInSubstepModeHLGoThroughThePartsAndXSwitchesOne(t *testing.T) {
 		t.Errorf("column %d, want 14", s.m().patCol)
 	}
 }
+
+func TestASoloInOnePatternDoesNotSilenceAnother(t *testing.T) {
+	pads := func(p ...int) []proto.PadIndex {
+		var out []proto.PadIndex
+		for _, i := range p {
+			pad, _ := proto.NewPadIndex(uint16(i))
+			out = append(out, pad)
+		}
+		return out
+	}
+	pad := func(i int) proto.PadIndex { p, _ := proto.NewPadIndex(uint16(i)); return p }
+	m := Model{soloed: map[proto.PadIndex]bool{pad(1): true}}
+	with := &app.PatternDetail{PadsUsed: pads(0, 1)}
+	without := &app.PatternDetail{PadsUsed: pads(5, 6)}
+	if !heard(pad(1), nil, m.soloFor(with)) || heard(pad(0), nil, m.soloFor(with)) {
+		t.Error("in the pattern with the soloed pad only that pad sounds")
+	}
+	if !heard(pad(5), nil, m.soloFor(without)) || !heard(pad(6), nil, m.soloFor(without)) {
+		t.Error("a pattern without the soloed pad plays as it is")
+	}
+}

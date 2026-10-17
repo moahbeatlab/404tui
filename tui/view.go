@@ -2654,7 +2654,7 @@ func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow boo
 	counts := cellSplits(d, pad)
 	// A pad that is not heard in the mix on this computer has its notes greyed out, and so do the
 	// tracks around one that is expanded, so the eye stays on it.
-	dimmed := !heard(pad, m.muted, m.soloed)
+	dimmed := !heard(pad, m.muted, m.soloFor(d))
 	if m.patFocus && d == m.pattern && len(d.Grid.Rows) > 0 && d.Grid.Rows[clamp(m.patRow, 0, len(d.Grid.Rows)-1)].Pad != pad {
 		dimmed = true
 	}

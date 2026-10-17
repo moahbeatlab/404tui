@@ -1339,6 +1339,14 @@ func (m Model) patternMixIn(slot proto.PadIndex, rng *barRange) func() (formats.
 		if err != nil {
 			return formats.Sample{}, 0, err
 		}
+		// A solo only counts in a pattern that has a soloed pad: the others play as they are.
+		inPattern := map[proto.PadIndex]bool{}
+		for _, e := range pattern.Events {
+			if !e.Control {
+				inPattern[e.Pad] = true
+			}
+		}
+		soloed = soloIn(soloed, func(pad proto.PadIndex) bool { return inPattern[pad] })
 		if rng != nil {
 			bar := uint32(pattern.BeatsPerBar()) * formats.PPQ
 			pattern = pattern.Slice(uint32(rng.first)*bar, min(uint32(rng.last+1)*bar, pattern.Length))
@@ -3803,7 +3811,7 @@ func (m Model) cycleLine() string {
 	if d == nil {
 		return ""
 	}
-	live := onlyHeard(m.patConds.PrunedTo(d.Notes), m.muted, m.soloed)
+	live := onlyHeard(m.patConds.PrunedTo(d.Notes), m.muted, m.soloFor(d))
 	if len(live) == 0 {
 		return ""
 	}
@@ -3819,7 +3827,7 @@ func (m Model) cycleLine() string {
 // how many loops the bounce needs before it repeats, and what the note at the cursor does.
 func (m Model) cycleExplain() []string {
 	d := m.pattern
-	live := onlyHeard(m.patConds.PrunedTo(d.Notes), m.muted, m.soloed)
+	live := onlyHeard(m.patConds.PrunedTo(d.Notes), m.muted, m.soloFor(d))
 	if len(live) == 0 {
 		return nil
 	}
@@ -4212,7 +4220,7 @@ func (m Model) toggleSolo(pad proto.PadIndex) (tea.Model, tea.Cmd) {
 // rests on the first free slot of its bank.
 func (m Model) chooseHeardSlot() (tea.Model, tea.Cmd) {
 	d := m.pattern
-	if len(d.PadsUsed) > 0 && !slices.ContainsFunc(d.PadsUsed, func(pad proto.PadIndex) bool { return heard(pad, m.muted, m.soloed) }) {
+	if len(d.PadsUsed) > 0 && !slices.ContainsFunc(d.PadsUsed, func(pad proto.PadIndex) bool { return heard(pad, m.muted, m.soloFor(d)) }) {
 		m.message = "every pad of the pattern is muted: nothing to save"
 		return m, nil
 	}
@@ -4226,15 +4234,17 @@ func (m Model) chooseHeardSlot() (tea.Model, tea.Cmd) {
 // The new pattern plays the same on the unit.
 func (m Model) saveHeardPattern(from, to proto.PadIndex) (tea.Model, tea.Cmd) {
 	var left []string
+	solo := m.soloed
 	if d := m.pattern; d != nil && d.Slot == from {
+		solo = m.soloFor(d)
 		for _, pad := range d.PadsUsed {
-			if !heard(pad, m.muted, m.soloed) {
+			if !heard(pad, m.muted, solo) {
 				left = append(left, pad.String())
 			}
 		}
 	}
 	unit := m.unit
-	muted, soloed := maps.Clone(m.muted), maps.Clone(m.soloed)
+	muted, soloed := maps.Clone(m.muted), maps.Clone(solo)
 	m.busy = "saving what you hear as " + to.String()
 	return m, m.edit(func() tea.Msg {
 		dropped, err := app.CopyPatternKeeping(unit, from, to, func(pad proto.PadIndex) bool { return heard(pad, muted, soloed) })
@@ -4249,6 +4259,25 @@ func (m Model) saveHeardPattern(from, to proto.PadIndex) (tea.Model, tea.Cmd) {
 		}
 		return doneMsg{message: message, patterns: true}
 	})
+}
+
+// soloFor is the pads soloed as they count in the pattern d: all of them when it has one of them,
+// else none, so that a solo in one pattern does not silence the others.
+func (m Model) soloFor(d *app.PatternDetail) map[proto.PadIndex]bool {
+	if d == nil {
+		return m.soloed
+	}
+	return soloIn(m.soloed, func(pad proto.PadIndex) bool { return slices.Contains(d.PadsUsed, pad) })
+}
+
+// soloIn is soloed when one of its pads is in the pattern (has says so), else nil.
+func soloIn(soloed map[proto.PadIndex]bool, has func(proto.PadIndex) bool) map[proto.PadIndex]bool {
+	for pad := range soloed {
+		if has(pad) {
+			return soloed
+		}
+	}
+	return nil
 }
 
 // heard says whether a pad sounds in the mix on this computer: not muted, and soloed when any is.
