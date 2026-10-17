@@ -1405,10 +1405,13 @@ func (m Model) patternDetail(g geom) string {
 			pad := strings.Repeat(" ", 20)
 			rule := st.accent.Render(strings.Repeat("─", lipgloss.Width(lane[1])))
 			// The name sits on the rule over the lane, like a heading for it.
+			// The two strips say what they show: how loud each note is, and how long it lasts.
+			loud := st.dim.Render(fmt.Sprintf("%-20s", "  loudness ▁▃▅█"))
+			long := st.dim.Render(fmt.Sprintf("%-20s", "  length ├──┤"))
 			lines = append(lines, m.rowLabel(row.Pad, focused, lit)+" "+rule+m.mixBadge(row.Pad),
 				pad+lane[0],
 				pad+lane[1],
-				pad+lane[2], pad+lane[3], pad+rule)
+				loud+lane[2], long+lane[3], pad+rule)
 			continue
 		}
 		if !m.patFocus && r == m.patRow {
@@ -3065,9 +3068,20 @@ func (m Model) focusLane(d *app.PatternDetail, pad proto.PadIndex, sp stepSpan) 
 		length := strings.Repeat(" ", w)
 		switch {
 		case sustained:
-			length = st.accent.Render(strings.Repeat("━", w))
+			// Under a note that goes on: its line, closed with ┤ in the last step it covers.
+			if carries {
+				length = st.accent.Render(strings.Repeat("─", w))
+			} else {
+				length = st.accent.Render(strings.Repeat("─", w-1) + "┤")
+			}
 		case cover[c] > 0:
-			length = st.accent.Render("┣" + strings.Repeat(map[bool]string{true: "━", false: " "}[carries], w-1))
+			// The length is a bracket from the step the note starts in to the last it covers:
+			// ├────┤. A note of one step is ├┤.
+			if carries {
+				length = st.accent.Render("├" + strings.Repeat("─", w-1))
+			} else {
+				length = st.accent.Render("├" + strings.Repeat("─", w-2) + "┤")
+			}
 			mark, style = m.noteGlyph(cover[c])
 			vel = st.accent.Render(noteBlock(cover[c]) + strings.Repeat(" ", w-1))
 			if d == m.pattern && m.conditioned(d, pad, c) {
@@ -3094,7 +3108,7 @@ func (m Model) focusLane(d *app.PatternDetail, pad proto.PadIndex, sp stepSpan) 
 			vels.WriteString(g)
 			notes.WriteString(g)
 			if carries {
-				lens.WriteString(m.fillGap(gap, "━", st.accent))
+				lens.WriteString(m.fillGap(gap, "─", st.accent))
 			} else {
 				lens.WriteString(g)
 			}
