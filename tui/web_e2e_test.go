@@ -196,7 +196,9 @@ func TestABrowserPlaysThroughTheWholePipelineWithAClock(t *testing.T) {
 	for range 60 {
 		fm.emit(midiin.Event{Kind: midiin.Clock})
 	}
-	br.until(t, "the loop past half", func(s webState) bool { return s.Motion.Bus[0].Slots[1].State == motionPlaying && s.Motion.Bus[0].Slots[1].Pos >= 0.5 })
+	br.until(t, "the loop past half", func(s webState) bool {
+		return s.Motion.Bus[0].Slots[1].State == motionPlaying && s.Motion.Bus[0].Slots[1].Pos >= 0.5
+	})
 	fm.mu.Lock()
 	sent := len(fm.sent)
 	fm.mu.Unlock()
