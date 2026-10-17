@@ -52,10 +52,13 @@ messages on that channel, `note 60` … or `cc 20` (a controller turned up past 
 
 | Default | Does |
 | --- | --- |
-| `note 60` | live mode (the Perform tab and back) |
-| `note 61` | start / stop a recording |
-| `note 62` | the next pattern becomes the one that plays |
-| `note 63` | clear the next pattern |
+| `note 62` | live mode (the Perform tab and back) |
+| `note 60` | start / stop a recording |
+| `note 74` | the next pattern becomes the one that plays |
+| `note 75` | clear the next pattern |
+
+These are four of the 16 pushes of the map for the Faderfox EC4, which also drives focus, the length and the
+motion slots of Perform: see [ec4.md](ec4.md) (or `sp404 midimap`).
 
 MIDI input is built in on every release build (macOS: CoreMIDI, Linux: ALSA, Windows: winmm, on Intel and ARM alike). A build from source needs `go build -tags midi` on macOS and Linux (cgo; on Linux the ALSA headers `libasound2-dev`); on Windows there is nothing to add. The line under the settings says whether it is listening.
 

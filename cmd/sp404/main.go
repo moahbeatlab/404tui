@@ -34,6 +34,7 @@ const usage = `usage: sp404 [flags] <command>
 
 commands:
   menu           full-screen terminal UI (the default when no command is given)
+  midimap        print the map of the Faderfox EC4 for 404tui (one group of 16 pushes)
   check          check this installation: the computer, the program on a simulated unit, a plugged-in unit
   doctor         read-only checks of this program against the unit; run it first
                  (add -preview as an argument to also play a pad on the unit)
@@ -182,6 +183,9 @@ func run(args []string, o options) error {
 	switch args[0] {
 	case "ports":
 		return listPorts()
+	case "midimap":
+		fmt.Print(tui.EC4Sheet())
+		return nil
 	case "check":
 		return selfCheck(o, os.Stdout, l.Logger)
 	case "beep":

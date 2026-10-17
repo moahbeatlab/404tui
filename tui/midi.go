@@ -34,7 +34,9 @@ const (
 	defaultMidiChan = 16
 )
 
-var defaultMidiMap = [4]string{"note 60", "note 61", "note 62", "note 63"}
+// defaultMidiMap is where the four messages of Config are in the map of the Faderfox EC4 (see ec4Map):
+// live mode on the third push, recording on the first, next becomes now and clear next on the last two.
+var defaultMidiMap = [4]string{"note 62", "note 60", "note 74", "note 75"}
 
 // midiActions names what the four messages do, in the order of State.MidiMap.
 var midiActions = [4]string{"live mode", "recording", "next becomes now", "clear next"}
@@ -249,6 +251,12 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 			}
 			nm, cmd := m.midiAction(i)
 			return nm, tea.Batch(cmd, next)
+		}
+		// The rest of the map of the EC4: a note on, 60 to 75, on this channel.
+		if e.Kind == midiin.NoteOn {
+			if nm, ok := m.ec4Action(e.Data1 - ec4FirstNote); ok {
+				return nm, next
+			}
 		}
 		return m, next
 	}

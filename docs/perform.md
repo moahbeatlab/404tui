@@ -4,7 +4,7 @@ A dashboard for the stage. It is meant to be looked at from afar while you play 
 and the beat on the screen, nothing you have to operate. It listens to the unit's MIDI (a Mac, Windows
 or Linux release build; "no MIDI in this build" otherwise) and, for the level, to its USB audio.
 
-**Open it:** tab `7`, or the live-mode pad code (default `1 3 3 7`) or control-channel note 60, which
+**Open it:** tab `7`, or the live-mode pad code (default `1 3 3 7`) or control-channel note 62, which
 also takes you back to where you were.
 
 ## Layout
@@ -42,8 +42,7 @@ Narrower screens put the same panels one under the other.
 | `Ctrl-F` | full screen |
 | `?` | all keys |
 
-The control channel does the same from a controller: notes 60–63 (live mode, recording, next becomes now,
-clear next), see [config.md](config.md).
+The control channel does the same from a controller: see [ec4.md](ec4.md) and [config.md](config.md).
 
 ## Mouse and touch
 
@@ -90,6 +89,8 @@ where the knobs stood when the recording began. A slot that holds a motion shows
 curve of the knob that moved the most (`C2 ▁▃▆█▆▃▁`). Turning a knob while a loop plays moves it until the
 loop comes round to it again. Motions are not saved: they are gone when the program ends. The panel also
 shows the last message sent to the unit, or why none can be sent (no MIDI output).
+
+A controller can do all of this: the map for the Faderfox EC4 is in [ec4.md](ec4.md).
 
 The glide between two snapshots of an effect ("scenes") is built but switched off for now.
 

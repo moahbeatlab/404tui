@@ -5977,7 +5977,7 @@ func TestMIDIFromTheUnitAndAControllerDoTheSameAsTheCodes(t *testing.T) {
 	feed := func(e midiin.Event) {
 		next, cmd := s.m().midiEvent(midiMsg{link: link, ev: e})
 		s.model = next
-		if s.m().rec != nil || e.Data1 == 61 {
+		if s.m().rec != nil || e.Data1 == 60 {
 			s.run(cmd) // a recording starts and stops in a command
 		}
 	}
@@ -5991,21 +5991,22 @@ func TestMIDIFromTheUnitAndAControllerDoTheSameAsTheCodes(t *testing.T) {
 	if !s.m().liveOn || s.m().section != secPerform {
 		t.Fatalf("pads 1 3 3 7 by MIDI: live %v, section %d", s.m().liveOn, s.m().section)
 	}
-	// A controller on the control channel (16): note 60 switches the live mode off again.
-	feed(note(16, 60))
+	// A controller on the control channel (16): note 62 (the third push of the EC4's group) switches the
+	// live mode off again.
+	feed(note(16, 62))
 	if s.m().liveOn {
-		t.Error("note 60 on channel 16 did not leave the live mode")
+		t.Error("note 62 on channel 16 did not leave the live mode")
 	}
-	// Note 61 starts a recording and again stops it; a note on another channel does nothing.
-	feed(note(15, 61))
+	// Note 60 (the first push) starts a recording and again stops it; a note on another channel does nothing.
+	feed(note(15, 60))
 	if s.m().rec != nil {
 		t.Error("a note on another channel started a recording")
 	}
-	feed(note(16, 61))
+	feed(note(16, 60))
 	s.shows("REC")
-	feed(note(16, 61))
+	feed(note(16, 60))
 	if s.m().rec != nil || stopped != 1 {
-		t.Errorf("note 61 again: recording %v, stopped %d", s.m().rec != nil, stopped)
+		t.Errorf("note 60 again: recording %v, stopped %d", s.m().rec != nil, stopped)
 	}
 	// The messages are set in Config: a controller turned up past half works too.
 	m = s.m()
@@ -6201,7 +6202,7 @@ func TestRawMIDIBytesDriveARunningProgram(t *testing.T) {
 		src.play(t, 0xF8)
 	}
 	// The control channel: note 60 on channel 16 (0x9F) brings the live mode back on.
-	src.play(t, 0x9F, 60, 127)
+	src.play(t, 0x9F, 62, 127)
 	// Every message is a pass through the program's loop and a draw; they are let go through.
 	time.Sleep(3 * time.Second)
 	p.Quit()

@@ -11,6 +11,7 @@ view in front, searchable; these pages explain what they are for.
 | `5` Sequencer (and the patterns under the pads) | [sequencer.md](sequencer.md) |
 | `6` Config | [config.md](config.md) |
 | `7` Perform | [perform.md](perform.md) |
+| Faderfox EC4 map for Perform | [ec4.md](ec4.md) |
 
 Everywhere: `1`–`7` change tab, `Ctrl-R` records the unit's audio, `Ctrl-F` full screen, `Ctrl-T` next
 theme, `r` refresh, `?` keys, `:` command palette, `q` quit. `sp404 check` checks the installation.

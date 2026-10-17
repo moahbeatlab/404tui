@@ -511,3 +511,54 @@ func TestFourMotionSlotsPerBusAreButtonsThatShowTheirCurve(t *testing.T) {
 		t.Error("two slots armed or playing on one bus")
 	}
 }
+
+func TestTheEC4MapDrivesFocusLengthMotionAndClear(t *testing.T) {
+	r := newPerfRig(t, 170, 80)
+	push := func(n int) { r.feed(midiin.Event{Kind: midiin.NoteOn, Channel: 16, Data1: n, Data2: 127}) }
+	r.feed(midiin.Event{Kind: midiin.Start})
+	// E2: focus on and off.
+	push(61)
+	if r.s.m().iso == nil || !r.s.m().iso.multi {
+		t.Error("E2 did not switch the focus on")
+	}
+	push(61)
+	if r.s.m().iso != nil {
+		t.Error("E2 did not switch the focus off")
+	}
+	// E4: the length goes 2, 3, 4, 8, 1, 2.
+	var got []int
+	for range 6 {
+		push(63)
+		got = append(got, r.sc().bars)
+	}
+	if fmt.Sprint(got) != "[3 4 8 1 2 3]" {
+		t.Errorf("E4 gave the lengths %v", got)
+	}
+	// E5 to E12: the slots of each bus; E6 is slot 2 of bus 1, E11 slot 3 of bus 2.
+	push(65)
+	push(70)
+	if r.sc().bus[0].mo[1].state != motionArmed || r.sc().bus[1].mo[2].state != motionArmed {
+		t.Errorf("E6 and E11 did not arm slot 2 of BUS 1 and slot 3 of BUS 2: %d %d", r.sc().bus[0].mo[1].state, r.sc().bus[1].mo[2].state)
+	}
+	// A push cancels a slot that waits; E13 and E14 clear the slot tapped last of each bus.
+	push(65)
+	push(70)
+	if r.sc().bus[0].mo[1].state != motionIdle || r.sc().bus[1].mo[2].state != motionIdle {
+		t.Error("a second push did not cancel the recording")
+	}
+	r.sc().bus[0].mo[1] = motion{total: ticksPerBar, events: []motionEv{{0, 0, 9}}}
+	r.sc().bus[1].mo[2] = motion{total: ticksPerBar, events: []motionEv{{0, 0, 9}}}
+	push(72)
+	push(73)
+	if r.sc().bus[0].mo[1].filled() || r.sc().bus[1].mo[2].filled() {
+		t.Error("E13 and E14 did not clear the slots")
+	}
+	// A note that is not in the map, or on another channel, does nothing.
+	before := r.sc().bars
+	push(76)
+	push(59)
+	r.feed(midiin.Event{Kind: midiin.NoteOn, Channel: 15, Data1: 63, Data2: 127})
+	if r.sc().bars != before {
+		t.Error("a note outside the map or on another channel changed the length")
+	}
+}

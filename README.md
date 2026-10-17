@@ -117,8 +117,10 @@ the input with `404` in its name (set in Config, `6`). What it does:
   sends (24 ticks to a quarter note; the loop is of the pattern you said plays). The unit has to send
   MIDI clock: check its MIDI sync setting.
 - **Control channel:** a note (or a controller turned up past half) on the control channel, 16 to start
-  with, does an action: notes 60 to 63 switch the live mode, start and stop a recording, make the next
-  pattern the one that plays, and clear it. The channel and each message are set in Config.
+  with, does an action. The map for a Faderfox EC4 (one group of 16 pushes, notes 60 to 75) switches the live
+  mode, starts and stops a recording, switches the focus, sets the length of a motion, records, plays and
+  clears the motion slots of both buses, and makes the next pattern the one that plays: see
+  [`docs/ec4.md`](docs/ec4.md) or `sp404 midimap`. The channel and the four main messages are set in Config.
 - **Movement in Perform:** pads hit on the unit light up in the Perform tab by how hard they were hit and
   fade out (a stripe on the tile's edge is its bus, the selected pad is tinted), every controller seen
   gets a fader and a dial with its value and `channel:number` in a CONTROLS strip (the ones moved lately
