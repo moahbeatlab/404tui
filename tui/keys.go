@@ -1009,6 +1009,9 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 				return next, cmd
 			}
 		}
+		if next, cmd, ok := m.substepKey(name); ok {
+			return next, cmd
+		}
 		switch name {
 		case "V":
 			return m.startSelecting()
@@ -1037,21 +1040,9 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 			if name == "h" || name == "left" {
 				dir = -1
 			}
-			// In a split step the keys go through its parts first, then on to the next step.
-			if pad, _, ok := m.cellOfPattern(); ok {
-				if n, _ := d.Split(pad, m.patCol); n > 1 && m.patSub+dir >= 0 && m.patSub+dir < n {
-					m.patSub += dir
-					break
-				}
-			}
 			lo, hi := m.colBounds(d)
 			m.patCol = clamp(m.patCol+dir, lo, hi-1)
 			m.patSub = 0
-			if pad, _, ok := m.cellOfPattern(); ok && dir < 0 {
-				if n, _ := d.Split(pad, m.patCol); n > 1 {
-					m.patSub = n - 1
-				}
-			}
 		case "v":
 			return m.openRangePicker()
 		case "j", "down":
@@ -1084,21 +1075,9 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 				}
 				break
 			}
-			return m.toggleNoteOrPart()
+			return m.toggleNote()
 		case "x":
-			return m.toggleNoteOrPart()
-		case "i":
-			return m.cycleSubsteps()
-		case "I":
-			if pad, _, ok := m.cellOfPattern(); ok {
-				if n, _ := m.pattern.Split(pad, m.patCol); n > 1 {
-					m.patSub = (m.patSub + 1) % n
-				} else {
-					m.message = "the step is not split: i divides it into 2, 3 or 4 parts"
-				}
-			}
-		case "z":
-			return m.toggleSubstep()
+			return m.toggleNote()
 		case "H", "L", "(", ")":
 			// Nudge the note off (or back toward) the grid: H L by 5 ticks, ( ) by 1.
 			by := map[string]int{"H": -5, "L": 5, "(": -1, ")": 1}[name]
@@ -3567,9 +3546,9 @@ func (m Model) cycleSubsteps() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	cur, _ := m.pattern.Split(pad, m.patCol)
-	n := cur%4 + 1
-	if len(m.pattern.CellNotes(pad, m.patCol)) == 0 {
-		n = 1
+	n := cur + 1
+	if n > 4 {
+		n = 2
 	}
 	on := make([]bool, n)
 	for i := range on {
@@ -3579,15 +3558,57 @@ func (m Model) cycleSubsteps() (tea.Model, tea.Cmd) {
 	return m.setSplit(pad, n, on)
 }
 
-// toggleNoteOrPart is Enter or x: in a split step it switches the part the cursor is on, else the
-// step's note on or off.
-func (m Model) toggleNoteOrPart() (tea.Model, tea.Cmd) {
-	if pad, _, ok := m.cellOfPattern(); ok {
-		if n, _ := m.pattern.Split(pad, m.patCol); n > 1 {
-			return m.toggleSubstep()
-		}
+// substepKey is the substep mode of the track: e turns it on and off, and while it is on h l go
+// through the parts of the step, x (or Enter) switches the part the cursor is on, and i changes
+// into how many parts the step is divided. Other keys do what they always do.
+func (m Model) substepKey(name string) (tea.Model, tea.Cmd, bool) {
+	pad, _, ok := m.cellOfPattern()
+	if !ok {
+		return m, nil, false
 	}
-	return m.toggleNote()
+	n, _ := m.pattern.Split(pad, m.patCol)
+	switch {
+	case name == "e":
+		m.patSubMode = !m.patSubMode
+		m.patSub = 0
+		if !m.patSubMode {
+			m.message = "substep mode off"
+			return m, nil, true
+		}
+		m.message = "substep mode: h l part, x on/off, i 2/3/4 parts, e leaves it"
+		if n < 2 {
+			nm, cmd := m.cycleSubsteps()
+			return nm, cmd, true
+		}
+		return m, nil, true
+	case !m.patSubMode:
+		return m, nil, false
+	case name == "esc":
+		m.patSubMode = false
+		m.message = "substep mode off"
+		return m, nil, true
+	case name == "h" || name == "left" || name == "l" || name == "right":
+		if n < 2 {
+			return m, nil, false
+		}
+		dir := 1
+		if name == "h" || name == "left" {
+			dir = -1
+		}
+		m.patSub = clamp(m.patSub+dir, 0, n-1)
+		return m, nil, true
+	case name == "x" || name == "enter":
+		if n < 2 {
+			nm, cmd := m.cycleSubsteps()
+			return nm, cmd, true
+		}
+		nm, cmd := m.toggleSubstep()
+		return nm, cmd, true
+	case name == "i":
+		nm, cmd := m.cycleSubsteps()
+		return nm, cmd, true
+	}
+	return m, nil, false
 }
 
 // toggleSubstep switches the part of a split step the cursor is on: sounding or not.

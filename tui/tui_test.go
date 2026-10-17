@@ -6596,7 +6596,7 @@ func TestABusKnobsAreItsChannelsCC16To18(t *testing.T) {
 	s.press("7") // the view draws without a MIDI monitor too
 }
 
-func TestISplitsAStepIntoSubstepsAndTheGridCountsThem(t *testing.T) {
+func TestESubstepModeSplitsAStepAndTheGridCountsThem(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	s.press("N", "enter", "enter", "tab", "enter")
@@ -6618,80 +6618,53 @@ func TestISplitsAStepIntoSubstepsAndTheGridCountsThem(t *testing.T) {
 		}
 		return ticks
 	}
+	s.press("e") // on: the step is two parts
 	for _, c := range []struct {
 		want  int
 		ticks []uint32
-	}{{2, []uint32{0, step / 2}}, {3, []uint32{0, step / 3, 2 * (step / 3)}}, {4, []uint32{0, step / 4, step / 2, 3 * step / 4}}} {
-		want, ticks := c.want, c.ticks
-		s.press("i")
+	}{{2, []uint32{0, step / 2}}, {3, []uint32{0, step / 3, 2 * (step / 3)}}, {4, []uint32{0, step / 4, step / 2, 3 * step / 4}}, {2, []uint32{0, step / 2}}} {
 		got := inStep()
-		if len(got) != len(ticks) {
-			t.Fatalf("%d sub-steps: notes at %v", want, got)
+		if len(got) != len(c.ticks) {
+			t.Fatalf("%d parts: notes at %v", c.want, got)
 		}
 		for i := range got {
-			if got[i] != ticks[i] {
-				t.Errorf("%d sub-steps: notes at %v, want %v", want, got, ticks)
+			if got[i] != c.ticks[i] {
+				t.Errorf("%d parts: notes at %v, want %v", c.want, got, c.ticks)
 			}
 		}
-		s.shows(fmt.Sprintf("SUBSTEP %d", want))
+		s.shows(fmt.Sprintf("SUBSTEP %d", c.want))
+		s.press("i")
 	}
-	s.shows("⁴")
-	s.press("i")
-	if len(inStep()) != 1 {
-		t.Errorf("after the fourth, i gives one note again: %v", inStep())
+	s.press("e") // off
+	s.shows("substep mode off")
+	// Off: the keys are the plain ones again, x takes the notes out.
+	s.press("x")
+	if len(inStep()) != 0 {
+		t.Errorf("x outside the mode left notes: %v", inStep())
 	}
 }
 
-func TestZSwitchesAPartOfASplitStepAndISplitsAgain(t *testing.T) {
+func TestInSubstepModeHLGoThroughThePartsAndXSwitchesOne(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	s.press("N", "enter", "enter", "tab", "enter")
 	pad := s.m().pattern.Grid.Rows[0].Pad
-	s.press("l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "x") // step 13, empty
-	step := s.m().pattern.StepTicks()
-	s.press("i", "i") // three parts
-	if n, on := s.m().pattern.Split(pad, 13); n != 3 || !on[0] || !on[1] || !on[2] {
-		t.Fatalf("split = %d %v, want 3 parts all on", n, on)
-	}
-	s.press("I", "z") // the middle part off
-	n, on := s.m().pattern.Split(pad, 13)
-	if n != 3 || !on[0] || on[1] || !on[2] {
-		t.Fatalf("split = %d %v, want 3 parts, the middle off", n, on)
-	}
-	if got := len(s.m().pattern.CellNotes(pad, 13)); got != 2 {
-		t.Errorf("%d notes in the step, want 2", got)
-	}
-	s.press("z")
-	if n, on := s.m().pattern.Split(pad, 13); n != 3 || !on[1] {
-		t.Errorf("z again: split = %d %v", n, on)
-	}
-	// Only the first of four parts: still a split step, not a plain note.
-	s.press("i") // four parts
-	s.press("I", "z", "I", "z", "I", "z")
-	// parts 2..4 off (cursor moved 1,2,3)
-	if n, on := s.m().pattern.Split(pad, 13); n != 4 || !on[0] || on[1] || on[2] || on[3] {
-		t.Errorf("split = %d %v, want 4 parts with only the first", n, on)
-	}
-	_ = step
-}
-
-func TestHAndLGoThroughThePartsOfASplitStepAndEnterSwitchesOne(t *testing.T) {
-	s := open(t)
-	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
-	s.press("N", "enter", "enter", "tab", "enter")
-	pad := s.m().pattern.Grid.Rows[0].Pad
-	s.press("l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "x") // step 13, empty
-	s.press("i", "i", "i")                                                        // four parts
+	s.press("l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "x") // an empty step 13
+	s.press("e", "i", "i")                                                        // four parts
 	s.press("l", "l", "x")                                                        // the third part off
 	if n, on := s.m().pattern.Split(pad, 13); n != 4 || !on[0] || !on[1] || on[2] || !on[3] {
 		t.Fatalf("split = %d %v, want the third part off", n, on)
 	}
-	s.press("l", "l") // past the last part: the next step
-	if s.m().patCol != 14 {
-		t.Errorf("column %d, want 14", s.m().patCol)
+	s.press("l", "l", "l") // stops at the last part
+	if s.m().patCol != 13 || s.m().patSub != 3 {
+		t.Errorf("column %d part %d, want 13 and 3", s.m().patCol, s.m().patSub)
 	}
 	s.press("h")
-	if s.m().patCol != 13 || s.m().patSub != 3 {
-		t.Errorf("back: column %d part %d, want 13 and 3", s.m().patCol, s.m().patSub)
+	if s.m().patSub != 2 {
+		t.Errorf("part %d, want 2", s.m().patSub)
+	}
+	s.press("e", "l") // out of the mode, l is the next step
+	if s.m().patCol != 14 {
+		t.Errorf("column %d, want 14", s.m().patCol)
 	}
 }

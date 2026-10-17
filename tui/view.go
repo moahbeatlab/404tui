@@ -1426,7 +1426,7 @@ func (m Model) patternDetail(g geom) string {
 				lines = append(lines, "", where+st.text.Render(fmt.Sprintf("  vel %d  ", loudest))+
 					st.accent.Render(levelBar(16, loudest, 127))+st.text.Render("  ·  ")+
 					st.hot.Render(fmt.Sprintf("SUBSTEP %d", n))+"  "+m.substepBoxes(n, on)+
-					st.dim.Render(fmt.Sprintf(" part %d  ·  h l part  Enter on/off  i split", m.patSub+1)))
+					st.dim.Render(m.substepHint()))
 			} else {
 				length := float64(notes[0].Length) / float64(max(d.StepTicks(), 1))
 				here := where + st.text.Render(fmt.Sprintf("  vel %d  ", loudest)) +
@@ -2741,6 +2741,14 @@ func cellSplits(d *app.PatternDetail, pad proto.PadIndex) []int {
 	return splits
 }
 
+// substepHint tells what the keys do for a split step.
+func (m Model) substepHint() string {
+	if m.patSubMode {
+		return fmt.Sprintf(" part %d  ·  h l part  x on/off  i 2/3/4  e leave substep mode", m.patSub+1)
+	}
+	return "  ·  e edits the parts"
+}
+
 // substepBoxes draws the parts of a split step as the unit's display does: a box each, filled when
 // the part sounds, the one the cursor is on lit.
 func (m Model) substepBoxes(n int, on []bool) string {
@@ -2753,7 +2761,7 @@ func (m Model) substepBoxes(n int, on []bool) string {
 			box = "██"
 		}
 		switch {
-		case i == m.patSub:
+		case i == m.patSub && m.patSubMode:
 			b.WriteString(lit.Render(box))
 		case i < len(on) && on[i]:
 			b.WriteString(st.accent.Render(box))

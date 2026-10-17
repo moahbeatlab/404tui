@@ -396,8 +396,10 @@ type Model struct {
 	// redo stacks of edits to it.
 	patRow, patCol int
 	// patSub is the part of a split step the cursor is on.
-	patSub  int
-	patHist *patternHistory
+	patSub int
+	// patSubMode is on while h l move between the parts of a step and x switches them.
+	patSubMode bool
+	patHist    *patternHistory
 	// patFocus expands the track on the cursor row into a big step lane; the others stay
 	// one-line strips. Esc collapses it again.
 	patFocus bool
