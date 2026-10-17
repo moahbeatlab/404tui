@@ -6085,12 +6085,17 @@ type fakeMIDI struct {
 	on      func(midiin.Event)
 	stopped int
 	sent    [][]byte // what was sent to the unit
+	// openOutErr and sendErr make the output fail to open, or fail when sent to.
+	openOutErr, sendErr error
 }
 
 func (f *fakeMIDI) Ports() ([]string, error) { return []string{"SP-404MKII"}, nil }
 
 // OpenOut takes the messages sent to the unit.
 func (f *fakeMIDI) OpenOut(string) (midiin.Out, string, error) {
+	if f.openOutErr != nil {
+		return nil, "", f.openOutErr
+	}
 	return &fakeOut{f: f}, "SP-404MKII", nil
 }
 
@@ -6099,6 +6104,9 @@ type fakeOut struct{ f *fakeMIDI }
 func (o *fakeOut) Send(msg []byte) error {
 	o.f.mu.Lock()
 	defer o.f.mu.Unlock()
+	if o.f.sendErr != nil {
+		return o.f.sendErr
+	}
 	o.f.sent = append(o.f.sent, append([]byte(nil), msg...))
 	return nil
 }
