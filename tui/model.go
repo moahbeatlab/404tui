@@ -430,6 +430,9 @@ type Model struct {
 	muted, soloed map[proto.PadIndex]bool
 	// lvlWas holds the level of a pad that was muted from the controller.
 	lvlWas map[proto.PadIndex]int32
+	// web is where the state of Perform is published for the browsers, when there is a web side.
+	web    WebSink
+	webURL string
 	// iso is what Perform has isolated; clickPadAt and clickAt find a double click.
 	iso        *isolation
 	sc         *sceneState
@@ -1117,6 +1120,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	model, cmd := m.update(msg)
 	if updated, ok := model.(Model); ok {
 		updated = updated.logMessage()
+		updated.publishWeb()
 		if updated.loopDirty {
 			updated.loopDirty = false
 			if again := updated.requeueLoop(); again != nil {
@@ -1145,6 +1149,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case WebCommand:
+		return m.webCommand(msg)
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case tea.MouseMsg:

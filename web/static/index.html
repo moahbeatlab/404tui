@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>404tui</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#161618">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="connect" class="screen" hidden>
+  <form id="connectForm">
+    <h1>404<span>tui</span></h1>
+    <p>Connect to the computer that runs <code>sp404 serve</code></p>
+    <label>Address <input id="hostIn" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="192.168.1.20:8404"></label>
+    <label>Key <input id="keyIn" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="shown by sp404 serve"></label>
+    <button type="submit" class="big on">Connect</button>
+    <p id="connectErr" class="err"></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header id="top">
+    <div class="brand">404<span>tui</span></div>
+    <div id="conn" class="conn"><i></i><b id="connText">…</b></div>
+  </header>
+
+  <section id="rail" class="panel">
+    <div class="bankbpm">
+      <div class="bank"><small>BANK</small><b id="bank">–</b></div>
+      <div class="bpm"><small>BPM</small><b id="bpm">–</b></div>
+    </div>
+    <div class="clock">
+      <div id="beats"><i></i><i></i><i></i><i></i></div>
+      <div id="bar">–</div>
+    </div>
+    <div class="cue">
+      <div><small>NOW</small><b id="now">–</b></div>
+      <div><small>NEXT</small><b id="next">–</b></div>
+    </div>
+    <div class="buttons">
+      <button id="bRec" class="big" data-a="rec"><span class="dot"></span><span id="bRecT">RECORD</span></button>
+      <button id="bFocus" class="big" data-a="focus"><span id="bFocusT">FOCUS</span><small id="bFocusS">tap, then pads</small></button>
+      <button id="bMix" class="big"><span>MIX</span><small id="bMixS">drag a pad = volume</small></button>
+      <div class="pair">
+        <button class="big" data-a="nextnow"><span>NEXT ▸ NOW</span></button>
+        <button class="big" data-a="clearnext"><span>CLEAR NEXT</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section id="pads"><div id="grid"></div></section>
+
+  <section id="motion" class="panel">
+    <div class="len">
+      <small>LENGTH</small>
+      <div class="seg" id="bars"></div>
+      <button id="bDub" class="big dub" data-a="dub"><span>OVERDUB</span></button>
+    </div>
+    <div id="buses"></div>
+  </section>
+
+  <nav id="tabs">
+    <button data-tab="pads" class="on">PADS</button>
+    <button data-tab="motion">MOTION</button>
+    <button data-tab="rail">STAGE</button>
+  </nav>
+  <div id="toast"></div>
+</div>
+
+<div id="lost" hidden><div><b>Connection lost</b><span id="lostS">reconnecting…</span><button id="lostB">Change address</button></div></div>
+
+<script src="app.js"></script>
+</body>
+</html>

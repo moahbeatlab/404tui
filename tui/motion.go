@@ -419,7 +419,19 @@ func (m Model) motionLines(width int) ([]string, []btn) {
 // sparkline draws the knob that moves the most as a small curve of n steps over the loop, with its
 // number in front: "C2 ▁▃▆█▆▃▁".
 func (mo motion) sparkline(n int) string {
-	var best, bestRange int
+	best, vals := mo.curve(n)
+	steps := []rune("▁▂▃▄▅▆▇█")
+	out := make([]rune, n)
+	for i, v := range vals {
+		out[i] = steps[clamp(v*len(steps)/128, 0, len(steps)-1)]
+	}
+	return fmt.Sprintf("C%d %s", best+1, string(out))
+}
+
+// curve is the knob that moves the most (0 to 2) as n values over the loop; a step with no move holds
+// the value before it.
+func (mo motion) curve(n int) (best int, vals []int) {
+	var bestRange int
 	var curves [3][]int
 	for k := range curves {
 		curves[k] = make([]int, n)
@@ -442,15 +454,14 @@ func (mo motion) sparkline(n int) string {
 			best, bestRange = k, hi-lo
 		}
 	}
-	steps := []rune("▁▂▃▄▅▆▇█")
-	out := make([]rune, n)
+	vals = make([]int, n)
 	last := 0
 	for i, v := range curves[best] {
 		if v < 0 {
-			v = last // a step with no move holds the value before it
+			v = last
 		}
 		last = v
-		out[i] = steps[clamp(v*len(steps)/128, 0, len(steps)-1)]
+		vals[i] = v
 	}
-	return fmt.Sprintf("C%d %s", best+1, string(out))
+	return best, vals
 }

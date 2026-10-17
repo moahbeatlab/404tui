@@ -28,12 +28,14 @@ import (
 	"github.com/moahbeatlab/404tui/sim"
 	"github.com/moahbeatlab/404tui/tui"
 	"github.com/moahbeatlab/404tui/version"
+	"github.com/moahbeatlab/404tui/web"
 )
 
 const usage = `usage: sp404 [flags] <command>
 
 commands:
   menu           full-screen terminal UI (the default when no command is given)
+  serve          run without a screen and serve Perform to a browser on this network (phone, tablet)
   midimap        print the map of the Faderfox EC4 for 404tui (one group of 16 pushes)
   check          check this installation: the computer, the program on a simulated unit, a plugged-in unit
   doctor         read-only checks of this program against the unit; run it first
@@ -59,6 +61,9 @@ type options struct {
 	audio string
 	// offline is a folder of projects on this computer to work on without the unit.
 	offline string
+	// webAddr is where to serve the web page of Perform ("" for not at all; serve uses :8404), webKey
+	// the key a browser has to give (kept for the user when empty).
+	webAddr, webKey string
 }
 
 func main() {
@@ -70,6 +75,8 @@ func main() {
 	flag.BoolVar(&o.trace, "trace", false, "also log every message on the wire, as hex (implies -v)")
 	flag.StringVar(&o.logPath, "log", "", "debug log file (default: the user cache folder for the UI, standard error otherwise)")
 	flag.StringVar(&o.audio, "audio", "", "how files are played on this computer: oto (default) or afplay (macOS's own player)")
+	flag.StringVar(&o.webAddr, "web", "", "serve the Perform web page on this address, e.g. :8404 (the serve command does it by itself)")
+	flag.StringVar(&o.webKey, "web-key", "", "key a browser must give to connect (default: one kept for you; \"none\" lets everyone on the network in)")
 	showVersion := flag.Bool("version", false, "print the version and stop")
 	flag.Usage = func() {
 		fmt.Fprint(os.Stderr, usage)
@@ -196,7 +203,9 @@ func run(args []string, o options) error {
 		}
 		return audioTest(args[1], o.audio)
 	case "menu":
-		return runUI(o, l)
+		return runUI(o, l, false)
+	case "serve":
+		return runUI(o, l, true)
 	}
 
 	dev, err := open(o, l.Logger)
@@ -228,7 +237,7 @@ func run(args []string, o options) error {
 }
 
 // runUI starts the terminal UI, which waits for a unit by itself.
-func runUI(o options, l logging) error {
+func runUI(o options, l logging, headless bool) error {
 	// Without an audio output the files just cannot be auditioned, and it says why.
 	var player app.Player
 	p, audioErr := playback.OpenBackend(o.audio)
@@ -244,7 +253,35 @@ func runUI(o options, l logging) error {
 		model = model.WithLogger(l.Logger, l.path)
 		fmt.Fprintln(os.Stderr, "debug log:", l.path)
 	}
-	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	// The web side: the state of Perform for the browsers, and their commands.
+	var srv *web.Server
+	if o.webAddr != "" || headless {
+		if o.webAddr == "" {
+			o.webAddr = ":8404"
+		}
+		srv = &web.Server{Key: webKey(o.webKey)}
+		listener, err := srv.Listen(o.webAddr)
+		if err != nil {
+			return fmt.Errorf("web page: %w", err)
+		}
+		defer listener.Close()
+		urls := srv.URLs(listener)
+		model = model.WithWeb(srv).WithWebURL(urls[0])
+		fmt.Fprintln(os.Stderr, "web page for Perform: open one of these on a phone on this network:")
+		for _, u := range urls {
+			fmt.Fprintln(os.Stderr, "  "+u)
+		}
+		l.Info("web page", "addr", listener.Addr().String(), "urls", urls)
+	}
+	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
+	if headless {
+		// No screen and no keyboard: the program runs for the browsers.
+		opts = []tea.ProgramOption{tea.WithoutRenderer(), tea.WithInput(nil)}
+	}
+	program := tea.NewProgram(model, opts...)
+	if srv != nil {
+		srv.OnCommand = func(msg []byte) { program.Send(tui.WebCommand(append([]byte(nil), msg...))) }
+	}
 	// Finding the output's name takes a moment, so it comes later: the UI then says where the
 	// sound of a file goes.
 	if player != nil {
@@ -483,4 +520,15 @@ func audioTest(file, only string) error {
 		fmt.Println("neither     -> the system output is the problem (see the device named above)")
 	}
 	return nil
+}
+
+// webKey is the key for the browsers: the one asked for, "none" for no key, else the one kept for the user.
+func webKey(asked string) string {
+	switch asked {
+	case "":
+		return web.LoadKey()
+	case "none":
+		return ""
+	}
+	return asked
 }

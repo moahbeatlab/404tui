@@ -417,6 +417,9 @@ func (m Model) perfSidebar(width, h int) []string {
 		add(m.pairPanels(wide, pw, ta, ca, la, w2, tb, cb, lb)...)
 	}
 	add(st.dim.Render("pad colours:  ") + lipgloss.NewStyle().Foreground(st.th.good).Render("green") + st.dim.Render(" heard in this pattern  ·  ") + lipgloss.NewStyle().Foreground(st.th.accent).Render("tinted") + st.dim.Render(" in it, not heard yet"))
+	if m.webURL != "" {
+		add(st.dim.Render("web: ") + st.text.Render(m.webURL))
+	}
 	if len(out) > h {
 		out = out[:h]
 	}

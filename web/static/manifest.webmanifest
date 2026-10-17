@@ -1,0 +1,10 @@
+{
+  "name": "404tui Perform",
+  "short_name": "404tui",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#161618",
+  "theme_color": "#161618",
+  "icons": [{"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]
+}
