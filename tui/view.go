@@ -1426,7 +1426,7 @@ func (m Model) patternDetail(g geom) string {
 				lines = append(lines, "", where+st.text.Render(fmt.Sprintf("  vel %d  ", loudest))+
 					st.accent.Render(levelBar(16, loudest, 127))+st.text.Render("  ·  ")+
 					st.hot.Render(fmt.Sprintf("SUBSTEP %d", n))+"  "+m.substepBoxes(n, on)+
-					st.dim.Render(fmt.Sprintf(" part %d  ·  I part  z on/off  i split", m.patSub+1)))
+					st.dim.Render(fmt.Sprintf(" part %d  ·  h l part  Enter on/off  i split", m.patSub+1)))
 			} else {
 				length := float64(notes[0].Length) / float64(max(d.StepTicks(), 1))
 				here := where + st.text.Render(fmt.Sprintf("  vel %d  ", loudest)) +
@@ -2677,8 +2677,8 @@ func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow boo
 				// the grid has it).
 				mark, style = "◐", lipgloss.NewStyle().Foreground(st.th.cond).Bold(true)
 			}
-			if counts[c] > 1 {
-				// Sub-steps: the step holds several notes, and the mark says how many.
+			if counts[c] > 1 && w < 2 {
+				// No room beside the note: the mark says into how many parts the step is split.
 				mark = substepMark(counts[c])
 			}
 		}
@@ -2690,13 +2690,19 @@ func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow boo
 		if dimmed && cover[c] > 0 {
 			style = st.faint
 		}
+		// A split step keeps its note's mark, and the number of its parts follows it.
+		tail, tailRest := strings.Repeat(rest, w-1), strings.Repeat(" ", w-1)
+		if counts[c] > 1 && w >= 2 && cover[c] > 0 && !sustained {
+			tail = substepMark(counts[c]) + strings.Repeat(rest, w-2)
+			tailRest = substepMark(counts[c]) + strings.Repeat(" ", w-2)
+		}
 		switch {
 		case onCursorRow && c == m.patCol:
-			b.WriteString(cursorStyle.Render(mark + strings.Repeat(rest, w-1)))
+			b.WriteString(cursorStyle.Render(mark + tail))
 		case chosen[c] && !sustained:
-			b.WriteString(chosenStyle.Render(mark + strings.Repeat(" ", w-1)))
+			b.WriteString(chosenStyle.Render(mark + tailRest))
 		default:
-			b.WriteString(style.Render(mark) + st.accent.Render(strings.Repeat(rest, w-1)))
+			b.WriteString(style.Render(mark) + st.accent.Render(tail))
 		}
 		if c+1 == hi {
 			break

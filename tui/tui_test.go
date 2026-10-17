@@ -6674,3 +6674,24 @@ func TestZSwitchesAPartOfASplitStepAndISplitsAgain(t *testing.T) {
 	}
 	_ = step
 }
+
+func TestHAndLGoThroughThePartsOfASplitStepAndEnterSwitchesOne(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "enter", "enter", "tab", "enter")
+	pad := s.m().pattern.Grid.Rows[0].Pad
+	s.press("l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "x") // step 13, empty
+	s.press("i", "i", "i")                                                        // four parts
+	s.press("l", "l", "x")                                                    // the third part off
+	if n, on := s.m().pattern.Split(pad, 13); n != 4 || !on[0] || !on[1] || on[2] || !on[3] {
+		t.Fatalf("split = %d %v, want the third part off", n, on)
+	}
+	s.press("l", "l") // past the last part: the next step
+	if s.m().patCol != 14 {
+		t.Errorf("column %d, want 14", s.m().patCol)
+	}
+	s.press("h")
+	if s.m().patCol != 13 || s.m().patSub != 3 {
+		t.Errorf("back: column %d part %d, want 13 and 3", s.m().patCol, s.m().patSub)
+	}
+}

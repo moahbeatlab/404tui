@@ -359,8 +359,9 @@ pattern, from the grid or from an expanded track, back to the patterns under the
   velocity by 1 and `<` `>` by 10, `*` sets it to 127, `+` `-` make a note a step longer or
   shorter, and `u` undoes. `i` divides the step into 2, 3 (a triplet) or 4 parts, like the
   unit's SUBSTEP, and then back to one note. A split step is drawn `²` `³` `⁴`; its detail line
-  shows a box for each part, filled when it sounds: `I` moves to the next part and `z` switches
-  it on or off. `b` moves the pattern's pads to another bank.
+  shows a box for each part, filled when it sounds: `h` `l` go through the parts (and on to the
+  next step), Enter or `x` switches the part on or off. The note keeps its mark in the grid, with
+  the number of parts after it. `b` moves the pattern's pads to another bank.
 - **Mute and solo:** `m` mutes a pad and `s` solos it (in Pads and in the editor). They only
   change what this computer plays: muted rows show a red `MUTE`, soloed ones a green `SOLO`,
   and pads you do not hear are greyed. `S` in the editor saves the pattern **as you hear it**
