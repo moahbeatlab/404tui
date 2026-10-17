@@ -39,6 +39,8 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 		}
 		m.logCue()
 		return m, m.wanted()
+	case "v":
+		return m.toggleLevels(), nil
 	case "i":
 		return m.isolateButton()
 	case "esc":
@@ -158,6 +160,9 @@ func (m Model) perfBody(g geom) string {
 // the unit's selected pad, the settings and the level bar) with the name in block letters between
 // them. A pad hit on the unit lights it by how hard it was hit and fades.
 func (m Model) perfTile(row app.PadRow, w, h int) []string {
+	if m.perfLevels {
+		return m.levelTile(int(row.Pad.Pad()), w, h)
+	}
 	ts := tileState{
 		empty:    !row.HasSample,
 		bus:      row.Params["bus-fx"],
@@ -712,6 +717,10 @@ func (m Model) clickPerform(x, y int) (tea.Model, tea.Cmd) {
 	if col > 3 || row > 3 {
 		return m, nil
 	}
+	if m.perfLevels {
+		nm, cmd := m.levelMute(row*4 + col)
+		return nm, cmd
+	}
 	return m.clickPad(m.snap.Bank(m.perfBank())[row*4+col].Pad)
 }
 
@@ -739,6 +748,9 @@ func (m Model) perfButton(b hitBtn, x int) (tea.Model, tea.Cmd) {
 	case "view":
 		if b.arg == 0 {
 			return m.toggleRecording()
+		}
+		if b.arg == 2 {
+			return m.toggleLevels(), nil
 		}
 		return m.toggleFullScreen()
 	}

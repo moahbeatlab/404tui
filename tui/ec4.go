@@ -25,7 +25,7 @@ var ec4Map = [16]ec4Entry{
 	{"record on / off", 1}, {"focus on / off", -1}, {"live mode (the Perform tab)", 0}, {"length: 1, 2, 3, 4, 8 bars", -1},
 	{"BUS 1 motion slot 1", -1}, {"BUS 1 motion slot 2", -1}, {"BUS 1 motion slot 3", -1}, {"BUS 1 motion slot 4", -1},
 	{"BUS 2 motion slot 1", -1}, {"BUS 2 motion slot 2", -1}, {"BUS 2 motion slot 3", -1}, {"BUS 2 motion slot 4", -1},
-	{"clear BUS 1 motion", -1}, {"clear BUS 2 motion", -1}, {"next pattern becomes now", 2}, {"clear next pattern", 3},
+	{"clear BUS 1 motion", -1}, {"clear BUS 2 motion", -1}, {"next pattern becomes now", 2}, {"view: Stage / Levels", -1},
 }
 
 // ec4Action does the fixed pushes of the map (the others are the messages of Config, which
@@ -46,6 +46,8 @@ func (m Model) ec4Action(i int) (Model, bool) {
 		return m.sceneAct("bars", next, 0), true
 	case i >= 4 && i <= 11:
 		return m.motionAct((i-4)/motionSlots, (i-4)%motionSlots), true
+	case i == 15:
+		return m.toggleLevels(), true
 	case i == 12 || i == 13:
 		return m.motionClear(i - 12), true
 	}

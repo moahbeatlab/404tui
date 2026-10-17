@@ -518,7 +518,7 @@ func (m Model) statusBar() string {
 	case secConfig:
 		chips = []string{chip("j k", "move"), chip("h l", "change"), chip("Enter", "edit"), chip("Space", "toggle")}
 	case secPerform:
-		chips = []string{chip("a", "now"), chip("n", "next"), chip("Space", "next becomes now"), chip("x", "clear next"), chip("f F", "bus effect notes")}
+		chips = []string{chip("a", "now"), chip("n", "next"), chip("Space", "next becomes now"), chip("x", "clear next"), chip("f F", "bus effect notes"), chip("v", "levels")}
 	case secProjects:
 		chips = []string{chip("Enter", "select"), chip("n", "rename"), chip("e", "export"), chip("R", "restore"), chip("X", "erase")}
 	}
@@ -537,6 +537,10 @@ func (m Model) statusBar() string {
 		rec = chip("^R", "stop recording")
 	}
 	chips = append(chips, rec, chip("?", "all keys"), chip("q", "quit"))
+	if m.unit == nil {
+		// Nothing to work on yet: only what can be done here.
+		chips = []string{chip("o", "work offline on a folder"), chip("?", "help"), chip("q", "quit")}
+	}
 	line := strings.Join(chips, st.faint.Render("  "))
 	if m.autoplay {
 		line = st.good.Render("♫ autoplay") + st.faint.Render("  │  ") + line

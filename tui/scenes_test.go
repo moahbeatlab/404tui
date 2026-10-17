@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/proto"
 )
 
 // perfRig is the Perform view with a fake MIDI input and output, and helpers to play the unit.
@@ -633,4 +634,111 @@ func TestTheSpeedAndReverseButtonsActOnTheSlotTappedLast(t *testing.T) {
 	}
 	// The buttons are on the screen and can be tapped.
 	r.s.shows("speed", "reverse", "clear")
+}
+
+// levelOf is the level the unit holds for a pad.
+func levelOf(t *testing.T, r *perfRig, name string) int32 {
+	t.Helper()
+	info, _ := proto.ParamByName("level")
+	b, err := r.s.m().unit.(interface {
+		PadBlock(proto.PadIndex) (*proto.PadBlock, error)
+	}).PadBlock(pad(t, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, _ := b.Param(info.ID)
+	return v
+}
+
+func TestTheLevelsViewTurnsAndMutesThePadsOfTheBank(t *testing.T) {
+	r := newPerfRig(t, 170, 80)
+	info, _ := proto.ParamByName("level")
+	m := r.s.m()
+	for _, name := range []string{"A1", "A2", "A3"} {
+		if err := m.unit.SetParam(info.ID, proto.TargetPad(pad(t, name)), 100); err != nil {
+			t.Fatal(err)
+		}
+		m.snap.Pads[pad(t, name).Index()].Level = 100
+	}
+	push := func(n int) { r.feed(midiin.Event{Kind: midiin.NoteOn, Channel: 16, Data1: n, Data2: 127}) }
+	run := func(cmd tea.Cmd) {
+		if cmd != nil {
+			cmd()
+		}
+	}
+	// Not in the view: a turn does nothing.
+	r.cc(16, ec4FirstCC, 70)
+	if r.s.m().snap.Pads[pad(t, "A1").Index()].Level != 100 {
+		t.Fatal("a turn changed a level outside the Levels view")
+	}
+	push(75) // E16 into Levels
+	if !r.s.m().perfLevels {
+		t.Fatal("E16 did not open the Levels view")
+	}
+	// Relative turns: 70 is +6, 62 is -2.
+	for _, c := range []struct{ cc, v int }{{ec4FirstCC, 70}, {ec4FirstCC, 62}, {ec4FirstCC + 1, 10}} {
+		nm, cmd, ok := r.s.m().levelEvent(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: c.cc, Data2: c.v})
+		if !ok {
+			t.Fatal("a turn was not taken")
+		}
+		run(cmd)
+		r.s.model = nm
+	}
+	if got := levelOf(t, r, "A1"); got != 104 {
+		t.Errorf("A1 is %d after +6 and -2, want 104", got)
+	}
+	if got := levelOf(t, r, "A2"); got != 100-54 {
+		t.Errorf("A2 is %d, want 46", got)
+	}
+	// Limits.
+	nm, cmd, _ := r.s.m().levelEvent(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: ec4FirstCC, Data2: 127})
+	run(cmd)
+	r.s.model = nm
+	nm, cmd, _ = r.s.m().levelEvent(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: ec4FirstCC + 2, Data2: 0})
+	run(cmd)
+	r.s.model = nm
+	if levelOf(t, r, "A1") != 127 || levelOf(t, r, "A3") != 36 {
+		t.Errorf("A1 %d A3 %d", levelOf(t, r, "A1"), levelOf(t, r, "A3"))
+	}
+	// A push mutes pad 3, another brings back the level it had.
+	for want, label := range []int32{0, 36} {
+		nm, cmd, _ := r.s.m().levelEvent(midiin.Event{Kind: midiin.NoteOn, Channel: 16, Data1: ec4FirstNote + 2, Data2: 127})
+		run(cmd)
+		r.s.model = nm
+		if got := levelOf(t, r, "A3"); got != label {
+			t.Errorf("push %d: A3 is %d, want %d", want+1, got, label)
+		}
+	}
+	// A turn on a muted pad brings it back from 0.
+	nm, cmd, _ = r.s.m().levelEvent(midiin.Event{Kind: midiin.NoteOn, Channel: 16, Data1: ec4FirstNote + 2, Data2: 127})
+	run(cmd)
+	r.s.model = nm
+	nm, cmd, _ = r.s.m().levelEvent(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: ec4FirstCC + 2, Data2: 74})
+	run(cmd)
+	r.s.model = nm
+	if got := levelOf(t, r, "A3"); got != 10 {
+		t.Errorf("a turn of a muted pad gave %d, want 10", got)
+	}
+	// The pushes of the Stage map do not fire here (E1 is pad 1's mute, not the recording).
+	if r.s.m().rec != nil {
+		t.Error("a push in Levels started the recording")
+	}
+	// It draws, at any size, and says the level.
+	for _, sz := range [][2]int{{170, 80}, {120, 40}, {90, 30}, {60, 20}} {
+		r.s.send(tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
+		_ = r.s.m().View()
+	}
+	r.s.send(tea.WindowSizeMsg{Width: 170, Height: 80})
+	if !strings.Contains(r.s.m().View(), "127") {
+		t.Error("the view does not show the level")
+	}
+	// E16 again, and v, leave and enter.
+	push(75)
+	if r.s.m().perfLevels {
+		t.Error("E16 did not leave Levels")
+	}
+	r.s.press("v")
+	if !r.s.m().perfLevels {
+		t.Error("v did not open Levels")
+	}
 }

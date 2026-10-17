@@ -162,6 +162,7 @@ func (m Model) dashboard(status []string) string {
 	}
 	by := st.dim.Render("by ") + st.accent.Render(strings.Join(strings.Split("moahbeatlab", ""), " "))
 	lines = append(lines, "", by, st.faint.Render("sample · slice · sequence  ·  SP-404MKII  ·  v"+version.Version))
+	lines = append(lines, st.faint.Render("made with ")+lipgloss.NewStyle().Foreground(st.th.hot).Render("♥")+st.faint.Render(" in Berlin"))
 	if m.height >= 40 {
 		lines = append(lines, "")
 		lines = append(lines, m.padGlow()...)

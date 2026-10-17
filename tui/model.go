@@ -428,6 +428,9 @@ type Model struct {
 	full bool
 	// muted and soloed are pads silenced, or alone to sound, in the mix played on this computer.
 	muted, soloed map[proto.PadIndex]bool
+	// perfLevels is the Levels view of Perform; lvlWas holds the level of a pad that was muted there.
+	perfLevels bool
+	lvlWas     map[proto.PadIndex]int32
 	// iso is what Perform has isolated; clickPadAt and clickAt find a double click.
 	iso        *isolation
 	sc         *sceneState
@@ -582,6 +585,7 @@ func New(unit app.Unit, player app.Player, store Store) Model {
 		patPreview:  map[proto.PadIndex]*app.PatternDetail{},
 		muted:       map[proto.PadIndex]bool{},
 		soloed:      map[proto.PadIndex]bool{},
+		lvlWas:      map[proto.PadIndex]int32{},
 		root:        app.CardRoot,
 		fileMarks:   map[string]bool{},
 		ranger:      true,
