@@ -732,6 +732,10 @@ func (m Model) perfButton(b hitBtn, x int) (tea.Model, tea.Cmd) {
 		return m.motionAct(b.arg/motionSlots, b.arg%motionSlots), nil
 	case "mclear":
 		return m.motionClear(b.arg), nil
+	case "mspeed":
+		return m.motionSpeed(b.arg), nil
+	case "mrev":
+		return m.motionReverse(b.arg), nil
 	case "view":
 		if b.arg == 0 {
 			return m.toggleRecording()

@@ -83,9 +83,11 @@ run: motion follows its MIDI clock.
 | the slot that **plays** | it stops (the motion is kept) |
 | a slot that waits or records | cancels it |
 | *clear* | empties the slot that was tapped last on that bus |
+| *speed* | steps the speed of the slot tapped last: 1×, 2×, ½× and round again |
+| *reverse* | plays the slot tapped last backwards (a ◀ on the slot), tap again for forwards |
 
 The loop is sent to the unit as MIDI controllers (CC 16–18 on channel 1 for BUS 1, 2 for BUS 2), and begins
-where the knobs stood when the recording began. A slot that holds a motion shows its length and, small, the
+where the knobs stood when the recording began. The speed and the direction can be changed while it plays and take effect at once. At 2× a loop of one bar takes half a bar, at ½× two bars. A slot that holds a motion shows its length and, small, the
 curve of the knob that moved the most (`C2 ▁▃▆█▆▃▁`). Turning a knob while a loop plays moves it until the
 loop comes round to it again. Motions are not saved: they are gone when the program ends. The panel also
 shows the last message sent to the unit, or why none can be sent (no MIDI output).

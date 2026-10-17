@@ -562,3 +562,75 @@ func TestTheEC4MapDrivesFocusLengthMotionAndClear(t *testing.T) {
 		t.Error("a note outside the map or on another channel changed the length")
 	}
 }
+
+// playedValues runs a loop of one bar (C1 = 10 at tick 0, 50 at tick 48, 90 at tick 90) for the number
+// of clock ticks given, at the speed and direction given, and returns the C1 values sent in order.
+func playedValues(t *testing.T, speed float64, rev bool, ticks int) []int {
+	t.Helper()
+	r := newPerfRig(t, 170, 80)
+	r.feed(midiin.Event{Kind: midiin.Start})
+	sc := r.s.m().scenes()
+	sc.bus[0].mo[0] = motion{state: motionWaiting, total: ticksPerBar, speed: speed, rev: rev,
+		events: []motionEv{{0, 0, 10}, {48, 0, 50}, {90, 0, 90}}}
+	r.s.model = func() Model { m := r.s.m(); m.sc = sc; return m }()
+	r.clearSent()
+	// The loop begins on the bar: the Start put the clock at tick 0, and the next bar is 96 ticks on.
+	r.tick(ticksPerBar)
+	r.clearSent()
+	var out []int
+	for i := 0; i < ticks; i++ {
+		r.tick(1)
+	}
+	for _, msg := range r.sent() {
+		validMessage(t, msg)
+		out = append(out, int(msg[2]))
+	}
+	return out
+}
+
+func TestAMotionPlaysAtItsSpeedAndDirection(t *testing.T) {
+	// At normal speed one bar of the clock is one round of the loop: 50 at tick 48, 90 at tick 90, and 10
+	// again when it comes round.
+	if got := playedValues(t, 1, false, ticksPerBar); fmt.Sprint(got) != "[50 90 10]" {
+		t.Errorf("1x: %v, want [50 90 10]", got)
+	}
+	// Twice as fast: two rounds in a bar.
+	if got := playedValues(t, 2, false, ticksPerBar); fmt.Sprint(got) != "[50 90 10 50 90 10]" {
+		t.Errorf("2x: %v, want two rounds", got)
+	}
+	// Half speed: a bar of the clock is half a round: only the move at tick 48 is reached.
+	if got := playedValues(t, 0.5, false, ticksPerBar); fmt.Sprint(got) != "[]" && fmt.Sprint(got) != "[50]" {
+		t.Errorf("1/2x: %v, want at most [50]", got)
+	}
+	if got := playedValues(t, 0.5, false, 2*ticksPerBar); fmt.Sprint(got) != "[50 90 10]" {
+		t.Errorf("1/2x over two bars: %v, want one round [50 90 10]", got)
+	}
+	// Backwards: from the end, 90, then 50, then 10.
+	if got := playedValues(t, 1, true, ticksPerBar); fmt.Sprint(got) != "[90 50 10]" {
+		t.Errorf("backwards: %v, want [90 50 10]", got)
+	}
+	// Backwards at twice the speed: two rounds in a bar.
+	if got := playedValues(t, 2, true, ticksPerBar); fmt.Sprint(got) != "[90 50 10 90 50 10]" {
+		t.Errorf("backwards 2x: %v, want two rounds", got)
+	}
+}
+
+func TestTheSpeedAndReverseButtonsActOnTheSlotTappedLast(t *testing.T) {
+	r := newPerfRig(t, 170, 80)
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.s.model = r.s.m().motionAct(0, 2) // slot 3 of BUS 1 is the last tapped
+	var seen []float64
+	for range 4 {
+		r.s.model = r.s.m().motionSpeed(0)
+		seen = append(seen, r.sc().bus[0].mo[2].rate())
+	}
+	if fmt.Sprint(seen) != "[2 0.5 1 2]" {
+		t.Errorf("the speed went %v, want 2, 1/2, 1, 2", seen)
+	}
+	r.s.model = r.s.m().motionReverse(0)
+	if !r.sc().bus[0].mo[2].rev || r.sc().bus[0].mo[0].rev || r.sc().bus[1].mo[2].rev {
+		t.Error("reverse is not on slot 3 of BUS 1 alone")
+	}
+	// The buttons are on the screen and can be tapped.
+	r.s.shows("speed", "reverse", "clear")
+}

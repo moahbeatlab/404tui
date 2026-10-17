@@ -31,8 +31,21 @@ type motionEv struct{ tick, knob, val int }
 type motion struct {
 	state  int
 	total  int // ticks in the loop
-	pos    int // ticks since the loop (or the recording) began
+	pos    int // ticks since the recording began
 	events []motionEv
+	// speed is how fast the loop plays (0.5, 1 or 2; 0 means 1), rev plays it backwards; fpos is where
+	// it is in the loop, in ticks.
+	speed float64
+	rev   bool
+	fpos  float64
+}
+
+// rate is how many ticks of the loop pass in a tick of the clock.
+func (mo motion) rate() float64 {
+	if mo.speed <= 0 {
+		return 1
+	}
+	return mo.speed
 }
 
 func (mo motion) filled() bool { return len(mo.events) > 0 && mo.total > 0 }
@@ -142,38 +155,132 @@ func (m Model) motionTick() {
 						*mo = motion{} // nothing was moved
 						continue
 					}
-					mo.state, mo.pos = motionPlaying, 0
-					m.motionPlay(sc, bus, slot)
-					mo.pos = 1
+					mo.state = motionPlaying
+					m.motionStart(sc, bus, slot)
 				}
 			case motionWaiting:
 				if m.clock.ticks%ticksPerBar == 0 {
-					mo.state, mo.pos = motionPlaying, 0
-					m.motionPlay(sc, bus, slot)
-					mo.pos = 1 % mo.total
+					mo.state = motionPlaying
+					m.motionStart(sc, bus, slot)
 				}
 			case motionPlaying:
-				m.motionPlay(sc, bus, slot)
-				mo.pos = (mo.pos + 1) % mo.total
+				m.motionStep(sc, bus, slot)
 			}
 		}
 	}
 }
 
-// motionPlay sends the moves recorded at the tick the loop is at.
-func (m Model) motionPlay(sc *sceneState, bus, slot int) {
+// motionStart begins the loop of a slot: at its start, or at its end when it plays backwards, and
+// sends what is there.
+func (m Model) motionStart(sc *sceneState, bus, slot int) {
 	mo := &sc.bus[bus].mo[slot]
+	total := float64(mo.total)
+	if mo.rev {
+		mo.fpos = total
+	} else {
+		mo.fpos = 0
+	}
+	m.motionStep(sc, bus, slot)
+}
+
+// motionStep moves the loop on by one tick of the clock, at its speed and direction, and sends the
+// moves it passes over (in the order they are passed).
+func (m Model) motionStep(sc *sceneState, bus, slot int) {
+	mo := &sc.bus[bus].mo[slot]
+	total := float64(mo.total)
+	from := mo.fpos
+	if mo.rev {
+		to := from - mo.rate()
+		if to < 0 {
+			m.motionSend(sc, bus, slot, 0, from, true)
+			to += total
+			m.motionSend(sc, bus, slot, to, total, true)
+		} else {
+			m.motionSend(sc, bus, slot, to, from, true)
+		}
+		mo.fpos = to
+		return
+	}
+	to := from + mo.rate()
+	if to >= total {
+		m.motionSend(sc, bus, slot, from, total, false)
+		to -= total
+		m.motionSend(sc, bus, slot, 0, to, false)
+	} else {
+		m.motionSend(sc, bus, slot, from, to, false)
+	}
+	mo.fpos = to
+}
+
+// motionSend sends the moves of the ticks from lo up to (not including) hi, from the first to the last,
+// or from the last to the first when backwards. The first step of a loop sends tick 0 as well.
+func (m Model) motionSend(sc *sceneState, bus, slot int, lo, hi float64, back bool) {
+	mo := &sc.bus[bus].mo[slot]
+	send := func(ev motionEv) {
+		m.sceneSend(sc, []byte{0xB0 | byte(bus), byte(16 + ev.knob), byte(clamp(ev.val, 0, 127))})
+	}
+	if back {
+		for i := len(mo.events) - 1; i >= 0; i-- {
+			if t := float64(mo.events[i].tick); t >= lo && t < hi {
+				send(mo.events[i])
+			}
+		}
+		return
+	}
 	for _, ev := range mo.events {
-		if ev.tick == mo.pos {
-			m.sceneSend(sc, []byte{0xB0 | byte(bus), byte(16 + ev.knob), byte(clamp(ev.val, 0, 127))})
+		if t := float64(ev.tick); t >= lo && t < hi {
+			send(ev)
 		}
 	}
+}
+
+// motionSpeed steps the speed of the slot tapped last: 1x, 2x, 1/2x and round again.
+func (m Model) motionSpeed(bus int) Model {
+	sc := m.scenes()
+	bs := &sc.bus[bus]
+	mo := &bs.mo[bs.sel]
+	mo.speed = map[float64]float64{0: 2, 1: 2, 2: 0.5, 0.5: 1}[mo.speed]
+	if mo.speed == 0 {
+		mo.speed = 1
+	}
+	m.message = fmt.Sprintf("BUS %d: motion %d plays at %s", bus+1, bs.sel+1, speedText(mo.speed))
+	m.sc = sc
+	return m
+}
+
+// motionReverse turns the slot tapped last round, to play backwards or forwards.
+func (m Model) motionReverse(bus int) Model {
+	sc := m.scenes()
+	bs := &sc.bus[bus]
+	mo := &bs.mo[bs.sel]
+	mo.rev = !mo.rev
+	m.message = fmt.Sprintf("BUS %d: motion %d plays %s", bus+1, bs.sel+1, map[bool]string{true: "backwards", false: "forwards"}[mo.rev])
+	m.sc = sc
+	return m
+}
+
+func speedText(v float64) string {
+	switch v {
+	case 0.5:
+		return "½×"
+	case 2:
+		return "2×"
+	}
+	return "1×"
 }
 
 // motionSpec is what a slot's button shows.
 func (m Model) motionSpec(bus, slot int) btnSpec {
 	mo := m.scenes().bus[bus].mo[slot]
 	sp := btnSpec{label: fmt.Sprint(slot + 1), detail: "empty", act: "motion", arg: bus*motionSlots + slot}
+	if mo.filled() || mo.state != motionIdle {
+		if mo.rate() != 1 {
+			sp.label += "  " + speedText(mo.rate())
+		}
+		if mo.rev {
+			sp.label += "  ◀"
+		}
+	}
 	switch mo.state {
 	case motionArmed:
 		sp.detail, sp.on = "next bar…", true
@@ -222,7 +329,11 @@ func (m Model) motionLines(width int) ([]string, []btn) {
 		}
 		b.row(slotW, specs...)
 		b.gap(1)
-		b.row(slotW, btnSpec{label: "clear", detail: fmt.Sprintf("slot %d", m.scenes().bus[bus].sel+1), act: "mclear", arg: bus})
+		mo := m.scenes().bus[bus].mo[m.scenes().bus[bus].sel]
+		b.stackN(slotW,
+			btnSpec{label: "speed " + speedText(mo.rate()), on: mo.rate() != 1, act: "mspeed", arg: bus},
+			btnSpec{label: "reverse", on: mo.rev, act: "mrev", arg: bus},
+			btnSpec{label: "clear", act: "mclear", arg: bus})
 		l, bt := b.rows(len(lines))
 		lines = append(lines, l...)
 		btns = append(btns, bt...)

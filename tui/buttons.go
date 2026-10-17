@@ -166,6 +166,10 @@ func (b *rowBuilder) twoLine(rows, w int, sp btnSpec) []string {
 	for i := range out {
 		out[i] = style.Render(strings.Repeat(" ", w))
 	}
+	if rows < 2 || sp.detail == "" {
+		out[(rows-1)/2] = centre(style, sp.label)
+		return out
+	}
 	at := (rows - 2) / 2
 	out[at] = centre(style, sp.label)
 	out[at+1] = centre(faint, sp.detail)
@@ -202,4 +206,18 @@ func motionRows(h int) int {
 		n--
 	}
 	return n
+}
+
+// stackN puts buttons one above the other in a column w wide, each about the same height; their labels
+// are in the middle of their part.
+func (b *rowBuilder) stackN(w int, specs ...btnSpec) {
+	var blk []string
+	row := 0
+	for i, sp := range specs {
+		h := b.n/len(specs) + b2i(i < b.n%len(specs))
+		blk = append(blk, b.twoLine(h, w, sp)...)
+		b.btns = append(b.btns, btn{row: row, col: b.w, w: w, h: h, act: sp.act, arg: sp.arg})
+		row += h
+	}
+	b.add(blk, w)
 }
