@@ -134,6 +134,7 @@ func children(dir string, depth int, entries []fileapi.DirEntry) []Node {
 // Join adds a name to a folder path. The roots take no separator: "SD:" + "IMPORT" is
 // "SD:IMPORT".
 func Join(dir, name string) string {
+	dir = slash(dir)
 	if dir == StorageRoot || dir == CardRoot || dir == "/" {
 		return dir + name
 	}
@@ -142,6 +143,7 @@ func Join(dir, name string) string {
 
 // Dir is the folder holding path, down to the root of its volume.
 func Dir(path string) string {
+	path = slash(path)
 	switch at := strings.LastIndexByte(path, '/'); {
 	case at == 0:
 		return "/"
@@ -155,6 +157,7 @@ func Dir(path string) string {
 
 // Base is the last element of path.
 func Base(path string) string {
+	path = slash(path)
 	if at := strings.LastIndexByte(path, '/'); at >= 0 {
 		return path[at+1:]
 	}

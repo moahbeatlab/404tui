@@ -169,6 +169,9 @@ func segments(dir string) []string {
 		prefix, rest = fileapi.Card, after
 	} else if strings.HasPrefix(dir, "/") {
 		prefix = "/"
+	} else if len(dir) >= 3 && dir[1] == ':' && dir[2] == '/' {
+		// A Windows drive: "C:/" is where the walk starts, and it is there already.
+		prefix, rest = dir[:3], dir[3:]
 	}
 	var out []string
 	walked := ""
