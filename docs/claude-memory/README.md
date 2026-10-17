@@ -12,5 +12,5 @@ machine's Claude memory directory for the project (or just ask Claude to read th
 - `feedback_tmux_private_socket.md` — never a bare `tmux kill-server`; use `tmux -L shots` for TUI captures
 - `feedback-no-stray-scripts.md` — one-off scripts via heredoc, not files in the project
 
-Current branch: `perform` (experimental, not merged to main). Build: `go build -o sp404 ./cmd/sp404`;
+Current branch: `main` (`perform` was merged into it on another machine; see the perform note). Build: `go build -o sp404 ./cmd/sp404`;
 try without hardware: `./sp404 -sim`. Mac: `make macos`.

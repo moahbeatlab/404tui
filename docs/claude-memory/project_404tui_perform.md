@@ -5,8 +5,9 @@ metadata:
   type: project
 ---
 
-404tui (~/projects/404tui), **experimental branch `perform`** (from main, pushed, NOT merged; merge only
-when the user asks). Latest at time of writing: `a5cda92` (recording level meter) plus the docs/memory
+404tui (~/projects/404tui). **UPDATE 2026-10-17: the user worked on another machine and committed to `main`;
+`main` (0ce576e) now contains everything from `perform` plus 28 newer commits (see "Changed on main" below). Work
+on `main` from now on.** Original note: experimental branch `perform` (e3c36f0 = its tip, an ancestor of main). Latest at time of writing: `a5cda92` (recording level meter) plus the docs/memory
 commit after it. User: music producer @moahbeatlab, works on a Mac arm64, SP-404MKII is MIDI clock master,
 Faderfox EC4 feeds the SP (control channel 16 by default, notes 60-63 / CC >= 64).
 
@@ -28,6 +29,23 @@ Faderfox EC4 feeds the SP (control channel 16 by default, notes 60-63 / CC >= 64
 - **Recording level meter** (`record/level.go`, `tui/level.go`): peak of last 100 ms of the growing WAV, hold 1.5 s,
   CLIP at >= -0.3 dBFS held 5 s, header badge + Perform bars. UNTESTED against a real ffmpeg-written file.
 
+## Changed on main after `perform` (done by the user on another machine, with Claude; summary of git log)
+- Perform: sidebar as panels (clock, bus panels with C1-C3 faders in the bus colour, controls, keys); split went
+  50:50 then 40:60 (panels left 40%, pads right 60%); cue / patterns / last-MIDI panels REMOVED; no glow on empty pads.
+- FX now from the unit's own MIDI: CC 83 = effect name (`tui/fxnames.go`), CC 19 = on/off, knobs always CC 16-18 on
+  channel 1 (bus 1) / 2 (bus 2); no knob learning any more (`k`/`K` gone; FxKnobs state removed).
+- Always-on level meter listening to the MIDI input's audio (`record/meter.go`, `tui/level.go`), not only while recording.
+- Sequencer: sub-steps like the unit's SUBSTEP (`i` splits 2-4, `e` substep mode, h/l parts, x switch); solo only counts
+  in a pattern that has a soloed pad.
+- New pattern dialog: groove templates (+14 genres in `formats/grooves.go`), list in columns, 2-bar preview,
+  "All pads held"; grid spreads spare cells evenly. Expanded-track "roll" drawing tried then reverted.
+- Ctrl-F full screen (header/tabs away); GitHub Actions CI + release builds on `v*` tag; header link state top right.
+- Known after pull (2026-10-17): `go vet` clean, but `TestRawMIDIBytesDriveARunningProgram` FAILS on main (clock
+  counted 169 of 216 ticks in the 3 s sleep, live mode not yet off). Cause: Perform View at 170 cols costs ~15 ms
+  (lipgloss Render / ansi.StringWidth in perfSplitBody, grid, tile) and runs once per MIDI message, so the loop falls
+  behind (~50 clock msgs/s at 125 BPM = most of a core). Fix options: make the test wait until the ticks arrive;
+  and/or make Perform cheaper (cache tiles/panels between ticks, render only when something visible changed).
+
 ## To test on the Mac
 `git pull; git checkout perform; make macos && ./dist/sp404-darwin-arm64 -v` (RtMidi VLA warning harmless).
 Log: `~/Library/Caches/404tui/debug.log`. Check: FX learning (switch an effect on the unit, watch Config monitor),
@@ -35,7 +53,7 @@ knob learning, pattern detection, mute inference, level meter latency with real 
 CC 16/17/18 sweeps on ch 1/2 in their log: source unknown (EC4 vs unit) so not merged across channels.
 
 ## Open / ideas (not built)
-- Player view (`p`) and patterns view (`v`) still use the old full-width layout (not split).
+- Player view (`p`) and patterns view (`v`) may still use the old full-width layout (unchecked on main).
 - Replay a recorded performance from `.events.jsonl`, then offline overlay-video render (frames piped to ffmpeg
   with the WAV; recommended over screen-recording a terminal). Calibration offset for log time zero vs audio start.
 - Computer-side player synced to MIDI clock; live OBS browser-source overlay; pick patterns from sidebar list directly.
