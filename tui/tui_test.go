@@ -6707,3 +6707,14 @@ func TestCtrlFGoesFullScreenAndBack(t *testing.T) {
 	s.press("ctrl+f")
 	s.shows("404tui by moahbeatlab")
 }
+
+func TestTheTemplatePickerShowsTheFirstBarOfTheGroove(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 150, Height: 50})
+	s.press("N")
+	s.hides("bar 1")
+	s.press("down", "down") // House
+	s.shows("House · bar 1", "Kick")
+	s.press("down", "down", "down", "down", "down", "down")
+	s.shows("Hip-hop · bar 1")
+}

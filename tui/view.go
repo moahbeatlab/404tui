@@ -1850,6 +1850,25 @@ func (m Model) templatePickerBox() string {
 		}
 		lines = append(lines, line)
 	}
+	// Under the list, the bar the groove under the cursor starts with, drawn like the sequencer.
+	if g, ok := grooveAt(m.tmplPicker.cursor); ok {
+		lines = append(lines, "", st.dim.Render(g.Name+" · bar 1"))
+		for _, bar := range g.FirstBar() {
+			var b strings.Builder
+			for i, v := range bar.Steps {
+				if v == 0 {
+					b.WriteString(st.faint.Render("·"))
+				} else {
+					mark, style := m.noteGlyph(int(v))
+					b.WriteString(style.Render(mark))
+				}
+				if i < len(bar.Steps)-1 {
+					b.WriteString(barGap(i))
+				}
+			}
+			lines = append(lines, fmt.Sprintf("%-12s ", bar.Lane.LaneName())+b.String())
+		}
+	}
 	lines = append(lines, "", st.dim.Render("↑↓ navigate  ·  Enter choose  ·  Esc close"))
 	return st.modal.Width(min(m.width-4, 110)).Render(strings.Join(lines, "\n"))
 }
