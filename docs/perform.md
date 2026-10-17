@@ -96,6 +96,14 @@ A controller can do all of this: the map for the Faderfox EC4 is in [ec4.md](ec4
 
 The glide between two snapshots of an effect ("scenes") is built but switched off for now.
 
+### Overdub
+
+The **overdub** button (next to the length, or the key `d`) lets you add to a motion while it plays: turn a
+knob on the unit and the move is written into the loop where it is. Use it to record C1 in the first
+round and C2 in the second. While a knob is held, the old moves of *that* knob that you pass over are
+replaced and the loop does not send them against your hand; a short moment after you let go (about half a
+beat) the loop takes over again. The other knobs are not touched. Switch it off and the loop plays as it is.
+
 ## Pad colours
 
 A pad keeps a **green** tint while it is heard in the pattern that plays (within a round of the pattern); a

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -38,6 +39,10 @@ type motion struct {
 	speed float64
 	rev   bool
 	fpos  float64
+	// touch counts the clock ticks a knob is still held by an overdub (the loop leaves it alone then);
+	// lastAt is where in the loop it was written last.
+	touch  [3]int
+	lastAt [3]float64
 }
 
 // rate is how many ticks of the loop pass in a tick of the clock.
@@ -103,6 +108,19 @@ func (bs *busScene) stopMotions() {
 	}
 }
 
+// motionOverdub switches overdubbing: knobs moved while a motion plays are added to it.
+func (m Model) motionOverdub() Model {
+	sc := m.scenes()
+	sc.overdub = !sc.overdub
+	if sc.overdub {
+		m.message = "overdub on: move C1 to C3 on the unit while a motion plays and the moves are added to it"
+	} else {
+		m.message = "overdub off"
+	}
+	m.sc = sc
+	return m
+}
+
 // motionClear empties the slot of a bus that was tapped last.
 func (m Model) motionClear(bus int) Model {
 	sc := m.scenes()
@@ -119,11 +137,43 @@ func (m Model) motionIn(e midiin.Event) {
 		return
 	}
 	bs := &m.sc.bus[e.Channel-1]
+	if m.sc.overdub {
+		for i := range bs.mo {
+			if bs.mo[i].state == motionPlaying {
+				bs.mo[i].overdub(e.Data1-16, e.Data2)
+				return
+			}
+		}
+	}
 	mo := &bs.mo[bs.sel]
 	if mo.state != motionRecording {
 		return
 	}
 	mo.events = append(mo.events, motionEv{tick: mo.pos, knob: e.Data1 - 16, val: e.Data2})
+}
+
+// overdubHold is how many clock ticks after the last move a knob counts as held by the hand.
+const overdubHold = 12
+
+// overdub writes a move of a knob into the loop at the place it is at. While the knob is held the old
+// moves of it that are passed over are taken out, and the loop does not send them.
+func (mo *motion) overdub(knob, val int) {
+	at := mo.fpos
+	from, held := at, mo.touch[knob] > 0 && mo.lastAt[knob] <= at
+	if held {
+		from = mo.lastAt[knob]
+	}
+	kept := mo.events[:0]
+	for _, ev := range mo.events {
+		// The moves passed over since the last write go; the one before them is the hand's own.
+		if t := float64(ev.tick); ev.knob == knob && (held && t > from && t <= at || !held && t == float64(int(at))) {
+			continue
+		}
+		kept = append(kept, ev)
+	}
+	mo.events = append(kept, motionEv{tick: min(int(at), mo.total-1), knob: knob, val: val})
+	slices.SortStableFunc(mo.events, func(a, b motionEv) int { return a.tick - b.tick })
+	mo.touch[knob], mo.lastAt[knob] = overdubHold, at
 }
 
 // motionTick moves the motions on with the clock.
@@ -189,6 +239,9 @@ func (m Model) motionStep(sc *sceneState, bus, slot int) {
 	mo := &sc.bus[bus].mo[slot]
 	total := float64(mo.total)
 	from := mo.fpos
+	for k := range mo.touch {
+		mo.touch[k] = max(mo.touch[k]-1, 0)
+	}
 	if mo.rev {
 		to := from - mo.rate()
 		if to < 0 {
@@ -217,6 +270,9 @@ func (m Model) motionStep(sc *sceneState, bus, slot int) {
 func (m Model) motionSend(sc *sceneState, bus, slot int, lo, hi float64, back bool) {
 	mo := &sc.bus[bus].mo[slot]
 	send := func(ev motionEv) {
+		if mo.touch[ev.knob] > 0 {
+			return
+		}
 		m.sceneSend(sc, []byte{0xB0 | byte(bus), byte(16 + ev.knob), byte(clamp(ev.val, 0, 127))})
 	}
 	if back {
@@ -290,6 +346,9 @@ func (m Model) motionSpec(bus, slot int) btnSpec {
 		sp.detail, sp.on = "next bar…", true
 	case motionPlaying:
 		sp.detail, sp.on = "▶ "+mo.sparkline(10), true
+		if m.scenes().overdub {
+			sp.detail = "● dub " + mo.sparkline(6)
+		}
 	default:
 		if mo.filled() {
 			sp.detail = fmt.Sprintf("%d bar%s  %s", mo.total/ticksPerBar, map[bool]string{true: "", false: "s"}[mo.total/ticksPerBar == 1], mo.sparkline(10))
@@ -308,12 +367,20 @@ func (m Model) motionLines(width int) ([]string, []btn) {
 	sc := m.scenes()
 	bb := newRowBuilder(st, m.motionH)
 	bb.text(st.dim.Render("length: "))
-	lenBtn := max((width-8-5-6)/5, 5)
+	barsW := 5
+	if width < 58 {
+		barsW = 0
+	}
+	lenBtn := max((width-8-5-barsW-1-10)/5, 3)
 	for _, n := range []int{1, 2, 3, 4, 8} {
 		bb.button(fmt.Sprint(n), n == sc.bars, "bars", n, lenBtn)
 		bb.gap(1)
 	}
-	bb.text(st.dim.Render("bars"))
+	if barsW > 0 {
+		bb.text(st.dim.Render("bars"))
+	}
+	bb.gap(1)
+	bb.button("overdub", sc.overdub, "dub", 0, 10)
 	l0, b0 := bb.rows(0)
 	lines = append(lines, l0...)
 	btns = append(btns, b0...)

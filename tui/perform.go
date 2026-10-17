@@ -41,6 +41,8 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 		return m, m.wanted()
 	case "v":
 		return m.toggleLevels(), nil
+	case "d":
+		return m.motionOverdub(), nil
 	case "i":
 		return m.isolateButton()
 	case "esc":
@@ -743,6 +745,8 @@ func (m Model) perfButton(b hitBtn, x int) (tea.Model, tea.Cmd) {
 		return m.motionClear(b.arg), nil
 	case "mspeed":
 		return m.motionSpeed(b.arg), nil
+	case "dub":
+		return m.motionOverdub(), nil
 	case "mrev":
 		return m.motionReverse(b.arg), nil
 	case "view":

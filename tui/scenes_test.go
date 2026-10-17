@@ -742,3 +742,73 @@ func TestTheLevelsViewTurnsAndMutesThePadsOfTheBank(t *testing.T) {
 		t.Error("v did not open Levels")
 	}
 }
+
+func TestOverdubAddsAKnobToAPlayingMotionAndReplacesOnlyWhatIsHeld(t *testing.T) {
+	r := newPerfRig(t, 170, 80)
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.s.model = r.s.m().motionClear(0) // makes the scenes
+	r.sc().bus[0].mo[0] = motion{state: motionPlaying, total: 2 * ticksPerBar,
+		events: []motionEv{{0, 0, 10}, {48, 0, 20}, {120, 0, 30}}}
+	count := func(knob int) (n int) {
+		for _, ev := range r.sc().bus[0].mo[0].events {
+			if ev.knob == knob {
+				n++
+			}
+		}
+		return
+	}
+	// Off: a move is not kept.
+	r.tick(10)
+	r.cc(1, 17, 99)
+	if count(1) != 0 {
+		t.Fatal("a move was kept with overdub off")
+	}
+	r.s.press("d")
+	if !r.sc().overdub {
+		t.Fatal("d did not switch overdub on")
+	}
+	r.cc(1, 17, 99) // C2 at the tick the loop is at
+	if count(1) != 1 || count(0) != 3 {
+		t.Fatalf("C2 %d, C1 %d events, want 1 and 3", count(1), count(0))
+	}
+	// Holding C1 from tick ~40 to ~60 takes the old move at 48 out, and plays nothing of it meanwhile.
+	r.tick(30)
+	r.clearSent()
+	for range 20 {
+		r.cc(1, 16, 77)
+		r.tick(1)
+	}
+	for _, ev := range r.sc().bus[0].mo[0].events {
+		if ev.knob == 0 && ev.val == 20 {
+			t.Error("the old move at tick 48 was kept under the hand")
+		}
+	}
+	if count(0) < 20 {
+		t.Errorf("the held knob left %d moves", count(0))
+	}
+	for _, msg := range r.sent() {
+		if len(msg) == 3 && msg[1] == 16 && msg[2] != 77 {
+			t.Errorf("the loop sent %v over the hand", msg)
+		}
+	}
+	// The events stay in order, the other knob and the later move are untouched.
+	evs := r.sc().bus[0].mo[0].events
+	for i := 1; i < len(evs); i++ {
+		if evs[i].tick < evs[i-1].tick {
+			t.Fatal("the events are not in order")
+		}
+	}
+	if count(1) != 1 {
+		t.Error("C2 was disturbed by holding C1")
+	}
+	// The button is there, and is a toggle.
+	r.s.shows("overdub")
+	r.s.model = r.s.m().motionOverdub()
+	if r.sc().overdub {
+		t.Error("overdub did not switch off")
+	}
+	for _, sz := range [][2]int{{170, 80}, {120, 40}, {90, 30}, {60, 20}} {
+		r.s.send(tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
+		_ = r.s.m().View()
+	}
+}

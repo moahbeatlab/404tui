@@ -40,11 +40,13 @@ type busScene struct {
 // sceneState is the scenes of both buses and the output they are sent on. It is shared by the copies
 // of the model, as the cache of the drawing is.
 type sceneState struct {
-	bus    [2]busScene
-	bars   int // the length of a glide
-	out    midiin.Out
-	outErr string
-	tried  time.Time
+	bus  [2]busScene
+	bars int // the length of a glide
+	// overdub: a knob moved while a motion plays is written into it.
+	overdub bool
+	out     midiin.Out
+	outErr  string
+	tried   time.Time
 	// last is the last message sent to the unit, as text, for the panel and the log.
 	last string
 }
