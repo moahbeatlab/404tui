@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -162,6 +163,7 @@ func MkdirAll(s Storage, dir string) error {
 // segments lists every ancestor of a path, from its first element down to the path itself,
 // with any "SD:" prefix or leading slash kept.
 func segments(dir string) []string {
+	dir = slash(dir)
 	prefix, rest := "", dir
 	if after, ok := strings.CutPrefix(dir, fileapi.Card); ok {
 		prefix, rest = fileapi.Card, after
@@ -207,3 +209,11 @@ func (r *Routed) Stat(p string) (fileapi.FileStat, bool, error) { return r.files
 func (r *Routed) ReadPrefix(p string, n uint32) ([]byte, bool, error) {
 	return r.files.ReadPrefix(p, n)
 }
+
+// Local paths use the computer's separator (a backslash on Windows) and the paths of the unit and
+// its card always a slash, so names are taken from a path after its separators are made slashes.
+func slash(p string) string { return filepath.ToSlash(p) }
+
+func pBase(p string) string { return path.Base(slash(p)) }
+func pExt(p string) string  { return path.Ext(slash(p)) }
+func pDir(p string) string  { return path.Dir(slash(p)) }

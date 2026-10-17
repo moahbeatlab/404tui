@@ -3,7 +3,6 @@ package app
 import (
 	"errors"
 	"fmt"
-	"path"
 	"regexp"
 	"slices"
 	"strconv"
@@ -20,11 +19,11 @@ const MaxPadName = 16
 func LoadSample(s Storage, file string) (formats.Imported, error) {
 	b, err := s.ReadFile(file)
 	if err != nil {
-		return formats.Imported{}, fmt.Errorf("%s: %w", path.Base(file), err)
+		return formats.Imported{}, fmt.Errorf("%s: %w", pBase(file), err)
 	}
-	imported, err := formats.DecodeAudio(b, path.Ext(file))
+	imported, err := formats.DecodeAudio(b, pExt(file))
 	if err != nil {
-		return formats.Imported{}, fmt.Errorf("%s: %w", path.Base(file), err)
+		return formats.Imported{}, fmt.Errorf("%s: %w", pBase(file), err)
 	}
 	return imported, nil
 }
@@ -32,8 +31,8 @@ func LoadSample(s Storage, file string) (formats.Imported, error) {
 // PadName is the name a pad gets from a file: its name without the extension, printable
 // ASCII only, cut to fit.
 func PadName(file string) string {
-	base := path.Base(file)
-	stem := strings.TrimSuffix(base, path.Ext(base))
+	base := pBase(file)
+	stem := strings.TrimSuffix(base, pExt(base))
 	var name []rune
 	for _, r := range stem {
 		if r >= ' ' && r <= '~' && len(name) < MaxPadName {
@@ -121,7 +120,7 @@ func AssignManyReport(u Importer, s Storage, pads []proto.PadIndex, files []stri
 	}
 	for i, file := range files {
 		if i >= len(pads) {
-			add(Placement{File: file, Err: fmt.Errorf("%w for %s", ErrNoFreePad, path.Base(file))})
+			add(Placement{File: file, Err: fmt.Errorf("%w for %s", ErrNoFreePad, pBase(file))})
 			continue
 		}
 		if progress != nil {
@@ -152,7 +151,7 @@ const silence = 8
 // kit (named EMPTY, as sample packs do) and really is empty: no frames, or only silence.
 // A file named EMPTY that holds sound is a sample like any other.
 func IsBlankPlaceholder(file string, s formats.Sample) bool {
-	if !strings.Contains(strings.ToUpper(path.Base(file)), "EMPTY") {
+	if !strings.Contains(strings.ToUpper(pBase(file)), "EMPTY") {
 		return false
 	}
 	for _, v := range s.Samples {
@@ -175,7 +174,7 @@ func NumberedPads(files []string, bank int, taken func(proto.PadIndex) bool) ([]
 	numbers := make([]int, len(files))
 	claimed := map[int]bool{}
 	for i, f := range files {
-		m := numberPrefix.FindStringSubmatch(path.Base(f))
+		m := numberPrefix.FindStringSubmatch(pBase(f))
 		if m == nil {
 			return nil, false
 		}
@@ -184,7 +183,7 @@ func NumberedPads(files []string, bank int, taken func(proto.PadIndex) bool) ([]
 			return nil, false
 		}
 		numbers[i] = n
-		if !strings.Contains(strings.ToUpper(path.Base(f)), "EMPTY") {
+		if !strings.Contains(strings.ToUpper(pBase(f)), "EMPTY") {
 			claimed[n] = true
 		}
 	}

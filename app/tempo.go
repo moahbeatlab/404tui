@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"math"
-	"path"
 	"regexp"
 	"strings"
 	"unicode"
@@ -18,7 +17,7 @@ var tempoWord = regexp.MustCompile(`^(\d{2,3})(?:bpm)?$`)
 // TempoFromName is the tempo a name states, in BPM, and whether it states one. A number in
 // front that is the pad (01 to 16) is not one: it is below the lowest tempo.
 func TempoFromName(name string) (float64, bool) {
-	stem := strings.TrimSuffix(name, path.Ext(name))
+	stem := strings.TrimSuffix(name, pExt(name))
 	words := strings.FieldsFunc(strings.ToLower(stem), func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 	})
@@ -56,7 +55,7 @@ func (t TempoPlan) Steps() int {
 }
 
 func isPlaceholder(file string) bool {
-	return strings.Contains(strings.ToUpper(path.Base(file)), "EMPTY")
+	return strings.Contains(strings.ToUpper(pBase(file)), "EMPTY")
 }
 
 // PlanTempos reads the tempos out of the names of files. The bank's tempo is the one every
@@ -69,7 +68,7 @@ func PlanTempos(files []string, withBank bool) TempoPlan {
 		if isPlaceholder(f) {
 			continue
 		}
-		bpm, ok := TempoFromName(path.Base(f))
+		bpm, ok := TempoFromName(pBase(f))
 		if !ok {
 			continue
 		}
@@ -83,7 +82,7 @@ func PlanTempos(files []string, withBank bool) TempoPlan {
 		return plan
 	}
 	if agreed == 0 && len(files) > 0 {
-		agreed, _ = TempoFromName(path.Base(path.Dir(files[0])))
+		agreed, _ = TempoFromName(pBase(pDir(files[0])))
 	}
 	plan.Bank, plan.HasBank = agreed, agreed != 0
 	return plan

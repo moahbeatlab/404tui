@@ -3,6 +3,7 @@ package playback
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -12,6 +13,9 @@ import (
 // fakeAfplay puts a stand-in for afplay first on the PATH: it records the file it is given
 // (and that it was a WAV) and then sleeps like a playing sound.
 func fakeAfplay(t *testing.T, sleep string) (record string) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in for afplay is a shell script")
+	}
 	dir := t.TempDir()
 	record = filepath.Join(dir, "args")
 	script := "#!/bin/sh\nhead -c 4 \"$1\" > '" + record + "'\nsleep " + sleep + "\n"

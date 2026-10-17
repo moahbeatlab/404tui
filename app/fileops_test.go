@@ -27,7 +27,7 @@ func TestJunkIsRecognisedAndNeverAudio(t *testing.T) {
 		t.Error("IsAudioFile judges the macOS companion file wrongly")
 	}
 	for path, want := range map[string]app.Volume{
-		"SD:IMPORT/x.wav": app.VolumeCard, "ROLAND/SP-404MKII": app.VolumeUnit, "/Users/me/x.wav": app.VolumeComputer, "~/x": app.VolumeComputer,
+		"SD:IMPORT/x.wav": app.VolumeCard, "ROLAND/SP-404MKII": app.VolumeUnit, filepath.Join(os.TempDir(), "x.wav"): app.VolumeComputer, "~/x": app.VolumeComputer,
 	} {
 		if got := app.VolumeOf(path); got != want {
 			t.Errorf("VolumeOf(%q) = %v, want %v", path, got, want)
