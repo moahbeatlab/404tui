@@ -7092,3 +7092,76 @@ func TestAGlideSurvivesANewStartAndALengthChange(t *testing.T) {
 		t.Error("the glide did not end")
 	}
 }
+
+func TestMotionIsRecordedFromTheKnobsAndLoopedBackToTheUnit(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 70})
+	link := &midiLink{ch: make(chan midiin.Event, 4)}
+	src := &fakeMIDI{}
+	m := s.m()
+	m.midi, m.midiSrc = link, src
+	s.model = m
+	s.press("7")
+	feed := func(e midiin.Event) {
+		e.At = time.Now()
+		next, _ := s.m().midiEvent(midiMsg{link: link, ev: e})
+		s.model = next
+	}
+	tick := func(n int) {
+		for range n {
+			feed(midiin.Event{Kind: midiin.Clock})
+		}
+	}
+	cc := func(ch, n, v int) { feed(midiin.Event{Kind: midiin.CC, Channel: ch, Data1: n, Data2: v}) }
+	// Without the clock there is nothing to record against.
+	s.model = s.m().motionAct(0)
+	if s.m().sc != nil && s.m().sc.bus[0].mo.state != motionIdle {
+		t.Error("a motion was armed without a clock")
+	}
+	feed(midiin.Event{Kind: midiin.Start})
+	s.model = s.m().sceneAct("bars", 1, 0)
+	tick(10)
+	s.model = s.m().motionAct(0)
+	if s.m().sc.bus[0].mo.state != motionArmed {
+		t.Fatal("the motion is not armed")
+	}
+	tick(ticksPerBar) // up to the next bar: the recording begins
+	if s.m().sc.bus[0].mo.state != motionRecording {
+		t.Fatalf("state %d, want recording", s.m().sc.bus[0].mo.state)
+	}
+	// C1 is turned a quarter of the way in, to 50, and C3 half way, to 90; bus 2 is turned too.
+	tick(ticksPerBar / 4)
+	cc(1, 16, 50)
+	tick(ticksPerBar / 4)
+	cc(1, 18, 90)
+	cc(2, 16, 7)
+	tick(ticksPerBar/2 + 1)
+	if s.m().sc.bus[0].mo.state != motionPlaying {
+		t.Fatalf("state %d, want playing after the bar", s.m().sc.bus[0].mo.state)
+	}
+	if s.m().sc.bus[1].mo.state != motionIdle {
+		t.Error("bus 2 has a motion that was never asked for")
+	}
+	src.mu.Lock()
+	src.sent = nil
+	src.mu.Unlock()
+	// A whole loop is played again: C1 = 50 and C3 = 90 on channel 1 come back, once each, and nothing on 2.
+	tick(ticksPerBar)
+	src.mu.Lock()
+	got := map[[2]int]int{}
+	for _, msg := range src.sent {
+		if msg[0]&0x0F == 1 {
+			t.Errorf("sent % x on bus 2's channel", msg)
+		}
+		got[[2]int{int(msg[1]), int(msg[2])}]++
+	}
+	src.mu.Unlock()
+	if got[[2]int{16, 50}] != 1 || got[[2]int{18, 90}] != 1 {
+		t.Errorf("a loop sent %v, want 16=50 and 18=90 once each", got)
+	}
+	// A tap stops it.
+	s.model = s.m().motionAct(0)
+	if s.m().sc.bus[0].mo.state != motionIdle {
+		t.Error("the motion did not stop")
+	}
+}

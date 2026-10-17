@@ -11,9 +11,9 @@ import (
 // big buttons, as tall as the screen allows (3 to 7 rows), and the places they were drawn at are kept
 // for the clicks.
 
-// btnRows is how tall the buttons are for a sidebar h rows high: the other panels need about 43 rows
-// and the buttons use 5 times their height, so a taller screen makes bigger buttons.
-func btnRows(h int) int { return clamp((h-43)/5, 3, 7) }
+// btnRows is how tall the buttons are for a sidebar h rows high: the other panels need about 45 rows
+// and the buttons use 6 times their height, so a taller screen makes bigger buttons.
+func btnRows(h int) int { return clamp((h-45)/6, 3, 7) }
 
 // btn is a place of a panel that does something when it is clicked: its column, width and height,
 // counted from the start of the panel's text, and the row where it starts.

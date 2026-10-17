@@ -94,6 +94,19 @@ change at the middle of the fade (an effect cannot be half another). A bus with 
 alone. It needs a MIDI output to the unit, found by the same name as the input (Config); where it cannot be
 opened the panel says why.
 
+## Motion: recording the knobs and looping them
+
+The MOTION panel has a button for each bus. Tap it: it waits for the next bar of the unit's clock (so its
+sequencer must run), then records everything you do to C1–C3 of that bus on the unit for the number of bars
+set at the top of SCENES (*1 2 4 8*, the same setting as a glide), and then plays it back in a loop by
+sending the same controllers to the unit. The loop begins where the knobs stood when the recording began.
+Tap the button again to stop it; while it waits or records, a tap cancels. A bus with a motion is not moved
+by its scenes, and its glide button asks you to stop the motion first. Each bus has its own motion, so one
+can loop while you play with the other.
+
+The motion is not saved: it is gone when the program ends. Turning a knob while a loop plays moves the
+knob until the loop comes round to it again.
+
 ## Pad colours
 
 A pad keeps a **green** tint while it is heard in the pattern that plays (within a round of the pattern); a

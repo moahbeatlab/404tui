@@ -33,6 +33,7 @@ type busScene struct {
 	mix   float64
 	glide *glide
 	sent  fxScene
+	mo    motion
 }
 
 // sceneState is the scenes of both buses and the output they are sent on. It is shared by the copies
@@ -112,6 +113,8 @@ func (m Model) sceneAct(act string, bus int, pos float64) Model {
 		m = m.sceneApply(sc, bus)
 	case "glide":
 		switch {
+		case bs.mo.state != motionIdle:
+			m.message = fmt.Sprintf("BUS %d: a motion is on: stop it first", bus+1)
 		case bs.glide != nil:
 			bs.glide = nil
 			m.message = fmt.Sprintf("BUS %d: glide stopped where it is", bus+1)
@@ -168,7 +171,7 @@ func (m Model) sceneTick() Model {
 func (m Model) sceneApply(sc *sceneState, bus int) Model {
 	bs := &sc.bus[bus]
 	a, b := bs.a, bs.b
-	if !a.set || !b.set {
+	if !a.set || !b.set || bs.mo.state != motionIdle {
 		return m
 	}
 	pick := a
@@ -254,7 +257,7 @@ func (m Model) sceneLines(width int) ([]string, []btn) {
 	}
 	// How long a glide takes.
 	b := newRowBuilder(st, m.btnH)
-	b.text(st.dim.Render("glide takes "))
+	b.text(st.dim.Render("glide or motion: "))
 	barBtn := max((width-12-5-4)/4, 5)
 	for _, n := range []int{1, 2, 4, 8} {
 		b.button(fmt.Sprint(n), n == sc.bars, "bars", n, barBtn)

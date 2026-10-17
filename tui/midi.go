@@ -212,6 +212,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		m.mon.tick(e.At, m.clock.ticks)
 		m.logMIDI(e)
 		m = m.sceneTick()
+		m.motionTick()
 		if m.vc != nil && m.clock.ticks%6 != 0 {
 			m.vc.keep = true
 		}
@@ -233,6 +234,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		return m, next
 	}
 	m.logMIDI(e)
+	m.motionIn(e)
 	m = m.fxEvent(e)
 	ctl := m.midiChan()
 	// A message on the control channel: a note on, or a controller turned up.
