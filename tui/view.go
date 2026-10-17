@@ -688,12 +688,9 @@ func (m Model) tile(w, h int, num, name string, level int32, ts tileState) strin
 	busStyle, badge := pieceBold, ""
 	busColour, onBus := th.busColour(ts.bus)
 	if onBus && !ts.empty {
-		busStyle = pieceBold.Foreground(busColour)
-		if bright {
-			// On the bright tiles the colour would be lost: the badge keeps the dark text.
-			busStyle = pieceBold
-		}
-		badge = busBadge(ts.bus)
+		// The bus is a small box in the corner, in its colour, with its number in it.
+		busStyle = lipgloss.NewStyle().Background(busColour).Foreground(th.cursorFg).Bold(true)
+		badge = fmt.Sprintf(" %d ", ts.bus)
 	}
 	// Muted or soloed in the mix on this computer: a mark before the others.
 	mixMark := ""
@@ -794,11 +791,20 @@ func (m Model) tile(w, h int, num, name string, level int32, ts tileState) strin
 	default:
 		fill := piece.Render(" ")
 		barText := levelBar(w-2, int(level), 127)
-		if onBus && !ts.cursor && !ts.playing {
-			bar = fill + lipgloss.NewStyle().Background(bg).Foreground(busColour).Render(barText) + fill
-		} else {
-			bar = style.Render(" " + barText)
+		// The bar is the pad's volume: the level in the text colour, the rest faint.
+		on, off := th.text, th.faint
+		if bright {
+			on, off = fg, fg
 		}
+		var sb strings.Builder
+		for _, r := range barText {
+			c := on
+			if r != '━' {
+				c = off
+			}
+			sb.WriteString(lipgloss.NewStyle().Background(bg).Foreground(c).Render(string(r)))
+		}
+		bar = fill + sb.String() + fill
 	}
 	if h == 2 {
 		first := numLine
