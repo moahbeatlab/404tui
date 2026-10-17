@@ -6712,9 +6712,16 @@ func TestTheTemplatePickerShowsTheFirstBarOfTheGroove(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 150, Height: 50})
 	s.press("N")
-	s.hides("bars 1-2")
+	s.hides("House · bars")
 	s.press("down", "down") // House
 	s.shows("House · bars 1-2", "Kick")
 	s.press("down", "down", "down", "down", "down", "down")
 	s.shows("Hip-hop · bars 1-2")
+}
+
+func TestTheTemplatePickerShowsAllPadsHeldHeld(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 150, Height: 50})
+	s.press("N")
+	s.shows("All pads held · bars 1-2", "────")
 }

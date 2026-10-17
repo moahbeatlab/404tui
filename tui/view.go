@@ -1872,8 +1872,44 @@ func (m Model) templatePickerBox() string {
 			lines = append(lines, fmt.Sprintf("%-12s ", bar.Lane.LaneName())+b.String())
 		}
 	}
+	if m.tmplPicker.cursor == 0 && m.snap != nil {
+		lines = append(lines, m.heldPreview()...)
+	}
 	lines = append(lines, "", st.dim.Render("↑↓ navigate  ·  Enter choose  ·  Esc close"))
 	return st.modal.Width(min(m.width-4, 110)).Render(strings.Join(lines, "\n"))
+}
+
+// heldPreview is what "All pads held" makes, drawn like the sequencer over its two bars: a row for
+// each pad of the bank that has a sample, its note on beat 1 and held to the end.
+func (m Model) heldPreview() []string {
+	st := m.st
+	bars := app.StartBars
+	steps := bars * app.GridStepsPerBar
+	lines := []string{"", st.dim.Render(fmt.Sprintf("All pads held · bars 1-%d", bars))}
+	shown, more := 0, 0
+	for _, pad := range proto.AllPads()[m.bank*proto.PadsPerBank : (m.bank+1)*proto.PadsPerBank] {
+		row := m.snap.Pads[pad.Index()]
+		if !row.HasSample {
+			continue
+		}
+		if shown >= 8 {
+			more++
+			continue
+		}
+		shown++
+		var b strings.Builder
+		mark, style := m.noteGlyph(127)
+		b.WriteString(style.Render(mark))
+		for i := 0; i < steps-1; i++ {
+			b.WriteString(m.fillGap(barGap(i), "─", st.accent) + st.accent.Render("─"))
+		}
+		name := ansi.Truncate(row.Name, 7, "…")
+		lines = append(lines, fmt.Sprintf("%-4s %-7s ", pad, name)+b.String())
+	}
+	if more > 0 {
+		lines = append(lines, st.dim.Render(fmt.Sprintf("… and %d more", more)))
+	}
+	return lines
 }
 
 // laneAssignBox draws the lane->pad confirm dialog for a genre groove, or its pad chooser when a
