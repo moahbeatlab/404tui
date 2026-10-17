@@ -367,20 +367,13 @@ func (m Model) motionLines(width int) ([]string, []btn) {
 	sc := m.scenes()
 	bb := newRowBuilder(st, m.motionH)
 	bb.text(st.dim.Render("length: "))
-	barsW := 5
-	if width < 58 {
-		barsW = 0
-	}
-	lenBtn := max((width-8-5-barsW-1-10)/5, 3)
+	odW := 12
+	lenBtn := max((width-8-5-odW)/5, 3)
 	for _, n := range []int{1, 2, 3, 4, 8} {
 		bb.button(fmt.Sprint(n), n == sc.bars, "bars", n, lenBtn)
 		bb.gap(1)
 	}
-	if barsW > 0 {
-		bb.text(st.dim.Render("bars"))
-	}
-	bb.gap(1)
-	bb.button("overdub", sc.overdub, "dub", 0, 10)
+	bb.button("overdub", sc.overdub, "dub", 0, odW)
 	l0, b0 := bb.rows(0)
 	lines = append(lines, l0...)
 	btns = append(btns, b0...)
