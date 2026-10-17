@@ -6265,7 +6265,7 @@ func TestChangingTheMIDIInputInConfigClosesTheOldOneAndOpensTheNew(t *testing.T)
 
 func TestARecordingWritesWhatTheUnitSendsToAnEventLogAndPerformShowsIt(t *testing.T) {
 	s := open(t)
-	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 70})
 	stopped := 0
 	dir := t.TempDir()
 	m := s.m().WithRecorder(&fakeRecorder{stopped: &stopped})
