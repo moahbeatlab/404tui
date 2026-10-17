@@ -1828,6 +1828,7 @@ func (m Model) templatePickerBox() string {
 	lines := []string{st.bold.Render("New pattern"), ""}
 	inner := min(m.width-4, 110) - 4 // what the modal's frame and padding leave
 	// Columns: the name, how long, the tempos, and what it is or the voices it plays.
+	var rows []string
 	for i := range 2 + len(formats.GrooveTemplates()) {
 		name, length, tempo, note := "", "", "", ""
 		switch i {
@@ -1848,14 +1849,17 @@ func (m Model) templatePickerBox() string {
 		row := fmt.Sprintf("%-16s %-7s %-12s %s", name, length, tempo, note)
 		if i == m.tmplPicker.cursor {
 			row += strings.Repeat(" ", max(inner-ansi.StringWidth(row), 0))
-			lines = append(lines, lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true).Render(row))
+			rows = append(rows, lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true).Render(row))
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("%-16s %-7s %-12s ", name, length, tempo)+st.dim.Render(note))
+		rows = append(rows, fmt.Sprintf("%-16s %-7s %-12s ", name, length, tempo)+st.dim.Render(note))
 	}
+	// The preview goes under the list; what is left of the screen is the list's, and it scrolls to
+	// keep the cursor in view.
+	var preview []string
 	// Under the list, the bar the groove under the cursor starts with, drawn like the sequencer.
 	if g, ok := grooveAt(m.tmplPicker.cursor); ok {
-		lines = append(lines, "", st.dim.Render(g.Name+" · bars 1-2"))
+		preview = append(preview, "", st.dim.Render(g.Name+" · bars 1-2"))
 		for _, bar := range g.FirstBars(2) {
 			var b strings.Builder
 			for i, v := range bar.Steps {
@@ -1869,12 +1873,19 @@ func (m Model) templatePickerBox() string {
 					b.WriteString(barGap(i)) // a bar line after every 16th step
 				}
 			}
-			lines = append(lines, fmt.Sprintf("%-12s ", bar.Lane.LaneName())+b.String())
+			preview = append(preview, fmt.Sprintf("%-12s ", bar.Lane.LaneName())+b.String())
 		}
 	}
 	if m.tmplPicker.cursor == 0 && m.snap != nil {
-		lines = append(lines, m.heldPreview()...)
+		preview = append(preview, m.heldPreview()...)
 	}
+	room := max(m.height-3-4-len(lines)-len(preview)-2, 5)
+	first := clamp(m.tmplPicker.cursor-room+1, 0, max(len(rows)-room, 0))
+	if m.tmplPicker.cursor < first {
+		first = m.tmplPicker.cursor
+	}
+	lines = append(lines, rows[first:min(first+room, len(rows))]...)
+	lines = append(lines, preview...)
 	lines = append(lines, "", st.dim.Render("↑↓ navigate  ·  Enter choose  ·  Esc close"))
 	return st.modal.Width(min(m.width-4, 110)).Render(strings.Join(lines, "\n"))
 }
@@ -2866,8 +2877,13 @@ func (sp stepSpan) gap(i int) string {
 	// does not split evenly is left out, so the steps stay regular.
 	add := sp.extra / gaps
 	if (i+1)%4 == 0 {
+		// What does not split over every gap goes to the gaps after a beat, to the last cell.
 		if beats := gaps / 4; beats > 0 {
-			add += sp.extra % gaps / beats
+			rest := sp.extra % gaps
+			add += rest / beats
+			if (i+1)/4-1 < rest%beats {
+				add++
+			}
 		}
 	}
 	if strings.Contains(base, "│") {
@@ -2942,9 +2958,9 @@ func (m Model) patSpan(d *app.PatternDetail, width int) stepSpan {
 	}
 	if r, ok := m.rangeOf(d); ok {
 		// A range is shown whole, however few bars, stretched over the width.
-		return spanBars(d, r.first, r.bars(), width, 1, 4, gridGapW)
+		return spanBars(d, r.first, r.bars(), width, 1, 6, gridGapW)
 	}
-	return spanFor(d, m.viewPage(d), width, 1, 4, gridGapW)
+	return spanFor(d, m.viewPage(d), width, 1, 6, gridGapW)
 }
 
 // centered puts s (one cell wide) in the middle of w cells of fill.

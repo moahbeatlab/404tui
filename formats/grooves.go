@@ -205,6 +205,122 @@ var grooveTemplates = []GrooveTemplate{
 		laneSpec{lane: LaneSnare, hits: "....X.......X..."},
 		laneSpec{lane: LaneClosedHat, hits: "x.o.o.o.x.o.o.o."},
 	),
+	// Drum and bass: two-step. Kick on 1 and the "and" of 3, snare on 2 and 4 (so the kick-snare-
+	// kick-snare skeleton), 8th hats; bar 2 adds a ghost snare and a closing open hat. 170-175 BPM.
+	groove("Drum and bass", "170–175 BPM",
+		laneSpec{lane: LaneKick, hits: "X.........x..... | X.........x...g."},
+		laneSpec{lane: LaneSnare, hits: "....X.......X... | ....X..g....X..."},
+		laneSpec{lane: LaneClosedHat, hits: "x.o.x.o.x.o.x.o. | x.o.x.o.x.o.x...", gate: 60},
+		laneSpec{lane: LaneOpenHat, hits: "................ | ..............x.", gate: 120},
+	),
+	// Jungle: a simplified Amen-style break. Kicks on 1, the "a" of 1 and the "and" of 3, snare on
+	// 2 and 4 with ghost snares around them, 8th ride/hat. Bar 2 moves the kicks. 160-170 BPM.
+	groove("Jungle", "160–170 BPM",
+		laneSpec{lane: LaneKick, hits: "X.x.......x..... | ..x.....x.x....."},
+		laneSpec{lane: LaneSnare, hits: "....X..g.g..X..g | ....X..g.g..X..."},
+		laneSpec{lane: LaneClosedHat, hits: "x.x.x.x.x.x.x.x. | x.x.x.x.x.x.x.x.", gate: 60},
+		laneSpec{lane: LaneRide, hits: "................ | ..............o.", gate: 240},
+	),
+	// Dubstep: half-time at ~140 BPM, the snare alone on beat 3 (step 9), kick on 1 and a
+	// syncopated one before it, 8th hats; bar 2 shifts the second kick. 138-142 BPM.
+	groove("Dubstep", "138–142 BPM",
+		laneSpec{lane: LaneKick, hits: "X.........x..... | X.....x........."},
+		laneSpec{lane: LaneSnare, hits: "........X......."},
+		laneSpec{lane: LaneClosedHat, hits: "x.x.x.x.x.x.x.x. | x.x.x.x.x.x.xxx.", gate: 60},
+		laneSpec{lane: LanePerc, hits: "................ | ............g.g."},
+	),
+	// Trance: 4/4 kick, clap on 2 and 4, open hat on every off-beat, 16th closed hat ghosts.
+	// 136-142 BPM.
+	groove("Trance", "136–142 BPM",
+		laneSpec{lane: LaneKick, hits: "X...X...X...X..."},
+		laneSpec{lane: LaneClap, hits: "....x.......x..."},
+		laneSpec{lane: LaneOpenHat, hits: "..x...x...x...x.", gate: 180},
+		laneSpec{lane: LaneClosedHat, hits: "g.g.g.g.g.g.g.g.", gate: 60},
+	),
+	// Psytrance: 4/4 kick, off-beat hat, a closed hat on the 16th right after it and a clap on 2
+	// and 4 only every other bar. 140-148 BPM.
+	groove("Psytrance", "140–148 BPM",
+		laneSpec{lane: LaneKick, hits: "X...X...X...X..."},
+		laneSpec{lane: LaneOpenHat, hits: "..x...x...x...x.", gate: 120},
+		laneSpec{lane: LaneClosedHat, hits: "...o...o...o...o", gate: 60},
+		laneSpec{lane: LaneClap, hits: "................ | ....x.......x..."},
+	),
+	// Hard techno: a hard 4/4 kick with ghost kicks leading into 2 and 4, clap on 2 and 4, off-beat
+	// open hat and a pushing 16th closed hat. 145-160 BPM.
+	groove("Hard techno", "145–160 BPM",
+		laneSpec{lane: LaneKick, hits: "X...X..gX...X..g"},
+		laneSpec{lane: LaneClap, hits: "....X.......X..."},
+		laneSpec{lane: LaneOpenHat, hits: "..x...x...x...x.", gate: 120},
+		laneSpec{lane: LaneClosedHat, hits: "gogo gogo gogo gogo", gate: 60},
+		laneSpec{lane: LaneTom, hits: "................ | ..............og"},
+	),
+	// UK garage / 2-step: kick on 1 and the "and" of 3 (a second one halfway through beat 3),
+	// snare on 2 and 4, shuffled 16th hats and a rim skip; swing 58-62. 130-135 BPM.
+	groove("UK garage", "130–135 BPM",
+		laneSpec{lane: LaneKick, hits: "X.........x..... | X.....x...x....."},
+		laneSpec{lane: LaneSnare, hits: "....X.......X... | ....X.......X..g"},
+		laneSpec{lane: LaneClosedHat, hits: "x.ox x.ox x.ox x.ox", swing: 60, gate: 60},
+		laneSpec{lane: LaneShaker, hits: "..o...o...o...o.", swing: 60, gate: 60},
+		laneSpec{lane: LaneRim, hits: "......g.....g... | ...g......g...g.", swing: 60},
+	),
+	// Breakbeat / big beat: the funky-break skeleton: kick on 1, a kick just before beat 3 and
+	// one on the "and" of 3, snare on 2 and 4, 8th hats with an open hat. 120-135 BPM.
+	groove("Breakbeat", "120–135 BPM",
+		laneSpec{lane: LaneKick, hits: "X......x..x..... | X..o..x...x....."},
+		laneSpec{lane: LaneSnare, hits: "....X.......X... | ....X..g....X..g"},
+		laneSpec{lane: LaneClosedHat, hits: "x.x.x.x.x.x.x.x.", gate: 60},
+		laneSpec{lane: LaneOpenHat, hits: "..............x. | ................", gate: 180},
+	),
+	// Electro (Planet Rock / Kraftwerk lineage): a syncopated 808 kick (steps 0, 3, 6, 10), snare and clap on 2 and 4, off-beat hat, rim. 120-135 BPM.
+	groove("Electro", "120–135 BPM",
+		laneSpec{lane: LaneKick, hits: "X..x..X...x..... | X..x..X...x..x.."},
+		laneSpec{lane: LaneSnare, hits: "....X.......X..."},
+		laneSpec{lane: LaneClap, hits: "....x.......x..."},
+		laneSpec{lane: LaneClosedHat, hits: "..x...x...x...x.", gate: 60},
+		laneSpec{lane: LaneRim, hits: "......o.......o."},
+	),
+	// Trap: 808 kick pattern, a single clap/snare on beat 3 (half-time), 16th hats with soft
+	// and ghost steps and a roll at the end of bar 2. Programmed at 130-150 (felt 65-75).
+	groove("Trap", "130–150 BPM",
+		laneSpec{lane: LaneKick, hits: "X......x..x..... | X.....x...x.x..."},
+		laneSpec{lane: LaneClap, hits: "........X......."},
+		laneSpec{lane: LaneClosedHat, hits: "x.xgx.xgx.x.xoxo | x.xgx.xgx.xoxoxx", gate: 60},
+		laneSpec{lane: LaneOpenHat, hits: "................ | ..............x.", gate: 120},
+	),
+	// Amapiano: a soft 4/4 kick, a syncopated log-drum line on perc, clap/rim on 2 and 4, a swung
+	// 16th shaker and an off-beat open hat. 108-115 BPM.
+	groove("Amapiano", "108–115 BPM",
+		laneSpec{lane: LaneKick, hits: "x...x...x...x..."},
+		laneSpec{lane: LanePerc, hits: "x..x..x...x..x.. | x..x..x...x.x..x"},
+		laneSpec{lane: LaneClap, hits: "....o.......o..."},
+		laneSpec{lane: LaneShaker, hits: "ogog ogog ogog ogog", swing: 58, gate: 60},
+		laneSpec{lane: LaneOpenHat, hits: "..o...o...o...o.", gate: 180},
+		laneSpec{lane: LaneRim, hits: "......g.......g. | ......g.....g.g.", swing: 58},
+	),
+	// Reggaeton: the dembow riddim: kick on every beat, snare on steps 3, 6, 11
+	// and 14 (the 3+3+4+3+3 shape), 8th hats. 90-100 BPM.
+	groove("Reggaeton", "90–100 BPM",
+		laneSpec{lane: LaneKick, hits: "X...X...X...X..."},
+		laneSpec{lane: LaneSnare, hits: "...x..x....x..x."},
+		laneSpec{lane: LaneClosedHat, hits: "x.o.x.o.x.o.x.o.", gate: 60},
+		laneSpec{lane: LaneRim, hits: "................ | ..............g."},
+	),
+	// Disco / nu-disco: 4/4 kick, clap on 2 and 4, open hat on every off-beat, steady 16th closed
+	// hats with accents on the beat, light swing. 110-125 BPM.
+	groove("Disco", "110–125 BPM",
+		laneSpec{lane: LaneKick, hits: "X...X...X...X..."},
+		laneSpec{lane: LaneClap, hits: "....x.......x..."},
+		laneSpec{lane: LaneOpenHat, hits: "..x...x...x...x.", gate: 180},
+		laneSpec{lane: LaneClosedHat, hits: "xogo xogo xogo xogo", swing: 54, gate: 60},
+	),
+	// Footwork / juke: a 3-3-2 kick, claps on the 3-3-2 too, off-beat hat and a fast tom/perc
+	// stutter at the end of bar 2. 155-165 BPM.
+	groove("Footwork", "155–165 BPM",
+		laneSpec{lane: LaneKick, hits: "x..x..x.x..x..x."},
+		laneSpec{lane: LaneClap, hits: "......x.......x. | ....x.x.....x.x."},
+		laneSpec{lane: LaneClosedHat, hits: "x.x.x.x.x.x.x.x.", gate: 60},
+		laneSpec{lane: LaneTom, hits: "................ | ............oxox"},
+	),
 }
 
 // GrooveTemplates are the genre grooves the picker offers, in order.
