@@ -6202,6 +6202,9 @@ func TestRawMIDIBytesDriveARunningProgram(t *testing.T) {
 	if final.clock == nil || final.clock.ticks != 24*9 {
 		t.Errorf("the clock counted %v ticks, want %d", final.clock, 24*9)
 	}
+	if final.perfLog != nil {
+		final.perfLog.Close() // a file that is open cannot be removed on Windows
+	}
 	final.clock.at = time.Now() // the clock text is blank for a clock that stopped two seconds ago
 	if got := final.clockText(0); !strings.Contains(got, "BAR 3 · BEAT 2") {
 		t.Errorf("clock text %q", got)

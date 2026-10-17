@@ -372,7 +372,7 @@ func TestLocalStorage(t *testing.T) {
 	if err := r.Rename(file, filepath.Join(dir, "a", "b", "y.wav")); err == nil {
 		t.Error("renaming onto an existing file succeeded")
 	}
-	for path, local := range map[string]bool{"/tmp/x": true, "./x": true, "~/x": true, "SD:IMPORT": false, "ROLAND/x": false} {
+	for path, local := range map[string]bool{filepath.Join(dir, "x"): true, "./x": true, "~/x": true, "SD:IMPORT": false, "ROLAND/x": false} {
 		if app.IsLocal(path) != local {
 			t.Errorf("IsLocal(%q) = %v", path, !local)
 		}
