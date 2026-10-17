@@ -39,7 +39,7 @@ Narrower screens put the same panels one under the other.
 | `n` | choose the next pattern |
 | `Space` | the next pattern becomes the one that plays |
 | `x` | clear the next pattern |
-| `i` | the ISOLATE button (see below); `Esc` puts everything back |
+| `i`, `Esc` | the ISOLATE switch on / everything back (the mouse does the same) |
 | `f` `F` | note what BUS 1 / BUS 2 is used for (the unit does not tell the effect by itself) |
 | `Ctrl-R` | start / stop a recording |
 | `Ctrl-F` | full screen |
@@ -48,48 +48,62 @@ Narrower screens put the same panels one under the other.
 The control channel does the same from a controller: notes 60–63 (live mode, recording, next becomes now,
 clear next), see [config.md](config.md).
 
-## Isolating a pad (mouse)
+## Mouse and touch
 
-The unit has one effect on each bus; to hear what a bus does to a single sound, the other pads on it have
-to go dry. In the wide layout:
+Perform is made to be used without the keyboard: everything below is a button or a pad to tap (a touch
+screen sends taps as clicks). In the wide layout the left side has, from the top:
 
-- **One click** on a pad mutes it (a × on the tile). It mutes on this computer only; the unit has no mute to
-  set from here.
-- **Double click** a pad: it alone keeps its own bus, every other pad on the same bus is set dry (bus off).
-  The ISOLATE panel says `ISOLATED`. Double click again (or `Esc`) puts every pad back on the bus it had.
-- **The ISOLATE button** (`i`, or a click on its panel in the sidebar): click several pads to add them or
-  take them out; each keeps its bus and the others on those buses go dry. `i`, `Esc` or a click on the panel
-  again puts everything back.
+- **VIEW**: *player*, *patterns*, *● record* / *■ stop recording* and *full screen*. The player and the
+  patterns view have no buttons of their own: a tap anywhere goes back to the pads.
+- **ISOLATE**: a switch. See below.
+- **SCENES**: the effects of each bus, saved and faded. See below.
 
-These are real changes to the pads' bus setting on the unit, saved in the project, until they are put back (quitting with `q` or `Ctrl-C` puts them back first; if the program is killed or the
-unit unplugged, they stay as they were set).
+## Isolating a pad
 
-## Scenes: fading the effects from one state to another
+The unit has one effect on each bus; to hear what a bus does to one sound, the other pads on it have to
+go dry.
 
-Set the effects on the unit, save them as scene **A**; change them, save scene **B**; then fade between
-the two. For each bus a scene holds whether the effect is on, which effect it is and the three knobs
-C1–C3 (all as the unit last said them over MIDI, so touch each knob once first; a knob it never sent is
-left alone). The fade is sent back to the unit as MIDI controllers (CC 16–18, 19 and 83 on channel 1 for
-BUS 1 and 2 for BUS 2), so the unit's own knobs follow. The SCENES panel shows the position.
+- **Tap a pad** once: it is muted (a × on the tile). It mutes on this computer only; the unit has no mute
+  to set from here.
+- **Double tap a pad**: it alone keeps its own bus, every other pad on the same bus is set dry (bus off).
+  The ISOLATE switch turns on and says which pad is alone. Double tap it again, or switch ISOLATE off,
+  and every pad is back on the bus it had.
+- **The ISOLATE switch**: switch it on, then tap pads to add them or take them out; each keeps its bus and
+  the others on those buses go dry. Switch it off and everything is put back.
 
-| Key | What |
+These are real changes to the pads' bus setting on the unit, saved in the project, until they are put
+back (quitting puts them back first; if the program is killed or the unit unplugged, they stay as they
+were set). A pad that goes to no bus has nothing to isolate.
+
+## Scenes: fading each bus's effect from one state to another
+
+Every bus has its own two scenes, **A** and **B**, and its own fade, so one bus can glide while the other
+stays. Set the effect on the unit, tap *save A* on that bus; change it, tap *save B*. A scene holds
+whether the effect is on, which effect it is and the three knobs C1–C3, all as the unit last said them over
+MIDI, so touch each knob once first (a knob it never sent is left alone). The fade is sent back to the
+unit as MIDI controllers (CC 16–18, 19 and 83 on channel 1 for BUS 1 and channel 2 for BUS 2), so the
+unit's own knobs follow.
+
+Per bus, in the SCENES panel:
+
+| Button | What |
 | --- | --- |
-| `A` / `B` | save the effects as scene A / B (for the buses that follow) |
-| `h` `l` (arrows) | fade towards A / B in steps of 5 % |
-| `H` `L` | jump to A / B |
-| `g` | **glide** to the other scene over some bars, beginning on the next bar of the unit's clock; `g` again stops where it is |
-| `G` | the length of a glide: 1, 2, 4 or 8 bars |
-| `t` `T` | BUS 1 / BUS 2 follows the fade or not (a bus without both scenes is left alone) |
+| *save A* / *save B* | save the effect as that scene |
+| the bar (tap anywhere on it) | fade to that point, from A at the left to B at the right |
+| *A* / *B* | jump to that scene |
+| *glide →B* / *glide →A* | glide to the other scene over the number of bars set at the top, beginning on the next bar of the unit's clock (so the unit's sequencer must run); tap again to stop where it is |
 
-The knobs move smoothly; the effect and the on/off switch change at the middle of the fade (an effect
-cannot be half another). It needs a MIDI output to the unit: the unit's USB MIDI port, found by the same
-name as the input (Config). Where it cannot be opened the panel says why.
+*1 2 4 8* at the top is how long a glide takes. The knobs move smoothly; the effect and the on/off switch
+change at the middle of the fade (an effect cannot be half another). A bus with only one scene saved is left
+alone. It needs a MIDI output to the unit, found by the same name as the input (Config); where it cannot be
+opened the panel says why.
 
 ## Pad colours
 
-A pad keeps a **green** tint once it has been heard in the pattern that plays (since the unit's Start, or
-since you made the next pattern the one that plays); a pad the pattern plays but that has not been heard
-yet is **tinted** in the accent colour. A hit still flashes on top of that.
+A pad keeps a **green** tint while it is heard in the pattern that plays (within a round of the pattern); a
+pad the pattern plays that has not been heard lately is **tinted** in the accent colour; a pad the pattern
+does not play has no tint. What was heard more than a couple of bars ago does not count, so after a switch
+to another pattern the tints follow it. A hit still flashes on top of that.
 
 ## What it works out by itself
 

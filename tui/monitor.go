@@ -399,3 +399,14 @@ func (mo *monitor) heardSince(key, tick, ticks int) bool {
 	at, ok := mo.playedAt[key]
 	return ok && at <= tick && tick-at <= ticks
 }
+
+// heardWithin is the pads heard within the last ticks of the clock.
+func (mo *monitor) heardWithin(tick, ticks int) map[int]bool {
+	out := map[int]bool{}
+	for k, at := range mo.playedAt {
+		if at <= tick && tick-at <= ticks {
+			out[k] = true
+		}
+	}
+	return out
+}

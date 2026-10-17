@@ -115,6 +115,15 @@ func (m Model) setIsolated(pads map[proto.PadIndex]bool) (tea.Model, tea.Cmd) {
 	})
 }
 
+// isolateSwitch is the switch of the ISOLATE panel: on, to tap the pads that keep their bus; off, with
+// everything put back (also after a double tap isolated one pad).
+func (m Model) isolateSwitch() (tea.Model, tea.Cmd) {
+	if m.iso != nil {
+		return m.isolateOff()
+	}
+	return m.isolateButton()
+}
+
 // isolateButton switches the multi-pad isolation on, or off with everything put back.
 func (m Model) isolateButton() (tea.Model, tea.Cmd) {
 	if m.iso != nil && m.iso.multi {
@@ -188,40 +197,39 @@ func (m Model) clickPad(pad proto.PadIndex) (tea.Model, tea.Cmd) {
 	return m.setIsolated(map[proto.PadIndex]bool{pad: true})
 }
 
-// isolateLines are the ISOLATE panel of the Perform sidebar.
-func (m Model) isolateLines() []string {
+// isolateLines are the ISOLATE panel of the Perform sidebar: a switch, and what it does now.
+func (m Model) isolateLines() ([]string, []btn) {
 	st := m.st
-	switch {
-	case m.iso != nil && m.iso.multi:
-		var names []string
+	b := &lineBuilder{st: st}
+	b.toggle(m.iso != nil, "ISOLATE", "iso", 0)
+	lines := []string{b.String()}
+	btns := b.btns
+	var names []string
+	if m.iso != nil {
 		for p := range m.iso.pads {
 			names = append(names, p.String())
 		}
 		slices.Sort(names)
+	}
+	switch {
+	case m.iso != nil && m.iso.multi:
 		list := "no pad yet"
 		if len(names) > 0 {
 			list = strings.Join(names, " ")
 		}
-		return []string{
-			st.hot.Bold(true).Render("ON") + st.text.Render("  keeping "+list+"  ·  "+plural(len(m.iso.was), "pad")+" dry"),
-			st.dim.Render("click pads to add or take them out"),
-			st.dim.Render("i, Esc or a click here: everything back"),
-		}
+		lines = append(lines,
+			st.hot.Bold(true).Render("keeping "+list)+st.text.Render("  ·  "+plural(len(m.iso.was), "pad")+" dry"),
+			st.dim.Render("tap pads to add or take them out; switch off: all back"))
 	case m.iso != nil:
-		var names []string
-		for p := range m.iso.pads {
-			names = append(names, p.String())
-		}
-		slices.Sort(names)
-		return []string{
-			st.hot.Bold(true).Render("ISOLATED") + st.text.Render("  "+strings.Join(names, " ")+"  ·  "+plural(len(m.iso.was), "pad")+" dry"),
-			st.dim.Render("double click a pad, or Esc: everything back"),
-		}
+		lines = append(lines,
+			st.hot.Bold(true).Render(strings.Join(names, " ")+" alone")+st.text.Render("  ·  "+plural(len(m.iso.was), "pad")+" dry"),
+			st.dim.Render("double tap it, or switch off: all back"))
+	default:
+		lines = append(lines,
+			st.dim.Render("switch on, then tap the pads that keep their bus,"),
+			st.dim.Render("or double tap a pad.  One tap mutes a pad."))
 	}
-	return []string{
-		st.dim.Render("double click a pad: it alone keeps its bus"),
-		st.dim.Render("i or a click here: choose several pads  ·  one click mutes"),
-	}
+	return lines, btns
 }
 
 // restoreIsolationNow puts the buses back before the program ends, so a pad is not left dry.

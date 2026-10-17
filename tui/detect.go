@@ -15,16 +15,30 @@ import (
 // start, and makes it the one the Perform view shows (marked as detected). A slot that was chosen by
 // hand stays as long as it fits what is heard.
 func (m Model) detectPattern() Model {
-	if m.mon == nil || len(m.mon.played) == 0 {
+	if m.mon == nil || m.clock == nil || len(m.mon.played) == 0 {
 		return m
 	}
-	heard := map[int]bool{}
-	for k := range m.mon.played {
-		heard[k] = true
+	// The pads heard lately: what was heard before a switch to another pattern must not count, or
+	// the pattern found would be one that holds the pads of both. A short stretch first, a longer
+	// one when it does not make the pattern clear.
+	for _, bars := range []int{2, 4, 8} {
+		heard := m.mon.heardWithin(m.clock.ticks, bars*ticksPerBar)
+		if len(heard) == 0 {
+			continue
+		}
+		if m.perfNow != nil && !m.perfAuto && m.slotFits(*m.perfNow, heard) {
+			return m
+		}
+		if nm, ok := m.detectFrom(heard); ok {
+			return nm
+		}
 	}
-	if m.perfNow != nil && !m.perfAuto && m.slotFits(*m.perfNow, heard) {
-		return m
-	}
+	return m
+}
+
+// detectFrom makes the slot that fits the pads heard the pattern that plays, when one is clearly the
+// closest; false when none is, or when two are as close.
+func (m Model) detectFrom(heard map[int]bool) (Model, bool) {
 	var best []int // slot indexes, fewest extra pads first
 	extra := map[int]int{}
 	for _, rows := range m.patterns {
@@ -38,21 +52,21 @@ func (m Model) detectPattern() Model {
 		}
 	}
 	if len(best) == 0 {
-		return m
+		return m, false
 	}
 	slices.SortFunc(best, func(a, b int) int { return extra[a] - extra[b] })
 	// An ambiguous result (two slots as close) waits for more pads to be heard.
 	if len(best) > 1 && extra[best[0]] == extra[best[1]] {
-		return m
+		return m, false
 	}
 	slot, _ := proto.NewPadIndex(uint16(best[0]))
 	if m.perfNow != nil && *m.perfNow == slot && m.perfAuto {
-		return m
+		return m, true
 	}
 	m.perfNow, m.perfAuto = &slot, true
 	m.message = fmt.Sprintf("the pattern that plays is %s (heard from the unit)", slot)
 	m.logCue()
-	return m
+	return m, true
 }
 
 // slotFits says whether every pad heard (bank*16 + pad) is one of the pads of the slot's pattern.

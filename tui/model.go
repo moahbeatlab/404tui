@@ -1100,9 +1100,9 @@ type viewCache struct {
 // perfHit is the place of the clickable things of the wide Perform view.
 type perfHit struct {
 	ok             bool
-	gx, gy, tw, th int // the pad grid: its corner and the size of a tile
-	sideW          int // the width of the sidebar, which starts at column 1
-	panelY, panelH int // the ISOLATE panel in the sidebar
+	gx, gy, tw, th int      // the pad grid: its corner and the size of a tile
+	sideW          int      // the width of the sidebar, which starts at column 1
+	btns           []hitBtn // the buttons of the sidebar's panels
 }
 
 // ---- update ----

@@ -356,16 +356,34 @@ func (m Model) perfSidebar(width, h int) []string {
 	if rec := m.perfRecLine(); rec != "" {
 		add(rec)
 	}
-	iso := m.isolateLines()
-	if m.vc != nil && m.vc.hit.ok {
-		m.vc.hit.panelY, m.vc.hit.panelH = 1+len(out), len(iso)+2
+	// The panels with buttons: where each button is is kept for the mouse (from the corner of the frame:
+	// the sidebar starts one column in, a panel's text two more, and its first line one row down).
+	panelWithButtons := func(title string, colour lipgloss.Color, lines []string, btns []btn) {
+		top := len(out)
+		if m.vc != nil && m.vc.hit.ok {
+			for _, x := range btns {
+				m.vc.hit.btns = append(m.vc.hit.btns, hitBtn{x: 1 + 2 + x.col, y: 1 + top + 1 + x.row, w: x.w, act: x.act, arg: x.arg})
+			}
+		}
+		add(m.panel(title, colour, lines, width)...)
 	}
+	vb := &lineBuilder{st: st}
+	vb.button("player", m.perfPlayer, "view", 0)
+	vb.text(" ")
+	vb.button("patterns", m.perfPatterns, "view", 1)
+	vb.text(" ")
+	vb.button(map[bool]string{true: "■ stop recording", false: "● record"}[m.rec != nil], m.rec != nil, "view", 2)
+	vb.text(" ")
+	vb.button("full screen", m.full, "view", 3)
+	panelWithButtons("VIEW", st.th.faint, []string{vb.String()}, vb.btns)
+	isoLines, isoBtns := m.isolateLines()
 	isoColour := st.th.faint
 	if m.iso != nil {
 		isoColour = st.th.hot
 	}
-	add(m.panel("ISOLATE", isoColour, iso, width)...)
-	add(m.panel("SCENES", st.th.accent, m.sceneLines(width-4), width)...)
+	panelWithButtons("ISOLATE", isoColour, isoLines, isoBtns)
+	sceneLines, sceneBtns := m.sceneLines(width - 4)
+	panelWithButtons("SCENES", st.th.accent, sceneLines, sceneBtns)
 	pw, pt := width, width
 	if wide {
 		pw = half

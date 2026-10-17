@@ -6797,7 +6797,7 @@ func (s *screen) clickOn(text string) {
 			return
 		}
 	}
-	s.t.Fatalf("no %q on the screen", text)
+	s.t.Fatalf("no %q on the screen:\n%s", text, ansi.Strip(s.m().View()))
 }
 
 func TestPerformClicksMuteIsolateAndBringTheOthersBack(t *testing.T) {
@@ -6843,7 +6843,7 @@ func TestPerformClicksMuteIsolateAndBringTheOthersBack(t *testing.T) {
 	if unitBus("A1") != 1 || unitBus("A2") != 0 || unitBus("A3") != 2 {
 		t.Errorf("after isolating A1 the buses are %d %d %d, want 1 0 2", busOf("A1"), busOf("A2"), busOf("A3"))
 	}
-	s.shows("ISOLATED", "A1")
+	s.shows("A1 alone")
 	// A double click again brings it back.
 	time.Sleep(doubleClick + 50*time.Millisecond)
 	s.clickOn("kick")
@@ -6852,13 +6852,13 @@ func TestPerformClicksMuteIsolateAndBringTheOthersBack(t *testing.T) {
 		t.Errorf("after the second double click the buses are %d %d %d, want 1 1 2", busOf("A1"), busOf("A2"), busOf("A3"))
 	}
 	// The button: the pads clicked keep their buses, leaving it puts everything back.
-	s.press("i")
-	s.shows("ISOLATE", "click pads")
+	s.clickOn("● off")
+	s.shows("tap pads to add or take them out")
 	s.clickOn("snare")
 	if unitBus("A1") != 0 || unitBus("A2") != 1 {
 		t.Errorf("with A2 chosen the buses are %d %d, want 0 1", busOf("A1"), busOf("A2"))
 	}
-	s.press("i")
+	s.clickOn("ON ●")
 	if unitBus("A1") != 1 || unitBus("A2") != 1 {
 		t.Errorf("after the button the buses are %d %d, want 1 1", busOf("A1"), busOf("A2"))
 	}
@@ -6895,26 +6895,54 @@ func TestScenesFadeTheEffectsOfTheUnitByMIDI(t *testing.T) {
 		s.model = next
 	}
 	cc := func(ch, n, v int) { feed(midiin.Event{Kind: midiin.CC, Channel: ch, Data1: n, Data2: v}) }
-	// Bus 1 is Scatter (6), on, knobs 20 40 60; scene A. Then knobs 100 40 0 and Downer (7): scene B.
-	cc(1, 83, 6)
-	cc(1, 19, 127)
-	cc(1, 16, 20)
-	cc(1, 17, 40)
-	cc(1, 18, 60)
-	s.press("A")
-	cc(1, 83, 7)
-	cc(1, 16, 100)
-	cc(1, 18, 0)
-	s.press("B")
-	s.shows("SCENES", "Scatter", "Downer")
-	src.mu.Lock()
-	src.sent = nil
-	src.mu.Unlock()
-	// Halfway: knob 1 is at 60, knob 3 at 30, and the effect is still A's until it passes the middle.
-	for i := 0; i < 10; i++ {
-		s.press("l")
+	lines := func() []string { return strings.Split(ansi.Strip(s.m().View()), "\n") }
+	click := func(y, x int) {
+		s.send(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	}
-	sentLast := func(n byte) int {
+	// clickNth clicks the n-th place a text is on the screen (reading top to bottom).
+	clickNth := func(text string, n int) {
+		t.Helper()
+		for y, line := range lines() {
+			if at := strings.Index(line, text); at >= 0 {
+				if n == 0 {
+					click(y, len([]rune(line[:at]))+1)
+					return
+				}
+				n--
+			}
+		}
+		t.Fatalf("no %q on the screen:\n%s", text, ansi.Strip(s.m().View()))
+	}
+	// fadeAt clicks the fade bar of a bus at a fraction of its width.
+	fadeAt := func(bus int, frac float64) {
+		t.Helper()
+		row := -1
+		seen := 0
+		for y, line := range lines() {
+			if strings.Contains(line, "save A") {
+				if seen == bus {
+					row = y + 1
+					break
+				}
+				seen++
+			}
+		}
+		if row < 0 {
+			t.Fatal("no fade bar")
+		}
+		runes := []rune(lines()[row])
+		first, last := -1, -1
+		for i, r := range runes {
+			if r == '█' || r == '░' {
+				if first < 0 {
+					first = i
+				}
+				last = i
+			}
+		}
+		click(row, first+int(frac*float64(last-first)))
+	}
+	sent := func(n byte) int {
 		src.mu.Lock()
 		defer src.mu.Unlock()
 		for i := len(src.sent) - 1; i >= 0; i-- {
@@ -6924,31 +6952,57 @@ func TestScenesFadeTheEffectsOfTheUnitByMIDI(t *testing.T) {
 		}
 		return -1
 	}
-	if got := sentLast(16); got != 60 {
-		t.Errorf("knob 1 at the middle is %d, want 60", got)
+	// Bus 1 is Scatter (6), on, knobs 20 40 60: scene A. Then knobs 100 40 0 and Downer (7): scene B.
+	cc(1, 83, 6)
+	cc(1, 19, 127)
+	cc(1, 16, 20)
+	cc(1, 17, 40)
+	cc(1, 18, 60)
+	clickNth("save A", 0)
+	cc(1, 83, 7)
+	cc(1, 16, 100)
+	cc(1, 18, 0)
+	clickNth("save B", 0)
+	s.shows("SCENES", "Scatter", "Downer")
+	src.mu.Lock()
+	src.sent = nil
+	src.mu.Unlock()
+	// Halfway on the bar: knob 1 at about 60, the effect that of B (past the middle).
+	fadeAt(0, 0.5)
+	if got := sent(16); got < 55 || got > 65 {
+		t.Errorf("knob 1 at the middle is %d, want about 60", got)
 	}
-	if got := sentLast(18); got != 30 {
-		t.Errorf("knob 3 at the middle is %d, want 30", got)
-	}
-	if got := sentLast(83); got != 7 {
+	if got := sent(83); got != 7 {
 		t.Errorf("the effect at the middle is %d, want B's 7", got)
 	}
-	s.press("H")
-	if got := sentLast(16); got != 20 || sentLast(83) != 6 {
-		t.Errorf("back at A: knob 1 %d effect %d, want 20 and 6", got, sentLast(83))
+	// Bus 2 has no scenes: its fade does nothing, and nothing is sent to its channel.
+	fadeAt(1, 0.5)
+	src.mu.Lock()
+	for _, msg := range src.sent {
+		if msg[0]&0x0F == 1 {
+			t.Errorf("sent % x on bus 2's channel, which has no scenes", msg)
+		}
 	}
-	// A glide of two bars begins on the next bar of the clock and ends at B.
+	src.mu.Unlock()
+	// The left end of the bar is scene A.
+	fadeAt(0, 0)
+	if got := sent(16); got != 20 || sent(83) != 6 {
+		t.Errorf("back at A: knob 1 %d effect %d, want 20 and 6", got, sent(83))
+	}
+	// A glide of this bus begins on the next bar of the clock and ends at B; bus 2 cannot glide yet.
 	feed(midiin.Event{Kind: midiin.Start})
-	s.press("g")
-	s.shows("glide to B")
+	clickNth("glide →A", 0) // bus 2's fade was left in the middle, so its button says A
+	s.shows("BUS 2: save scene A and scene B first")
+	clickNth("glide →B", 0)
+	s.shows("BUS 1: glide to B")
 	for i := 0; i < ticksPerBar*3; i++ {
 		feed(midiin.Event{Kind: midiin.Clock})
 	}
-	if got := sentLast(16); got != 100 {
+	if got := sent(16); got != 100 {
 		t.Errorf("after the glide knob 1 is %d, want 100", got)
 	}
-	if s.m().sc.mix != 1 || s.m().sc.glide != nil {
-		t.Errorf("mix %v glide %v after the glide", s.m().sc.mix, s.m().sc.glide)
+	if bs := s.m().sc.bus[0]; bs.mix != 1 || bs.glide != nil {
+		t.Errorf("mix %v glide %v after the glide", bs.mix, bs.glide)
 	}
 }
 
@@ -6977,4 +7031,18 @@ func TestAPadOfAnEarlierPatternIsNotShownAsPlayedInTheCurrentOne(t *testing.T) {
 	if m.mon.played[0] {
 		t.Error("a pad last heard nine bars ago is still held as played")
 	}
+}
+
+func TestPerformViewsWithoutButtonsGoBackWithATap(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("7")
+	s.clickOn("patterns")
+	s.shows("tap anywhere")
+	s.send(tea.MouseMsg{X: 50, Y: 20, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	s.hides("tap anywhere")
+	s.clickOn("player")
+	s.shows("Perform · player")
+	s.send(tea.MouseMsg{X: 50, Y: 20, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	s.hides("Perform · player")
 }

@@ -42,9 +42,6 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 		return m, m.wanted()
 	case "i":
 		return m.isolateButton()
-	case "A", "B", "g", "G", "h", "l", "H", "L", "t", "T", "left", "right":
-		nm, _ := m.sceneKey(name)
-		return nm, nil
 	case "esc":
 		if m.iso != nil {
 			return m.isolateOff()
@@ -455,6 +452,7 @@ func (m Model) perfPatternBody(g geom) string {
 	lines = append(lines, m.perfFxLines(width)...)
 	lines = append(lines, m.perfMovement(width)...)
 	lines = append(lines, "", st.dim.Render("a  the pattern that plays   n  the next one   Space  next becomes now   x  clear next   f F  note the effect of BUS 1, 2   Ctrl-R  record"))
+	lines = append(lines, "", st.dim.Render("tap anywhere (or v): back to the pads"))
 	return m.box("Perform", strings.Join(lines, "\n"), g.bodyW+g.bodyX-1, g.bodyH, true)
 }
 
@@ -833,7 +831,7 @@ func (m Model) perfPlayerBody(g geom) string {
 		}
 	}
 	lines = append(lines, "", m.perfFxLines(width)[0])
-	lines = append(lines, st.dim.Render("p  back to the pads   s  the pattern starts now   a n  cue   Space  next→now   ^R  record"))
+	lines = append(lines, st.dim.Render("tap anywhere or p  back to the pads   s  the pattern starts now   a n  cue   Space  next→now   ^R  record"))
 	return m.box("Perform · player", strings.Join(lines, "\n"), g.bodyW+g.bodyX-1, g.bodyH, true)
 }
 
@@ -929,8 +927,10 @@ func (m Model) clickPerform(x, y int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	h := m.vc.hit
-	if x >= 1 && x < 1+h.sideW && y >= h.panelY && y < h.panelY+h.panelH {
-		return m.isolateButton()
+	for _, b := range h.btns {
+		if y == b.y && x >= b.x && x < b.x+b.w {
+			return m.perfButton(b, x)
+		}
 	}
 	x, y = x-h.gx, y-h.gy
 	if x < 0 || y < 0 || x%(h.tw+1) >= h.tw || y%(h.th+1) >= h.th {
@@ -941,4 +941,31 @@ func (m Model) clickPerform(x, y int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m.clickPad(m.snap.Bank(m.perfBank())[row*4+col].Pad)
+}
+
+// perfButton does what the button that was clicked is for; x is where in the line it was.
+func (m Model) perfButton(b hitBtn, x int) (tea.Model, tea.Cmd) {
+	switch b.act {
+	case "iso":
+		return m.isolateSwitch()
+	case "fade":
+		pos := 0.0
+		if b.w > 1 {
+			pos = float64(x-b.x) / float64(b.w-1)
+		}
+		return m.sceneAct("fade", b.arg, pos), nil
+	case "bars":
+		return m.sceneAct("bars", b.arg, 0), nil
+	case "view":
+		switch b.arg {
+		case 0:
+			return m.perfKey("p")
+		case 1:
+			return m.perfKey("v")
+		case 2:
+			return m.toggleRecording()
+		}
+		return m.toggleFullScreen()
+	}
+	return m.sceneAct(b.act, b.arg, 0), nil
 }
