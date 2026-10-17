@@ -1085,6 +1085,14 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 			return m.toggleNote()
 		case "x":
 			return m.toggleNote()
+		case "w":
+			// The expanded track's two ways of showing loudness and length.
+			m.mem.LaneStems = !m.mem.LaneStems
+			if m.mem.LaneStems {
+				m.message = "track drawn with stems and lines (w for the roll)"
+			} else {
+				m.message = "track drawn as a roll: height is loudness, width is length (w for stems)"
+			}
 		case "H", "L", "(", ")":
 			// Nudge the note off (or back toward) the grid: H L by 5 ticks, ( ) by 1.
 			by := map[string]int{"H": -5, "L": 5, "(": -1, ")": 1}[name]

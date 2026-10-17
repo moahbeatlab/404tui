@@ -327,6 +327,9 @@ The bank's 16 pattern slots are a panel under the pads; `Tab` moves between the 
 the highlighted pattern is previewed on the right. In an open pattern `Tab` expands the track on
 the cursor row into a big step lane (`Enter` does too) and folds it again; Esc leaves the
 pattern, from the grid or from an expanded track, back to the patterns under the pads.
+The expanded track is drawn as a roll: each note is a block as wide as it lasts and as tall as it is
+loud. `w` switches to the other drawing (a stem for the loudness, a line for the length) and back; the
+choice is remembered.
 
 - `N` makes a pattern in the first free slot: every sample of the bank on beat 1, 2 bars.
   `c` or `x` pick a pattern up and `p` puts it in a slot of any bank (a second `p` replaces
