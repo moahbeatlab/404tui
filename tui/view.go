@@ -1825,35 +1825,38 @@ func (m Model) rangePickerBox() string {
 // templatePickerBox draws the new-pattern template list N opens.
 func (m Model) templatePickerBox() string {
 	st := m.st
-	items := templateItems()
 	lines := []string{st.bold.Render("New pattern"), ""}
-	for i, it := range items {
-		note := ""
+	inner := min(m.width-4, 110) - 4 // what the modal's frame and padding leave
+	// Columns: the name, how long, the tempos, and what it is or the voices it plays.
+	for i := range 2 + len(formats.GrooveTemplates()) {
+		name, length, tempo, note := "", "", "", ""
 		switch i {
 		case 0:
-			note = "every sampled pad held for the whole pattern"
+			name, note = "All pads held", "every sampled pad held for the whole pattern"
 		case 1:
-			note = "an empty pattern to program by hand"
+			name, note = "Blank", "an empty pattern to program by hand"
 		default:
 			// A groove names the voices it plays, so the kit it wants is plain.
-			if g, ok := grooveAt(i); ok {
-				var names []string
-				for _, l := range g.Lanes {
-					names = append(names, strings.ToLower(l.LaneName()))
-				}
-				note = strings.Join(names, ", ")
+			g, _ := grooveAt(i)
+			name, length, tempo = g.Name, plural(g.Bars(), "bar"), g.Tempo
+			var names []string
+			for _, l := range g.Lanes {
+				names = append(names, strings.ToLower(l.LaneName()))
 			}
+			note = strings.Join(names, ", ")
 		}
-		line := fmt.Sprintf("%-38s %s", it, st.dim.Render(note))
+		row := fmt.Sprintf("%-16s %-7s %-12s %s", name, length, tempo, note)
 		if i == m.tmplPicker.cursor {
-			line = lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true).Render(fmt.Sprintf("%-38s %s", it, note))
+			row += strings.Repeat(" ", max(inner-ansi.StringWidth(row), 0))
+			lines = append(lines, lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true).Render(row))
+			continue
 		}
-		lines = append(lines, line)
+		lines = append(lines, fmt.Sprintf("%-16s %-7s %-12s ", name, length, tempo)+st.dim.Render(note))
 	}
 	// Under the list, the bar the groove under the cursor starts with, drawn like the sequencer.
 	if g, ok := grooveAt(m.tmplPicker.cursor); ok {
-		lines = append(lines, "", st.dim.Render(g.Name+" · bar 1"))
-		for _, bar := range g.FirstBar() {
+		lines = append(lines, "", st.dim.Render(g.Name+" · bars 1-2"))
+		for _, bar := range g.FirstBars(2) {
 			var b strings.Builder
 			for i, v := range bar.Steps {
 				if v == 0 {
@@ -1863,7 +1866,7 @@ func (m Model) templatePickerBox() string {
 					b.WriteString(style.Render(mark))
 				}
 				if i < len(bar.Steps)-1 {
-					b.WriteString(barGap(i))
+					b.WriteString(barGap(i)) // a bar line after every 16th step
 				}
 			}
 			lines = append(lines, fmt.Sprintf("%-12s ", bar.Lane.LaneName())+b.String())

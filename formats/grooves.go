@@ -307,15 +307,15 @@ func startTrailer(bars int) []byte {
 	return []byte{byte(bars), 0, 0, 0, 0, 0x80, 0x04, 0x01}
 }
 
-// LaneBar is one lane's first bar: how hard each of the 16 steps is struck, 0 for a rest.
+// LaneBar is one lane's first bars: how hard each step is struck, 0 for a rest, 16 steps a bar.
 type LaneBar struct {
 	Lane  Lane
-	Steps [16]uint8
+	Steps []uint8
 }
 
-// FirstBar is the first bar of the groove, a row for each of its lanes, for showing what the
-// pattern is like before it is made.
-func (g GrooveTemplate) FirstBar() []LaneBar {
+// FirstBars is the first bars of the groove, a row for each of its lanes, for showing what the
+// pattern is like before it is made. A lane with a shorter phrase repeats it.
+func (g GrooveTemplate) FirstBars(bars int) []LaneBar {
 	var out []LaneBar
 	for _, s := range g.specs {
 		steps, err := parseHits(s.hits)
@@ -323,7 +323,9 @@ func (g GrooveTemplate) FirstBar() []LaneBar {
 			continue
 		}
 		bar := LaneBar{Lane: s.lane}
-		copy(bar.Steps[:], steps[:16])
+		for i := 0; i < 16*bars; i++ {
+			bar.Steps = append(bar.Steps, steps[i%len(steps)])
+		}
 		out = append(out, bar)
 	}
 	return out
