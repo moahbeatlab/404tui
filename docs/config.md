@@ -47,7 +47,7 @@ hits.
 
 ## MIDI
 
-*Input with this in its name* (default `404`), *Control channel* (1–16 or `off`, default 16) and four
+*Input with this in its name* (default `404`), *Control channel* (1–16 or `off`, default 16), *Pad volumes channel* (default 15, see [ec4.md](ec4.md)) and four
 messages on that channel, `note 60` … or `cc 20` (a controller turned up past half), or `off`:
 
 | Default | Does |
@@ -55,7 +55,7 @@ messages on that channel, `note 60` … or `cc 20` (a controller turned up past 
 | `note 62` | live mode (the Perform tab and back) |
 | `note 60` | start / stop a recording |
 | `note 74` | the next pattern becomes the one that plays |
-| `off` (default) | clear the next pattern (note 75 is the Levels view now) |
+| `note 75` | clear the next pattern |
 
 These are four of the 16 pushes of the map for the Faderfox EC4, which also drives focus, the length and the
 motion slots of Perform: see [ec4.md](ec4.md) (or `sp404 midimap`).

@@ -518,7 +518,7 @@ func (m Model) statusBar() string {
 	case secConfig:
 		chips = []string{chip("j k", "move"), chip("h l", "change"), chip("Enter", "edit"), chip("Space", "toggle")}
 	case secPerform:
-		chips = []string{chip("a", "now"), chip("n", "next"), chip("Space", "next becomes now"), chip("x", "clear next"), chip("f F", "bus effect notes"), chip("v", "levels"), chip("d", "overdub")}
+		chips = []string{chip("a", "now"), chip("n", "next"), chip("Space", "next becomes now"), chip("x", "clear next"), chip("f F", "bus effect notes"), chip("d", "overdub")}
 	case secProjects:
 		chips = []string{chip("Enter", "select"), chip("n", "rename"), chip("e", "export"), chip("R", "restore"), chip("X", "erase")}
 	}

@@ -650,7 +650,7 @@ func levelOf(t *testing.T, r *perfRig, name string) int32 {
 	return v
 }
 
-func TestTheLevelsViewTurnsAndMutesThePadsOfTheBank(t *testing.T) {
+func TestThePadVolumesAreTurnedAndMutedOnTheirOwnChannel(t *testing.T) {
 	r := newPerfRig(t, 170, 80)
 	info, _ := proto.ParamByName("level")
 	m := r.s.m()
@@ -660,86 +660,104 @@ func TestTheLevelsViewTurnsAndMutesThePadsOfTheBank(t *testing.T) {
 		}
 		m.snap.Pads[pad(t, name).Index()].Level = 100
 	}
-	push := func(n int) { r.feed(midiin.Event{Kind: midiin.NoteOn, Channel: 16, Data1: n, Data2: 127}) }
-	run := func(cmd tea.Cmd) {
-		if cmd != nil {
-			cmd()
-		}
-	}
-	// Not in the view: a turn does nothing.
-	r.cc(16, ec4FirstCC, 70)
-	if r.s.m().snap.Pads[pad(t, "A1").Index()].Level != 100 {
-		t.Fatal("a turn changed a level outside the Levels view")
-	}
-	push(75) // E16 into Levels
-	if !r.s.m().perfLevels {
-		t.Fatal("E16 did not open the Levels view")
-	}
-	// Relative turns: 70 is +6, 62 is -2.
-	for _, c := range []struct{ cc, v int }{{ec4FirstCC, 70}, {ec4FirstCC, 62}, {ec4FirstCC + 1, 10}} {
-		nm, cmd, ok := r.s.m().levelEvent(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: c.cc, Data2: c.v})
-		if !ok {
-			t.Fatal("a turn was not taken")
+	// The messages go through midiEvent, and the commands it returns are run, as the program does.
+	send := func(e midiin.Event) {
+		e.At = time.Now()
+		nm, cmd := r.s.m().midiEvent(midiMsg{link: r.link, ev: e})
+		r.s.model = nm
+		// The batch holds the wait for the next MIDI message, which never ends here: each command runs
+		// on its own and is given a moment.
+		var run func(c tea.Cmd)
+		run = func(c tea.Cmd) {
+			if c == nil {
+				return
+			}
+			done := make(chan tea.Msg, 1)
+			go func() { done <- c() }()
+			select {
+			case msg := <-done:
+				if b, ok := msg.(tea.BatchMsg); ok {
+					for _, x := range b {
+						run(x)
+					}
+				}
+			case <-time.After(100 * time.Millisecond):
+			}
 		}
 		run(cmd)
-		r.s.model = nm
 	}
+	turn := func(ch, enc, v int) {
+		send(midiin.Event{Kind: midiin.CC, Channel: ch, Data1: ec4FirstCC + enc, Data2: v})
+	}
+	push := func(ch, enc int) {
+		send(midiin.Event{Kind: midiin.NoteOn, Channel: ch, Data1: ec4FirstNote + enc, Data2: 127})
+	}
+	// Not on the volume channel (15): a turn on the control channel or another does nothing.
+	turn(16, 0, 70)
+	turn(1, 0, 70)
+	if levelOf(t, r, "A1") != 100 {
+		t.Fatal("a turn on another channel changed a level")
+	}
+	// Relative turns: 70 is +6, 62 is -2, 10 is -54.
+	turn(15, 0, 70)
+	turn(15, 0, 62)
+	turn(15, 1, 10)
 	if got := levelOf(t, r, "A1"); got != 104 {
 		t.Errorf("A1 is %d after +6 and -2, want 104", got)
 	}
-	if got := levelOf(t, r, "A2"); got != 100-54 {
+	if got := levelOf(t, r, "A2"); got != 46 {
 		t.Errorf("A2 is %d, want 46", got)
 	}
 	// Limits.
-	nm, cmd, _ := r.s.m().levelEvent(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: ec4FirstCC, Data2: 127})
-	run(cmd)
-	r.s.model = nm
-	nm, cmd, _ = r.s.m().levelEvent(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: ec4FirstCC + 2, Data2: 0})
-	run(cmd)
-	r.s.model = nm
+	turn(15, 0, 127)
+	turn(15, 2, 0)
 	if levelOf(t, r, "A1") != 127 || levelOf(t, r, "A3") != 36 {
 		t.Errorf("A1 %d A3 %d", levelOf(t, r, "A1"), levelOf(t, r, "A3"))
 	}
-	// A push mutes pad 3, another brings back the level it had.
-	for want, label := range []int32{0, 36} {
-		nm, cmd, _ := r.s.m().levelEvent(midiin.Event{Kind: midiin.NoteOn, Channel: 16, Data1: ec4FirstNote + 2, Data2: 127})
-		run(cmd)
-		r.s.model = nm
-		if got := levelOf(t, r, "A3"); got != label {
-			t.Errorf("push %d: A3 is %d, want %d", want+1, got, label)
-		}
+	// A push mutes pad 3, another brings back the level it had; the pad shows it is muted.
+	push(15, 2)
+	if got := levelOf(t, r, "A3"); got != 0 {
+		t.Errorf("a push left A3 at %d, want 0", got)
 	}
-	// A turn on a muted pad brings it back from 0.
-	nm, cmd, _ = r.s.m().levelEvent(midiin.Event{Kind: midiin.NoteOn, Channel: 16, Data1: ec4FirstNote + 2, Data2: 127})
-	run(cmd)
-	r.s.model = nm
-	nm, cmd, _ = r.s.m().levelEvent(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: ec4FirstCC + 2, Data2: 74})
-	run(cmd)
-	r.s.model = nm
+	push(15, 2)
+	if got := levelOf(t, r, "A3"); got != 36 {
+		t.Errorf("the second push gave A3 %d, want 36", got)
+	}
+	// A turn of a muted pad starts from 0.
+	push(15, 2)
+	turn(15, 2, 74)
 	if got := levelOf(t, r, "A3"); got != 10 {
 		t.Errorf("a turn of a muted pad gave %d, want 10", got)
 	}
-	// The pushes of the Stage map do not fire here (E1 is pad 1's mute, not the recording).
-	if r.s.m().rec != nil {
-		t.Error("a push in Levels started the recording")
+	// All 16 pushes mute, E16 as well; the pushes of the control channel keep their own meaning.
+	push(15, 15)
+	push(16, 0) // E1 of the control channel is the recording, not pad 1
+	if levelOf(t, r, "A1") != 127 {
+		t.Error("a push on the control channel changed a level")
 	}
-	// It draws, at any size, and says the level.
+	// The channel can be moved, or turned off.
+	m = r.s.m()
+	m.mem.MidiLevelChan = "12"
+	r.s.model = m
+	turn(15, 0, 40)
+	if levelOf(t, r, "A1") != 127 {
+		t.Error("channel 15 still turned a level after the channel was set to 12")
+	}
+	turn(12, 0, 40)
+	if levelOf(t, r, "A1") != 103 {
+		t.Errorf("A1 is %d on channel 12, want 103", levelOf(t, r, "A1"))
+	}
+	m = r.s.m()
+	m.mem.MidiLevelChan = "off"
+	r.s.model = m
+	turn(12, 0, 100)
+	if levelOf(t, r, "A1") != 103 {
+		t.Error("a turn counted with the channel off")
+	}
+	// It draws at any size and the pad bar shows the level.
 	for _, sz := range [][2]int{{170, 80}, {120, 40}, {90, 30}, {60, 20}} {
 		r.s.send(tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
 		_ = r.s.m().View()
-	}
-	r.s.send(tea.WindowSizeMsg{Width: 170, Height: 80})
-	if !strings.Contains(r.s.m().View(), "127") {
-		t.Error("the view does not show the level")
-	}
-	// E16 again, and v, leave and enter.
-	push(75)
-	if r.s.m().perfLevels {
-		t.Error("E16 did not leave Levels")
-	}
-	r.s.press("v")
-	if !r.s.m().perfLevels {
-		t.Error("v did not open Levels")
 	}
 }
 

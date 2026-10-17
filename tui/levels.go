@@ -2,35 +2,26 @@ package tui
 
 import (
 	"fmt"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/proto"
 )
 
-// The Levels view of Perform: the volume of each pad of the bank as a bar. On the EC4 the 16 encoders turn
-// the levels of the 16 pads and their pushes mute (level 0) and bring back; the view itself is switched
-// by the push of E16 (see ec4.go), the button in VIEW, or v.
+// The volume of the pads from a controller: on a channel of its own (15 by default, Config), the 16
+// encoders turn the levels of the 16 pads of the bank the unit is on, and their pushes mute (level 0)
+// and bring back. It works in any view; Perform shows the level as the bar of each pad.
 
-// ec4FirstCC is the controller of the first encoder's turn: 60 to 75 on the control channel, relative
-// (64 is no turn, above it up, below it down).
+// ec4FirstCC is the controller of the first encoder's turn: 60 to 75, relative (64 is no turn, above it
+// up, below it down, by the distance); the pushes are the notes of the same numbers.
 const ec4FirstCC = 60
-
-func (m Model) toggleLevels() Model {
-	m.perfLevels = !m.perfLevels
-	if m.perfLevels {
-		m.message = "Levels: encoders turn the volume of the pads, a push mutes · E16 or v goes back"
-	} else {
-		m.message = "Stage view"
-	}
-	return m
-}
 
 // levelPad is the pad of the bank on show at a place (0 to 15) of the grid.
 func (m Model) levelPad(i int) (proto.PadIndex, bool) {
+	if m.snap == nil {
+		return proto.PadIndex{}, false
+	}
 	rows := m.snap.Bank(m.perfBank())
 	if i < 0 || i >= len(rows) {
 		return proto.PadIndex{}, false
@@ -44,9 +35,7 @@ func (m Model) levelTurn(i, steps int) (Model, tea.Cmd) {
 	if !ok || steps == 0 || m.unit == nil {
 		return m, nil
 	}
-	if _, muted := m.lvlWas[pad]; muted {
-		delete(m.lvlWas, pad)
-	}
+	delete(m.lvlWas, pad)
 	return m.levelSet(pad, m.snap.Pads[pad.Index()].Level+int32(steps))
 }
 
@@ -89,8 +78,8 @@ func (m Model) levelSet(pad proto.PadIndex, v int32) (Model, tea.Cmd) {
 	})
 }
 
-// levelEvent handles a message of the control channel while the Levels view is on: a turn of an encoder
-// (CC 60 to 75) and a push (notes 60 to 74; 75 leaves the view).
+// levelEvent handles a message of the volume channel: a turn of an encoder (CC 60 to 75) and a push
+// (notes 60 to 75).
 func (m Model) levelEvent(e midiin.Event) (Model, tea.Cmd, bool) {
 	switch e.Kind {
 	case midiin.CC:
@@ -102,61 +91,10 @@ func (m Model) levelEvent(e midiin.Event) (Model, tea.Cmd, bool) {
 		return nm, cmd, true
 	case midiin.NoteOn:
 		i := int(e.Data1) - ec4FirstNote
-		switch {
-		case i == 15:
-			return m.toggleLevels(), nil, true
-		case i >= 0 && i < 15:
+		if i >= 0 && i < 16 {
 			nm, cmd := m.levelMute(i)
 			return nm, cmd, true
 		}
 	}
 	return m, nil, false
-}
-
-// levelTile is a pad of the Levels view: number and name over a bar that stands in the tile as high as
-// the level, and the number of the level (or MUTED) under it.
-func (m Model) levelTile(i int, w, h int) []string {
-	th := m.st.th
-	rows := m.snap.Bank(m.perfBank())
-	row := rows[i]
-	_, muted := m.lvlWas[row.Pad]
-	level := int(row.Level)
-	empty := !row.HasSample
-	bar, base := th.accent, th.tile
-	if empty {
-		bar, base = th.faint, th.tileEmpty
-	}
-	if muted || level == 0 && !empty {
-		bar = th.bad
-	}
-	head := lipgloss.NewStyle().Background(base).Foreground(th.text).Bold(true)
-	pad := func(s string) string {
-		r := []rune(s)
-		if len(r) > w {
-			r = r[:w]
-		}
-		return string(r) + strings.Repeat(" ", w-len(r))
-	}
-	out := []string{head.Render(pad(fmt.Sprintf(" %d %s", row.Pad.Pad()+1, strings.TrimSpace(row.Name))))}
-	body := max(h-2, 1)
-	filled := (level*body*2 + 127) / 254 // rounded, in rows
-	if level > 0 {
-		filled = max(filled, 1)
-	}
-	for r := 0; r < body; r++ {
-		bg := base
-		if body-r <= filled && !empty {
-			bg = bar
-		}
-		out = append(out, lipgloss.NewStyle().Background(bg).Render(strings.Repeat(" ", w)))
-	}
-	label := fmt.Sprintf(" %d", level)
-	if muted {
-		label = fmt.Sprintf(" MUTED (%d)", m.lvlWas[row.Pad])
-	}
-	if empty {
-		label = ""
-	}
-	foot := lipgloss.NewStyle().Background(base).Foreground(th.text).Bold(true)
-	return append(out, foot.Render(pad(label)))
 }

@@ -25,7 +25,7 @@ var ec4Map = [16]ec4Entry{
 	{"record on / off", 1}, {"focus on / off", -1}, {"live mode (the Perform tab)", 0}, {"length: 1, 2, 3, 4, 8 bars", -1},
 	{"BUS 1 motion slot 1", -1}, {"BUS 1 motion slot 2", -1}, {"BUS 1 motion slot 3", -1}, {"BUS 1 motion slot 4", -1},
 	{"BUS 2 motion slot 1", -1}, {"BUS 2 motion slot 2", -1}, {"BUS 2 motion slot 3", -1}, {"BUS 2 motion slot 4", -1},
-	{"clear BUS 1 motion", -1}, {"clear BUS 2 motion", -1}, {"next pattern becomes now", 2}, {"view: Stage / Levels", -1},
+	{"clear BUS 1 motion", -1}, {"clear BUS 2 motion", -1}, {"next pattern becomes now", 2}, {"clear next pattern", 3},
 }
 
 // ec4Action does the fixed pushes of the map (the others are the messages of Config, which
@@ -46,8 +46,6 @@ func (m Model) ec4Action(i int) (Model, bool) {
 		return m.sceneAct("bars", next, 0), true
 	case i >= 4 && i <= 11:
 		return m.motionAct((i-4)/motionSlots, (i-4)%motionSlots), true
-	case i == 15:
-		return m.toggleLevels(), true
 	case i == 12 || i == 13:
 		return m.motionClear(i - 12), true
 	}
@@ -70,8 +68,7 @@ func EC4Sheet() string {
 		}
 		fmt.Fprintf(&b, "  E%-2d  note %-3d  %s\n", i+1, note, e.name)
 	}
-	fmt.Fprintf(&b, "\nThe turn of each encoder (type CCr2, relative 63/65) sends CC %d to %d on the same channel, the same number as its push: E1 is CC %d, E16 is CC %d.\nSet the Push function of the EC4 (setup mode, encoder 16) to Note.\n",
-		ec4FirstCC, ec4FirstCC+15, ec4FirstCC, ec4FirstCC+15)
-	b.WriteString("In the Levels view (E16) the turns are the volumes of pad 1 to 16 and the pushes E1 to E15 mute a pad; in Stage the turns do nothing.\n")
+	fmt.Fprintf(&b, "\nA second group, on channel %d, is for the pad volumes: the turn of each encoder (type CCr2, relative 63/65) sends CC %d to %d, its push Note %d to %d.\n", defaultLevelChan, ec4FirstCC, ec4FirstCC+15, ec4FirstNote, ec4FirstNote+15)
+	b.WriteString("Turn = the level of pad 1 to 16 of the bank, push = mute / bring back. Set the Push function of the EC4 (setup mode, encoder 16) to Note.\n")
 	return b.String()
 }

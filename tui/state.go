@@ -55,6 +55,8 @@ type State struct {
 	MidiPort string    `json:"midiPort,omitempty"`
 	MidiChan string    `json:"midiChan,omitempty"`
 	MidiMap  [4]string `json:"midiMap,omitempty"`
+	// MidiLevelChan is the channel of the pad volumes (Levels): "15" when empty, "off" for none.
+	MidiLevelChan string `json:"midiLevelChan,omitempty"`
 	// BusNotes are what the user wrote of the effect on each bus (the unit does not say), shown in
 	// the Perform view.
 	BusNotes [2]string `json:"busNotes,omitempty"`

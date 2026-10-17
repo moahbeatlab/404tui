@@ -78,8 +78,8 @@ const (
 	cfgRecCode
 	cfgMidiPort
 	cfgMidiChan
-	cfgMidiMap // the four messages follow
-	cfgRows    = cfgMidiMap + 4
+	cfgMidiMap                  // the four messages follow
+	cfgRows    = cfgMidiMap + 5 // the level channel after them
 )
 
 // cycleColour is the colour after (or before) the named one, the theme's own ("") at one end.
@@ -146,7 +146,7 @@ func (m Model) configKey(name string) (tea.Model, tea.Cmd) {
 				m.prompt = &prompt{kind: promptRecDevice, buffer: m.recordDevice()}
 			}
 			return m, nil
-		case cfgMidiPort, cfgMidiChan, cfgMidiMap, cfgMidiMap + 1, cfgMidiMap + 2, cfgMidiMap + 3:
+		case cfgMidiPort, cfgMidiChan, cfgMidiMap, cfgMidiMap + 1, cfgMidiMap + 2, cfgMidiMap + 3, cfgMidiMap + 4:
 			if name == " " || name == "enter" {
 				field := m.cfgAt - cfgMidiPort
 				m.prompt = &prompt{kind: promptMidi, busOf: field, buffer: m.midiFieldText(field)}
@@ -234,6 +234,7 @@ func (m Model) configBody(g geom) string {
 		row(cfgMidiMap+1, "Start and stop a recording", st.text.Render(m.midiMapText(1)), "Enter edits"),
 		row(cfgMidiMap+2, "Next pattern becomes the one that plays", st.text.Render(m.midiMapText(2)), "Enter edits"),
 		row(cfgMidiMap+3, "Clear the next pattern", st.text.Render(m.midiMapText(3)), "Enter edits"),
+		row(cfgMidiMap+4, "Pad volumes channel (turns and pushes)", st.text.Render(m.midiFieldText(6)), "Enter edits"),
 		st.dim.Render(m.midiLine()),
 		"",
 	}

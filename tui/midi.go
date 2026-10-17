@@ -35,8 +35,8 @@ const (
 )
 
 // defaultMidiMap is where the four messages of Config are in the map of the Faderfox EC4 (see ec4Map):
-// live mode on the third push, recording on the first, next becomes now on the 15th; clear next has no default (the 16th push is the Levels view).
-var defaultMidiMap = [4]string{"note 62", "note 60", "note 74", "off"}
+// live mode on the third push, recording on the first, next becomes now on the 15th; clear next on the 16th.
+var defaultMidiMap = [4]string{"note 62", "note 60", "note 74", "note 75"}
 
 // midiActions names what the four messages do, in the order of State.MidiMap.
 var midiActions = [4]string{"live mode", "recording", "next becomes now", "clear next"}
@@ -61,6 +61,25 @@ func (m Model) midiChan() int {
 		}
 	}
 	return defaultMidiChan
+}
+
+// defaultLevelChan is the channel of the pad volumes: not the control channel, so that a group of the
+// controller of its own (the volumes of the 16 pads) works at any time.
+const defaultLevelChan = 15
+
+// levelChan is the channel of the pad volumes, 0 for none.
+func (m Model) levelChan() int {
+	switch s := strings.ToLower(strings.TrimSpace(m.mem.MidiLevelChan)); s {
+	case "":
+		return defaultLevelChan
+	case "off":
+		return 0
+	default:
+		if n, err := strconv.Atoi(s); err == nil && n >= 1 && n <= 16 {
+			return n
+		}
+	}
+	return defaultLevelChan
 }
 
 func (m Model) midiMapText(i int) string {
@@ -239,14 +258,15 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 	m.motionIn(e)
 	m = m.fxEvent(e)
 	ctl := m.midiChan()
+	// The pad volumes have a channel of their own: always on, in any view.
+	if lc := m.levelChan(); lc != 0 && lc != ctl && e.Channel == lc {
+		if nm, cmd, ok := m.levelEvent(e); ok {
+			return nm, tea.Batch(cmd, next)
+		}
+		return m, next
+	}
 	// A message on the control channel: a note on, or a controller turned up.
 	if ctl != 0 && e.Channel == ctl {
-		// In the Levels view the encoders are the pads' volumes and their pushes mute.
-		if m.perfLevels {
-			if nm, cmd, ok := m.levelEvent(e); ok {
-				return nm, tea.Batch(cmd, next)
-			}
-		}
 		for i := range midiActions {
 			kind, n, ok := parseMidiMap(m.midiMapText(i))
 			if !ok || kind != e.Kind || e.Data1 != n {
@@ -313,6 +333,11 @@ func (m Model) midiFieldText(i int) string {
 			return "off"
 		}
 		return strconv.Itoa(m.midiChan())
+	case i == 6:
+		if m.levelChan() == 0 {
+			return "off"
+		}
+		return strconv.Itoa(m.levelChan())
 	}
 	return m.midiMapText(i - 2)
 }
@@ -323,6 +348,8 @@ func midiPromptTitle(i int) string {
 		return "MIDI input"
 	case 1:
 		return "MIDI control channel"
+	case 6:
+		return "MIDI channel of the pad volumes"
 	}
 	return "MIDI message for " + midiActions[i-2]
 }
@@ -331,7 +358,7 @@ func midiPromptHint(i int) string {
 	switch i {
 	case 0:
 		return "a part of the name of the input; the unit's is SP-404MKII, so 404  ·  "
-	case 1:
+	case 1, 6:
 		return "1 to 16, or off  ·  "
 	}
 	return "note 60 or cc 20 (a controller turned up past half), off for none  ·  "
@@ -346,9 +373,14 @@ func (m Model) applyMidi(field int, text string) (tea.Model, tea.Cmd) {
 		nm, cmd := m.restartMIDI()
 		nm.message = fmt.Sprintf("listening for the MIDI input with %q in its name", nm.midiPort())
 		return nm, cmd
-	case field == 1:
+	case field == 1 || field == 6:
 		if n, err := strconv.Atoi(text); text != "off" && (err != nil || n < 1 || n > 16) {
 			m.message = "a MIDI channel is 1 to 16 (or off)"
+			return m, nil
+		}
+		if field == 6 {
+			m.mem.MidiLevelChan = text
+			m.message = "pad volumes on channel " + m.midiFieldText(6)
 			return m, nil
 		}
 		m.mem.MidiChan = text

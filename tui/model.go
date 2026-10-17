@@ -428,9 +428,8 @@ type Model struct {
 	full bool
 	// muted and soloed are pads silenced, or alone to sound, in the mix played on this computer.
 	muted, soloed map[proto.PadIndex]bool
-	// perfLevels is the Levels view of Perform; lvlWas holds the level of a pad that was muted there.
-	perfLevels bool
-	lvlWas     map[proto.PadIndex]int32
+	// lvlWas holds the level of a pad that was muted from the controller.
+	lvlWas map[proto.PadIndex]int32
 	// iso is what Perform has isolated; clickPadAt and clickAt find a double click.
 	iso        *isolation
 	sc         *sceneState
