@@ -363,6 +363,11 @@ func (m Model) header() string {
 		status = badge + "  " + status
 	}
 	line := left
+	if row, _ := m.tabLayout(); row != rowHeader && status != "" {
+		// The tabs have a row of their own: the state of the link and the version are in the top
+		// right corner.
+		return ansi.Truncate(spaceBetween(left, status, m.width), m.width, "…")
+	}
 	if status != "" {
 		line += "  " + status
 	}
