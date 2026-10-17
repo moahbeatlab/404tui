@@ -303,6 +303,7 @@ type Model struct {
 	// recorder starts recordings of the unit's audio input; rec is the one running.
 	recorder record.Backend
 	rec      *record.Session
+	vc       *viewCache  // the last drawing, kept over the clock ticks that change nothing visible
 	lvl      *levelMeter // the level of what is heard: of the recording that runs, else of the input
 	// meterErr is why the input could not be listened to; meterAgain is when to try again, meterBusy
 	// that it is being started.
@@ -1080,10 +1081,22 @@ func columns(samples []int16, channels, n int) []int16 {
 	return out
 }
 
+// viewCache holds the last drawing. The clock is 24 ticks to a quarter note, about fifty messages a
+// second, and drawing the wide Perform view takes milliseconds: only every sixth tick (a sixteenth
+// note, the finest thing the ticker and the playhead show) is drawn again.
+type viewCache struct {
+	out  string
+	keep bool
+}
+
 // ---- update ----
 
 // Update handles a message, then keeps the state that is remembered between runs.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.vc == nil {
+		m.vc = &viewCache{}
+	}
+	m.vc.keep = false // only a quiet clock tick (midiEvent) says the drawing can stay
 	model, cmd := m.update(msg)
 	if updated, ok := model.(Model); ok {
 		updated = updated.logMessage()

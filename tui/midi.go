@@ -189,6 +189,9 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 	}
 	next := waitMIDI(msg.link)
 	e := msg.ev
+	if m.vc != nil {
+		m.vc.keep = false
+	}
 	if m.clock == nil {
 		m.clock = &clockState{}
 	}
@@ -208,6 +211,9 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		m.clock.running = true
 		m.mon.tick(e.At, m.clock.ticks)
 		m.logMIDI(e)
+		if m.vc != nil && m.clock.ticks%6 != 0 {
+			m.vc.keep = true
+		}
 		return m, next
 	case midiin.Start:
 		m.clock.ticks, m.clock.running, m.clock.at = 0, true, time.Now()

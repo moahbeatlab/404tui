@@ -66,6 +66,17 @@ var helpText = [][2]string{
 // View draws a header, the body with the navigation rail down its left, and a status bar;
 // the help, a prompt, a picker, the palette or a wait is drawn over the body.
 func (m Model) View() string {
+	if c := m.vc; c != nil {
+		if c.keep && c.out != "" {
+			return c.out // a clock tick that changes nothing you can see: the last drawing stands
+		}
+		c.out = m.draw()
+		return c.out
+	}
+	return m.draw()
+}
+
+func (m Model) draw() string {
 	m = m.withBusColours()
 	g := m.geom()
 	// A dialog is drawn in the middle of the screen it belongs to, over it, not instead of it.

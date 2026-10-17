@@ -21,13 +21,17 @@ jobs:
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
       - run: go test ./...
+      - name: The program checks itself (simulated unit)
+        run: go run ./cmd/sp404 -sim check
 
-  # Windows is only built here, to see that it still builds.
-  windows-build:
+  windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go build -o sp404.exe ./cmd/sp404
+      - run: go vet ./...
+      - run: go test ./...
+      - name: The program checks itself (simulated unit)
+        run: go run ./cmd/sp404 -sim check

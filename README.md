@@ -465,6 +465,15 @@ without the unit.
 
 Tests: `go test -race ./...`, or `make test` (vet, gofmt check and the tests).
 
+### Checking an installation
+
+`sp404 check` checks the program on the computer it runs on, with or without a unit, on Linux, macOS and Windows alike (it is in every release archive, so nothing else has to be installed):
+
+    sp404 check          # also checks a plugged-in unit (read-only)
+    sp404 -sim check     # leave the unit out
+
+It looks at the terminal, the settings and cache folders (that they can be written), the serial ports, the audio output, `ffmpeg`/`sox` for recording and the MIDI inputs; runs the doctor and the whole UI (every tab at three screen sizes, keys pressed, help opened) on a simulated unit; and, when an SP-404MKII is plugged in, the doctor on it. `ok` is fine, `WARN` is a part that cannot work here (no sound, no MIDI, no recorder) and `FAIL` is a problem; the exit code is 1 on a `FAIL`. From a clone: `make check` runs the tests, builds and then runs `sp404 check`.
+
 ## Build
 
     make                    # ./sp404 for this computer

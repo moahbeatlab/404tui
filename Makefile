@@ -1,6 +1,7 @@
 # 404tui: build, check and cross-compile the sp404 command.
 #
 #   make                  build ./sp404 for this computer
+#   make check            test, build and run the program's own check (sp404 check)
 #   make test             vet, gofmt check and the tests with the race detector
 #   make dist             every platform below, into dist/
 #   make linux | windows | macos
@@ -24,7 +25,7 @@ GOBUILD := go build -trimpath -ldflags "$(LDFLAGS)"
 LINUX   := linux-amd64 linux-arm64
 WINDOWS := windows-amd64 windows-arm64
 
-.PHONY: build test vet fmt dist linux windows macos clean
+.PHONY: build test check vet fmt dist linux windows macos clean
 
 # MIDI input is built in on a Mac (it needs cgo); elsewhere it is left out.
 MIDITAGS := $(if $(filter Darwin,$(shell uname -s)),-tags midi,)
@@ -34,6 +35,11 @@ build:
 
 test: vet fmt
 	go test -race ./...
+
+# check is everything: the tests, then the built program checks itself (computer, simulated unit,
+# and a plugged-in unit if there is one). The same without make: go test ./... && sp404 check
+check: test build
+	./$(BIN) check
 
 vet:
 	go vet ./...

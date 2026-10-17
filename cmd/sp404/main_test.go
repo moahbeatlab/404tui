@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,5 +47,17 @@ func TestDebugLevelLeavesOutTheWireBytes(t *testing.T) {
 	b, _ := os.ReadFile(log)
 	if !strings.Contains(string(b), "msg=tx") || strings.Contains(string(b), "level=TRACE") {
 		t.Errorf("-v should log transactions but not wire bytes:\n%s", b[:min(len(b), 600)])
+	}
+}
+
+func TestSelfCheckPassesOnTheSimulator(t *testing.T) {
+	var out strings.Builder
+	if err := selfCheck(options{simulate: true}, &out, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	for _, want := range []string{"doctor (simulated)", "screens (simulated)", "0 failed"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the check does not say %q:\n%s", want, out.String())
+		}
 	}
 }
