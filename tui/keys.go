@@ -223,6 +223,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.stopListening()
 		m.stopRecordingNow()
 		m.restoreIsolationNow()
+		m.closeScenes()
 		return m, tea.Quit
 	}
 	// Ctrl-F goes full screen from anywhere but a text being typed (where it is the cursor key).
@@ -2906,6 +2907,7 @@ func (m Model) promptKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.stopListening()
 			m.stopRecordingNow()
 			m.restoreIsolationNow()
+			m.closeScenes()
 			return m, tea.Quit
 		}
 		return m, nil

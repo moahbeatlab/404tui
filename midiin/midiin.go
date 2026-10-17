@@ -114,6 +114,19 @@ type Source interface {
 	Open(part string, on func(Event)) (stop func(), name string, err error)
 }
 
+// Out is a MIDI output that is open.
+type Out interface {
+	// Send sends one message as its bytes, e.g. {0xB0, 16, 100} for a controller on channel 1.
+	Send(msg []byte) error
+	Close()
+}
+
+// Outputs is a Source that can also send: the effects of the unit are moved by MIDI controllers.
+type Outputs interface {
+	// OpenOut opens the first output whose name holds part (any case) and says which it took.
+	OpenOut(part string) (Out, string, error)
+}
+
 // ErrUnavailable is what a build without the midi tag says.
 var ErrUnavailable = errors.New("this build has no MIDI: build with -tags midi (needs a C compiler)")
 
@@ -123,3 +136,4 @@ func (unavailable) Ports() ([]string, error) { return nil, ErrUnavailable }
 func (unavailable) Open(string, func(Event)) (func(), string, error) {
 	return nil, "", ErrUnavailable
 }
+func (unavailable) OpenOut(string) (Out, string, error) { return nil, "", ErrUnavailable }

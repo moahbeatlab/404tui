@@ -434,6 +434,7 @@ type Model struct {
 	muted, soloed map[proto.PadIndex]bool
 	// iso is what Perform has isolated; clickPadAt and clickAt find a double click.
 	iso        *isolation
+	sc         *sceneState
 	clickPadAt proto.PadIndex
 	clickAt    time.Time
 	// loopStart is when the looping pattern started, and loopRound how long a round lasts.

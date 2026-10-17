@@ -36,12 +36,15 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 		}
 		m.perfNow, m.perfNext, m.perfAuto = m.perfNext, nil, false
 		if m.mon != nil {
-			m.mon.played = map[int]bool{} // the new pattern starts with nothing heard
+			m.mon.played, m.mon.playedAt = map[int]bool{}, map[int]int{} // the new pattern starts with nothing heard
 		}
 		m.logCue()
 		return m, m.wanted()
 	case "i":
 		return m.isolateButton()
+	case "A", "B", "g", "G", "h", "l", "H", "L", "t", "T", "left", "right":
+		nm, _ := m.sceneKey(name)
+		return nm, nil
 	case "esc":
 		if m.iso != nil {
 			return m.isolateOff()
@@ -901,19 +904,23 @@ func (m Model) perfSplitBody(g geom, width int) string {
 	return m.box("Perform", body, g.bodyW+g.bodyX-1, g.bodyH, true)
 }
 
-// padUsed says whether a pad was heard in the pattern that plays (it stays lit, where the glow of a
-// hit is gone in a moment) and whether the pattern plays it at all.
+// padUsed says whether a pad is one of the pattern that plays and was heard in it lately (it stays lit,
+// where the glow of a hit is gone in a moment), or is in the pattern and not heard yet. A pad that is
+// not in the pattern is neither, however lately it was heard: it was the last pattern's.
 func (m Model) padUsed(pad proto.PadIndex) (heard, inPattern bool) {
 	if m.perfNow == nil {
 		return false, false
 	}
-	if d := m.patPreview[*m.perfNow]; d != nil {
-		inPattern = slices.Contains(d.PadsUsed, pad)
+	d := m.patPreview[*m.perfNow]
+	if d == nil || !slices.Contains(d.PadsUsed, pad) {
+		return false, false
 	}
-	if m.mon != nil {
-		heard = m.mon.played[int(pad.Bank())*16+int(pad.Pad())]
+	if m.mon != nil && m.clock != nil {
+		// Heard within a round of the pattern, and a bar over for a pattern that is late.
+		window := (d.Bars() + 1) * ticksPerBar
+		heard = m.mon.heardSince(int(pad.Bank())*16+int(pad.Pad()), m.clock.ticks, window)
 	}
-	return heard, inPattern && !heard
+	return heard, !heard
 }
 
 // clickPerform handles a click in the wide Perform view: on a pad, or on the ISOLATE panel.

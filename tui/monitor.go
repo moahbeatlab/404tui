@@ -52,6 +52,9 @@ type monitor struct {
 	padAt time.Time
 	// played holds the pads (bank*16 + pad) heard since the sequencer started: what a pattern plays.
 	played map[int]bool
+	// playedAt is the clock tick each of them was last heard on: a pad that has not been heard for a
+	// long time belongs to a pattern that played before.
+	playedAt map[int]int
 }
 
 func newMonitor() *monitor {
@@ -371,4 +374,28 @@ func (m Model) padMuted(pad proto.PadIndex) bool {
 	}
 	d, _ := m.perfTracks(m.perfNow)
 	return m.unitMuted(d, pad, time.Now())
+}
+
+// heard notes that a pad of a pattern played, on the clock tick it did, and forgets the pads that
+// were last heard more than eight bars ago: they are from a pattern that has been left.
+func (mo *monitor) heard(key, tick int) {
+	if mo.played == nil {
+		mo.played = map[int]bool{}
+	}
+	if mo.playedAt == nil {
+		mo.playedAt = map[int]int{}
+	}
+	mo.played[key], mo.playedAt[key] = true, tick
+	for k, at := range mo.playedAt {
+		if at > tick || tick-at > 8*ticksPerBar {
+			delete(mo.played, k)
+			delete(mo.playedAt, k)
+		}
+	}
+}
+
+// heardSince says whether a pad was heard within the last ticks of the clock.
+func (mo *monitor) heardSince(key, tick, ticks int) bool {
+	at, ok := mo.playedAt[key]
+	return ok && at <= tick && tick-at <= ticks
 }

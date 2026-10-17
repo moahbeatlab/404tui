@@ -21,6 +21,11 @@ var (
 	procStop       = winmm.NewProc("midiInStop")
 	procReset      = winmm.NewProc("midiInReset")
 	procClose      = winmm.NewProc("midiInClose")
+	procOutNum     = winmm.NewProc("midiOutGetNumDevs")
+	procOutCaps    = winmm.NewProc("midiOutGetDevCapsW")
+	procOutOpen    = winmm.NewProc("midiOutOpen")
+	procOutShort   = winmm.NewProc("midiOutShortMsg")
+	procOutClose   = winmm.NewProc("midiOutClose")
 	callbackOnce   sync.Once
 	callbackFunc   uintptr
 	listenersMu    sync.Mutex
@@ -126,4 +131,60 @@ func (winSource) Open(part string, on func(Event)) (func(), string, error) {
 		procClose.Call(handle)
 		forget()
 	}, names[id], nil
+}
+
+// outputs names the outputs there are, by their device number. A MIDIOUTCAPSW starts like an input's.
+func outputs() []string {
+	n, _, _ := procOutNum.Call()
+	var names []string
+	for i := uintptr(0); i < n; i++ {
+		var caps midiOutCaps
+		if r, _, _ := procOutCaps.Call(i, uintptr(unsafe.Pointer(&caps)), unsafe.Sizeof(caps)); r != 0 {
+			names = append(names, fmt.Sprintf("output %d", i))
+			continue
+		}
+		names = append(names, syscall.UTF16ToString(caps.name[:]))
+	}
+	return names
+}
+
+type midiOutCaps struct {
+	mid, pid                  uint16
+	driverVersion             uint32
+	name                      [32]uint16
+	technology, voices, notes uint16
+	channelMask, support      uint32
+}
+
+type winOut struct{ handle uintptr }
+
+func (o *winOut) Send(msg []byte) error {
+	var packed uintptr
+	for i, b := range msg {
+		if i < 3 {
+			packed |= uintptr(b) << (8 * i)
+		}
+	}
+	if r, _, _ := procOutShort.Call(o.handle, packed); r != 0 {
+		return fmt.Errorf("sending MIDI failed (winmm error %d)", r)
+	}
+	return nil
+}
+
+func (o *winOut) Close() { procOutClose.Call(o.handle) }
+
+// OpenOut opens the first output with part in its name.
+func (winSource) OpenOut(part string) (Out, string, error) {
+	names := outputs()
+	for i, n := range names {
+		if !strings.Contains(strings.ToLower(n), strings.ToLower(part)) {
+			continue
+		}
+		var handle uintptr
+		if r, _, _ := procOutOpen.Call(uintptr(unsafe.Pointer(&handle)), uintptr(i), 0, 0, 0); r != 0 {
+			return nil, "", fmt.Errorf("opening the MIDI output %q failed (winmm error %d; is another program using it?)", n, r)
+		}
+		return &winOut{handle: handle}, n, nil
+	}
+	return nil, "", fmt.Errorf("no MIDI output with %q in its name (there are: %s)", part, strings.Join(names, ", "))
 }

@@ -79,3 +79,40 @@ func (rtSource) Open(part string, on func(Event)) (func(), string, error) {
 		drv.Close()
 	}, in.String(), nil
 }
+
+type rtOut struct {
+	drv drivers.Driver
+	out drivers.Out
+}
+
+func (o *rtOut) Send(msg []byte) error { return o.out.Send(msg) }
+func (o *rtOut) Close() {
+	o.out.Close()
+	o.drv.Close()
+}
+
+// OpenOut opens the first output with part in its name.
+func (rtSource) OpenOut(part string) (Out, string, error) {
+	drv, err := rtmididrv.New()
+	if err != nil {
+		return nil, "", err
+	}
+	outs, err := drv.Outs()
+	if err != nil {
+		drv.Close()
+		return nil, "", err
+	}
+	var names []string
+	for _, o := range outs {
+		names = append(names, o.String())
+		if strings.Contains(strings.ToLower(o.String()), strings.ToLower(part)) {
+			if err := o.Open(); err != nil {
+				drv.Close()
+				return nil, "", err
+			}
+			return &rtOut{drv: drv, out: o}, o.String(), nil
+		}
+	}
+	drv.Close()
+	return nil, "", fmt.Errorf("no MIDI output with %q in its name (there are: %s)", part, strings.Join(names, ", "))
+}

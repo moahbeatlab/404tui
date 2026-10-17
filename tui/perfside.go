@@ -340,12 +340,12 @@ func (m Model) perfSidebar(width, h int) []string {
 	half := width / 2
 	// The faders take the height that is left: the other panels need about 24 lines side by side, a
 	// little more stacked, and the banner of a recording one more.
-	spare, per := h-29, 2
+	spare, per := h-35, 2
 	if !wideTop {
 		spare -= 6
 	}
 	if !wide {
-		spare, per = h-45, 3
+		spare, per = h-51, 3
 	}
 	if m.rec != nil {
 		spare--
@@ -365,6 +365,7 @@ func (m Model) perfSidebar(width, h int) []string {
 		isoColour = st.th.hot
 	}
 	add(m.panel("ISOLATE", isoColour, iso, width)...)
+	add(m.panel("SCENES", st.th.accent, m.sceneLines(width-4), width)...)
 	pw, pt := width, width
 	if wide {
 		pw = half

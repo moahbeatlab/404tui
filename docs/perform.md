@@ -64,6 +64,27 @@ to go dry. In the wide layout:
 These are real changes to the pads' bus setting on the unit, saved in the project, until they are put back (quitting with `q` or `Ctrl-C` puts them back first; if the program is killed or the
 unit unplugged, they stay as they were set).
 
+## Scenes: fading the effects from one state to another
+
+Set the effects on the unit, save them as scene **A**; change them, save scene **B**; then fade between
+the two. For each bus a scene holds whether the effect is on, which effect it is and the three knobs
+C1–C3 (all as the unit last said them over MIDI, so touch each knob once first; a knob it never sent is
+left alone). The fade is sent back to the unit as MIDI controllers (CC 16–18, 19 and 83 on channel 1 for
+BUS 1 and 2 for BUS 2), so the unit's own knobs follow. The SCENES panel shows the position.
+
+| Key | What |
+| --- | --- |
+| `A` / `B` | save the effects as scene A / B (for the buses that follow) |
+| `h` `l` (arrows) | fade towards A / B in steps of 5 % |
+| `H` `L` | jump to A / B |
+| `g` | **glide** to the other scene over some bars, beginning on the next bar of the unit's clock; `g` again stops where it is |
+| `G` | the length of a glide: 1, 2, 4 or 8 bars |
+| `t` `T` | BUS 1 / BUS 2 follows the fade or not (a bus without both scenes is left alone) |
+
+The knobs move smoothly; the effect and the on/off switch change at the middle of the fade (an effect
+cannot be half another). It needs a MIDI output to the unit: the unit's USB MIDI port, found by the same
+name as the input (Config). Where it cannot be opened the panel says why.
+
 ## Pad colours
 
 A pad keeps a **green** tint once it has been heard in the pattern that plays (since the unit's Start, or

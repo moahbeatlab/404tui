@@ -211,6 +211,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		m.clock.running = true
 		m.mon.tick(e.At, m.clock.ticks)
 		m.logMIDI(e)
+		m = m.sceneTick()
 		if m.vc != nil && m.clock.ticks%6 != 0 {
 			m.vc.keep = true
 		}
@@ -257,7 +258,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 				// The sequencer runs: these notes are what the pattern plays (the unit sends them
 				// over MIDI), not pads hit by hand. They find the pattern, not the pad codes.
 				if m.mon.played == nil {
-					m.mon.played = map[int]bool{}
+					m.mon.played, m.mon.playedAt = map[int]bool{}, map[int]int{}
 				}
 				m.mon.played[(e.Channel-1)*16+pad-1] = true
 				nm := m.detectPattern()

@@ -6091,9 +6091,25 @@ type fakeMIDI struct {
 	failFor int // the first opens fail, as before the unit is plugged in
 	on      func(midiin.Event)
 	stopped int
+	sent    [][]byte // what was sent to the unit
 }
 
 func (f *fakeMIDI) Ports() ([]string, error) { return []string{"SP-404MKII"}, nil }
+
+// OpenOut takes the messages sent to the unit.
+func (f *fakeMIDI) OpenOut(string) (midiin.Out, string, error) {
+	return &fakeOut{f: f}, "SP-404MKII", nil
+}
+
+type fakeOut struct{ f *fakeMIDI }
+
+func (o *fakeOut) Send(msg []byte) error {
+	o.f.mu.Lock()
+	defer o.f.mu.Unlock()
+	o.f.sent = append(o.f.sent, append([]byte(nil), msg...))
+	return nil
+}
+func (o *fakeOut) Close() {}
 
 func (f *fakeMIDI) Open(part string, on func(midiin.Event)) (func(), string, error) {
 	f.mu.Lock()
@@ -6861,5 +6877,104 @@ func TestPadsHeardInThePatternKeepADifferentColour(t *testing.T) {
 	glow, _ := m.tileColours(tileState{used: true, glow: 1})
 	if glow == heard {
 		t.Error("a pad that is hit now does not glow")
+	}
+}
+
+func TestScenesFadeTheEffectsOfTheUnitByMIDI(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	link := &midiLink{ch: make(chan midiin.Event, 4)}
+	src := &fakeMIDI{}
+	m := s.m()
+	m.midi, m.midiSrc = link, src
+	s.model = m
+	s.press("7")
+	feed := func(e midiin.Event) {
+		e.At = time.Now()
+		next, _ := s.m().midiEvent(midiMsg{link: link, ev: e})
+		s.model = next
+	}
+	cc := func(ch, n, v int) { feed(midiin.Event{Kind: midiin.CC, Channel: ch, Data1: n, Data2: v}) }
+	// Bus 1 is Scatter (6), on, knobs 20 40 60; scene A. Then knobs 100 40 0 and Downer (7): scene B.
+	cc(1, 83, 6)
+	cc(1, 19, 127)
+	cc(1, 16, 20)
+	cc(1, 17, 40)
+	cc(1, 18, 60)
+	s.press("A")
+	cc(1, 83, 7)
+	cc(1, 16, 100)
+	cc(1, 18, 0)
+	s.press("B")
+	s.shows("SCENES", "Scatter", "Downer")
+	src.mu.Lock()
+	src.sent = nil
+	src.mu.Unlock()
+	// Halfway: knob 1 is at 60, knob 3 at 30, and the effect is still A's until it passes the middle.
+	for i := 0; i < 10; i++ {
+		s.press("l")
+	}
+	sentLast := func(n byte) int {
+		src.mu.Lock()
+		defer src.mu.Unlock()
+		for i := len(src.sent) - 1; i >= 0; i-- {
+			if src.sent[i][1] == n {
+				return int(src.sent[i][2])
+			}
+		}
+		return -1
+	}
+	if got := sentLast(16); got != 60 {
+		t.Errorf("knob 1 at the middle is %d, want 60", got)
+	}
+	if got := sentLast(18); got != 30 {
+		t.Errorf("knob 3 at the middle is %d, want 30", got)
+	}
+	if got := sentLast(83); got != 7 {
+		t.Errorf("the effect at the middle is %d, want B's 7", got)
+	}
+	s.press("H")
+	if got := sentLast(16); got != 20 || sentLast(83) != 6 {
+		t.Errorf("back at A: knob 1 %d effect %d, want 20 and 6", got, sentLast(83))
+	}
+	// A glide of two bars begins on the next bar of the clock and ends at B.
+	feed(midiin.Event{Kind: midiin.Start})
+	s.press("g")
+	s.shows("glide to B")
+	for i := 0; i < ticksPerBar*3; i++ {
+		feed(midiin.Event{Kind: midiin.Clock})
+	}
+	if got := sentLast(16); got != 100 {
+		t.Errorf("after the glide knob 1 is %d, want 100", got)
+	}
+	if s.m().sc.mix != 1 || s.m().sc.glide != nil {
+		t.Errorf("mix %v glide %v after the glide", s.m().sc.mix, s.m().sc.glide)
+	}
+}
+
+func TestAPadOfAnEarlierPatternIsNotShownAsPlayedInTheCurrentOne(t *testing.T) {
+	s := open(t)
+	m := s.m()
+	slot := pad(t, "B2")
+	m.perfNow = &slot
+	m.patPreview[slot] = &app.PatternDetail{PadsUsed: []proto.PadIndex{pad(t, "A1"), pad(t, "A2")}}
+	m.mon = newMonitor()
+	m.clock = &clockState{ticks: 200, running: true}
+	m.mon.heard(0, 190) // A1: in the pattern, heard
+	m.mon.heard(2, 190) // A3: heard, but the pattern does not play it
+	heard, in := m.padUsed(pad(t, "A1"))
+	if !heard || in {
+		t.Errorf("A1 heard %v inPattern %v, want heard", heard, in)
+	}
+	if heard, in := m.padUsed(pad(t, "A2")); heard || !in {
+		t.Errorf("A2 (in the pattern, not heard) heard %v inPattern %v", heard, in)
+	}
+	if heard, in := m.padUsed(pad(t, "A3")); heard || in {
+		t.Errorf("A3 is not in the pattern but shows heard %v inPattern %v", heard, in)
+	}
+	// What was heard long ago is forgotten.
+	m.mon.heard(1, 190+9*ticksPerBar)
+	if m.mon.played[0] {
+		t.Error("a pad last heard nine bars ago is still held as played")
 	}
 }
