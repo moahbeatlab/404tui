@@ -928,7 +928,7 @@ func (m Model) clickPerform(x, y int) (tea.Model, tea.Cmd) {
 	}
 	h := m.vc.hit
 	for _, b := range h.btns {
-		if y == b.y && x >= b.x && x < b.x+b.w {
+		if y >= b.y && y < b.y+max(b.h, 1) && x >= b.x && x < b.x+b.w {
 			return m.perfButton(b, x)
 		}
 	}

@@ -200,10 +200,9 @@ func (m Model) clickPad(pad proto.PadIndex) (tea.Model, tea.Cmd) {
 // isolateLines are the ISOLATE panel of the Perform sidebar: a switch, and what it does now.
 func (m Model) isolateLines() ([]string, []btn) {
 	st := m.st
-	b := &lineBuilder{st: st}
+	b := &rowBuilder{st: st}
 	b.toggle(m.iso != nil, "ISOLATE", "iso", 0)
-	lines := []string{b.String()}
-	btns := b.btns
+	lines, btns := b.rows(0)
 	var names []string
 	if m.iso != nil {
 		for p := range m.iso.pads {

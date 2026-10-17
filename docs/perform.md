@@ -50,7 +50,7 @@ clear next), see [config.md](config.md).
 
 ## Mouse and touch
 
-Perform is made to be used without the keyboard: everything below is a button or a pad to tap (a touch
+Perform is made to be used without the keyboard: everything below is a big button (three rows tall) or a pad to tap (a touch
 screen sends taps as clicks). In the wide layout the left side has, from the top:
 
 - **VIEW**: *player*, *patterns*, *● record* / *■ stop recording* and *full screen*. The player and the

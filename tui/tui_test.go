@@ -6852,13 +6852,13 @@ func TestPerformClicksMuteIsolateAndBringTheOthersBack(t *testing.T) {
 		t.Errorf("after the second double click the buses are %d %d %d, want 1 1 2", busOf("A1"), busOf("A2"), busOf("A3"))
 	}
 	// The button: the pads clicked keep their buses, leaving it puts everything back.
-	s.clickOn("● off")
+	s.clickOn("off  ")
 	s.shows("tap pads to add or take them out")
 	s.clickOn("snare")
 	if unitBus("A1") != 0 || unitBus("A2") != 1 {
 		t.Errorf("with A2 chosen the buses are %d %d, want 0 1", busOf("A1"), busOf("A2"))
 	}
-	s.clickOn("ON ●")
+	s.clickOn("ON  ●")
 	if unitBus("A1") != 1 || unitBus("A2") != 1 {
 		t.Errorf("after the button the buses are %d %d, want 1 1", busOf("A1"), busOf("A2"))
 	}
@@ -6921,7 +6921,7 @@ func TestScenesFadeTheEffectsOfTheUnitByMIDI(t *testing.T) {
 		for y, line := range lines() {
 			if strings.Contains(line, "save A") {
 				if seen == bus {
-					row = y + 1
+					row = y
 					break
 				}
 				seen++

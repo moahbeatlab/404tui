@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moahbeatlab/404tui/midiin"
 )
@@ -221,50 +222,31 @@ func (m Model) closeScenes() {
 	}
 }
 
-// sceneLines are the SCENES panel of the Perform sidebar, with the buttons in it.
+// sceneLines are the SCENES panel of the Perform sidebar, with its big buttons.
 func (m Model) sceneLines(width int) ([]string, []btn) {
 	st := m.st
 	sc := m.scenes()
 	var lines []string
 	var btns []btn
-	add := func(b *lineBuilder) {
-		for _, x := range b.btns {
-			x.row = len(lines)
-			btns = append(btns, x)
-		}
-		lines = append(lines, b.String())
+	band := func(b *rowBuilder) {
+		l, bt := b.rows(len(lines))
+		lines = append(lines, l...)
+		btns = append(btns, bt...)
 	}
 	// How long a glide takes.
-	b := &lineBuilder{st: st}
+	b := &rowBuilder{st: st}
 	b.text(st.dim.Render("glide takes "))
 	for _, n := range []int{1, 2, 4, 8} {
-		b.button(fmt.Sprint(n), n == sc.bars, "bars", n)
-		b.text(" ")
+		b.button(fmt.Sprint(n), n == sc.bars, "bars", n, 5)
+		b.gap(1)
 	}
-	b.text(st.dim.Render("bars, from the next bar"))
-	add(b)
+	b.text(st.dim.Render("bars"))
+	band(b)
 	for bus := range 2 {
 		bs := sc.bus[bus]
 		colour, _ := st.th.busColour(int32(bus + 1))
 		head := lipgloss.NewStyle().Foreground(colour).Bold(true).Render(fmt.Sprintf("BUS %d", bus+1))
-		b := &lineBuilder{st: st}
-		b.text(head + "  ")
-		b.button("save A", bs.a.set, "a", bus)
-		b.text(" " + st.dim.Render(sceneText(bs.a)) + "   ")
-		b.button("save B", bs.b.set, "b", bus)
-		b.text(" " + st.dim.Render(sceneText(bs.b)))
-		add(b)
-		// The fade bar: a click puts the fade there.
-		b = &lineBuilder{st: st}
-		b.button("A", false, "jumpa", bus)
-		barW := max(width-36, 8)
-		filled := int(math.Round(bs.mix * float64(barW)))
-		bar := lipgloss.NewStyle().Foreground(colour).Render(strings.Repeat("█", filled)) + st.faint.Render(strings.Repeat("░", barW-filled))
-		b.text(" ")
-		b.region(bar, barW, "fade", bus)
-		b.text(" ")
-		b.button("B", false, "jumpb", bus)
-		b.text(st.text.Render(fmt.Sprintf(" %3d%% ", int(math.Round(bs.mix*100)))))
+		lines = append(lines, head+st.dim.Render("   A: ")+st.text.Render(sceneText(bs.a))+st.dim.Render("   B: ")+st.text.Render(sceneText(bs.b)))
 		label := "glide →B"
 		if bs.mix >= 0.5 {
 			label = "glide →A"
@@ -275,8 +257,17 @@ func (m Model) sceneLines(width int) ([]string, []btn) {
 		case bs.glide != nil:
 			label = "gliding… stop"
 		}
-		b.button(label, bs.glide != nil, "glide", bus)
-		add(b)
+		b := &rowBuilder{st: st}
+		b.button("save A", bs.a.set, "a", bus, 9)
+		b.gap(1)
+		glideW := max(ansi.StringWidth(label)+6, 14)
+		barW := max(width-12-12-glideW-3, 6)
+		b.bar(barW, bs.mix, colour, "fade", bus)
+		b.gap(1)
+		b.button("save B", bs.b.set, "b", bus, 9)
+		b.gap(1)
+		b.button(label, bs.glide != nil, "glide", bus, glideW)
+		band(b)
 	}
 	if sc.outErr != "" {
 		lines = append(lines, st.warn.Render("cannot send to the unit: "+sc.outErr))

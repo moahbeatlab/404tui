@@ -340,12 +340,12 @@ func (m Model) perfSidebar(width, h int) []string {
 	half := width / 2
 	// The faders take the height that is left: the other panels need about 24 lines side by side, a
 	// little more stacked, and the banner of a recording one more.
-	spare, per := h-35, 2
+	spare, per := h-45, 2
 	if !wideTop {
 		spare -= 6
 	}
 	if !wide {
-		spare, per = h-51, 3
+		spare, per = h-61, 3
 	}
 	if m.rec != nil {
 		spare--
@@ -362,20 +362,21 @@ func (m Model) perfSidebar(width, h int) []string {
 		top := len(out)
 		if m.vc != nil && m.vc.hit.ok {
 			for _, x := range btns {
-				m.vc.hit.btns = append(m.vc.hit.btns, hitBtn{x: 1 + 2 + x.col, y: 1 + top + 1 + x.row, w: x.w, act: x.act, arg: x.arg})
+				m.vc.hit.btns = append(m.vc.hit.btns, hitBtn{x: 1 + 2 + x.col, y: 1 + top + 1 + x.row, w: x.w, h: x.h, act: x.act, arg: x.arg})
 			}
 		}
 		add(m.panel(title, colour, lines, width)...)
 	}
-	vb := &lineBuilder{st: st}
-	vb.button("player", m.perfPlayer, "view", 0)
-	vb.text(" ")
-	vb.button("patterns", m.perfPatterns, "view", 1)
-	vb.text(" ")
-	vb.button(map[bool]string{true: "■ stop recording", false: "● record"}[m.rec != nil], m.rec != nil, "view", 2)
-	vb.text(" ")
-	vb.button("full screen", m.full, "view", 3)
-	panelWithButtons("VIEW", st.th.faint, []string{vb.String()}, vb.btns)
+	vb := &rowBuilder{st: st}
+	vb.button("player", m.perfPlayer, "view", 0, 10)
+	vb.gap(1)
+	vb.button("patterns", m.perfPatterns, "view", 1, 12)
+	vb.gap(1)
+	vb.button(map[bool]string{true: "■ stop recording", false: "● record"}[m.rec != nil], m.rec != nil, "view", 2, 12)
+	vb.gap(1)
+	vb.button("full screen", m.full, "view", 3, 14)
+	viewLines, viewBtns := vb.rows(0)
+	panelWithButtons("VIEW", st.th.faint, viewLines, viewBtns)
 	isoLines, isoBtns := m.isolateLines()
 	isoColour := st.th.faint
 	if m.iso != nil {
