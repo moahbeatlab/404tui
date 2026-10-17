@@ -484,7 +484,10 @@ func (m Model) statusBar() string {
 		chips = []string{chip("Enter", "preview on "+map[bool]string{true: "computer", false: "unit"}[m.previewLocal]), chip("a", "assign"), chip("v", "mark"), chip("t", "set"), chip("c", "copy"), chip("d", "delete"), chip("B", "buses by name"), chip("K", "check sample"), chip("Tab", "patterns"), chip("[ ]", "bank")}
 	case secPatterns:
 		if m.seqTab {
-			chips = []string{chip("a", "other pattern"), chip("P", "play"), chip("Esc", "close")}
+			chips = []string{chip("a", "other pattern"), chip("e", "substeps"), chip("P", "play"), chip("Esc", "close")}
+			if m.pattern != nil && m.patSubMode {
+				chips = []string{st.hot.Render("SUBSTEP MODE"), chip("h l", "part"), chip("x", "on/off"), chip("i", "2/3/4 parts"), chip("e", "leave")}
+			}
 			break
 		}
 		chips = []string{chip("Enter", "open"), chip("N", "new"), chip("Space", "play / stop"), chip("d", "delete"), chip("c", "copy"), chip("[ ]", "bank")}
@@ -2753,24 +2756,24 @@ func (m Model) substepHint() string {
 // the part sounds, the one the cursor is on lit.
 func (m Model) substepBoxes(n int, on []bool) string {
 	st := m.st
-	lit := lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
 	var b strings.Builder
 	for i := range n {
-		box := "░░"
-		if i < len(on) && on[i] {
-			box = "██"
-		}
+		sounds := i < len(on) && on[i]
+		cell := fmt.Sprintf(" %d ", i+1)
+		here := i == m.patSub && m.patSubMode
 		switch {
-		case i == m.patSub && m.patSubMode:
-			b.WriteString(lit.Render(box))
-		case i < len(on) && on[i]:
-			b.WriteString(st.accent.Render(box))
+		case sounds && here:
+			b.WriteString(lipgloss.NewStyle().Background(st.th.hot).Foreground(st.th.cursorFg).Bold(true).Render(cell))
+		case sounds:
+			b.WriteString(lipgloss.NewStyle().Background(st.th.accent).Foreground(st.th.cursorFg).Bold(true).Render(cell))
+		case here:
+			b.WriteString(st.hot.Bold(true).Render("[" + fmt.Sprint(i+1) + "]"))
 		default:
-			b.WriteString(st.faint.Render(box))
+			b.WriteString(st.faint.Render("·" + fmt.Sprint(i+1) + "·"))
 		}
 		b.WriteString(" ")
 	}
-	return b.String()
+	return b.String() + st.dim.Render(" filled plays · dotted silent")
 }
 
 // conditioned says whether a note that starts in the step has a condition that is not plain.
