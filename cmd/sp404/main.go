@@ -85,6 +85,7 @@ func main() {
 	}
 	if err := run(args, o); err != nil {
 		fmt.Fprintln(os.Stderr, "sp404:", err)
+		holdWindow()
 		os.Exit(1)
 	}
 }

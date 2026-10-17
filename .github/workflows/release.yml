@@ -77,6 +77,7 @@ jobs:
             CGO_ENABLED=$cgo GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -trimpath $tags -ldflags "$ldflags" -o out/sp404$ext $PKG
           fi
           cp README.md LICENSE out/
+          if [ "${{ matrix.goos }}" = darwin ]; then cp packaging/404tui.command out/; fi
 
       - name: Archive
         run: |
@@ -84,6 +85,8 @@ jobs:
           mkdir -p dist
           if [ "${{ matrix.goos }}" = windows ]; then
             (cd out && 7z a -tzip "../dist/$base.zip" sp404.exe README.md LICENSE)
+          elif [ "${{ matrix.goos }}" = darwin ]; then
+            tar -C out -czf "dist/$base.tar.gz" sp404 404tui.command README.md LICENSE
           else
             tar -C out -czf "dist/$base.tar.gz" sp404 README.md LICENSE
           fi

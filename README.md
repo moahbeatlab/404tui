@@ -17,6 +17,21 @@ checks sequencing and data handling, not the unit's actual behaviour.
 
 Documentation per tab, with all keys and modes: [`docs/`](docs/README.md).
 
+## Getting started without the terminal
+
+404tui is a program that runs in a terminal window, and it opens one by itself when you double-click it:
+
+- **Windows:** unzip the release, double-click `sp404.exe`. A console window opens with 404tui in it. If
+  Windows says "protected your PC" (the program is not signed yet), choose *More info*, then *Run anyway*. If
+  the program stops with a message, the window waits for Enter so you can read it.
+- **macOS:** unpack the release and double-click `404tui.command` (not `sp404`): Terminal opens and starts it. The
+  first time, macOS may refuse because the file came from the internet: right-click it, choose *Open*, then *Open*
+  again (or in a terminal: `xattr -dr com.apple.quarantine <the folder>`).
+- **Linux:** run `./sp404` in a terminal.
+
+Plug the SP-404MKII in with its USB cable; 404tui finds it by itself and waits if it is not there yet. `?` shows
+the keys, `q` quits. From a terminal, `sp404 -sim` tries it without a unit and `sp404 check` tests the installation.
+
 ## Usage
 
     go run ./cmd/sp404                 # the terminal UI (same as `menu`)
