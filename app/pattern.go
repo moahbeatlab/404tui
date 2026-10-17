@@ -397,3 +397,28 @@ func (d *PatternDetail) NotesAt(pad proto.PadIndex, col int) []formats.NoteRecor
 	}
 	return out
 }
+
+// Split reads how a step of a pad is divided, as the unit's SUBSTEP does: into n parts (2, 3 or
+// 4; 1 when it is not) of which on says which sound. The notes of a split step are as long as a
+// part and start on a part; a note that is not like that is a plain one.
+func (d *PatternDetail) Split(pad proto.PadIndex, col int) (n int, on []bool) {
+	notes := d.CellNotes(pad, col)
+	if len(notes) == 0 {
+		return 1, nil
+	}
+	step, start := d.StepTicks(), d.StepTick(col)
+	n = 1
+	if l := uint32(notes[0].Length); l > 0 && l < step && step/l >= 2 && step/l <= 4 {
+		n = int(step / l)
+	}
+	on = make([]bool, n)
+	for _, note := range notes {
+		part := step / uint32(n)
+		off := note.Tick - start
+		if n > 1 && (uint32(note.Length) != part || off%part != 0 || int(off/part) >= n) {
+			return 1, []bool{true}
+		}
+		on[off/max(part, 1)] = true
+	}
+	return n, on
+}

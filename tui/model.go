@@ -395,7 +395,9 @@ type Model struct {
 	// patRow and patCol are the cursor in the open pattern's step grid; patHist is the undo and
 	// redo stacks of edits to it.
 	patRow, patCol int
-	patHist        *patternHistory
+	// patSub is the part of a split step the cursor is on.
+	patSub  int
+	patHist *patternHistory
 	// patFocus expands the track on the cursor row into a big step lane; the others stay
 	// one-line strips. Esc collapses it again.
 	patFocus bool

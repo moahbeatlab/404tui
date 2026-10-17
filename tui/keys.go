@@ -1075,6 +1075,16 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 			return m.toggleNote()
 		case "i":
 			return m.cycleSubsteps()
+		case "I":
+			if pad, _, ok := m.cellOfPattern(); ok {
+				if n, _ := m.pattern.Split(pad, m.patCol); n > 1 {
+					m.patSub = (m.patSub + 1) % n
+				} else {
+					m.message = "the step is not split: i divides it into 2, 3 or 4 parts"
+				}
+			}
+		case "z":
+			return m.toggleSubstep()
 		case "H", "L", "(", ")":
 			// Nudge the note off (or back toward) the grid: H L by 5 ticks, ( ) by 1.
 			by := map[string]int{"H": -5, "L": 5, "(": -1, ")": 1}[name]
@@ -3534,16 +3544,49 @@ func (m Model) toggleNote() (tea.Model, tea.Cmd) {
 	}, fmt.Sprintf("%s %s: note on %s at velocity 127", d.Slot, m.patStepLabel(), pad))
 }
 
-// cycleSubsteps splits the step at the cursor into 1, 2, 3 or 4 notes of equal length (the unit's
-// SUBSTEP), going on to the next number each time. A step with no note gets a whole one first.
+// cycleSubsteps divides the step at the cursor into 1, 2, 3 or 4 parts (the unit's SUBSTEP),
+// going on to the next number each time, all of them sounding. A step with no note gets a whole
+// one first.
 func (m Model) cycleSubsteps() (tea.Model, tea.Cmd) {
 	pad, _, ok := m.cellOfPattern()
 	if !ok {
 		return m, nil
 	}
+	cur, _ := m.pattern.Split(pad, m.patCol)
+	n := cur%4 + 1
+	if len(m.pattern.CellNotes(pad, m.patCol)) == 0 {
+		n = 1
+	}
+	on := make([]bool, n)
+	for i := range on {
+		on[i] = true
+	}
+	m.patSub = 0
+	return m.setSplit(pad, n, on)
+}
+
+// toggleSubstep switches the part of a split step the cursor is on: sounding or not.
+func (m Model) toggleSubstep() (tea.Model, tea.Cmd) {
+	pad, _, ok := m.cellOfPattern()
+	if !ok {
+		return m, nil
+	}
+	n, on := m.pattern.Split(pad, m.patCol)
+	if n < 2 {
+		m.message = "the step is not split: i divides it into 2, 3 or 4 parts"
+		return m, nil
+	}
+	m.patSub = clamp(m.patSub, 0, n-1)
+	on = slices.Clone(on)
+	on[m.patSub] = !on[m.patSub]
+	return m.setSplit(pad, n, on)
+}
+
+// setSplit writes the step at the cursor as n parts, a note of the loudest velocity there was in
+// each part that sounds; the notes of the step before are taken out.
+func (m Model) setSplit(pad proto.PadIndex, n int, on []bool) (tea.Model, tea.Cmd) {
 	d := m.pattern
 	notes := d.CellNotes(pad, m.patCol)
-	n := len(notes)%4 + 1
 	vel := uint8(127)
 	if len(notes) > 0 {
 		vel = 0
@@ -3560,6 +3603,19 @@ func (m Model) cycleSubsteps() (tea.Model, tea.Cmd) {
 	// Taking out goes from the back, so that the offsets of the ones still to go stay right.
 	slices.Sort(offsets)
 	slices.Reverse(offsets)
+	sounding := 0
+	for _, o := range on {
+		if o {
+			sounding++
+		}
+	}
+	say := fmt.Sprintf("%s %s: %d parts, %d sounding", d.Slot, m.patStepLabel(), n, sounding)
+	switch {
+	case sounding == 0:
+		say = fmt.Sprintf("%s %s: no part sounds, the step is empty", d.Slot, m.patStepLabel())
+	case n == 1:
+		say = fmt.Sprintf("%s %s: one note", d.Slot, m.patStepLabel())
+	}
 	return m.editPatternBytes(func(b []byte) ([]byte, error) {
 		for _, at := range offsets {
 			if err := formats.RemoveNote(b, at); err != nil {
@@ -3568,12 +3624,15 @@ func (m Model) cycleSubsteps() (tea.Model, tea.Cmd) {
 		}
 		var err error
 		for i := range n {
+			if !on[i] {
+				continue
+			}
 			if b, err = formats.InsertNote(b, start+uint32(i)*part, pad, vel, uint16(min(part, 65535))); err != nil {
 				return nil, err
 			}
 		}
 		return b, nil
-	}, fmt.Sprintf("%s %s: %s", d.Slot, m.patStepLabel(), map[int]string{1: "one note", 2: "2 sub-steps", 3: "3 sub-steps (triplet)", 4: "4 sub-steps"}[n]))
+	}, say)
 }
 
 // condKeys are the keys of the notes at the cursor step: the sixteenth each starts in.

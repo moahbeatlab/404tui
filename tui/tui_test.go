@@ -6633,11 +6633,44 @@ func TestISplitsAStepIntoSubstepsAndTheGridCountsThem(t *testing.T) {
 				t.Errorf("%d sub-steps: notes at %v, want %v", want, got, ticks)
 			}
 		}
-		s.shows(fmt.Sprintf("%d sub-steps", want))
+		s.shows(fmt.Sprintf("SUBSTEP %d", want))
 	}
 	s.shows("⁴")
 	s.press("i")
 	if len(inStep()) != 1 {
 		t.Errorf("after the fourth, i gives one note again: %v", inStep())
 	}
+}
+
+func TestZSwitchesAPartOfASplitStepAndISplitsAgain(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "enter", "enter", "tab", "enter")
+	pad := s.m().pattern.Grid.Rows[0].Pad
+	s.press("l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "x") // step 13, empty
+	step := s.m().pattern.StepTicks()
+	s.press("i", "i") // three parts
+	if n, on := s.m().pattern.Split(pad, 13); n != 3 || !on[0] || !on[1] || !on[2] {
+		t.Fatalf("split = %d %v, want 3 parts all on", n, on)
+	}
+	s.press("I", "z") // the middle part off
+	n, on := s.m().pattern.Split(pad, 13)
+	if n != 3 || !on[0] || on[1] || !on[2] {
+		t.Fatalf("split = %d %v, want 3 parts, the middle off", n, on)
+	}
+	if got := len(s.m().pattern.CellNotes(pad, 13)); got != 2 {
+		t.Errorf("%d notes in the step, want 2", got)
+	}
+	s.press("z")
+	if n, on := s.m().pattern.Split(pad, 13); n != 3 || !on[1] {
+		t.Errorf("z again: split = %d %v", n, on)
+	}
+	// Only the first of four parts: still a split step, not a plain note.
+	s.press("i") // four parts
+	s.press("I", "z", "I", "z", "I", "z")
+	// parts 2..4 off (cursor moved 1,2,3)
+	if n, on := s.m().pattern.Split(pad, 13); n != 4 || !on[0] || on[1] || on[2] || on[3] {
+		t.Errorf("split = %d %v, want 4 parts with only the first", n, on)
+	}
+	_ = step
 }

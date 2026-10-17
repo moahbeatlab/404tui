@@ -1422,11 +1422,11 @@ func (m Model) patternDetail(g geom) string {
 			for _, n := range notes {
 				loudest = max(loudest, int(n.Velocity))
 			}
-			if len(notes) > 1 {
+			if n, on := d.Split(pad, m.patCol); n > 1 {
 				lines = append(lines, "", where+st.text.Render(fmt.Sprintf("  vel %d  ", loudest))+
-					st.accent.Render(levelBar(16, loudest, 127))+
-					st.text.Render("  ·  ")+st.hot.Render(fmt.Sprintf("%d sub-steps", len(notes)))+
-					st.dim.Render("  at "+m.substepOffsets(d, notes)+"  ·  i changes them"))
+					st.accent.Render(levelBar(16, loudest, 127))+st.text.Render("  ·  ")+
+					st.hot.Render(fmt.Sprintf("SUBSTEP %d", n))+"  "+m.substepBoxes(n, on)+
+					st.dim.Render(fmt.Sprintf(" part %d  ·  I part  z on/off  i split", m.patSub+1)))
 			} else {
 				length := float64(notes[0].Length) / float64(max(d.StepTicks(), 1))
 				here := where + st.text.Render(fmt.Sprintf("  vel %d  ", loudest)) +
@@ -1490,15 +1490,6 @@ func (m Model) patternHelp(d *app.PatternDetail) []helpGroup {
 		{"trig", []helpKey{{"c C", "condition"}, {"y", "roll the dice again"}}},
 		history,
 	}
-}
-
-// substepOffsets lists where the notes of a step start in it, in ticks from its start: "0 · 60".
-func (m Model) substepOffsets(d *app.PatternDetail, notes []formats.NoteRecord) string {
-	var parts []string
-	for _, n := range notes {
-		parts = append(parts, fmt.Sprint(int(n.Tick)-int(d.StepTick(m.patCol))))
-	}
-	return strings.Join(parts, " · ") + " ticks"
 }
 
 // offsetLabel says how far a note at tick is off the grid, as swing, shift or humanize leave
@@ -2657,7 +2648,7 @@ func (m Model) noteGlyph(velocity int) (string, lipgloss.Style) {
 func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow bool, sp stepSpan) string {
 	st := m.st
 	cover, _, start := laneCover(d, pad)
-	counts := cellCounts(d, pad)
+	counts := cellSplits(d, pad)
 	// A pad that is not heard in the mix on this computer has its notes greyed out, and so do the
 	// tracks around one that is expanded, so the eye stays on it.
 	dimmed := !heard(pad, m.muted, m.soloed)
@@ -2732,18 +2723,40 @@ func substepMark(n int) string {
 	return substepMarks[clamp(n-2, 0, len(substepMarks)-1)]
 }
 
-// cellCounts is how many notes of a pad start in each column of the grid.
-func cellCounts(d *app.PatternDetail, pad proto.PadIndex) []int {
-	counts := make([]int, d.Grid.Steps)
-	if d.Length == 0 {
-		return counts
-	}
-	for _, n := range d.Notes {
-		if n.Pad == pad {
-			counts[min(int(uint64(n.Tick)*uint64(d.Grid.Steps)/uint64(d.Length)), d.Grid.Steps-1)]++
+// cellSplits is, for each column of the grid, into how many parts the pad's step is split: 0 when
+// it is not.
+func cellSplits(d *app.PatternDetail, pad proto.PadIndex) []int {
+	splits := make([]int, d.Grid.Steps)
+	for c := range splits {
+		if n, _ := d.Split(pad, c); n > 1 {
+			splits[c] = n
 		}
 	}
-	return counts
+	return splits
+}
+
+// substepBoxes draws the parts of a split step as the unit's display does: a box each, filled when
+// the part sounds, the one the cursor is on lit.
+func (m Model) substepBoxes(n int, on []bool) string {
+	st := m.st
+	lit := lipgloss.NewStyle().Background(st.th.cursorBg).Foreground(st.th.cursorFg).Bold(true)
+	var b strings.Builder
+	for i := range n {
+		box := "░░"
+		if i < len(on) && on[i] {
+			box = "██"
+		}
+		switch {
+		case i == m.patSub:
+			b.WriteString(lit.Render(box))
+		case i < len(on) && on[i]:
+			b.WriteString(st.accent.Render(box))
+		default:
+			b.WriteString(st.faint.Render(box))
+		}
+		b.WriteString(" ")
+	}
+	return b.String()
 }
 
 // conditioned says whether a note that starts in the step has a condition that is not plain.
