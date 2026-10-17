@@ -7040,3 +7040,55 @@ func TestAClickPastTheEndOfTheFadeBarStaysInsideIt(t *testing.T) {
 		b.bar(20, f, m.st.th.accent, "fade", 0)
 	}
 }
+
+func TestAGlideSurvivesANewStartAndALengthChange(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	link := &midiLink{ch: make(chan midiin.Event, 4)}
+	src := &fakeMIDI{}
+	m := s.m()
+	m.midi, m.midiSrc = link, src
+	s.model = m
+	s.press("7")
+	feed := func(e midiin.Event) {
+		e.At = time.Now()
+		next, _ := s.m().midiEvent(midiMsg{link: link, ev: e})
+		s.model = next
+	}
+	cc := func(n, v int) { feed(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: n, Data2: v}) }
+	cc(16, 0)
+	m = s.m().sceneAct("a", 0, 0)
+	s.model = m
+	cc(16, 100)
+	s.model = s.m().sceneAct("b", 0, 0)
+	s.model = s.m().sceneAct("bars", 2, 0)
+	feed(midiin.Event{Kind: midiin.Start})
+	s.model = s.m().sceneAct("glide", 0, 0)
+	for i := 0; i < ticksPerBar+10; i++ {
+		feed(midiin.Event{Kind: midiin.Clock})
+	}
+	// The length is changed and the unit starts again in the middle of the glide.
+	s.model = s.m().sceneAct("bars", 8, 0)
+	before := s.m().sc.bus[0].mix
+	feed(midiin.Event{Kind: midiin.Clock})
+	if d := s.m().sc.bus[0].mix - before; d < 0 || d > 0.02 {
+		t.Errorf("the fade jumped by %v when the length of a glide was changed", d)
+	}
+	feed(midiin.Event{Kind: midiin.Start})
+	for i := 0; i < ticksPerBar*3; i++ {
+		feed(midiin.Event{Kind: midiin.Clock})
+	}
+	src.mu.Lock()
+	defer src.mu.Unlock()
+	for _, msg := range src.sent {
+		if msg[2] > 127 {
+			t.Fatalf("sent a value of %d", msg[2])
+		}
+	}
+	if mix := s.m().sc.bus[0].mix; mix < 0 || mix > 1 {
+		t.Errorf("the fade is at %v", mix)
+	}
+	if s.m().sc.bus[0].glide != nil {
+		t.Error("the glide did not end")
+	}
+}

@@ -51,7 +51,8 @@ type sceneState struct {
 type glide struct {
 	from, to float64
 	waiting  bool // for the next bar
-	start    int  // the tick it began on
+	ticks    int  // clock ticks since it began (a new Start of the unit does not disturb it)
+	total    int  // how many it takes, fixed when it began
 }
 
 const ticksPerBar = 24 * 4
@@ -125,7 +126,7 @@ func (m Model) sceneAct(act string, bus int, pos float64) Model {
 			if bs.mix >= 0.5 {
 				to = 0
 			}
-			bs.glide = &glide{from: bs.mix, to: to, waiting: true}
+			bs.glide = &glide{from: bs.mix, to: to, waiting: true, total: sc.bars * ticksPerBar}
 			m.message = fmt.Sprintf("BUS %d: glide to %s over %s, from the next bar", bus+1, map[bool]string{true: "B", false: "A"}[to == 1], plural(sc.bars, "bar"))
 		}
 	}
@@ -149,14 +150,15 @@ func (m Model) sceneTick() Model {
 			if m.clock.ticks%ticksPerBar != 0 {
 				continue
 			}
-			g.waiting, g.start = false, m.clock.ticks
+			g.waiting, g.ticks = false, 0
+		} else {
+			g.ticks++
 		}
-		p := float64(m.clock.ticks-g.start) / float64(sc.bars*ticksPerBar)
+		p := math.Min(float64(g.ticks)/float64(g.total), 1)
 		if p >= 1 {
-			p = 1
 			bs.glide = nil
 		}
-		bs.mix = g.from + (g.to-g.from)*p
+		bs.mix = math.Max(math.Min(g.from+(g.to-g.from)*p, 1), 0)
 		m = m.sceneApply(sc, bus)
 	}
 	return m
@@ -183,7 +185,7 @@ func (m Model) sceneApply(sc *sceneState, bus int) Model {
 		if a.knobs[k] < 0 || b.knobs[k] < 0 {
 			continue
 		}
-		v := int(math.Round(float64(a.knobs[k]) + float64(b.knobs[k]-a.knobs[k])*bs.mix))
+		v := clamp(int(math.Round(float64(a.knobs[k])+float64(b.knobs[k]-a.knobs[k])*bs.mix)), 0, 127)
 		if !last.set || v != last.knobs[k] {
 			m.sceneSend(sc, []byte{0xB0 | ch, byte(16 + k), byte(v)})
 			last.knobs[k] = v
