@@ -5768,15 +5768,13 @@ func TestPerformShowsThePatternThatPlaysAndWhatChangesInTheNext(t *testing.T) {
 		s.sim.SetPattern(pad(t, slot), pad(t, "A1"))
 		s.sim.AddFile(formats.PatternPath(1, pad(t, slot)), data)
 	}
-	s.press("r", "7", "v")
-	s.shows("Perform", "chooses the pattern that is playing")
+	s.press("r", "7")
 	s.press("a", "enter")
 	if s.m().perfNow == nil || *s.m().perfNow != pad(t, "A2") {
 		t.Fatalf("the pattern that plays is %v", s.m().perfNow)
 	}
 	// The next pattern: l goes to the next slot of the chooser.
 	s.press("n", "l", "enter")
-	s.shows("NEXT", "A3", "TAKE OUT", "A1 kick")
 	if s.m().perfNow == nil || s.m().perfNext == nil {
 		t.Fatalf("now %v next %v", s.m().perfNow, s.m().perfNext)
 	}
@@ -5785,7 +5783,6 @@ func TestPerformShowsThePatternThatPlaysAndWhatChangesInTheNext(t *testing.T) {
 	if s.m().perfNow == nil || *s.m().perfNow != pad(t, "A3") || s.m().perfNext != nil {
 		t.Errorf("after Space: now %v, next %v", s.m().perfNow, s.m().perfNext)
 	}
-	s.shows("NOW", "A3", "2 tracks")
 	s.press("x", " ")
 	s.shows("no next pattern")
 }
@@ -5805,14 +5802,15 @@ func TestPerformListsWhatGoesToEachBusAndShowsARecording(t *testing.T) {
 	}
 	s.sim.SetPattern(pad(t, "A2"), pad(t, "A1"))
 	s.sim.AddFile(formats.PatternPath(1, pad(t, "A2")), one)
-	s.press("r", "7", "v", "a", "enter")
-	s.shows("BUS 1", "BUS 2", "hat", "kick  ·  snare", "f notes the effect")
+	s.press("r", "7", "a", "enter")
 	// The effect of a bus is what the user writes: the unit does not say.
 	s.press("f")
 	s.shows("The effect on BUS 1")
 	s.typeText("Hall reverb")
 	s.press("enter")
-	s.shows("BUS 1", "Hall reverb")
+	if got := s.m().mem.BusNotes[0]; got != "Hall reverb" {
+		t.Errorf("the note of BUS 1 is %q", got)
+	}
 	// A recording shows in the dashboard too.
 	stopped := 0
 	fake := &fakeRecorder{stopped: &stopped}
@@ -5843,11 +5841,6 @@ func TestPerformOpensOnTheBankTheUnitIsOnWithItsPadsBig(t *testing.T) {
 	m.playing, m.playingPad = true, pad(t, "C3")
 	s.model = m
 	s.shows("▶ C3")
-	// v swaps to the patterns view and back.
-	s.press("v")
-	s.shows("NOW")
-	s.press("v")
-	s.shows("BANK C")
 }
 
 func TestParseCodeReadsPadNumbers(t *testing.T) {
@@ -6463,10 +6456,7 @@ func TestPerformPlaysThePatternLikeTheSequencerAndShowsWhatIsMutedOnTheUnit(t *t
 		t.Error("the silent pad is not muted")
 	}
 	s.shows("×")
-	s.press("p", "v")
-	s.shows("MUTED")
-	s.press("p") // the patterns view (v is still on), without the player
-	s.shows("MUTED")
+	s.press("p")
 	// With nothing heard at all, nothing is called muted.
 	m = s.m()
 	m.mon.padAt = now.Add(-time.Minute)
@@ -6959,6 +6949,19 @@ func TestScenesFadeTheEffectsOfTheUnitByMIDI(t *testing.T) {
 	cc(1, 17, 40)
 	cc(1, 18, 60)
 	clickNth("save A", 0)
+	// The length of a glide is set by the buttons 1 2 4 8 (not a bus: 8 is no index).
+	for _, n := range []string{"8", "4", "1", "2"} {
+		for y, line := range lines() {
+			if strings.Contains(line, "glide takes") {
+				at := strings.Index(line, "  "+n+"  ")
+				click(y, len([]rune(line[:at]))+3)
+				break
+			}
+		}
+	}
+	if s.m().sc.bars != 2 {
+		t.Errorf("a glide takes %d bars after tapping 8, 4, 1 and 2", s.m().sc.bars)
+	}
 	cc(1, 83, 7)
 	cc(1, 16, 100)
 	cc(1, 18, 0)
@@ -7033,14 +7036,10 @@ func TestAPadOfAnEarlierPatternIsNotShownAsPlayedInTheCurrentOne(t *testing.T) {
 	}
 }
 
-func TestPerformViewsWithoutButtonsGoBackWithATap(t *testing.T) {
+func TestThePerformPlayerHasNoButtonsAndGoesBackWithATap(t *testing.T) {
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
 	s.press("7")
-	s.clickOn("patterns")
-	s.shows("tap anywhere")
-	s.send(tea.MouseMsg{X: 50, Y: 20, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
-	s.hides("tap anywhere")
 	s.clickOn("player")
 	s.shows("Perform · player")
 	s.send(tea.MouseMsg{X: 50, Y: 20, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})

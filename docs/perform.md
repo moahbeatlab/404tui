@@ -34,7 +34,6 @@ Narrower screens put the same panels one under the other.
 | --- | --- |
 | `p` | **player**: the pattern you said plays, drawn as the Sequencer does, with a ▼ playhead that follows the unit's MIDI clock |
 | `s` | (player) the pattern starts now: the playhead goes back to its beginning |
-| `v` | the patterns of the bank in front |
 | `a`, `Enter` | choose the pattern that plays now |
 | `n` | choose the next pattern |
 | `Space` | the next pattern becomes the one that plays |
@@ -53,7 +52,7 @@ clear next), see [config.md](config.md).
 Perform is made to be used without the keyboard: everything below is a big button (as tall as the screen allows, 3 to 7 rows) or a pad to tap (a touch
 screen sends taps as clicks). In the wide layout the left side has, from the top:
 
-- **VIEW**: *player*, *patterns*, *● record* / *■ stop recording* and *full screen*. The player and the
+- **VIEW**: *player*, *● record* / *■ stop recording* and *full screen*. The player and the
   patterns view have no buttons of their own: a tap anywhere goes back to the pads.
 - **ISOLATE**: a switch. See below.
 - **SCENES**: the effects of each bus, saved and faded. See below.

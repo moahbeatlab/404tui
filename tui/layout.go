@@ -303,9 +303,9 @@ func (m Model) clickBody(x, y int, g geom) (tea.Model, tea.Cmd) {
 		next := model.(Model)
 		return next, tea.Batch(cmd, next.wanted())
 	case secPerform:
-		if m.perfPlayer || m.perfPatterns {
+		if m.perfPlayer {
 			// These views have no buttons: a tap anywhere goes back to the pads.
-			m.perfPlayer, m.perfPatterns = false, false
+			m.perfPlayer = false
 			return m, nil
 		}
 		return m.clickPerform(x, y)

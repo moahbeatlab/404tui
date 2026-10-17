@@ -332,8 +332,6 @@ type Model struct {
 	codes    *codeState
 	liveOn   bool
 	liveBack int
-	// perfPatterns shows the Perform view's patterns, big, in place of the pads of the bank.
-	perfPatterns bool
 	// perfPlayer shows the pattern that plays as the Sequencer draws it, with a playhead that
 	// follows the MIDI clock; perfSync is the clock tick the loop began on.
 	perfPlayer bool

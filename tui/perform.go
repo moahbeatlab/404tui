@@ -58,8 +58,6 @@ func (m Model) perfKey(name string) (tea.Model, tea.Cmd) {
 		} else {
 			m.message = "no clock to follow: the unit sends it when it plays"
 		}
-	case "v":
-		m.perfPatterns = !m.perfPatterns
 	case "f", "F":
 		bus := 1
 		if name == "F" {
@@ -166,10 +164,7 @@ func (m Model) perfBody(g geom) string {
 	if m.perfPlayer {
 		return m.perfPlayerBody(g)
 	}
-	if !m.perfPatterns {
-		return m.perfBankBody(g)
-	}
-	return m.perfPatternBody(g)
+	return m.perfBankBody(g)
 }
 
 // perfTile is a pad of the Pads view, only bigger: the same tile (number, length in bars, bus badge,
@@ -333,127 +328,6 @@ func slotText(p *proto.PadIndex) string {
 		return "—"
 	}
 	return p.String()
-}
-
-// perfPatternBody is the other Perform view, v: the samples of the pattern that plays, big, and
-// the next pattern's changes.
-func (m Model) perfPatternBody(g geom) string {
-	st := m.st
-	nowD, now := m.perfTracks(m.perfNow)
-	nextD, next := m.perfTracks(m.perfNext)
-	inNow, inNext := map[proto.PadIndex]bool{}, map[proto.PadIndex]bool{}
-	for _, t := range now {
-		inNow[t.pad] = true
-	}
-	for _, t := range next {
-		inNext[t.pad] = true
-	}
-	hasNext := m.perfNext != nil && nextD != nil
-	width := g.bodyW + g.bodyX - 3
-	cols := 1
-	switch {
-	case width >= 150:
-		cols = 3
-	case width >= 90:
-		cols = 2
-	}
-	colW := width/cols - 2
-
-	var lines []string
-	if rec := m.perfRecLine(); rec != "" {
-		lines = append(lines, rec, "")
-	}
-	lines = append(lines, m.perfTicker(nowBars(nowD)), "")
-	lines = append(lines, m.perfHead("NOW", m.perfNow, nowD, now, st.accent), "")
-	if m.perfNow == nil {
-		lines = append(lines, st.dim.Render("a  chooses the pattern that is playing"), st.dim.Render("n  chooses the one that comes next"))
-	}
-	// A track that is not in the next pattern is marked: it is the one to mute.
-	tag := func(pad proto.PadIndex) string {
-		switch {
-		case hasNext && !inNext[pad]:
-			return lipgloss.NewStyle().Foreground(st.th.hot).Bold(true).Render("  ▼ OUT NEXT")
-		case hasNext:
-			return st.dim.Render("  stays")
-		}
-		return ""
-	}
-	rowsNeeded := (len(now) + cols - 1) / cols
-	roomForBig := g.bodyH - 14
-	big := len(now) > 0 && rowsNeeded*5 <= roomForBig
-	for i := 0; i < len(now); i += cols {
-		chunk := now[i:min(i+cols, len(now))]
-		var cells [5][]string
-		for _, t := range chunk {
-			label := st.accent.Render(fmt.Sprintf("%-4s", t.pad)) + tag(t.pad)
-			if m.unitMuted(nowD, t.pad, time.Now()) {
-				label += "  " + lipgloss.NewStyle().Foreground(st.th.bad).Bold(true).Render("MUTED")
-			}
-			name := strings.TrimSpace(t.name)
-			if big {
-				wrapped := wrapName(name, colW, 3)
-				cells[0] = append(cells[0], lipgloss.NewStyle().Width(colW+2).Render(label))
-				for k := 0; k < 3; k++ {
-					text := ""
-					if k < len(wrapped) {
-						text = wrapped[k]
-					}
-					cells[k+1] = append(cells[k+1], lipgloss.NewStyle().Width(colW+2).Foreground(st.th.text).Bold(true).Render(text))
-				}
-				cells[4] = append(cells[4], strings.Repeat(" ", colW+2))
-			} else {
-				text := label + "  " + st.bold.Render(ansi.Truncate(name, max(colW-18, 8), "…"))
-				cells[0] = append(cells[0], lipgloss.NewStyle().Width(colW+2).Render(text))
-			}
-		}
-		for k := 0; k < 5; k++ {
-			if len(cells[k]) > 0 {
-				lines = append(lines, strings.Join(cells[k], ""))
-			}
-		}
-	}
-	lines = append(lines, "")
-	lines = append(lines, m.perfHead("NEXT", m.perfNext, nextD, next, lipgloss.NewStyle().Foreground(st.th.bus1).Bold(true)))
-	if hasNext {
-		var on, off []string
-		for _, t := range next {
-			if !inNow[t.pad] {
-				on = append(on, fmt.Sprintf("%s %s", t.pad, t.name))
-			}
-		}
-		for _, t := range now {
-			if !inNext[t.pad] {
-				off = append(off, fmt.Sprintf("%s %s", t.pad, t.name))
-			}
-		}
-		good := lipgloss.NewStyle().Foreground(st.th.good).Bold(true)
-		bad := lipgloss.NewStyle().Foreground(st.th.hot).Bold(true)
-		switch {
-		case len(on) == 0 && len(off) == 0:
-			lines = append(lines, st.dim.Render("the same pads play"))
-		default:
-			if len(on) > 0 {
-				lines = append(lines, good.Render("BRING IN  ")+st.text.Render(ansi.Truncate(strings.Join(on, "  ·  "), width-12, "…")))
-			}
-			if len(off) > 0 {
-				lines = append(lines, bad.Render("TAKE OUT  ")+st.text.Render(ansi.Truncate(strings.Join(off, "  ·  "), width-12, "…")))
-			}
-		}
-		lines = append(lines, "")
-		var names []string
-		for _, t := range next {
-			names = append(names, fmt.Sprintf("%s %s", t.pad, t.name))
-		}
-		lines = append(lines, st.dim.Render(ansi.Truncate(strings.Join(names, "  ·  "), width-2, "…")))
-	}
-	lines = append(lines, "")
-	lines = append(lines, m.perfBusLines(now, width)...)
-	lines = append(lines, "")
-	lines = append(lines, m.perfFxLines(width)...)
-	lines = append(lines, m.perfMovement(width)...)
-	lines = append(lines, "", st.dim.Render("a  the pattern that plays   n  the next one   Space  next becomes now   x  clear next   f F  note the effect of BUS 1, 2   Ctrl-R  record"))
-	lines = append(lines, "", st.dim.Render("tap anywhere (or v): back to the pads"))
-	return m.box("Perform", strings.Join(lines, "\n"), g.bodyW+g.bodyX-1, g.bodyH, true)
 }
 
 // perfMovement shows what the unit sends as it happens: the controllers that were moved lately as
@@ -961,8 +835,6 @@ func (m Model) perfButton(b hitBtn, x int) (tea.Model, tea.Cmd) {
 		case 0:
 			return m.perfKey("p")
 		case 1:
-			return m.perfKey("v")
-		case 2:
 			return m.toggleRecording()
 		}
 		return m.toggleFullScreen()

@@ -19,10 +19,11 @@ import (
 
 // fxScene is the effect of one bus as it was saved; a knob that was not known is -1.
 type fxScene struct {
-	set   bool
-	on    bool
-	num   int
-	knobs [3]int
+	set     bool
+	on      bool
+	onKnown bool // the unit had said whether the effect was on
+	num     int
+	knobs   [3]int
 }
 
 // busScene is the scenes of one bus and where its fade is: each bus has its own, so one can glide
@@ -42,6 +43,8 @@ type sceneState struct {
 	out    midiin.Out
 	outErr string
 	tried  time.Time
+	// last is the last message sent to the unit, as text, for the panel and the log.
+	last string
 }
 
 // glide is a fade that runs with the clock.
@@ -63,7 +66,7 @@ func (m Model) scenes() *sceneState {
 // captureScene reads the effect of a bus as the unit last said it.
 func (m Model) captureScene(bus int) fxScene {
 	f := m.fx[bus]
-	s := fxScene{set: true, on: f.on, num: -1, knobs: [3]int{-1, -1, -1}}
+	s := fxScene{set: true, on: f.on, onKnown: f.onSeen, num: -1, knobs: [3]int{-1, -1, -1}}
 	if f.numSeen {
 		s.num = f.num
 	}
@@ -80,6 +83,16 @@ func (m Model) captureScene(bus int) fxScene {
 // scene (or stops the one that runs), "bars" sets the length of a glide, "jumpa" and "jumpb" go to a scene.
 func (m Model) sceneAct(act string, bus int, pos float64) Model {
 	sc := m.scenes()
+	if act == "bars" {
+		// Here bus is the number of bars, not a bus.
+		sc.bars = bus
+		m.sc = sc
+		m.message = fmt.Sprintf("a glide takes %s", plural(sc.bars, "bar"))
+		return m
+	}
+	if bus < 0 || bus > 1 {
+		return m
+	}
 	bs := &sc.bus[bus]
 	switch act {
 	case "a", "b":
@@ -89,16 +102,13 @@ func (m Model) sceneAct(act string, bus int, pos float64) Model {
 		} else {
 			bs.b = scene
 		}
-		m.message = fmt.Sprintf("BUS %d: scene %s saved from the effect as the unit last said it", bus+1, strings.ToUpper(act))
+		m.message = fmt.Sprintf("BUS %d: scene %s saved: %s", bus+1, strings.ToUpper(act), sceneDetail(scene))
 	case "fade":
 		bs.mix, bs.glide = math.Round(pos*20)/20, nil
 		m = m.sceneApply(sc, bus)
 	case "jumpa", "jumpb":
 		bs.mix, bs.glide = map[string]float64{"jumpa": 0, "jumpb": 1}[act], nil
 		m = m.sceneApply(sc, bus)
-	case "bars":
-		sc.bars = bus
-		m.message = fmt.Sprintf("a glide takes %s", plural(sc.bars, "bar"))
 	case "glide":
 		switch {
 		case bs.glide != nil:
@@ -106,6 +116,8 @@ func (m Model) sceneAct(act string, bus int, pos float64) Model {
 			m.message = fmt.Sprintf("BUS %d: glide stopped where it is", bus+1)
 		case !bs.a.set || !bs.b.set:
 			m.message = fmt.Sprintf("BUS %d: save scene A and scene B first", bus+1)
+		case !fadeable(bs.a, bs.b):
+			m.message = fmt.Sprintf("BUS %d: nothing to fade: the unit has not said a knob value in both scenes. Turn C1 C2 C3 on the unit once, then save A and B again", bus+1)
 		case m.clock == nil || !m.clock.running:
 			m.message = "a glide runs with the unit's MIDI clock: start its sequencer (the fade bar works without)"
 		default:
@@ -177,7 +189,7 @@ func (m Model) sceneApply(sc *sceneState, bus int) Model {
 			last.knobs[k] = v
 		}
 	}
-	if !last.set || pick.on != last.on {
+	if a.onKnown && b.onKnown && (!last.set || pick.on != last.on) {
 		v := byte(0)
 		if pick.on {
 			v = 127
@@ -207,6 +219,8 @@ func (m Model) sceneSend(sc *sceneState, msg []byte) {
 		sc.out, sc.outErr = o, ""
 		m.log.Info("midi: sending to", "output", name)
 	}
+	sc.last = fmt.Sprintf("channel %d, controller %d = %d", int(msg[0]&0x0F)+1, msg[1], msg[2])
+	m.log.Debug("midi: sent", "channel", int(msg[0]&0x0F)+1, "controller", msg[1], "value", msg[2])
 	if err := sc.out.Send(msg); err != nil {
 		sc.outErr = err.Error()
 		sc.out.Close()
@@ -270,8 +284,13 @@ func (m Model) sceneLines(width int) ([]string, []btn) {
 		b.button(label, bs.glide != nil, "glide", bus, glideW)
 		band(b)
 	}
-	if sc.outErr != "" {
+	switch {
+	case sc.outErr != "":
 		lines = append(lines, st.warn.Render("cannot send to the unit: "+sc.outErr))
+	case sc.last != "":
+		lines = append(lines, st.dim.Render("last sent to the unit: "+sc.last))
+	}
+	if sc.outErr != "" {
 	} else if _, ok := m.midiSrc.(midiin.Outputs); !ok {
 		lines = append(lines, st.warn.Render("no MIDI output in this build"))
 	}
@@ -282,12 +301,57 @@ func sceneText(s fxScene) string {
 	if !s.set {
 		return "—"
 	}
-	t := fxName(max(s.num, 0))
-	if s.num < 0 {
-		t = "?"
+	var parts []string
+	if s.num >= 0 {
+		parts = append(parts, fxName(s.num))
 	}
-	if !s.on {
-		t += " off"
+	if s.onKnown && !s.on {
+		parts = append(parts, "off")
 	}
-	return t
+	known := 0
+	for _, v := range s.knobs {
+		if v >= 0 {
+			known++
+		}
+	}
+	parts = append(parts, fmt.Sprintf("%d/3 knobs", known))
+	return strings.Join(parts, " ")
+}
+
+// fadeable says whether the two scenes have anything in common to fade: a knob known in both, or the
+// on/off switch or the effect known in both.
+func fadeable(a, b fxScene) bool {
+	for k := range a.knobs {
+		if a.knobs[k] >= 0 && b.knobs[k] >= 0 {
+			return true
+		}
+	}
+	return a.onKnown && b.onKnown || a.num >= 0 && b.num >= 0
+}
+
+// sceneDetail says what a scene holds, and what the unit had not said.
+func sceneDetail(s fxScene) string {
+	var parts []string
+	if s.num >= 0 {
+		parts = append(parts, fxName(s.num))
+	}
+	if s.onKnown {
+		parts = append(parts, map[bool]string{true: "on", false: "off"}[s.on])
+	}
+	var missing []string
+	for k, v := range s.knobs {
+		if v >= 0 {
+			parts = append(parts, fmt.Sprintf("C%d %d", k+1, v))
+		} else {
+			missing = append(missing, fmt.Sprintf("C%d", k+1))
+		}
+	}
+	text := strings.Join(parts, ", ")
+	if text == "" {
+		text = "nothing known yet"
+	}
+	if len(missing) > 0 {
+		text += " (the unit has not sent " + strings.Join(missing, " ") + ": turn it once on the unit)"
+	}
+	return text
 }
