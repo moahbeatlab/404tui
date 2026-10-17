@@ -80,12 +80,22 @@
     pad(d, i);
   }
   let mixing = false;
+  // A tap mutes the pad (its level goes to 0 and back); two taps in a row make it the only one on its bus.
+  // With focus on, the pads are picked: the program decides what a tap means then.
+  let lastTap = { i: -1, t: 0 };
+  function tap(i) {
+    if (state && state.focus && state.focus.on) return send({ a: 'pad', i });
+    const now = performance.now();
+    if (lastTap.i === i && now - lastTap.t < 380) { lastTap = { i: -1, t: 0 }; return send({ a: 'solo', i }); }
+    lastTap = { i, t: now };
+    send({ a: 'mute', i });
+  }
   function pad(el, i) {
     let down = null;
     el.addEventListener('pointerdown', (e) => {
       try { el.setPointerCapture(e.pointerId); } catch (err) {}
       down = { y: e.clientY, x: e.clientX, moved: false, at: performance.now() };
-      if (!mixing) send({ a: 'pad', i });
+      if (!mixing) tap(i);
     });
     el.addEventListener('pointermove', (e) => {
       if (!down || !mixing) return;
@@ -154,6 +164,33 @@
     sync();
   });
 
+  // ---- choosing the pattern that plays now or next ----
+  let picking = 0;
+  const pickGrid = $('pickGrid');
+  for (let i = 0; i < 16; i++) {
+    const b = document.createElement('button');
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!picking) return; send({ a: 'cue', i, n: picking }); closePick(); });
+    pickGrid.appendChild(b);
+  }
+  function openPick(n) { picking = n; $('picker').hidden = false; drawPick(); }
+  function closePick() { picking = 0; $('picker').hidden = true; }
+  function drawPick() {
+    if (!picking || !state) return;
+    $('pickT').textContent = (picking === 1 ? 'Plays now' : 'Plays next') + ' · bank ' + state.bank;
+    [...pickGrid.children].forEach((b, i) => {
+      const p = (state.patterns || [])[i];
+      const ok = !!(p && p.exists);
+      b.disabled = !ok;
+      b.className = p && p.now ? 'now' : p && p.next ? 'next' : '';
+      b.innerHTML = (i + 1) + (ok ? '<small>' + p.pads + ' pad' + (p.pads === 1 ? '' : 's') + (p.now ? ' · now' : p.next ? ' · next' : '') + '</small>' : '<small>empty</small>');
+    });
+    $('pickS').textContent = (state.patterns || []).some((p) => p.exists) ? 'Tap a pattern.' : 'No patterns in this bank (the unit’s bank decides).';
+  }
+  $('cNow').addEventListener('pointerdown', (e) => { e.preventDefault(); openPick(1); });
+  $('cNext').addEventListener('pointerdown', (e) => { e.preventDefault(); openPick(2); });
+  $('pickX').addEventListener('pointerdown', (e) => { e.preventDefault(); closePick(); });
+  $('picker').addEventListener('pointerdown', (e) => { if (e.target === $('picker')) closePick(); });
+
   // ---- drawing the state, at most once a frame ----
   let queued = false;
   function schedule() { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; render(); }); } }
@@ -176,6 +213,7 @@
     const s = state;
     if (!s) return;
     if (ws && ws.readyState === 1 && rtt !== null) setConn(s.unit ? 'ok' : 'nounit', (s.unit ? '' : 'no unit · ') + rtt + ' ms');
+    $('waiting').hidden = s.unit;
     set($('bank'), 'textContent', s.bank || '–');
     set($('bpm'), 'textContent', s.bpm ? s.bpm.toFixed(1) : '–');
     set($('bar'), 'textContent', s.running || s.beat >= 0 ? 'BAR ' + s.bar + ' · BEAT ' + (s.beat + 1) + (s.running ? '' : ' (stopped)') : 'no clock');
@@ -229,6 +267,7 @@
       be.ctlEls[2].small.textContent = '#' + (mb.sel + 1);
       cls(be.ctlEls[0].b, 'on', cur.speed !== 1); cls(be.ctlEls[1].b, 'on', cur.rev);
     });
+    drawPick();
     toast(s.msg);
   }
 

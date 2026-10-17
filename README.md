@@ -121,6 +121,9 @@ the input with `404` in its name (set in Config, `6`). What it does:
   mode, starts and stops a recording, switches the focus, sets the length of a motion, records, plays and
   clears the motion slots of both buses, and makes the next pattern the one that plays: see
   [`docs/ec4.md`](docs/ec4.md) or `sp404 midimap`. The channel and the four main messages are set in Config.
+- **Web app:** `sp404 serve` runs 404tui without a screen and serves Perform to a phone or tablet on the
+  same network (pads, clock, cue, motion, focus, pad volumes, big touch buttons, landscape and portrait):
+  see [`docs/web.md`](docs/web.md).
 - **Movement in Perform:** pads hit on the unit light up in the Perform tab by how hard they were hit and
   fade out (a stripe on the tile's edge is its bus, the selected pad is tinted), every controller seen
   gets a fader and a dial with its value and `channel:number` in a CONTROLS strip (the ones moved lately

@@ -291,7 +291,14 @@ func runUI(o options, l logging, headless bool) error {
 			}
 		}()
 	}
-	_, err := program.Run()
+	final, err := program.Run()
+	if headless {
+		// Stopped from outside (Ctrl-C): the buses focus made dry go back, and that is no error.
+		tui.Shutdown(final)
+		if errors.Is(err, tea.ErrInterrupted) || errors.Is(err, tea.ErrProgramKilled) {
+			err = nil
+		}
+	}
 	return err
 }
 

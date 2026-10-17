@@ -12,7 +12,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/moahbeatlab/404tui/app"
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/proto"
 )
 
 type fakeWeb struct {
@@ -50,9 +52,7 @@ func webRig(t *testing.T) (*perfRig, *fakeWeb) {
 }
 
 func (r *perfRig) web(cmd string) {
-	next, c := r.s.m().Update(WebCommand(cmd))
-	r.s.model = next
-	runCmd(c)
+	r.s.send(WebCommand(cmd)) // through Update, with what comes back
 }
 
 // runCmd runs the commands the program would, each on its own and given a moment: a batch holds the
@@ -229,5 +229,86 @@ func TestEveryUpdatePublishesAndASnapshotIsCheap(t *testing.T) {
 	}
 	if per := time.Since(start) / 200; per > 2*time.Millisecond {
 		t.Errorf("a snapshot takes %v: too slow for the clock's rate", per)
+	}
+}
+
+func TestADoubleTapFromTheBrowserIsolatesAPadAndUndoesTheMute(t *testing.T) {
+	r, w := webRig(t)
+	bus, _ := proto.ParamByName("bus-fx")
+	level, _ := proto.ParamByName("level")
+	for i, v := range []int32{1, 1, 2} {
+		p, _ := proto.NewPadIndex(uint16(i))
+		r.s.m().unit.SetParam(bus.ID, proto.TargetPad(p), v)
+		r.s.m().unit.SetParam(level.ID, proto.TargetPad(p), 100)
+	}
+	r.s.press("r")
+	busOf := func(name string) int32 {
+		r.s.press("r")
+		return r.s.m().snap.Pads[pad(t, name).Index()].Params["bus-fx"]
+	}
+	// The first tap of a double tap mutes (level 0 on the unit), the second says "solo".
+	r.web(`{"a":"mute","i":0}`)
+	if levelOf(t, r, "A1") != 0 {
+		t.Fatal("the first tap did not mute")
+	}
+	r.web(`{"a":"solo","i":0}`)
+	if got := levelOf(t, r, "A1"); got != 100 {
+		t.Errorf("the double tap left A1 at level %d, want 100", got)
+	}
+	if busOf("A1") != 1 || busOf("A2") != 0 || busOf("A3") != 2 {
+		t.Errorf("buses %d %d %d, want 1 0 2", busOf("A1"), busOf("A2"), busOf("A3"))
+	}
+	if f := w.last(t).Focus; !f.On || f.Dry != 1 {
+		t.Errorf("focus %+v", f)
+	}
+	// Again: everything goes back.
+	r.web(`{"a":"solo","i":0}`)
+	if busOf("A1") != 1 || busOf("A2") != 1 || busOf("A3") != 2 || w.last(t).Focus.On {
+		t.Error("the second double tap did not bring the buses back")
+	}
+	// A pad that goes to no bus has nothing to isolate.
+	r.web(`{"a":"solo","i":5}`)
+	if w.last(t).Focus.On {
+		t.Error("a pad without a bus was isolated")
+	}
+}
+
+func TestAPatternIsChosenFromTheBrowserForNowAndNext(t *testing.T) {
+	r, w := webRig(t)
+	one, _ := formats.StartPattern([]proto.PadIndex{pad(t, "A1"), pad(t, "A2")}, 1)
+	for _, slot := range []string{"A2", "A3"} {
+		r.s.sim.SetPattern(pad(t, slot), pad(t, "A1"))
+		r.s.sim.AddFile(formats.PatternPath(1, pad(t, slot)), one)
+	}
+	r.s.press("r", "7")
+	st := w.last(t)
+	if len(st.Patterns) != 16 || !st.Patterns[1].Exists || !st.Patterns[2].Exists || st.Patterns[0].Exists {
+		t.Fatalf("patterns of bank A: %+v", st.Patterns)
+	}
+	r.web(`{"a":"cue","i":0,"n":2}`) // an empty slot: nothing
+	if w.last(t).Next != "—" {
+		t.Error("an empty pattern slot was taken")
+	}
+	r.web(`{"a":"cue","i":2,"n":2}`)
+	st = w.last(t)
+	if st.Next != "A3" || !st.Patterns[2].Next || st.Patterns[2].Now {
+		t.Errorf("next %q %+v", st.Next, st.Patterns[2])
+	}
+	r.web(`{"a":"nextnow"}`)
+	st = w.last(t)
+	if st.Now != "A3" || st.Next != "—" || !st.Patterns[2].Now {
+		t.Errorf("after next to now: now %q next %q", st.Now, st.Next)
+	}
+	r.web(`{"a":"cue","i":1,"n":1}`)
+	if w.last(t).Now != "A2" {
+		t.Errorf("now is %q, want A2", w.last(t).Now)
+	}
+	for _, c := range []string{`{"a":"cue","i":1,"n":3}`, `{"a":"cue","i":99,"n":1}`, `{"a":"cue","i":-1,"n":1}`} {
+		r.web(c)
+	}
+	r.web(`{"a":"cue","i":2,"n":2}`)
+	r.web(`{"a":"clearnext"}`)
+	if w.last(t).Next != "—" {
+		t.Error("clear next did not clear")
 	}
 }

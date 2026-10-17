@@ -1775,7 +1775,7 @@ func (m *Model) wanted() tea.Cmd {
 			return m.fileInfoCmd(node.Path)
 		}
 	}
-	if m.section == secPerform && m.snap != nil {
+	if m.perfActive() && m.snap != nil {
 		// The bank the unit is on: the lengths of its samples, and its patterns, are read for the tiles.
 		bank := m.perfBank()
 		if !m.factsBusy {
@@ -1795,7 +1795,7 @@ func (m *Model) wanted() tea.Cmd {
 			return m.loadPatternsQuietly(bank)
 		}
 	}
-	if m.section == secPerform && !m.previewBusy {
+	if m.perfActive() && !m.previewBusy {
 		// The patterns the Perform view shows are read to know which pads play in them.
 		for _, slot := range []*proto.PadIndex{m.perfNow, m.perfNext} {
 			if slot != nil && m.patPreview[*slot] == nil && !m.patUnread[*slot] {

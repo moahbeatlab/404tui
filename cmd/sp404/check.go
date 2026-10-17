@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -18,6 +19,7 @@ import (
 	"github.com/moahbeatlab/404tui/serialport"
 	"github.com/moahbeatlab/404tui/tui"
 	"github.com/moahbeatlab/404tui/version"
+	"github.com/moahbeatlab/404tui/web"
 )
 
 // A check is FAIL when the program cannot work on this computer, WARN when a part of it cannot
@@ -89,6 +91,7 @@ func selfCheck(o options, w io.Writer, l *slog.Logger) error {
 	} else {
 		line(levelOK, "recording", "records with "+tool)
 	}
+	line(webCheck())
 	switch ports, err := midiin.Default().Ports(); {
 	case errors.Is(err, midiin.ErrUnavailable):
 		line(levelWarn, "MIDI input", "not in this build (needs go build -tags midi, with cgo and the ALSA headers on Linux; the release builds have it)")
@@ -178,4 +181,25 @@ func writable(dir string) error {
 	}
 	f.Close()
 	return os.Remove(f.Name())
+}
+
+// webCheck starts the web page of Perform on a free local port, fetches it, and opens a WebSocket to it:
+// what a phone does, on this computer.
+func webCheck() (level, name, detail string) {
+	srv := &web.Server{}
+	l, err := srv.Listen("127.0.0.1:0")
+	if err != nil {
+		return levelFail, "web page", "cannot listen: " + err.Error()
+	}
+	defer l.Close()
+	resp, err := http.Get("http://" + l.Addr().String() + "/")
+	if err != nil {
+		return levelFail, "web page", err.Error()
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return levelFail, "web page", fmt.Sprintf("the page answers %d", resp.StatusCode)
+	}
+	urls := srv.URLs(l)
+	return levelOK, "web page", "serves Perform (sp404 serve): " + strings.Replace(urls[0], "/?key=", "/", 1)
 }

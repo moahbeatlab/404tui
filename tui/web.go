@@ -2,10 +2,13 @@ package tui
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/moahbeatlab/404tui/proto"
 )
 
 // The web page (see package web) is a second screen for Perform: the program sends it its state as JSON
@@ -24,6 +27,9 @@ func (m Model) WithWebURL(u string) Model {
 	m.webURL = u
 	return m
 }
+
+// perfActive says whether what Perform shows is kept read: on its tab, or for the browsers.
+func (m Model) perfActive() bool { return m.section == secPerform || m.web != nil }
 
 // WithWeb gives the model a web side to publish to.
 func (m Model) WithWeb(s WebSink) Model {
@@ -48,7 +54,9 @@ type webState struct {
 	Focus   webFocus  `json:"focus"`
 	Motion  webMotion `json:"motion"`
 	Fx      [2]webFx  `json:"fx"`
-	Version string    `json:"version"`
+	// Patterns are the 16 slots of the bank, to choose what plays now and next.
+	Patterns []webPattern `json:"patterns"`
+	Version  string       `json:"version"`
 }
 
 type webPad struct {
@@ -65,6 +73,14 @@ type webPad struct {
 	Keep  bool    `json:"keep"`  // kept by focus
 	Bars  string  `json:"bars"`  // its length in bars, when known
 	Dry   bool    `json:"dry"`   // put on no bus by focus
+}
+
+type webPattern struct {
+	N      int  `json:"n"` // 1 to 16
+	Exists bool `json:"exists"`
+	Pads   int  `json:"pads"`
+	Now    bool `json:"now"`
+	Next   bool `json:"next"`
 }
 
 type webFocus struct {
@@ -105,7 +121,7 @@ type webFx struct {
 
 // webSnapshot is the state of Perform for the page.
 func (m Model) webSnapshot() webState {
-	s := webState{Unit: m.unit != nil && m.snap != nil, Beat: -1, Pads: []webPad{}, Msg: m.message}
+	s := webState{Unit: m.unit != nil && m.snap != nil, Beat: -1, Pads: []webPad{}, Patterns: []webPattern{}, Msg: m.message}
 	s.Motion.Bars = m.scenes().bars
 	s.Motion.Overdub = m.scenes().overdub
 	s.Rec = m.rec != nil
@@ -125,6 +141,10 @@ func (m Model) webSnapshot() webState {
 		s.Bar, s.Beat = c.ticks/96+1, c.ticks/24%4
 	}
 	s.Now, s.Next = slotText(m.perfNow), slotText(m.perfNext)
+	for i, r := range m.patterns[bank] {
+		s.Patterns = append(s.Patterns, webPattern{N: i + 1, Exists: r.Exists, Pads: len(r.Pads),
+			Now: m.perfNow != nil && *m.perfNow == r.Slot, Next: m.perfNext != nil && *m.perfNext == r.Slot})
+	}
 	now := time.Now()
 	for i, row := range m.snap.Bank(bank) {
 		p := webPad{N: i + 1, Name: row.Name, Has: row.HasSample, Bus: int(m.busOf(row.Pad)), Level: int(row.Level),
@@ -216,6 +236,27 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.clickPad(m.snap.Bank(m.perfBank())[c.I].Pad)
+	case "solo":
+		// A double tap: the first tap muted the pad, so that is undone, and the pad is the only one on
+		// its bus (or, when that is so already, everything goes back).
+		if m.snap == nil || c.I < 0 || c.I > 15 {
+			return m, nil
+		}
+		if m.iso != nil {
+			return m.isolateOff()
+		}
+		pad := m.snap.Bank(m.perfBank())[c.I].Pad
+		var undo tea.Cmd
+		if _, muted := m.lvlWas[pad]; muted {
+			m, undo = m.levelMute(c.I)
+		}
+		if m.busOf(pad) == 0 {
+			m.message = fmt.Sprintf("%s goes to no bus: nothing to isolate", pad)
+			return m, undo
+		}
+		m.message = fmt.Sprintf("%s alone on %s: double tap again to bring the others back", pad, busName(m.busOf(pad)))
+		nm, cmd := m.setIsolated(map[proto.PadIndex]bool{pad: true})
+		return nm, tea.Batch(undo, cmd)
 	case "level":
 		nm, cmd := m.levelSet2(c.I, int32(c.Value))
 		return nm, cmd
@@ -240,6 +281,20 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		}
 	case "dub":
 		return m.motionOverdub(), nil
+	case "cue":
+		// A pattern of the bank on show is the one that plays (n 1) or the next (n 2).
+		rows := m.patterns[m.perfBank()]
+		if c.I < 0 || c.I >= len(rows) || !rows[c.I].Exists || (c.N != 1 && c.N != 2) {
+			return m, nil
+		}
+		slot := rows[c.I].Slot
+		if c.N == 1 {
+			m.perfNow, m.perfAuto = &slot, false
+		} else {
+			m.perfNext = &slot
+		}
+		m.logCue()
+		return m, m.wanted()
 	case "nextnow":
 		return m.perfKey(" ")
 	case "clearnext":

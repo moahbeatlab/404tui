@@ -226,6 +226,14 @@ func (m Model) isolateStatus() []string {
 	return []string{st.dim.Render("focus: tap it, then the pads that keep their bus (or double tap a pad)")}
 }
 
+// Shutdown puts back what the program changed on the unit (the buses of the pads that focus made dry),
+// for the end of a program that is stopped from outside (the serve command, on Ctrl-C).
+func Shutdown(final tea.Model) {
+	if m, ok := final.(Model); ok {
+		m.restoreIsolationNow()
+	}
+}
+
 // restoreIsolationNow puts the buses back before the program ends, so a pad is not left dry.
 func (m Model) restoreIsolationNow() {
 	if m.iso == nil || len(m.iso.was) == 0 || m.unit == nil {
