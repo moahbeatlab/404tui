@@ -70,3 +70,16 @@ CC 16/17/18 sweeps on ch 1/2 in their log: source unknown (EC4 vs unit) so not m
 **How to apply:** research first before building uncertain live features; every mode shows its keys on screen;
 commit AND push after each change ([[feedback_404tui_commit_push]]); no Claude-Session URL ([[feedback-commit-messages]]);
 see [[project_404tui_slicer_roadmap]] for the earlier slicer work.
+
+## State on 2026-10-17 evening (main, v0.1-alpha released, tag replaced after MIDI on all Windows builds)
+- Perform is mouse/touch first: big buttons (`tui/buttons.go`, `rowBuilder`, hit boxes in `viewCache.hit`), VIEW panel
+  (record, full screen, focus = the old isolate), MOTION panel (length 1/2/3/4/8 bars; per bus four motion slots that
+  record C1-C3 from a bar of the unit's clock and loop them back as MIDI CC; clear; sparkline on a slot).
+  Scenes (A/B snapshots + glide, `tui/scenes.go`) are built and tested but switched off (`scenesOn=false`).
+  Player view, patterns view, controls panel, keys panel are gone. One click mutes a pad (computer only), double tap focus.
+- MIDI output exists on all platforms (`midiin.Outputs`); Windows MIDI is pure Go winmm (no cgo).
+- Faderfox EC4 map for a group `404tui`: pushes = notes 60-75 on channel 16 (`tui/ec4.go`, `sp404 midimap`, docs/ec4.md).
+- `sp404 check` self-test; docs/ has one page per tab; CI green on Linux/macOS/Windows; release via tag `v*` (workflow).
+- Ideas offered, not built: LED feedback to the EC4, encoder turns as macro depth, save motions with the project,
+  overdub, glide between motion slots. Unverified on hardware: whether the unit follows CC sent by the app.
+- Gotchas: keep go build cache small (disk filled once: `go clean -cache`); test chains must not commit after a failing test.
