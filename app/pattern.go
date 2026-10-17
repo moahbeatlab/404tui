@@ -415,10 +415,15 @@ func (d *PatternDetail) Split(pad proto.PadIndex, col int) (n int, on []bool) {
 	for _, note := range notes {
 		part := step / uint32(n)
 		off := note.Tick - start
-		if n > 1 && (uint32(note.Length) != part || off%part != 0 || int(off/part) >= n) {
-			return 1, []bool{true}
+		idx := int(off / max(part, 1))
+		if n > 1 && (uint32(note.Length) != part || off%part != 0) || idx >= n {
+			if n == 1 {
+				idx = 0
+			} else {
+				return 1, []bool{true}
+			}
 		}
-		on[off/max(part, 1)] = true
+		on[idx] = true
 	}
 	return n, on
 }
