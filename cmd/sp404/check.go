@@ -91,7 +91,7 @@ func selfCheck(o options, w io.Writer, l *slog.Logger) error {
 	}
 	switch ports, err := midiin.Default().Ports(); {
 	case errors.Is(err, midiin.ErrUnavailable):
-		line(levelWarn, "MIDI input", "not in this build (needs go build -tags midi; the release builds have it, except Windows ARM)")
+		line(levelWarn, "MIDI input", "not in this build (needs go build -tags midi, with cgo and the ALSA headers on Linux; the release builds have it)")
 	case err != nil:
 		line(levelWarn, "MIDI input", err.Error())
 	default:

@@ -7,7 +7,8 @@
 #   make linux | windows | macos
 #   make dist VERSION=0.2 stamp a version (else the one in version/version.go stays)
 #
-# Linux and Windows build without cgo, from any computer. macOS needs cgo (the serial port
+# Windows builds without cgo, from any computer, MIDI included. Linux builds without cgo too, but then
+# has no MIDI input (that needs ALSA; the release builds it on Linux). macOS needs cgo (the serial port
 # library asks IOKit for the USB ports), so the macOS binaries are built on a Mac; there both
 # architectures are built and joined into one universal binary.
 
@@ -27,8 +28,9 @@ WINDOWS := windows-amd64 windows-arm64
 
 .PHONY: build test check vet fmt dist linux windows macos clean
 
-# MIDI input is built in on a Mac (it needs cgo); elsewhere it is left out.
-MIDITAGS := $(if $(filter Darwin,$(shell uname -s)),-tags midi,)
+# MIDI input needs cgo on a Mac (CoreMIDI) and Linux (ALSA headers: libasound2-dev); Windows has it
+# always (no cgo). Where the headers are missing the build goes on without MIDI.
+MIDITAGS := $(if $(filter Darwin,$(shell uname -s)),-tags midi,$(if $(shell pkg-config --exists alsa 2>/dev/null && echo y),-tags midi,))
 
 build:
 	go build $(MIDITAGS) -ldflags "$(LDFLAGS)" -o $(BIN) $(PKG)

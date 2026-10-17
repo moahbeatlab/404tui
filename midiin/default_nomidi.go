@@ -1,4 +1,4 @@
-//go:build !midi
+//go:build !midi && !windows
 
 package midiin
 

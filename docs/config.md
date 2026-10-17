@@ -57,8 +57,7 @@ messages on that channel, `note 60` … or `cc 20` (a controller turned up past 
 | `note 62` | the next pattern becomes the one that plays |
 | `note 63` | clear the next pattern |
 
-MIDI input is built in on macOS, Windows (not ARM) and Linux release builds (`go build -tags midi`
-needs cgo; on Linux the ALSA headers). The line under the settings says whether it is listening.
+MIDI input is built in on every release build (macOS: CoreMIDI, Linux: ALSA, Windows: winmm, on Intel and ARM alike). A build from source needs `go build -tags midi` on macOS and Linux (cgo; on Linux the ALSA headers `libasound2-dev`); on Windows there is nothing to add. The line under the settings says whether it is listening.
 
 ### MIDI monitor
 

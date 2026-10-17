@@ -107,8 +107,7 @@ selected pad already and makes no sound.
 
 ### MIDI (experimental)
 
-The unit sends MIDI over USB: a note for each pad hit, and its clock and start/stop. On a Mac, `make build`
-builds MIDI input in (`go build -tags midi`; it needs cgo); other builds leave it out. 404tui listens to
+The unit sends MIDI over USB: a note for each pad hit, and its clock and start/stop. MIDI input is in every release (macOS CoreMIDI, Linux ALSA, Windows winmm, Intel and ARM). Building yourself, `make build` includes it on a Mac, on Linux when the ALSA headers are installed (`libasound2-dev`) and on Windows always; otherwise `go build -tags midi` (needs cgo). 404tui listens to
 the input with `404` in its name (set in Config, `6`). What it does:
 
 - **Pads:** a note on channels 1 to 10 is a pad hit (pad 1 is note 48, pad 13 note 36), so the pad codes
