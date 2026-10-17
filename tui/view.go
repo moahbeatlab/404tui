@@ -2873,19 +2873,10 @@ func (sp stepSpan) gap(i int) string {
 	if gaps <= 0 || sp.extra <= 0 {
 		return base
 	}
-	// Every gap gets the same share, the gaps after a beat what is left of it split evenly; what
-	// does not split evenly is left out, so the steps stay regular.
-	add := sp.extra / gaps
-	if (i+1)%4 == 0 {
-		// What does not split over every gap goes to the gaps after a beat, to the last cell.
-		if beats := gaps / 4; beats > 0 {
-			rest := sp.extra % gaps
-			add += rest / beats
-			if (i+1)/4-1 < rest%beats {
-				add++
-			}
-		}
-	}
+	// The spare cells are shared out over all the gaps, a cell more here and there, so no gap is
+	// much wider than the others (the beats and the bar line are already a cell or two wider).
+	i = min(i, gaps-1)
+	add := sp.extra*(i+1)/gaps - sp.extra*i/gaps
 	if strings.Contains(base, "│") {
 		return strings.Repeat(" ", 1+add/2) + "│" + strings.Repeat(" ", 1+add-add/2)
 	}
