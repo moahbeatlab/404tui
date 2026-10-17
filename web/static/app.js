@@ -24,6 +24,8 @@
   function setConn(kind, text) {
     $('conn').className = 'conn ' + kind;
     $('connText').textContent = text;
+    $('conn2').className = 'conn ' + kind;
+    $('connText2').textContent = text;
   }
   function open() {
     clearTimeout(retryTimer);

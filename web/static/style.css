@@ -43,6 +43,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 .brand span { color: var(--text); }
 .conn { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 13px; }
 .conn i { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); }
+#conn2 { display: none; }
 .conn.ok i { background: var(--good); box-shadow: 0 0 8px var(--good); }
 .conn.nounit i { background: var(--accent); }
 .conn.bad i { background: var(--hot); }
@@ -77,7 +78,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 #beats i.on { background: var(--good); }
 #beats i.on:first-child { background: var(--hot); }
 #beats.stopped i { opacity: .4; }
-#bar { font-weight: 700; font-size: 15px; white-space: nowrap; }
+#bar { font-weight: 700; font-size: 15px; }
 .cue { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .cue button { text-align: left; background: var(--tile); border-radius: 10px; padding: 6px 10px; min-height: 54px; display: grid; align-content: center; }
 .cue button:active { background: #45454c; }
@@ -191,13 +192,13 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
   #app { grid-template-rows: 1fr; grid-template-areas: "rail pads motion"; }
   .panel { padding: 8px; }
   #rail { gap: 6px; }
-  .cue b { font-size: 18px; }
+  .cue b { font-size: 18px; } #bar { font-size: 13px; }
   .big { min-height: 42px; padding: 4px; font-size: 13px; }
   .ctl { grid-auto-flow: column; gap: 8px; } .ctl b { font-size: 14px; }
   .slot b { font-size: 17px; } .slot svg { height: 16px; }
   .seg button { min-height: 40px; } .dub { min-height: 40px; }
   .pad { padding: 5px 6px 0; } .pad .lv { margin: 0 -6px; height: 9px; }
-  .conn { position: fixed; top: 4px; right: 8px; z-index: 2; }
+  .conn { display: none; } #conn2 { display: flex; margin-top: 2px; }
   .bankbpm { gap: 10px; } .bank b { font-size: 30px; } .bankbpm b { font-size: 24px; }
 }
 @media (orientation: landscape) and (min-width: 1100px) {
