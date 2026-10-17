@@ -340,13 +340,13 @@ func (m Model) perfSidebar(width, h int) []string {
 	half := width / 2
 	// The faders take the height that is left: the other panels need about 24 lines side by side, a
 	// little more stacked, and the banner of a recording one more.
-	m.btnH = btnRows(h)
-	spare, per := h-(34+4*m.btnH), 2
+	m.btnH, m.motionH = 3, motionRows(h)
+	spare, per := h-(26+3*m.motionH+14), 2
 	if !wideTop {
 		spare -= 6
 	}
 	if !wide {
-		spare, per = h-(50+4*m.btnH), 3
+		spare, per = h-(42+3*m.motionH+14), 3
 	}
 	if m.rec != nil {
 		spare--

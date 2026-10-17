@@ -193,3 +193,13 @@ func (b *rowBuilder) row(w int, specs ...btnSpec) {
 		b.add(b.twoLine(b.n, w, sp), w)
 	}
 }
+
+// motionRows is how tall the buttons of the MOTION panel are for a sidebar h rows high: they take what
+// the other panels leave, in odd numbers so that a label has a middle row.
+func motionRows(h int) int {
+	n := clamp((h-33)/3, 3, 11)
+	if n%2 == 0 {
+		n--
+	}
+	return n
+}

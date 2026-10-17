@@ -199,7 +199,7 @@ func (m Model) motionLines(width int) ([]string, []btn) {
 	slotW := max((width-motionSlots-8)/(motionSlots+1), 8)
 	// How long a motion is, in bars.
 	sc := m.scenes()
-	bb := newRowBuilder(st, m.btnH)
+	bb := newRowBuilder(st, m.motionH)
 	bb.text(st.dim.Render("length: "))
 	lenBtn := max((width-8-5-6)/5, 5)
 	for _, n := range []int{1, 2, 3, 4, 8} {
@@ -215,7 +215,7 @@ func (m Model) motionLines(width int) ([]string, []btn) {
 		head := fmt.Sprintf("BUS %d", bus+1)
 		lines = append(lines, lipgloss.NewStyle().Foreground(colour).Bold(true).Render(head)+st.dim.Render("  motion: tap a slot to record, play or stop it"))
 		// Two lines of text (the slot and what it holds) are centred in a band of even height.
-		b := newRowBuilder(st, m.btnH+1)
+		b := newRowBuilder(st, m.motionH+1)
 		specs := make([]btnSpec, motionSlots)
 		for slot := range specs {
 			specs[slot] = m.motionSpec(bus, slot)

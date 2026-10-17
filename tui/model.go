@@ -432,6 +432,7 @@ type Model struct {
 	iso        *isolation
 	sc         *sceneState
 	btnH       int // how tall the buttons of Perform are
+	motionH    int // and those of its MOTION panel
 	clickPadAt proto.PadIndex
 	clickAt    time.Time
 	// loopStart is when the looping pattern started, and loopRound how long a round lasts.
