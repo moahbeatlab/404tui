@@ -214,7 +214,8 @@ func (m Model) motionLines(width int) ([]string, []btn) {
 		colour, _ := st.th.busColour(int32(bus + 1))
 		head := fmt.Sprintf("BUS %d", bus+1)
 		lines = append(lines, lipgloss.NewStyle().Foreground(colour).Bold(true).Render(head)+st.dim.Render("  motion: tap a slot to record, play or stop it"))
-		b := newRowBuilder(st, m.btnH)
+		// Two lines of text (the slot and what it holds) are centred in a band of even height.
+		b := newRowBuilder(st, m.btnH+1)
 		specs := make([]btnSpec, motionSlots)
 		for slot := range specs {
 			specs[slot] = m.motionSpec(bus, slot)

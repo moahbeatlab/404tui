@@ -8,12 +8,18 @@ import (
 )
 
 // The Perform view is meant to be used with a mouse or a touch screen: what can be done is drawn as
-// big buttons, as tall as the screen allows (2 to 7 rows), and the places they were drawn at are kept
+// big buttons, as tall as the screen allows (3, 5 or 7 rows), and the places they were drawn at are kept
 // for the clicks.
 
 // btnRows is how tall the buttons are for a sidebar h rows high: the other panels need about 41 rows
 // and the buttons use 5 times their height, so a taller screen makes bigger buttons.
-func btnRows(h int) int { return clamp((h-41)/5, 2, 7) }
+func btnRows(h int) int {
+	n := clamp((h-41)/5, 3, 7)
+	if n%2 == 0 {
+		n-- // an odd height has a middle row for the label
+	}
+	return n
+}
 
 // btn is a place of a panel that does something when it is clicked: its column, width and height,
 // counted from the start of the panel's text, and the row where it starts.
