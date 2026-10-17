@@ -357,7 +357,9 @@ pattern, from the grid or from an expanded track, back to the patterns under the
 - Enter opens the step editor. Notes are blocks as tall as their velocity and as wide as
   they last. `h j k l` move, Enter puts a note in or takes it out, `,` `.` change the
   velocity by 1 and `<` `>` by 10, `*` sets it to 127, `+` `-` make a note a step longer or
-  shorter, and `u` undoes. `b` moves the pattern's pads to another bank.
+  shorter, and `u` undoes. `i` splits the step into 2, 3 (a triplet) or 4 sub-steps, like the
+  unit's SUBSTEP, and then back to one note; a step with sub-steps is drawn `²` `³` `⁴` and its
+  detail line lists where each starts. `b` moves the pattern's pads to another bank.
 - **Mute and solo:** `m` mutes a pad and `s` solos it (in Pads and in the editor). They only
   change what this computer plays: muted rows show a red `MUTE`, soloed ones a green `SOLO`,
   and pads you do not hear are greyed. `S` in the editor saves the pattern **as you hear it**

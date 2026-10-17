@@ -1422,17 +1422,24 @@ func (m Model) patternDetail(g geom) string {
 			for _, n := range notes {
 				loudest = max(loudest, int(n.Velocity))
 			}
-			length := float64(notes[0].Length) / float64(max(d.StepTicks(), 1))
-			here := where + st.text.Render(fmt.Sprintf("  vel %d  ", loudest)) +
-				st.accent.Render(levelBar(16, loudest, 127)) +
-				st.text.Render(fmt.Sprintf("  ·  %s  ·  ", plural(int(math.Round(length)), "step"))) +
-				m.offsetLabel(d, notes[0].Tick)
-			// A note played chromatically on the unit has a pitch byte; what it means in
-			// semitones is not known, so it is shown as it is.
-			if pitch := notes[0].Pitch; pitch != 0 {
-				here += st.dim.Render("  ·  ") + st.accent.Render(fmt.Sprintf("chromatic: pitch byte %d (0x%02X)", pitch, pitch))
+			if len(notes) > 1 {
+				lines = append(lines, "", where+st.text.Render(fmt.Sprintf("  vel %d  ", loudest))+
+					st.accent.Render(levelBar(16, loudest, 127))+
+					st.text.Render("  ·  ")+st.hot.Render(fmt.Sprintf("%d sub-steps", len(notes)))+
+					st.dim.Render("  at "+m.substepOffsets(d, notes)+"  ·  i changes them"))
+			} else {
+				length := float64(notes[0].Length) / float64(max(d.StepTicks(), 1))
+				here := where + st.text.Render(fmt.Sprintf("  vel %d  ", loudest)) +
+					st.accent.Render(levelBar(16, loudest, 127)) +
+					st.text.Render(fmt.Sprintf("  ·  %s  ·  ", plural(int(math.Round(length)), "step"))) +
+					m.offsetLabel(d, notes[0].Tick)
+				// A note played chromatically on the unit has a pitch byte; what it means in
+				// semitones is not known, so it is shown as it is.
+				if pitch := notes[0].Pitch; pitch != 0 {
+					here += st.dim.Render("  ·  ") + st.accent.Render(fmt.Sprintf("chromatic: pitch byte %d (0x%02X)", pitch, pitch))
+				}
+				lines = append(lines, "", here)
 			}
-			lines = append(lines, "", here)
 		} else {
 			lines = append(lines, "", where+st.dim.Render("  no note  ·  Enter puts one"))
 		}
@@ -1483,6 +1490,15 @@ func (m Model) patternHelp(d *app.PatternDetail) []helpGroup {
 		{"trig", []helpKey{{"c C", "condition"}, {"y", "roll the dice again"}}},
 		history,
 	}
+}
+
+// substepOffsets lists where the notes of a step start in it, in ticks from its start: "0 · 60".
+func (m Model) substepOffsets(d *app.PatternDetail, notes []formats.NoteRecord) string {
+	var parts []string
+	for _, n := range notes {
+		parts = append(parts, fmt.Sprint(int(n.Tick)-int(d.StepTick(m.patCol))))
+	}
+	return strings.Join(parts, " · ") + " ticks"
 }
 
 // offsetLabel says how far a note at tick is off the grid, as swing, shift or humanize leave
@@ -2641,6 +2657,7 @@ func (m Model) noteGlyph(velocity int) (string, lipgloss.Style) {
 func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow bool, sp stepSpan) string {
 	st := m.st
 	cover, _, start := laneCover(d, pad)
+	counts := cellCounts(d, pad)
 	// A pad that is not heard in the mix on this computer has its notes greyed out, and so do the
 	// tracks around one that is expanded, so the eye stays on it.
 	dimmed := !heard(pad, m.muted, m.soloed)
@@ -2668,6 +2685,10 @@ func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow boo
 				// A note with a condition: half lit, in a colour of its own (green: no other mark in
 				// the grid has it).
 				mark, style = "◐", lipgloss.NewStyle().Foreground(st.th.cond).Bold(true)
+			}
+			if counts[c] > 1 {
+				// Sub-steps: the step holds several notes, and the mark says how many.
+				mark = substepMark(counts[c])
 			}
 		}
 		// A step is w cells: its mark, then dashes when the note goes on, else spaces.
@@ -2702,6 +2723,27 @@ func (m Model) noteRow(d *app.PatternDetail, pad proto.PadIndex, onCursorRow boo
 		}
 	}
 	return b.String()
+}
+
+// substepMarks are the marks of a step with 2, 3 and 4 notes in it.
+var substepMarks = []string{"²", "³", "⁴"}
+
+func substepMark(n int) string {
+	return substepMarks[clamp(n-2, 0, len(substepMarks)-1)]
+}
+
+// cellCounts is how many notes of a pad start in each column of the grid.
+func cellCounts(d *app.PatternDetail, pad proto.PadIndex) []int {
+	counts := make([]int, d.Grid.Steps)
+	if d.Length == 0 {
+		return counts
+	}
+	for _, n := range d.Notes {
+		if n.Pad == pad {
+			counts[min(int(uint64(n.Tick)*uint64(d.Grid.Steps)/uint64(d.Length)), d.Grid.Steps-1)]++
+		}
+	}
+	return counts
 }
 
 // conditioned says whether a note that starts in the step has a condition that is not plain.

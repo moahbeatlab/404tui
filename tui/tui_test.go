@@ -6595,3 +6595,49 @@ func TestABusKnobsAreItsChannelsCC16To18(t *testing.T) {
 	s.model = m
 	s.press("7") // the view draws without a MIDI monitor too
 }
+
+func TestISplitsAStepIntoSubstepsAndTheGridCountsThem(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 170, Height: 54})
+	s.press("N", "enter", "enter", "tab", "enter")
+	notesOf := func() []formats.NoteRecord {
+		data, _ := s.sim.File("ROLAND/SP-404MKII/PROJECT_01/PTN/PTN00001.BIN")
+		notes, _ := formats.NoteRecords(data)
+		return notes
+	}
+	pad := s.m().pattern.Grid.Rows[0].Pad
+	step := s.m().pattern.StepTicks()
+	s.press("l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "l", "x") // an empty step 13
+	at := s.m().pattern.StepTick(13)
+	inStep := func() []uint32 {
+		var ticks []uint32
+		for _, n := range notesOf() {
+			if n.Pad == pad && n.Tick >= at && n.Tick < at+step {
+				ticks = append(ticks, n.Tick-at)
+			}
+		}
+		return ticks
+	}
+	for _, c := range []struct {
+		want  int
+		ticks []uint32
+	}{{2, []uint32{0, step / 2}}, {3, []uint32{0, step / 3, 2 * (step / 3)}}, {4, []uint32{0, step / 4, step / 2, 3 * step / 4}}} {
+		want, ticks := c.want, c.ticks
+		s.press("i")
+		got := inStep()
+		if len(got) != len(ticks) {
+			t.Fatalf("%d sub-steps: notes at %v", want, got)
+		}
+		for i := range got {
+			if got[i] != ticks[i] {
+				t.Errorf("%d sub-steps: notes at %v, want %v", want, got, ticks)
+			}
+		}
+		s.shows(fmt.Sprintf("%d sub-steps", want))
+	}
+	s.shows("⁴")
+	s.press("i")
+	if len(inStep()) != 1 {
+		t.Errorf("after the fourth, i gives one note again: %v", inStep())
+	}
+}

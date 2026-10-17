@@ -1073,6 +1073,8 @@ func (m Model) patternsKey(name string) (tea.Model, tea.Cmd) {
 			return m.toggleNote()
 		case "x":
 			return m.toggleNote()
+		case "i":
+			return m.cycleSubsteps()
 		case "H", "L", "(", ")":
 			// Nudge the note off (or back toward) the grid: H L by 5 ticks, ( ) by 1.
 			by := map[string]int{"H": -5, "L": 5, "(": -1, ")": 1}[name]
@@ -3530,6 +3532,48 @@ func (m Model) toggleNote() (tea.Model, tea.Cmd) {
 	return m.editPatternBytes(func(b []byte) ([]byte, error) {
 		return formats.InsertNote(b, tick, pad, 127, length)
 	}, fmt.Sprintf("%s %s: note on %s at velocity 127", d.Slot, m.patStepLabel(), pad))
+}
+
+// cycleSubsteps splits the step at the cursor into 1, 2, 3 or 4 notes of equal length (the unit's
+// SUBSTEP), going on to the next number each time. A step with no note gets a whole one first.
+func (m Model) cycleSubsteps() (tea.Model, tea.Cmd) {
+	pad, _, ok := m.cellOfPattern()
+	if !ok {
+		return m, nil
+	}
+	d := m.pattern
+	notes := d.CellNotes(pad, m.patCol)
+	n := len(notes)%4 + 1
+	vel := uint8(127)
+	if len(notes) > 0 {
+		vel = 0
+		for _, o := range notes {
+			vel = max(vel, o.Velocity)
+		}
+	}
+	start, step := d.StepTick(m.patCol), max(d.StepTicks(), 1)
+	part := step / uint32(n)
+	offsets := make([]int, len(notes))
+	for i, o := range notes {
+		offsets[i] = o.Offset
+	}
+	// Taking out goes from the back, so that the offsets of the ones still to go stay right.
+	slices.Sort(offsets)
+	slices.Reverse(offsets)
+	return m.editPatternBytes(func(b []byte) ([]byte, error) {
+		for _, at := range offsets {
+			if err := formats.RemoveNote(b, at); err != nil {
+				return nil, err
+			}
+		}
+		var err error
+		for i := range n {
+			if b, err = formats.InsertNote(b, start+uint32(i)*part, pad, vel, uint16(min(part, 65535))); err != nil {
+				return nil, err
+			}
+		}
+		return b, nil
+	}, fmt.Sprintf("%s %s: %s", d.Slot, m.patStepLabel(), map[int]string{1: "one note", 2: "2 sub-steps", 3: "3 sub-steps (triplet)", 4: "4 sub-steps"}[n]))
 }
 
 // condKeys are the keys of the notes at the cursor step: the sixteenth each starts in.
