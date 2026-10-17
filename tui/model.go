@@ -1623,8 +1623,15 @@ func (m Model) polled(msg pollMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	if msg.changed && m.busy == "" {
+		// Something was changed on the unit's own panel: what was read of its patterns is old too.
+		m.patterns = map[int][]app.PatternRow{}
+		m.patPreview = map[proto.PadIndex]*app.PatternDetail{}
 		m.busy = "reading the unit"
-		return m, tea.Batch(codeCmd, m.load(""))
+		cmds := []tea.Cmd{codeCmd, m.load("")}
+		if m.pattern != nil && m.patSel == nil && !m.patSubMode {
+			cmds = append(cmds, m.openPattern(m.pattern.Slot, "changed on the unit"))
+		}
+		return m, tea.Batch(cmds...)
 	}
 	return m, tea.Batch(codeCmd, m.wanted())
 }

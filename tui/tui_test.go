@@ -6736,3 +6736,37 @@ func TestTheTemplateListScrollsToKeepTheCursorInViewOnASmallScreen(t *testing.T)
 	s.press("N", "G")
 	s.shows("Footwork · bars 1-2", "Footwork")
 }
+
+func TestAPatternEditedOnTheUnitIsReadAgainWhenTheUnitSaysSo(t *testing.T) {
+	s := open(t)
+	rec := func(delta byte, pad proto.PadIndex) []byte {
+		return []byte{delta, 0x2F + byte(pad.Index()%80), byte(pad.Index() / 80), 0, 0x7F, 0x40, 0x10, 0}
+	}
+	end := [][]byte{{0, 0x8C, 0, 0, 0, 0, 0, 0}, {4, 0, 0, 0, 3, 0, 0, 0}}
+	file := func(pads ...proto.PadIndex) []byte {
+		var b []byte
+		for _, p := range pads {
+			b = append(b, rec(240, p)...)
+		}
+		for _, r := range end {
+			b = append(b, r...)
+		}
+		return b
+	}
+	s.sim.AddFile(formats.PatternPath(1, pad(t, "B2")), file(pad(t, "A1"), pad(t, "A2")))
+	s.press("tab", "]", "l", "enter")
+	s.shows("Pattern B2", "A1   kick", "A2   snare")
+	if n := len(s.m().pattern.Notes); n != 2 {
+		t.Fatalf("the open pattern has %d notes, want 2", n)
+	}
+	// The pattern is changed on the unit's own panel, which says that the project changed.
+	s.sim.AddFile(formats.PatternPath(1, pad(t, "B2")), file(pad(t, "A1")))
+	s.sim.Notify([]byte{proto.ReplyChanged, 0, 0, 0, 0})
+	for i := 0; i < 3; i++ {
+		s.send(s.pollResult())
+	}
+	s.shows("Pattern B2", "changed on the unit")
+	if n := len(s.m().pattern.Notes); n != 1 {
+		t.Errorf("the open pattern has %d notes, want the 1 the unit has now", n)
+	}
+}

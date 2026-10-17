@@ -40,7 +40,12 @@ Faderfox EC4 feeds the SP (control channel 16 by default, notes 60-63 / CC >= 64
 - New pattern dialog: groove templates (+14 genres in `formats/grooves.go`), list in columns, 2-bar preview,
   "All pads held"; grid spreads spare cells evenly. Expanded-track "roll" drawing tried then reverted.
 - Ctrl-F full screen (header/tabs away); GitHub Actions CI + release builds on `v*` tag; header link state top right.
-- Known after pull (2026-10-17): `go vet` clean, but `TestRawMIDIBytesDriveARunningProgram` FAILS on main (clock
+- 2026-10-17 later: Perform redraw cached (`viewCache`, every 6th clock tick) fixed the slow View; `sp404 check`
+  + `make check` + `tui.Smoke` added; CI runs tests + check on Linux/macOS/Windows (Windows path fixes in `app`);
+  docs/ has one page per tab; double-click start (Windows holds console on error, macOS `packaging/404tui.command`);
+  patterns re-read when the unit says the project changed; release workflow dry run OK on all 5 builds;
+  release tag format `v0.1-alpha` (a `-` makes it a prerelease).
+- (Fixed) Earlier on 2026-10-17: `go vet` clean, but `TestRawMIDIBytesDriveARunningProgram` FAILS on main (clock
   counted 169 of 216 ticks in the 3 s sleep, live mode not yet off). Cause: Perform View at 170 cols costs ~15 ms
   (lipgloss Render / ansi.StringWidth in perfSplitBody, grid, tile) and runs once per MIDI message, so the loop falls
   behind (~50 clock msgs/s at 125 BPM = most of a core). Fix options: make the test wait until the ticks arrive;
