@@ -70,5 +70,8 @@ func EC4Sheet() string {
 		}
 		fmt.Fprintf(&b, "  E%-2d  note %-3d  %s\n", i+1, note, e.name)
 	}
+	fmt.Fprintf(&b, "\nThe turn of each encoder (relative, 64 is none) sends CC %d to %d on the same channel: E1 is CC %d, E16 is CC %d.\n",
+		ec4FirstCC, ec4FirstCC+15, ec4FirstCC, ec4FirstCC+15)
+	b.WriteString("In the Levels view (E16) the turns are the volumes of pad 1 to 16 and the pushes E1 to E15 mute a pad; in Stage the turns do nothing.\n")
 	return b.String()
 }
