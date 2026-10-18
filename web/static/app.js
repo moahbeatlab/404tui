@@ -180,20 +180,21 @@
   // tabs (portrait), and the switch between Perform and the Looper (the tab in portrait, the button in the top bar)
   const app = $('app');
   app.dataset.tab = store.get('tab') === 'looper' ? 'pads' : (store.get('tab') || 'pads');
-  app.dataset.view = store.get('view') === 'looper' ? 'looper' : 'perform';
+  app.dataset.view = ['looper', 'patterns'].includes(store.get('view')) ? store.get('view') : 'perform';
   const tabBtns = document.querySelectorAll('#tabs button');
   function syncTabs() {
-    tabBtns.forEach((x) => x.classList.toggle('on', app.dataset.view === 'looper' ? x.dataset.tab === 'looper' : x.dataset.tab === app.dataset.tab));
-    $('viewBtn').textContent = app.dataset.view === 'looper' ? 'PERFORM' : 'LOOPER';
-    $('viewBtn').classList.toggle('on', app.dataset.view === 'looper');
+    tabBtns.forEach((x) => x.classList.toggle('on', app.dataset.view !== 'perform' ? x.dataset.tab === app.dataset.view : x.dataset.tab === app.dataset.tab));
+    // The button in the top bar (landscape) names the view it goes to: Perform, Looper, Patterns, and round.
+    $('viewBtn').textContent = { perform: 'LOOPER', looper: 'PATTERNS', patterns: 'PERFORM' }[app.dataset.view];
+    $('viewBtn').classList.toggle('on', app.dataset.view !== 'perform');
   }
-  function setView(v) { app.dataset.view = v; store.set('view', v); syncTabs(); }
+  function setView(v) { app.dataset.view = v; store.set('view', v); syncTabs(); try { if (state) render(); } catch (e) { /* before the first state */ } }
   tabBtns.forEach((b) => b.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    if (b.dataset.tab === 'looper') return setView('looper');
+    if (b.dataset.tab === 'looper' || b.dataset.tab === 'patterns') return setView(b.dataset.tab);
     app.dataset.tab = b.dataset.tab; store.set('tab', b.dataset.tab); setView('perform');
   }));
-  $('viewBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); setView(app.dataset.view === 'looper' ? 'perform' : 'looper'); });
+  $('viewBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); setView({ perform: 'looper', looper: 'patterns', patterns: 'perform' }[app.dataset.view]); });
   syncTabs();
 
   // ---- the Looper ----
@@ -325,6 +326,26 @@
     set($('lpLast'), 'textContent', l.later || 'Tap a pad, then DELETE; or work with the Slicer.');
   }
 
+  // ---- the Patterns page ----
+  const ptnBtns = [];
+  for (let i = 0; i < 16; i++) {
+    const b = document.createElement('button');
+    b.innerHTML = '<span>' + (i + 1) + '</span><small></small>';
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!b.disabled) send({ a: 'ptn', i }); });
+    $('ptnGrid').appendChild(b);
+    ptnBtns.push({ b, s: b.querySelector('small') });
+  }
+  function renderPatterns(p) {
+    ptnBtns.forEach((e, i) => {
+      const sl = p.slots[i];
+      const ok = !!(sl && sl.exists);
+      e.b.disabled = !ok;
+      cls(e.b, 'last', i === p.last);
+      set(e.s, 'textContent', !p.known ? '' : ok ? sl.pads + (sl.pads === 1 ? ' pad' : ' pads') + (i === p.last ? ' · sent' : '') : 'empty');
+    });
+    set($('ptnInfo'), 'textContent', !p.known ? 'reading the patterns of bank ' + p.bank + '…' : p.last >= 0 ? 'Pattern ' + p.bank + (p.last + 1) + ' is sent: the unit plays it next.' : 'Tap a pattern of bank ' + p.bank + ': the unit plays it next.');
+  }
+
   // ---- the Slicer's dice ----
   const DICE = [
     ['DROP-OUTS', 'slices that stay silent', (v) => v + ' %'],
@@ -364,6 +385,7 @@
     loop: { title: 'Bank for the loops', cmd: 'lpbankset', cur: (s) => s.looper && s.looper.bank },
     from: { title: 'Slice a pad of bank', cmd: 'slbankset', cur: (s) => s.slicer && s.slicer.bank },
     to: { title: 'Slices go to bank', cmd: 'sltbankset', cur: (s) => s.slicer && s.slicer.target },
+    ptn: { title: 'Patterns of bank', cmd: 'ptnbankset', cur: (s) => s.ptn && s.ptn.bank },
   };
   for (let i = 0; i < 10; i++) {
     const b = document.createElement('button');
@@ -383,7 +405,7 @@
   $('bankBtn').addEventListener('pointerdown', (e) => {
     e.preventDefault();
     const inLp = app.dataset.view === 'looper';
-    openBanks(inLp ? ($('looper').dataset.lp === 'slice' ? 'from' : 'loop') : 'unit');
+    openBanks(app.dataset.view === 'patterns' ? 'ptn' : inLp ? ($('looper').dataset.lp === 'slice' ? 'from' : 'loop') : 'unit');
   });
   for (const [id, kind] of [['slBank', 'from'], ['slTBank', 'to']]) {
     const box = $(id).closest('.lpmid');
@@ -417,13 +439,14 @@
     if (ws && ws.readyState === 1 && rtt !== null) setConn(s.unit ? 'ok' : 'nounit', (s.unit ? '' : 'no unit · ') + rtt + ' ms');
     $('waiting').hidden = s.unit;
     renderLooper(s);
+    if (s.ptn) renderPatterns(s.ptn);
     renderMeters(s.level, s.levelNote);
     set($('bank'), 'textContent', s.bank || '–');
     // In the Looper the chip is the bank the loops go to (in the Slicer: the bank a pad is taken from); elsewhere the unit's bank.
-    const inLp = app.dataset.view === 'looper';
+    const inLp = app.dataset.view === 'looper', inPtn = app.dataset.view === 'patterns';
     const lpPage = $('looper').dataset.lp;
-    set($('bankTop'), 'textContent', (inLp && s.looper ? (lpPage === 'slice' && s.slicer ? s.slicer.bank : s.looper.bank) : s.bank) || '–');
-    set($('bankLbl'), 'textContent', inLp ? (lpPage === 'slice' ? 'FROM' : 'LOOP') : 'BANK');
+    set($('bankTop'), 'textContent', (inPtn && s.ptn ? s.ptn.bank : inLp && s.looper ? (lpPage === 'slice' && s.slicer ? s.slicer.bank : s.looper.bank) : s.bank) || '–');
+    set($('bankLbl'), 'textContent', inPtn ? 'PTN' : inLp ? (lpPage === 'slice' ? 'FROM' : 'LOOP') : 'BANK');
     set($('bpm'), 'textContent', s.bpm ? s.bpm.toFixed(1) : '–');
     set($('bar'), 'textContent', s.running || s.beat >= 0 ? 'BAR ' + s.bar + ' · BEAT ' + (s.beat + 1) + (s.running ? '' : ' (stopped)') : 'no clock');
     const beats = $('beats').children;

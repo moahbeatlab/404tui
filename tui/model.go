@@ -1845,6 +1845,10 @@ func (m *Model) wanted() tea.Cmd {
 		m.stripBusy = true
 		return m.loadPatternsQuietly(m.loopBank())
 	}
+	if m.web != nil && m.patterns[m.ptnBankNow()] == nil && !m.stripBusy {
+		m.stripBusy = true
+		return m.loadPatternsQuietly(m.ptnBankNow())
+	}
 	if m.section == secLooper || m.web != nil {
 		// How long the pattern of the Looper's bank is: from its pattern, or else from how long its loops are.
 		if slot, ok := m.loopPatternSlot(); ok && m.patPreview[slot] == nil && !m.patUnread[slot] && !m.previewBusy {

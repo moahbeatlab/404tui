@@ -139,3 +139,7 @@ The bank chip at the top follows the page: on the Pads and Stage pages it is the
 
 The Slicer page has a **MANGLE** button: a list of dice that are rolled for every slice each time SLICE is pressed: DROP-OUTS (slices that stay silent), REVERSE (played backwards), PITCH (each slice up or down by up to 2, 5 or 12 semitones, at random), ROLLS (slices that stutter 2 to 8 times), HUMANIZE (loudness, and timing on a grid) and FADE (at the ends of every slice). The result always has the length of the original, so it still fits the pattern; a pitched slice keeps its place in the rhythm (a shorter one ends in silence, a longer one is cut).
 
+
+## Patterns
+
+The **PATTERNS** tab in portrait (the button at the top right in landscape goes Perform, Looper, Patterns) shows the 16 patterns of a bank (the chip at the top left says PTN there and chooses the bank; it starts with the unit's bank), each with the number of pads it plays; empty slots are dark. Tapping a pattern makes the unit play it **next**: the program sends a MIDI Program Change on the channel of the bank (1 for A to 10 for J) with the number of the pattern, as 404jam does. The unit needs **PC Rx** switched on (and the MIDI mode B of its MIDI settings); it does not say it took the change, so the page only marks the pattern sent last.

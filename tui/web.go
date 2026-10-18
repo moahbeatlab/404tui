@@ -62,6 +62,7 @@ type webState struct {
 	Version  string       `json:"version"`
 	Looper   webLooper    `json:"looper"`
 	Slicer   webSlicer    `json:"slicer"`
+	Ptn      webPtn       `json:"ptn"`
 	// Level is how loud the sound is that is recorded (or, outside a recording, that the unit sends); nil until read.
 	Level *webLevel `json:"level"`
 	// LevelNote says why there is none: no recorder, or what the listening program said.
@@ -217,6 +218,7 @@ func (m Model) webSnapshot() webState {
 	}
 	s.Looper = m.webLooper()
 	s.Slicer = m.webSlicer()
+	s.Ptn = m.webPtn()
 	s.Level = m.webLevel()
 	if s.Level == nil {
 		switch _, ok := m.recorder.(record.Metering); {
@@ -379,6 +381,8 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.looperBankSet(c.I)
+	case "ptn", "ptnbank", "ptnbankset":
+		return m.ptnCommand(c.A, c.I)
 	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute", "slmang":
 		return m.slicerCommand(c.A, c.N, c.I)
 	case "lpbank", "lppattern", "lpdel", "lpslices", "lpremix":

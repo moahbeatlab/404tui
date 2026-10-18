@@ -689,3 +689,37 @@ func TestTheCurrentPatternIsForgottenWhenTheProjectChanges(t *testing.T) {
 		t.Errorf("the pattern of the other project is still current: %v %v", nm.perfNow, nm.perfNext)
 	}
 }
+
+func TestThePatternsPageSendsAProgramChangeForThePattern(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	slot := m.snap.Bank(0)[2].Pad // A3
+	if err := app.WriteStartPattern(m.unit, slot, []proto.PadIndex{m.snap.Bank(0)[0].Pad}, 2); err != nil {
+		t.Fatal(err)
+	}
+	m.patterns = map[int][]app.PatternRow{}
+	r.s.model = m
+	r.s.run(m.loadPatternsQuietly(0))
+	p := w.last(t).Ptn
+	if p.Bank != "A" || !p.Known || len(p.Slots) != 16 || !p.Slots[2].Exists || p.Last != -1 {
+		t.Fatalf("patterns %+v", p)
+	}
+	r.web(`{"a":"ptn","i":5}`) // an empty slot: nothing is sent
+	if len(r.sent()) != 0 {
+		t.Fatalf("something was sent for an empty pattern: %v", r.sent())
+	}
+	r.web(`{"a":"ptn","i":2}`)
+	sent := r.sent()
+	if len(sent) != 1 || len(sent[0]) != 2 || sent[0][0] != 0xC0 || sent[0][1] != 2 {
+		t.Fatalf("sent %v, want program change 2 on channel 1", sent)
+	}
+	if p = w.last(t).Ptn; p.Last != 2 {
+		t.Errorf("last %d, want 2", p.Last)
+	}
+	// Another bank: the channel is the bank's.
+	r.web(`{"a":"ptnbankset","i":3}`)
+	if got := w.last(t).Ptn; got.Bank != "D" || got.Last != -1 {
+		t.Errorf("bank %s last %d", got.Bank, got.Last)
+	}
+}

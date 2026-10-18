@@ -412,3 +412,24 @@ button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
 #mangleReset { min-height: 42px; }
 #rail .buttons { align-content: start; grid-auto-rows: max-content; }
 #rail #bRec { min-height: 84px; }
+
+/* ---- the Patterns page ---- */
+#patterns { display: none; gap: 10px; min-height: 0; min-width: 0; grid-template-rows: auto 1fr; }
+#app[data-view="patterns"] #patterns { display: grid; }
+#app[data-view="patterns"] #rail, #app[data-view="patterns"] #pads, #app[data-view="patterns"] #motion, #app[data-view="patterns"] #looper { display: none; }
+#ptnGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: var(--gap); min-height: 0; min-width: 0; }
+#ptnGrid button { border-radius: var(--r); background: var(--tile); color: var(--text); display: grid; place-content: center; gap: 2px; font-weight: 800; font-size: clamp(20px, 7vmin, 34px);
+  min-height: 0; min-width: 0; touch-action: manipulation; border: 3px solid transparent; }
+#ptnGrid button small { font-weight: 600; font-size: 12px; color: var(--dim); letter-spacing: .02em; }
+#ptnGrid button:disabled { background: var(--tile-empty); color: var(--faint); } #ptnGrid button:disabled small { color: var(--faint); }
+#ptnGrid button.last { background: var(--accent); color: var(--ink); } #ptnGrid button.last small { color: rgba(0,0,0,.65); }
+#ptnGrid button:not(:disabled):active { filter: brightness(1.25); }
+@media (orientation: landscape) { #patterns { grid-column: 1 / -1; grid-row: 2; } }
+@media (orientation: landscape) and (max-width: 759px) {
+  #patterns { grid-row: 2 / 4; } #app[data-view="patterns"] #tabs { display: none; }
+  #tabs button[data-tab="patterns"] { display: none; }
+}
+@media (orientation: portrait) {
+  #patterns { grid-area: main; }
+  #tabs { grid-template-columns: repeat(5, 1fr); } #tabs button { font-size: 11px; letter-spacing: .02em; }
+}
