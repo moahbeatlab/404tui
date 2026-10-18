@@ -9,7 +9,10 @@ require (
 	github.com/ebitengine/oto/v3 v3.5.1
 	github.com/hajimehoshi/go-mp3 v0.3.4
 	github.com/mewkiz/flac v1.0.14
+	github.com/muesli/termenv v0.16.0
+	gitlab.com/gomidi/midi/v2 v2.3.24
 	go.bug.st/serial v1.8.0
+	rsc.io/qr v0.2.0
 )
 
 require (
@@ -29,10 +32,8 @@ require (
 	github.com/mewpkg/term v0.0.0-20241026122259-37a80af23985 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
-	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	gitlab.com/gomidi/midi/v2 v2.3.24 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.3.8 // indirect
 )

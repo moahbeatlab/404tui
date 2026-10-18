@@ -19,7 +19,8 @@ web page for Perform: open one of these on a phone on this network:
   http://192.168.1.20:8404/?key=k7p2mdq4
 ```
 
-Open that on the phone. The key is made once and kept (so the link stays the same from one run to the
+Under the link it draws a QR code of the first one: scan it with the phone camera instead of typing
+(`sp404 serve` only; with `-web` the TUI covers the terminal right away). The key is made once and kept (so the link stays the same from one run to the
 next); the phone keeps it too. Ctrl-C stops the server and puts back what the program changed on the
 unit (the buses of pads that focus made dry).
 

@@ -271,6 +271,9 @@ func runUI(o options, l logging, headless bool) error {
 		for _, u := range urls {
 			fmt.Fprintln(os.Stderr, "  "+u)
 		}
+		if code, err := qrText(urls[0]); err == nil && isTerminal(os.Stderr) {
+			fmt.Fprintln(os.Stderr, "\nor scan with the phone camera:\n"+code)
+		}
 		l.Info("web page", "addr", listener.Addr().String(), "urls", urls)
 	}
 	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
