@@ -365,3 +365,26 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 @media (orientation: landscape) and (max-height: 430px) { .meter { padding: 4px 6px; gap: 2px; } .mbar { height: 7px; } }
 .minfo b { white-space: nowrap; }
 .lpgroup > .meter { grid-column: 1 / -1; }
+
+#slReady[hidden] { display: none; }
+@media (orientation: portrait) {
+  .lpctl, .lpgroup { gap: 6px; }
+  .lpctl .big { min-height: 38px; font-size: 14px; }
+  .lpctl .lprow .big { font-size: 16px; }
+  .lpctl .lparm { min-height: 44px; font-size: 18px; }
+  .lpsw, .lpsw button { min-height: 36px; font-size: 13px; }
+  .lpstatus { padding: 5px 10px; } .lpstatus b { font-size: 18px; } .lpstatus span { font-size: 12px; }
+  .lpmid b { font-size: 18px; }
+  .lpmid small { font-size: 10px; }
+  #lpPat { grid-column: auto; }
+  #looper { grid-template-rows: max-content minmax(190px, 1fr); }
+  #lpgrid { gap: 6px; }
+  .lpad { padding: 4px 6px; border-width: 2px; }
+  .lpad b { font-size: 13px; }
+  #lpSlice .lpinfo { display: none; }
+  .lpgroup > .meter { padding: 4px 8px; gap: 2px; }
+  .slbanks .lprow { gap: 4px; }
+}
+.meter { min-width: 0; }
+.minfo b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.minfo { min-width: 0; }

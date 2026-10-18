@@ -66,6 +66,11 @@ type looperState struct {
 	// slBank and slPad are the pad the web page's Slicer will cut (slPad -1 for none); slSet says they were chosen.
 	slBank, slPad int
 	slSet         bool
+	// slOut are slices that wait for a pad (slHave), from slFrom in slN slices; slDest is the pad chosen for them (-1 for none).
+	slOut       formats.Sample
+	slHave      bool
+	slFrom      string
+	slN, slDest int
 }
 
 // loopLast is what the Looper knows of the loop it saved last.

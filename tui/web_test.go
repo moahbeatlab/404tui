@@ -432,17 +432,30 @@ func TestTheSlicerOfThePageCutsAPadOntoTheNextFreePad(t *testing.T) {
 		t.Fatalf("slicer after the buttons: %+v", s)
 	}
 	r.web(`{"a":"slgo"}`)
+	s = w.last(t).Slicer
+	if s.Phase != "ready" || s.Dest < 0 || !strings.Contains(s.Src, "16 slices") {
+		t.Fatalf("not ready after slicing: %+v (%q)", s, r.s.m().message)
+	}
+	// While the slices wait, the grid is the bank they go to: a pad of another bank is chosen.
+	r.web(`{"a":"sltbank","n":1}`)
+	r.web(`{"a":"slpad","i":6}`)
+	s = w.last(t).Slicer
+	if s.Target != "B" || s.Dest != 6 || s.Phase != "ready" {
+		t.Fatalf("after choosing B7: %+v", s)
+	}
+	r.web(`{"a":"slbank","n":1}`) // the source cannot change now
+	if got := w.last(t).Slicer.Bank; got != "A" {
+		t.Errorf("the source bank changed while the slices wait: %s", got)
+	}
+	r.web(`{"a":"slgo"}`)
 	m = r.s.m()
-	if !strings.Contains(m.message, "16 slices") {
+	if !strings.Contains(m.message, "16 slices") || !strings.Contains(m.message, "B7") {
 		t.Fatalf("message %q", m.message)
 	}
-	found := false
-	for _, row := range m.snap.Bank(0) {
-		if strings.HasPrefix(row.Name, "SLC ") {
-			found = true
-		}
+	if got := m.snap.Bank(1)[6].Name; !strings.HasPrefix(got, "SLC ") {
+		t.Errorf("B7 holds %q, want the slices", got)
 	}
-	if !found {
-		t.Errorf("no result on bank A (%q)", m.message)
+	if s = w.last(t).Slicer; s.Phase != "pick" {
+		t.Errorf("still waiting after the slices were placed: %+v", s)
 	}
 }

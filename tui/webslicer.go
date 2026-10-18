@@ -118,6 +118,84 @@ func (m Model) sliceJob(row app.PadRow, target proto.PadIndex, o sliceOpts) (tea
 	}
 }
 
+// slicerDoneMsg is a slicing that was rendered and waits for a pad to go on.
+type slicerDoneMsg struct {
+	out  formats.Sample
+	from string
+	n    int
+	err  error
+}
+
+// sliceRender cuts the sample of a pad; the result waits for the pad it goes on.
+func (m Model) sliceRender(row app.PadRow, o sliceOpts) (tea.Model, tea.Cmd) {
+	if !row.HasSample {
+		m.message = fmt.Sprintf("%s holds no sample to slice", row.Pad)
+		return m, nil
+	}
+	unit, ops, log, cache := m.unit, m.ops, m.log, m.padAudio
+	key := factKey{row.Pad, row.Size, row.Name}
+	m.busy = "slicing " + row.Pad.String()
+	return m, func() tea.Msg {
+		sample, ok := cache.get(key)
+		if !ok {
+			ops.Lock()
+			var err error
+			sample, err = app.PadAudio(unit, row)
+			ops.Unlock()
+			if err != nil {
+				return slicerDoneMsg{err: fmt.Errorf("could not read %s: %w", row.Pad, err)}
+			}
+			cache.put(key, sample)
+		}
+		out := sliceSample(sample, o)
+		log.Info("slicer: rendered", "from", row.Pad.String(), "slices", o.n, "random_cut", o.randomCut, "order", o.order,
+			"div", o.div, "bpm", o.bpm, "frames", out.Frames(), "frames_before", sample.Frames())
+		return slicerDoneMsg{out: out, from: row.Pad.String(), n: o.n}
+	}
+}
+
+// slicerDone takes the rendered slices: they wait, and the page asks for the pad.
+func (m Model) slicerDone(msg slicerDoneMsg) (tea.Model, tea.Cmd) {
+	m.busy = ""
+	if msg.err != nil {
+		m.message = msg.err.Error()
+		return m, nil
+	}
+	lp := m.looper()
+	lp.slOut, lp.slHave, lp.slFrom, lp.slN = msg.out, true, msg.from, msg.n
+	lp.slDest = -1
+	if free, ok := m.slFreePad(m.slTargetBank()); ok {
+		lp.slDest = int(free.Pad())
+	}
+	m.message = fmt.Sprintf("%s in %d slices: choose the pad it goes on, then PLACE", msg.from, msg.n)
+	return m, nil
+}
+
+// slicerPlace puts the waiting slices on the pad chosen, ungated.
+func (m Model) slicerPlace() (tea.Model, tea.Cmd) {
+	lp := m.looper()
+	tb := m.slTargetBank()
+	if !lp.slHave || lp.slDest < 0 || lp.slDest > 15 {
+		m.message = "tap the pad the slices go on first"
+		return m, nil
+	}
+	target := m.snap.Bank(tb)[lp.slDest].Pad
+	out, from, n := lp.slOut, lp.slFrom, lp.slN
+	lp.slHave, lp.slOut = false, formats.Sample{}
+	unit, edit := m.unit, m.edit
+	name := "SLC " + time.Now().Format("15:04:05")
+	m.busy = "putting the slices on " + target.String()
+	return m, edit(func() tea.Msg {
+		if _, err := app.PutSample(unit, target, out, name); err != nil {
+			return doneMsg{message: "the slices were lost: " + err.Error(), reload: true}
+		}
+		if info, ok := proto.ParamByName("gate"); ok {
+			_ = unit.SetParam(info.ID, proto.TargetPad(target), 0)
+		}
+		return doneMsg{message: fmt.Sprintf("%s in %d slices → %s (%s)", from, n, target, name), reload: true}
+	})
+}
+
 // ---- the page's Slicer ----
 
 func (m Model) slSlices() int {
@@ -193,6 +271,30 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 	}
 	bank, pad := m.slSource()
 	lp := m.looper()
+	if lp.slHave {
+		// The slices wait: the grid is the bank they go to.
+		switch act {
+		case "slpad":
+			if i >= 0 && i <= 15 {
+				lp.slDest = i
+			}
+		case "sltbank":
+			cur := m.slTargetBank()
+			m.mem.SlicerTarget = (cur+n+proto.Banks)%proto.Banks + 1
+			lp.slDest = -1
+			if free, ok := m.slFreePad(m.slTargetBank()); ok {
+				lp.slDest = int(free.Pad())
+			}
+		case "slgo":
+			return m.slicerPlace()
+		case "slagain":
+			return m.sliceRender(m.snap.Bank(bank)[pad], m.sliceOptions(bank))
+		case "slcancel":
+			lp.slHave, lp.slOut = false, formats.Sample{}
+			m.message = "the slices were dropped"
+		}
+		return m, nil
+	}
 	switch act {
 	case "slbank":
 		lp.slBank = (bank + n + proto.Banks) % proto.Banks
@@ -223,17 +325,14 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 			m.message = "tap the pad to slice first"
 			return m, nil
 		}
-		tb := m.slTargetBank()
-		target, ok := m.slFreePad(tb)
-		if !ok {
-			m.message = fmt.Sprintf("bank %c is full: delete a pad first", 'A'+tb)
-			return m, nil
-		}
-		o := sliceOpts{n: m.slSlices(), randomCut: m.mem.SlicerRandomCut, order: m.slOrder(), div: m.mem.SlicerDiv, swing: m.mem.SlicerSwing}
-		o.bpm = m.slBPM(bank)
-		return m.sliceJob(m.snap.Bank(bank)[pad], target, o)
+		return m.sliceRender(m.snap.Bank(bank)[pad], m.sliceOptions(bank))
 	}
 	return m, nil
+}
+
+// sliceOptions are the settings of the page's Slicer, for a pad of a bank.
+func (m Model) sliceOptions(bank int) sliceOpts {
+	return sliceOpts{n: m.slSlices(), randomCut: m.mem.SlicerRandomCut, order: m.slOrder(), div: m.mem.SlicerDiv, swing: m.mem.SlicerSwing, bpm: m.slBPM(bank)}
 }
 
 // webSlicer is the Slicer for the page.
@@ -250,6 +349,11 @@ type webSlicer struct {
 	Free   string       `json:"free"`   // its next free pad, empty when full
 	Src    string       `json:"src"`    // the pad that is cut
 	Busy   bool         `json:"busy"`
+	// Phase is pick (the grid is the bank the pad comes from) or ready (the slices wait, and the grid is the bank they go to,
+	// Dest the pad chosen, -1 for none, DestName what it holds now).
+	Phase    string `json:"phase"`
+	Dest     int    `json:"dest"`
+	DestName string `json:"destName"`
 }
 
 func (m Model) webSlicer() webSlicer {
@@ -257,13 +361,27 @@ func (m Model) webSlicer() webSlicer {
 	tb := m.slTargetBank()
 	s := webSlicer{Bank: string(rune('A' + bank)), Pad: pad, Pads: []webLoopPad{}, Slices: m.slSlices(), Random: m.mem.SlicerRandomCut,
 		Order: slOrderNames[m.slOrder()], Div: m.mem.SlicerDiv, Swing: m.mem.SlicerSwing, Target: string(rune('A' + tb)), Busy: m.busy != ""}
+	s.Phase, s.Dest = "pick", -1
 	if free, ok := m.slFreePad(tb); ok {
 		s.Free = free.String()
 	}
 	for i, row := range m.snap.Bank(bank) {
-		s.Pads = append(s.Pads, webLoopPad{N: i + 1, Name: row.Name, Has: row.HasSample})
 		if i == pad {
 			s.Src = row.Pad.String() + " " + row.Name
+		}
+	}
+	grid := bank
+	if lp := m.lp; lp != nil && lp.slHave {
+		s.Phase, s.Dest, grid, s.Free = "ready", lp.slDest, tb, ""
+		s.Src = lp.slFrom + " in " + fmt.Sprint(lp.slN) + " slices"
+	}
+	for i, row := range m.snap.Bank(grid) {
+		s.Pads = append(s.Pads, webLoopPad{N: i + 1, Name: row.Name, Has: row.HasSample})
+		if s.Phase == "ready" && i == s.Dest {
+			s.Free, s.DestName = row.Pad.String(), ""
+			if row.HasSample {
+				s.DestName = row.Name
+			}
 		}
 	}
 	return s

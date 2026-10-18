@@ -81,4 +81,6 @@ how many slices: 4, 8, 16 or 32.
 The web page has a basic **SLICER** page (the switch LOOP / SLICER / SETTINGS in the Looper): pick a pad of any bank
 (FROM BANK), then set the slices (2 to 32), equal or random cuts, the order (shuffle, in order, random picks), the
 timing (the slices' own length, or a 1/4, 1/8 or 1/16 grid at the bank's tempo, with swing) and the bank the result goes
-to. SLICE makes a new version on the next free pad of that bank each time it is pressed.
+to. SLICE makes the slices and keeps them: the grid then shows the bank they go to (TO ◂ ▸ changes it), tap any pad of
+any bank (the next free pad is pre-chosen; a pad that holds a sample asks for a second tap) and press PLACE. NEW VERSION
+cuts again, DISCARD drops them. Placed slices are ungated.

@@ -225,7 +225,16 @@
   press('slOrder', () => send({ a: 'slorder' }));
   press('slDiv', () => send({ a: 'sldiv' }));
   press('slSwing', () => send({ a: 'slswing' }));
-  press('slGo', () => send({ a: 'slgo' }));
+  let slAsk = 0, slAskT = 0;
+  press('slGo', () => {
+    const sl = state && state.slicer;
+    if (sl && sl.phase === 'ready' && sl.destName && slAsk !== sl.dest + 1) {
+      slAsk = sl.dest + 1; clearTimeout(slAskT); slAskT = setTimeout(() => { slAsk = 0; render(); }, 3000); return render();
+    }
+    slAsk = 0; send({ a: 'slgo' });
+  });
+  press('slAgain', () => send({ a: 'slagain' }));
+  press('slCancel', () => send({ a: 'slcancel' }));
   press('lpCal', () => send({ a: 'lpcal' }));
   press('lpGm', () => send({ a: 'lpgain', n: -1 }));
   press('lpGp', () => send({ a: 'lpgain', n: 1 }));
@@ -271,11 +280,16 @@
     set($('slDivT'), 'textContent', sl.div ? 'GRID 1/' + sl.div : 'OWN LENGTH');
     set($('slSwingT'), 'textContent', 'SWING: ' + (SWING[sl.swing] || sl.swing + '%'));
     $('slSwing').disabled = !sl.div;
-    set($('slT'), 'textContent', sl.pad >= 0 ? sl.src : 'SLICER');
-    set($('slSub'), 'textContent', sl.pad >= 0 ? (sl.free ? 'result goes to ' + sl.free : 'bank ' + sl.target + ' is full: delete a pad') : 'tap a pad of bank ' + sl.bank + ' to slice');
-    set($('slGoT'), 'textContent', sl.busy ? 'WORKING…' : sl.free ? 'SLICE → ' + sl.free : 'BANK FULL');
-    $('slGo').disabled = sl.busy || sl.pad < 0 || !sl.free || !(sl.pads[sl.pad] && sl.pads[sl.pad].has);
-    for (const id of ['slPrev', 'slNext', 'slTPrev', 'slTNext', 'slSlices', 'slCut', 'slOrder', 'slDiv']) $(id).disabled = sl.busy;
+    const ready = sl.phase === 'ready';
+    $('slReady').hidden = !ready;
+    set($('slT'), 'textContent', ready ? sl.src : sl.pad >= 0 ? sl.src : 'SLICER');
+    set($('slSub'), 'textContent', ready ? 'tap a pad of bank ' + sl.target + ' for the slices, then PLACE' : sl.pad >= 0 ? (sl.free ? 'next free pad: ' + sl.free : 'bank ' + sl.target + ' is full') : 'tap a pad of bank ' + sl.bank + ' to slice');
+    const asking = ready && sl.destName && slAsk === sl.dest + 1;
+    cls($('slGo'), 'on', !!asking);
+    set($('slGoT'), 'textContent', sl.busy ? 'WORKING…' : ready ? (sl.dest < 0 ? 'TAP A PAD' : asking ? 'TAP AGAIN: REPLACE ' + sl.free : sl.destName ? 'REPLACE ' + sl.free + ' …' : 'PLACE → ' + sl.free) : 'SLICE');
+    $('slGo').disabled = sl.busy || (ready ? sl.dest < 0 : sl.pad < 0 || !(sl.pads[sl.pad] && sl.pads[sl.pad].has));
+    for (const id of ['slPrev', 'slNext', 'slSlices', 'slCut', 'slOrder', 'slDiv']) $(id).disabled = sl.busy || ready;
+    for (const id of ['slTPrev', 'slTNext', 'slAgain', 'slCancel']) $(id).disabled = sl.busy;
   }
   function renderLooper(s) {
     const l = s.looper;
@@ -313,7 +327,7 @@
       const e = lpPads[i];
       set(e.n, 'textContent', p.n);
       set(e.nm, 'textContent', p.has ? p.name : !slMode && p.target ? 'next' : '');
-      cls(e.d, 'has', p.has); cls(e.d, 'target', !slMode && p.target && !p.has); cls(e.d, 'sel', slMode ? i === sl.pad : i === lpSel);
+      cls(e.d, 'has', p.has); cls(e.d, 'target', !slMode && p.target && !p.has); cls(e.d, 'sel', slMode ? i === (sl.phase === 'ready' ? sl.dest : sl.pad) : i === lpSel);
     });
     if (sl) renderSlicer(sl);
     const last = l.last ? 'last take ' + l.last.name + ' on ' + l.last.pad + ': peak ' + l.last.peak.toFixed(1) + ' dB' + (l.last.gain ? ' (' + (l.last.gain > 0 ? '+' : '') + l.last.gain.toFixed(1) + ' dB added)' : '') : 'no take yet';

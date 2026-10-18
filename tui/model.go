@@ -1245,6 +1245,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.loopStarted(msg)
 	case loopSavedMsg:
 		return m.loopSaved(msg)
+	case slicerDoneMsg:
+		return m.slicerDone(msg)
 	case doneMsg:
 		m.message = msg.message
 		if msg.origins != nil {
