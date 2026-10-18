@@ -293,17 +293,6 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 	}
 	bank, pad := m.slSource()
 	lp := m.looper()
-	if act == "sldel" {
-		// Holding a pad deletes it, in the bank the grid shows.
-		grid := bank
-		if lp.slHave {
-			grid = m.slTargetBank()
-		}
-		if !lp.slHave && i == pad {
-			lp.slPad = -1
-		}
-		return m.deletePadIn(grid, i)
-	}
 	if lp.slHave {
 		// The slices wait: the grid is the bank they go to.
 		switch act {

@@ -203,31 +203,7 @@
     const d = document.createElement('div');
     d.className = 'lpad';
     d.innerHTML = '<b></b><span></span>';
-    // A tap chooses the pad; holding it deletes its sample (the pad turns red while it is held).
-    const LPHOLD = 600;
-    let hold = null;
-    const stop = () => { if (hold) { clearTimeout(hold.t); d.classList.remove('arming'); } };
-    d.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      if (d.setPointerCapture) { try { d.setPointerCapture(e.pointerId); } catch (x) { /* not all browsers */ } }
-      stop();
-      hold = { x: e.clientX, y: e.clientY, done: false, t: 0 };
-      const slice = $('looper').dataset.lp === 'slice';
-      const p = slice ? state && state.slicer && state.slicer.pads[i] : state && state.looper && state.looper.pads[i];
-      if (p && p.has) {
-        d.classList.add('arming');
-        const h = hold;
-        h.t = setTimeout(() => { h.done = true; d.classList.remove('arming'); if (navigator.vibrate) navigator.vibrate(25); send({ a: slice ? 'sldel' : 'lpdel', i }); if (!slice && lpSel === i) lpSel = -1; render(); }, LPHOLD);
-      }
-    });
-    d.addEventListener('pointermove', (e) => { if (hold && !hold.done && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 10) { stop(); hold.done = true; hold.moved = true; } });
-    d.addEventListener('pointerup', () => {
-      const h = hold; stop(); hold = null;
-      if (!h || h.done) return;
-      if ($('looper').dataset.lp === 'slice') return send({ a: 'slpad', i });
-      lpSel = lpSel === i ? -1 : i; lpAsk = 0; render();
-    });
-    d.addEventListener('pointercancel', () => { stop(); hold = null; });
+    d.addEventListener('pointerdown', (e) => { e.preventDefault(); if ($('looper').dataset.lp === 'slice') return send({ a: 'slpad', i }); lpSel = lpSel === i ? -1 : i; lpAsk = 0; render(); });
     lpGrid.appendChild(d);
     lpPads.push({ d, n: d.children[0], nm: d.children[1] });
   }
@@ -345,7 +321,7 @@
     const asking = lpAsk === lpSel + 1 && sel && sel.has;
     cls($('lpDel'), 'danger', asking);
     set($('lpDelT'), 'textContent', asking ? 'TAP AGAIN TO DELETE' : 'DELETE');
-    set($('lpDelS'), 'textContent', sel ? (sel.has ? 'pad ' + sel.n + ' ' + sel.name : 'pad ' + sel.n + ' is empty') : 'or hold a pad');
+    set($('lpDelS'), 'textContent', sel ? (sel.has ? 'pad ' + sel.n + ' ' + sel.name : 'pad ' + sel.n + ' is empty') : 'tap a pad first');
     const sl = s.slicer, slMode = $('looper').dataset.lp === 'slice' && sl;
     (slMode ? sl.pads : l.pads).forEach((p, i) => {
       const e = lpPads[i];

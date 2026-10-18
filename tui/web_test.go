@@ -476,19 +476,3 @@ func TestTheBrowserCanChangeTheBank(t *testing.T) {
 		t.Errorf("bank %s after a bank out of range", got)
 	}
 }
-
-func TestHoldingAPadOfTheSlicerDeletesItInTheBankTheGridShows(t *testing.T) {
-	r, w := webRig(t)
-	r.s.press("r")
-	if !r.s.m().snap.Bank(0)[0].HasSample {
-		t.Skip("A1 holds no sample")
-	}
-	r.web(`{"a":"sldel","i":0}`)
-	if r.s.m().snap.Bank(0)[0].HasSample {
-		t.Fatalf("A1 still holds its sample (%q)", r.s.m().message)
-	}
-	if s := w.last(t).Slicer; s.Pads[0].Has {
-		t.Errorf("the page still shows A1 filled")
-	}
-	r.web(`{"a":"sldel","i":99}`) // out of range: nothing
-}
