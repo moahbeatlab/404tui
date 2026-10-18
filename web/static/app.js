@@ -93,36 +93,44 @@
     lastTap = { i, t: now };
     send({ a: 'solo', i });
   }
+  // A pad: a tap does what tap() says (or mutes, in MIX), a swipe up or down sets the volume from where it was.
+  // The tap counts when the finger comes up, because it is not known before whether it will swipe.
   function pad(el, i) {
     let down = null;
     el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
       try { el.setPointerCapture(e.pointerId); } catch (err) {}
-      down = { y: e.clientY, x: e.clientX, moved: false, at: performance.now() };
-      if (!mixing) tap(i);
+      const p = state && state.pads && state.pads[i];
+      down = { y: e.clientY, moved: false, v0: p ? p.level : 0, h: el.getBoundingClientRect().height || 80 };
     });
     el.addEventListener('pointermove', (e) => {
-      if (!down || !mixing) return;
-      if (Math.abs(e.clientY - down.y) > 8) down.moved = true;
+      if (!down) return;
+      if (!down.moved && Math.abs(e.clientY - down.y) > 10) down.moved = true;
       if (!down.moved) return;
-      const r = el.getBoundingClientRect();
-      const v = Math.round(Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height)) * 127);
+      const v = Math.round(Math.max(0, Math.min(127, down.v0 + (down.y - e.clientY) / (down.h * 0.8) * 127)));
       const now = performance.now();
       if (now - (down.sent || 0) > 33 && v !== down.v) { down.sent = now; down.v = v; send({ a: 'level', i, v }); padEls[i].lvi.style.width = (v / 127 * 100) + '%'; el.dataset.lv = v; }
     });
-    const up = () => {
-      if (down && mixing && !down.moved) send({ a: 'mute', i });
-      else if (down && mixing && down.moved && down.v !== undefined) send({ a: 'level', i, v: down.v });
+    el.addEventListener('pointerup', () => {
+      if (!down) return;
+      if (!down.moved) { if (mixing) send({ a: 'mute', i }); else tap(i); }
+      else if (down.v !== undefined) send({ a: 'level', i, v: down.v });
       down = null;
-    };
-    el.addEventListener('pointerup', up);
+    });
     el.addEventListener('pointercancel', () => { down = null; });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
+  // No zoom: iOS ignores user-scalable=no, so double taps and pinches are stopped here.
+  let lastEnd = 0;
+  document.addEventListener('touchend', (e) => { const n = Date.now(); if (n - lastEnd < 350) e.preventDefault(); lastEnd = n; }, { passive: false });
+  document.addEventListener('dblclick', (e) => e.preventDefault());
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach((g) => document.addEventListener(g, (e) => e.preventDefault()));
+
   // Buttons with a data-a send it as they are pressed down, not when the finger comes up.
   document.querySelectorAll('[data-a]').forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: b.dataset.a }); }));
   $('bMix').addEventListener('pointerdown', (e) => { e.preventDefault(); mixing = !mixing; document.body.classList.toggle('mixing', mixing); $('bMix').classList.toggle('on', mixing);
-    $('bMixS').textContent = mixing ? 'drag = volume · tap = mute' : 'drag a pad = volume'; if (navigator.vibrate) navigator.vibrate(8); render(); });
+    $('bMixS').textContent = mixing ? 'tap = mute' : 'swipe a pad = volume'; if (navigator.vibrate) navigator.vibrate(8); render(); });
 
   const barsEl = $('bars');
   [1, 2, 3, 4, 8].forEach((n) => { const b = document.createElement('button'); b.textContent = n; b.dataset.n = n;

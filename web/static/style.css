@@ -18,9 +18,10 @@
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden; overscroll-behavior: none; }
-body { font: 15px/1.25 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+html { touch-action: pan-x pan-y; }
+body { font: 15px/1.25 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; touch-action: pan-x pan-y; -webkit-user-select: none; user-select: none; }
 [hidden] { display: none !important; }
-button { font: inherit; color: inherit; border: 0; background: none; padding: 0; touch-action: manipulation; }
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; touch-action: pan-x pan-y; }
 small { color: var(--dim); font-size: .72em; letter-spacing: .08em; font-weight: 600; }
 b { font-weight: 700; }
 code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
