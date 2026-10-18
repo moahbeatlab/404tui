@@ -85,7 +85,8 @@
   // the others back), a swipe up or down sets the volume from where it was. With focus on, a tap picks the pad.
   // A tap counts when the finger comes up, because it is not known before whether it will swipe or hold.
   const HOLD = 400;
-  const focusOn = () => !!(state && state.focus && state.focus.on);
+  // Only the FOCUS button's mode (multi) picks pads by tap; pads kept by a hold leave taps to mute.
+  const focusOn = () => !!(state && state.focus && state.focus.multi);
   function tap(i) { send({ a: focusOn() ? 'pad' : 'mute', i }); }
   function pad(el, i) {
     let down = null;
