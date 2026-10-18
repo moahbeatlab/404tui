@@ -74,6 +74,30 @@ func PutSample(u Importer, pad proto.PadIndex, sample formats.Sample, name strin
 	return name, nil
 }
 
+// PutSampleLive is PutSample for a unit that is playing (the Looper and the Slicer put samples on pads in the middle of a
+// pattern): the unit is not stopped for the import, if it can do without. When it cannot, the import is made the usual way.
+func PutSampleLive(u Importer, pad proto.PadIndex, sample formats.Sample, name string) (string, error) {
+	live, ok := u.(interface {
+		ImportSMPLive(project uint8, pad proto.PadIndex, smp []byte, name string) error
+	})
+	if !ok {
+		return PutSample(u, pad, sample, name)
+	}
+	current, err := u.CurrentProject()
+	if err != nil {
+		return "", err
+	}
+	if err := live.ImportSMPLive(current+1, pad, sample.SMP(), name); err != nil {
+		return PutSample(u, pad, sample, name)
+	}
+	if p, ok := u.(interface {
+		SetParam(id byte, target proto.Target, value int32) error
+	}); ok {
+		_ = p.SetParam(paramLevel, proto.TargetPad(pad), DefaultPadLevel)
+	}
+	return name, nil
+}
+
 // DefaultPadLevel is the level a pad gets with a sample put on it.
 const DefaultPadLevel = 127
 

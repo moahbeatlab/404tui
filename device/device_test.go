@@ -268,6 +268,30 @@ func TestImportFollowsTheOfficialSequence(t *testing.T) {
 	}
 }
 
+func TestALiveImportDoesNotStopTheUnit(t *testing.T) {
+	d, s := connect(t)
+	j16 := pad(t, "J16")
+	smp := make([]byte, 512+6000)
+	for i := range smp {
+		smp[i] = byte(i)
+	}
+	s.Requests = nil
+	check(t, d.ImportSMPLive(1, j16, smp, "hat"))
+	if stored, _ := s.File(j16.SamplePath(1)); !bytes.Equal(stored, smp) {
+		t.Fatalf("device holds %d bytes of sample, want %d", len(stored), len(smp))
+	}
+	for _, p := range s.Requests {
+		if p[0] == 0x9D {
+			t.Fatalf("a live import sent Stop: % x", p)
+		}
+	}
+	block, err := d.PadBlock(j16)
+	check(t, err)
+	if block.Name() != "hat" {
+		t.Errorf("pad block: %q", block.Name())
+	}
+}
+
 func TestInitAndRestore(t *testing.T) {
 	d, s := connect(t)
 	a1, b1 := pad(t, "A1"), pad(t, "B1")

@@ -436,7 +436,7 @@ func (m Model) looperSave() tea.Cmd {
 		peak := app.PeakDB(sample)
 		log.Info("looper: loop", "frames", sample.Frames(), "peak_db", peak, "gain_applied_db", applied)
 		msg := edit(func() tea.Msg {
-			if _, err := app.PutSample(unit, pad, sample, name); err != nil {
+			if _, err := app.PutSampleLive(unit, pad, sample, name); err != nil {
 				return loopSavedMsg{pad: pad, err: err}
 			}
 			// Ungated: the loop plays to its end after the pattern hits the pad.
@@ -493,7 +493,7 @@ func (m Model) looperSaveRing() tea.Cmd {
 		peak := app.PeakDB(sample)
 		log.Info("looper: loop", "frames", sample.Frames(), "peak_db", peak, "gain_applied_db", applied)
 		return edit(func() tea.Msg {
-			if _, err := app.PutSample(unit, pad, sample, name); err != nil {
+			if _, err := app.PutSampleLive(unit, pad, sample, name); err != nil {
 				return loopSavedMsg{pad: pad, err: err}
 			}
 			if info, ok := proto.ParamByName("gate"); ok {

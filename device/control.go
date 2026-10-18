@@ -600,6 +600,17 @@ func (d *Device) restore(project uint8, files []File, progress func(i int, name 
 // the current project: the pad block is written to the current project, so importing into
 // another one would change a current pad while its file went elsewhere.
 func (d *Device) ImportSMP(project uint8, pad proto.PadIndex, smp []byte, name string) error {
+	return d.importWith(project, pad, smp, name, true)
+}
+
+// ImportSMPLive is ImportSMP for a unit that is playing: the official app sends Stop (reply 1D 00) before an import, and
+// that is left out here, so that the sound and the pattern are not stopped by it. Whether the unit takes the sample just
+// as well without it is for the caller to find out: an error is the sign that it did not.
+func (d *Device) ImportSMPLive(project uint8, pad proto.PadIndex, smp []byte, name string) error {
+	return d.importWith(project, pad, smp, name, false)
+}
+
+func (d *Device) importWith(project uint8, pad proto.PadIndex, smp []byte, name string, stop bool) error {
 	current, err := d.CurrentProject()
 	if err != nil {
 		return err
@@ -617,14 +628,14 @@ func (d *Device) ImportSMP(project uint8, pad proto.PadIndex, smp []byte, name s
 	if err := d.fire(short(proto.ImportBegin())); err != nil {
 		return err
 	}
-	result := d.importSMP(project, pad, block, smp, name)
+	result := d.importSMP(project, pad, block, smp, name, stop)
 	if err := d.fire(short(proto.ImportEnd())); err != nil {
 		return err
 	}
 	return result
 }
 
-func (d *Device) importSMP(project uint8, pad proto.PadIndex, block *proto.PadBlock, smp []byte, name string) error {
+func (d *Device) importSMP(project uint8, pad proto.PadIndex, block *proto.PadBlock, smp []byte, name string, stop bool) error {
 	const header = int(proto.SMPHeaderLen)
 	path := pad.SamplePath(project)
 	tmp := strings.ReplaceAll(path, ".SMP", ".TMP")
@@ -632,8 +643,10 @@ func (d *Device) importSMP(project uint8, pad proto.PadIndex, block *proto.PadBl
 	if err := d.command(proto.ImportReleaseSlot(pad), proto.ReplyPadSlot, "release slot"); err != nil {
 		return err
 	}
-	if err := d.command(proto.Stop(), proto.ReplyStop, "stop"); err != nil {
-		return err
+	if stop {
+		if err := d.command(proto.Stop(), proto.ReplyStop, "stop"); err != nil {
+			return err
+		}
 	}
 	_ = d.Unlink(tmp)
 	_ = d.Unlink(path)

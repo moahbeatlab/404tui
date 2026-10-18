@@ -127,7 +127,7 @@ func (m Model) sliceJob(row app.PadRow, target proto.PadIndex, o sliceOpts) (tea
 		log.Info("slicer: result", "from", row.Pad.String(), "to", target.String(), "slices", o.n, "random_cut", o.randomCut,
 			"order", o.order, "div", o.div, "bpm", o.bpm, "frames", out.Frames(), "frames_before", sample.Frames())
 		return edit(func() tea.Msg {
-			if _, err := app.PutSample(unit, target, out, name); err != nil {
+			if _, err := app.PutSampleLive(unit, target, out, name); err != nil {
 				return doneMsg{message: "the slices were lost: " + err.Error(), reload: true}
 			}
 			if info, ok := proto.ParamByName("gate"); ok {
@@ -208,7 +208,7 @@ func (m Model) slicerPlace() (tea.Model, tea.Cmd) {
 	name := "SLC " + time.Now().Format("15:04:05")
 	m.busy = "putting the slices on " + target.String()
 	return m, edit(func() tea.Msg {
-		if _, err := app.PutSample(unit, target, out, name); err != nil {
+		if _, err := app.PutSampleLive(unit, target, out, name); err != nil {
 			return doneMsg{message: "the slices were lost: " + err.Error(), reload: true}
 		}
 		if info, ok := proto.ParamByName("gate"); ok {

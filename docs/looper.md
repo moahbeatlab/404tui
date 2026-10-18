@@ -84,3 +84,10 @@ timing (the slices' own length, or a 1/4, 1/8 or 1/16 grid at the bank's tempo, 
 to. SLICE makes the slices and keeps them: the grid then shows the bank they go to (TO ◂ ▸ changes it), tap any pad of
 any bank (the next free pad is pre-chosen; a pad that holds a sample asks for a second tap) and press PLACE. NEW VERSION
 cuts again, DISCARD drops them. Placed slices are ungated.
+
+## Putting a sample on a pad while the unit plays
+
+The official app sends the unit a Stop before it imports a sample. The Looper and the Slicer leave that out (`ImportSMPLive`), so
+that the pattern is not stopped when a take or a slice lands on a pad. If the unit refuses the import without it, the import is
+made the usual way (with the Stop). If the pattern still stops for a moment, that is the unit loading the sample: tell me, and
+look for `looper:` and `slicer:` lines in `sp404 -v`.
