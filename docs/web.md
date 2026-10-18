@@ -140,3 +140,5 @@ there to see whether the sound is loud enough: it shows what the unit sends over
 open (on Linux the program listens itself, elsewhere ffmpeg or sox does), and the sound being recorded (marked **REC**) while Ctrl-R or a take
 of the Looper runs. The number is the loudest recent peak in dB below full scale: aim for the yellow, not the red.
 If the computer cannot listen, the meter says why.
+
+The bank chip at the top left of the page opens a list of the ten banks with the number of pads that hold a sample; choosing one moves the unit to that bank, as the bank keys do in the Pads view, and the Pads view shows it.

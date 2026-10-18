@@ -40,21 +40,23 @@ func (m Model) WithWeb(s WebSink) Model {
 
 // webState is what the page shows.
 type webState struct {
-	Unit    bool      `json:"unit"`
-	Bank    string    `json:"bank"`
-	BPM     float64   `json:"bpm"`
-	Running bool      `json:"running"`
-	Clock   string    `json:"clock"`
-	Bar     int       `json:"bar"`
-	Beat    int       `json:"beat"` // 0 to 3, -1 when there is no clock
-	Rec     bool      `json:"rec"`
-	Now     string    `json:"now"`
-	Next    string    `json:"next"`
-	Msg     string    `json:"msg"`
-	Pads    []webPad  `json:"pads"`
-	Focus   webFocus  `json:"focus"`
-	Motion  webMotion `json:"motion"`
-	Fx      [2]webFx  `json:"fx"`
+	Unit bool   `json:"unit"`
+	Bank string `json:"bank"`
+	// BankFill is how many pads of each bank hold a sample.
+	BankFill []int     `json:"bankFill"`
+	BPM      float64   `json:"bpm"`
+	Running  bool      `json:"running"`
+	Clock    string    `json:"clock"`
+	Bar      int       `json:"bar"`
+	Beat     int       `json:"beat"` // 0 to 3, -1 when there is no clock
+	Rec      bool      `json:"rec"`
+	Now      string    `json:"now"`
+	Next     string    `json:"next"`
+	Msg      string    `json:"msg"`
+	Pads     []webPad  `json:"pads"`
+	Focus    webFocus  `json:"focus"`
+	Motion   webMotion `json:"motion"`
+	Fx       [2]webFx  `json:"fx"`
 	// Patterns are the 16 slots of the bank, to choose what plays now and next.
 	Patterns []webPattern `json:"patterns"`
 	Version  string       `json:"version"`
@@ -190,6 +192,15 @@ func (m Model) webSnapshot() webState {
 	}
 	bank := m.perfBank()
 	s.Bank = string(rune('A' + bank))
+	for b := 0; b < proto.Banks; b++ {
+		n := 0
+		for _, row := range m.snap.Bank(b) {
+			if row.HasSample {
+				n++
+			}
+		}
+		s.BankFill = append(s.BankFill, n)
+	}
 	s.BPM = m.bankTempo(bank)
 	bars := 0
 	if d, _ := m.perfTracks(m.perfNow); d != nil {
@@ -480,6 +491,14 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		}
 	case "dub":
 		return m.motionOverdub(), nil
+	case "bank":
+		// The unit moves to the bank, as it does when [ or ] is pressed in the Pads view.
+		if m.snap == nil || m.busy != "" || c.I < 0 || c.I >= proto.Banks || c.I == m.perfBank() {
+			return m, nil
+		}
+		m.bank = m.perfBank()
+		cmd := m.switchBank(c.I - m.bank)
+		return m, cmd
 	case "cue":
 		// A pattern of the bank on show is the one that plays (n 1) or the next (n 2).
 		rows := m.patterns[m.perfBank()]

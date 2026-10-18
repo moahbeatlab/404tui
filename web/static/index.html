@@ -29,7 +29,7 @@
 <div id="app" hidden>
   <header id="top">
     <div class="brand">404<span>tui</span></div>
-    <div class="bankchip">BANK <b id="bankTop">–</b></div>
+    <button id="bankBtn" class="bankchip" aria-label="Choose the bank">BANK <b id="bankTop">–</b> <i>▾</i></button>
     <div class="clock">
       <div id="beats"><i></i><i></i><i></i><i></i></div>
       <div id="bar">–</div>
@@ -149,6 +149,13 @@
   </nav>
   <div id="toast"></div>
   <div id="lvPop" hidden><small id="lvPopN"></small><b id="lvPopV"></b></div>
+</div>
+
+<div id="bankPick" class="modal" hidden>
+  <div class="card">
+    <div class="phead"><b>Bank</b><button id="bankX" aria-label="Close">✕</button></div>
+    <div id="bankGrid"></div>
+  </div>
 </div>
 
 <div id="picker" hidden>

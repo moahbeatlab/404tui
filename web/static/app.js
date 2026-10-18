@@ -343,6 +343,25 @@
     }
   }
 
+  // ---- choosing the bank ----
+  const bankGrid = $('bankGrid');
+  for (let i = 0; i < 10; i++) {
+    const b = document.createElement('button');
+    b.innerHTML = String.fromCharCode(65 + i) + '<small></small>';
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'bank', i }); $('bankPick').hidden = true; });
+    bankGrid.appendChild(b);
+  }
+  function drawBanks() {
+    if ($('bankPick').hidden || !state) return;
+    [...bankGrid.children].forEach((b, i) => {
+      b.className = state.bank === String.fromCharCode(65 + i) ? 'now' : '';
+      b.lastChild.textContent = state.bankFill ? state.bankFill[i] + ' pads' : '';
+    });
+  }
+  $('bankBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); $('bankPick').hidden = false; drawBanks(); });
+  $('bankX').addEventListener('pointerdown', (e) => { e.preventDefault(); $('bankPick').hidden = true; });
+  $('bankPick').addEventListener('pointerdown', (e) => { if (e.target === $('bankPick')) $('bankPick').hidden = true; });
+
   // ---- choosing the pattern that plays now or next ----
   let picking = 0;
   const pickGrid = $('pickGrid');
@@ -449,7 +468,7 @@
       be.ctlEls[2].small.textContent = '#' + (mb.sel + 1);
       cls(be.ctlEls[0].b, 'on', cur.speed !== 1); cls(be.ctlEls[1].b, 'on', cur.rev);
     });
-    drawPick();
+    drawPick(); drawBanks();
     toast(s.msg);
   }
 

@@ -459,3 +459,20 @@ func TestTheSlicerOfThePageCutsAPadOntoTheNextFreePad(t *testing.T) {
 		t.Errorf("still waiting after the slices were placed: %+v", s)
 	}
 }
+
+func TestTheBrowserCanChangeTheBank(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	s := w.last(t)
+	if s.Bank != "A" || len(s.BankFill) != 10 || s.BankFill[0] == 0 {
+		t.Fatalf("bank %q, fill %v", s.Bank, s.BankFill)
+	}
+	r.web(`{"a":"bank","i":3}`)
+	if got := w.last(t).Bank; got != "D" {
+		t.Errorf("bank %s after choosing D", got)
+	}
+	r.web(`{"a":"bank","i":99}`) // out of range: nothing
+	if got := w.last(t).Bank; got != "D" {
+		t.Errorf("bank %s after a bank out of range", got)
+	}
+}
