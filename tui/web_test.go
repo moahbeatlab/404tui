@@ -490,12 +490,24 @@ func TestTheBrowserCanChangeTheBank(t *testing.T) {
 	}
 }
 
-func TestADeleteAndASlicePlacementWaitForTheLastBeatOfThePattern(t *testing.T) {
+func TestADeleteAndASlicePlacementWaitForBeat1OrTheLastBeatOfThePattern(t *testing.T) {
+	t.Run("beat 1", func(t *testing.T) { testQueuedDelete(t, false); testQueuedPlace(t, false) })
+	t.Run("last beat", func(t *testing.T) { testQueuedDelete(t, true); testQueuedPlace(t, true) })
+}
+
+func testQueuedDelete(t *testing.T, lastBeat bool) {
 	r, w := webRig(t)
 	r.s.press("r")
+	m0 := r.s.m()
+	m0.mem.LaterLastBeat = lastBeat
+	r.s.model = m0
 	r.feed(midiin.Event{Kind: midiin.Start})
 	r.tick(5)
 	length := r.s.m().loopBars() * ticksPerBar
+	at := r.s.m().laterAt()
+	if at == 0 {
+		at = length
+	}
 	if !r.s.m().snap.Bank(0)[0].HasSample {
 		t.Skip("A1 holds no sample")
 	}
@@ -511,7 +523,7 @@ func TestADeleteAndASlicePlacementWaitForTheLastBeatOfThePattern(t *testing.T) {
 	}
 	r.web(`{"a":"lpdel","i":0}`)
 	// Nothing happens before the last beat ...
-	r.tick(length - ticksPerBeat - 5 - 1)
+	r.tick(at - 5 - 1)
 	if !r.s.m().snap.Bank(0)[0].HasSample {
 		t.Fatal("deleted before the last beat")
 	}
@@ -519,8 +531,8 @@ func TestADeleteAndASlicePlacementWaitForTheLastBeatOfThePattern(t *testing.T) {
 	m := r.s.m()
 	next, cmd := m.midiEvent(midiMsg{link: r.link, ev: midiin.Event{Kind: midiin.Clock, At: time.Now()}})
 	r.s.model = next
-	if got := r.s.m().clock.ticks; got != length-ticksPerBeat {
-		t.Fatalf("at tick %d, want %d", got, length-ticksPerBeat)
+	if got := r.s.m().clock.ticks; got != at {
+		t.Fatalf("at tick %d, want %d", got, at)
 	}
 	r.s.run(cmd)
 	if r.s.m().snap.Bank(0)[0].HasSample {
@@ -531,7 +543,7 @@ func TestADeleteAndASlicePlacementWaitForTheLastBeatOfThePattern(t *testing.T) {
 	}
 }
 
-func TestSlicesPlacedWhileTheClockRunsGoOnThePadOnTheLastBeat(t *testing.T) {
+func testQueuedPlace(t *testing.T, lastBeat bool) {
 	r, w := webRig(t)
 	r.s.press("r")
 	m := r.s.m()
@@ -547,9 +559,16 @@ func TestSlicesPlacedWhileTheClockRunsGoOnThePadOnTheLastBeat(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.s.run(m.load(""))
+	m0 := r.s.m()
+	m0.mem.LaterLastBeat = lastBeat
+	r.s.model = m0
 	r.feed(midiin.Event{Kind: midiin.Start})
 	r.tick(3)
 	length := r.s.m().loopBars() * ticksPerBar
+	at := r.s.m().laterAt()
+	if at == 0 {
+		at = length
+	}
 	r.web(fmt.Sprintf(`{"a":"slpad","i":%d}`, from.Pad()))
 	if got := w.last(t).Slicer.Pad; got != int(from.Pad()) {
 		t.Fatalf("slpad: pad %d, busy %q, msg %q", got, r.s.m().busy, r.s.m().message)
@@ -561,7 +580,7 @@ func TestSlicesPlacedWhileTheClockRunsGoOnThePadOnTheLastBeat(t *testing.T) {
 	if s.Phase != "pick" || !strings.Contains(s.Later, "slices →") {
 		t.Fatalf("not queued: %+v (%q)", s, r.s.m().message)
 	}
-	r.tick(length - ticksPerBeat - 3 - 1)
+	r.tick(at - 3 - 1)
 	if r.s.m().snap.Bank(0)[free].HasSample {
 		t.Fatal("placed before the last beat")
 	}

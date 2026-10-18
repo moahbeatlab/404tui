@@ -254,6 +254,7 @@
   press('lpDp', () => send({ a: 'lpdelay', n: 5 }));
   press('lpPat', () => send({ a: 'lppattern' }));
   press('lpAlign', () => send({ a: 'lpalign' }));
+  press('lpLater', () => send({ a: 'lplater' }));
   press('slPrev', () => send({ a: 'slbank', n: -1 }));
   press('slNext', () => send({ a: 'slbank', n: 1 }));
   press('slTPrev', () => send({ a: 'sltbank', n: -1 }));
@@ -348,6 +349,7 @@
     cls($('lpArm'), 'on', run);
     $('lpArm').disabled = l.phase === 'saving' || (!run && !target);
     set($('lpBank'), 'textContent', l.bank);
+    set($('lpLaterT'), 'textContent', 'DELETE / PLACE: ' + (l.laterLast ? 'LAST BEAT' : 'BEAT 1'));
     set($('lpAlignT'), 'textContent', 'START: ' + (l.onBar ? 'BAR' : 'BEAT'));
     $('lpCal').disabled = busy;
     set($('lpBarsT'), 'textContent', l.bars + (l.bars === 1 ? ' BAR' : ' BARS'));

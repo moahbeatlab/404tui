@@ -122,6 +122,7 @@ var commands = []command{
 	{"b", "Looper: how long a loop is (1, 2, 4 or 8 bars)", []int{secLooper}},
 	{"[", "Looper: the bank the loops go to ( ] the next)", []int{secLooper}},
 	{"x", "Looper: remix the pad in front: cut in slices (s sets how many: 4, 8, 16, 32), played in a random order, onto the next free pad of the bank, ungated", []int{secLooper}},
+	{"w", "Looper: a delete (and slices placed from the web page) wait for beat 1 of the pattern, or for the last beat (press again to switch)", []int{secLooper}},
 	{"p", "Looper: make the pattern of the bank in which all 16 pads start on beat 1", []int{secLooper}},
 	{"d", "Looper: delete the sample of the pad in front (d twice)", []int{secLooper}},
 	{"g", "Looper: loops are made 1 dB quieter (G louder); n: every loop as loud as it can be", []int{secLooper}},

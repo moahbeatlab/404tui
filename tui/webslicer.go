@@ -317,7 +317,7 @@ func (m Model) slicerPlace() (tea.Model, tea.Cmd) {
 		return msg
 	})
 	if m.looperLater(lpJob{key: "place:" + target.String(), label: "slices → " + target.String(), cmd: cmd}) {
-		m.message = fmt.Sprintf("the slices go on %s on the last beat of the pattern, in %.1f beats", target, m.beatsToLast())
+		m.message = fmt.Sprintf("the slices go on %s on %s, in %.1f beats", target, m.laterName(), m.beatsToLater())
 		return m, nil
 	}
 	m.busy = "putting the slices on " + target.String()

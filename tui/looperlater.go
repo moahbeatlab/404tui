@@ -10,9 +10,9 @@ import (
 	"github.com/moahbeatlab/404tui/proto"
 )
 
-// What changes the pads while the unit plays (a pad that is deleted, slices that are put on a pad) waits for the last beat
-// of the pattern: the next beat is the start of the pattern, where everything is triggered again, so a gap from the work on
-// the unit is not heard. The pattern is as long as a loop (the length the Looper has, in bars), counted from the unit's
+// What changes the pads while the unit plays (a pad that is deleted, slices that are put on a pad) waits for a beat of the
+// pattern: beat 1 of the next round, where everything is triggered again, or (a setting) the last beat before it. The work
+// on the unit can make a gap, and this is where it is least heard. The pattern is as long as a loop (the length the Looper has, in bars), counted from the unit's
 // start. Without a running clock the work is done at once.
 
 // ticksPerBeat is the clock's ticks in a quarter note.
@@ -25,14 +25,37 @@ type lpJob struct {
 	cmd   tea.Cmd
 }
 
-// lastBeat is the tick, in the pattern, at which the last beat begins.
-func (m Model) lastBeat() int { return m.loopBars()*ticksPerBar - ticksPerBeat }
+// laterAt is the tick, in the pattern, at which the queued work is done: beat 1 of the next round, or (the setting) the last beat.
+func (m Model) laterAt() int {
+	if m.mem.LaterLastBeat {
+		return m.loopBars()*ticksPerBar - ticksPerBeat
+	}
+	return 0
+}
 
-// beatsToLast says in how many beats the last beat of the pattern begins.
-func (m Model) beatsToLast() float64 {
+// laterName says when the queued work is done.
+func (m Model) laterName() string {
+	if m.mem.LaterLastBeat {
+		return "the last beat of the pattern"
+	}
+	return "beat 1 of the pattern"
+}
+
+// beatsToLater says in how many beats that is.
+func (m Model) beatsToLater() float64 {
 	length := m.loopBars() * ticksPerBar
-	left := (m.lastBeat() - m.clock.ticks%length + length) % length
+	left := (m.laterAt() - m.clock.ticks%length + length) % length
+	if left == 0 {
+		left = length
+	}
 	return float64(left) / ticksPerBeat
+}
+
+// laterToggle switches between beat 1 and the last beat for the queued work.
+func (m Model) laterToggle() (tea.Model, tea.Cmd) {
+	m.mem.LaterLastBeat = !m.mem.LaterLastBeat
+	m.message = "deleting a pad and placing slices wait for " + m.laterName()
+	return m, nil
 }
 
 // looperLater queues work for the last beat of the pattern. It says false when the clock does not run: the work is not
@@ -76,12 +99,12 @@ func (m Model) looperJobsTick() tea.Cmd {
 	if lp == nil || len(lp.jobs) == 0 || m.clock == nil {
 		return nil
 	}
-	if m.clock.ticks%(m.loopBars()*ticksPerBar) != m.lastBeat() {
+	if m.clock.ticks%(m.loopBars()*ticksPerBar) != m.laterAt() {
 		return nil
 	}
 	var cmds []tea.Cmd
 	for _, j := range lp.jobs {
-		m.log.Info("looper: doing the queued work on the last beat", "job", j.key, "tick", m.clock.ticks)
+		m.log.Info("looper: doing the queued work", "job", j.key, "tick", m.clock.ticks)
 		cmds = append(cmds, j.cmd)
 	}
 	lp.jobs = nil
@@ -121,5 +144,5 @@ func (m Model) laterText() string {
 	for _, j := range m.lp.jobs {
 		labels = append(labels, j.label)
 	}
-	return fmt.Sprintf("on the last beat of the pattern (in %.1f beats): %s", m.beatsToLast(), strings.Join(labels, ", "))
+	return fmt.Sprintf("on %s (in %.1f beats): %s", m.laterName(), m.beatsToLater(), strings.Join(labels, ", "))
 }

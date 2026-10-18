@@ -170,6 +170,8 @@ func (m Model) looperKey(name string) (tea.Model, tea.Cmd) {
 		return m.looperArmWith(true)
 	case "t":
 		return m.looperAlignToggle()
+	case "w":
+		return m.laterToggle()
 	case "s":
 		return m.looperSlicesNext()
 	case "x":
@@ -263,7 +265,7 @@ func (m Model) looperDelete(i int) (tea.Model, tea.Cmd) {
 	row := m.snap.Bank(m.loopBank())[i]
 	key := fmt.Sprintf("del:%d", i)
 	if m.looperUnlater(key) {
-		m.message = fmt.Sprintf("%s is no longer deleted on the last beat", row.Pad)
+		m.message = fmt.Sprintf("%s is no longer deleted when the pattern comes round", row.Pad)
 		return m, nil
 	}
 	if !row.HasSample {
@@ -271,7 +273,7 @@ func (m Model) looperDelete(i int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.looperLater(lpJob{key: key, label: "delete " + row.Pad.String(), cmd: m.deleteCmd([]proto.PadIndex{row.Pad})}) {
-		m.message = fmt.Sprintf("%s is deleted on the last beat of the pattern, in %.1f beats (delete it again to keep it)", row.Pad, m.beatsToLast())
+		m.message = fmt.Sprintf("%s is deleted on %s, in %.1f beats (delete it again to keep it)", row.Pad, m.laterName(), m.beatsToLater())
 		return m, nil
 	}
 	m.busy = "deleting " + row.Pad.String()
@@ -682,7 +684,7 @@ func (m Model) looperBody(g geom) string {
 			}
 		}
 	}
-	keys := st.dim.Render("a arm   b length   [ ] bank   p pattern   d delete   g G gain   n normalise   t beat/bar   s slices   x remix   c calibrate   , . delay   h j k l pad")
+	keys := st.dim.Render("a arm   b length   [ ] bank   p pattern   d delete   g G gain   n normalise   t beat/bar   w delete/place on beat 1 or last beat   s slices   x remix   c calibrate   , . delay   h j k l pad")
 	top := []string{head, "", status, pattern, ""}
 	bottom := []string{"", keys}
 	avail := g.bodyH - 2 - len(top) - len(bottom) - 3

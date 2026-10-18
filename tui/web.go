@@ -88,9 +88,10 @@ type webLooper struct {
 	Norm   bool   `json:"norm"`
 	OnBar  bool   `json:"onBar"`
 	Slices int    `json:"slices"`
-	// Later says what waits for the last beat of the pattern (empty for nothing).
-	Later string `json:"later"`
-	Cal   bool   `json:"cal"`
+	// Later says what waits for the pattern to come round (empty for nothing); LaterLast that it is the last beat, not beat 1.
+	Later     string `json:"later"`
+	LaterLast bool   `json:"laterLast"`
+	Cal       bool   `json:"cal"`
 	// Phase is idle, starting, armed, recording or saving; Bar of Of is where a recording is; Left the beats until
 	// bar 1 while it waits.
 	Phase  string  `json:"phase"`
@@ -317,7 +318,7 @@ func (m Model) webLevel() *webLevel {
 // webLooper is the Looper for the page.
 func (m Model) webLooper() webLooper {
 	bank := m.loopBank()
-	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), Delay: m.mem.LooperDelay, Gain: m.mem.LooperGain, Norm: m.mem.LooperNormalize, OnBar: !m.mem.LooperOnBeat, Slices: m.loopSlices(), Phase: "idle", Of: m.loopBars(), Pads: []webLoopPad{}}
+	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), Delay: m.mem.LooperDelay, Gain: m.mem.LooperGain, Norm: m.mem.LooperNormalize, OnBar: !m.mem.LooperOnBeat, LaterLast: m.mem.LaterLastBeat, Slices: m.loopSlices(), Phase: "idle", Of: m.loopBars(), Pads: []webLoopPad{}}
 	free, ok := m.loopFreePad()
 	if ok {
 		l.Target = free.String()
@@ -474,7 +475,7 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		return m.looperBankSet(c.I)
 	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute", "slmang":
 		return m.slicerCommand(c.A, c.N, c.I)
-	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel", "lpgain", "lpnorm", "lpcal", "lpalign", "lpslices", "lpremix":
+	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel", "lpgain", "lpnorm", "lpcal", "lpalign", "lpslices", "lpremix", "lplater":
 		if m.snap == nil {
 			return m, nil
 		}
@@ -501,6 +502,8 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 			return m.looperArmWith(true)
 		case "lpalign":
 			return m.looperAlignToggle()
+		case "lplater":
+			return m.laterToggle()
 		case "lpslices":
 			return m.looperSlicesNext()
 		case "lpremix":
@@ -581,6 +584,6 @@ func (m Model) levelSet2(i int, v int32) (Model, tea.Cmd) {
 
 // lpSettings are the commands of the Looper and the Slicer that only change a setting: they do not wait for the unit.
 var lpSettings = map[string]bool{
-	"lpbank": true, "lpbankset": true, "lpbars": true, "lpdelay": true, "lpgain": true, "lpnorm": true, "lpalign": true, "lpslices": true,
+	"lpbank": true, "lpbankset": true, "lpbars": true, "lpdelay": true, "lpgain": true, "lpnorm": true, "lpalign": true, "lplater": true, "lpslices": true,
 	"slbank": true, "slbankset": true, "sltbank": true, "sltbankset": true, "slslices": true, "slcut": true, "slorder": true, "slmang": true, "sldiv": true, "slswing": true,
 }
