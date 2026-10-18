@@ -201,6 +201,11 @@
   press('lpDm', () => send({ a: 'lpdelay', n: -5 }));
   press('lpDp', () => send({ a: 'lpdelay', n: 5 }));
   press('lpPat', () => send({ a: 'lppattern' }));
+  press('lpAlign', () => send({ a: 'lpalign' }));
+  press('lpCal', () => send({ a: 'lpcal' }));
+  press('lpGm', () => send({ a: 'lpgain', n: -1 }));
+  press('lpGp', () => send({ a: 'lpgain', n: 1 }));
+  press('lpGain', () => send({ a: 'lpnorm' }));
   press('lpDel', () => {
     const p = state && state.looper && state.looper.pads[lpSel];
     if (!p || !p.has) return;
@@ -217,16 +222,20 @@
     const st = $('lpStatus');
     st.dataset.phase = l.phase;
     set($('lpPhase'), 'textContent', l.phase === 'recording' ? '● REC ' + l.bar + '/' + l.of : PHASE[l.phase] || l.phase);
-    set($('lpSub'), 'textContent', l.phase === 'idle' ? (target ? l.bars + (l.bars === 1 ? ' bar' : ' bars') + ' from the next bar 1 → ' + target : 'bank ' + l.bank + ' is full: delete a loop')
-      : l.phase === 'armed' ? 'bar 1 in ' + l.left.toFixed(1) + ' beats → ' + target
+    set($('lpSub'), 'textContent', l.phase === 'idle' ? (target ? l.bars + (l.bars === 1 ? ' bar' : ' bars') + ' from the next ' + (l.onBar ? 'bar' : 'beat') + ' → ' + target : 'bank ' + l.bank + ' is full: delete a loop')
+      : l.phase === 'armed' ? (l.cal ? 'calibrating: ' : '') + 'starts in ' + l.left.toFixed(1) + ' beats → ' + target
       : target ? '→ ' + target : '');
     set($('lpArmT'), 'textContent', run ? 'CANCEL' : l.phase === 'saving' ? 'SAVING…' : 'ARM');
     cls($('lpArm'), 'on', run);
     $('lpArm').disabled = l.phase === 'saving' || (!run && !target);
     set($('lpBank'), 'textContent', l.bank);
+    set($('lpAlignT'), 'textContent', 'START: ' + (l.onBar ? 'BAR' : 'BEAT'));
+    $('lpCal').disabled = busy;
     set($('lpBarsT'), 'textContent', l.bars + (l.bars === 1 ? ' BAR' : ' BARS'));
     set($('lpDelay'), 'textContent', l.delay + ' ms');
-    for (const id of ['lpPrev', 'lpNext', 'lpBars']) $(id).disabled = busy;
+    set($('lpGainT'), 'textContent', l.norm ? 'NORMALISE' : (l.gain > 0 ? '+' : '') + l.gain + ' dB');
+    cls($('lpGain'), 'on', l.norm);
+    for (const id of ['lpPrev', 'lpNext', 'lpBars', 'lpAlign']) $(id).disabled = busy;
     set($('lpPatS'), 'textContent', !l.known ? 'reading…' : l.pattern ? 'pattern ' + l.patternName + ' plays all 16 pads ✓' : 'no pattern with all 16 pads');
     cls($('lpPat'), 'warn', l.known && !l.pattern);
     const sel = l.pads[lpSel];

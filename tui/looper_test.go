@@ -10,7 +10,7 @@ import (
 	"github.com/moahbeatlab/404tui/midiin"
 )
 
-func TestTheLooperRecordsAFullLoopFromBarOneAndPutsItOnTheNextFreePad(t *testing.T) {
+func TestTheLooperRecordsAFullLoopFromTheNextBeatAndPutsItOnTheNextFreePad(t *testing.T) {
 	loopSettle = 0
 	t.Cleanup(func() { loopSettle = 600 * time.Millisecond })
 	r := newPerfRig(t, 200, 40)
@@ -49,15 +49,15 @@ func TestTheLooperRecordsAFullLoopFromBarOneAndPutsItOnTheNextFreePad(t *testing
 			r.s.run(cmd)
 		}
 	}
-	for r.s.m().clock.ticks < ticksPerBar-1 {
+	for r.s.m().clock.ticks < 23 {
 		tickAt(-time.Hour, false)
 	}
-	tickAt(0, false) // bar 1
+	tickAt(0, false) // the next beat
 	if r.s.m().lp.phase != lpRecording {
-		t.Fatalf("not recording on bar 1: phase %d, ticks %d", r.s.m().lp.phase, r.s.m().clock.ticks)
+		t.Fatalf("not recording on the next beat: phase %d, ticks %d", r.s.m().lp.phase, r.s.m().clock.ticks)
 	}
 	r.s.shows("REC")
-	for r.s.m().clock.ticks < 2*ticksPerBar-1 {
+	for r.s.m().clock.ticks < 24+ticksPerBar-1 {
 		tickAt(time.Second, false)
 	}
 	tickAt(2*time.Second, true) // the end: the take is cut and saved
@@ -67,6 +67,9 @@ func TestTheLooperRecordsAFullLoopFromBarOneAndPutsItOnTheNextFreePad(t *testing
 	m := r.s.m()
 	if stopped != 1 {
 		t.Errorf("the recorder was stopped %d times, want 1", stopped)
+	}
+	if !strings.Contains(m.message, "peak") {
+		t.Errorf("the message does not say how loud the loop is: %q", m.message)
 	}
 	row := m.snap.Pads[3]
 	if !row.HasSample || !strings.HasPrefix(row.Name, "LOOP ") {
@@ -115,5 +118,50 @@ func TestTheLooperSaysWhichPatternItMade(t *testing.T) {
 	}
 	if name := s.m().message; !strings.Contains(name, "pattern A") {
 		t.Errorf("no pattern name in %q", name)
+	}
+}
+
+func TestTheLooperCanStartOnTheNextBarAndCalibratesTheDelay(t *testing.T) {
+	loopSettle = 0
+	t.Cleanup(func() { loopSettle = 600 * time.Millisecond })
+	r := newPerfRig(t, 200, 40)
+	stopped := 0
+	r.s.model = r.s.m().WithRecorder(&fakeRecorder{stopped: &stopped, loud: 4194304})
+	r.s.press("8", "t")
+	if !r.s.m().mem.LooperOnBar || r.s.m().takeAlign() != ticksPerBar {
+		t.Fatal("t did not switch to the bar")
+	}
+	r.s.press("t")
+	// A calibration waits for a bar whatever is set, and is one bar long.
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.tick(1)
+	r.s.press("c")
+	if m := r.s.m(); m.lp.phase != lpArmed || !m.lp.cal || m.takeBars() != 1 || m.takeAlign() != ticksPerBar {
+		t.Fatalf("not calibrating: %+v", m.lp)
+	}
+	r.s.m().lp.session.Started = time.Now().Add(-5 * time.Second)
+	at := time.Now().Add(-2500 * time.Millisecond)
+	tickAt := func(d time.Duration, run bool) {
+		next, cmd := r.s.m().midiEvent(midiMsg{link: r.link, ev: midiin.Event{Kind: midiin.Clock, At: at.Add(d)}})
+		r.s.model = next
+		if run {
+			r.s.run(cmd)
+		}
+	}
+	for r.s.m().clock.ticks < ticksPerBar-1 {
+		tickAt(-time.Hour, false)
+	}
+	tickAt(0, false)
+	for r.s.m().clock.ticks < 2*ticksPerBar-1 {
+		tickAt(time.Second, false)
+	}
+	tickAt(2*time.Second, true)
+	m := r.s.m()
+	// The fake recording is silent where the bar was: the calibration says so, and puts nothing on a pad.
+	if m.lp.phase != lpIdle || !strings.Contains(m.message, "calibration failed: nothing was heard") {
+		t.Fatalf("calibration did not run: phase %d %q", m.lp.phase, m.message)
+	}
+	if m.snap.Pads[3].HasSample {
+		t.Error("a calibration put a loop on a pad")
 	}
 }

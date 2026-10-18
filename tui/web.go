@@ -65,6 +65,10 @@ type webLooper struct {
 	Bank  string `json:"bank"`
 	Bars  int    `json:"bars"`
 	Delay int    `json:"delay"` // ms
+	Gain  int    `json:"gain"`  // dB
+	Norm  bool   `json:"norm"`
+	OnBar bool   `json:"onBar"`
+	Cal   bool   `json:"cal"`
 	// Phase is idle, starting, armed, recording or saving; Bar of Of is where a recording is; Left the beats until
 	// bar 1 while it waits.
 	Phase  string  `json:"phase"`
@@ -233,25 +237,26 @@ func (m Model) webSnapshot() webState {
 // webLooper is the Looper for the page.
 func (m Model) webLooper() webLooper {
 	bank := m.loopBank()
-	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), Delay: m.mem.LooperDelay, Phase: "idle", Of: m.loopBars(), Pads: []webLoopPad{}}
+	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), Delay: m.mem.LooperDelay, Gain: m.mem.LooperGain, Norm: m.mem.LooperNormalize, OnBar: m.mem.LooperOnBar, Phase: "idle", Of: m.loopBars(), Pads: []webLoopPad{}}
 	free, ok := m.loopFreePad()
 	if ok {
 		l.Target = free.String()
 	}
 	if lp := m.lp; lp != nil {
-		length := m.loopBars() * ticksPerBar
+		align := m.takeAlign()
+		l.Of, l.Cal = m.takeBars(), lp.cal
 		switch lp.phase {
 		case lpStarting:
 			l.Phase = "starting"
 		case lpArmed:
 			l.Phase = "armed"
 			if m.clock != nil {
-				l.Left = math.Round(float64((length-m.clock.ticks%length)%length)/24*10) / 10
+				l.Left = math.Round(float64((align-m.clock.ticks%align)%align)/24*10) / 10
 			}
 		case lpRecording:
 			l.Phase = "recording"
 			if m.clock != nil {
-				l.Bar = min((m.clock.ticks-lp.startTick)/ticksPerBar+1, m.loopBars())
+				l.Bar = min((m.clock.ticks-lp.startTick)/ticksPerBar+1, m.takeBars())
 			}
 		case lpSaving:
 			l.Phase = "saving"
@@ -344,7 +349,7 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("%s kept on %s: hold it again to let it go", pad, busName(m.busOf(pad)))
 		nm, cmd := m.setIsolated(keep)
 		return nm, tea.Batch(undo, cmd)
-	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel":
+	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel", "lpgain", "lpnorm", "lpcal", "lpalign":
 		if m.snap == nil || m.busy != "" {
 			return m, nil
 		}
@@ -359,6 +364,14 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 			return m.looperDelayStep(clamp(c.N, -50, 50))
 		case "lppattern":
 			return m.looperPattern()
+		case "lpgain":
+			return m.looperGainStep(clamp(c.N, -6, 6))
+		case "lpnorm":
+			return m.looperNormalizeToggle()
+		case "lpcal":
+			return m.looperArmWith(true)
+		case "lpalign":
+			return m.looperAlignToggle()
 		default:
 			return m.looperDelete(c.I)
 		}

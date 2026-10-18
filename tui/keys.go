@@ -123,6 +123,7 @@ var commands = []command{
 	{"[", "Looper: the bank the loops go to ( ] the next)", []int{secLooper}},
 	{"p", "Looper: make the pattern of the bank in which all 16 pads start on beat 1", []int{secLooper}},
 	{"d", "Looper: delete the sample of the pad in front (d twice)", []int{secLooper}},
+	{"g", "Looper: loops are made 1 dB quieter (G louder); n: every loop as loud as it can be", []int{secLooper}},
 	{",", "Looper: the recording is 5 ms less behind the clock ( . is more)", []int{secLooper}},
 	{"1", "Go to Pads", nil},
 	{"2", "Go to Files", nil},

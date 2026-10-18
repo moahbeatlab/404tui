@@ -62,6 +62,11 @@ type State struct {
 	LooperBank  int `json:"looperBank,omitempty"`
 	LooperBars  int `json:"looperBars,omitempty"`
 	LooperDelay int `json:"looperDelay,omitempty"`
+	// LooperOnBar makes a take wait for the next bar instead of the next beat.
+	LooperOnBar bool `json:"looperOnBar,omitempty"`
+	// LooperGain makes a loop louder by that many dB (it can be negative); LooperNormalize makes it as loud as it can be.
+	LooperGain      int  `json:"looperGain,omitempty"`
+	LooperNormalize bool `json:"looperNormalize,omitempty"`
 	// BusNotes are what the user wrote of the effect on each bus (the unit does not say), shown in
 	// the Perform view.
 	BusNotes [2]string `json:"busNotes,omitempty"`

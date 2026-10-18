@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/moahbeatlab/404tui/formats"
@@ -46,4 +47,67 @@ func CutLoop(rec formats.Sample, stopped, loopStart, loopEnd time.Time, delay ti
 		}
 	}
 	return out, nil
+}
+
+// NormalizeTo is the peak, in dB below full scale, that a normalised loop gets.
+const NormalizeTo = -1.0
+
+// PeakDB is the highest sample of s in dB below full scale (0 is full scale); a silent sample is -Inf.
+func PeakDB(s formats.Sample) float64 {
+	peak := 0
+	for _, v := range s.Samples {
+		a := int(v)
+		if a < 0 {
+			a = -a
+		}
+		peak = max(peak, a)
+	}
+	if peak == 0 {
+		return math.Inf(-1)
+	}
+	return 20 * math.Log10(float64(peak)/32768)
+}
+
+// ApplyGain makes s louder by db (or, when normalize is set, as loud as its peak can be, NormalizeTo): the samples
+// that would go past full scale are held there. It returns the gain it applied in dB.
+func ApplyGain(s formats.Sample, db float64, normalize bool) (formats.Sample, float64) {
+	if normalize {
+		if p := PeakDB(s); !math.IsInf(p, -1) {
+			db = NormalizeTo - p
+		}
+	}
+	if db == 0 {
+		return s, 0
+	}
+	g := math.Pow(10, db/20)
+	out := formats.Sample{Channels: s.Channels, Samples: make([]int16, len(s.Samples))}
+	for i, v := range s.Samples {
+		out.Samples[i] = int16(math.Max(-32768, math.Min(32767, math.Round(float64(v)*g))))
+	}
+	return out, db
+}
+
+// HitDelay finds how late a hit is in a loop that has one on its first beat: the milliseconds from the start to
+// the first sample that is a third of the peak. A hit just before the start (late in the loop) comes out negative.
+func HitDelay(s formats.Sample) (int, error) {
+	peak := 0
+	for _, v := range s.Samples {
+		peak = max(peak, int(math.Abs(float64(v))))
+	}
+	if peak < 330 { // -40 dB
+		return 0, errors.New("nothing was heard: is the pattern playing a hit on beat 1?")
+	}
+	ch := max(s.Channels, 1)
+	for i := 0; i+ch <= len(s.Samples); i += ch {
+		for c := 0; c < ch; c++ {
+			if int(math.Abs(float64(s.Samples[i+c]))) >= peak/3 {
+				frame := i / ch
+				if frame > s.Frames()/2 {
+					frame -= s.Frames()
+				}
+				return int(math.Round(float64(frame) / formats.SampleRate * 1000)), nil
+			}
+		}
+	}
+	return 0, errors.New("no hit found")
 }

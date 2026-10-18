@@ -40,3 +40,45 @@ func TestCutLoopEndsWhereTheClockSaysAndFades(t *testing.T) {
 		t.Error("a loop that ends after the recording was cut")
 	}
 }
+
+func TestApplyGainAndNormalize(t *testing.T) {
+	s := formats.Sample{Channels: 1, Samples: []int16{0, 8192, -16384, 30000}}
+	if got := PeakDB(s); got > -0.7 || got < -0.9 {
+		t.Errorf("peak %.2f dB, want about -0.77", got)
+	}
+	quiet := formats.Sample{Channels: 1, Samples: []int16{0, 1000, -2000}}
+	loud, gain := ApplyGain(quiet, 0, true)
+	if p := PeakDB(loud); p < NormalizeTo-0.05 || p > NormalizeTo+0.05 || gain <= 0 {
+		t.Errorf("normalised to %.2f dB with %.2f dB of gain", p, gain)
+	}
+	// Past full scale is held there, not wrapped.
+	clipped, _ := ApplyGain(s, 12, false)
+	if clipped.Samples[3] != 32767 || clipped.Samples[2] != -32768 {
+		t.Errorf("clipped %v", clipped.Samples)
+	}
+	same, g := ApplyGain(s, 0, false)
+	if g != 0 || &same.Samples[0] != &s.Samples[0] {
+		t.Error("no gain must leave the sample alone")
+	}
+	if silent, g := ApplyGain(formats.Sample{Channels: 1, Samples: []int16{0, 0}}, 0, true); g != 0 || PeakDB(silent) < 0 == false && false {
+		t.Error("silence has nothing to normalise")
+	}
+}
+
+func TestHitDelayFindsTheHitOnTheFirstBeat(t *testing.T) {
+	// A bar at 48 kHz with a hit 12 ms after the start, and one that is 5 ms before the start (late in the loop).
+	mk := func(at int) formats.Sample {
+		s := formats.Sample{Channels: 2, Samples: make([]int16, 2*48000)}
+		s.Samples[2*at], s.Samples[2*at+1] = 20000, 20000
+		return s
+	}
+	if ms, err := HitDelay(mk(576)); err != nil || ms != 12 {
+		t.Errorf("hit 12 ms late: %d %v", ms, err)
+	}
+	if ms, err := HitDelay(mk(48000 - 240)); err != nil || ms != -5 {
+		t.Errorf("hit 5 ms early: %d %v", ms, err)
+	}
+	if _, err := HitDelay(formats.Sample{Channels: 1, Samples: make([]int16, 100)}); err == nil {
+		t.Error("silence has no hit")
+	}
+}

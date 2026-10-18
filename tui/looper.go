@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,7 +19,7 @@ import (
 )
 
 // The Looper records what the unit plays (the loop of the MC-101 that goes through it) for a number of bars,
-// beginning on bar 1 of the unit's clock, and puts it on the next free pad of a bank, ungated. The bank has a
+// beginning on the next beat (or bar) of the unit's clock, and puts it on the next free pad of a bank, ungated. The bank has a
 // pattern in which all 16 pads start on beat 1, so the loop plays from the next round on. A pad that is no longer
 // wanted is deleted: its note in the pattern is silent then, and the pad is free for the next take.
 
@@ -27,7 +28,7 @@ type looperPhase int
 const (
 	lpIdle      looperPhase = iota
 	lpStarting              // the recorder is being started
-	lpArmed                 // recording, waiting for bar 1
+	lpArmed                 // recording, waiting for the start
 	lpRecording             // the loop is being played into the file
 	lpSaving                // the take is being cut and put on its pad
 )
@@ -49,6 +50,8 @@ type looperState struct {
 	// cursor is the pad in front (0 to 15); delAsk is the pad d asked to delete (-1 for none).
 	cursor, delAsk int
 	takes          int
+	// cal is a take that measures the delay instead of making a loop.
+	cal bool
 }
 
 type (
@@ -62,6 +65,11 @@ type (
 		pad  proto.PadIndex
 		name string
 		err  error
+		// peak is how loud the loop on the pad is, in dB below full scale; gain what was added to it.
+		peak, gain float64
+		// delay is what a calibration found, in ms.
+		cal   bool
+		delay int
 	}
 )
 
@@ -88,6 +96,23 @@ func (m Model) loopBars() int {
 func (m Model) loopDelay() time.Duration { return time.Duration(m.mem.LooperDelay) * time.Millisecond }
 
 // loopFreePad is the first pad of the bank that holds no sample.
+// takeBars is how long the take that is on (or the next) is: a calibration is one bar.
+func (m Model) takeBars() int {
+	if m.lp != nil && m.lp.cal {
+		return 1
+	}
+	return m.loopBars()
+}
+
+// takeAlign is how many clock ticks the start of a take is a multiple of: a beat, or a bar when set (and for a
+// calibration, which needs the bar so that a hit on beat 1 is at the start).
+func (m Model) takeAlign() int {
+	if m.mem.LooperOnBar || (m.lp != nil && m.lp.cal) {
+		return ticksPerBar
+	}
+	return 24
+}
+
 func (m Model) loopFreePad() (proto.PadIndex, bool) {
 	for _, row := range m.snap.Bank(m.loopBank()) {
 		if !row.HasSample {
@@ -112,12 +137,22 @@ func (m Model) looperKey(name string) (tea.Model, tea.Cmd) {
 	switch name {
 	case "a", "enter", " ", "space":
 		return m.looperArm()
+	case "c":
+		return m.looperArmWith(true)
+	case "t":
+		return m.looperAlignToggle()
 	case "[":
 		return m.looperBankStep(-1)
 	case "]":
 		return m.looperBankStep(1)
 	case "b":
 		return m.looperBarsNext()
+	case "g":
+		return m.looperGainStep(-1)
+	case "G":
+		return m.looperGainStep(1)
+	case "n":
+		return m.looperNormalizeToggle()
 	case ",":
 		return m.looperDelayStep(-5)
 	case ".":
@@ -173,7 +208,7 @@ func (m Model) looperBarsNext() (tea.Model, tea.Cmd) {
 
 // looperDelayStep changes how many milliseconds the recording is behind the clock.
 func (m Model) looperDelayStep(step int) (tea.Model, tea.Cmd) {
-	m.mem.LooperDelay = clamp(m.mem.LooperDelay+step, 0, 500)
+	m.mem.LooperDelay = clamp(m.mem.LooperDelay+step, -250, 500)
 	m.message = fmt.Sprintf("the recording is %d ms behind the clock: loops are taken that much later from the recording", m.mem.LooperDelay)
 	return m, nil
 }
@@ -198,8 +233,11 @@ func (m Model) looperDelete(i int) (tea.Model, tea.Cmd) {
 	})
 }
 
-// looperArm starts a take: the recorder comes up now, and the loop begins on the next bar 1.
-func (m Model) looperArm() (tea.Model, tea.Cmd) {
+// looperArm starts a take: the recorder comes up now, and the loop begins on the next beat.
+func (m Model) looperArm() (tea.Model, tea.Cmd) { return m.looperArmWith(false) }
+
+// looperArmWith starts a take, or a calibration (cal) that measures the delay.
+func (m Model) looperArmWith(cal bool) (tea.Model, tea.Cmd) {
 	lp := m.looper()
 	switch lp.phase {
 	case lpStarting, lpArmed, lpRecording:
@@ -220,7 +258,7 @@ func (m Model) looperArm() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	pad, ok := m.loopFreePad()
-	if !ok {
+	if !ok && !cal {
 		m.message = fmt.Sprintf("bank %c has no free pad: d deletes a loop", 'A'+m.loopBank())
 		return m, nil
 	}
@@ -228,8 +266,12 @@ func (m Model) looperArm() (tea.Model, tea.Cmd) {
 		m.lvl.src.Stop() // the recorder takes the input
 		m.lvl = nil
 	}
-	lp.phase, lp.target = lpStarting, pad
-	m.message = fmt.Sprintf("armed: %s from bar 1 go to %s", plural(m.loopBars(), "bar"), pad)
+	lp.phase, lp.target, lp.cal = lpStarting, pad, cal
+	if cal {
+		m.message = "calibrating: one bar from the next bar; a hit (a kick) on beat 1 of the pattern, everything else muted"
+	} else {
+		m.message = fmt.Sprintf("armed: %s from the next %s go to %s", plural(m.loopBars(), "bar"), map[bool]string{true: "bar", false: "beat"}[m.mem.LooperOnBar], pad)
+	}
 	b, device := m.recorder, m.recordDevice()
 	return m, func() tea.Msg {
 		s, err := b.Start(loopDir(), device)
@@ -241,7 +283,7 @@ func (m Model) looperArm() (tea.Model, tea.Cmd) {
 func (m Model) looperCancel(message string) (tea.Model, tea.Cmd) {
 	lp := m.looper()
 	s := lp.session
-	lp.phase, lp.session = lpIdle, nil
+	lp.phase, lp.session, lp.cal = lpIdle, nil, false
 	m.message = message
 	if s == nil {
 		return m, nil
@@ -270,26 +312,29 @@ func (m Model) loopStarted(msg loopStartedMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// looperTick moves a take on with the clock: bar 1 starts it, the end of the loop finishes it. at is when the
+// looperTick moves a take on with the clock: the start of a beat starts it, the end of the loop finishes it. at is when the
 // tick came.
 func (m Model) looperTick(at time.Time) tea.Cmd {
 	lp := m.lp
 	if lp == nil || m.clock == nil {
 		return nil
 	}
-	length := m.loopBars() * ticksPerBar
+	length := m.takeBars() * ticksPerBar
 	switch lp.phase {
 	case lpArmed:
-		// The recorder needs a moment before it hears anything: bar 1 comes after that.
-		if m.clock.ticks%length != 0 || time.Since(lp.session.Started) < 1500*time.Millisecond {
+		// The recorder needs a moment before it hears anything: the start comes after that.
+		if m.clock.ticks%m.takeAlign() != 0 || time.Since(lp.session.Started) < 1500*time.Millisecond {
 			return nil
 		}
 		lp.phase, lp.startTick, lp.t0 = lpRecording, m.clock.ticks, at
+		m.log.Info("looper: start", "tick", m.clock.ticks, "align", m.takeAlign(), "bars", m.takeBars(), "bpm", m.mon.bpm,
+			"since_recorder_start_ms", time.Since(lp.session.Started).Milliseconds(), "event_age_ms", time.Since(at).Milliseconds())
 	case lpRecording:
 		if m.clock.ticks-lp.startTick < length {
 			return nil
 		}
 		lp.phase, lp.t1 = lpSaving, at
+		m.log.Info("looper: end", "tick", m.clock.ticks, "ticks", m.clock.ticks-lp.startTick, "event_age_ms", time.Since(at).Milliseconds())
 		return m.looperSave()
 	}
 	return nil
@@ -300,10 +345,12 @@ func (m Model) looperTick(at time.Time) tea.Cmd {
 func (m Model) looperSave() tea.Cmd {
 	lp := m.lp
 	s, t0, t1, pad, delay := lp.session, lp.t0, lp.t1, lp.target, m.loopDelay()
+	gain, normalize, cal := float64(m.mem.LooperGain), m.mem.LooperNormalize, lp.cal
 	lp.takes++
 	name := fmt.Sprintf("LOOP %s", t1.Format("15:04:05"))
 	unit := m.unit
 	edit := m.edit
+	log := m.log
 	return func() tea.Msg {
 		time.Sleep(loopSettle)
 		stopped := time.Now()
@@ -315,10 +362,28 @@ func (m Model) looperSave() tea.Cmd {
 		if err != nil {
 			return loopSavedMsg{pad: pad, err: fmt.Errorf("reading the take (%s): %w", s.Path, err)}
 		}
+		log.Info("looper: take", "loop_ms", t1.Sub(t0).Milliseconds(), "stop_after_end_ms", stopped.Sub(t1).Milliseconds(),
+			"file_frames", imported.Sample.Frames(), "file_ms", imported.Sample.Frames()*1000/formats.SampleRate,
+			"source_rate", imported.SourceRate, "delay_ms", delay.Milliseconds(), "gain_db", gain, "normalize", normalize,
+			"calibration", cal, "tool", s.Tool, "file", s.Path)
+		if cal {
+			// With no delay the hit on beat 1 is at the start of the loop, and as late as the recording is.
+			sample, err := app.CutLoop(imported.Sample, stopped, t0, t1, 0)
+			if err != nil {
+				return loopSavedMsg{err: err, cal: true}
+			}
+			ms, err := app.HitDelay(sample)
+			log.Info("looper: calibration", "hit_ms", ms, "peak_db", app.PeakDB(sample), "err", err)
+			_ = os.Remove(s.Path)
+			return loopSavedMsg{err: err, cal: true, delay: ms}
+		}
 		sample, err := app.CutLoop(imported.Sample, stopped, t0, t1, delay)
 		if err != nil {
 			return loopSavedMsg{pad: pad, err: err}
 		}
+		sample, applied := app.ApplyGain(sample, gain, normalize)
+		peak := app.PeakDB(sample)
+		log.Info("looper: loop", "frames", sample.Frames(), "peak_db", peak, "gain_applied_db", applied)
 		msg := edit(func() tea.Msg {
 			if _, err := app.PutSample(unit, pad, sample, name); err != nil {
 				return loopSavedMsg{pad: pad, err: err}
@@ -327,7 +392,7 @@ func (m Model) looperSave() tea.Cmd {
 			if info, ok := proto.ParamByName("gate"); ok {
 				_ = unit.SetParam(info.ID, proto.TargetPad(pad), 0)
 			}
-			return loopSavedMsg{pad: pad, name: name}
+			return loopSavedMsg{pad: pad, name: name, peak: peak, gain: applied}
 		})()
 		if saved, ok := msg.(loopSavedMsg); ok && saved.err == nil {
 			_ = os.Remove(s.Path)
@@ -339,15 +404,59 @@ func (m Model) looperSave() tea.Cmd {
 // loopSaved is a take that ended.
 func (m Model) loopSaved(msg loopSavedMsg) (tea.Model, tea.Cmd) {
 	lp := m.looper()
-	lp.phase, lp.session = lpIdle, nil
+	lp.phase, lp.session, lp.cal = lpIdle, nil, false
+	if msg.cal {
+		if msg.err != nil {
+			m.message = "calibration failed: " + msg.err.Error()
+			return m, nil
+		}
+		m.mem.LooperDelay = clamp(msg.delay, -250, 500)
+		m.message = fmt.Sprintf("calibrated: the recording is %d ms behind the clock, the delay is set to it", msg.delay)
+		return m, nil
+	}
 	if msg.err != nil {
 		m.message = "the take was lost: " + msg.err.Error()
 		return m, nil
 	}
 	lp.cursor = int(msg.pad.Pad())
-	m.message = fmt.Sprintf("%s is on %s: it plays from the next round of the pattern", msg.name, msg.pad)
+	m.message = fmt.Sprintf("%s is on %s (%s): it plays from the next round of the pattern", msg.name, msg.pad, loudness(msg.peak, msg.gain))
 	m.busy = "reading the unit"
 	return m, m.load(m.message)
+}
+
+// loudness says how loud a loop is: its peak, and what was added to it.
+func loudness(peak, gain float64) string {
+	text := "peak " + dbText(math.Pow(10, peak/20))
+	text = strings.TrimSpace(text)
+	if gain != 0 {
+		text += fmt.Sprintf(", %+.1f dB added", gain)
+	}
+	return text
+}
+
+// looperGainStep changes how much louder a loop is made.
+func (m Model) looperGainStep(step int) (tea.Model, tea.Cmd) {
+	m.mem.LooperGain = clamp(m.mem.LooperGain+step, -24, 24)
+	m.message = fmt.Sprintf("loops are made %+d dB louder (n makes them as loud as they can be instead)", m.mem.LooperGain)
+	return m, nil
+}
+
+// looperNormalizeToggle switches making every loop as loud as it can be (peak -1 dB).
+func (m Model) looperNormalizeToggle() (tea.Model, tea.Cmd) {
+	m.mem.LooperNormalize = !m.mem.LooperNormalize
+	if m.mem.LooperNormalize {
+		m.message = "normalise on: every loop gets a peak of -1 dB, the gain is ignored"
+	} else {
+		m.message = fmt.Sprintf("normalise off: loops are made %+d dB louder", m.mem.LooperGain)
+	}
+	return m, nil
+}
+
+// looperAlignToggle switches between starting on the next beat and on the next bar.
+func (m Model) looperAlignToggle() (tea.Model, tea.Cmd) {
+	m.mem.LooperOnBar = !m.mem.LooperOnBar
+	m.message = map[bool]string{true: "a take starts on the next bar", false: "a take starts on the next beat"}[m.mem.LooperOnBar]
+	return m, nil
 }
 
 // looperWatch ends a take when the clock has stopped: it would wait for ever.
@@ -384,7 +493,7 @@ func (m Model) looperBadge() string {
 		return ""
 	}
 	bg := m.st.th.bus1
-	text := " LOOPER armed: bar 1 next "
+	text := " LOOPER armed "
 	switch lp.phase {
 	case lpStarting:
 		text = " LOOPER starting… "
@@ -394,7 +503,7 @@ func (m Model) looperBadge() string {
 			dot = "○"
 		}
 		bg = m.st.th.hot
-		text = fmt.Sprintf(" %s LOOPER REC %d/%d ", dot, min((m.clock.ticks-lp.startTick)/ticksPerBar+1, m.loopBars()), m.loopBars())
+		text = fmt.Sprintf(" %s LOOPER REC %d/%d ", dot, min((m.clock.ticks-lp.startTick)/ticksPerBar+1, m.takeBars()), m.takeBars())
 	case lpSaving:
 		text = " LOOPER saving… "
 	}
@@ -408,7 +517,12 @@ func (m Model) looperBody(g geom) string {
 	width := g.bodyW + g.bodyX - 3
 	head := lipgloss.NewStyle().Foreground(st.th.accent).Bold(true).Render(fmt.Sprintf("BANK %c", 'A'+bank)) +
 		st.dim.Render("   loop ") + st.bold.Render(plural(m.loopBars(), "bar")) +
-		st.dim.Render(fmt.Sprintf("   delay %d ms", m.mem.LooperDelay))
+		st.dim.Render(fmt.Sprintf("   delay %d ms   ", m.mem.LooperDelay))
+	if m.mem.LooperNormalize {
+		head += st.bold.Render("normalise")
+	} else {
+		head += st.dim.Render(fmt.Sprintf("gain %+d dB", m.mem.LooperGain))
+	}
 	if clock := m.clockText(m.loopBars()); clock != "" {
 		head += "   " + lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render("♩ "+clock)
 	}
@@ -416,18 +530,18 @@ func (m Model) looperBody(g geom) string {
 	switch lp.phase {
 	case lpIdle:
 		if pad, ok := m.loopFreePad(); ok {
-			status = st.text.Render(fmt.Sprintf("READY  a arms: the next %s from bar 1 go to %s", plural(m.loopBars(), "bar"), pad))
+			status = st.text.Render(fmt.Sprintf("READY  a arms: the next %s from the next %s go to %s", plural(m.loopBars(), "bar"), map[bool]string{true: "bar", false: "beat"}[m.mem.LooperOnBar], pad))
 		} else {
 			status = lipgloss.NewStyle().Foreground(st.th.hot).Render(fmt.Sprintf("bank %c is full: d deletes a loop", 'A'+bank))
 		}
 	case lpStarting:
 		status = lipgloss.NewStyle().Foreground(st.th.bus1).Bold(true).Render("STARTING THE RECORDER…")
 	case lpArmed:
-		length := m.loopBars() * ticksPerBar
-		left := (length - m.clock.ticks%length) % length
-		status = lipgloss.NewStyle().Foreground(st.th.bus1).Bold(true).Render(fmt.Sprintf("ARMED  bar 1 in %.1f beats  ·  goes to %s  ·  a or Esc cancels", float64(left)/24, lp.target))
+		align := m.takeAlign()
+		left := (align - m.clock.ticks%align) % align
+		status = lipgloss.NewStyle().Foreground(st.th.bus1).Bold(true).Render(fmt.Sprintf("ARMED  starts in %.1f beats  ·  goes to %s  ·  a or Esc cancels", float64(left)/24, lp.target))
 	case lpRecording:
-		status = lipgloss.NewStyle().Background(st.th.hot).Foreground(st.th.cursorFg).Bold(true).Render(fmt.Sprintf(" ● REC  bar %d of %d  →  %s ", min((m.clock.ticks-lp.startTick)/ticksPerBar+1, m.loopBars()), m.loopBars(), lp.target))
+		status = lipgloss.NewStyle().Background(st.th.hot).Foreground(st.th.cursorFg).Bold(true).Render(fmt.Sprintf(" ● REC  bar %d of %d  →  %s ", min((m.clock.ticks-lp.startTick)/ticksPerBar+1, m.takeBars()), m.takeBars(), lp.target))
 	case lpSaving:
 		status = lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render(fmt.Sprintf("SAVING to %s…", lp.target))
 	}
@@ -441,7 +555,7 @@ func (m Model) looperBody(g geom) string {
 			}
 		}
 	}
-	keys := st.dim.Render("a arm   b length   [ ] bank   p pattern   d delete   , . delay   h j k l pad")
+	keys := st.dim.Render("a arm   b length   [ ] bank   p pattern   d delete   g G gain   n normalise   t beat/bar   c calibrate   , . delay   h j k l pad")
 	top := []string{head, "", status, pattern, ""}
 	bottom := []string{"", keys}
 	avail := g.bodyH - 2 - len(top) - len(bottom) - 3

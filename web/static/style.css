@@ -322,3 +322,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
   .lpctl { gap: 6px; }
 }
 @media (orientation: portrait) { .lpctl { overflow: visible; } }
+.lpbtn { border: 0; color: var(--text); font: inherit; touch-action: manipulation; }
+.lpbtn.on { background: var(--accent); color: var(--ink); } .lpbtn.on small { color: rgba(0,0,0,.6); }
+.lprow2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (orientation: portrait) { .lprow2 { grid-column: 1 / -1; } }

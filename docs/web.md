@@ -113,6 +113,9 @@ The **LOOPER** tab in portrait (the button at the top right in landscape) is the
 | **ARM** | arms a take: it records the bars set from the next bar 1 and puts the loop on the framed pad; the button then says **CANCEL** |
 | ◂ ▸ | the bank the loops go to |
 | **n BARS** | tap for the next length: 1, 2, 4, 8 |
+| GAIN − + | makes loops quieter or louder in dB; tap **GAIN** itself for normalise (every loop as loud as it can be) |
+| **START: BEAT / BAR** | a take starts on the next beat or the next bar |
+| **CALIBRATE** | measures how late the recording is from a hit (kick) on beat 1 of the pattern and sets the delay |
 | − + | how far the recording is behind the clock, in steps of 5 ms |
 | **MAKE PATTERN** | writes the pattern of the bank in which all 16 pads start on beat 1 (it says whether there is one) |
 | a pad, then **DELETE** | deletes the sample of the pad (tap DELETE twice) |
