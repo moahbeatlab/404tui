@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -580,5 +581,52 @@ func TestTheBanksOfTheLooperAndTheSlicerCanBeChosenDirectly(t *testing.T) {
 	r.web(`{"a":"sltbankset","i":9}`)
 	if s := w.last(t).Slicer; s.Bank != "E" || s.Target != "J" {
 		t.Errorf("slicer from %s to %s, want E to J", s.Bank, s.Target)
+	}
+}
+
+func TestAHeldPadCanBeAddedToThePatternThatPlays(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	slot := m.snap.Bank(0)[15].Pad // a pattern slot (the same index space as the pads)
+	pad := m.snap.Bank(0)[0].Pad
+	if !m.snap.Bank(0)[0].HasSample {
+		t.Skip("A1 holds no sample")
+	}
+	if err := app.WriteStartPattern(m.unit, slot, []proto.PadIndex{m.snap.Bank(0)[1].Pad}, 2); err != nil {
+		t.Fatal(err)
+	}
+	r.web(`{"a":"padpat","i":0}`)
+	if got := w.last(t).Msg; !strings.Contains(got, "no pattern") {
+		t.Errorf("without a pattern: %q", got)
+	}
+	m.perfNow = &slot
+	r.s.model = m
+	r.web(`{"a":"padpat","i":0}`)
+	m = r.s.m()
+	if !strings.Contains(m.message, "is in pattern") {
+		t.Fatalf("message %q", m.message)
+	}
+	detail, err := app.OpenPattern(m.unit, slot)
+	if err != nil || !slices.Contains(detail.PadsUsed, pad) {
+		t.Fatalf("A1 is not in the pattern: %+v (%v)", detail, err)
+	}
+	notes := 0
+	b, _ := m.unit.ReadFile(formats.PatternPath(1, slot))
+	recs, _ := formats.NoteRecords(b)
+	for _, n := range recs {
+		if n.Pad == pad {
+			notes++
+			if n.Tick != 0 || uint32(n.Length) != 2*4*formats.PPQ {
+				t.Errorf("note at %d, length %d; want beat 1 and the whole 2 bars", n.Tick, n.Length)
+			}
+		}
+	}
+	if notes != 1 {
+		t.Errorf("%d notes for A1, want 1", notes)
+	}
+	r.web(`{"a":"padpat","i":0}`)
+	if got := r.s.m().message; !strings.Contains(got, "already") {
+		t.Errorf("second time: %q", got)
 	}
 }

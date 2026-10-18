@@ -144,3 +144,8 @@ If the computer cannot listen, the meter says why.
 The bank chip at the top left of the page opens a list of the ten banks with the number of pads that hold a sample; choosing one moves the unit to that bank, as the bank keys do in the Pads view, and the Pads view shows it.
 
 In the Looper and the Slicer the bank boxes (BANK, FROM, TO) can be tapped for a list of all ten banks, so a bank is chosen in one tap.
+
+Holding a pad (0.4 s) opens a small menu beside it: **ISOLATE** (what a hold always did) and **+ PATTERN**, which adds the pad
+to the pattern that plays (or the next one): one note on beat 1, as long as the whole pattern, so the pad plays through each
+round. Slide the finger onto an option and let go; letting go without sliding isolates. A pad that is in the pattern that way
+already says so and is not added twice. An empty pad has no menu.

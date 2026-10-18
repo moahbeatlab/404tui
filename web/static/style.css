@@ -406,3 +406,10 @@ button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
 .lpad.del { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--hot) 40%, #000) 0 8px, color-mix(in srgb, var(--hot) 16%, #000) 8px 16px); border-color: var(--hot); }
 .lpad.del span { text-decoration: line-through; }
 .lpmid.pick { cursor: pointer; } .lpmid.pick b::after { content: " ▾"; font-size: 11px; color: var(--dim); }
+
+#padMenu { position: fixed; z-index: 21; display: flex; gap: 10px; transform: translateX(-50%); touch-action: none; }
+#padMenu[hidden] { display: none; }
+#padMenu button { min-width: 112px; height: 58px; border-radius: 14px; background: var(--panel); color: var(--text); font-weight: 800; font-size: 14px; letter-spacing: .04em;
+  box-shadow: 0 0 0 2px var(--faint), 0 6px 18px #000a; display: grid; place-content: center; gap: 1px; }
+#padMenu button small { font-weight: 500; font-size: 10px; letter-spacing: 0; color: var(--dim); }
+#padMenu button.on { background: var(--accent); color: var(--ink); box-shadow: 0 0 0 3px var(--text); } #padMenu button.on small { color: rgba(0,0,0,.6); }

@@ -100,6 +100,27 @@
     b.style.top = Math.max(4, r.top - h - 8) + 'px';
   }
   function hideLv() { $('lvPop').hidden = true; }
+  // Holding a pad opens a menu beside it: slide onto an option and let go. Letting go without sliding isolates, as a hold always did.
+  const menu = $('padMenu');
+  let menuOpt = 'solo';
+  function openMenu(el, d) {
+    const r = el.getBoundingClientRect();
+    menuOpt = 'solo';
+    menu.hidden = false;
+    const h = menu.offsetHeight, w = menu.offsetWidth;
+    menu.style.left = Math.max(w / 2 + 4, Math.min(innerWidth - w / 2 - 4, r.left + r.width / 2)) + 'px';
+    menu.style.top = (r.top - h - 14 >= 4 ? r.top - h - 14 : Math.min(innerHeight - h - 4, r.bottom + 14)) + 'px';
+    [...menu.children].forEach((b) => b.classList.toggle('on', b.dataset.o === 'solo'));
+  }
+  function hoverMenu(x, y) {
+    if (menu.hidden) return;
+    const b = document.elementFromPoint(x, y);
+    const hit = b && b.closest && b.closest('#padMenu button');
+    if (!hit) return;
+    menuOpt = hit.dataset.o;
+    [...menu.children].forEach((c) => c.classList.toggle('on', c === hit));
+  }
+  function closeMenu() { menu.hidden = true; return menuOpt; }
   function pad(el, i) {
     let down = null;
     el.addEventListener('pointerdown', (e) => {
@@ -108,12 +129,12 @@
       const p = state && state.pads && state.pads[i];
       down = { y: e.clientY, moved: false, held: false, v0: p ? p.level : 0, h: el.getBoundingClientRect().height || 80 };
       const d = down;
-      d.timer = setTimeout(() => { if (down === d && !d.moved && !focusOn()) { d.held = true; send({ a: 'solo', i }); if (navigator.vibrate) navigator.vibrate(15); } }, HOLD);
+      d.timer = setTimeout(() => { if (down === d && !d.moved && !focusOn()) { d.held = true; if (navigator.vibrate) navigator.vibrate(15); const q = state && state.pads && state.pads[i]; if (q && q.has) { d.menu = true; openMenu(el, d); } else send({ a: 'solo', i }); } }, HOLD);
     });
     el.addEventListener('pointermove', (e) => {
       if (!down) return;
       if (!down.moved && !down.held && Math.abs(e.clientY - down.y) > 10) { down.moved = true; clearTimeout(down.timer); }
-      if (down.held) return;
+      if (down.held) { hoverMenu(e.clientX, e.clientY); return; }
       if (!down.moved) return;
       const v = Math.round(Math.max(0, Math.min(127, down.v0 + (down.y - e.clientY) / (down.h * 0.8) * 127)));
       const now = performance.now();
@@ -125,11 +146,11 @@
       clearTimeout(down.timer);
       hideLv();
       if (!down.held && !down.moved) tap(i);
-      else if (down.held) {}
+      else if (down.held) { if (down.menu) send({ a: closeMenu(), i }); }
       else if (down.v !== undefined) send({ a: 'level', i, v: down.v });
       down = null;
     });
-    el.addEventListener('pointercancel', () => { if (down) clearTimeout(down.timer); hideLv(); down = null; });
+    el.addEventListener('pointercancel', () => { if (down) clearTimeout(down.timer); hideLv(); closeMenu(); down = null; });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
