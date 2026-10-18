@@ -108,11 +108,10 @@ network carries: a slow phone skips states), and takes commands as JSON: `{"a":"
 The **LOOPER** tab in portrait (the button at the top right in landscape) is the bank of loops that play together
 ([looper.md](looper.md)), for the phone: the 16 pads of a bank, and a pattern in which all 16 pads start on beat 1 and last
 the whole pattern. The samples come from the unit's own looper (copy one to a pad), the Slicer or anywhere else; this page keeps
-the bank and the pattern in order. The length of the pattern is the unit's: it is read from the pattern of the bank in which all 16 pads play, or else from how long the loops on the pads are (2 bars when neither is known). It has two pages, switched at the top: **LOOP** and **SLICER**.
+the bank and the pattern in order (the bank is chosen with the chip at the top left, which says LOOP there). The length of the pattern is the unit's: it is read from the pattern of the bank in which all 16 pads play, or else from how long the loops on the pads are (2 bars when neither is known). It has two pages, switched at the top: **LOOP** and **SLICER**.
 
 | Button | Does |
 | --- | --- |
-| ◂ ▸ (or tap the box) | the bank |
 | **MAKE PATTERN** | writes the pattern of the bank in which all 16 pads start on beat 1 (it says whether there is one) |
 | a pad, then **DELETE** | deletes the sample of the pad (tap DELETE twice; asking again before it happens takes it back) |
 

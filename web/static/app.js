@@ -226,8 +226,6 @@
     lpPads.push({ d, n: d.children[0], nm: d.children[1] });
   }
   const press = (id, fn) => $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); if (navigator.vibrate) navigator.vibrate(8); });
-  press('lpPrev', () => send({ a: 'lpbank', n: -1 }));
-  press('lpNext', () => send({ a: 'lpbank', n: 1 }));
   press('lpPat', () => send({ a: 'lppattern' }));
   press('slPrev', () => send({ a: 'slbank', n: -1 }));
   press('slNext', () => send({ a: 'slbank', n: 1 }));
@@ -306,9 +304,6 @@
   function renderLooper(s) {
     const l = s.looper;
     if (!l) return;
-    set($('lpPhase'), 'textContent', 'BANK ' + l.bank);
-    set($('lpSub'), 'textContent', l.later ? l.later : !l.known ? 'reading the patterns…' : l.pattern ? 'pattern ' + l.patternName + ' plays all 16 pads · ' + l.bars + (l.bars === 1 ? ' bar' : ' bars') : 'no pattern with all 16 pads: MAKE PATTERN (' + l.bars + (l.bars === 1 ? ' bar' : ' bars') + ')');
-    set($('lpBank'), 'textContent', l.bank);
     set($('lpPatS'), 'textContent', !l.known ? 'reading…' : l.pattern ? 'pattern ' + l.patternName + ' plays all 16 pads ✓' : 'no pattern with all 16 pads');
     cls($('lpPat'), 'warn', l.known && !l.pattern);
     const sel = l.pads[lpSel];
@@ -390,7 +385,7 @@
     const inLp = app.dataset.view === 'looper';
     openBanks(inLp ? ($('looper').dataset.lp === 'slice' ? 'from' : 'loop') : 'unit');
   });
-  for (const [id, kind] of [['lpBank', 'loop'], ['slBank', 'from'], ['slTBank', 'to']]) {
+  for (const [id, kind] of [['slBank', 'from'], ['slTBank', 'to']]) {
     const box = $(id).closest('.lpmid');
     box.classList.add('pick');
     box.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!box.parentElement.querySelector('button:disabled')) openBanks(kind); });
