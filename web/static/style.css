@@ -249,3 +249,6 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
   .bankbpm b { font-size: 40px; } .bank b { font-size: 54px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+.hint { color: var(--dim); font-size: 12px; text-align: center; padding: 2px 4px; }
+.hint b { color: var(--text); }

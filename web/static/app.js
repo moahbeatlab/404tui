@@ -81,26 +81,26 @@
     padEls.push({ d, n: d.children[0], nm: d.children[1], lvi: d.children[2].firstChild, bars: d.children[3], bus: d.children[4], last: '' });
     pad(d, i);
   }
-  // What a tap on a pad does is the TAP button's: isolate the pad (the only one on its bus; again brings the others
-  // back) or mute it (its level goes to 0 and back). With focus on, the pads are picked: the program decides.
-  let tapMute = false;
-  function tap(i) {
-    if (state && state.focus && state.focus.on) return send({ a: 'pad', i });
-    send({ a: tapMute ? 'mute' : 'solo', i });
-  }
-  // A pad: a tap does what tap() says , a swipe up or down sets the volume from where it was.
-  // The tap counts when the finger comes up, because it is not known before whether it will swipe.
+  // A pad: a tap mutes it (its level goes to 0 and back), holding it isolates it (the only one on its bus; again brings
+  // the others back), a swipe up or down sets the volume from where it was. With focus on, a tap picks the pad.
+  // A tap counts when the finger comes up, because it is not known before whether it will swipe or hold.
+  const HOLD = 400;
+  const focusOn = () => !!(state && state.focus && state.focus.on);
+  function tap(i) { send({ a: focusOn() ? 'pad' : 'mute', i }); }
   function pad(el, i) {
     let down = null;
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       try { el.setPointerCapture(e.pointerId); } catch (err) {}
       const p = state && state.pads && state.pads[i];
-      down = { y: e.clientY, moved: false, v0: p ? p.level : 0, h: el.getBoundingClientRect().height || 80 };
+      down = { y: e.clientY, moved: false, held: false, v0: p ? p.level : 0, h: el.getBoundingClientRect().height || 80 };
+      const d = down;
+      d.timer = setTimeout(() => { if (down === d && !d.moved && !focusOn()) { d.held = true; send({ a: 'solo', i }); if (navigator.vibrate) navigator.vibrate(15); } }, HOLD);
     });
     el.addEventListener('pointermove', (e) => {
       if (!down) return;
-      if (!down.moved && Math.abs(e.clientY - down.y) > 10) down.moved = true;
+      if (!down.moved && !down.held && Math.abs(e.clientY - down.y) > 10) { down.moved = true; clearTimeout(down.timer); }
+      if (down.held) return;
       if (!down.moved) return;
       const v = Math.round(Math.max(0, Math.min(127, down.v0 + (down.y - e.clientY) / (down.h * 0.8) * 127)));
       const now = performance.now();
@@ -108,11 +108,13 @@
     });
     el.addEventListener('pointerup', () => {
       if (!down) return;
-      if (!down.moved) { tap(i); }
+      clearTimeout(down.timer);
+      if (!down.held && !down.moved) tap(i);
+      else if (down.held) {}
       else if (down.v !== undefined) send({ a: 'level', i, v: down.v });
       down = null;
     });
-    el.addEventListener('pointercancel', () => { down = null; });
+    el.addEventListener('pointercancel', () => { if (down) clearTimeout(down.timer); down = null; });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
@@ -124,8 +126,6 @@
 
   // Buttons with a data-a send it as they are pressed down, not when the finger comes up.
   document.querySelectorAll('[data-a]').forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: b.dataset.a }); }));
-  $('bMix').addEventListener('pointerdown', (e) => { e.preventDefault(); tapMute = !tapMute; $('bMix').classList.toggle('on', tapMute);
-    $('bMixT').textContent = tapMute ? 'MUTE' : 'ISOLATE'; if (navigator.vibrate) navigator.vibrate(8); });
 
   const barsEl = $('bars');
   [1, 2, 3, 4, 8].forEach((n) => { const b = document.createElement('button'); b.textContent = n; b.dataset.n = n;

@@ -50,7 +50,8 @@ to the program at the top right (a few milliseconds on a good network).
 
 | Tap | Does |
 | --- | --- |
-| a pad | what the **TAP** button says: **ISOLATE** makes it the only one on its bus (the others on that bus go dry; tap it again to bring them back), **MUTE** sets its volume to 0 on the unit (another tap brings the level back) |
+| a pad | mutes it (its volume goes to 0 on the unit; another tap brings back the level it had) |
+| a pad, held (0.4 s) | makes it the only one on its bus (the others on that bus go dry, the phone vibrates); hold it again to bring them back |
 | a pad while **FOCUS** is on | picks the pad: the picked ones keep their bus; FOCUS again puts everything back |
 
 The tile shows the number, the name, the bus (a coloured box), the volume (the bar under the name),
