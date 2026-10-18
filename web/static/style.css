@@ -111,14 +111,21 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 .pad.sel { box-shadow: inset 0 0 0 3px var(--accent); }
 .pad.keep { box-shadow: inset 0 0 0 4px var(--good); background: color-mix(in srgb, var(--tile) 60%, var(--good)); }
 .pad.dry { opacity: .45; }
-.pad.muted .nm { text-decoration: line-through; opacity: .5; }
-.pad.muted::after { content: "×"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 55cqw; font-weight: 800; color: var(--hot); opacity: .7; pointer-events: none; }
+/* A muted pad is unmistakable: red hazard stripes, a red frame, struck-through name and a MUTED label. */
+.pad.muted, .pad.muted.heard, .pad.muted.inPat, .pad.muted.keep {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--hot) 42%, #000) 0 9px, color-mix(in srgb, var(--hot) 16%, #000) 9px 18px);
+  box-shadow: inset 0 0 0 3px var(--hot);
+}
+.pad.muted .n, .pad.muted .nm { color: #ffd9d9; text-decoration: line-through; opacity: .8; }
+.pad.muted .lv, .pad.muted .bus { opacity: .35; }
+.pad.muted::after { content: "MUTED"; position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); padding: 2px 8px; border-radius: 6px; background: var(--hot); color: var(--ink);
+  font-size: clamp(10px, 13cqw, 16px); font-weight: 900; letter-spacing: .1em; pointer-events: none; }
 .pad::before { content: ""; position: absolute; inset: 0; background: var(--hot); opacity: var(--glow, 0); pointer-events: none; transition: opacity .1s; }
 .pad:active { filter: brightness(1.25); }
 .mixing .pad .lv { height: 18px; }
 .mixing .pad .lv i { background: var(--accent); opacity: 1; }
 .mixing .pad::after { content: attr(data-lv); position: absolute; right: 8px; bottom: 22px; font-size: 20px; font-weight: 800; color: var(--accent); inset: auto 8px 22px auto; display: block; font-size: clamp(14px, 22cqw, 28px); }
-.mixing .pad.muted::after { content: "×"; inset: 0; display: grid; font-size: 55cqw; }
+.mixing .pad.muted::after { content: "MUTED"; inset: auto auto 8% 50%; right: auto; display: block; font-size: clamp(10px, 13cqw, 16px); }
 
 /* ---- motion ---- */
 #motion { display: grid; gap: 10px; overflow: hidden; grid-template-rows: auto repeat(2, minmax(0, 1fr)); }
