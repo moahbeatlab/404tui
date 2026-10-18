@@ -5,6 +5,11 @@ loop on a pad. It does what recording in the unit's looper, copying the loop to 
 
 ## Before
 
+On Linux (PulseAudio or PipeWire) the program listens to the unit's USB audio itself and keeps the last 90 seconds
+of it in memory, as long as the Looper, Perform or a browser is open. Nothing is started when you arm and nothing is
+written to a file: a take is cut out of the memory by the clock, and the level meter reads the same sound. On other
+systems the recorder program (ffmpeg or sox) does it, and a take then needs a moment to start before bar 1.
+
 - The unit is a USB audio interface: the app records its audio the way `Ctrl-R` does (ffmpeg or sox must be
   installed; `Recording` in [config.md](config.md) tells which input).
 - It follows the unit's **MIDI clock**: start the unit's sequencer, or the Looper says so.
@@ -31,7 +36,7 @@ The 16 pads of the bank loops go to, a line saying what the Looper does, and the
 
 ## A take
 
-1. Arm it. The recorder starts at once, so there is time to get ready; the next pad that holds no sample of the
+1. Arm it. (With the memory there is nothing to wait for; with the recorder program it starts at once.) The next pad that holds no sample of the
    bank is the target (it is lit).
 2. The loop begins on beat 1 of the next bar of the clock (`t` makes it the next beat), counted from the unit's Start. Arm on beat 2 and it starts one bar line later; the recorder only needs a third of a second to be ready. While it records the header shows a red `LOOPER REC 2/4` in every view.
 3. When the bars are over the recording ends, the loop is cut out of it by the clock (so it is as long as the bars

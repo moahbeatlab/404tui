@@ -93,6 +93,9 @@ func (m Model) stopRecordingNow() {
 	if m.rec != nil {
 		_ = m.rec.Stop()
 	}
+	if m.ring != nil {
+		m.ring.Stop()
+	}
 	if m.lp != nil && m.lp.session != nil {
 		_ = m.lp.session.Stop()
 		_ = os.Remove(m.lp.session.Path)

@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.10.1
 	github.com/ebitengine/oto/v3 v3.5.1
 	github.com/hajimehoshi/go-mp3 v0.3.4
+	github.com/jfreymuth/pulse v0.1.3
 	github.com/mewkiz/flac v1.0.14
 	github.com/muesli/termenv v0.16.0
 	gitlab.com/gomidi/midi/v2 v2.3.24
@@ -23,7 +24,6 @@ require (
 	github.com/ebitengine/purego v0.11.0 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/icza/bitio v1.1.0 // indirect
-	github.com/jfreymuth/pulse v0.1.3 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect

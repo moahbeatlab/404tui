@@ -433,6 +433,12 @@ type Model struct {
 	lvlWas map[proto.PadIndex]int32
 	// lp is the Looper: a take that is on, and where the cursor is.
 	lp *looperState
+	// ring is the memory the program listens into (the last seconds of the unit's sound); ringBusy while it starts, ringAgain
+	// when to try again after it failed, ringOff when this system has no such listening.
+	ring      *record.Ring
+	ringBusy  bool
+	ringAgain time.Time
+	ringOff   bool
 	// web is where the state of Perform is published for the browsers, when there is a web side.
 	web    WebSink
 	webURL string
@@ -1545,6 +1551,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		m.prompt = &prompt{kind: promptConfirmRestore, plan: msg.plan}
+	case ringStartedMsg:
+		return m.ringStarted(msg)
+	case ringEndedMsg:
+		return m.ringEnded(msg), nil
 	case meterStartedMsg:
 		return m.meterStarted(msg)
 	case meterEndedMsg:

@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/record"
 )
 
 func TestTheLooperRecordsAFullLoopFromTheNextBeatAndPutsItOnTheNextFreePad(t *testing.T) {
@@ -189,5 +190,75 @@ func TestAnArmOnBeatTwoStartsOnBeatOneOfTheNextBar(t *testing.T) {
 	r.tick(1)
 	if m := r.s.m(); m.lp.phase != lpRecording || m.lp.startTick != 2*ticksPerBar {
 		t.Errorf("phase %d, started on tick %d, want recording from tick %d", m.lp.phase, m.lp.startTick, 2*ticksPerBar)
+	}
+}
+
+// ringRecorder is a backend whose ring is given: the program listens to it itself.
+type ringRecorder struct {
+	fakeRecorder
+	ring *record.Ring
+}
+
+func (r *ringRecorder) StartRing(device string, seconds int) (*record.Ring, error) {
+	return r.ring, nil
+}
+
+func TestTheLooperCutsATakeOutOfTheMemoryItListensInto(t *testing.T) {
+	r := newPerfRig(t, 200, 40)
+	ring := record.NewRing(48000, 90)
+	base := time.Now().Add(-12 * time.Second)
+	// 12 s of a ramp that arrives on time: block n ends at base + (n+1) * 20 ms.
+	for n := 0; n < 600; n++ {
+		data := make([]int16, 960*2)
+		for i := range 960 {
+			data[2*i], data[2*i+1] = int16((n*960+i)%20000+500), int16((n*960+i)%20000+500)
+		}
+		ring.Write(data, base.Add(time.Duration(n+1)*20*time.Millisecond))
+	}
+	stopped := 0
+	r.s.model = r.s.m().WithRecorder(&ringRecorder{fakeRecorder: fakeRecorder{stopped: &stopped}, ring: ring})
+	r.s.press("8")
+	r.s.send(tickMsg{}) // the Update that starts the listening
+	if r.s.m().ring == nil {
+		t.Fatal("the program did not start listening")
+	}
+	r.s.send(tickMsg{})
+	if lv := r.s.m().webLevel(); lv == nil || lv.Src != "input" {
+		t.Errorf("no level from the ring: %+v", lv)
+	}
+	r.s.press("b", "b", "b") // 1 bar
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.tick(1)
+	r.s.press("a")
+	// No recorder to start: armed at once, and the meter goes on.
+	if m := r.s.m(); m.lp.phase != lpArmed || m.lp.session != nil || !m.lp.ringTake || m.lvl == nil {
+		t.Fatalf("not armed on the ring: %+v", m.lp)
+	}
+	at := base.Add(3 * time.Second)
+	tickAt := func(d time.Duration, run bool) {
+		next, cmd := r.s.m().midiEvent(midiMsg{link: r.link, ev: midiin.Event{Kind: midiin.Clock, At: at.Add(d)}})
+		r.s.model = next
+		if run {
+			r.s.run(cmd)
+		}
+	}
+	for r.s.m().clock.ticks < ticksPerBar-1 {
+		tickAt(-time.Hour, false)
+	}
+	tickAt(0, false)
+	if r.s.m().lp.phase != lpRecording {
+		t.Fatalf("not recording at the bar: %d", r.s.m().lp.phase)
+	}
+	for r.s.m().clock.ticks < 2*ticksPerBar-1 {
+		tickAt(time.Second, false)
+	}
+	tickAt(2*time.Second, true)
+	m := r.s.m()
+	row := m.snap.Pads[3]
+	if m.lp.phase != lpIdle || !row.HasSample || !strings.HasPrefix(row.Name, "LOOP ") {
+		t.Fatalf("no loop on A4: phase %d, %+v, %q", m.lp.phase, row, m.message)
+	}
+	if m.ring == nil || m.lvl == nil {
+		t.Error("the listening stopped with the take")
 	}
 }

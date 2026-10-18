@@ -36,7 +36,12 @@ func CutLoop(rec formats.Sample, stopped, loopStart, loopEnd time.Time, delay ti
 		return formats.Sample{}, fmt.Errorf("the recording began %.2f s too late for the loop", float64(-start)/formats.SampleRate)
 	}
 	ch := rec.Channels
-	out := formats.Sample{Channels: ch, Samples: append([]int16(nil), rec.Samples[start*ch:end*ch]...)}
+	return FadeLoop(formats.Sample{Channels: ch, Samples: append([]int16(nil), rec.Samples[start*ch:end*ch]...)}), nil
+}
+
+// FadeLoop fades the start and the end of a loop over a millisecond, so the cut makes no click. It works in place.
+func FadeLoop(out formats.Sample) formats.Sample {
+	ch, frames := out.Channels, out.Frames()
 	fade := min(loopFade, frames/2)
 	for i := 0; i < fade; i++ {
 		g := float64(i) / float64(fade)
@@ -46,7 +51,7 @@ func CutLoop(rec formats.Sample, stopped, loopStart, loopEnd time.Time, delay ti
 			out.Samples[j] = int16(float64(out.Samples[j]) * g)
 		}
 	}
-	return out, nil
+	return out
 }
 
 // NormalizeTo is the peak, in dB below full scale, that a normalised loop gets.

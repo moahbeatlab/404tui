@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -75,13 +76,19 @@ func (m Model) sampleLevel() {
 	if m.lvl == nil || time.Since(m.lvl.read) < 90*time.Millisecond {
 		return
 	}
-	if m.lvl.src == nil && m.levelFile() == "" {
+	if m.lvl.src == nil && m.ring == nil && m.levelFile() == "" {
 		return // the recording is over: syncMeter listens again
 	}
 	now := time.Now()
 	m.lvl.read = now
 	var peaks []float64
 	switch {
+	case m.ring != nil:
+		p, ok := m.ring.Level()
+		if !ok {
+			return
+		}
+		peaks = p[:]
 	case m.lvl.src != nil:
 		p, ok := m.lvl.src.Level()
 		if !ok {
@@ -133,6 +140,9 @@ const meterRetry = 5 * time.Second
 // syncMeter starts the listening program when the Perform view is open and nothing records, and ends
 // it when either stops being so: the level is there to set the volume by, whether or not it records.
 func (m Model) syncMeter() (Model, tea.Cmd) {
+	if rg, ok := m.recorder.(record.Ringing); ok && !m.ringOff {
+		return m.syncRing(rg)
+	}
 	if !m.meterWanted() || m.recBusy() {
 		if m.lvl != nil && m.lvl.src != nil {
 			m.lvl.src.Stop()
@@ -270,4 +280,83 @@ func (m Model) levelLines(width int) []string {
 		hint = m.clipBadge(now) + lipgloss.NewStyle().Foreground(st.th.bad).Bold(true).Render(" too loud: turn the unit's volume down")
 	}
 	return append(out, hint)
+}
+
+// The ring: where the program can listen itself (Linux), it keeps the last seconds of the input in memory while
+// the level is looked at or the Looper is open. The meter reads it, and so does a take of the Looper.
+
+type (
+	ringStartedMsg struct {
+		ring *record.Ring
+		err  error
+	}
+	ringEndedMsg struct{ ring *record.Ring }
+)
+
+// ringSeconds is how much sound the ring keeps: the longest loop (8 bars) at 40 BPM is 48 s.
+const ringSeconds = 90
+
+// syncRing starts the ring when it is wanted, and ends it when it is not.
+func (m Model) syncRing(rg record.Ringing) (Model, tea.Cmd) {
+	wanted := m.meterWanted() || (m.lp != nil && m.lp.phase != lpIdle)
+	if !wanted {
+		if m.ring != nil {
+			m.ring.Stop()
+			m.ring, m.lvl = nil, nil
+		}
+		return m, nil
+	}
+	if m.ring != nil {
+		if m.lvl == nil {
+			m.lvl = newLevelMeter()
+		}
+		return m, nil
+	}
+	if m.ringBusy || time.Now().Before(m.ringAgain) {
+		return m, nil
+	}
+	m.ringBusy = true
+	device := m.recordDevice()
+	return m, func() tea.Msg {
+		r, err := rg.StartRing(device, ringSeconds)
+		return ringStartedMsg{ring: r, err: err}
+	}
+}
+
+// ringStarted takes in the ring that started, or why it did not.
+func (m Model) ringStarted(msg ringStartedMsg) (tea.Model, tea.Cmd) {
+	m.ringBusy = false
+	switch {
+	case errors.Is(msg.err, record.ErrNoNative):
+		m.ringOff = true // the recorder program does it
+		return m, nil
+	case msg.err != nil:
+		m.meterErr, m.ringAgain = msg.err.Error(), time.Now().Add(meterRetry)
+		return m, nil
+	}
+	m.meterErr = ""
+	m.ring = msg.ring
+	m.lvl = newLevelMeter()
+	m.log.Info("listening to the input", "device", m.recordDevice(), "seconds", ringSeconds)
+	return m, func() tea.Msg {
+		<-msg.ring.Done()
+		return ringEndedMsg{ring: msg.ring}
+	}
+}
+
+// ringEnded is the listening ending by itself (the unit was switched off): it is tried again in a moment.
+func (m Model) ringEnded(msg ringEndedMsg) Model {
+	if m.ring == msg.ring {
+		m.ring, m.lvl = nil, nil
+		m.meterErr = "the input is gone"
+		if err := msg.ring.Err(); err != nil {
+			m.meterErr = err.Error()
+		}
+		m.ringAgain = time.Now().Add(meterRetry)
+		if m.lp != nil && m.lp.ringTake && m.lp.phase != lpIdle {
+			nm, _ := m.looperCancel("the input went away: the take was dropped")
+			return nm.(Model)
+		}
+	}
+	return m
 }

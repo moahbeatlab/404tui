@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -56,6 +57,8 @@ type looperState struct {
 	takes          int
 	// cal is a take that measures the delay instead of making a loop.
 	cal bool
+	// ringTake is a take that is cut out of the memory the program listens into, not recorded by a program.
+	ringTake bool
 	// last is the take that was saved last, calMS what the last calibration found (calDone says there was one).
 	last    loopLast
 	calMS   int
@@ -262,13 +265,13 @@ func (m Model) looperArmWith(cal bool) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch {
-	case m.recorder == nil:
+	case m.recorder == nil && m.ring == nil:
 		m.message = record.ErrNoTool.Error()
 		return m, nil
 	case !m.clockRuns():
 		m.message = "the Looper follows the unit's MIDI clock: start its sequencer"
 		return m, nil
-	case m.rec != nil:
+	case m.rec != nil && m.ring == nil:
 		m.message = "a recording is running: Ctrl-R ends it first"
 		return m, nil
 	}
@@ -277,16 +280,25 @@ func (m Model) looperArmWith(cal bool) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("bank %c has no free pad: d deletes a loop", 'A'+m.loopBank())
 		return m, nil
 	}
-	if m.lvl != nil && m.lvl.src != nil {
-		m.lvl.src.Stop() // the recorder takes the input
-		m.lvl = nil
+	lp.target, lp.cal, lp.ringTake = pad, cal, m.ring != nil
+	if lp.ringTake {
+		// The program listens to the input all the time: nothing to start, and the meter goes on.
+		lp.phase = lpArmed
+	} else {
+		if m.lvl != nil && m.lvl.src != nil {
+			m.lvl.src.Stop() // the recorder takes the input
+			m.lvl = nil
+		}
+		m.lvl = newLevelMeter() // the level is the end of the take's file
+		lp.phase = lpStarting
 	}
-	m.lvl = newLevelMeter() // the level is the end of the take's file
-	lp.phase, lp.target, lp.cal = lpStarting, pad, cal
 	if cal {
 		m.message = "calibrating: one bar from the next bar; a hit (a kick) on beat 1 of the pattern, everything else muted"
 	} else {
 		m.message = fmt.Sprintf("armed: %s from the next %s go to %s", plural(m.loopBars(), "bar"), map[bool]string{true: "bar", false: "beat"}[!m.mem.LooperOnBeat], pad)
+	}
+	if lp.ringTake {
+		return m, nil
 	}
 	b, device := m.recorder, m.recordDevice()
 	return m, func() tea.Msg {
@@ -299,8 +311,10 @@ func (m Model) looperArmWith(cal bool) (tea.Model, tea.Cmd) {
 func (m Model) looperCancel(message string) (tea.Model, tea.Cmd) {
 	lp := m.looper()
 	s := lp.session
-	lp.phase, lp.session, lp.cal = lpIdle, nil, false
-	m.lvl = nil
+	lp.phase, lp.session, lp.cal, lp.ringTake = lpIdle, nil, false, false
+	if m.ring == nil {
+		m.lvl = nil
+	}
 	m.message = message
 	if s == nil {
 		return m, nil
@@ -341,12 +355,12 @@ func (m Model) looperTick(at time.Time) tea.Cmd {
 	switch lp.phase {
 	case lpArmed:
 		// The recorder needs a moment before it hears anything: the start comes after that.
-		if m.clock.ticks%m.takeAlign() != 0 || time.Since(lp.session.Started) < loopWarmup+max(-m.loopDelay(), 0) {
+		if m.clock.ticks%m.takeAlign() != 0 || (!lp.ringTake && time.Since(lp.session.Started) < loopWarmup+max(-m.loopDelay(), 0)) {
 			return nil
 		}
 		lp.phase, lp.startTick, lp.t0 = lpRecording, m.clock.ticks, at
 		m.log.Info("looper: start", "tick", m.clock.ticks, "align", m.takeAlign(), "bars", m.takeBars(), "bpm", m.mon.bpm,
-			"since_recorder_start_ms", time.Since(lp.session.Started).Milliseconds(), "event_age_ms", time.Since(at).Milliseconds())
+			"ring", lp.ringTake, "event_age_ms", time.Since(at).Milliseconds())
 	case lpRecording:
 		if m.clock.ticks-lp.startTick < length {
 			return nil
@@ -362,6 +376,9 @@ func (m Model) looperTick(at time.Time) tea.Cmd {
 // pad.
 func (m Model) looperSave() tea.Cmd {
 	lp := m.lp
+	if lp.ringTake {
+		return m.looperSaveRing()
+	}
 	s, t0, t1, pad, delay := lp.session, lp.t0, lp.t1, lp.target, m.loopDelay()
 	gain, normalize, cal := float64(m.mem.LooperGain), m.mem.LooperNormalize, lp.cal
 	lp.takes++
@@ -419,11 +436,65 @@ func (m Model) looperSave() tea.Cmd {
 	}
 }
 
+// looperSaveRing cuts the loop out of the memory the program listens into, once the end of it has arrived, and puts
+// it on the pad.
+func (m Model) looperSaveRing() tea.Cmd {
+	lp, ring := m.lp, m.ring
+	t0, t1, pad, delay := lp.t0, lp.t1, lp.target, m.loopDelay()
+	gain, normalize, cal := float64(m.mem.LooperGain), m.mem.LooperNormalize, lp.cal
+	lp.takes++
+	name := fmt.Sprintf("LOOP %s", t1.Format("15:04:05"))
+	unit, edit, log := m.unit, m.edit, m.log
+	return func() tea.Msg {
+		cut := func(delay time.Duration) (formats.Sample, error) {
+			start := ring.FrameAt(t0.Add(delay))
+			frames := int64(app.LoopFrames(t1.Sub(t0)))
+			if !ring.WaitFor(start+frames, 2*time.Second) {
+				return formats.Sample{}, errors.New("the end of the loop never came from the input: is it still there?")
+			}
+			data, err := ring.Copy(start, frames)
+			if err != nil {
+				return formats.Sample{}, err
+			}
+			log.Info("looper: take", "ring", true, "loop_ms", t1.Sub(t0).Milliseconds(), "start_frame", start, "frames", frames, "ring_total", ring.Total(),
+				"delay_ms", delay.Milliseconds(), "calibration", cal)
+			return app.FadeLoop(formats.Sample{Channels: 2, Samples: data}), nil
+		}
+		if cal {
+			sample, err := cut(0)
+			if err != nil {
+				return loopSavedMsg{err: err, cal: true}
+			}
+			ms, err := app.HitDelay(sample)
+			log.Info("looper: calibration", "hit_ms", ms, "peak_db", app.PeakDB(sample), "err", err)
+			return loopSavedMsg{err: err, cal: true, delay: ms}
+		}
+		sample, err := cut(delay)
+		if err != nil {
+			return loopSavedMsg{pad: pad, err: err}
+		}
+		sample, applied := app.ApplyGain(sample, gain, normalize)
+		peak := app.PeakDB(sample)
+		log.Info("looper: loop", "frames", sample.Frames(), "peak_db", peak, "gain_applied_db", applied)
+		return edit(func() tea.Msg {
+			if _, err := app.PutSample(unit, pad, sample, name); err != nil {
+				return loopSavedMsg{pad: pad, err: err}
+			}
+			if info, ok := proto.ParamByName("gate"); ok {
+				_ = unit.SetParam(info.ID, proto.TargetPad(pad), 0)
+			}
+			return loopSavedMsg{pad: pad, name: name, peak: peak, gain: applied}
+		})()
+	}
+}
+
 // loopSaved is a take that ended.
 func (m Model) loopSaved(msg loopSavedMsg) (tea.Model, tea.Cmd) {
 	lp := m.looper()
-	lp.phase, lp.session, lp.cal = lpIdle, nil, false
-	m.lvl = nil
+	lp.phase, lp.session, lp.cal, lp.ringTake = lpIdle, nil, false, false
+	if m.ring == nil {
+		m.lvl = nil
+	}
 	if msg.cal {
 		if msg.err != nil {
 			m.message = "calibration failed: " + msg.err.Error()
