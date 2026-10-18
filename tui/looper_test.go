@@ -94,6 +94,19 @@ func TestTheLooperRecordsAFullLoopFromTheNextBeatAndPutsItOnTheNextFreePad(t *te
 		t.Fatalf("no question: %q", r.s.m().message)
 	}
 	r.s.press("d")
+	// The clock runs: the delete waits for the last beat of the pattern.
+	if !strings.Contains(r.s.m().message, "last beat") {
+		t.Fatalf("not queued for the last beat: %q", r.s.m().message)
+	}
+	if pad, _ := r.s.m().loopFreePad(); pad.String() != "A5" {
+		t.Fatalf("deleted at once: free pad %s", pad)
+	}
+	{
+		m := r.s.m()
+		m.clock.ticks = m.lastBeat()
+		cmd := m.looperJobsTick()
+		r.s.run(cmd)
+	}
 	if pad, _ := r.s.m().loopFreePad(); pad.String() != "A4" {
 		t.Errorf("after the delete the free pad is %s, want A4 (%q)", pad, r.s.m().message)
 	}

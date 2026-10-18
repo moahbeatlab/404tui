@@ -87,7 +87,9 @@ type webLooper struct {
 	Norm   bool   `json:"norm"`
 	OnBar  bool   `json:"onBar"`
 	Slices int    `json:"slices"`
-	Cal    bool   `json:"cal"`
+	// Later says what waits for the last beat of the pattern (empty for nothing).
+	Later string `json:"later"`
+	Cal   bool   `json:"cal"`
 	// Phase is idle, starting, armed, recording or saving; Bar of Of is where a recording is; Left the beats until
 	// bar 1 while it waits.
 	Phase  string  `json:"phase"`
@@ -119,6 +121,7 @@ type webLoopPad struct {
 	Name   string `json:"name"`
 	Has    bool   `json:"has"`
 	Target bool   `json:"target"`
+	Del    bool   `json:"del"` // waits to be deleted on the last beat
 }
 
 type webPad struct {
@@ -354,8 +357,9 @@ func (m Model) webLooper() webLooper {
 		}
 	}
 	for i, row := range m.snap.Bank(bank) {
-		l.Pads = append(l.Pads, webLoopPad{N: i + 1, Name: row.Name, Has: row.HasSample, Target: l.Target == row.Pad.String()})
+		l.Pads = append(l.Pads, webLoopPad{N: i + 1, Name: row.Name, Has: row.HasSample, Target: l.Target == row.Pad.String(), Del: m.looperQueued(fmt.Sprintf("del:%d", i))})
 	}
+	l.Later = m.laterText()
 	return l
 }
 
@@ -428,7 +432,12 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("%s kept on %s: hold it again to let it go", pad, busName(m.busOf(pad)))
 		nm, cmd := m.setIsolated(keep)
 		return nm, tea.Batch(undo, cmd)
-	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel":
+	case "lpbankset":
+		if m.snap == nil || m.busy != "" {
+			return m, nil
+		}
+		return m.looperBankSet(c.I)
+	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset":
 		return m.slicerCommand(c.A, c.N, c.I)
 	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel", "lpgain", "lpnorm", "lpcal", "lpalign", "lpslices", "lpremix":
 		if m.snap == nil || m.busy != "" {

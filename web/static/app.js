@@ -242,7 +242,7 @@
   press('lpDel', () => {
     const p = state && state.looper && state.looper.pads[lpSel];
     if (!p || !p.has) return;
-    if (lpAsk !== lpSel + 1) { lpAsk = lpSel + 1; clearTimeout(lpAskT); lpAskT = setTimeout(() => { lpAsk = 0; render(); }, 3000); return render(); }
+    if (!p.del && lpAsk !== lpSel + 1) { lpAsk = lpSel + 1; clearTimeout(lpAskT); lpAskT = setTimeout(() => { lpAsk = 0; render(); }, 3000); return render(); }
     lpAsk = 0; send({ a: 'lpdel', i: lpSel }); lpSel = -1; render();
   });
   const lpSw = document.querySelectorAll('.lpsw button');
@@ -283,7 +283,7 @@
     const ready = sl.phase === 'ready';
     $('slReady').hidden = !ready;
     set($('slT'), 'textContent', ready ? sl.src : sl.pad >= 0 ? sl.src : 'SLICER');
-    set($('slSub'), 'textContent', ready ? 'order ' + sl.played + ' · tap a pad of bank ' + sl.target + ', then PLACE' : sl.pad >= 0 ? (sl.free ? 'next free pad: ' + sl.free : 'bank ' + sl.target + ' is full') : 'tap a pad of bank ' + sl.bank + ' to slice');
+    set($('slSub'), 'textContent', sl.later ? sl.later : ready ? 'order ' + sl.played + ' · tap a pad of bank ' + sl.target + ', then PLACE' : sl.pad >= 0 ? (sl.free ? 'next free pad: ' + sl.free : 'bank ' + sl.target + ' is full') : 'tap a pad of bank ' + sl.bank + ' to slice');
     const asking = ready && sl.destName && slAsk === sl.dest + 1;
     cls($('slGo'), 'on', !!asking);
     set($('slGoT'), 'textContent', sl.busy ? 'WORKING…' : ready ? (sl.dest < 0 ? 'TAP A PAD' : asking ? 'TAP AGAIN: REPLACE ' + sl.free : sl.destName ? 'REPLACE ' + sl.free + ' …' : 'PLACE → ' + sl.free) : 'SLICE');
@@ -317,21 +317,23 @@
     set($('lpPatS'), 'textContent', !l.known ? 'reading…' : l.pattern ? 'pattern ' + l.patternName + ' plays all 16 pads ✓' : 'no pattern with all 16 pads');
     cls($('lpPat'), 'warn', l.known && !l.pattern);
     const sel = l.pads[lpSel];
-    $('lpDel').disabled = !sel || !sel.has;
+    $('lpDel').disabled = !sel || !(sel.has || sel.del);
     const asking = lpAsk === lpSel + 1 && sel && sel.has;
     cls($('lpDel'), 'danger', asking);
-    set($('lpDelT'), 'textContent', asking ? 'TAP AGAIN TO DELETE' : 'DELETE');
+    set($('lpDelT'), 'textContent', sel && sel.del ? 'KEEP IT' : asking ? 'TAP AGAIN TO DELETE' : 'DELETE');
+    cls($('lpDel'), 'on', !!(sel && sel.del));
     set($('lpDelS'), 'textContent', sel ? (sel.has ? 'pad ' + sel.n + ' ' + sel.name : 'pad ' + sel.n + ' is empty') : 'tap a pad first');
     const sl = s.slicer, slMode = $('looper').dataset.lp === 'slice' && sl;
     (slMode ? sl.pads : l.pads).forEach((p, i) => {
       const e = lpPads[i];
       set(e.n, 'textContent', p.n);
       set(e.nm, 'textContent', p.has ? p.name : !slMode && p.target ? 'next' : '');
+      cls(e.d, 'del', !!p.del);
       cls(e.d, 'has', p.has); cls(e.d, 'target', !slMode && p.target && !p.has); cls(e.d, 'sel', slMode ? i === (sl.phase === 'ready' ? sl.dest : sl.pad) : i === lpSel);
     });
     if (sl) renderSlicer(sl);
     const last = l.last ? 'last take ' + l.last.name + ' on ' + l.last.pad + ': peak ' + l.last.peak.toFixed(1) + ' dB' + (l.last.gain ? ' (' + (l.last.gain > 0 ? '+' : '') + l.last.gain.toFixed(1) + ' dB added)' : '') : 'no take yet';
-    set($('lpLast'), 'textContent', last);
+    set($('lpLast'), 'textContent', l.later ? l.later : last);
     set($('lpLast2'), 'textContent', last + (l.calDone ? ' · last calibration: the recording was ' + l.calMs + ' ms late' : ''));
     set($('lpCalS'), 'textContent', l.phase === 'idle' ? 'kick on beat 1, rest muted' : l.cal ? 'calibrating…' : 'a take is on');
     // The mark in the top bar, in every view.
@@ -344,21 +346,36 @@
   }
 
   // ---- choosing the bank ----
+  // The same list serves the unit's bank (the chip at the top), the bank the Looper's loops go to, and the banks of the Slicer.
   const bankGrid = $('bankGrid');
+  let bankKind = 'unit';
+  const BANKS = {
+    unit: { title: 'Bank on the unit', cmd: 'bank', cur: (s) => s.bank },
+    loop: { title: 'Bank for the loops', cmd: 'lpbankset', cur: (s) => s.looper && s.looper.bank },
+    from: { title: 'Slice a pad of bank', cmd: 'slbankset', cur: (s) => s.slicer && s.slicer.bank },
+    to: { title: 'Slices go to bank', cmd: 'sltbankset', cur: (s) => s.slicer && s.slicer.target },
+  };
   for (let i = 0; i < 10; i++) {
     const b = document.createElement('button');
     b.innerHTML = String.fromCharCode(65 + i) + '<small></small>';
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'bank', i }); $('bankPick').hidden = true; });
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: BANKS[bankKind].cmd, i }); $('bankPick').hidden = true; });
     bankGrid.appendChild(b);
   }
   function drawBanks() {
     if ($('bankPick').hidden || !state) return;
+    const cur = BANKS[bankKind].cur(state);
     [...bankGrid.children].forEach((b, i) => {
-      b.className = state.bank === String.fromCharCode(65 + i) ? 'now' : '';
+      b.className = cur === String.fromCharCode(65 + i) ? 'now' : '';
       b.lastChild.textContent = state.bankFill ? state.bankFill[i] + ' pads' : '';
     });
   }
-  $('bankBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); $('bankPick').hidden = false; drawBanks(); });
+  function openBanks(kind) { bankKind = kind; $('bankT').textContent = BANKS[kind].title; $('bankPick').hidden = false; drawBanks(); }
+  $('bankBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); openBanks('unit'); });
+  for (const [id, kind] of [['lpBank', 'loop'], ['slBank', 'from'], ['slTBank', 'to']]) {
+    const box = $(id).closest('.lpmid');
+    box.classList.add('pick');
+    box.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!box.parentElement.querySelector('button:disabled')) openBanks(kind); });
+  }
   $('bankX').addEventListener('pointerdown', (e) => { e.preventDefault(); $('bankPick').hidden = true; });
   $('bankPick').addEventListener('pointerdown', (e) => { if (e.target === $('bankPick')) $('bankPick').hidden = true; });
 

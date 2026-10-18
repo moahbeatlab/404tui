@@ -368,7 +368,12 @@ func TestTheLooperIsShownAndControlledFromTheBrowser(t *testing.T) {
 	if got := w.last(t).Looper.Phase; got != "idle" {
 		t.Errorf("not cancelled: %s", got)
 	}
-	// A pad is deleted.
+	// A pad is deleted (at once: the clock does not run).
+	r.s.model = func() tea.Model {
+		m := r.s.m()
+		m.clock = &clockState{}
+		return m
+	}()
 	r.web(`{"a":"lpdel","i":2}`)
 	if l = w.last(t).Looper; l.Pads[2].Has || l.Target != "A3" {
 		t.Errorf("A3 not deleted: %+v", l.Pads[2])
@@ -474,5 +479,106 @@ func TestTheBrowserCanChangeTheBank(t *testing.T) {
 	r.web(`{"a":"bank","i":99}`) // out of range: nothing
 	if got := w.last(t).Bank; got != "D" {
 		t.Errorf("bank %s after a bank out of range", got)
+	}
+}
+
+func TestADeleteAndASlicePlacementWaitForTheLastBeatOfThePattern(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.tick(5)
+	length := r.s.m().loopBars() * ticksPerBar
+	if !r.s.m().snap.Bank(0)[0].HasSample {
+		t.Skip("A1 holds no sample")
+	}
+	// A delete is queued, shown, and can be taken back.
+	r.web(`{"a":"lpdel","i":0}`)
+	l := w.last(t).Looper
+	if !l.Pads[0].Del || !strings.Contains(l.Later, "delete A1") || !r.s.m().snap.Bank(0)[0].HasSample {
+		t.Fatalf("not queued: %+v", l)
+	}
+	r.web(`{"a":"lpdel","i":0}`)
+	if w.last(t).Looper.Pads[0].Del {
+		t.Fatal("asking again did not take the delete back")
+	}
+	r.web(`{"a":"lpdel","i":0}`)
+	// Nothing happens before the last beat ...
+	r.tick(length - ticksPerBeat - 5 - 1)
+	if !r.s.m().snap.Bank(0)[0].HasSample {
+		t.Fatal("deleted before the last beat")
+	}
+	// ... and the last beat does it.
+	m := r.s.m()
+	next, cmd := m.midiEvent(midiMsg{link: r.link, ev: midiin.Event{Kind: midiin.Clock, At: time.Now()}})
+	r.s.model = next
+	if got := r.s.m().clock.ticks; got != length-ticksPerBeat {
+		t.Fatalf("at tick %d, want %d", got, length-ticksPerBeat)
+	}
+	r.s.run(cmd)
+	if r.s.m().snap.Bank(0)[0].HasSample {
+		t.Errorf("A1 still holds its sample after the last beat began (%q)", r.s.m().message)
+	}
+	if w.last(t).Looper.Later != "" {
+		t.Errorf("still queued: %q", w.last(t).Looper.Later)
+	}
+}
+
+func TestSlicesPlacedWhileTheClockRunsGoOnThePadOnTheLastBeat(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	from, ok := m.slFreePad(0)
+	if !ok {
+		t.Skip("bank A is full")
+	}
+	src := formats.Sample{Channels: 1}
+	for i := 0; i < 48000; i++ {
+		src.Samples = append(src.Samples, int16(i/6000*1500))
+	}
+	if _, err := app.PutSample(m.unit, from, src, "SRC"); err != nil {
+		t.Fatal(err)
+	}
+	r.s.run(m.load(""))
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.tick(3)
+	length := r.s.m().loopBars() * ticksPerBar
+	r.web(fmt.Sprintf(`{"a":"slpad","i":%d}`, from.Pad()))
+	if got := w.last(t).Slicer.Pad; got != int(from.Pad()) {
+		t.Fatalf("slpad: pad %d, busy %q, msg %q", got, r.s.m().busy, r.s.m().message)
+	}
+	r.web(`{"a":"slgo"}`)
+	free := w.last(t).Slicer.Dest
+	r.web(`{"a":"slgo"}`) // place
+	s := w.last(t).Slicer
+	if s.Phase != "pick" || !strings.Contains(s.Later, "slices →") {
+		t.Fatalf("not queued: %+v (%q)", s, r.s.m().message)
+	}
+	r.tick(length - ticksPerBeat - 3 - 1)
+	if r.s.m().snap.Bank(0)[free].HasSample {
+		t.Fatal("placed before the last beat")
+	}
+	next, cmd := r.s.m().midiEvent(midiMsg{link: r.link, ev: midiin.Event{Kind: midiin.Clock, At: time.Now()}})
+	r.s.model = next
+	r.s.run(cmd)
+	if got := r.s.m().snap.Bank(0)[free].Name; !strings.HasPrefix(got, "SLC ") {
+		t.Errorf("pad %d holds %q after the last beat began (%q)", free, got, r.s.m().message)
+	}
+}
+
+func TestTheBanksOfTheLooperAndTheSlicerCanBeChosenDirectly(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	r.web(`{"a":"lpbankset","i":7}`)
+	if got := w.last(t).Looper.Bank; got != "H" {
+		t.Errorf("looper bank %s, want H", got)
+	}
+	r.web(`{"a":"lpbankset","i":99}`)
+	if got := w.last(t).Looper.Bank; got != "H" {
+		t.Errorf("looper bank %s after a bank out of range", got)
+	}
+	r.web(`{"a":"slbankset","i":4}`)
+	r.web(`{"a":"sltbankset","i":9}`)
+	if s := w.last(t).Slicer; s.Bank != "E" || s.Target != "J" {
+		t.Errorf("slicer from %s to %s, want E to J", s.Bank, s.Target)
 	}
 }

@@ -142,3 +142,5 @@ of the Looper runs. The number is the loudest recent peak in dB below full scale
 If the computer cannot listen, the meter says why.
 
 The bank chip at the top left of the page opens a list of the ten banks with the number of pads that hold a sample; choosing one moves the unit to that bank, as the bank keys do in the Pads view, and the Pads view shows it.
+
+In the Looper and the Slicer the bank boxes (BANK, FROM, TO) can be tapped for a list of all ten banks, so a bank is chosen in one tap.

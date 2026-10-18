@@ -67,10 +67,12 @@ type looperState struct {
 	slBank, slPad int
 	slSet         bool
 	// slOut are slices that wait for a pad (slHave), from slFrom in slN slices; slDest is the pad chosen for them (-1 for none).
-	slOut       formats.Sample
-	slHave      bool
-	slFrom      string
-	slOrder     string
+	slOut   formats.Sample
+	slHave  bool
+	slFrom  string
+	slOrder string
+	// jobs wait for the last beat of the pattern.
+	jobs        []lpJob
 	slN, slDest int
 }
 
@@ -215,6 +217,13 @@ func (m Model) looperKey(name string) (tea.Model, tea.Cmd) {
 }
 
 // looperBankStep moves the bank the loops go to, up or down.
+func (m Model) looperBankSet(bank int) (tea.Model, tea.Cmd) {
+	if bank < 0 || bank >= proto.Banks {
+		return m, nil
+	}
+	return m.looperBankStep(bank - m.loopBank())
+}
+
 func (m Model) looperBankStep(dir int) (tea.Model, tea.Cmd) {
 	if m.looper().phase != lpIdle {
 		m.message = "the bank cannot change while a take is on"
@@ -244,27 +253,29 @@ func (m Model) looperDelayStep(step int) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// looperDelete deletes the sample of a pad (0 to 15) of the bank.
-func (m Model) looperDelete(i int) (tea.Model, tea.Cmd) { return m.deletePadIn(m.loopBank(), i) }
-
-// deletePadIn deletes the sample of pad i (0 to 15) of a bank.
-func (m Model) deletePadIn(bank, i int) (tea.Model, tea.Cmd) {
-	if i < 0 || i > 15 || bank < 0 || bank >= proto.Banks {
+// looperDelete deletes the sample of a pad (0 to 15) of the bank, on the last beat of the pattern when the clock runs
+// (asking again takes it back).
+func (m Model) looperDelete(i int) (tea.Model, tea.Cmd) {
+	if i < 0 || i > 15 || m.snap == nil {
 		return m, nil
 	}
-	row := m.snap.Bank(bank)[i]
+	m.looper() // made here, so that the queue stays with the model that goes back
+	row := m.snap.Bank(m.loopBank())[i]
+	key := fmt.Sprintf("del:%d", i)
+	if m.looperUnlater(key) {
+		m.message = fmt.Sprintf("%s is no longer deleted on the last beat", row.Pad)
+		return m, nil
+	}
 	if !row.HasSample {
 		m.message = fmt.Sprintf("%s holds no sample", row.Pad)
 		return m, nil
 	}
-	unit, target := m.unit, row.Pad
-	m.busy = "deleting " + target.String()
-	return m, m.edit(func() tea.Msg {
-		if failed := app.DeletePads(unit, []proto.PadIndex{target}); len(failed) > 0 {
-			return doneMsg{message: "not deleted: " + strings.Join(failed, ", "), reload: true}
-		}
-		return doneMsg{message: fmt.Sprintf("%s deleted", target), reload: true}
-	})
+	if m.looperLater(lpJob{key: key, label: "delete " + row.Pad.String(), cmd: m.deleteCmd([]proto.PadIndex{row.Pad})}) {
+		m.message = fmt.Sprintf("%s is deleted on the last beat of the pattern, in %.1f beats (delete it again to keep it)", row.Pad, m.beatsToLast())
+		return m, nil
+	}
+	m.busy = "deleting " + row.Pad.String()
+	return m, m.deleteCmd([]proto.PadIndex{row.Pad})
 }
 
 // looperArm starts a take: the recorder comes up now, and the loop begins on the next beat.
@@ -363,6 +374,10 @@ func (m Model) loopStarted(msg loopStartedMsg) (tea.Model, tea.Cmd) {
 // looperTick moves a take on with the clock: the start of a beat starts it, the end of the loop finishes it. at is when the
 // tick came.
 func (m Model) looperTick(at time.Time) tea.Cmd {
+	return tea.Batch(m.looperJobsTick(), m.looperTickTake(at))
+}
+
+func (m Model) looperTickTake(at time.Time) tea.Cmd {
 	lp := m.lp
 	if lp == nil || m.clock == nil {
 		return nil
@@ -569,6 +584,7 @@ func (m Model) looperAlignToggle() (tea.Model, tea.Cmd) {
 
 // looperWatch ends a take when the clock has stopped: it would wait for ever.
 func (m Model) looperWatch() Model {
+	m = m.looperJobsWatch()
 	lp := m.lp
 	if lp == nil || (lp.phase != lpArmed && lp.phase != lpRecording) || m.clockRuns() {
 		return m
@@ -652,6 +668,9 @@ func (m Model) looperBody(g geom) string {
 		status = lipgloss.NewStyle().Background(st.th.hot).Foreground(st.th.cursorFg).Bold(true).Render(fmt.Sprintf(" ● REC  bar %d of %d  →  %s ", min((m.clock.ticks-lp.startTick)/ticksPerBar+1, m.takeBars()), m.takeBars(), lp.target))
 	case lpSaving:
 		status = lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render(fmt.Sprintf("SAVING to %s…", lp.target))
+	}
+	if t := m.laterText(); t != "" {
+		status += "\n" + lipgloss.NewStyle().Foreground(st.th.hot).Bold(true).Render(t)
 	}
 	pattern := st.dim.Render("pattern: reading…")
 	if rows := m.patterns[bank]; rows != nil {

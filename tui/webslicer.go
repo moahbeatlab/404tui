@@ -206,8 +206,7 @@ func (m Model) slicerPlace() (tea.Model, tea.Cmd) {
 	lp.slHave, lp.slOut = false, formats.Sample{}
 	unit, edit := m.unit, m.edit
 	name := "SLC " + time.Now().Format("15:04:05")
-	m.busy = "putting the slices on " + target.String()
-	return m, edit(func() tea.Msg {
+	cmd := edit(func() tea.Msg {
 		if _, err := app.PutSampleLive(unit, target, out, name); err != nil {
 			return doneMsg{message: "the slices were lost: " + err.Error(), reload: true}
 		}
@@ -216,6 +215,12 @@ func (m Model) slicerPlace() (tea.Model, tea.Cmd) {
 		}
 		return doneMsg{message: fmt.Sprintf("%s in %d slices → %s (%s)", from, n, target, name), reload: true}
 	})
+	if m.looperLater(lpJob{key: "place:" + target.String(), label: "slices → " + target.String(), cmd: cmd}) {
+		m.message = fmt.Sprintf("the slices go on %s on the last beat of the pattern, in %.1f beats", target, m.beatsToLast())
+		return m, nil
+	}
+	m.busy = "putting the slices on " + target.String()
+	return m, cmd
 }
 
 // ---- the page's Slicer ----
@@ -291,6 +296,7 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 	if m.snap == nil || m.busy != "" {
 		return m, nil
 	}
+	m.looper() // made here, so that what is chosen stays with the model that goes back
 	bank, pad := m.slSource()
 	lp := m.looper()
 	if lp.slHave {
@@ -300,8 +306,11 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 			if i >= 0 && i <= 15 {
 				lp.slDest = i
 			}
-		case "sltbank":
+		case "sltbank", "sltbankset":
 			cur := m.slTargetBank()
+			if act == "sltbankset" {
+				n = i - cur
+			}
 			m.mem.SlicerTarget = (cur+n+proto.Banks)%proto.Banks + 1
 			lp.slDest = -1
 			if free, ok := m.slFreePad(m.slTargetBank()); ok {
@@ -318,7 +327,10 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch act {
-	case "slbank":
+	case "slbank", "slbankset":
+		if act == "slbankset" {
+			n = i - bank
+		}
 		lp.slBank = (bank + n + proto.Banks) % proto.Banks
 		lp.slPad = -1
 	case "slpad":
@@ -329,8 +341,11 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 			i = -1
 		}
 		lp.slPad = i
-	case "sltbank":
+	case "sltbank", "sltbankset":
 		cur := m.slTargetBank()
+		if act == "sltbankset" {
+			n = i - cur
+		}
 		m.mem.SlicerTarget = (cur+n+proto.Banks)%proto.Banks + 1
 	case "slslices":
 		m.mem.SlicerSlices = cycleInt(slSliceChoices, m.slSlices(), 1)
@@ -378,6 +393,8 @@ type webSlicer struct {
 	DestName string `json:"destName"`
 	// Order is how the waiting slices play, by number.
 	Played string `json:"played"`
+	// Later says what waits for the last beat of the pattern.
+	Later string `json:"later"`
 }
 
 func (m Model) webSlicer() webSlicer {
@@ -385,7 +402,7 @@ func (m Model) webSlicer() webSlicer {
 	tb := m.slTargetBank()
 	s := webSlicer{Bank: string(rune('A' + bank)), Pad: pad, Pads: []webLoopPad{}, Slices: m.slSlices(), Random: m.mem.SlicerRandomCut,
 		Order: slOrderNames[m.slOrder()], Div: m.mem.SlicerDiv, Swing: m.mem.SlicerSwing, Target: string(rune('A' + tb)), Busy: m.busy != ""}
-	s.Phase, s.Dest = "pick", -1
+	s.Phase, s.Dest, s.Later = "pick", -1, m.laterText()
 	if free, ok := m.slFreePad(tb); ok {
 		s.Free = free.String()
 	}

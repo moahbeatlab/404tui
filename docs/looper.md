@@ -91,3 +91,10 @@ The official app sends the unit a Stop before it imports a sample. The Looper an
 that the pattern is not stopped when a take or a slice lands on a pad. If the unit refuses the import without it, the import is
 made the usual way (with the Stop). If the pattern still stops for a moment, that is the unit loading the sample: tell me, and
 look for `looper:` and `slicer:` lines in `sp404 -v`.
+
+## Work that waits for the last beat
+
+While the unit's clock runs, DELETE in the Looper and PLACE in the Slicer wait for the last beat of the pattern: the next beat is the
+start of the pattern, where everything is triggered again, so the work on the unit is not heard as a gap. The pattern is as long as a
+loop is set to be (`b`, 1 to 8 bars) and counted from the unit's start. A pad that waits to be deleted is striped red (DELETE says KEEP IT:
+asking again takes it back); the Slicer and the Looper say what waits and in how many beats. Without a running clock the work is done at once.
