@@ -50,8 +50,7 @@ to the program at the top right (a few milliseconds on a good network).
 
 | Tap | Does |
 | --- | --- |
-| a pad | makes it the only one on its bus (the others on that bus go dry); tap it again to bring them back |
-| a pad twice | mutes it (its volume goes to 0 on the unit; twice again brings back the level it had) |
+| a pad | what the **TAP** button says: **ISOLATE** makes it the only one on its bus (the others on that bus go dry; tap it again to bring them back), **MUTE** sets its volume to 0 on the unit (another tap brings the level back) |
 | a pad while **FOCUS** is on | picks the pad: the picked ones keep their bus; FOCUS again puts everything back |
 
 The tile shows the number, the name, the bus (a coloured box), the volume (the bar under the name),
@@ -60,8 +59,7 @@ the length in bars, and what the pattern does: **green** the pad was heard in th
 a red flash is a hit, **×** is muted.
 
 **Swipe** up or down on a pad to change its volume from where it is (it is sent to the unit as you swipe).
-A tap counts when the finger comes up, since until then it could still be a swipe. **MIX** makes a tap on a
-pad mute it (or bring the level back) instead of isolating it. Zooming by double tap or pinch is switched off.
+A tap counts when the finger comes up, since until then it could still be a swipe. Zooming by double tap or pinch is switched off.
 
 ### The cue
 

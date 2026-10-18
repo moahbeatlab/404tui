@@ -81,19 +81,14 @@
     padEls.push({ d, n: d.children[0], nm: d.children[1], lvi: d.children[2].firstChild, bars: d.children[3], bus: d.children[4], last: '' });
     pad(d, i);
   }
-  let mixing = false;
-  // A tap makes the pad the only one on its bus (and brings the others back when it is alone already); a
-  // second tap in a row mutes it (its level goes to 0 and back) and undoes the isolation of the first.
-  // With focus on, the pads are picked: the program decides what a tap means then.
-  let lastTap = { i: -1, t: 0 };
+  // What a tap on a pad does is the TAP button's: isolate the pad (the only one on its bus; again brings the others
+  // back) or mute it (its level goes to 0 and back). With focus on, the pads are picked: the program decides.
+  let tapMute = false;
   function tap(i) {
     if (state && state.focus && state.focus.on) return send({ a: 'pad', i });
-    const now = performance.now();
-    if (lastTap.i === i && now - lastTap.t < 380) { lastTap = { i: -1, t: 0 }; return send({ a: 'mute', i, n: 1 }); }
-    lastTap = { i, t: now };
-    send({ a: 'solo', i });
+    send({ a: tapMute ? 'mute' : 'solo', i });
   }
-  // A pad: a tap does what tap() says (or mutes, in MIX), a swipe up or down sets the volume from where it was.
+  // A pad: a tap does what tap() says , a swipe up or down sets the volume from where it was.
   // The tap counts when the finger comes up, because it is not known before whether it will swipe.
   function pad(el, i) {
     let down = null;
@@ -113,7 +108,7 @@
     });
     el.addEventListener('pointerup', () => {
       if (!down) return;
-      if (!down.moved) { if (mixing) send({ a: 'mute', i }); else tap(i); }
+      if (!down.moved) { tap(i); }
       else if (down.v !== undefined) send({ a: 'level', i, v: down.v });
       down = null;
     });
@@ -129,8 +124,8 @@
 
   // Buttons with a data-a send it as they are pressed down, not when the finger comes up.
   document.querySelectorAll('[data-a]').forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: b.dataset.a }); }));
-  $('bMix').addEventListener('pointerdown', (e) => { e.preventDefault(); mixing = !mixing; document.body.classList.toggle('mixing', mixing); $('bMix').classList.toggle('on', mixing);
-    $('bMixS').textContent = mixing ? 'tap = mute' : 'swipe a pad = volume'; if (navigator.vibrate) navigator.vibrate(8); render(); });
+  $('bMix').addEventListener('pointerdown', (e) => { e.preventDefault(); tapMute = !tapMute; $('bMix').classList.toggle('on', tapMute);
+    $('bMixT').textContent = tapMute ? 'MUTE' : 'ISOLATE'; if (navigator.vibrate) navigator.vibrate(8); });
 
   const barsEl = $('bars');
   [1, 2, 3, 4, 8].forEach((n) => { const b = document.createElement('button'); b.textContent = n; b.dataset.n = n;
