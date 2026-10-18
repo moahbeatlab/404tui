@@ -216,7 +216,6 @@
   press('lpDp', () => send({ a: 'lpdelay', n: 5 }));
   press('lpPat', () => send({ a: 'lppattern' }));
   press('lpAlign', () => send({ a: 'lpalign' }));
-  press('lpWatch', () => send({ a: 'lpwatch' }));
   press('lpCal', () => send({ a: 'lpcal' }));
   press('lpGm', () => send({ a: 'lpgain', n: -1 }));
   press('lpGp', () => send({ a: 'lpgain', n: 1 }));
@@ -268,9 +267,6 @@
     cls($('lpArm'), 'on', run);
     $('lpArm').disabled = l.phase === 'saving' || (!run && !target);
     set($('lpBank'), 'textContent', l.bank);
-    set($('lpWatchT'), 'textContent', 'WATCH UNIT LOOPER: ' + (l.watch ? 'ON' : 'OFF'));
-    set($('lpWatchS'), 'textContent', l.watch && l.stopLeft >= 0 ? 'looper stops in ' + l.stopLeft.toFixed(1) + ' beats' : 'ungates a new pad sample, stops the looper at the end of the pattern');
-    cls($('lpWatch'), 'on', l.watch);
     set($('lpAlignT'), 'textContent', 'START: ' + (l.onBar ? 'BAR' : 'BEAT'));
     $('lpCal').disabled = busy;
     set($('lpBarsT'), 'textContent', l.bars + (l.bars === 1 ? ' BAR' : ' BARS'));

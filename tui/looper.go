@@ -15,7 +15,6 @@ import (
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
-	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/record"
 )
@@ -64,12 +63,6 @@ type looperState struct {
 	last    loopLast
 	calMS   int
 	calDone bool
-	// stopTick is the tick of the clock at which the unit's looper is stopped (0 for none); loadedAt is when the pads
-	// were read last; out is the MIDI output that stop goes to.
-	stopTick int
-	loadedAt time.Time
-	out      midiin.Out
-	tried    time.Time
 }
 
 // loopLast is what the Looper knows of the loop it saved last.
@@ -166,8 +159,6 @@ func (m Model) looperKey(name string) (tea.Model, tea.Cmd) {
 		return m.looperArmWith(true)
 	case "t":
 		return m.looperAlignToggle()
-	case "w":
-		return m.looperWatchToggle()
 	case "[":
 		return m.looperBankStep(-1)
 	case "]":
@@ -360,7 +351,6 @@ func (m Model) looperTick(at time.Time) tea.Cmd {
 	if lp == nil || m.clock == nil {
 		return nil
 	}
-	m.looperUnitTick()
 	length := m.takeBars() * ticksPerBar
 	switch lp.phase {
 	case lpArmed:
@@ -647,13 +637,6 @@ func (m Model) looperBody(g geom) string {
 	case lpSaving:
 		status = lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render(fmt.Sprintf("SAVING to %s…", lp.target))
 	}
-	if m.mem.LooperWatch {
-		w := "WATCHING the unit's looper: a new sample on a pad is ungated, the looper stops after " + plural(m.loopBars(), "bar") + " of the pattern"
-		if lp.stopTick > 0 && m.clock != nil {
-			w = fmt.Sprintf("WATCHING: the unit's looper stops in %.1f beats", float64(lp.stopTick-m.clock.ticks)/24)
-		}
-		status += "\n" + lipgloss.NewStyle().Foreground(st.th.good).Bold(true).Render(w)
-	}
 	pattern := st.dim.Render("pattern: reading…")
 	if rows := m.patterns[bank]; rows != nil {
 		pattern = lipgloss.NewStyle().Foreground(st.th.hot).Render("no pattern with all 16 pads: p makes one")
@@ -664,7 +647,7 @@ func (m Model) looperBody(g geom) string {
 			}
 		}
 	}
-	keys := st.dim.Render("a arm   b length   [ ] bank   p pattern   d delete   g G gain   n normalise   t beat/bar   w watch the unit's looper   c calibrate   , . delay   h j k l pad")
+	keys := st.dim.Render("a arm   b length   [ ] bank   p pattern   d delete   g G gain   n normalise   t beat/bar   c calibrate   , . delay   h j k l pad")
 	top := []string{head, "", status, pattern, ""}
 	bottom := []string{"", keys}
 	avail := g.bodyH - 2 - len(top) - len(bottom) - 3

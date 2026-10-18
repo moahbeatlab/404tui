@@ -71,17 +71,3 @@ loud it is ("peak -8.3 dB"). How loud that is depends on what the unit sends ove
 level, the effects) and on the input volume of the computer's own sound settings. If the loops are too quiet or too
 loud next to the rest, set the **gain** (`g` `G`) once, or switch **normalise** on (`n`) to have every loop come out
 at the same peak. The pad itself is set to level 127.
-
-## Watching the unit's own looper
-
-Another way: record the loop with the unit's own Looper mode (the MC-101 goes into a bus, the looper records that bus)
-and copy the sample to a pad on the unit, as you do now. Press `w` in the Looper view (or WATCH UNIT LOOPER in the web
-page) and the program
-
-- sees the new sample on a pad (the unit says it changed something; the pads are also read every 5 seconds while
-  watching),
-- ungates that pad, so the loop plays to its end after the pattern hits it,
-- stops the unit's looper (REC, controller 88 = 0 on channel 1) when the clock comes to the end of the pattern: the
-  next multiple of the loop length (`b`, in bars) counted from the unit's start.
-
-Nothing is muted and nothing is recorded by the computer. The messages are in the log (`sp404 -v`, lines `looper:`).

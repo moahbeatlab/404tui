@@ -7,7 +7,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/record"
 )
@@ -261,49 +260,5 @@ func TestTheLooperCutsATakeOutOfTheMemoryItListensInto(t *testing.T) {
 	}
 	if m.ring == nil || m.lvl == nil {
 		t.Error("the listening stopped with the take")
-	}
-}
-
-func TestWatchingTheUnitsLooperUngatesANewSampleAndStopsTheLooperAtTheEndOfThePattern(t *testing.T) {
-	r := newPerfRig(t, 200, 40)
-	r.s.press("8")
-	r.s.press("w")
-	if !r.s.m().mem.LooperWatch {
-		t.Fatalf("w did not switch watching on (%q)", r.s.m().message)
-	}
-	r.s.shows("WATCHING")
-	r.feed(midiin.Event{Kind: midiin.Start})
-	r.tick(10)
-	// A sample was copied to J5 on the unit: gated, as the unit makes it.
-	m := r.s.m()
-	old := m.snap
-	cur := *old
-	cur.Pads = append([]app.PadRow(nil), old.Pads...)
-	i := 9*16 + 4
-	cur.Pads[i] = app.PadRow{Pad: old.Pads[i].Pad, HasSample: true, Name: "LOOPER", Size: 1000, Gate: true}
-	cmd := m.looperFound(old, &cur)
-	r.s.model = m
-	if m.lp.stopTick != 2*ticksPerBar {
-		t.Fatalf("the looper stops at tick %d, want %d (%q)", m.lp.stopTick, 2*ticksPerBar, m.message)
-	}
-	if !strings.Contains(m.message, "J5") || !strings.Contains(m.message, "ungated") {
-		t.Errorf("message %q", m.message)
-	}
-	r.s.run(cmd)
-	if len(r.sent()) != 0 {
-		t.Fatalf("the looper was stopped before the pattern ended: %v", r.sent())
-	}
-	r.tick(2*ticksPerBar - 10 - 1)
-	if len(r.sent()) != 0 {
-		t.Fatalf("stopped a tick early: %v", r.sent())
-	}
-	r.tick(1)
-	sent := r.sent()
-	if len(sent) != 1 || len(sent[0]) != 3 || sent[0][0] != 0xB0 || sent[0][1] != 88 || sent[0][2] != 0 {
-		t.Fatalf("sent %v, want controller 88 = 0 on channel 1", sent)
-	}
-	r.tick(ticksPerBar)
-	if len(r.sent()) != 1 {
-		t.Errorf("stopped again: %v", r.sent())
 	}
 }

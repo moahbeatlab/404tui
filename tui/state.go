@@ -64,8 +64,6 @@ type State struct {
 	LooperDelay int `json:"looperDelay,omitempty"`
 	// LooperOnBeat makes a take start on the next beat instead of the next bar (beat 1 of the next bar).
 	LooperOnBeat bool `json:"looperOnBeat,omitempty"`
-	// LooperWatch watches the unit's own looper: a new sample on a pad is ungated, the looper stops when the pattern ends.
-	LooperWatch bool `json:"looperWatch,omitempty"`
 	// LooperGain makes a loop louder by that many dB (it can be negative); LooperNormalize makes it as loud as it can be.
 	LooperGain      int  `json:"looperGain,omitempty"`
 	LooperNormalize bool `json:"looperNormalize,omitempty"`
