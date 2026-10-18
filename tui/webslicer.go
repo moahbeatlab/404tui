@@ -43,7 +43,7 @@ type sliceOpts struct {
 
 // sliceSample cuts a sample and puts the slices back together. Without a grid it is as long as the sample, with a grid
 // it has as many steps as it takes to be as long.
-func sliceSample(src formats.Sample, o sliceOpts) formats.Sample {
+func sliceSample(src formats.Sample, o sliceOpts) (formats.Sample, []int) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	sl := formats.NewSlicing(src.Frames(), max(o.n, 1))
 	if o.randomCut {
@@ -68,8 +68,28 @@ func sliceSample(src formats.Sample, o sliceOpts) formats.Sample {
 			steps = max((src.Frames()+step/2)/step, 1)
 		}
 	}
-	out, _ := formats.Render(src, sl, formats.NewSequencer(sl), steps)
-	return out
+	out, placed := formats.Render(src, sl, formats.NewSequencer(sl), steps)
+	order := make([]int, 0, len(placed))
+	for _, pl := range placed {
+		order = append(order, pl.Slice+1)
+	}
+	return out, order
+}
+
+// orderText says in which order the slices play, by their numbers (1 is the first of the original), as far as it fits.
+func orderText(order []int) string {
+	var b strings.Builder
+	for i, n := range order {
+		if i == 32 {
+			b.WriteString(" …")
+			break
+		}
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		fmt.Fprint(&b, n)
+	}
+	return b.String()
 }
 
 func inOrder(order []int) bool {
@@ -102,7 +122,7 @@ func (m Model) sliceJob(row app.PadRow, target proto.PadIndex, o sliceOpts) (tea
 			}
 			cache.put(key, sample)
 		}
-		out := sliceSample(sample, o)
+		out, _ := sliceSample(sample, o)
 		name := "SLC " + time.Now().Format("15:04:05")
 		log.Info("slicer: result", "from", row.Pad.String(), "to", target.String(), "slices", o.n, "random_cut", o.randomCut,
 			"order", o.order, "div", o.div, "bpm", o.bpm, "frames", out.Frames(), "frames_before", sample.Frames())
@@ -124,6 +144,8 @@ type slicerDoneMsg struct {
 	from string
 	n    int
 	err  error
+	// order is how the slices play, by number.
+	order string
 }
 
 // sliceRender cuts the sample of a pad; the result waits for the pad it goes on.
@@ -147,10 +169,10 @@ func (m Model) sliceRender(row app.PadRow, o sliceOpts) (tea.Model, tea.Cmd) {
 			}
 			cache.put(key, sample)
 		}
-		out := sliceSample(sample, o)
-		log.Info("slicer: rendered", "from", row.Pad.String(), "slices", o.n, "random_cut", o.randomCut, "order", o.order,
+		out, order := sliceSample(sample, o)
+		log.Info("slicer: rendered", "from", row.Pad.String(), "slices", o.n, "random_cut", o.randomCut, "mode", o.order, "played", orderText(order),
 			"div", o.div, "bpm", o.bpm, "frames", out.Frames(), "frames_before", sample.Frames())
-		return slicerDoneMsg{out: out, from: row.Pad.String(), n: o.n}
+		return slicerDoneMsg{out: out, from: row.Pad.String(), n: o.n, order: orderText(order)}
 	}
 }
 
@@ -162,12 +184,12 @@ func (m Model) slicerDone(msg slicerDoneMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	lp := m.looper()
-	lp.slOut, lp.slHave, lp.slFrom, lp.slN = msg.out, true, msg.from, msg.n
+	lp.slOut, lp.slHave, lp.slFrom, lp.slN, lp.slOrder = msg.out, true, msg.from, msg.n, msg.order
 	lp.slDest = -1
 	if free, ok := m.slFreePad(m.slTargetBank()); ok {
 		lp.slDest = int(free.Pad())
 	}
-	m.message = fmt.Sprintf("%s in %d slices: choose the pad it goes on, then PLACE", msg.from, msg.n)
+	m.message = fmt.Sprintf("%s in %d slices, order %s: choose the pad it goes on, then PLACE", msg.from, msg.n, msg.order)
 	return m, nil
 }
 
@@ -271,6 +293,17 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 	}
 	bank, pad := m.slSource()
 	lp := m.looper()
+	if act == "sldel" {
+		// Holding a pad deletes it, in the bank the grid shows.
+		grid := bank
+		if lp.slHave {
+			grid = m.slTargetBank()
+		}
+		if !lp.slHave && i == pad {
+			lp.slPad = -1
+		}
+		return m.deletePadIn(grid, i)
+	}
 	if lp.slHave {
 		// The slices wait: the grid is the bank they go to.
 		switch act {
@@ -354,6 +387,8 @@ type webSlicer struct {
 	Phase    string `json:"phase"`
 	Dest     int    `json:"dest"`
 	DestName string `json:"destName"`
+	// Order is how the waiting slices play, by number.
+	Played string `json:"played"`
 }
 
 func (m Model) webSlicer() webSlicer {
@@ -374,6 +409,7 @@ func (m Model) webSlicer() webSlicer {
 	if lp := m.lp; lp != nil && lp.slHave {
 		s.Phase, s.Dest, grid, s.Free = "ready", lp.slDest, tb, ""
 		s.Src = lp.slFrom + " in " + fmt.Sprint(lp.slN) + " slices"
+		s.Played = lp.slOrder
 	}
 	for i, row := range m.snap.Bank(grid) {
 		s.Pads = append(s.Pads, webLoopPad{N: i + 1, Name: row.Name, Has: row.HasSample})

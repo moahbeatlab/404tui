@@ -40,7 +40,8 @@ func (m Model) looperSlicesNext() (tea.Model, tea.Cmd) {
 
 // remixSample cuts a sample in n equal slices and puts them in a random order, each once.
 func remixSample(src formats.Sample, n int) formats.Sample {
-	return sliceSample(src, sliceOpts{n: n, order: slOrderShuffle})
+	out, _ := sliceSample(src, sliceOpts{n: n, order: slOrderShuffle})
+	return out
 }
 
 // looperRemix remixes the pad i (0 to 15) of the bank onto the next free pad of it.

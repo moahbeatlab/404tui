@@ -70,6 +70,7 @@ type looperState struct {
 	slOut       formats.Sample
 	slHave      bool
 	slFrom      string
+	slOrder     string
 	slN, slDest int
 }
 
@@ -244,11 +245,14 @@ func (m Model) looperDelayStep(step int) (tea.Model, tea.Cmd) {
 }
 
 // looperDelete deletes the sample of a pad (0 to 15) of the bank.
-func (m Model) looperDelete(i int) (tea.Model, tea.Cmd) {
-	if i < 0 || i > 15 {
+func (m Model) looperDelete(i int) (tea.Model, tea.Cmd) { return m.deletePadIn(m.loopBank(), i) }
+
+// deletePadIn deletes the sample of pad i (0 to 15) of a bank.
+func (m Model) deletePadIn(bank, i int) (tea.Model, tea.Cmd) {
+	if i < 0 || i > 15 || bank < 0 || bank >= proto.Banks {
 		return m, nil
 	}
-	row := m.snap.Bank(m.loopBank())[i]
+	row := m.snap.Bank(bank)[i]
 	if !row.HasSample {
 		m.message = fmt.Sprintf("%s holds no sample", row.Pad)
 		return m, nil

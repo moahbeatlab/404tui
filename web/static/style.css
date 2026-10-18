@@ -396,3 +396,4 @@ button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
 #bankGrid button { min-height: min(72px, 14vh); border-radius: 12px; background: var(--tile); font-weight: 800; font-size: 22px; display: grid; place-content: center; gap: 2px; }
 #bankGrid button small { font-weight: 500; font-size: 11px; color: var(--dim); }
 #bankGrid button.now { background: var(--accent); color: var(--ink); } #bankGrid button.now small { color: rgba(0,0,0,.6); }
+.lpad.arming { border-color: var(--hot); background: color-mix(in srgb, var(--hot) 35%, var(--tile)); transition: background .6s linear; }
