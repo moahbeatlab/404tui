@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -373,4 +374,23 @@ func TestTheLooperIsShownAndControlledFromTheBrowser(t *testing.T) {
 		t.Errorf("A3 not deleted: %+v", l.Pads[2])
 	}
 	r.web(`{"a":"lpdel","i":99}`) // out of range: nothing
+}
+
+func TestTheLevelIsPublishedWhateverIsRecorded(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	if got := w.last(t); got.Level != nil || got.LevelNote == "" {
+		t.Fatalf("level %+v note %q before any reading", got.Level, got.LevelNote)
+	}
+	m := r.s.m()
+	m.lvl = newLevelMeter()
+	m.lvl.ok = true
+	m.lvl.peak, m.lvl.hold, m.lvl.top = [2]float64{-20.4, math.Inf(-1)}, [2]float64{-6, -30}, -2
+	m.lvl.clipped = time.Now()
+	r.s.model = m
+	r.s.press("r")
+	l := w.last(t).Level
+	if l == nil || l.Peak[0] != -20 || l.Peak[1] != -60 || l.Hold[0] != -6 || !l.Clip || l.Src != "input" {
+		t.Errorf("level %+v", l)
+	}
 }

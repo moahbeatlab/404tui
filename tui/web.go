@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/moahbeatlab/404tui/proto"
+	"github.com/moahbeatlab/404tui/record"
 )
 
 // The web page (see package web) is a second screen for Perform: the program sends it its state as JSON
@@ -58,6 +59,20 @@ type webState struct {
 	Patterns []webPattern `json:"patterns"`
 	Version  string       `json:"version"`
 	Looper   webLooper    `json:"looper"`
+	// Level is how loud the sound is that is recorded (or, outside a recording, that the unit sends); nil until read.
+	Level *webLevel `json:"level"`
+	// LevelNote says why there is none: no recorder, or what the listening program said.
+	LevelNote string `json:"levelNote"`
+}
+
+// webLevel is the level meter: the peak of each channel and the held one, in dB below full scale (-60 is the floor).
+type webLevel struct {
+	Peak [2]float64 `json:"peak"`
+	Hold [2]float64 `json:"hold"`
+	Top  float64    `json:"top"` // the loudest so far
+	Clip bool       `json:"clip"`
+	// Src is what is heard: the input, a recording, or a take of the Looper.
+	Src string `json:"src"`
 }
 
 // webLooper is the Looper: where the loops go, and how a take is going.
@@ -209,6 +224,17 @@ func (m Model) webSnapshot() webState {
 		s.Focus = webFocus{On: true, Multi: m.iso.multi, Dry: len(m.iso.was)}
 	}
 	s.Looper = m.webLooper()
+	s.Level = m.webLevel()
+	if s.Level == nil {
+		switch _, ok := m.recorder.(record.Metering); {
+		case !ok:
+			s.LevelNote = "no level: install ffmpeg (or sox) on the computer"
+		case m.meterErr != "":
+			s.LevelNote = "no level: " + m.meterErr
+		default:
+			s.LevelNote = "listening…"
+		}
+	}
 	sc := m.scenes()
 	for b := range sc.bus {
 		bs := &sc.bus[b]
@@ -243,6 +269,30 @@ func (m Model) webSnapshot() webState {
 		s.Fx[b] = fx
 	}
 	return s
+}
+
+// webLevel is the meter for the page, in whole dB.
+func (m Model) webLevel() *webLevel {
+	if m.lvl == nil || !m.lvl.ok {
+		return nil
+	}
+	db := func(v float64) float64 {
+		if math.IsInf(v, -1) || v < -60 {
+			return -60
+		}
+		return math.Round(v)
+	}
+	l := &webLevel{Top: db(m.lvl.top), Clip: m.lvl.clipping(time.Now()), Src: "input"}
+	for c := range 2 {
+		l.Peak[c], l.Hold[c] = db(m.lvl.peak[c]), db(m.lvl.hold[c])
+	}
+	switch {
+	case m.rec != nil:
+		l.Src = "recording"
+	case m.lp != nil && m.lp.session != nil:
+		l.Src = "take"
+	}
+	return l
 }
 
 // webLooper is the Looper for the page.

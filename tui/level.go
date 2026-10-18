@@ -46,11 +46,37 @@ func newLevelMeter() *levelMeter {
 	return &levelMeter{hold: [2]float64{math.Inf(-1), math.Inf(-1)}, peak: [2]float64{math.Inf(-1), math.Inf(-1)}, top: math.Inf(-1)}
 }
 
+// recBusy says whether a recording holds the input: Ctrl-R's, or a take of the Looper.
+func (m Model) recBusy() bool { return m.rec != nil || (m.lp != nil && m.lp.session != nil) }
+
+// levelFile is the file of the recording that runs, whose end is the level that is heard.
+func (m Model) levelFile() string {
+	switch {
+	case m.rec != nil:
+		return m.rec.Path
+	case m.lp != nil && m.lp.session != nil:
+		return m.lp.session.Path
+	}
+	return ""
+}
+
+// meterWanted says whether the level is looked at: in Perform and in the Looper, and while a browser is open.
+func (m Model) meterWanted() bool {
+	if m.section == secPerform || m.section == secLooper {
+		return true
+	}
+	c, ok := m.web.(interface{ Clients() int })
+	return ok && c.Clients() > 0
+}
+
 // sampleLevel reads the level of what is heard: the end of the recording's file while one runs, else
 // what the listening program says, a few times a second.
 func (m Model) sampleLevel() {
 	if m.lvl == nil || time.Since(m.lvl.read) < 90*time.Millisecond {
 		return
+	}
+	if m.lvl.src == nil && m.levelFile() == "" {
+		return // the recording is over: syncMeter listens again
 	}
 	now := time.Now()
 	m.lvl.read = now
@@ -62,8 +88,8 @@ func (m Model) sampleLevel() {
 			return
 		}
 		peaks = p[:]
-	case m.rec != nil:
-		l, err := record.ReadLevel(m.rec.Path, meterWindow)
+	case m.levelFile() != "":
+		l, err := record.ReadLevel(m.levelFile(), meterWindow)
 		if err != nil || len(l.Peak) == 0 {
 			return
 		}
@@ -107,7 +133,7 @@ const meterRetry = 5 * time.Second
 // syncMeter starts the listening program when the Perform view is open and nothing records, and ends
 // it when either stops being so: the level is there to set the volume by, whether or not it records.
 func (m Model) syncMeter() (Model, tea.Cmd) {
-	if m.section != secPerform || m.rec != nil {
+	if !m.meterWanted() || m.recBusy() {
 		if m.lvl != nil && m.lvl.src != nil {
 			m.lvl.src.Stop()
 			m.lvl = nil
@@ -133,7 +159,7 @@ func (m Model) meterStarted(msg meterStartedMsg) (Model, tea.Cmd) {
 		m.meterErr, m.meterAgain = msg.err.Error(), time.Now().Add(meterRetry)
 		return m, nil
 	}
-	if m.section != secPerform || m.rec != nil || m.lvl != nil {
+	if !m.meterWanted() || m.recBusy() || m.lvl != nil {
 		msg.meter.Stop()
 		return m, nil
 	}

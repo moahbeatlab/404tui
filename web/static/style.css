@@ -346,3 +346,18 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
   padding: 4px 14px; display: grid; justify-items: center; line-height: 1.05; box-shadow: 0 4px 18px rgba(0,0,0,.5); }
 #lvPop[hidden] { display: none; }
 #lvPop b { font-size: 28px; } #lvPop small { font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+
+/* ---- level meter ---- */
+.meter { display: grid; gap: 3px; background: var(--tile); border-radius: var(--r); padding: 6px 8px; }
+.mrow { display: grid; grid-template-columns: 12px 1fr; gap: 6px; align-items: center; font-size: 10px; font-weight: 800; color: var(--dim); }
+.mbar { position: relative; height: 9px; border-radius: 4px; background: rgba(255,255,255,.07); overflow: hidden; }
+.mbar i { position: absolute; inset: 0 auto 0 0; background: var(--good); width: 0; transition: width .06s linear; }
+.mbar i[data-l="warn"] { background: #ffd75f; } .mbar i[data-l="hot"] { background: var(--hot); }
+.mbar u { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--text); opacity: .9; }
+.minfo { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--dim); }
+.minfo em { font-style: normal; font-weight: 800; letter-spacing: .06em; padding: 1px 6px; border-radius: 5px; background: rgba(255,255,255,.07); color: var(--faint); }
+.minfo em.on { background: var(--hot); color: var(--ink); }
+.meter.off .mbar { opacity: .4; }
+@media (orientation: landscape) and (max-height: 430px) { .meter { padding: 4px 6px; gap: 2px; } .mbar { height: 7px; } }
+.minfo b { white-space: nowrap; }
+.lpgroup > .meter { grid-column: 1 / -1; }

@@ -281,6 +281,7 @@ func (m Model) looperArmWith(cal bool) (tea.Model, tea.Cmd) {
 		m.lvl.src.Stop() // the recorder takes the input
 		m.lvl = nil
 	}
+	m.lvl = newLevelMeter() // the level is the end of the take's file
 	lp.phase, lp.target, lp.cal = lpStarting, pad, cal
 	if cal {
 		m.message = "calibrating: one bar from the next bar; a hit (a kick) on beat 1 of the pattern, everything else muted"
@@ -299,6 +300,7 @@ func (m Model) looperCancel(message string) (tea.Model, tea.Cmd) {
 	lp := m.looper()
 	s := lp.session
 	lp.phase, lp.session, lp.cal = lpIdle, nil, false
+	m.lvl = nil
 	m.message = message
 	if s == nil {
 		return m, nil
@@ -315,6 +317,7 @@ func (m Model) loopStarted(msg loopStartedMsg) (tea.Model, tea.Cmd) {
 	lp := m.looper()
 	if msg.err != nil {
 		lp.phase = lpIdle
+		m.lvl = nil
 		m.message = "the recorder did not start: " + msg.err.Error()
 		return m, nil
 	}
@@ -420,6 +423,7 @@ func (m Model) looperSave() tea.Cmd {
 func (m Model) loopSaved(msg loopSavedMsg) (tea.Model, tea.Cmd) {
 	lp := m.looper()
 	lp.phase, lp.session, lp.cal = lpIdle, nil, false
+	m.lvl = nil
 	if msg.cal {
 		if msg.err != nil {
 			m.message = "calibration failed: " + msg.err.Error()

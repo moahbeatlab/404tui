@@ -231,6 +231,26 @@
   lpSw.forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); setLp(b.dataset.lp); }));
   setLp(store.get('lp') === 'set' ? 'set' : 'loop');
   const PHASE = { idle: 'READY', starting: 'STARTING…', armed: 'ARMED', recording: 'REC', saving: 'SAVING…' };
+  // The level meters (there is one on the stage panel and one on each page of the Looper): -60 dB to 0 dB.
+  const meters = [...document.querySelectorAll('[data-meter]')].map((el) => ({ el, bars: [...el.querySelectorAll('.mbar')].map((b) => ({ i: b.querySelector('i'), u: b.querySelector('u') })), clip: el.querySelector('em'), txt: el.querySelector('b') }));
+  const mpos = (db) => Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+  const SRC = { input: 'input', recording: 'recording', take: 'take' };
+  function renderMeters(lv, note) {
+    for (const m of meters) {
+      m.el.classList.toggle('off', !lv);
+      if (!lv) { m.bars.forEach((b) => { b.i.style.width = '0%'; b.u.style.left = '0%'; }); set(m.txt, 'textContent', note || 'no level'); cls(m.clip, 'on', false); continue; }
+      m.bars.forEach((b, c) => {
+        const w = mpos(lv.peak[c]).toFixed(0) + '%';
+        if (b.i.style.width !== w) b.i.style.width = w;
+        const left = mpos(lv.hold[c]).toFixed(0) + '%';
+        if (b.u.style.left !== left) b.u.style.left = left;
+        b.i.dataset.l = lv.peak[c] >= -3 ? 'hot' : lv.peak[c] >= -12 ? 'warn' : 'ok';
+      });
+      cls(m.clip, 'on', lv.clip);
+      const top = Math.max(lv.hold[0], lv.hold[1]);
+      set(m.txt, 'textContent', (lv.src === 'input' ? '' : 'REC ') + (top <= -60 ? '−∞ dB' : top + ' dB'));
+    }
+  }
   function renderLooper(s) {
     const l = s.looper;
     if (!l) return;
@@ -332,6 +352,7 @@
     if (ws && ws.readyState === 1 && rtt !== null) setConn(s.unit ? 'ok' : 'nounit', (s.unit ? '' : 'no unit · ') + rtt + ' ms');
     $('waiting').hidden = s.unit;
     renderLooper(s);
+    renderMeters(s.level, s.levelNote);
     set($('bank'), 'textContent', s.bank || '–');
     set($('bankTop'), 'textContent', (app.dataset.view === 'looper' && s.looper ? s.looper.bank : s.bank) || '–');
     set($('bpm'), 'textContent', s.bpm ? s.bpm.toFixed(1) : '–');

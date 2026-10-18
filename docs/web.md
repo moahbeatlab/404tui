@@ -131,3 +131,12 @@ keeps the rest off the small screen (an iPhone in landscape is not much higher t
 | **START: BAR / BEAT** | a take starts on beat 1 of the next bar, or on the next beat |
 
 The line with the last take says how loud it is (its peak in dB) and what gain was added.
+
+## Level meter
+
+A stereo level meter (left and right, with the held peak as a white mark and a **CLIP** light that stays on for
+five seconds after the sound reached full scale) sits on the stage panel and on both pages of the Looper. It is
+there to see whether the sound is loud enough: it shows what the unit sends over USB all the time a browser is
+open (the computer listens with ffmpeg or sox), and the sound being recorded (marked **REC**) while Ctrl-R or a take
+of the Looper runs. The number is the loudest recent peak in dB below full scale: aim for the yellow, not the red.
+If the computer cannot listen, the meter says why.
