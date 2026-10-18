@@ -203,7 +203,7 @@
     const d = document.createElement('div');
     d.className = 'lpad';
     d.innerHTML = '<b></b><span></span>';
-    d.addEventListener('pointerdown', (e) => { e.preventDefault(); lpSel = lpSel === i ? -1 : i; lpAsk = 0; render(); });
+    d.addEventListener('pointerdown', (e) => { e.preventDefault(); if ($('looper').dataset.lp === 'slice') return send({ a: 'slpad', i }); lpSel = lpSel === i ? -1 : i; lpAsk = 0; render(); });
     lpGrid.appendChild(d);
     lpPads.push({ d, n: d.children[0], nm: d.children[1] });
   }
@@ -216,8 +216,16 @@
   press('lpDp', () => send({ a: 'lpdelay', n: 5 }));
   press('lpPat', () => send({ a: 'lppattern' }));
   press('lpAlign', () => send({ a: 'lpalign' }));
-  press('lpSlices', () => send({ a: 'lpslices' }));
-  press('lpRemix', () => { if (lpSel >= 0) send({ a: 'lpremix', i: lpSel }); });
+  press('slPrev', () => send({ a: 'slbank', n: -1 }));
+  press('slNext', () => send({ a: 'slbank', n: 1 }));
+  press('slTPrev', () => send({ a: 'sltbank', n: -1 }));
+  press('slTNext', () => send({ a: 'sltbank', n: 1 }));
+  press('slSlices', () => send({ a: 'slslices' }));
+  press('slCut', () => send({ a: 'slcut' }));
+  press('slOrder', () => send({ a: 'slorder' }));
+  press('slDiv', () => send({ a: 'sldiv' }));
+  press('slSwing', () => send({ a: 'slswing' }));
+  press('slGo', () => send({ a: 'slgo' }));
   press('lpCal', () => send({ a: 'lpcal' }));
   press('lpGm', () => send({ a: 'lpgain', n: -1 }));
   press('lpGp', () => send({ a: 'lpgain', n: 1 }));
@@ -229,9 +237,9 @@
     lpAsk = 0; send({ a: 'lpdel', i: lpSel }); lpSel = -1; render();
   });
   const lpSw = document.querySelectorAll('.lpsw button');
-  function setLp(v) { $('looper').dataset.lp = v; lpSw.forEach((b) => b.classList.toggle('on', b.dataset.lp === v)); store.set('lp', v); }
+  function setLp(v) { $('looper').dataset.lp = v; lpSw.forEach((b) => b.classList.toggle('on', b.dataset.lp === v)); store.set('lp', v); try { render(); } catch (e) { /* before the first state */ } }
   lpSw.forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); setLp(b.dataset.lp); }));
-  setLp(store.get('lp') === 'set' ? 'set' : 'loop');
+  setLp(['set', 'slice'].includes(store.get('lp')) ? store.get('lp') : 'loop');
   const PHASE = { idle: 'READY', starting: 'STARTING…', armed: 'ARMED', recording: 'REC', saving: 'SAVING…' };
   // The level meters (there is one on the stage panel and one on each page of the Looper): -60 dB to 0 dB.
   const meters = [...document.querySelectorAll('[data-meter]')].map((el) => ({ el, bars: [...el.querySelectorAll('.mbar')].map((b) => ({ i: b.querySelector('i'), u: b.querySelector('u') })), clip: el.querySelector('em'), txt: el.querySelector('b') }));
@@ -253,6 +261,22 @@
       set(m.txt, 'textContent', (lv.src === 'input' ? '' : 'REC ') + (top <= -60 ? '−∞ dB' : top + ' dB'));
     }
   }
+  const SWING = { 0: 'OFF', 54: 'LIGHT', 58: 'MEDIUM', 62: 'HEAVY', 66: 'TRIPLET' };
+  function renderSlicer(sl) {
+    set($('slBank'), 'textContent', sl.bank);
+    set($('slTBank'), 'textContent', sl.target);
+    set($('slSlicesT'), 'textContent', sl.slices + ' SLICES');
+    set($('slCutT'), 'textContent', sl.random ? 'RANDOM CUTS' : 'EQUAL CUTS');
+    set($('slOrderT'), 'textContent', sl.order.toUpperCase());
+    set($('slDivT'), 'textContent', sl.div ? 'GRID 1/' + sl.div : 'OWN LENGTH');
+    set($('slSwingT'), 'textContent', 'SWING: ' + (SWING[sl.swing] || sl.swing + '%'));
+    $('slSwing').disabled = !sl.div;
+    set($('slT'), 'textContent', sl.pad >= 0 ? sl.src : 'SLICER');
+    set($('slSub'), 'textContent', sl.pad >= 0 ? (sl.free ? 'result goes to ' + sl.free : 'bank ' + sl.target + ' is full: delete a pad') : 'tap a pad of bank ' + sl.bank + ' to slice');
+    set($('slGoT'), 'textContent', sl.busy ? 'WORKING…' : sl.free ? 'SLICE → ' + sl.free : 'BANK FULL');
+    $('slGo').disabled = sl.busy || sl.pad < 0 || !sl.free || !(sl.pads[sl.pad] && sl.pads[sl.pad].has);
+    for (const id of ['slPrev', 'slNext', 'slTPrev', 'slTNext', 'slSlices', 'slCut', 'slOrder', 'slDiv']) $(id).disabled = sl.busy;
+  }
   function renderLooper(s) {
     const l = s.looper;
     if (!l) return;
@@ -269,7 +293,6 @@
     cls($('lpArm'), 'on', run);
     $('lpArm').disabled = l.phase === 'saving' || (!run && !target);
     set($('lpBank'), 'textContent', l.bank);
-    set($('lpSlicesT'), 'textContent', l.slices + ' SLICES');
     set($('lpAlignT'), 'textContent', 'START: ' + (l.onBar ? 'BAR' : 'BEAT'));
     $('lpCal').disabled = busy;
     set($('lpBarsT'), 'textContent', l.bars + (l.bars === 1 ? ' BAR' : ' BARS'));
@@ -281,19 +304,18 @@
     cls($('lpPat'), 'warn', l.known && !l.pattern);
     const sel = l.pads[lpSel];
     $('lpDel').disabled = !sel || !sel.has;
-    $('lpRemix').disabled = busy || !sel || !sel.has || !l.target;
-    $('lpSlices').disabled = busy;
-    set($('lpRemixS'), 'textContent', sel ? (sel.has ? 'pad ' + sel.n + ' → ' + (l.target || 'bank full') : 'pad ' + sel.n + ' is empty') : 'tap a pad first');
     const asking = lpAsk === lpSel + 1 && sel && sel.has;
     cls($('lpDel'), 'danger', asking);
     set($('lpDelT'), 'textContent', asking ? 'TAP AGAIN TO DELETE' : 'DELETE');
     set($('lpDelS'), 'textContent', sel ? (sel.has ? 'pad ' + sel.n + ' ' + sel.name : 'pad ' + sel.n + ' is empty') : 'tap a pad first');
-    l.pads.forEach((p, i) => {
+    const sl = s.slicer, slMode = $('looper').dataset.lp === 'slice' && sl;
+    (slMode ? sl.pads : l.pads).forEach((p, i) => {
       const e = lpPads[i];
       set(e.n, 'textContent', p.n);
-      set(e.nm, 'textContent', p.has ? p.name : p.target ? 'next' : '');
-      cls(e.d, 'has', p.has); cls(e.d, 'target', p.target && !p.has); cls(e.d, 'sel', i === lpSel);
+      set(e.nm, 'textContent', p.has ? p.name : !slMode && p.target ? 'next' : '');
+      cls(e.d, 'has', p.has); cls(e.d, 'target', !slMode && p.target && !p.has); cls(e.d, 'sel', slMode ? i === sl.pad : i === lpSel);
     });
+    if (sl) renderSlicer(sl);
     const last = l.last ? 'last take ' + l.last.name + ' on ' + l.last.pad + ': peak ' + l.last.peak.toFixed(1) + ' dB' + (l.last.gain ? ' (' + (l.last.gain > 0 ? '+' : '') + l.last.gain.toFixed(1) + ' dB added)' : '') : 'no take yet';
     set($('lpLast'), 'textContent', last);
     set($('lpLast2'), 'textContent', last + (l.calDone ? ' · last calibration: the recording was ' + l.calMs + ' ms late' : ''));

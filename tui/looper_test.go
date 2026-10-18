@@ -312,12 +312,12 @@ func TestTheLooperRemixesAPadOntoTheNextFreePad(t *testing.T) {
 	}
 	s.press("x")
 	m = s.m()
-	if !strings.Contains(m.message, "remixed in 16 slices") {
+	if !strings.Contains(m.message, "in 16 slices") {
 		t.Fatalf("message %q", m.message)
 	}
 	found := false
 	for _, r := range m.snap.Bank(m.loopBank()) {
-		if strings.HasPrefix(r.Name, "RMX ") {
+		if strings.HasPrefix(r.Name, "SLC ") {
 			found = true
 		}
 	}

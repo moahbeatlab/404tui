@@ -394,3 +394,55 @@ func TestTheLevelIsPublishedWhateverIsRecorded(t *testing.T) {
 		t.Errorf("level %+v", l)
 	}
 }
+
+func TestTheSlicerOfThePageCutsAPadOntoTheNextFreePad(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	from, ok := m.slFreePad(0)
+	if !ok {
+		t.Skip("bank A is full")
+	}
+	src := formats.Sample{Channels: 1}
+	for i := 0; i < 96000; i++ {
+		src.Samples = append(src.Samples, int16(i/6000*1500))
+	}
+	if _, err := app.PutSample(m.unit, from, src, "SRC"); err != nil {
+		t.Fatal(err)
+	}
+	r.s.run(m.load(""))
+	s := w.last(t).Slicer
+	if s.Bank != "A" || s.Pad != -1 || s.Slices != 8 || s.Order != "shuffle" || len(s.Pads) != 16 || s.Target != "A" {
+		t.Fatalf("slicer %+v", s)
+	}
+	r.web(`{"a":"slgo"}`)
+	if got := w.last(t); !strings.Contains(got.Msg, "tap the pad") {
+		t.Errorf("sliced nothing without a pad: %q", got.Msg)
+	}
+	r.web(`{"a":"slbank","n":1}`)
+	r.web(`{"a":"slbank","n":-1}`)
+	r.web(fmt.Sprintf(`{"a":"slpad","i":%d}`, from.Pad()))
+	r.web(`{"a":"slslices"}`)
+	r.web(`{"a":"slorder"}`)
+	r.web(`{"a":"sldiv"}`)
+	r.web(`{"a":"sltbank","n":1}`)
+	r.web(`{"a":"sltbank","n":-1}`)
+	s = w.last(t).Slicer
+	if s.Pad != int(from.Pad()) || s.Slices != 16 || s.Order != "in order" || s.Div != 4 || s.Target != "A" || s.Free == "" {
+		t.Fatalf("slicer after the buttons: %+v", s)
+	}
+	r.web(`{"a":"slgo"}`)
+	m = r.s.m()
+	if !strings.Contains(m.message, "16 slices") {
+		t.Fatalf("message %q", m.message)
+	}
+	found := false
+	for _, row := range m.snap.Bank(0) {
+		if strings.HasPrefix(row.Name, "SLC ") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no result on bank A (%q)", m.message)
+	}
+}

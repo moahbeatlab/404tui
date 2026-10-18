@@ -59,6 +59,7 @@ type webState struct {
 	Patterns []webPattern `json:"patterns"`
 	Version  string       `json:"version"`
 	Looper   webLooper    `json:"looper"`
+	Slicer   webSlicer    `json:"slicer"`
 	// Level is how loud the sound is that is recorded (or, outside a recording, that the unit sends); nil until read.
 	Level *webLevel `json:"level"`
 	// LevelNote says why there is none: no recorder, or what the listening program said.
@@ -225,6 +226,7 @@ func (m Model) webSnapshot() webState {
 		s.Focus = webFocus{On: true, Multi: m.iso.multi, Dry: len(m.iso.was)}
 	}
 	s.Looper = m.webLooper()
+	s.Slicer = m.webSlicer()
 	s.Level = m.webLevel()
 	if s.Level == nil {
 		switch _, ok := m.recorder.(record.Metering); {
@@ -415,6 +417,8 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("%s kept on %s: hold it again to let it go", pad, busName(m.busOf(pad)))
 		nm, cmd := m.setIsolated(keep)
 		return nm, tea.Batch(undo, cmd)
+	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo":
+		return m.slicerCommand(c.A, c.N, c.I)
 	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel", "lpgain", "lpnorm", "lpcal", "lpalign", "lpslices", "lpremix":
 		if m.snap == nil || m.busy != "" {
 			return m, nil

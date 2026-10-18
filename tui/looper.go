@@ -63,6 +63,9 @@ type looperState struct {
 	last    loopLast
 	calMS   int
 	calDone bool
+	// slBank and slPad are the pad the web page's Slicer will cut (slPad -1 for none); slSet says they were chosen.
+	slBank, slPad int
+	slSet         bool
 }
 
 // loopLast is what the Looper knows of the loop it saved last.

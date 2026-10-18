@@ -335,7 +335,11 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 .lpsw { min-height: 40px; flex-shrink: 0; } .lpsw button { min-height: 40px; font-size: 14px; }
 .lpinfo { color: var(--dim); font-size: 12px; line-height: 1.35; padding: 2px 4px; }
 .lpinfo b { color: var(--text); }
-#looper[data-lp="loop"] #lpSet { display: none; }
+#looper[data-lp="loop"] #lpSet, #looper[data-lp="loop"] #lpSlice { display: none; }
+#looper[data-lp="slice"] #lpMain, #looper[data-lp="slice"] #lpSet, #looper[data-lp="slice"] #lpStatus { display: none; }
+#looper[data-lp="set"] #lpSlice { display: none; }
+#looper[data-lp="slice"] .lpgroup { grid-template-columns: 1fr 1fr; }
+#looper[data-lp="slice"] .lpgroup > .lprow, #looper[data-lp="slice"] .lpgroup > .lprow2, #looper[data-lp="slice"] .lpgroup > .lpstatus, #looper[data-lp="slice"] .lpgroup > .lpinfo, #looper[data-lp="slice"] #slGo, #looper[data-lp="slice"] #slSwing { grid-column: 1 / -1; }
 #looper[data-lp="set"] #lpMain, #looper[data-lp="set"] #lpgrid { display: none; }
 #looper[data-lp="set"] { grid-template-columns: minmax(0, 1fr); }
 #looper[data-lp="set"] .lpgroup { grid-template-columns: 1fr 1fr; }

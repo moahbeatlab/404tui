@@ -66,6 +66,14 @@ type State struct {
 	LooperOnBeat bool `json:"looperOnBeat,omitempty"`
 	// LooperSlices is how many slices a remix cuts a loop in (4, 8, 16 or 32; 8 when unset).
 	LooperSlices int `json:"looperSlices,omitempty"`
+	// The web page's Slicer: how many slices, cut at random places, the order (0 shuffle, 1 in order, 2 random), the grid
+	// (0 none, else notes to the bar), its swing, and the bank the result goes to (0 the Looper's, 1 to 10 for A to J).
+	SlicerSlices    int  `json:"slicerSlices,omitempty"`
+	SlicerRandomCut bool `json:"slicerRandomCut,omitempty"`
+	SlicerOrder     int  `json:"slicerOrder,omitempty"`
+	SlicerDiv       int  `json:"slicerDiv,omitempty"`
+	SlicerSwing     int  `json:"slicerSwing,omitempty"`
+	SlicerTarget    int  `json:"slicerTarget,omitempty"`
 	// LooperGain makes a loop louder by that many dB (it can be negative); LooperNormalize makes it as loud as it can be.
 	LooperGain      int  `json:"looperGain,omitempty"`
 	LooperNormalize bool `json:"looperNormalize,omitempty"`

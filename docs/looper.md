@@ -72,8 +72,13 @@ level, the effects) and on the input volume of the computer's own sound settings
 loud next to the rest, set the **gain** (`g` `G`) once, or switch **normalise** on (`n`) to have every loop come out
 at the same peak. The pad itself is set to level 127.
 
-## Remix
+## Remix and the Slicer
 
-`x` (web: REMIX PAD, after tapping a pad) cuts the sample of the pad in front into equal slices, plays every slice once
-in a random order, and puts the result on the next free pad of the bank, ungated. The loop keeps its length, so it
-fills the pattern as before. `s` (web: SLICES) sets how many slices: 4, 8, 16 or 32.
+`x` cuts the sample of the pad in front into equal slices, plays every slice once in a random order, and puts the
+result on the next free pad of the bank, ungated. The loop keeps its length, so it fills the pattern as before. `s` sets
+how many slices: 4, 8, 16 or 32.
+
+The web page has a basic **SLICER** page (the switch LOOP / SLICER / SETTINGS in the Looper): pick a pad of any bank
+(FROM BANK), then set the slices (2 to 32), equal or random cuts, the order (shuffle, in order, random picks), the
+timing (the slices' own length, or a 1/4, 1/8 or 1/16 grid at the bank's tempo, with swing) and the bank the result goes
+to. SLICE makes a new version on the next free pad of that bank each time it is pressed.

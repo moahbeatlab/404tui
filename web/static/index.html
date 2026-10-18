@@ -74,7 +74,7 @@
 
   <section id="looper" class="panel" data-lp="loop">
     <div class="lpctl">
-      <div class="seg lpsw"><button data-lp="loop" class="on">LOOP</button><button data-lp="set">SETTINGS</button></div>
+      <div class="seg lpsw"><button data-lp="loop" class="on">LOOP</button><button data-lp="slice">SLICER</button><button data-lp="set">SETTINGS</button></div>
       <div id="lpStatus" class="lpstatus"><b id="lpPhase">READY</b><span id="lpSub"></span></div>
       <div id="lpMain" class="lpgroup">
         <div class="meter" data-meter><div class="mrow"><span>L</span><div class="mbar"><i></i><u></u></div></div><div class="mrow"><span>R</span><div class="mbar"><i></i><u></u></div></div><div class="minfo"><em>CLIP</em><b></b></div></div>
@@ -86,12 +86,32 @@
         </div>
         <button id="lpBars" class="big"><span id="lpBarsT">2 BARS</span><small>tap: 1 · 2 · 4 · 8</small></button>
         <button id="lpPat" class="big"><span>MAKE PATTERN</span><small id="lpPatS">…</small></button>
-        <div class="lprow2">
-          <button id="lpSlices" class="big"><span id="lpSlicesT">8 SLICES</span><small>tap: 4 · 8 · 16 · 32</small></button>
-          <button id="lpRemix" class="big"><span>REMIX PAD</span><small id="lpRemixS">tap a pad first</small></button>
-        </div>
         <button id="lpDel" class="big"><span id="lpDelT">DELETE</span><small id="lpDelS">tap a pad first</small></button>
         <div id="lpLast" class="lpinfo"></div>
+      </div>
+      <div id="lpSlice" class="lpgroup">
+        <div id="slStatus" class="lpstatus"><b id="slT">SLICER</b><span id="slSub">tap a pad to slice</span></div>
+        <button id="slGo" class="big lparm"><span id="slGoT">SLICE</span></button>
+        <div class="lprow">
+          <button id="slPrev" class="big">◂</button>
+          <div class="lpmid"><small>FROM BANK</small><b id="slBank">A</b></div>
+          <button id="slNext" class="big">▸</button>
+        </div>
+        <div class="lprow2">
+          <button id="slSlices" class="big"><span id="slSlicesT">8 SLICES</span><small>2 · 4 · 8 · 16 · 32</small></button>
+          <button id="slCut" class="big"><span id="slCutT">EQUAL CUTS</span><small>or random places</small></button>
+        </div>
+        <div class="lprow2">
+          <button id="slOrder" class="big"><span id="slOrderT">SHUFFLE</span><small>order of the slices</small></button>
+          <button id="slDiv" class="big"><span id="slDivT">OWN LENGTH</span><small>or on a 1/4 · 1/8 · 1/16 grid</small></button>
+        </div>
+        <button id="slSwing" class="big"><span id="slSwingT">SWING: OFF</span><small>late steps (on a grid)</small></button>
+        <div class="lprow">
+          <button id="slTPrev" class="big">◂</button>
+          <div class="lpmid"><small>TO BANK</small><b id="slTBank">A</b></div>
+          <button id="slTNext" class="big">▸</button>
+        </div>
+        <div class="lpinfo">Each press makes a new version: the result goes on the next free pad, ungated, and plays from the next round of the pattern.</div>
       </div>
       <div id="lpSet" class="lpgroup">
         <div class="meter" data-meter><div class="mrow"><span>L</span><div class="mbar"><i></i><u></u></div></div><div class="mrow"><span>R</span><div class="mbar"><i></i><u></u></div></div><div class="minfo"><em>CLIP</em><b></b></div></div>
