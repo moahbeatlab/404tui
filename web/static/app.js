@@ -212,6 +212,10 @@
     if (lpAsk !== lpSel + 1) { lpAsk = lpSel + 1; clearTimeout(lpAskT); lpAskT = setTimeout(() => { lpAsk = 0; render(); }, 3000); return render(); }
     lpAsk = 0; send({ a: 'lpdel', i: lpSel }); lpSel = -1; render();
   });
+  const lpSw = document.querySelectorAll('.lpsw button');
+  function setLp(v) { $('looper').dataset.lp = v; lpSw.forEach((b) => b.classList.toggle('on', b.dataset.lp === v)); store.set('lp', v); }
+  lpSw.forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); setLp(b.dataset.lp); }));
+  setLp(store.get('lp') === 'set' ? 'set' : 'loop');
   const PHASE = { idle: 'READY', starting: 'STARTING…', armed: 'ARMED', recording: 'REC', saving: 'SAVING…' };
   function renderLooper(s) {
     const l = s.looper;
@@ -250,6 +254,10 @@
       set(e.nm, 'textContent', p.has ? p.name : p.target ? 'next' : '');
       cls(e.d, 'has', p.has); cls(e.d, 'target', p.target && !p.has); cls(e.d, 'sel', i === lpSel);
     });
+    const last = l.last ? 'last take ' + l.last.name + ' on ' + l.last.pad + ': peak ' + l.last.peak.toFixed(1) + ' dB' + (l.last.gain ? ' (' + (l.last.gain > 0 ? '+' : '') + l.last.gain.toFixed(1) + ' dB added)' : '') : 'no take yet';
+    set($('lpLast'), 'textContent', last);
+    set($('lpLast2'), 'textContent', last + (l.calDone ? ' · last calibration: the recording was ' + l.calMs + ' ms late' : ''));
+    set($('lpCalS'), 'textContent', l.phase === 'idle' ? 'kick on beat 1, rest muted' : l.cal ? 'calibrating…' : 'a take is on');
     // The mark in the top bar, in every view.
     const b = $('lpBadge');
     b.hidden = !busy;

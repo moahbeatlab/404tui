@@ -82,6 +82,17 @@ type webLooper struct {
 	PatternName string       `json:"patternName"` // the slot it is in, such as "A2"
 	Known       bool         `json:"known"`
 	Pads        []webLoopPad `json:"pads"`
+	// Last is the loop saved last, CalMS what the last calibration found (CalDone says there was one).
+	Last    *webLoopLast `json:"last"`
+	CalMS   int          `json:"calMs"`
+	CalDone bool         `json:"calDone"`
+}
+
+type webLoopLast struct {
+	Name string  `json:"name"`
+	Pad  string  `json:"pad"`
+	Peak float64 `json:"peak"` // dB below full scale, -120 for silence
+	Gain float64 `json:"gain"`
 }
 
 type webLoopPad struct {
@@ -237,7 +248,7 @@ func (m Model) webSnapshot() webState {
 // webLooper is the Looper for the page.
 func (m Model) webLooper() webLooper {
 	bank := m.loopBank()
-	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), Delay: m.mem.LooperDelay, Gain: m.mem.LooperGain, Norm: m.mem.LooperNormalize, OnBar: m.mem.LooperOnBar, Phase: "idle", Of: m.loopBars(), Pads: []webLoopPad{}}
+	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), Delay: m.mem.LooperDelay, Gain: m.mem.LooperGain, Norm: m.mem.LooperNormalize, OnBar: !m.mem.LooperOnBeat, Phase: "idle", Of: m.loopBars(), Pads: []webLoopPad{}}
 	free, ok := m.loopFreePad()
 	if ok {
 		l.Target = free.String()
@@ -263,6 +274,10 @@ func (m Model) webLooper() webLooper {
 		}
 		if lp.phase != lpIdle {
 			l.Target = lp.target.String()
+		}
+		l.CalMS, l.CalDone = lp.calMS, lp.calDone
+		if lp.last.has {
+			l.Last = &webLoopLast{Name: lp.last.name, Pad: lp.last.pad, Peak: max(math.Round(lp.last.peak*10)/10, -120), Gain: math.Round(lp.last.gain*10) / 10}
 		}
 	}
 	if rows := m.patterns[bank]; rows != nil {

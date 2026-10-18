@@ -33,6 +33,10 @@ const (
 	lpSaving                // the take is being cut and put on its pad
 )
 
+// loopWarmup is how long the recorder runs before a take may start: the file has to hold the sound from before the
+// start too. The start waits for the next bar if it is not ready by then.
+const loopWarmup = 350 * time.Millisecond
+
 // loopBarChoices are the lengths of a loop the b key goes through.
 var loopBarChoices = []int{1, 2, 4, 8}
 
@@ -52,6 +56,17 @@ type looperState struct {
 	takes          int
 	// cal is a take that measures the delay instead of making a loop.
 	cal bool
+	// last is the take that was saved last, calMS what the last calibration found (calDone says there was one).
+	last    loopLast
+	calMS   int
+	calDone bool
+}
+
+// loopLast is what the Looper knows of the loop it saved last.
+type loopLast struct {
+	has        bool
+	name, pad  string
+	peak, gain float64
 }
 
 type (
@@ -107,7 +122,7 @@ func (m Model) takeBars() int {
 // takeAlign is how many clock ticks the start of a take is a multiple of: a beat, or a bar when set (and for a
 // calibration, which needs the bar so that a hit on beat 1 is at the start).
 func (m Model) takeAlign() int {
-	if m.mem.LooperOnBar || (m.lp != nil && m.lp.cal) {
+	if !m.mem.LooperOnBeat || (m.lp != nil && m.lp.cal) {
 		return ticksPerBar
 	}
 	return 24
@@ -270,7 +285,7 @@ func (m Model) looperArmWith(cal bool) (tea.Model, tea.Cmd) {
 	if cal {
 		m.message = "calibrating: one bar from the next bar; a hit (a kick) on beat 1 of the pattern, everything else muted"
 	} else {
-		m.message = fmt.Sprintf("armed: %s from the next %s go to %s", plural(m.loopBars(), "bar"), map[bool]string{true: "bar", false: "beat"}[m.mem.LooperOnBar], pad)
+		m.message = fmt.Sprintf("armed: %s from the next %s go to %s", plural(m.loopBars(), "bar"), map[bool]string{true: "bar", false: "beat"}[!m.mem.LooperOnBeat], pad)
 	}
 	b, device := m.recorder, m.recordDevice()
 	return m, func() tea.Msg {
@@ -323,7 +338,7 @@ func (m Model) looperTick(at time.Time) tea.Cmd {
 	switch lp.phase {
 	case lpArmed:
 		// The recorder needs a moment before it hears anything: the start comes after that.
-		if m.clock.ticks%m.takeAlign() != 0 || time.Since(lp.session.Started) < 1500*time.Millisecond {
+		if m.clock.ticks%m.takeAlign() != 0 || time.Since(lp.session.Started) < loopWarmup+max(-m.loopDelay(), 0) {
 			return nil
 		}
 		lp.phase, lp.startTick, lp.t0 = lpRecording, m.clock.ticks, at
@@ -410,6 +425,7 @@ func (m Model) loopSaved(msg loopSavedMsg) (tea.Model, tea.Cmd) {
 			m.message = "calibration failed: " + msg.err.Error()
 			return m, nil
 		}
+		lp.calMS, lp.calDone = msg.delay, true
 		m.mem.LooperDelay = clamp(msg.delay, -250, 500)
 		m.message = fmt.Sprintf("calibrated: the recording is %d ms behind the clock, the delay is set to it", msg.delay)
 		return m, nil
@@ -419,6 +435,7 @@ func (m Model) loopSaved(msg loopSavedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	lp.cursor = int(msg.pad.Pad())
+	lp.last = loopLast{has: true, name: msg.name, pad: msg.pad.String(), peak: msg.peak, gain: msg.gain}
 	m.message = fmt.Sprintf("%s is on %s (%s): it plays from the next round of the pattern", msg.name, msg.pad, loudness(msg.peak, msg.gain))
 	m.busy = "reading the unit"
 	return m, m.load(m.message)
@@ -454,8 +471,8 @@ func (m Model) looperNormalizeToggle() (tea.Model, tea.Cmd) {
 
 // looperAlignToggle switches between starting on the next beat and on the next bar.
 func (m Model) looperAlignToggle() (tea.Model, tea.Cmd) {
-	m.mem.LooperOnBar = !m.mem.LooperOnBar
-	m.message = map[bool]string{true: "a take starts on the next bar", false: "a take starts on the next beat"}[m.mem.LooperOnBar]
+	m.mem.LooperOnBeat = !m.mem.LooperOnBeat
+	m.message = map[bool]string{false: "a take starts on beat 1 of the next bar", true: "a take starts on the next beat"}[m.mem.LooperOnBeat]
 	return m, nil
 }
 
@@ -530,7 +547,7 @@ func (m Model) looperBody(g geom) string {
 	switch lp.phase {
 	case lpIdle:
 		if pad, ok := m.loopFreePad(); ok {
-			status = st.text.Render(fmt.Sprintf("READY  a arms: the next %s from the next %s go to %s", plural(m.loopBars(), "bar"), map[bool]string{true: "bar", false: "beat"}[m.mem.LooperOnBar], pad))
+			status = st.text.Render(fmt.Sprintf("READY  a arms: the next %s from the next %s go to %s", plural(m.loopBars(), "bar"), map[bool]string{true: "bar", false: "beat"}[!m.mem.LooperOnBeat], pad))
 		} else {
 			status = lipgloss.NewStyle().Foreground(st.th.hot).Render(fmt.Sprintf("bank %c is full: d deletes a loop", 'A'+bank))
 		}

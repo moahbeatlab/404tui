@@ -21,6 +21,7 @@ func TestTheLooperRecordsAFullLoopFromTheNextBeatAndPutsItOnTheNextFreePad(t *te
 	r.s.press("b") // 2 -> 4
 	r.s.press("b") // 4 -> 8
 	r.s.press("b") // 8 -> 1
+	r.s.press("t") // start on the next beat
 	if got := r.s.m().loopBars(); got != 1 {
 		t.Fatalf("the loop is %d bars, want 1", got)
 	}
@@ -127,9 +128,13 @@ func TestTheLooperCanStartOnTheNextBarAndCalibratesTheDelay(t *testing.T) {
 	r := newPerfRig(t, 200, 40)
 	stopped := 0
 	r.s.model = r.s.m().WithRecorder(&fakeRecorder{stopped: &stopped, loud: 4194304})
-	r.s.press("8", "t")
-	if !r.s.m().mem.LooperOnBar || r.s.m().takeAlign() != ticksPerBar {
-		t.Fatal("t did not switch to the bar")
+	r.s.press("8")
+	if r.s.m().takeAlign() != ticksPerBar {
+		t.Fatal("a take does not start on the bar by default")
+	}
+	r.s.press("t")
+	if !r.s.m().mem.LooperOnBeat || r.s.m().takeAlign() != 24 {
+		t.Fatal("t did not switch to the beat")
 	}
 	r.s.press("t")
 	// A calibration waits for a bar whatever is set, and is one bar long.
@@ -163,5 +168,26 @@ func TestTheLooperCanStartOnTheNextBarAndCalibratesTheDelay(t *testing.T) {
 	}
 	if m.snap.Pads[3].HasSample {
 		t.Error("a calibration put a loop on a pad")
+	}
+}
+
+func TestAnArmOnBeatTwoStartsOnBeatOneOfTheNextBar(t *testing.T) {
+	r := newPerfRig(t, 200, 40)
+	r.s.model = r.s.m().WithRecorder(&fakeRecorder{stopped: new(int)})
+	r.s.press("8")
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.tick(ticksPerBar + 25) // beat 2 of bar 2
+	r.s.press("a")
+	// The recorder is up for 400 ms by the next bar, which is a bar away at most.
+	r.s.m().lp.session.Started = time.Now().Add(-400 * time.Millisecond)
+	for r.s.m().clock.ticks < 2*ticksPerBar-1 {
+		r.tick(1)
+		if r.s.m().lp.phase != lpArmed {
+			t.Fatalf("left the armed state at tick %d: phase %d", r.s.m().clock.ticks, r.s.m().lp.phase)
+		}
+	}
+	r.tick(1)
+	if m := r.s.m(); m.lp.phase != lpRecording || m.lp.startTick != 2*ticksPerBar {
+		t.Errorf("phase %d, started on tick %d, want recording from tick %d", m.lp.phase, m.lp.startTick, 2*ticksPerBar)
 	}
 }

@@ -71,32 +71,39 @@
     <div id="buses"></div>
   </section>
 
-  <section id="looper" class="panel">
+  <section id="looper" class="panel" data-lp="loop">
     <div class="lpctl">
+      <div class="seg lpsw"><button data-lp="loop" class="on">LOOP</button><button data-lp="set">SETTINGS</button></div>
       <div id="lpStatus" class="lpstatus"><b id="lpPhase">READY</b><span id="lpSub"></span></div>
-      <button id="lpArm" class="big lparm"><span id="lpArmT">ARM</span></button>
-      <div class="lprow">
-        <button id="lpPrev" class="big">◂</button>
-        <div class="lpmid"><small>BANK</small><b id="lpBank">A</b></div>
-        <button id="lpNext" class="big">▸</button>
+      <div id="lpMain" class="lpgroup">
+        <button id="lpArm" class="big lparm"><span id="lpArmT">ARM</span></button>
+        <div class="lprow">
+          <button id="lpPrev" class="big">◂</button>
+          <div class="lpmid"><small>BANK</small><b id="lpBank">A</b></div>
+          <button id="lpNext" class="big">▸</button>
+        </div>
+        <button id="lpBars" class="big"><span id="lpBarsT">2 BARS</span><small>tap: 1 · 2 · 4 · 8</small></button>
+        <button id="lpPat" class="big"><span>MAKE PATTERN</span><small id="lpPatS">…</small></button>
+        <button id="lpDel" class="big"><span id="lpDelT">DELETE</span><small id="lpDelS">tap a pad first</small></button>
+        <div id="lpLast" class="lpinfo"></div>
       </div>
-      <button id="lpBars" class="big"><span id="lpBarsT">2 BARS</span><small>tap: 1 · 2 · 4 · 8</small></button>
-      <div class="lprow">
-        <button id="lpDm" class="big">−</button>
-        <div class="lpmid"><small>DELAY</small><b id="lpDelay">0 ms</b></div>
-        <button id="lpDp" class="big">+</button>
+      <div id="lpSet" class="lpgroup">
+        <div class="lpinfo"><b>Delay</b> USB audio arrives late by a fixed time. Put a kick on beat 1 of a pattern, mute the rest, start the sequencer and tap CALIBRATE: one bar is recorded and the delay is set from the hit.</div>
+        <button id="lpCal" class="big"><span>CALIBRATE</span><small id="lpCalS">kick on beat 1, rest muted</small></button>
+        <div class="lprow">
+          <button id="lpDm" class="big">−</button>
+          <div class="lpmid"><small>DELAY</small><b id="lpDelay">0 ms</b></div>
+          <button id="lpDp" class="big">+</button>
+        </div>
+        <div class="lprow">
+          <button id="lpGm" class="big">−</button>
+          <button id="lpGain" class="lpmid lpbtn"><small>GAIN</small><b id="lpGainT">0 dB</b></button>
+          <button id="lpGp" class="big">+</button>
+        </div>
+        <button id="lpAlign" class="big"><span id="lpAlignT">START: BEAT</span><small>when a take begins</small></button>
+        <div id="lpLast2" class="lpinfo"></div>
+        <div class="lpinfo">Tap the GAIN box to switch <b>normalise</b> on: every loop gets a peak of −1 dB.</div>
       </div>
-      <div class="lprow">
-        <button id="lpGm" class="big">−</button>
-        <button id="lpGain" class="lpmid lpbtn"><small>GAIN</small><b id="lpGainT">0 dB</b></button>
-        <button id="lpGp" class="big">+</button>
-      </div>
-      <div class="lprow2">
-        <button id="lpAlign" class="big"><span id="lpAlignT">START: BEAT</span></button>
-        <button id="lpCal" class="big"><span>CALIBRATE</span><small>kick on beat 1</small></button>
-      </div>
-      <button id="lpPat" class="big"><span>MAKE PATTERN</span><small id="lpPatS">…</small></button>
-      <button id="lpDel" class="big"><span id="lpDelT">DELETE</span><small id="lpDelS">tap a pad first</small></button>
     </div>
     <div id="lpgrid"></div>
   </section>

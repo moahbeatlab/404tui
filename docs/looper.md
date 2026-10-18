@@ -24,7 +24,7 @@ The 16 pads of the bank loops go to, a line saying what the Looper does, and the
 | `d` | deletes the sample of the pad in front (press it twice) |
 | `g` `G` | makes loops 1 dB quieter or louder (-24 to +24) |
 | `n` | normalise: every loop is made as loud as it can be (peak -1 dB), the gain is ignored |
-| `t` | a take starts on the next **beat** (the default) or on the next **bar** |
+| `t` | a take starts on beat 1 of the next **bar** (the default) or on the next **beat** |
 | `c` | calibrates the delay (see below) |
 | `, .` | how many milliseconds the recording is behind the clock (0 to 500, 5 at a time) |
 | `h j k l` | the pad in front |
@@ -33,7 +33,7 @@ The 16 pads of the bank loops go to, a line saying what the Looper does, and the
 
 1. Arm it. The recorder starts at once, so there is time to get ready; the next pad that holds no sample of the
    bank is the target (it is lit).
-2. The loop begins on the next beat of the clock (`t` makes it the next bar), counted from the unit's Start. While it records the header shows a red `LOOPER REC 2/4` in every view.
+2. The loop begins on beat 1 of the next bar of the clock (`t` makes it the next beat), counted from the unit's Start. Arm on beat 2 and it starts one bar line later; the recorder only needs a third of a second to be ready. While it records the header shows a red `LOOPER REC 2/4` in every view.
 3. When the bars are over the recording ends, the loop is cut out of it by the clock (so it is as long as the bars
    are, to the sample, with a fade of a millisecond at both ends), put on the pad, named `LOOP hh:mm:ss`, and the
    pad's **gate is turned off**. The temporary recording is deleted.
@@ -56,9 +56,8 @@ on beat 1 of a pattern on the unit, mute everything else, start the sequencer an
 bar from the next bar, finds the hit in it and sets the delay to how late it is. After that loops line up with the
 clock; `, .` fine-tunes (the delay can be negative). The delay stays as it is when you start the program again.
 
-A loop starts on the next beat, so what was playing at that beat is the loop's first beat. The pad is triggered by
-the pattern on its beat 1: for a loop that fits the pattern, arm on the beat of the pattern that is its beat 1 (or
-use `t` for bars when the pattern's bars line up with the clock).
+A loop starts on a bar line (or, with `t`, on a beat), so what was playing there is the loop's first beat. The pad is
+triggered by the pattern on its beat 1, so the bars of the pattern and of the clock should line up.
 
 ## Loudness
 

@@ -113,13 +113,21 @@ The **LOOPER** tab in portrait (the button at the top right in landscape) is the
 | **ARM** | arms a take: it records the bars set from the next bar 1 and puts the loop on the framed pad; the button then says **CANCEL** |
 | ◂ ▸ | the bank the loops go to |
 | **n BARS** | tap for the next length: 1, 2, 4, 8 |
-| GAIN − + | makes loops quieter or louder in dB; tap **GAIN** itself for normalise (every loop as loud as it can be) |
-| **START: BEAT / BAR** | a take starts on the next beat or the next bar |
-| **CALIBRATE** | measures how late the recording is from a hit (kick) on beat 1 of the pattern and sets the delay |
-| − + | how far the recording is behind the clock, in steps of 5 ms |
 | **MAKE PATTERN** | writes the pattern of the bank in which all 16 pads start on beat 1 (it says whether there is one) |
 | a pad, then **DELETE** | deletes the sample of the pad (tap DELETE twice) |
 
 The status shows READY, ARMED (with the beats left until bar 1), REC with the bar and SAVING, and while a take is
 on a mark next to the clock says so in every view. The page needs the same as the program: the unit's MIDI clock
 and ffmpeg or sox on the computer that runs `sp404 serve`.
+
+The Looper has two pages, switched at the top of its controls: **LOOP** (the table above) and **SETTINGS**, which
+keeps the rest off the small screen (an iPhone in landscape is not much higher than the controls):
+
+| Button | Does |
+| --- | --- |
+| **CALIBRATE** | measures how late the recording is from a hit (kick) on beat 1 of the pattern, with everything else muted, and sets the delay; the result stays on the page |
+| DELAY − + | how far the recording is behind the clock, in steps of 5 ms (it can be negative) |
+| GAIN − + | makes loops quieter or louder in dB; tap **GAIN** itself for normalise (every loop gets a peak of −1 dB) |
+| **START: BAR / BEAT** | a take starts on beat 1 of the next bar, or on the next beat |
+
+The line with the last take says how loud it is (its peak in dB) and what gain was added.

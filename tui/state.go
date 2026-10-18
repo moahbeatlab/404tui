@@ -62,8 +62,8 @@ type State struct {
 	LooperBank  int `json:"looperBank,omitempty"`
 	LooperBars  int `json:"looperBars,omitempty"`
 	LooperDelay int `json:"looperDelay,omitempty"`
-	// LooperOnBar makes a take wait for the next bar instead of the next beat.
-	LooperOnBar bool `json:"looperOnBar,omitempty"`
+	// LooperOnBeat makes a take start on the next beat instead of the next bar (beat 1 of the next bar).
+	LooperOnBeat bool `json:"looperOnBeat,omitempty"`
 	// LooperGain makes a loop louder by that many dB (it can be negative); LooperNormalize makes it as loud as it can be.
 	LooperGain      int  `json:"looperGain,omitempty"`
 	LooperNormalize bool `json:"looperNormalize,omitempty"`
