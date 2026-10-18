@@ -389,7 +389,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 .minfo b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .minfo { min-width: 0; }
 
-button.bankchip { border: 0; color: inherit; font-family: inherit; touch-action: manipulation; }
+button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
 .bankchip i { font-style: normal; font-size: 10px; color: var(--dim); }
 .modal[hidden] { display: none; }
 #bankGrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
