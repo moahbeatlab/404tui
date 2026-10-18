@@ -88,6 +88,18 @@
   // Only the FOCUS button's mode (multi) picks pads by tap; pads kept by a hold leave taps to mute.
   const focusOn = () => !!(state && state.focus && state.focus.multi);
   function tap(i) { send({ a: focusOn() ? 'pad' : 'mute', i }); }
+  // While a pad is swiped its level is shown in a bubble above it: the finger covers the pad itself.
+  function showLv(el, i, v) {
+    const b = $('lvPop');
+    const r = el.getBoundingClientRect();
+    b.hidden = false;
+    $('lvPopV').textContent = v;
+    $('lvPopN').textContent = 'PAD ' + (i + 1) + ' LEVEL';
+    const w = b.offsetWidth, h = b.offsetHeight;
+    b.style.left = Math.max(w / 2 + 4, Math.min(innerWidth - w / 2 - 4, r.left + r.width / 2)) + 'px';
+    b.style.top = Math.max(4, r.top - h - 8) + 'px';
+  }
+  function hideLv() { $('lvPop').hidden = true; }
   function pad(el, i) {
     let down = null;
     el.addEventListener('pointerdown', (e) => {
@@ -105,17 +117,19 @@
       if (!down.moved) return;
       const v = Math.round(Math.max(0, Math.min(127, down.v0 + (down.y - e.clientY) / (down.h * 0.8) * 127)));
       const now = performance.now();
+      showLv(el, i, v);
       if (now - (down.sent || 0) > 33 && v !== down.v) { down.sent = now; down.v = v; send({ a: 'level', i, v }); padEls[i].lvi.style.width = (v / 127 * 100) + '%'; el.dataset.lv = v; }
     });
     el.addEventListener('pointerup', () => {
       if (!down) return;
       clearTimeout(down.timer);
+      hideLv();
       if (!down.held && !down.moved) tap(i);
       else if (down.held) {}
       else if (down.v !== undefined) send({ a: 'level', i, v: down.v });
       down = null;
     });
-    el.addEventListener('pointercancel', () => { if (down) clearTimeout(down.timer); down = null; });
+    el.addEventListener('pointercancel', () => { if (down) clearTimeout(down.timer); hideLv(); down = null; });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 

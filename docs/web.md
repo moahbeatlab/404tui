@@ -59,7 +59,7 @@ the length in bars, and what the pattern does: **green** the pad was heard in th
 **tinted** it is in the pattern and not heard yet, an orange frame is the pad the unit has selected,
 a red flash is a hit, **×** is muted.
 
-**Swipe** up or down on a pad to change its volume from where it is (it is sent to the unit as you swipe).
+**Swipe** up or down on a pad to change its volume from where it is (it is sent to the unit as you swipe). The level bar of a pad is at its top, and while you swipe a bubble above the pad shows the level (0 to 127), since the finger covers the pad.
 A tap counts when the finger comes up, since until then it could still be a swipe. Zooming by double tap or pinch is switched off.
 
 ### The cue
