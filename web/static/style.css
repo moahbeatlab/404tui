@@ -418,3 +418,5 @@ button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
 .mrow b { text-align: center; font-size: 17px; } .mrow b.on { color: var(--accent); }
 .mnote { color: var(--dim); font-size: 12px; line-height: 1.35; }
 #mangleReset { min-height: 42px; }
+#rail .buttons { align-content: start; grid-auto-rows: max-content; }
+#rail #bRec { min-height: 84px; }

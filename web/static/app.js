@@ -436,33 +436,6 @@
   $('bankX').addEventListener('pointerdown', (e) => { e.preventDefault(); $('bankPick').hidden = true; });
   $('bankPick').addEventListener('pointerdown', (e) => { if (e.target === $('bankPick')) $('bankPick').hidden = true; });
 
-  // ---- choosing the pattern that plays now or next ----
-  let picking = 0;
-  const pickGrid = $('pickGrid');
-  for (let i = 0; i < 16; i++) {
-    const b = document.createElement('button');
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!picking) return; send({ a: 'cue', i, n: picking }); closePick(); });
-    pickGrid.appendChild(b);
-  }
-  function openPick(n) { picking = n; $('picker').hidden = false; drawPick(); }
-  function closePick() { picking = 0; $('picker').hidden = true; }
-  function drawPick() {
-    if (!picking || !state) return;
-    $('pickT').textContent = (picking === 1 ? 'Plays now' : 'Plays next') + ' · bank ' + state.bank;
-    [...pickGrid.children].forEach((b, i) => {
-      const p = (state.patterns || [])[i];
-      const ok = !!(p && p.exists);
-      b.disabled = !ok;
-      b.className = p && p.now ? 'now' : p && p.next ? 'next' : '';
-      b.innerHTML = (i + 1) + (ok ? '<small>' + p.pads + ' pad' + (p.pads === 1 ? '' : 's') + (p.now ? ' · now' : p.next ? ' · next' : '') + '</small>' : '<small>empty</small>');
-    });
-    $('pickS').textContent = (state.patterns || []).some((p) => p.exists) ? 'Tap a pattern.' : 'No patterns in this bank (the unit’s bank decides).';
-  }
-  $('cNow').addEventListener('pointerdown', (e) => { e.preventDefault(); openPick(1); });
-  $('cNext').addEventListener('pointerdown', (e) => { e.preventDefault(); openPick(2); });
-  $('pickX').addEventListener('pointerdown', (e) => { e.preventDefault(); closePick(); });
-  $('picker').addEventListener('pointerdown', (e) => { if (e.target === $('picker')) closePick(); });
-
   // ---- drawing the state, at most once a frame ----
   let queued = false;
   function schedule() { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; render(); }); } }
@@ -499,11 +472,7 @@
     const beats = $('beats').children;
     for (let i = 0; i < 4; i++) cls(beats[i], 'on', s.beat === i && s.running);
     cls($('beats'), 'stopped', !s.running);
-    set($('now'), 'textContent', s.now); set($('next'), 'textContent', s.next);
     cls($('bRec'), 'hot', s.rec); set($('bRecT'), 'textContent', s.rec ? 'STOP REC' : 'RECORD');
-    cls($('bFocus'), 'on', s.focus.on);
-    set($('bFocusT'), 'textContent', s.focus.on ? 'FOCUS ON' : 'FOCUS');
-    set($('bFocusS'), 'textContent', s.focus.on ? (s.focus.multi ? 'tap pads to keep · ' + s.focus.dry + ' dry' : 'tap again: all back') : 'tap, then pads');
 
     s.pads.forEach((p, i) => {
       const e = padEls[i], d = e.d;
@@ -546,7 +515,7 @@
       be.ctlEls[2].small.textContent = '#' + (mb.sel + 1);
       cls(be.ctlEls[0].b, 'on', cur.speed !== 1); cls(be.ctlEls[1].b, 'on', cur.rev);
     });
-    drawPick(); drawBanks();
+    drawBanks();
     toast(s.msg);
   }
 
