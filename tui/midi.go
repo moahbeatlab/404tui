@@ -238,6 +238,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		if at.IsZero() {
 			at = m.clock.at
 		}
+		m = m.ptnTick()
 		cmd := m.looperJobsTick()
 		if m.vc != nil && m.clock.ticks%6 != 0 {
 			m.vc.keep = true
@@ -245,6 +246,9 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(next, cmd)
 	case midiin.Start:
 		m.clock.ticks, m.clock.running, m.clock.at = 0, true, time.Now()
+		if m.lp != nil {
+			m.lp.ptPhase, m.lp.ptBoundary = 0, 0
+		}
 		m.perfSync = 0
 		m.mon.beatAt = time.Time{}
 		m.mon.played, m.mon.playedAt = map[int]bool{}, map[int]int{}

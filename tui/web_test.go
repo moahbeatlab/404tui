@@ -690,36 +690,72 @@ func TestTheCurrentPatternIsForgottenWhenTheProjectChanges(t *testing.T) {
 	}
 }
 
-func TestThePatternsPageSendsAProgramChangeForThePattern(t *testing.T) {
+func TestThePatternsPageSendsAProgramChangeAndFollowsWhatPlays(t *testing.T) {
 	r, w := webRig(t)
 	r.s.press("r")
 	m := r.s.m()
-	slot := m.snap.Bank(0)[2].Pad // A3
-	if err := app.WriteStartPattern(m.unit, slot, []proto.PadIndex{m.snap.Bank(0)[0].Pad}, 2); err != nil {
-		t.Fatal(err)
+	a3, a4 := m.snap.Bank(0)[2].Pad, m.snap.Bank(0)[3].Pad
+	for _, slot := range []proto.PadIndex{a3, a4} {
+		if err := app.WriteStartPattern(m.unit, slot, []proto.PadIndex{m.snap.Bank(0)[0].Pad}, 2); err != nil {
+			t.Fatal(err)
+		}
 	}
 	m.patterns = map[int][]app.PatternRow{}
 	r.s.model = m
+	r.web(`{"a":"view","name":"patterns"}`)
 	r.s.run(m.loadPatternsQuietly(0))
 	p := w.last(t).Ptn
-	if p.Bank != "A" || !p.Known || len(p.Slots) != 16 || !p.Slots[2].Exists || p.Last != -1 {
+	if p.Bank != "A" || !p.Known || len(p.Slots) != 16 || !p.Slots[2].Exists || p.Now != -1 || p.Next != -1 {
 		t.Fatalf("patterns %+v", p)
 	}
 	r.web(`{"a":"ptn","i":5}`) // an empty slot: nothing is sent
 	if len(r.sent()) != 0 {
 		t.Fatalf("something was sent for an empty pattern: %v", r.sent())
 	}
-	r.web(`{"a":"ptn","i":2}`)
+	// A3 plays (found from what is heard); its length is known.
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.tick(10)
+	m = r.s.m()
+	m.perfNow, m.perfAuto = &a3, true
+	m.patPreview[a3], _ = app.OpenPattern(m.unit, a3)
+	r.s.model = m
+	r.web(`{"a":"ptn","i":3}`)
 	sent := r.sent()
-	if len(sent) != 1 || len(sent[0]) != 2 || sent[0][0] != 0xC0 || sent[0][1] != 2 {
-		t.Fatalf("sent %v, want program change 2 on channel 1", sent)
+	if len(sent) != 1 || len(sent[0]) != 2 || sent[0][0] != 0xC0 || sent[0][1] != 3 {
+		t.Fatalf("sent %v, want program change 3 on channel 1", sent)
 	}
-	if p = w.last(t).Ptn; p.Last != 2 {
-		t.Errorf("last %d, want 2", p.Last)
+	if p = w.last(t).Ptn; p.Now != 2 || p.Next != 3 {
+		t.Fatalf("now %d next %d, want 2 and 3", p.Now, p.Next)
 	}
-	// Another bank: the channel is the bank's.
+	// It takes over where the pattern that plays ends: 2 bars from the start.
+	length := 2 * ticksPerBar
+	r.tick(length - 10 - 1)
+	r.s.press("r") // publishes the state
+	if p = w.last(t).Ptn; p.Next != 3 {
+		t.Fatalf("took over early: %+v", p)
+	}
+	r.tick(1)
+	r.s.press("r")
+	if p = w.last(t).Ptn; p.Now != 3 || p.Next != -1 {
+		t.Errorf("now %d next %d after the end of the pattern, want 3 and -1", p.Now, p.Next)
+	}
+	// Another bank is chosen on the page and stays, until the pattern that plays changes.
 	r.web(`{"a":"ptnbankset","i":3}`)
-	if got := w.last(t).Ptn; got.Bank != "D" || got.Last != -1 {
-		t.Errorf("bank %s last %d", got.Bank, got.Last)
+	if got := w.last(t).Ptn; got.Bank != "D" || got.Now != -1 {
+		t.Errorf("bank %s now %d", got.Bank, got.Now)
+	}
+	m = r.s.m()
+	m.perfNow = &a4
+	r.s.model = m
+	r.s.press("r")
+	if got := w.last(t).Ptn; got.Bank != "D" {
+		t.Errorf("the page left bank D without a change of pattern: %s", got.Bank)
+	}
+	m = r.s.m()
+	m.perfNow = &a3
+	r.s.model = m
+	r.s.press("r")
+	if got := w.last(t).Ptn; got.Bank != "A" || got.Now != 2 {
+		t.Errorf("the page did not follow the pattern to bank A: %+v", got)
 	}
 }

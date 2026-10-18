@@ -314,6 +314,8 @@ type Model struct {
 	// perfNow and perfNext are the pattern that plays and the one that comes next, as the
 	// Perform view shows them: what the user says, the unit does not tell.
 	perfNow, perfNext *proto.PadIndex
+	// webView is the page the browser shows (perform, looper or patterns).
+	webView string
 	// midiSrc is where MIDI comes from, midi the input that is open (nil when none is), midiOpening
 	// is set while one is being opened, and clock counts the MIDI clock.
 	midiSrc     midiin.Source
@@ -1848,6 +1850,15 @@ func (m *Model) wanted() tea.Cmd {
 	if m.web != nil && m.patterns[m.ptnBankNow()] == nil && !m.stripBusy {
 		m.stripBusy = true
 		return m.loadPatternsQuietly(m.ptnBankNow())
+	}
+	if m.web != nil && m.webView == "patterns" && !m.stripBusy {
+		// The pattern that plays is found among all the banks' patterns.
+		for b := 0; b < proto.Banks; b++ {
+			if m.patterns[b] == nil {
+				m.stripBusy = true
+				return m.loadPatternsQuietly(b)
+			}
+		}
 	}
 	if m.section == secLooper || m.web != nil {
 		// How long the pattern of the Looper's bank is: from its pattern, or else from how long its loops are.

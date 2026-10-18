@@ -33,15 +33,21 @@ type looperState struct {
 	slN, slDest int
 	// jobs wait for the pattern to come round.
 	jobs []lpJob
-	// The Patterns page: the bank shown (ptSet says it was chosen), and the pattern sent last.
-	ptBank, ptLastBank, ptLast int
-	ptSet                      bool
+	// The Patterns page: the bank shown (ptSet says it was chosen); ptBoundary is the clock tick at which the pattern sent last
+	// is expected to take over (0 when that is not known).
+	ptBank     int
+	ptSet      bool
+	ptBoundary int
+	// ptPhase is the clock tick at which the pattern that plays began (0: the unit's start); ptSeen is the pattern the Patterns
+	// page last followed.
+	ptPhase int
+	ptSeen  *proto.PadIndex
 }
 
 // looper is the state of the Looper, made when it is first wanted.
 func (m *Model) looper() *looperState {
 	if m.lp == nil {
-		m.lp = &looperState{delAsk: -1, ptLast: -1}
+		m.lp = &looperState{delAsk: -1}
 	}
 	return m.lp
 }

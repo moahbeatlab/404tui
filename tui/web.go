@@ -326,6 +326,7 @@ type webCmd struct {
 	Slot  int     `json:"slot"`
 	N     int     `json:"n"`
 	Value float64 `json:"v"`
+	Name  string  `json:"name"`
 }
 
 // webCommand does what the page asked for.
@@ -381,6 +382,9 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.looperBankSet(c.I)
+	case "view":
+		m.webView = c.Name
+		return m, m.wanted()
 	case "ptn", "ptnbank", "ptnbankset":
 		return m.ptnCommand(c.A, c.I)
 	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute", "slmang":

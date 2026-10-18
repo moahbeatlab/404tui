@@ -32,7 +32,7 @@
     if (!target()) return showConnect('');
     try { ws = new WebSocket(wsURL()); } catch (e) { return showConnect('That address does not work.'); }
     ws.onopen = () => { retry = 0; everOpen = true; $('lost').hidden = true; $('connect').hidden = true; $('app').hidden = false;
-      store.set('host', host); if (key) store.set('key', key); setConn('ok', 'connected'); ping(); };
+      store.set('host', host); if (key) store.set('key', key); setConn('ok', 'connected'); ping(); send({ a: 'view', name: $('app').dataset.view }); };
     ws.onmessage = (ev) => { let o; try { o = JSON.parse(ev.data); } catch (e) { return; }
       if (o.pong !== undefined) { pong(); return; } state = o; schedule(); };
     ws.onclose = () => { ws = null; setConn('bad', 'offline'); if (!everOpen && retry >= 2) return showConnect('No answer from ' + host + '. Is sp404 serve running, and the key right?');
@@ -188,7 +188,7 @@
     $('viewBtn').textContent = { perform: 'LOOPER', looper: 'PATTERNS', patterns: 'PERFORM' }[app.dataset.view];
     $('viewBtn').classList.toggle('on', app.dataset.view !== 'perform');
   }
-  function setView(v) { app.dataset.view = v; store.set('view', v); syncTabs(); try { if (state) render(); } catch (e) { /* before the first state */ } }
+  function setView(v) { app.dataset.view = v; store.set('view', v); syncTabs(); send({ a: 'view', name: v }); try { if (state) render(); } catch (e) { /* before the first state */ } }
   tabBtns.forEach((b) => b.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     if (b.dataset.tab === 'looper' || b.dataset.tab === 'patterns') return setView(b.dataset.tab);
@@ -340,10 +340,11 @@
       const sl = p.slots[i];
       const ok = !!(sl && sl.exists);
       e.b.disabled = !ok;
-      cls(e.b, 'last', i === p.last);
-      set(e.s, 'textContent', !p.known ? '' : ok ? sl.pads + (sl.pads === 1 ? ' pad' : ' pads') + (i === p.last ? ' · sent' : '') : 'empty');
+      cls(e.b, 'now', i === p.now);
+      cls(e.b, 'next', i === p.next);
+      set(e.s, 'textContent', !p.known ? '' : i === p.next ? 'next…' : i === p.now ? 'playing' : ok ? sl.pads + (sl.pads === 1 ? ' pad' : ' pads') : 'empty');
     });
-    set($('ptnInfo'), 'textContent', !p.known ? 'reading the patterns of bank ' + p.bank + '…' : p.last >= 0 ? 'Pattern ' + p.bank + (p.last + 1) + ' is sent: the unit plays it next.' : 'Tap a pattern of bank ' + p.bank + ': the unit plays it next.');
+    set($('ptnInfo'), 'textContent', !p.known ? 'reading the patterns of bank ' + p.bank + '…' : p.next >= 0 ? 'Pattern ' + p.bank + (p.next + 1) + ' is sent: it takes over when the pattern ends.' : p.now >= 0 ? 'Playing ' + p.bank + (p.now + 1) + '. Tap another pattern: the unit plays it next.' : 'Tap a pattern of bank ' + p.bank + ': the unit plays it next.');
   }
 
   // ---- the Slicer's dice ----
