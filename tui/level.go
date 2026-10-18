@@ -47,16 +47,13 @@ func newLevelMeter() *levelMeter {
 	return &levelMeter{hold: [2]float64{math.Inf(-1), math.Inf(-1)}, peak: [2]float64{math.Inf(-1), math.Inf(-1)}, top: math.Inf(-1)}
 }
 
-// recBusy says whether a recording holds the input: Ctrl-R's, or a take of the Looper.
-func (m Model) recBusy() bool { return m.rec != nil || (m.lp != nil && m.lp.session != nil) }
+// recBusy says whether a recording holds the input (Ctrl-R's).
+func (m Model) recBusy() bool { return m.rec != nil }
 
 // levelFile is the file of the recording that runs, whose end is the level that is heard.
 func (m Model) levelFile() string {
-	switch {
-	case m.rec != nil:
+	if m.rec != nil {
 		return m.rec.Path
-	case m.lp != nil && m.lp.session != nil:
-		return m.lp.session.Path
 	}
 	return ""
 }
@@ -293,12 +290,12 @@ type (
 	ringEndedMsg struct{ ring *record.Ring }
 )
 
-// ringSeconds is how much sound the ring keeps: the longest loop (8 bars) at 40 BPM is 48 s.
-const ringSeconds = 90
+// ringSeconds is how much sound the ring keeps; the level meter needs a moment of it.
+const ringSeconds = 10
 
 // syncRing starts the ring when it is wanted, and ends it when it is not.
 func (m Model) syncRing(rg record.Ringing) (Model, tea.Cmd) {
-	wanted := m.meterWanted() || (m.lp != nil && m.lp.phase != lpIdle)
+	wanted := m.meterWanted()
 	if !wanted {
 		if m.ring != nil {
 			m.ring.Stop()
@@ -353,10 +350,6 @@ func (m Model) ringEnded(msg ringEndedMsg) Model {
 			m.meterErr = err.Error()
 		}
 		m.ringAgain = time.Now().Add(meterRetry)
-		if m.lp != nil && m.lp.ringTake && m.lp.phase != lpIdle {
-			nm, _ := m.looperCancel("the input went away: the take was dropped")
-			return nm.(Model)
-		}
 	}
 	return m
 }

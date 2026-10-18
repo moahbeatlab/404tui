@@ -80,50 +80,25 @@ type webLevel struct {
 
 // webLooper is the Looper: where the loops go, and how a take is going.
 type webLooper struct {
-	Bank   string `json:"bank"`
-	Bars   int    `json:"bars"`
-	Delay  int    `json:"delay"` // ms
-	Gain   int    `json:"gain"`  // dB
-	Norm   bool   `json:"norm"`
-	OnBar  bool   `json:"onBar"`
-	Slices int    `json:"slices"`
+	Bank string `json:"bank"`
+	Bars int    `json:"bars"`
 	// Later says what waits for the pattern to come round (empty for nothing); LaterLast that it is the last beat, not beat 1.
 	Later     string `json:"later"`
 	LaterLast bool   `json:"laterLast"`
-	Cal       bool   `json:"cal"`
-	// Phase is idle, starting, armed, recording or saving; Bar of Of is where a recording is; Left the beats until
-	// bar 1 while it waits.
-	Phase  string  `json:"phase"`
-	Bar    int     `json:"bar"`
-	Of     int     `json:"of"`
-	Left   float64 `json:"left"`
-	Target string  `json:"target"` // the pad the next loop goes on, "" when the bank is full
 	// Pattern is the number of the pattern of the bank in which all 16 pads play, 0 when there is none (or it is
 	// not read yet: Known says which).
 	Pattern     int          `json:"pattern"`
 	PatternName string       `json:"patternName"` // the slot it is in, such as "A2"
 	Known       bool         `json:"known"`
 	Pads        []webLoopPad `json:"pads"`
-	// Last is the loop saved last, CalMS what the last calibration found (CalDone says there was one).
-	Last    *webLoopLast `json:"last"`
-	CalMS   int          `json:"calMs"`
-	CalDone bool         `json:"calDone"`
-}
-
-type webLoopLast struct {
-	Name string  `json:"name"`
-	Pad  string  `json:"pad"`
-	Peak float64 `json:"peak"` // dB below full scale, -120 for silence
-	Gain float64 `json:"gain"`
 }
 
 type webLoopPad struct {
-	N      int    `json:"n"`
-	Name   string `json:"name"`
-	Has    bool   `json:"has"`
-	Target bool   `json:"target"`
-	Del    bool   `json:"del"` // waits to be deleted on the last beat
-	Muted  bool   `json:"muted"`
+	N     int    `json:"n"`
+	Name  string `json:"name"`
+	Has   bool   `json:"has"`
+	Del   bool   `json:"del"` // waits to be deleted on the last beat
+	Muted bool   `json:"muted"`
 }
 
 type webPad struct {
@@ -305,11 +280,8 @@ func (m Model) webLevel() *webLevel {
 	for c := range 2 {
 		l.Peak[c], l.Hold[c] = db(m.lvl.peak[c]), db(m.lvl.hold[c])
 	}
-	switch {
-	case m.rec != nil:
+	if m.rec != nil {
 		l.Src = "recording"
-	case m.lp != nil && m.lp.session != nil:
-		l.Src = "take"
 	}
 	return l
 }
@@ -317,38 +289,7 @@ func (m Model) webLevel() *webLevel {
 // webLooper is the Looper for the page.
 func (m Model) webLooper() webLooper {
 	bank := m.loopBank()
-	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), Delay: m.mem.LooperDelay, Gain: m.mem.LooperGain, Norm: m.mem.LooperNormalize, OnBar: !m.mem.LooperOnBeat, LaterLast: m.mem.LaterLastBeat, Slices: m.loopSlices(), Phase: "idle", Of: m.loopBars(), Pads: []webLoopPad{}}
-	free, ok := m.loopFreePad()
-	if ok {
-		l.Target = free.String()
-	}
-	if lp := m.lp; lp != nil {
-		align := m.takeAlign()
-		l.Of, l.Cal = m.takeBars(), lp.cal
-		switch lp.phase {
-		case lpStarting:
-			l.Phase = "starting"
-		case lpArmed:
-			l.Phase = "armed"
-			if m.clock != nil {
-				l.Left = math.Round(float64((align-m.clock.ticks%align)%align)/24*10) / 10
-			}
-		case lpRecording:
-			l.Phase = "recording"
-			if m.clock != nil {
-				l.Bar = min((m.clock.ticks-lp.startTick)/ticksPerBar+1, m.takeBars())
-			}
-		case lpSaving:
-			l.Phase = "saving"
-		}
-		if lp.phase != lpIdle {
-			l.Target = lp.target.String()
-		}
-		l.CalMS, l.CalDone = lp.calMS, lp.calDone
-		if lp.last.has {
-			l.Last = &webLoopLast{Name: lp.last.name, Pad: lp.last.pad, Peak: max(math.Round(lp.last.peak*10)/10, -120), Gain: math.Round(lp.last.gain*10) / 10}
-		}
-	}
+	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), LaterLast: m.mem.LaterLastBeat, Pads: []webLoopPad{}}
 	if rows := m.patterns[bank]; rows != nil {
 		l.Known = true
 		for i, r := range rows {
@@ -359,7 +300,7 @@ func (m Model) webLooper() webLooper {
 		}
 	}
 	for i, row := range m.snap.Bank(bank) {
-		l.Pads = append(l.Pads, webLoopPad{N: i + 1, Name: row.Name, Has: row.HasSample, Target: l.Target == row.Pad.String(), Del: m.looperQueued(fmt.Sprintf("del:%d", i)), Muted: m.lvlMuted(row.Pad)})
+		l.Pads = append(l.Pads, webLoopPad{N: i + 1, Name: row.Name, Has: row.HasSample, Del: m.looperQueued(fmt.Sprintf("del:%d", i)), Muted: m.lvlMuted(row.Pad)})
 	}
 	l.Later = m.laterText()
 	return l
@@ -441,7 +382,7 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		return m.looperBankSet(c.I)
 	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute", "slmang":
 		return m.slicerCommand(c.A, c.N, c.I)
-	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel", "lpgain", "lpnorm", "lpcal", "lpalign", "lpslices", "lpremix", "lplater":
+	case "lpbank", "lpbars", "lppattern", "lpdel", "lpslices", "lpremix", "lplater":
 		if m.snap == nil {
 			return m, nil
 		}
@@ -450,24 +391,12 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		switch c.A {
-		case "lparm":
-			return m.looperArm()
 		case "lpbank":
 			return m.looperBankStep(clamp(c.N, -1, 1))
 		case "lpbars":
 			return m.looperBarsNext()
-		case "lpdelay":
-			return m.looperDelayStep(clamp(c.N, -50, 50))
 		case "lppattern":
 			return m.looperPattern()
-		case "lpgain":
-			return m.looperGainStep(clamp(c.N, -6, 6))
-		case "lpnorm":
-			return m.looperNormalizeToggle()
-		case "lpcal":
-			return m.looperArmWith(true)
-		case "lpalign":
-			return m.looperAlignToggle()
 		case "lplater":
 			return m.laterToggle()
 		case "lpslices":
@@ -550,6 +479,6 @@ func (m Model) levelSet2(i int, v int32) (Model, tea.Cmd) {
 
 // lpSettings are the commands of the Looper and the Slicer that only change a setting: they do not wait for the unit.
 var lpSettings = map[string]bool{
-	"lpbank": true, "lpbankset": true, "lpbars": true, "lpdelay": true, "lpgain": true, "lpnorm": true, "lpalign": true, "lplater": true, "lpslices": true,
+	"lpbank": true, "lpbankset": true, "lpbars": true, "lplater": true, "lpslices": true,
 	"slbank": true, "slbankset": true, "sltbank": true, "sltbankset": true, "slslices": true, "slcut": true, "slorder": true, "slmang": true, "sldiv": true, "slswing": true,
 }

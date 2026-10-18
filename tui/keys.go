@@ -118,15 +118,12 @@ var commands = []command{
 	{"a", "Slicer: choose a pad, or a new sample from the file view, to slice", []int{secSlicer}},
 	{"a", "Sequencer: choose a pattern to edit (a again, in the editor, chooses another)", []int{secSequencer}},
 	{"N", "Sequencer: make a new pattern", []int{secSequencer}},
-	{"a", "Looper: arm a take: the unit's sound is recorded for the bars set, from the next bar 1, and put on the next free pad of the bank", []int{secLooper}},
 	{"b", "Looper: how long a loop is (1, 2, 4 or 8 bars)", []int{secLooper}},
 	{"[", "Looper: the bank the loops go to ( ] the next)", []int{secLooper}},
 	{"x", "Looper: remix the pad in front: cut in slices (s sets how many: 4, 8, 16, 32), played in a random order, onto the next free pad of the bank, ungated", []int{secLooper}},
 	{"w", "Looper: a delete (and slices placed from the web page) wait for beat 1 of the pattern, or for the last beat (press again to switch)", []int{secLooper}},
 	{"p", "Looper: make the pattern of the bank in which all 16 pads start on beat 1", []int{secLooper}},
 	{"d", "Looper: delete the sample of the pad in front (d twice)", []int{secLooper}},
-	{"g", "Looper: loops are made 1 dB quieter (G louder); n: every loop as loud as it can be", []int{secLooper}},
-	{",", "Looper: the recording is 5 ms less behind the clock ( . is more)", []int{secLooper}},
 	{"1", "Go to Pads", nil},
 	{"2", "Go to Files", nil},
 	{"3", "Go to Projects", nil},
@@ -439,8 +436,6 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 // escape backs out of the innermost thing: a pattern, a pick-up, marks; else it quits.
 func (m Model) escape() (tea.Model, tea.Cmd) {
 	switch {
-	case m.section == secLooper && m.lp != nil && m.lp.phase != lpIdle && m.lp.phase != lpSaving:
-		return m.looperCancel("the take was cancelled")
 	case m.selecting() && m.section == secPatterns:
 		// Esc ends a selection of notes before it leaves the pattern.
 		m.patSel = nil

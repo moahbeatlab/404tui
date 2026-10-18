@@ -103,42 +103,30 @@ network carries: a slow phone skips states), and takes commands as JSON: `{"a":"
 (`bus`), `bars` (`n`), `dub`, `cue` (`i`, `n` 1 now, 2 next), `nextnow`, `clearnext`. The code is in
 `web/` (server and page) and `tui/web.go` (state and commands).
 
-## Looper
+## Looper and Slicer
 
-The **LOOPER** tab in portrait (the button at the top right in landscape) is the Looper of the program
-([looper.md](looper.md)), for the phone: the 16 pads of the bank the loops go to, with the next free pad framed.
+The **LOOPER** tab in portrait (the button at the top right in landscape) is the bank of loops that play together
+([looper.md](looper.md)), for the phone: the 16 pads of a bank, and a pattern in which all 16 pads start on beat 1 and last
+the whole pattern. The samples come from the unit's own looper (copy one to a pad), the Slicer or anywhere else; this page keeps
+the bank and the pattern in order. It has two pages, switched at the top: **LOOP** and **SLICER**.
 
 | Button | Does |
 | --- | --- |
-| **ARM** | arms a take: it records the bars set from the next bar 1 and puts the loop on the framed pad; the button then says **CANCEL** |
-| ◂ ▸ | the bank the loops go to |
-| **n BARS** | tap for the next length: 1, 2, 4, 8 |
+| ◂ ▸ (or tap the box) | the bank |
+| **n BARS** | tap for the next length of the pattern: 1, 2, 4, 8 |
 | **MAKE PATTERN** | writes the pattern of the bank in which all 16 pads start on beat 1 (it says whether there is one) |
-| a pad, then **DELETE** | deletes the sample of the pad (tap DELETE twice) |
+| a pad, then **DELETE** | deletes the sample of the pad (tap DELETE twice; asking again before it happens takes it back) |
+| **DELETE / PLACE** | when a delete or a placed slice is done: beat 1 of the pattern or the last beat before it |
 
-The status shows READY, ARMED (with the beats left until bar 1), REC with the bar and SAVING, and while a take is
-on a mark next to the clock says so in every view. The page needs the same as the program: the unit's MIDI clock
-and ffmpeg or sox on the computer that runs `sp404 serve`.
-
-The Looper has two pages, switched at the top of its controls: **LOOP** (the table above) and **SETTINGS**, which
-keeps the rest off the small screen (an iPhone in landscape is not much higher than the controls):
-
-| Button | Does |
-| --- | --- |
-| **CALIBRATE** | measures how late the recording is from a hit (kick) on beat 1 of the pattern, with everything else muted, and sets the delay; the result stays on the page |
-| DELAY − + | how far the recording is behind the clock, in steps of 5 ms (it can be negative) |
-| GAIN − + | makes loops quieter or louder in dB; tap **GAIN** itself for normalise (every loop gets a peak of −1 dB) |
-| **START: BAR / BEAT** | a take starts on beat 1 of the next bar, or on the next beat |
-
-The line with the last take says how loud it is (its peak in dB) and what gain was added.
+While the unit's clock runs a delete (and a slice that is placed) waits for the pattern to come round, so that the work on the
+unit is not heard as a gap; a pad that waits is striped red, and the page says in how many beats it happens.
 
 ## Level meter
 
 A stereo level meter (left and right, with the held peak as a white mark and a **CLIP** light that stays on for
-five seconds after the sound reached full scale) sits on the stage panel and on both pages of the Looper. It is
+five seconds after the sound reached full scale) sits on the stage panel. It is
 there to see whether the sound is loud enough: it shows what the unit sends over USB all the time a browser is
-open (on Linux the program listens itself, elsewhere ffmpeg or sox does), and the sound being recorded (marked **REC**) while Ctrl-R or a take
-of the Looper runs. The number is the loudest recent peak in dB below full scale: aim for the yellow, not the red.
+open (on Linux the program listens itself, elsewhere ffmpeg or sox does), and the sound being recorded (marked **REC**) while Ctrl-R runs. The number is the loudest recent peak in dB below full scale: aim for the yellow, not the red.
 If the computer cannot listen, the meter says why.
 
 The bank chip at the top left of the page opens a list of the ten banks with the number of pads that hold a sample; choosing one moves the unit to that bank, as the bank keys do in the Pads view, and the Pads view shows it.
@@ -147,7 +135,7 @@ In the Looper and the Slicer the bank boxes (BANK, FROM, TO) can be tapped for a
 
 
 In the Slicer, holding a pad (0.5 s) mutes it, in the bank the grid shows (again brings it back); muted pads are striped red. A tap
-chooses the pad. The Looper's settings (bank, bars, delay, gain …) are no longer held up while the unit is busy reading; a command that
+chooses the pad. The Looper's and Slicer's settings (bank, bars, slices …) are no longer held up while the unit is busy reading; a command that
 needs the unit says "busy (…)" and why, instead of doing nothing.
 
 The bank chip at the top follows the page: on the Pads and Stage pages it is the unit's bank (BANK), in the Looper it is the bank the loops go to (LOOP), and on the Slicer page it is the bank a pad is taken from (FROM). A pad the Slicer puts on a pad of a bank starts muted (level 0); hold it in the Slicer, or mute it on the Pads page, to bring it in at the level it had.

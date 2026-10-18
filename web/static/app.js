@@ -226,14 +226,10 @@
     lpPads.push({ d, n: d.children[0], nm: d.children[1] });
   }
   const press = (id, fn) => $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); if (navigator.vibrate) navigator.vibrate(8); });
-  press('lpArm', () => send({ a: 'lparm' }));
   press('lpPrev', () => send({ a: 'lpbank', n: -1 }));
   press('lpNext', () => send({ a: 'lpbank', n: 1 }));
   press('lpBars', () => send({ a: 'lpbars' }));
-  press('lpDm', () => send({ a: 'lpdelay', n: -5 }));
-  press('lpDp', () => send({ a: 'lpdelay', n: 5 }));
   press('lpPat', () => send({ a: 'lppattern' }));
-  press('lpAlign', () => send({ a: 'lpalign' }));
   press('lpLater', () => send({ a: 'lplater' }));
   press('slPrev', () => send({ a: 'slbank', n: -1 }));
   press('slNext', () => send({ a: 'slbank', n: 1 }));
@@ -254,10 +250,6 @@
   });
   press('slAgain', () => send({ a: 'slagain' }));
   press('slCancel', () => send({ a: 'slcancel' }));
-  press('lpCal', () => send({ a: 'lpcal' }));
-  press('lpGm', () => send({ a: 'lpgain', n: -1 }));
-  press('lpGp', () => send({ a: 'lpgain', n: 1 }));
-  press('lpGain', () => send({ a: 'lpnorm' }));
   press('lpDel', () => {
     const p = state && state.looper && state.looper.pads[lpSel];
     if (!p || !p.has) return;
@@ -267,7 +259,7 @@
   const lpSw = document.querySelectorAll('.lpsw button');
   function setLp(v) { $('looper').dataset.lp = v; lpSw.forEach((b) => b.classList.toggle('on', b.dataset.lp === v)); store.set('lp', v); try { render(); } catch (e) { /* before the first state */ } }
   lpSw.forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); setLp(b.dataset.lp); }));
-  setLp(['set', 'slice'].includes(store.get('lp')) ? store.get('lp') : 'loop');
+  setLp(store.get('lp') === 'slice' ? 'slice' : 'loop');
   const PHASE = { idle: 'READY', starting: 'STARTING…', armed: 'ARMED', recording: 'REC', saving: 'SAVING…' };
   // The level meters (there is one on the stage panel and one on each page of the Looper): -60 dB to 0 dB.
   const meters = [...document.querySelectorAll('[data-meter]')].map((el) => ({ el, bars: [...el.querySelectorAll('.mbar')].map((b) => ({ i: b.querySelector('i'), u: b.querySelector('u') })), clip: el.querySelector('em'), txt: el.querySelector('b') }));
@@ -316,27 +308,11 @@
   function renderLooper(s) {
     const l = s.looper;
     if (!l) return;
-    const busy = l.phase !== 'idle';
-    const target = l.target || '';
-    const run = l.phase === 'starting' || l.phase === 'armed' || l.phase === 'recording';
-    const st = $('lpStatus');
-    st.dataset.phase = l.phase;
-    set($('lpPhase'), 'textContent', l.phase === 'recording' ? '● REC ' + l.bar + '/' + l.of : PHASE[l.phase] || l.phase);
-    set($('lpSub'), 'textContent', l.phase === 'idle' ? (target ? l.bars + (l.bars === 1 ? ' bar' : ' bars') + ' from the next ' + (l.onBar ? 'bar' : 'beat') + ' → ' + target : 'bank ' + l.bank + ' is full: delete a loop')
-      : l.phase === 'armed' ? (l.cal ? 'calibrating: ' : '') + 'starts in ' + l.left.toFixed(1) + ' beats → ' + target
-      : target ? '→ ' + target : '');
-    set($('lpArmT'), 'textContent', run ? 'CANCEL' : l.phase === 'saving' ? 'SAVING…' : 'ARM');
-    cls($('lpArm'), 'on', run);
-    $('lpArm').disabled = l.phase === 'saving' || (!run && !target);
+    set($('lpPhase'), 'textContent', 'BANK ' + l.bank);
+    set($('lpSub'), 'textContent', l.later ? l.later : !l.known ? 'reading the patterns…' : l.pattern ? 'pattern ' + l.patternName + ' plays all 16 pads' : 'no pattern with all 16 pads: MAKE PATTERN');
     set($('lpBank'), 'textContent', l.bank);
-    set($('lpLaterT'), 'textContent', 'DELETE / PLACE: ' + (l.laterLast ? 'LAST BEAT' : 'BEAT 1'));
-    set($('lpAlignT'), 'textContent', 'START: ' + (l.onBar ? 'BAR' : 'BEAT'));
-    $('lpCal').disabled = busy;
     set($('lpBarsT'), 'textContent', l.bars + (l.bars === 1 ? ' BAR' : ' BARS'));
-    set($('lpDelay'), 'textContent', l.delay + ' ms');
-    set($('lpGainT'), 'textContent', l.norm ? 'NORMALISE' : (l.gain > 0 ? '+' : '') + l.gain + ' dB');
-    cls($('lpGain'), 'on', l.norm);
-    for (const id of ['lpPrev', 'lpNext', 'lpBars', 'lpAlign']) $(id).disabled = busy;
+    set($('lpLaterT'), 'textContent', 'DELETE / PLACE: ' + (l.laterLast ? 'LAST BEAT' : 'BEAT 1'));
     set($('lpPatS'), 'textContent', !l.known ? 'reading…' : l.pattern ? 'pattern ' + l.patternName + ' plays all 16 pads ✓' : 'no pattern with all 16 pads');
     cls($('lpPat'), 'warn', l.known && !l.pattern);
     const sel = l.pads[lpSel];
@@ -350,22 +326,12 @@
     (slMode ? sl.pads : l.pads).forEach((p, i) => {
       const e = lpPads[i];
       set(e.n, 'textContent', p.n);
-      set(e.nm, 'textContent', p.has ? p.name : !slMode && p.target ? 'next' : '');
+      set(e.nm, 'textContent', p.has ? p.name : '');
       cls(e.d, 'del', !!p.del); cls(e.d, 'muted', !!p.muted);
-      cls(e.d, 'has', p.has); cls(e.d, 'target', !slMode && p.target && !p.has); cls(e.d, 'sel', slMode ? i === (sl.phase === 'ready' ? sl.dest : sl.pad) : i === lpSel);
+      cls(e.d, 'has', p.has); cls(e.d, 'target', false); cls(e.d, 'sel', slMode ? i === (sl.phase === 'ready' ? sl.dest : sl.pad) : i === lpSel);
     });
     if (sl) renderSlicer(sl);
-    const last = l.last ? 'last take ' + l.last.name + ' on ' + l.last.pad + ': peak ' + l.last.peak.toFixed(1) + ' dB' + (l.last.gain ? ' (' + (l.last.gain > 0 ? '+' : '') + l.last.gain.toFixed(1) + ' dB added)' : '') : 'no take yet';
-    set($('lpLast'), 'textContent', l.later ? l.later : last);
-    set($('lpLast2'), 'textContent', last + (l.calDone ? ' · last calibration: the recording was ' + l.calMs + ' ms late' : ''));
-    set($('lpCalS'), 'textContent', l.phase === 'idle' ? 'kick on beat 1, rest muted' : l.cal ? 'calibrating…' : 'a take is on');
-    // The mark in the top bar, in every view.
-    const b = $('lpBadge');
-    b.hidden = !busy;
-    if (busy) {
-      set(b, 'textContent', l.phase === 'recording' ? '● REC ' + l.bar + '/' + l.of : l.phase === 'armed' ? 'ARMED' : l.phase === 'saving' ? 'SAVING' : '…');
-      b.dataset.phase = l.phase;
-    }
+    set($('lpLast'), 'textContent', l.later || 'Tap a pad, then DELETE; or work with the Slicer.');
   }
 
   // ---- the Slicer's dice ----

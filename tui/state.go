@@ -57,13 +57,9 @@ type State struct {
 	MidiMap  [4]string `json:"midiMap,omitempty"`
 	// MidiLevelChan is the channel of the pad volumes (Levels): "15" when empty, "off" for none.
 	MidiLevelChan string `json:"midiLevelChan,omitempty"`
-	// LooperBank is the bank loops go to (0 to 9), LooperBars how long a loop is (2 when empty), LooperDelay how many
-	// milliseconds the recording is behind the clock.
-	LooperBank  int `json:"looperBank,omitempty"`
-	LooperBars  int `json:"looperBars,omitempty"`
-	LooperDelay int `json:"looperDelay,omitempty"`
-	// LooperOnBeat makes a take start on the next beat instead of the next bar (beat 1 of the next bar).
-	LooperOnBeat bool `json:"looperOnBeat,omitempty"`
+	// LooperBank is the bank loops go to (0 to 9), LooperBars how long a loop (and its pattern) is (2 when empty).
+	LooperBank int `json:"looperBank,omitempty"`
+	LooperBars int `json:"looperBars,omitempty"`
 	// LooperSlices is how many slices a remix cuts a loop in (4, 8, 16 or 32; 8 when unset).
 	LooperSlices int `json:"looperSlices,omitempty"`
 	// The web page's Slicer: how many slices, cut at random places, the order (0 shuffle, 1 in order, 2 random), the grid
@@ -78,9 +74,6 @@ type State struct {
 	LaterLastBeat bool `json:"laterLastBeat,omitempty"`
 	// The dice of the Slicer (see mangleOpts): drop-outs, reversed, pitch spread, rolls, humanize (percent), fade (ms).
 	SlicerDrop, SlicerRev, SlicerPitch, SlicerRoll, SlicerHuman, SlicerFade int
-	// LooperGain makes a loop louder by that many dB (it can be negative); LooperNormalize makes it as loud as it can be.
-	LooperGain      int  `json:"looperGain,omitempty"`
-	LooperNormalize bool `json:"looperNormalize,omitempty"`
 	// BusNotes are what the user wrote of the effect on each bus (the unit does not say), shown in
 	// the Perform view.
 	BusNotes [2]string `json:"busNotes,omitempty"`

@@ -1,102 +1,32 @@
-# Looper
+# Looper (tab 8)
 
-The Looper (`8`) records what the unit plays, for example a loop of an MC-101 that goes through it, and puts the
-loop on a pad. It does what recording in the unit's looper, copying the loop to a pad and ungating it does by hand.
+The Looper is a bank of loops that play together. The loops come from wherever you like (the unit's own looper, copied to a pad;
+the Slicer; a file), and this view keeps the bank and its pattern in order. It does not record sound itself.
 
-## Before
-
-On Linux (PulseAudio or PipeWire) the program listens to the unit's USB audio itself and keeps the last 90 seconds
-of it in memory, as long as the Looper, Perform or a browser is open. Nothing is started when you arm and nothing is
-written to a file: a take is cut out of the memory by the clock, and the level meter reads the same sound. On other
-systems the recorder program (ffmpeg or sox) does it, and a take then needs a moment to start before bar 1.
-
-- The unit is a USB audio interface: the app records its audio the way `Ctrl-R` does (ffmpeg or sox must be
-  installed; `Recording` in [config.md](config.md) tells which input).
-- It follows the unit's **MIDI clock**: start the unit's sequencer, or the Looper says so.
-- The recording is what the computer hears from the unit. Whatever else is playing is in it: mute the other pads
-  before a take.
-
-## The view
-
-The 16 pads of the bank loops go to, a line saying what the Looper does, and the keys:
+- A **pattern** in which all 16 pads of the bank start on beat 1 and last the whole pattern (`p`, "MAKE PATTERN" on the page): a
+  sample put on any pad plays from the next round on, and a pad that is deleted is silent, its note still in the pattern.
+- **Bank** (`[` `]`), **length** of the pattern and of a loop (`b`: 1, 2, 4, 8 bars).
+- **Delete** a pad's sample (`d`, twice). While the unit's clock runs, a delete waits for **beat 1** of the pattern (or, with `w`, the
+  last beat before it), counted from the unit's start; a second `d` before it happens takes it back. Without a running clock it is
+  done at once.
+- **Remix** (`x`): cuts the pad in front into equal slices (`s`: 4, 8, 16 or 32) in a random order and puts the result on the next
+  free pad of the bank, muted. The web page has a fuller **Slicer** ([web.md](web.md)).
 
 | Key | Does |
 | --- | --- |
-| `a`, `Enter` | arms a take; again (or `Esc`) cancels it |
-| `b` | how long a loop is: 1, 2, 4 or 8 bars |
-| `[` `]` | the bank the loops go to |
-| `p` | writes the pattern of the bank in which all 16 pads start on beat 1 (in the first free pattern slot) |
-| `d` | deletes the sample of the pad in front (press it twice) |
-| `g` `G` | makes loops 1 dB quieter or louder (-24 to +24) |
-| `n` | normalise: every loop is made as loud as it can be (peak -1 dB), the gain is ignored |
-| `t` | a take starts on beat 1 of the next **bar** (the default) or on the next **beat** |
-| `c` | calibrates the delay (see below) |
-| `, .` | how many milliseconds the recording is behind the clock (0 to 500, 5 at a time) |
 | `h j k l` | the pad in front |
-
-## A take
-
-1. Arm it. (With the memory there is nothing to wait for; with the recorder program it starts at once.) The next pad that holds no sample of the
-   bank is the target (it is lit).
-2. The loop begins on beat 1 of the next bar of the clock (`t` makes it the next beat), counted from the unit's Start. Arm on beat 2 and it starts one bar line later; the recorder only needs a third of a second to be ready. While it records the header shows a red `LOOPER REC 2/4` in every view.
-3. When the bars are over the recording ends, the loop is cut out of it by the clock (so it is as long as the bars
-   are, to the sample, with a fade of a millisecond at both ends), put on the pad, named `LOOP hh:mm:ss`, and the
-   pad's **gate is turned off**. The temporary recording is deleted.
-4. The pattern of the bank plays it from its next round on. Arm again for the next loop: it goes on the next free
-   pad.
-
-If the clock stops during a take it is dropped. If the take could not be cut (the recording began too late, for
-example because it was armed right before bar 1) the message says so; nothing is put on a pad.
-
-## Taking a loop out
-
-`d` on the pad (twice) deletes its sample. The note in the pattern stays, but a note on an empty pad is silent,
-and the pad is free for the next take. So the pattern never has to be edited while it plays.
-
-## Delay
-
-USB audio arrives a little after the clock tick it belongs to (and the recorder buffers some of it), so a loop
-comes out late by a fixed time, usually tens of milliseconds. **Calibrate it once**: put a short, loud hit (a kick)
-on beat 1 of a pattern on the unit, mute everything else, start the sequencer and press `c`. The app records one
-bar from the next bar, finds the hit in it and sets the delay to how late it is. After that loops line up with the
-clock; `, .` fine-tunes (the delay can be negative). The delay stays as it is when you start the program again.
-
-A loop starts on a bar line (or, with `t`, on a beat), so what was playing there is the loop's first beat. The pad is
-triggered by the pattern on its beat 1, so the bars of the pattern and of the clock should line up.
-
-## Loudness
-
-A loop is saved exactly as the computer hears it: without any change in level. After a take the message says how
-loud it is ("peak -8.3 dB"). How loud that is depends on what the unit sends over USB (its main volume, the input
-level, the effects) and on the input volume of the computer's own sound settings. If the loops are too quiet or too
-loud next to the rest, set the **gain** (`g` `G`) once, or switch **normalise** on (`n`) to have every loop come out
-at the same peak. The pad itself is set to level 127.
-
-## Remix and the Slicer
-
-`x` cuts the sample of the pad in front into equal slices, plays every slice once in a random order, and puts the
-result on the next free pad of the bank, ungated. The loop keeps its length, so it fills the pattern as before. `s` sets
-how many slices: 4, 8, 16 or 32.
-
-The web page has a basic **SLICER** page (the switch LOOP / SLICER / SETTINGS in the Looper): pick a pad of any bank
-(FROM BANK), then set the slices (2 to 32), equal or random cuts, the order (shuffle, in order, random picks), the
-timing (the slices' own length, or a 1/4, 1/8 or 1/16 grid at the bank's tempo, with swing) and the bank the result goes
-to. SLICE makes the slices and keeps them: the grid then shows the bank they go to (TO ◂ ▸ changes it), tap any pad of
-any bank (the next free pad is pre-chosen; a pad that holds a sample asks for a second tap) and press PLACE. NEW VERSION
-cuts again, DISCARD drops them. Placed slices are ungated.
-
-## Putting a sample on a pad while the unit plays
-
-The official app sends the unit a Stop before it imports a sample. The Looper and the Slicer leave that out (`ImportSMPLive`), so
-that the pattern is not stopped when a take or a slice lands on a pad. If the unit refuses the import without it, the import is
-made the usual way (with the Stop). If the pattern still stops for a moment, that is the unit loading the sample: tell me, and
-look for `looper:` and `slicer:` lines in `sp404 -v`.
+| `[` `]` | the bank |
+| `b` | length: 1, 2, 4, 8 bars |
+| `p` | make the pattern of the bank |
+| `d` | delete the pad in front (twice) |
+| `w` | queued work waits for beat 1 or for the last beat |
+| `x` `s` | remix the pad in front, and how many slices |
 
 ## Work that waits for the pattern
 
-While the unit's clock runs, DELETE in the Looper and PLACE in the Slicer do not act at once: they wait for **beat 1** of the pattern, where
-everything is triggered again (or, if you switch it, for the last beat before it: `w` in the TUI, "DELETE / PLACE" in the web Looper's settings).
-The pattern is as long as a loop is set to be (`b`, 1 to 8 bars), counted from the unit's start. A pad that waits to be deleted is striped red
-(DELETE says KEEP IT: asking again takes it back); the Slicer and the Looper say what waits and in how many beats. Without a running clock the
-work is done at once. The work itself (writing the file, reading the pads) takes a moment on the unit; if you hear a gap at beat 1, try the
-last beat, and tell me which of the two sounds better.
+A delete and a slice that is placed (from the web page's Slicer) do not act at once while the clock runs: the work on the unit (writing
+the file, reading the pads) can make a gap, and beat 1 of the pattern, where everything is triggered again, is where it is least heard.
+The pattern is as long as the length above. If you hear a gap at beat 1, try the last beat, and tell me which of the two sounds better.
+
+The samples are put on the unit without the Stop the official app sends before an import (the unit keeps playing); if the unit
+refuses the import that way it is done the usual way.

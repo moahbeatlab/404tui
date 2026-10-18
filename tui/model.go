@@ -1172,7 +1172,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.midiEvent(msg)
 	case tickMsg:
 		m.frame++
-		m = m.looperWatch()
+		m = m.looperJobsWatch()
 		m.sampleLevel()
 		if m.midiSrc != nil && m.midi == nil && !m.midiOpening && m.frame%50 == 25 {
 			// The unit's MIDI input appears when it is plugged in: it is looked for now and then.
@@ -1245,10 +1245,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, m.wanted()
-	case loopStartedMsg:
-		return m.loopStarted(msg)
-	case loopSavedMsg:
-		return m.loopSaved(msg)
 	case slicerDoneMsg:
 		return m.slicerDone(msg)
 	case doneMsg:

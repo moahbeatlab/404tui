@@ -337,37 +337,16 @@ func TestTheLooperIsShownAndControlledFromTheBrowser(t *testing.T) {
 	r, w := webRig(t)
 	r.s.press("r")
 	l := w.last(t).Looper
-	if l.Bank != "A" || l.Bars != 2 || l.Phase != "idle" || l.Target != "A4" || len(l.Pads) != 16 || !l.Pads[0].Has || !l.Pads[3].Target {
+	if l.Bank != "A" || l.Bars != 2 || len(l.Pads) != 16 || !l.Pads[0].Has || l.Pads[3].Has {
 		t.Fatalf("looper %+v", l)
 	}
 	r.web(`{"a":"lpbars"}`)
 	r.web(`{"a":"lpbank","n":1}`)
-	r.web(`{"a":"lpdelay","n":5}`)
 	l = w.last(t).Looper
-	if l.Bars != 4 || l.Bank != "B" || l.Delay != 5 {
-		t.Errorf("after bars, bank, delay: %+v", l)
+	if l.Bars != 4 || l.Bank != "B" {
+		t.Errorf("after bars and bank: %+v", l)
 	}
 	r.web(`{"a":"lpbank","n":-1}`)
-	r.s.model = r.s.m().WithRecorder(&fakeRecorder{stopped: new(int)})
-	// No clock, no take.
-	r.web(`{"a":"lparm"}`)
-	if got := w.last(t); got.Looper.Phase != "idle" || !strings.Contains(got.Msg, "clock") {
-		t.Errorf("armed without a clock: %+v %q", got.Looper, got.Msg)
-	}
-	// Armed with one.
-	r.s.model = func() tea.Model {
-		m := r.s.m()
-		m.clock = &clockState{running: true, at: time.Now()}
-		return m
-	}()
-	r.web(`{"a":"lparm"}`)
-	if got := w.last(t).Looper; got.Phase != "armed" || got.Target != "A4" {
-		t.Errorf("not armed: %+v", got)
-	}
-	r.web(`{"a":"lparm"}`) // again: cancelled
-	if got := w.last(t).Looper.Phase; got != "idle" {
-		t.Errorf("not cancelled: %s", got)
-	}
 	// A pad is deleted (at once: the clock does not run).
 	r.s.model = func() tea.Model {
 		m := r.s.m()
@@ -375,7 +354,7 @@ func TestTheLooperIsShownAndControlledFromTheBrowser(t *testing.T) {
 		return m
 	}()
 	r.web(`{"a":"lpdel","i":2}`)
-	if l = w.last(t).Looper; l.Pads[2].Has || l.Target != "A3" {
+	if l = w.last(t).Looper; l.Pads[2].Has {
 		t.Errorf("A3 not deleted: %+v", l.Pads[2])
 	}
 	r.web(`{"a":"lpdel","i":99}`) // out of range: nothing

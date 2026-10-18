@@ -238,7 +238,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		if at.IsZero() {
 			at = m.clock.at
 		}
-		cmd := m.looperTick(at)
+		cmd := m.looperJobsTick()
 		if m.vc != nil && m.clock.ticks%6 != 0 {
 			m.vc.keep = true
 		}
