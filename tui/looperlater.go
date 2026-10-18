@@ -25,21 +25,11 @@ type lpJob struct {
 	cmd   tea.Cmd
 }
 
-// laterAt is the tick, in the pattern, at which the queued work is done: beat 1 of the next round, or (the setting) the last beat.
-func (m Model) laterAt() int {
-	if m.mem.LaterLastBeat {
-		return m.loopBars()*ticksPerBar - ticksPerBeat
-	}
-	return 0
-}
+// laterAt is the tick, in the pattern, at which the queued work is done: beat 1 of the next round.
+func (m Model) laterAt() int { return 0 }
 
 // laterName says when the queued work is done.
-func (m Model) laterName() string {
-	if m.mem.LaterLastBeat {
-		return "the last beat of the pattern"
-	}
-	return "beat 1 of the pattern"
-}
+func (m Model) laterName() string { return "beat 1 of the pattern" }
 
 // beatsToLater says in how many beats that is.
 func (m Model) beatsToLater() float64 {
@@ -49,13 +39,6 @@ func (m Model) beatsToLater() float64 {
 		left = length
 	}
 	return float64(left) / ticksPerBeat
-}
-
-// laterToggle switches between beat 1 and the last beat for the queued work.
-func (m Model) laterToggle() (tea.Model, tea.Cmd) {
-	m.mem.LaterLastBeat = !m.mem.LaterLastBeat
-	m.message = "deleting a pad and placing slices wait for " + m.laterName()
-	return m, nil
 }
 
 // looperLater queues work for the last beat of the pattern. It says false when the clock does not run: the work is not

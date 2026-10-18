@@ -108,17 +108,15 @@ network carries: a slow phone skips states), and takes commands as JSON: `{"a":"
 The **LOOPER** tab in portrait (the button at the top right in landscape) is the bank of loops that play together
 ([looper.md](looper.md)), for the phone: the 16 pads of a bank, and a pattern in which all 16 pads start on beat 1 and last
 the whole pattern. The samples come from the unit's own looper (copy one to a pad), the Slicer or anywhere else; this page keeps
-the bank and the pattern in order. It has two pages, switched at the top: **LOOP** and **SLICER**.
+the bank and the pattern in order. The length of the pattern is the unit's: it is read from the pattern of the bank in which all 16 pads play, or else from how long the loops on the pads are (2 bars when neither is known). It has two pages, switched at the top: **LOOP** and **SLICER**.
 
 | Button | Does |
 | --- | --- |
 | ◂ ▸ (or tap the box) | the bank |
-| **n BARS** | tap for the next length of the pattern: 1, 2, 4, 8 |
 | **MAKE PATTERN** | writes the pattern of the bank in which all 16 pads start on beat 1 (it says whether there is one) |
 | a pad, then **DELETE** | deletes the sample of the pad (tap DELETE twice; asking again before it happens takes it back) |
-| **DELETE / PLACE** | when a delete or a placed slice is done: beat 1 of the pattern or the last beat before it |
 
-While the unit's clock runs a delete (and a slice that is placed) waits for the pattern to come round, so that the work on the
+While the unit's clock runs a delete (and a slice that is placed) waits for beat 1 of the pattern, so that the work on the
 unit is not heard as a gap; a pad that waits is striped red, and the page says in how many beats it happens.
 
 ## Level meter

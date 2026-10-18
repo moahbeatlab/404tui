@@ -2,7 +2,7 @@ package tui
 
 import (
 	"fmt"
-	"slices"
+	"math"
 	"strings"
 	"time"
 
@@ -18,9 +18,6 @@ import (
 // whole pattern, so that a sample put on a pad plays from the next round on. A pad that is no longer wanted is deleted: its
 // note in the pattern is silent then, and the pad is free for the next one. The samples come from the unit's own looper, the
 // Slicer or anywhere else; this view only keeps the bank and the pattern in order.
-
-// loopBarChoices are the lengths of a loop the b key goes through.
-var loopBarChoices = []int{1, 2, 4, 8}
 
 type looperState struct {
 	// cursor is the pad in front (0 to 15); delAsk is the pad d asked to delete (-1 for none).
@@ -48,12 +45,55 @@ func (m *Model) looper() *looperState {
 
 func (m Model) loopBank() int { return clamp(m.mem.LooperBank, 0, proto.Banks-1) }
 
-// loopBars is how long a loop is.
+// loopPatternSlot is the pattern of the Looper's bank in which all 16 pads play.
+func (m Model) loopPatternSlot() (proto.PadIndex, bool) {
+	for _, r := range m.patterns[m.loopBank()] {
+		if r.Exists && len(r.Pads) == proto.PadsPerBank {
+			return r.Slot, true
+		}
+	}
+	return proto.PadIndex{}, false
+}
+
+// loopBars is how long the pattern of the bank is, in bars: the unit decides. It is read from the pattern in which all 16 pads play
+// when there is one, else from how long the loops on the pads are (the most common whole number of bars at the bank's tempo), else
+// it is 2.
 func (m Model) loopBars() int {
-	if slices.Contains(loopBarChoices, m.mem.LooperBars) {
-		return m.mem.LooperBars
+	if slot, ok := m.loopPatternSlot(); ok {
+		if d := m.patPreview[slot]; d != nil && d.Bars() > 0 {
+			return d.Bars()
+		}
+	}
+	if n := m.sampleBars(); n > 0 {
+		return n
 	}
 	return 2
+}
+
+// sampleBars is the length of the loops of the bank in whole bars (the most common one, the longer when it is a tie), 0 when
+// it is not known.
+func (m Model) sampleBars() int {
+	count := map[int]int{}
+	for _, row := range m.snap.Bank(m.loopBank()) {
+		if !row.HasSample {
+			continue
+		}
+		f, ok := m.facts[factKey{row.Pad, row.Size, row.Name}]
+		if !ok || f.err != nil {
+			continue
+		}
+		b := loopBars(f.facts.Seconds, m.bankTempo(int(row.Pad.Bank())))
+		if n := int(math.Round(b)); n >= 1 && math.Abs(b-float64(n)) < 0.1 {
+			count[n]++
+		}
+	}
+	best, bestN := 0, 0
+	for n, c := range count {
+		if c > bestN || (c == bestN && n > best) {
+			best, bestN = n, c
+		}
+	}
+	return best
 }
 
 func (m Model) loopFreePad() (proto.PadIndex, bool) {
@@ -75,8 +115,6 @@ func (m Model) looperKey(name string) (tea.Model, tea.Cmd) {
 	ask := lp.delAsk
 	lp.delAsk = -1
 	switch name {
-	case "w":
-		return m.laterToggle()
 	case "s":
 		return m.looperSlicesNext()
 	case "x":
@@ -85,8 +123,6 @@ func (m Model) looperKey(name string) (tea.Model, tea.Cmd) {
 		return m.looperBankStep(-1)
 	case "]":
 		return m.looperBankStep(1)
-	case "b":
-		return m.looperBarsNext()
 	case "h", "left":
 		lp.cursor = clamp(lp.cursor-1, 0, 15)
 	case "l", "right":
@@ -127,14 +163,6 @@ func (m Model) looperBankStep(dir int) (tea.Model, tea.Cmd) {
 	return m, m.wanted()
 }
 
-// looperBarsNext goes to the next length of a loop.
-func (m Model) looperBarsNext() (tea.Model, tea.Cmd) {
-	i := slices.Index(loopBarChoices, m.loopBars())
-	m.mem.LooperBars = loopBarChoices[(i+1)%len(loopBarChoices)]
-	m.message = fmt.Sprintf("a loop is %s long", plural(m.mem.LooperBars, "bar"))
-	return m, nil
-}
-
 // looperDelete deletes the sample of a pad (0 to 15) of the bank, on the last beat of the pattern when the clock runs
 // (asking again takes it back).
 func (m Model) looperDelete(i int) (tea.Model, tea.Cmd) {
@@ -162,7 +190,7 @@ func (m Model) looperDelete(i int) (tea.Model, tea.Cmd) {
 
 // looperPattern writes the pattern of the bank in which all 16 pads start on beat 1.
 func (m Model) looperPattern() (tea.Model, tea.Cmd) {
-	unit, bank, bars := m.unit, m.loopBank(), m.loopBars()
+	unit, bank, bars := m.unit, m.loopBank(), min(m.loopBars(), formats.MaxStartBars)
 	m.busy = "making a pattern"
 	return m, m.edit(func() tea.Msg {
 		slot, err := firstFreePatternSlot(unit, bank)
@@ -206,7 +234,7 @@ func (m Model) looperBody(g geom) string {
 			}
 		}
 	}
-	keys := st.dim.Render("b length   [ ] bank   p pattern   d delete   w delete/place on beat 1 or last beat   s slices   x remix   h j k l pad")
+	keys := st.dim.Render("[ ] bank   p pattern   d delete   s slices   x remix   h j k l pad")
 	top := []string{head, "", status, pattern, ""}
 	bottom := []string{"", keys}
 	avail := g.bodyH - 2 - len(top) - len(bottom) - 3

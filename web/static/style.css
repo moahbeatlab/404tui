@@ -403,11 +403,11 @@ button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
 .lpad.muted b, .lpad.muted span { color: #ffd9d9; text-decoration: line-through; }
 
 #mangleRows { display: grid; gap: 8px; }
-.mrow { display: grid; grid-template-columns: 1fr 48px 74px 48px; align-items: center; gap: 6px; }
-.mrow span { font-weight: 800; letter-spacing: .04em; font-size: 14px; }
-.mrow small { grid-column: 1; color: var(--dim); font-size: 11px; margin-top: -4px; }
-.mrow button { height: 42px; border-radius: 10px; background: var(--tile); font-weight: 800; font-size: 18px; }
-.mrow b { text-align: center; font-size: 17px; } .mrow b.on { color: var(--accent); }
+.dicerow { display: grid; grid-template-columns: 1fr 48px 74px 48px; align-items: center; gap: 6px; }
+.dicerow span { font-weight: 800; letter-spacing: .04em; font-size: 14px; }
+.dicerow small { grid-column: 1; color: var(--dim); font-size: 11px; margin-top: -4px; }
+.dicerow button { height: 42px; border-radius: 10px; background: var(--tile); font-weight: 800; font-size: 18px; }
+.dicerow b { text-align: center; font-size: 17px; } .dicerow b.on { color: var(--accent); }
 .mnote { color: var(--dim); font-size: 12px; line-height: 1.35; }
 #mangleReset { min-height: 42px; }
 #rail .buttons { align-content: start; grid-auto-rows: max-content; }

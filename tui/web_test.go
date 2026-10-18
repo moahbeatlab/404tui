@@ -337,14 +337,13 @@ func TestTheLooperIsShownAndControlledFromTheBrowser(t *testing.T) {
 	r, w := webRig(t)
 	r.s.press("r")
 	l := w.last(t).Looper
-	if l.Bank != "A" || l.Bars != 2 || len(l.Pads) != 16 || !l.Pads[0].Has || l.Pads[3].Has {
+	if l.Bank != "A" || l.Bars < 1 || len(l.Pads) != 16 || !l.Pads[0].Has || l.Pads[3].Has {
 		t.Fatalf("looper %+v", l)
 	}
-	r.web(`{"a":"lpbars"}`)
 	r.web(`{"a":"lpbank","n":1}`)
 	l = w.last(t).Looper
-	if l.Bars != 4 || l.Bank != "B" {
-		t.Errorf("after bars and bank: %+v", l)
+	if l.Bank != "B" {
+		t.Errorf("after bank: %+v", l)
 	}
 	r.web(`{"a":"lpbank","n":-1}`)
 	// A pad is deleted (at once: the clock does not run).
@@ -468,17 +467,14 @@ func TestTheBrowserCanChangeTheBank(t *testing.T) {
 	}
 }
 
-func TestADeleteAndASlicePlacementWaitForBeat1OrTheLastBeatOfThePattern(t *testing.T) {
-	t.Run("beat 1", func(t *testing.T) { testQueuedDelete(t, false); testQueuedPlace(t, false) })
-	t.Run("last beat", func(t *testing.T) { testQueuedDelete(t, true); testQueuedPlace(t, true) })
+func TestADeleteAndASlicePlacementWaitForBeat1OfThePattern(t *testing.T) {
+	testQueuedDelete(t)
+	testQueuedPlace(t)
 }
 
-func testQueuedDelete(t *testing.T, lastBeat bool) {
+func testQueuedDelete(t *testing.T) {
 	r, w := webRig(t)
 	r.s.press("r")
-	m0 := r.s.m()
-	m0.mem.LaterLastBeat = lastBeat
-	r.s.model = m0
 	r.feed(midiin.Event{Kind: midiin.Start})
 	r.tick(5)
 	length := r.s.m().loopBars() * ticksPerBar
@@ -521,7 +517,7 @@ func testQueuedDelete(t *testing.T, lastBeat bool) {
 	}
 }
 
-func testQueuedPlace(t *testing.T, lastBeat bool) {
+func testQueuedPlace(t *testing.T) {
 	r, w := webRig(t)
 	r.s.press("r")
 	m := r.s.m()
@@ -537,9 +533,6 @@ func testQueuedPlace(t *testing.T, lastBeat bool) {
 		t.Fatal(err)
 	}
 	r.s.run(m.load(""))
-	m0 := r.s.m()
-	m0.mem.LaterLastBeat = lastBeat
-	r.s.model = m0
 	r.feed(midiin.Event{Kind: midiin.Start})
 	r.tick(3)
 	length := r.s.m().loopBars() * ticksPerBar

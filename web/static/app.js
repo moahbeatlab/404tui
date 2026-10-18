@@ -228,9 +228,7 @@
   const press = (id, fn) => $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); if (navigator.vibrate) navigator.vibrate(8); });
   press('lpPrev', () => send({ a: 'lpbank', n: -1 }));
   press('lpNext', () => send({ a: 'lpbank', n: 1 }));
-  press('lpBars', () => send({ a: 'lpbars' }));
   press('lpPat', () => send({ a: 'lppattern' }));
-  press('lpLater', () => send({ a: 'lplater' }));
   press('slPrev', () => send({ a: 'slbank', n: -1 }));
   press('slNext', () => send({ a: 'slbank', n: 1 }));
   press('slTPrev', () => send({ a: 'sltbank', n: -1 }));
@@ -309,10 +307,8 @@
     const l = s.looper;
     if (!l) return;
     set($('lpPhase'), 'textContent', 'BANK ' + l.bank);
-    set($('lpSub'), 'textContent', l.later ? l.later : !l.known ? 'reading the patterns…' : l.pattern ? 'pattern ' + l.patternName + ' plays all 16 pads' : 'no pattern with all 16 pads: MAKE PATTERN');
+    set($('lpSub'), 'textContent', l.later ? l.later : !l.known ? 'reading the patterns…' : l.pattern ? 'pattern ' + l.patternName + ' plays all 16 pads · ' + l.bars + (l.bars === 1 ? ' bar' : ' bars') : 'no pattern with all 16 pads: MAKE PATTERN (' + l.bars + (l.bars === 1 ? ' bar' : ' bars') + ')');
     set($('lpBank'), 'textContent', l.bank);
-    set($('lpBarsT'), 'textContent', l.bars + (l.bars === 1 ? ' BAR' : ' BARS'));
-    set($('lpLaterT'), 'textContent', 'DELETE / PLACE: ' + (l.laterLast ? 'LAST BEAT' : 'BEAT 1'));
     set($('lpPatS'), 'textContent', !l.known ? 'reading…' : l.pattern ? 'pattern ' + l.patternName + ' plays all 16 pads ✓' : 'no pattern with all 16 pads');
     cls($('lpPat'), 'warn', l.known && !l.pattern);
     const sel = l.pads[lpSel];
@@ -346,7 +342,7 @@
   const diceEls = [];
   DICE.forEach(([name, hint], k) => {
     const r = document.createElement('div');
-    r.className = 'mrow';
+    r.className = 'dicerow';
     r.innerHTML = '<span>' + name + '</span><button>−</button><b></b><button>+</button><small>' + hint + '</small>';
     const [lo, , hi] = [r.children[1], r.children[2], r.children[3]];
     lo.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'slmang', i: k, n: -1 }); });

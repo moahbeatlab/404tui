@@ -10,6 +10,7 @@ import (
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/proto"
 )
 
 func TestTheLooperSaysWhichPatternItMade(t *testing.T) {
@@ -31,10 +32,6 @@ func TestTheLooperChangesBankAndLengthAndDeletesOnBeat1WhileTheClockRuns(t *test
 	r.s.press("]")
 	r.s.shows("BANK B")
 	r.s.press("[")
-	r.s.press("b")
-	if got := r.s.m().loopBars(); got != 4 {
-		t.Fatalf("the loop is %d bars after b, want 4", got)
-	}
 	// The cursor is on A1, which holds a sample: d asks, d again deletes. With no clock it is done at once.
 	r.s.press("d")
 	if !strings.Contains(r.s.m().message, "d again") {
@@ -119,5 +116,20 @@ func TestTheLooperRemixesAPadOntoTheNextFreePad(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("no remix on the bank (%q)", m.message)
+	}
+}
+
+func TestTheLengthOfTheLooperPatternComesFromThePatternOfTheUnit(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 200, Height: 40})
+	m := s.m()
+	if got := m.loopBars(); got < 1 {
+		t.Fatalf("no length without a pattern: %d", got)
+	}
+	slot := m.snap.Bank(0)[9].Pad
+	m.patterns[0] = []app.PatternRow{{Slot: slot, Exists: true, Pads: proto.AllPads()[:16]}}
+	m.patPreview[slot] = &app.PatternDetail{Slot: slot, Beats: 4, Length: 3 * 4 * formats.PPQ}
+	if got := m.loopBars(); got != 3 {
+		t.Errorf("the loop is %d bars, the pattern of the unit has 3", got)
 	}
 }

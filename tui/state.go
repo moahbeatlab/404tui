@@ -57,9 +57,8 @@ type State struct {
 	MidiMap  [4]string `json:"midiMap,omitempty"`
 	// MidiLevelChan is the channel of the pad volumes (Levels): "15" when empty, "off" for none.
 	MidiLevelChan string `json:"midiLevelChan,omitempty"`
-	// LooperBank is the bank loops go to (0 to 9), LooperBars how long a loop (and its pattern) is (2 when empty).
+	// LooperBank is the bank loops go to (0 to 9).
 	LooperBank int `json:"looperBank,omitempty"`
-	LooperBars int `json:"looperBars,omitempty"`
 	// LooperSlices is how many slices a remix cuts a loop in (4, 8, 16 or 32; 8 when unset).
 	LooperSlices int `json:"looperSlices,omitempty"`
 	// The web page's Slicer: how many slices, cut at random places, the order (0 shuffle, 1 in order, 2 random), the grid
@@ -70,8 +69,6 @@ type State struct {
 	SlicerDiv       int  `json:"slicerDiv,omitempty"`
 	SlicerSwing     int  `json:"slicerSwing,omitempty"`
 	SlicerTarget    int  `json:"slicerTarget,omitempty"`
-	// LaterLastBeat makes queued work (a delete, slices placed) wait for the last beat of the pattern; else it is beat 1.
-	LaterLastBeat bool `json:"laterLastBeat,omitempty"`
 	// The dice of the Slicer (see mangleOpts): drop-outs, reversed, pitch spread, rolls, humanize (percent), fade (ms).
 	SlicerDrop, SlicerRev, SlicerPitch, SlicerRoll, SlicerHuman, SlicerFade int
 	// BusNotes are what the user wrote of the effect on each bus (the unit does not say), shown in

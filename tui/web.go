@@ -82,9 +82,8 @@ type webLevel struct {
 type webLooper struct {
 	Bank string `json:"bank"`
 	Bars int    `json:"bars"`
-	// Later says what waits for the pattern to come round (empty for nothing); LaterLast that it is the last beat, not beat 1.
-	Later     string `json:"later"`
-	LaterLast bool   `json:"laterLast"`
+	// Later says what waits for beat 1 of the pattern (empty for nothing).
+	Later string `json:"later"`
 	// Pattern is the number of the pattern of the bank in which all 16 pads play, 0 when there is none (or it is
 	// not read yet: Known says which).
 	Pattern     int          `json:"pattern"`
@@ -289,7 +288,7 @@ func (m Model) webLevel() *webLevel {
 // webLooper is the Looper for the page.
 func (m Model) webLooper() webLooper {
 	bank := m.loopBank()
-	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), LaterLast: m.mem.LaterLastBeat, Pads: []webLoopPad{}}
+	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), Pads: []webLoopPad{}}
 	if rows := m.patterns[bank]; rows != nil {
 		l.Known = true
 		for i, r := range rows {
@@ -382,7 +381,7 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		return m.looperBankSet(c.I)
 	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute", "slmang":
 		return m.slicerCommand(c.A, c.N, c.I)
-	case "lpbank", "lpbars", "lppattern", "lpdel", "lpslices", "lpremix", "lplater":
+	case "lpbank", "lppattern", "lpdel", "lpslices", "lpremix":
 		if m.snap == nil {
 			return m, nil
 		}
@@ -393,12 +392,8 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		switch c.A {
 		case "lpbank":
 			return m.looperBankStep(clamp(c.N, -1, 1))
-		case "lpbars":
-			return m.looperBarsNext()
 		case "lppattern":
 			return m.looperPattern()
-		case "lplater":
-			return m.laterToggle()
 		case "lpslices":
 			return m.looperSlicesNext()
 		case "lpremix":
@@ -479,6 +474,6 @@ func (m Model) levelSet2(i int, v int32) (Model, tea.Cmd) {
 
 // lpSettings are the commands of the Looper and the Slicer that only change a setting: they do not wait for the unit.
 var lpSettings = map[string]bool{
-	"lpbank": true, "lpbankset": true, "lpbars": true, "lplater": true, "lpslices": true,
+	"lpbank": true, "lpbankset": true, "lpslices": true,
 	"slbank": true, "slbankset": true, "sltbank": true, "sltbankset": true, "slslices": true, "slcut": true, "slorder": true, "slmang": true, "sldiv": true, "slswing": true,
 }
