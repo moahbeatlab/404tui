@@ -232,7 +232,7 @@ func TestEveryUpdatePublishesAndASnapshotIsCheap(t *testing.T) {
 	}
 }
 
-func TestADoubleTapFromTheBrowserIsolatesAPadAndUndoesTheMute(t *testing.T) {
+func TestATapFromTheBrowserIsolatesAPadAndADoubleTapMutesIt(t *testing.T) {
 	r, w := webRig(t)
 	bus, _ := proto.ParamByName("bus-fx")
 	level, _ := proto.ParamByName("level")
@@ -246,25 +246,30 @@ func TestADoubleTapFromTheBrowserIsolatesAPadAndUndoesTheMute(t *testing.T) {
 		r.s.press("r")
 		return r.s.m().snap.Pads[pad(t, name).Index()].Params["bus-fx"]
 	}
-	// The first tap of a double tap mutes (level 0 on the unit), the second says "solo".
-	r.web(`{"a":"mute","i":0}`)
-	if levelOf(t, r, "A1") != 0 {
-		t.Fatal("the first tap did not mute")
-	}
+	// A tap isolates; another tap on the pad brings everything back.
 	r.web(`{"a":"solo","i":0}`)
-	if got := levelOf(t, r, "A1"); got != 100 {
-		t.Errorf("the double tap left A1 at level %d, want 100", got)
-	}
 	if busOf("A1") != 1 || busOf("A2") != 0 || busOf("A3") != 2 {
 		t.Errorf("buses %d %d %d, want 1 0 2", busOf("A1"), busOf("A2"), busOf("A3"))
 	}
 	if f := w.last(t).Focus; !f.On || f.Dry != 1 {
 		t.Errorf("focus %+v", f)
 	}
-	// Again: everything goes back.
 	r.web(`{"a":"solo","i":0}`)
 	if busOf("A1") != 1 || busOf("A2") != 1 || busOf("A3") != 2 || w.last(t).Focus.On {
-		t.Error("the second double tap did not bring the buses back")
+		t.Error("the second tap did not bring the buses back")
+	}
+	// A double tap: the first tap isolates, the second undoes that and mutes.
+	r.web(`{"a":"solo","i":0}`)
+	r.web(`{"a":"mute","i":0,"n":1}`)
+	if busOf("A2") != 1 || w.last(t).Focus.On {
+		t.Error("the double tap left the pad isolated")
+	}
+	if got := levelOf(t, r, "A1"); got != 0 {
+		t.Errorf("the double tap left A1 at level %d, want 0", got)
+	}
+	r.web(`{"a":"mute","i":0}`)
+	if got := levelOf(t, r, "A1"); got != 100 {
+		t.Errorf("A1 at level %d after unmuting, want 100", got)
 	}
 	// A pad that goes to no bus has nothing to isolate.
 	r.web(`{"a":"solo","i":5}`)

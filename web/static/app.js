@@ -82,15 +82,16 @@
     pad(d, i);
   }
   let mixing = false;
-  // A tap mutes the pad (its level goes to 0 and back); two taps in a row make it the only one on its bus.
+  // A tap makes the pad the only one on its bus (and brings the others back when it is alone already); a
+  // second tap in a row mutes it (its level goes to 0 and back) and undoes the isolation of the first.
   // With focus on, the pads are picked: the program decides what a tap means then.
   let lastTap = { i: -1, t: 0 };
   function tap(i) {
     if (state && state.focus && state.focus.on) return send({ a: 'pad', i });
     const now = performance.now();
-    if (lastTap.i === i && now - lastTap.t < 380) { lastTap = { i: -1, t: 0 }; return send({ a: 'solo', i }); }
+    if (lastTap.i === i && now - lastTap.t < 380) { lastTap = { i: -1, t: 0 }; return send({ a: 'mute', i, n: 1 }); }
     lastTap = { i, t: now };
-    send({ a: 'mute', i });
+    send({ a: 'solo', i });
   }
   function pad(el, i) {
     let down = null;
