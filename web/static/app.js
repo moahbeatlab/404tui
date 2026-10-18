@@ -408,7 +408,11 @@
     });
   }
   function openBanks(kind) { bankKind = kind; $('bankT').textContent = BANKS[kind].title; $('bankPick').hidden = false; drawBanks(); }
-  $('bankBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); openBanks('unit'); });
+  $('bankBtn').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const inLp = app.dataset.view === 'looper';
+    openBanks(inLp ? ($('looper').dataset.lp === 'slice' ? 'from' : 'loop') : 'unit');
+  });
   for (const [id, kind] of [['lpBank', 'loop'], ['slBank', 'from'], ['slTBank', 'to']]) {
     const box = $(id).closest('.lpmid');
     box.classList.add('pick');
@@ -470,7 +474,11 @@
     renderLooper(s);
     renderMeters(s.level, s.levelNote);
     set($('bank'), 'textContent', s.bank || '–');
-    set($('bankTop'), 'textContent', (app.dataset.view === 'looper' && s.looper ? s.looper.bank : s.bank) || '–');
+    // In the Looper the chip is the bank the loops go to (in the Slicer: the bank a pad is taken from); elsewhere the unit's bank.
+    const inLp = app.dataset.view === 'looper';
+    const lpPage = $('looper').dataset.lp;
+    set($('bankTop'), 'textContent', (inLp && s.looper ? (lpPage === 'slice' && s.slicer ? s.slicer.bank : s.looper.bank) : s.bank) || '–');
+    set($('bankLbl'), 'textContent', inLp ? (lpPage === 'slice' ? 'FROM' : 'LOOP') : 'BANK');
     set($('bpm'), 'textContent', s.bpm ? s.bpm.toFixed(1) : '–');
     set($('bar'), 'textContent', s.running || s.beat >= 0 ? 'BAR ' + s.bar + ' · BEAT ' + (s.beat + 1) + (s.running ? '' : ' (stopped)') : 'no clock');
     const beats = $('beats').children;

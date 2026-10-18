@@ -133,7 +133,13 @@ func (m Model) sliceJob(row app.PadRow, target proto.PadIndex, o sliceOpts) (tea
 			if info, ok := proto.ParamByName("gate"); ok {
 				_ = unit.SetParam(info.ID, proto.TargetPad(target), 0)
 			}
-			return doneMsg{message: fmt.Sprintf("%s in %d slices → %s (%s)", row.Pad, o.n, target, strings.TrimSpace(name)), reload: true}
+			msg := doneMsg{message: fmt.Sprintf("%s in %d slices → %s (%s), muted: hold it to bring it in", row.Pad, o.n, target, strings.TrimSpace(name)), reload: true}
+			if muteNewPad(unit, target) {
+				msg.muted = []proto.PadIndex{target}
+			} else {
+				msg.message = fmt.Sprintf("%s in %d slices → %s (%s)", row.Pad, o.n, target, strings.TrimSpace(name))
+			}
+			return msg
 		})()
 	}
 }
@@ -213,7 +219,13 @@ func (m Model) slicerPlace() (tea.Model, tea.Cmd) {
 		if info, ok := proto.ParamByName("gate"); ok {
 			_ = unit.SetParam(info.ID, proto.TargetPad(target), 0)
 		}
-		return doneMsg{message: fmt.Sprintf("%s in %d slices → %s (%s)", from, n, target, name), reload: true}
+		msg := doneMsg{message: fmt.Sprintf("%s in %d slices → %s (%s), muted: hold it to bring it in", from, n, target, name), reload: true}
+		if muteNewPad(unit, target) {
+			msg.muted = []proto.PadIndex{target}
+		} else {
+			msg.message = fmt.Sprintf("%s in %d slices → %s (%s)", from, n, target, name)
+		}
+		return msg
 	})
 	if m.looperLater(lpJob{key: "place:" + target.String(), label: "slices → " + target.String(), cmd: cmd}) {
 		m.message = fmt.Sprintf("the slices go on %s on the last beat of the pattern, in %.1f beats", target, m.beatsToLast())

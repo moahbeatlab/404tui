@@ -153,3 +153,5 @@ already says so and is not added twice. An empty pad has no menu.
 In the Slicer, holding a pad (0.5 s) mutes it, in the bank the grid shows (again brings it back); muted pads are striped red. A tap
 chooses the pad. The Looper's settings (bank, bars, delay, gain …) are no longer held up while the unit is busy reading; a command that
 needs the unit says "busy (…)" and why, instead of doing nothing.
+
+The bank chip at the top follows the page: on the Pads and Stage pages it is the unit's bank (BANK), in the Looper it is the bank the loops go to (LOOP), and on the Slicer page it is the bank a pad is taken from (FROM). A pad the Slicer puts on a pad of a bank starts muted (level 0); hold it in the Slicer, or mute it on the Pads page, to bring it in at the level it had.

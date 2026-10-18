@@ -65,6 +65,18 @@ func (m Model) levelMutePad(pad proto.PadIndex) (Model, tea.Cmd) {
 	return m.levelSet(pad, 0)
 }
 
+// muteNewPad puts a pad that just got a sample at level 0, on the unit, for the Slicer's results: they start silent, and a
+// mute (hold the pad, or its tap) brings them in.
+func muteNewPad(unit interface {
+	SetParam(id byte, target proto.Target, value int32) error
+}, pad proto.PadIndex) bool {
+	info, ok := proto.ParamByName("level")
+	if !ok {
+		return false
+	}
+	return unit.SetParam(info.ID, proto.TargetPad(pad), 0) == nil
+}
+
 // lvlMuted says whether a pad was muted from here.
 func (m Model) lvlMuted(pad proto.PadIndex) bool {
 	_, muted := m.lvlWas[pad]

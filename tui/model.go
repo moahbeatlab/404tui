@@ -756,6 +756,8 @@ type (
 		origins *app.Origins
 		// folderUses are the notes of which folders are on which banks, after a restore or a scan.
 		folderUses *app.FolderUses
+		// muted are pads put at level 0 from here: their level is kept, so that a mute brings them back.
+		muted []proto.PadIndex
 	}
 	patternsMsg struct {
 		bank int
@@ -1256,6 +1258,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case doneMsg:
 		m.message = msg.message
+		for _, p := range msg.muted {
+			m.lvlWas[p] = app.DefaultPadLevel
+		}
 		if msg.origins != nil {
 			m.origins = msg.origins
 		}

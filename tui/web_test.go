@@ -461,6 +461,13 @@ func TestTheSlicerOfThePageCutsAPadOntoTheNextFreePad(t *testing.T) {
 	if got := m.snap.Bank(1)[6].Name; !strings.HasPrefix(got, "SLC ") {
 		t.Errorf("B7 holds %q, want the slices", got)
 	}
+	// The result starts muted: its level is 0 and a mute brings it back to the level it had.
+	if row := m.snap.Bank(1)[6]; row.Level != 0 || !m.lvlMuted(row.Pad) {
+		t.Errorf("B7 is not muted: level %d, muted %v", row.Level, m.lvlMuted(row.Pad))
+	}
+	if s := w.last(t).Slicer; len(s.Pads) == 16 && s.Phase != "pick" {
+		t.Errorf("phase %s", s.Phase)
+	}
 	if s = w.last(t).Slicer; s.Phase != "pick" {
 		t.Errorf("still waiting after the slices were placed: %+v", s)
 	}
