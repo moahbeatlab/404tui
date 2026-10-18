@@ -162,14 +162,93 @@
     busEls.push({ w, fx: w.querySelector('.fx'), knobs: [...w.querySelectorAll('.knob i')], slotEls, ctlEls });
   }
 
-  // tabs (portrait)
+  // tabs (portrait), and the switch between Perform and the Looper (the tab in portrait, the button in the top bar)
   const app = $('app');
-  app.dataset.tab = store.get('tab') || 'pads';
-  document.querySelectorAll('#tabs button').forEach((b) => {
-    const sync = () => b.classList.toggle('on', b.dataset.tab === app.dataset.tab);
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); app.dataset.tab = b.dataset.tab; store.set('tab', b.dataset.tab); document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x.dataset.tab === b.dataset.tab)); });
-    sync();
+  app.dataset.tab = store.get('tab') === 'looper' ? 'pads' : (store.get('tab') || 'pads');
+  app.dataset.view = store.get('view') === 'looper' ? 'looper' : 'perform';
+  const tabBtns = document.querySelectorAll('#tabs button');
+  function syncTabs() {
+    tabBtns.forEach((x) => x.classList.toggle('on', app.dataset.view === 'looper' ? x.dataset.tab === 'looper' : x.dataset.tab === app.dataset.tab));
+    $('viewBtn').textContent = app.dataset.view === 'looper' ? 'PERFORM' : 'LOOPER';
+    $('viewBtn').classList.toggle('on', app.dataset.view === 'looper');
+  }
+  function setView(v) { app.dataset.view = v; store.set('view', v); syncTabs(); }
+  tabBtns.forEach((b) => b.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (b.dataset.tab === 'looper') return setView('looper');
+    app.dataset.tab = b.dataset.tab; store.set('tab', b.dataset.tab); setView('perform');
+  }));
+  $('viewBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); setView(app.dataset.view === 'looper' ? 'perform' : 'looper'); });
+  syncTabs();
+
+  // ---- the Looper ----
+  const lpGrid = $('lpgrid');
+  const lpPads = [];
+  let lpSel = -1, lpAsk = 0, lpAskT = 0;
+  for (let i = 0; i < 16; i++) {
+    const d = document.createElement('div');
+    d.className = 'lpad';
+    d.innerHTML = '<b></b><span></span>';
+    d.addEventListener('pointerdown', (e) => { e.preventDefault(); lpSel = lpSel === i ? -1 : i; lpAsk = 0; render(); });
+    lpGrid.appendChild(d);
+    lpPads.push({ d, n: d.children[0], nm: d.children[1] });
+  }
+  const press = (id, fn) => $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); if (navigator.vibrate) navigator.vibrate(8); });
+  press('lpArm', () => send({ a: 'lparm' }));
+  press('lpPrev', () => send({ a: 'lpbank', n: -1 }));
+  press('lpNext', () => send({ a: 'lpbank', n: 1 }));
+  press('lpBars', () => send({ a: 'lpbars' }));
+  press('lpDm', () => send({ a: 'lpdelay', n: -5 }));
+  press('lpDp', () => send({ a: 'lpdelay', n: 5 }));
+  press('lpPat', () => send({ a: 'lppattern' }));
+  press('lpDel', () => {
+    const p = state && state.looper && state.looper.pads[lpSel];
+    if (!p || !p.has) return;
+    if (lpAsk !== lpSel + 1) { lpAsk = lpSel + 1; clearTimeout(lpAskT); lpAskT = setTimeout(() => { lpAsk = 0; render(); }, 3000); return render(); }
+    lpAsk = 0; send({ a: 'lpdel', i: lpSel }); lpSel = -1; render();
   });
+  const PHASE = { idle: 'READY', starting: 'STARTING…', armed: 'ARMED', recording: 'REC', saving: 'SAVING…' };
+  function renderLooper(s) {
+    const l = s.looper;
+    if (!l) return;
+    const busy = l.phase !== 'idle';
+    const target = l.target || '';
+    const run = l.phase === 'starting' || l.phase === 'armed' || l.phase === 'recording';
+    const st = $('lpStatus');
+    st.dataset.phase = l.phase;
+    set($('lpPhase'), 'textContent', l.phase === 'recording' ? '● REC ' + l.bar + '/' + l.of : PHASE[l.phase] || l.phase);
+    set($('lpSub'), 'textContent', l.phase === 'idle' ? (target ? l.bars + (l.bars === 1 ? ' bar' : ' bars') + ' from the next bar 1 → ' + target : 'bank ' + l.bank + ' is full: delete a loop')
+      : l.phase === 'armed' ? 'bar 1 in ' + l.left.toFixed(1) + ' beats → ' + target
+      : target ? '→ ' + target : '');
+    set($('lpArmT'), 'textContent', run ? 'CANCEL' : l.phase === 'saving' ? 'SAVING…' : 'ARM');
+    cls($('lpArm'), 'on', run);
+    $('lpArm').disabled = l.phase === 'saving' || (!run && !target);
+    set($('lpBank'), 'textContent', l.bank);
+    set($('lpBarsT'), 'textContent', l.bars + (l.bars === 1 ? ' BAR' : ' BARS'));
+    set($('lpDelay'), 'textContent', l.delay + ' ms');
+    for (const id of ['lpPrev', 'lpNext', 'lpBars']) $(id).disabled = busy;
+    set($('lpPatS'), 'textContent', !l.known ? 'reading…' : l.pattern ? 'pattern ' + l.pattern + ' plays all 16 pads ✓' : 'no pattern with all 16 pads');
+    cls($('lpPat'), 'warn', l.known && !l.pattern);
+    const sel = l.pads[lpSel];
+    $('lpDel').disabled = !sel || !sel.has;
+    const asking = lpAsk === lpSel + 1 && sel && sel.has;
+    cls($('lpDel'), 'danger', asking);
+    set($('lpDelT'), 'textContent', asking ? 'TAP AGAIN TO DELETE' : 'DELETE');
+    set($('lpDelS'), 'textContent', sel ? (sel.has ? 'pad ' + sel.n + ' ' + sel.name : 'pad ' + sel.n + ' is empty') : 'tap a pad first');
+    l.pads.forEach((p, i) => {
+      const e = lpPads[i];
+      set(e.n, 'textContent', p.n);
+      set(e.nm, 'textContent', p.has ? p.name : p.target ? 'next' : '');
+      cls(e.d, 'has', p.has); cls(e.d, 'target', p.target && !p.has); cls(e.d, 'sel', i === lpSel);
+    });
+    // The mark in the top bar, in every view.
+    const b = $('lpBadge');
+    b.hidden = !busy;
+    if (busy) {
+      set(b, 'textContent', l.phase === 'recording' ? '● REC ' + l.bar + '/' + l.of : l.phase === 'armed' ? 'ARMED' : l.phase === 'saving' ? 'SAVING' : '…');
+      b.dataset.phase = l.phase;
+    }
+  }
 
   // ---- choosing the pattern that plays now or next ----
   let picking = 0;
@@ -221,8 +300,9 @@
     if (!s) return;
     if (ws && ws.readyState === 1 && rtt !== null) setConn(s.unit ? 'ok' : 'nounit', (s.unit ? '' : 'no unit · ') + rtt + ' ms');
     $('waiting').hidden = s.unit;
+    renderLooper(s);
     set($('bank'), 'textContent', s.bank || '–');
-    set($('bankTop'), 'textContent', s.bank || '–');
+    set($('bankTop'), 'textContent', (app.dataset.view === 'looper' && s.looper ? s.looper.bank : s.bank) || '–');
     set($('bpm'), 'textContent', s.bpm ? s.bpm.toFixed(1) : '–');
     set($('bar'), 'textContent', s.running || s.beat >= 0 ? 'BAR ' + s.bar + ' · BEAT ' + (s.beat + 1) + (s.running ? '' : ' (stopped)') : 'no clock');
     const beats = $('beats').children;

@@ -112,26 +112,16 @@ func (m Model) looperKey(name string) (tea.Model, tea.Cmd) {
 	switch name {
 	case "a", "enter", " ", "space":
 		return m.looperArm()
-	case "[", "]":
-		if lp.phase != lpIdle {
-			m.message = "the bank cannot change while a take is on"
-			return m, nil
-		}
-		m.mem.LooperBank = (m.loopBank() + map[string]int{"[": proto.Banks - 1, "]": 1}[name]) % proto.Banks
-		m.message = fmt.Sprintf("loops go to bank %c", 'A'+m.loopBank())
-		return m, m.wanted()
+	case "[":
+		return m.looperBankStep(-1)
+	case "]":
+		return m.looperBankStep(1)
 	case "b":
-		if lp.phase != lpIdle {
-			m.message = "the length cannot change while a take is on"
-			return m, nil
-		}
-		i := slices.Index(loopBarChoices, m.loopBars())
-		m.mem.LooperBars = loopBarChoices[(i+1)%len(loopBarChoices)]
-		m.message = fmt.Sprintf("a loop is %s long", plural(m.mem.LooperBars, "bar"))
-	case ",", ".":
-		step := map[string]int{",": -5, ".": 5}[name]
-		m.mem.LooperDelay = clamp(m.mem.LooperDelay+step, 0, 500)
-		m.message = fmt.Sprintf("the recording is %d ms behind the clock: loops are taken that much later from the recording", m.mem.LooperDelay)
+		return m.looperBarsNext()
+	case ",":
+		return m.looperDelayStep(-5)
+	case ".":
+		return m.looperDelayStep(5)
 	case "h", "left":
 		lp.cursor = clamp(lp.cursor-1, 0, 15)
 	case "l", "right":
@@ -143,26 +133,69 @@ func (m Model) looperKey(name string) (tea.Model, tea.Cmd) {
 	case "p":
 		return m.looperPattern()
 	case "d":
-		pad := m.snap.Bank(m.loopBank())[lp.cursor]
-		if !pad.HasSample {
-			m.message = fmt.Sprintf("%s holds no sample", pad.Pad)
+		row := m.snap.Bank(m.loopBank())[lp.cursor]
+		if !row.HasSample {
+			m.message = fmt.Sprintf("%s holds no sample", row.Pad)
 			return m, nil
 		}
 		if ask != lp.cursor {
 			lp.delAsk = lp.cursor
-			m.message = fmt.Sprintf("d again deletes %s %s (its note in the pattern stays, silent)", pad.Pad, pad.Name)
+			m.message = fmt.Sprintf("d again deletes %s %s (its note in the pattern stays, silent)", row.Pad, row.Name)
 			return m, nil
 		}
-		unit, target := m.unit, pad.Pad
-		m.busy = "deleting " + target.String()
-		return m, m.edit(func() tea.Msg {
-			if failed := app.DeletePads(unit, []proto.PadIndex{target}); len(failed) > 0 {
-				return doneMsg{message: "not deleted: " + strings.Join(failed, ", "), reload: true}
-			}
-			return doneMsg{message: fmt.Sprintf("%s deleted", target), reload: true}
-		})
+		return m.looperDelete(lp.cursor)
 	}
 	return m, nil
+}
+
+// looperBankStep moves the bank the loops go to, up or down.
+func (m Model) looperBankStep(dir int) (tea.Model, tea.Cmd) {
+	if m.looper().phase != lpIdle {
+		m.message = "the bank cannot change while a take is on"
+		return m, nil
+	}
+	m.mem.LooperBank = (m.loopBank() + dir + proto.Banks) % proto.Banks
+	m.message = fmt.Sprintf("loops go to bank %c", 'A'+m.loopBank())
+	return m, m.wanted()
+}
+
+// looperBarsNext goes to the next length of a loop.
+func (m Model) looperBarsNext() (tea.Model, tea.Cmd) {
+	if m.looper().phase != lpIdle {
+		m.message = "the length cannot change while a take is on"
+		return m, nil
+	}
+	i := slices.Index(loopBarChoices, m.loopBars())
+	m.mem.LooperBars = loopBarChoices[(i+1)%len(loopBarChoices)]
+	m.message = fmt.Sprintf("a loop is %s long", plural(m.mem.LooperBars, "bar"))
+	return m, nil
+}
+
+// looperDelayStep changes how many milliseconds the recording is behind the clock.
+func (m Model) looperDelayStep(step int) (tea.Model, tea.Cmd) {
+	m.mem.LooperDelay = clamp(m.mem.LooperDelay+step, 0, 500)
+	m.message = fmt.Sprintf("the recording is %d ms behind the clock: loops are taken that much later from the recording", m.mem.LooperDelay)
+	return m, nil
+}
+
+// looperDelete deletes the sample of a pad (0 to 15) of the bank.
+func (m Model) looperDelete(i int) (tea.Model, tea.Cmd) {
+	if i < 0 || i > 15 {
+		return m, nil
+	}
+	row := m.snap.Bank(m.loopBank())[i]
+	if !row.HasSample {
+		m.message = fmt.Sprintf("%s holds no sample", row.Pad)
+		return m, nil
+	}
+	unit, target := m.unit, row.Pad
+	m.busy = "deleting " + target.String()
+	return m, m.edit(func() tea.Msg {
+		if failed := app.DeletePads(unit, []proto.PadIndex{target}); len(failed) > 0 {
+			return doneMsg{message: "not deleted: " + strings.Join(failed, ", "), reload: true}
+		}
+		return doneMsg{message: fmt.Sprintf("%s deleted", target), reload: true}
+	})
 }
 
 // looperArm starts a take: the recorder comes up now, and the loop begins on the next bar 1.

@@ -1826,7 +1826,7 @@ func (m *Model) wanted() tea.Cmd {
 			return m.loadPreview(slot)
 		}
 	}
-	if m.section == secLooper && m.patterns[m.loopBank()] == nil && !m.stripBusy {
+	if (m.section == secLooper || m.web != nil) && m.patterns[m.loopBank()] == nil && !m.stripBusy {
 		m.stripBusy = true
 		return m.loadPatternsQuietly(m.loopBank())
 	}

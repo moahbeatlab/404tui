@@ -57,6 +57,33 @@ type webState struct {
 	// Patterns are the 16 slots of the bank, to choose what plays now and next.
 	Patterns []webPattern `json:"patterns"`
 	Version  string       `json:"version"`
+	Looper   webLooper    `json:"looper"`
+}
+
+// webLooper is the Looper: where the loops go, and how a take is going.
+type webLooper struct {
+	Bank  string `json:"bank"`
+	Bars  int    `json:"bars"`
+	Delay int    `json:"delay"` // ms
+	// Phase is idle, starting, armed, recording or saving; Bar of Of is where a recording is; Left the beats until
+	// bar 1 while it waits.
+	Phase  string  `json:"phase"`
+	Bar    int     `json:"bar"`
+	Of     int     `json:"of"`
+	Left   float64 `json:"left"`
+	Target string  `json:"target"` // the pad the next loop goes on, "" when the bank is full
+	// Pattern is the number of the pattern of the bank in which all 16 pads play, 0 when there is none (or it is
+	// not read yet: Known says which).
+	Pattern int          `json:"pattern"`
+	Known   bool         `json:"known"`
+	Pads    []webLoopPad `json:"pads"`
+}
+
+type webLoopPad struct {
+	N      int    `json:"n"`
+	Name   string `json:"name"`
+	Has    bool   `json:"has"`
+	Target bool   `json:"target"`
 }
 
 type webPad struct {
@@ -165,6 +192,7 @@ func (m Model) webSnapshot() webState {
 	if m.iso != nil {
 		s.Focus = webFocus{On: true, Multi: m.iso.multi, Dry: len(m.iso.was)}
 	}
+	s.Looper = m.webLooper()
 	sc := m.scenes()
 	for b := range sc.bus {
 		bs := &sc.bus[b]
@@ -199,6 +227,51 @@ func (m Model) webSnapshot() webState {
 		s.Fx[b] = fx
 	}
 	return s
+}
+
+// webLooper is the Looper for the page.
+func (m Model) webLooper() webLooper {
+	bank := m.loopBank()
+	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), Delay: m.mem.LooperDelay, Phase: "idle", Of: m.loopBars(), Pads: []webLoopPad{}}
+	free, ok := m.loopFreePad()
+	if ok {
+		l.Target = free.String()
+	}
+	if lp := m.lp; lp != nil {
+		length := m.loopBars() * ticksPerBar
+		switch lp.phase {
+		case lpStarting:
+			l.Phase = "starting"
+		case lpArmed:
+			l.Phase = "armed"
+			if m.clock != nil {
+				l.Left = math.Round(float64((length-m.clock.ticks%length)%length)/24*10) / 10
+			}
+		case lpRecording:
+			l.Phase = "recording"
+			if m.clock != nil {
+				l.Bar = min((m.clock.ticks-lp.startTick)/ticksPerBar+1, m.loopBars())
+			}
+		case lpSaving:
+			l.Phase = "saving"
+		}
+		if lp.phase != lpIdle {
+			l.Target = lp.target.String()
+		}
+	}
+	if rows := m.patterns[bank]; rows != nil {
+		l.Known = true
+		for i, r := range rows {
+			if r.Exists && len(r.Pads) == proto.PadsPerBank {
+				l.Pattern = i + 1
+				break
+			}
+		}
+	}
+	for i, row := range m.snap.Bank(bank) {
+		l.Pads = append(l.Pads, webLoopPad{N: i + 1, Name: row.Name, Has: row.HasSample, Target: l.Target == row.Pad.String()})
+	}
+	return l
 }
 
 // publishWeb sends the state to the browsers.
@@ -270,6 +343,24 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("%s kept on %s: hold it again to let it go", pad, busName(m.busOf(pad)))
 		nm, cmd := m.setIsolated(keep)
 		return nm, tea.Batch(undo, cmd)
+	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel":
+		if m.snap == nil || m.busy != "" {
+			return m, nil
+		}
+		switch c.A {
+		case "lparm":
+			return m.looperArm()
+		case "lpbank":
+			return m.looperBankStep(clamp(c.N, -1, 1))
+		case "lpbars":
+			return m.looperBarsNext()
+		case "lpdelay":
+			return m.looperDelayStep(clamp(c.N, -50, 50))
+		case "lppattern":
+			return m.looperPattern()
+		default:
+			return m.looperDelete(c.I)
+		}
 	case "level":
 		nm, cmd := m.levelSet2(c.I, int32(c.Value))
 		return nm, cmd

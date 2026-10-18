@@ -102,3 +102,21 @@ network carries: a slow phone skips states), and takes commands as JSON: `{"a":"
 `solo`, `level` (`i`, `v` 0–127), `focus`, `rec`, `motion` (`bus`, `slot`), `mclear`, `mspeed`, `mrev`
 (`bus`), `bars` (`n`), `dub`, `cue` (`i`, `n` 1 now, 2 next), `nextnow`, `clearnext`. The code is in
 `web/` (server and page) and `tui/web.go` (state and commands).
+
+## Looper
+
+The **LOOPER** tab in portrait (the button at the top right in landscape) is the Looper of the program
+([looper.md](looper.md)), for the phone: the 16 pads of the bank the loops go to, with the next free pad framed.
+
+| Button | Does |
+| --- | --- |
+| **ARM** | arms a take: it records the bars set from the next bar 1 and puts the loop on the framed pad; the button then says **CANCEL** |
+| ◂ ▸ | the bank the loops go to |
+| **n BARS** | tap for the next length: 1, 2, 4, 8 |
+| − + | how far the recording is behind the clock, in steps of 5 ms |
+| **MAKE PATTERN** | writes the pattern of the bank in which all 16 pads start on beat 1 (it says whether there is one) |
+| a pad, then **DELETE** | deletes the sample of the pad (tap DELETE twice) |
+
+The status shows READY, ARMED (with the beats left until bar 1), REC with the bar and SAVING, and while a take is
+on a mark next to the clock says so in every view. The page needs the same as the program: the unit's MIDI clock
+and ffmpeg or sox on the computer that runs `sp404 serve`.

@@ -34,6 +34,8 @@
       <div id="beats"><i></i><i></i><i></i><i></i></div>
       <div id="bar">–</div>
     </div>
+    <div id="lpBadge" class="lpbadge" hidden></div>
+    <button id="viewBtn" class="viewbtn">LOOPER</button>
     <div id="conn" class="conn"><i></i><b id="connText">…</b></div>
   </header>
 
@@ -69,10 +71,32 @@
     <div id="buses"></div>
   </section>
 
+  <section id="looper" class="panel">
+    <div class="lpctl">
+      <div id="lpStatus" class="lpstatus"><b id="lpPhase">READY</b><span id="lpSub"></span></div>
+      <button id="lpArm" class="big lparm"><span id="lpArmT">ARM</span></button>
+      <div class="lprow">
+        <button id="lpPrev" class="big">◂</button>
+        <div class="lpmid"><small>BANK</small><b id="lpBank">A</b></div>
+        <button id="lpNext" class="big">▸</button>
+      </div>
+      <button id="lpBars" class="big"><span id="lpBarsT">2 BARS</span><small>tap: 1 · 2 · 4 · 8</small></button>
+      <div class="lprow">
+        <button id="lpDm" class="big">−</button>
+        <div class="lpmid"><small>DELAY</small><b id="lpDelay">0 ms</b></div>
+        <button id="lpDp" class="big">+</button>
+      </div>
+      <button id="lpPat" class="big"><span>MAKE PATTERN</span><small id="lpPatS">…</small></button>
+      <button id="lpDel" class="big"><span id="lpDelT">DELETE</span><small id="lpDelS">tap a pad first</small></button>
+    </div>
+    <div id="lpgrid"></div>
+  </section>
+
   <nav id="tabs">
     <button data-tab="pads" class="on">PADS</button>
     <button data-tab="motion">MOTION</button>
     <button data-tab="rail">STAGE</button>
+    <button data-tab="looper">LOOPER</button>
   </nav>
   <div id="toast"></div>
 </div>
