@@ -116,7 +116,10 @@
           <button id="slOrder" class="big"><span id="slOrderT">SHUFFLE</span><small>order of the slices</small></button>
           <button id="slDiv" class="big"><span id="slDivT">OWN LENGTH</span><small>or on a 1/4 · 1/8 · 1/16 grid</small></button>
         </div>
-        <button id="slSwing" class="big"><span id="slSwingT">SWING: OFF</span><small>late steps (on a grid)</small></button>
+        <div class="lprow2">
+          <button id="slSwing" class="big"><span id="slSwingT">SWING: OFF</span><small>late steps (on a grid)</small></button>
+          <button id="slMangle" class="big"><span id="slMangleT">MANGLE</span><small>dice for every slice</small></button>
+        </div>
         <div class="lpinfo">Hold a pad to mute it (again to bring it back). SLICE makes the slices, then you tap the pad of any bank they go on (TO picks the bank) and press PLACE. They are ungated and play from the next round of the pattern.</div>
       </div>
       <div id="lpSet" class="lpgroup">
@@ -156,6 +159,15 @@
   <div class="card">
     <div class="phead"><b id="bankT">Bank</b><button id="bankX" aria-label="Close">✕</button></div>
     <div id="bankGrid"></div>
+  </div>
+</div>
+
+<div id="manglePick" class="modal" hidden>
+  <div class="card">
+    <div class="phead"><b>Mangle</b><button id="mangleX" aria-label="Close">✕</button></div>
+    <div id="mangleRows"></div>
+    <small class="mnote">Every SLICE rolls these dice again for each slice: nothing here is kept in the pad, only in the new sample, and it stays as long as the old one.</small>
+    <button id="mangleReset" class="big">ALL OFF</button>
   </div>
 </div>
 

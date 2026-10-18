@@ -675,3 +675,59 @@ func TestTheLooperSettingsDoNotWaitForTheUnit(t *testing.T) {
 		t.Errorf("a command that needs the unit did not say why it waits: %q", got)
 	}
 }
+
+func TestTheDiceOfTheSlicerKeepTheLengthAndChangeTheSound(t *testing.T) {
+	src := formats.Sample{Channels: 1}
+	for i := 0; i < 48000; i++ {
+		src.Samples = append(src.Samples, int16(1000+i/4000*500))
+	}
+	plain, _ := sliceSample(src, sliceOpts{n: 8, order: slOrderInOrder})
+	if plain.Frames() != src.Frames() {
+		t.Fatalf("plain slicing is %d frames, the sample %d", plain.Frames(), src.Frames())
+	}
+	for i := range src.Samples {
+		// The ends of a slice have a short fade against clicks; inside, it is the sample.
+		if at := i % 6000; at > 400 && at < 5600 && plain.Samples[i] != src.Samples[i] {
+			t.Fatalf("slices in order differ from the sample at frame %d", i)
+		}
+	}
+	for _, o := range []sliceOpts{
+		{n: 8, order: slOrderShuffle, mangle: mangleOpts{drop: 75}},
+		{n: 8, order: slOrderInOrder, mangle: mangleOpts{rev: 100}},
+		{n: 16, order: slOrderRandom, mangle: mangleOpts{pitch: 12, roll: 100, fade: 50}},
+		{n: 8, order: slOrderShuffle, div: 8, bpm: 120, mangle: mangleOpts{drop: 25, rev: 50, pitch: 5, roll: 50, human: 100, fade: 10}},
+	} {
+		out, order := sliceSample(src, o)
+		if out.Frames() != src.Frames() {
+			t.Errorf("%+v: %d frames, want %d", o, out.Frames(), src.Frames())
+		}
+		if len(order) == 0 {
+			t.Errorf("%+v: no order", o)
+		}
+		same := true
+		for i := range src.Samples {
+			if at := i % 3000; at > 400 && at < 2600 && out.Samples[i] != src.Samples[i] {
+				same = false
+				break
+			}
+		}
+		if same {
+			t.Errorf("%+v: the dice changed nothing", o)
+		}
+	}
+}
+
+func TestTheDiceCanBeSetFromThePage(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	r.web(`{"a":"slmang","i":0,"n":1}`)
+	r.web(`{"a":"slmang","i":2,"n":-1}`)
+	s := w.last(t).Slicer
+	if len(s.Mangle) != 6 || s.Mangle[0] != 25 || s.Mangle[2] != 12 || s.Active != 2 {
+		t.Fatalf("dice %v, active %d", s.Mangle, s.Active)
+	}
+	r.web(`{"a":"slmang","i":6,"n":0}`)
+	if s = w.last(t).Slicer; s.Active != 0 {
+		t.Errorf("not all off: %v", s.Mangle)
+	}
+}

@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"math/rand"
+	"slices"
 	"strings"
 	"time"
 
@@ -39,15 +40,49 @@ type sliceOpts struct {
 	// the percent of the late steps.
 	div, swing int
 	bpm        float64
+	mangle     mangleOpts
+}
+
+// mangleOpts are the dice that are rolled for every slice: what share of the slices drop out, play backwards, get a pitch (up
+// or down by up to pitch semitones) or a roll, how much the loudness and the timing wander, and the fades at the ends of the slices.
+type mangleOpts struct {
+	drop, rev, pitch, roll, human, fade int
+}
+
+// The choices of each die, in the order of the page's list.
+var (
+	mangleDrop  = []int{0, 25, 50, 75}
+	mangleRev   = []int{0, 25, 50, 100}
+	manglePitch = []int{0, 2, 5, 12}
+	mangleRoll  = []int{0, 25, 50, 100}
+	mangleHuman = []int{0, 25, 50, 100}
+	mangleFade  = []int{0, 10, 50, 200}
+	mangleLists = [][]int{mangleDrop, mangleRev, manglePitch, mangleRoll, mangleHuman, mangleFade}
+)
+
+func (o mangleOpts) values() []int {
+	return []int{o.drop, o.rev, o.pitch, o.roll, o.human, o.fade}
+}
+
+func (o mangleOpts) active() int {
+	n := 0
+	for _, v := range o.values() {
+		if v != 0 {
+			n++
+		}
+	}
+	return n
 }
 
 // sliceSample cuts a sample and puts the slices back together. Without a grid it is as long as the sample, with a grid
-// it has as many steps as it takes to be as long.
+// it has as many steps as it takes to be as long. Whatever the dice do, the result has the length of the sample, so that it
+// still fits the pattern. It also says in which order the slices play.
 func sliceSample(src formats.Sample, o sliceOpts) (formats.Sample, []int) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	sl := formats.NewSlicing(src.Frames(), max(o.n, 1))
+	n := max(o.n, 1)
+	sl := formats.NewSlicing(src.Frames(), n)
 	if o.randomCut {
-		sl.DivideRandom(max(o.n, 1), rng)
+		sl.DivideRandom(n, rng)
 	}
 	sl.Seed = rng.Int63()
 	switch o.order {
@@ -59,8 +94,40 @@ func sliceSample(src formats.Sample, o sliceOpts) (formats.Sample, []int) {
 			}
 		}
 	case slOrderRandom:
-		sl.Mode = formats.ModeRandom
+		// Picks by chance, made here so that the dice below work in every order.
+		sl.Order = make([]int, len(sl.Slices))
+		for i := range sl.Order {
+			sl.Order[i] = rng.Intn(len(sl.Slices))
+		}
 	}
+	mg := o.mangle
+	mod := src
+	if mg.pitch > 0 {
+		// A pitched slice is as long as its slot again: shorter ones end in silence, longer ones are cut, so that the
+		// rhythm stays where it is.
+		mod = formats.Sample{Channels: src.Channels, Samples: slices.Clone(src.Samples)}
+	}
+	ch := max(src.Channels, 1)
+	for i := range sl.Slices {
+		sc := &sl.Slices[i]
+		sc.Chance = 100 - mg.drop
+		sc.Reverse = rng.Intn(100) < mg.rev
+		sc.Attack, sc.Release = mg.fade, mg.fade
+		if mg.roll > 0 && rng.Intn(100) < mg.roll {
+			sc.Roll = formats.Rolls[1+rng.Intn(len(formats.Rolls)-1)]
+		}
+		if mg.pitch > 0 {
+			if p := rng.Intn(2*mg.pitch+1) - mg.pitch; p != 0 {
+				from, to := min(sc.Start, src.Frames()), min(sc.End, src.Frames())
+				part := formats.Sample{Channels: src.Channels, Samples: src.Samples[from*ch : to*ch]}.Pitched(p)
+				region := mod.Samples[from*ch : to*ch]
+				clear(region)
+				copy(region, part.Samples)
+			}
+		}
+	}
+	sl.Humanize = mg.human
+	sl.Mode = formats.ModeOrder
 	steps := len(sl.Order)
 	if o.div > 0 && o.bpm > 0 {
 		sl.Division, sl.BPM, sl.Swing = o.div, o.bpm, o.swing
@@ -68,12 +135,34 @@ func sliceSample(src formats.Sample, o sliceOpts) (formats.Sample, []int) {
 			steps = max((src.Frames()+step/2)/step, 1)
 		}
 	}
-	out, placed := formats.Render(src, sl, formats.NewSequencer(sl), steps)
+	out, placed := formats.Render(mod, sl, formats.NewSequencer(sl), steps)
 	order := make([]int, 0, len(placed))
 	for _, pl := range placed {
 		order = append(order, pl.Slice+1)
 	}
-	return out, order
+	return fitFrames(out, src.Frames()), order
+}
+
+// fitFrames makes a sample exactly frames long: the end is cut (with a short fade) or silence is added.
+func fitFrames(s formats.Sample, frames int) formats.Sample {
+	ch := max(s.Channels, 1)
+	switch have := s.Frames(); {
+	case have == frames:
+		return s
+	case have > frames:
+		s.Samples = s.Samples[:frames*ch]
+		fade := min(64, frames)
+		for f := 0; f < fade; f++ {
+			g := float64(f) / float64(fade)
+			for c := 0; c < ch; c++ {
+				i := (frames-1-f)*ch + c
+				s.Samples[i] = int16(float64(s.Samples[i]) * g)
+			}
+		}
+	default:
+		s.Samples = append(s.Samples, make([]int16, (frames-have)*ch)...)
+	}
+	return s
 }
 
 // orderText says in which order the slices play, by their numbers (1 is the first of the original), as far as it fits.
@@ -387,6 +476,8 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 		m.mem.SlicerTarget = (cur+n+proto.Banks)%proto.Banks + 1
 	case "slslices":
 		m.mem.SlicerSlices = cycleInt(slSliceChoices, m.slSlices(), 1)
+	case "slmang":
+		m = m.slMangle(i, n)
 	case "slcut":
 		m.mem.SlicerRandomCut = !m.mem.SlicerRandomCut
 	case "slorder":
@@ -407,7 +498,48 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 
 // sliceOptions are the settings of the page's Slicer, for a pad of a bank.
 func (m Model) sliceOptions(bank int) sliceOpts {
-	return sliceOpts{n: m.slSlices(), randomCut: m.mem.SlicerRandomCut, order: m.slOrder(), div: m.mem.SlicerDiv, swing: m.mem.SlicerSwing, bpm: m.slBPM(bank)}
+	return sliceOpts{n: m.slSlices(), randomCut: m.mem.SlicerRandomCut, order: m.slOrder(), div: m.mem.SlicerDiv, swing: m.mem.SlicerSwing, bpm: m.slBPM(bank),
+		mangle: m.mangleOptions()}
+}
+
+// mangleOptions are the dice as they are set, each one a value of its list.
+func (m Model) mangleOptions() mangleOpts {
+	pick := func(list []int, v int) int {
+		if slices.Contains(list, v) {
+			return v
+		}
+		return 0
+	}
+	return mangleOpts{drop: pick(mangleDrop, m.mem.SlicerDrop), rev: pick(mangleRev, m.mem.SlicerRev), pitch: pick(manglePitch, m.mem.SlicerPitch),
+		roll: pick(mangleRoll, m.mem.SlicerRoll), human: pick(mangleHuman, m.mem.SlicerHuman), fade: pick(mangleFade, m.mem.SlicerFade)}
+}
+
+// slMangle steps a die (field 0 to 5) up or down its list; field 6 puts them all back to 0.
+func (m Model) slMangle(field, dir int) Model {
+	if field == 6 {
+		m.mem.SlicerDrop, m.mem.SlicerRev, m.mem.SlicerPitch, m.mem.SlicerRoll, m.mem.SlicerHuman, m.mem.SlicerFade = 0, 0, 0, 0, 0, 0
+		return m
+	}
+	if field < 0 || field >= len(mangleLists) {
+		return m
+	}
+	cur := m.mangleOptions().values()[field]
+	next := cycleInt(mangleLists[field], cur, dir)
+	switch field {
+	case 0:
+		m.mem.SlicerDrop = next
+	case 1:
+		m.mem.SlicerRev = next
+	case 2:
+		m.mem.SlicerPitch = next
+	case 3:
+		m.mem.SlicerRoll = next
+	case 4:
+		m.mem.SlicerHuman = next
+	case 5:
+		m.mem.SlicerFade = next
+	}
+	return m
 }
 
 // webSlicer is the Slicer for the page.
@@ -433,6 +565,9 @@ type webSlicer struct {
 	Played string `json:"played"`
 	// Later says what waits for the last beat of the pattern.
 	Later string `json:"later"`
+	// Mangle are the dice (drop, reverse, pitch, roll, humanize, fade) and Active how many are not 0.
+	Mangle []int `json:"mangle"`
+	Active int   `json:"active"`
 }
 
 func (m Model) webSlicer() webSlicer {
@@ -441,6 +576,8 @@ func (m Model) webSlicer() webSlicer {
 	s := webSlicer{Bank: string(rune('A' + bank)), Pad: pad, Pads: []webLoopPad{}, Slices: m.slSlices(), Random: m.mem.SlicerRandomCut,
 		Order: slOrderNames[m.slOrder()], Div: m.mem.SlicerDiv, Swing: m.mem.SlicerSwing, Target: string(rune('A' + tb)), Busy: m.busy != ""}
 	s.Phase, s.Dest, s.Later = "pick", -1, m.laterText()
+	mg := m.mangleOptions()
+	s.Mangle, s.Active = mg.values(), mg.active()
 	if free, ok := m.slFreePad(tb); ok {
 		s.Free = free.String()
 	}

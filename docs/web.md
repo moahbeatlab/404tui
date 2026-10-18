@@ -155,3 +155,5 @@ chooses the pad. The Looper's settings (bank, bars, delay, gain …) are no long
 needs the unit says "busy (…)" and why, instead of doing nothing.
 
 The bank chip at the top follows the page: on the Pads and Stage pages it is the unit's bank (BANK), in the Looper it is the bank the loops go to (LOOP), and on the Slicer page it is the bank a pad is taken from (FROM). A pad the Slicer puts on a pad of a bank starts muted (level 0); hold it in the Slicer, or mute it on the Pads page, to bring it in at the level it had.
+
+The Slicer page has a **MANGLE** button: a list of dice that are rolled for every slice each time SLICE is pressed: DROP-OUTS (slices that stay silent), REVERSE (played backwards), PITCH (each slice up or down by up to 2, 5 or 12 semitones, at random), ROLLS (slices that stutter 2 to 8 times), HUMANIZE (loudness, and timing on a grid) and FADE (at the ends of every slice). The result always has the length of the original, so it still fits the pattern; a pitched slice keeps its place in the rhythm (a shorter one ends in silence, a longer one is cut).

@@ -472,7 +472,7 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.looperBankSet(c.I)
-	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute":
+	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute", "slmang":
 		return m.slicerCommand(c.A, c.N, c.I)
 	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel", "lpgain", "lpnorm", "lpcal", "lpalign", "lpslices", "lpremix":
 		if m.snap == nil {
@@ -582,5 +582,5 @@ func (m Model) levelSet2(i int, v int32) (Model, tea.Cmd) {
 // lpSettings are the commands of the Looper and the Slicer that only change a setting: they do not wait for the unit.
 var lpSettings = map[string]bool{
 	"lpbank": true, "lpbankset": true, "lpbars": true, "lpdelay": true, "lpgain": true, "lpnorm": true, "lpalign": true, "lpslices": true,
-	"slbank": true, "slbankset": true, "sltbank": true, "sltbankset": true, "slslices": true, "slcut": true, "slorder": true, "sldiv": true, "slswing": true,
+	"slbank": true, "slbankset": true, "sltbank": true, "sltbankset": true, "slslices": true, "slcut": true, "slorder": true, "slmang": true, "sldiv": true, "slswing": true,
 }

@@ -318,6 +318,9 @@
     set($('slDivT'), 'textContent', sl.div ? 'GRID 1/' + sl.div : 'OWN LENGTH');
     set($('slSwingT'), 'textContent', 'SWING: ' + (SWING[sl.swing] || sl.swing + '%'));
     $('slSwing').disabled = !sl.div;
+    set($('slMangleT'), 'textContent', sl.active ? 'MANGLE · ' + sl.active : 'MANGLE');
+    cls($('slMangle'), 'on', sl.active > 0);
+    drawDice();
     const ready = sl.phase === 'ready';
     $('slReady').hidden = !ready;
     set($('slT'), 'textContent', ready ? sl.src : sl.pad >= 0 ? sl.src : 'SLICER');
@@ -382,6 +385,36 @@
       b.dataset.phase = l.phase;
     }
   }
+
+  // ---- the Slicer's dice ----
+  const DICE = [
+    ['DROP-OUTS', 'slices that stay silent', (v) => v + ' %'],
+    ['REVERSE', 'slices played backwards', (v) => v + ' %'],
+    ['PITCH', 'up or down by up to', (v) => '±' + v + ' st'],
+    ['ROLLS', 'slices that stutter', (v) => v + ' %'],
+    ['HUMANIZE', 'loudness and timing wander', (v) => v + ' %'],
+    ['FADE', 'at the ends of every slice', (v) => v + ' ms'],
+  ];
+  const diceEls = [];
+  DICE.forEach(([name, hint], k) => {
+    const r = document.createElement('div');
+    r.className = 'mrow';
+    r.innerHTML = '<span>' + name + '</span><button>−</button><b></b><button>+</button><small>' + hint + '</small>';
+    const [lo, , hi] = [r.children[1], r.children[2], r.children[3]];
+    lo.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'slmang', i: k, n: -1 }); });
+    hi.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'slmang', i: k, n: 1 }); });
+    $('mangleRows').appendChild(r);
+    diceEls.push(r.children[2]);
+  });
+  function drawDice() {
+    const sl = state && state.slicer;
+    if (!sl || !sl.mangle) return;
+    diceEls.forEach((b, k) => { b.textContent = sl.mangle[k] ? DICE[k][2](sl.mangle[k]) : 'off'; b.classList.toggle('on', sl.mangle[k] > 0); });
+  }
+  $('slMangle').addEventListener('pointerdown', (e) => { e.preventDefault(); $('manglePick').hidden = false; drawDice(); });
+  $('mangleX').addEventListener('pointerdown', (e) => { e.preventDefault(); $('manglePick').hidden = true; });
+  $('manglePick').addEventListener('pointerdown', (e) => { if (e.target === $('manglePick')) $('manglePick').hidden = true; });
+  $('mangleReset').addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'slmang', i: 6, n: 0 }); });
 
   // ---- choosing the bank ----
   // The same list serves the unit's bank (the chip at the top), the bank the Looper's loops go to, and the banks of the Slicer.

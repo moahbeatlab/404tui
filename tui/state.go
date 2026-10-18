@@ -74,6 +74,8 @@ type State struct {
 	SlicerDiv       int  `json:"slicerDiv,omitempty"`
 	SlicerSwing     int  `json:"slicerSwing,omitempty"`
 	SlicerTarget    int  `json:"slicerTarget,omitempty"`
+	// The dice of the Slicer (see mangleOpts): drop-outs, reversed, pitch spread, rolls, humanize (percent), fade (ms).
+	SlicerDrop, SlicerRev, SlicerPitch, SlicerRoll, SlicerHuman, SlicerFade int
 	// LooperGain makes a loop louder by that many dB (it can be negative); LooperNormalize makes it as loud as it can be.
 	LooperGain      int  `json:"looperGain,omitempty"`
 	LooperNormalize bool `json:"looperNormalize,omitempty"`
