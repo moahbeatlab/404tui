@@ -750,3 +750,53 @@ func TestTheDiceCanBeSetFromThePage(t *testing.T) {
 		t.Errorf("not all off: %v", s.Mangle)
 	}
 }
+
+func TestAddingAPadToAnEmptyPatternSlot(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	slot := m.snap.Bank(0)[14].Pad
+	if _, exists, _ := m.unit.Stat(formats.PatternPath(1, slot)); exists {
+		t.Skip("the slot holds a pattern")
+	}
+	if !m.snap.Bank(0)[0].HasSample {
+		t.Skip("A1 holds no sample")
+	}
+	// A slot the program guessed has to have a pattern: nothing is made.
+	m.perfNow, m.perfAuto = &slot, true
+	r.s.model = m
+	r.web(`{"a":"padpat","i":0}`)
+	if got := r.s.m().message; !strings.Contains(got, "holds no notes") {
+		t.Errorf("guessed empty slot: %q", got)
+	}
+	if _, exists, _ := m.unit.Stat(formats.PatternPath(1, slot)); exists {
+		t.Fatal("a pattern was made for a slot that was only guessed")
+	}
+	// A slot that was chosen is made.
+	m = r.s.m()
+	m.perfAuto = false
+	r.s.model = m
+	r.web(`{"a":"padpat","i":0}`)
+	if got := r.s.m().message; !strings.Contains(got, "is made now") {
+		t.Fatalf("chosen empty slot: %q", got)
+	}
+	if _, exists, _ := m.unit.Stat(formats.PatternPath(1, slot)); !exists {
+		t.Error("no pattern was made")
+	}
+	_ = w
+}
+
+func TestTheCurrentPatternIsForgottenWhenTheProjectChanges(t *testing.T) {
+	r, _ := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	slot := m.snap.Bank(0)[0].Pad
+	m.perfNow, m.perfNext = &slot, &slot
+	r.s.model = m
+	cur := *m.snap
+	cur.Project = m.snap.Project + 1
+	next, _ := m.Update(loadedMsg{snap: &cur})
+	if nm := next.(Model); nm.perfNow != nil || nm.perfNext != nil {
+		t.Errorf("the pattern of the other project is still current: %v %v", nm.perfNow, nm.perfNext)
+	}
+}

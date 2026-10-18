@@ -419,12 +419,13 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 			m.message = "no pattern is playing or next: choose one first"
 			return m, nil
 		}
-		unit, ops, pad, at := m.unit, m.ops, row.Pad, *slot
+		// A slot the program guessed from what it heard has a pattern; one that was chosen on the page may be empty: it gets a new one.
+		unit, ops, pad, at, bars, create := m.unit, m.ops, row.Pad, *slot, m.loopBars(), !m.perfAuto
 		m.message = fmt.Sprintf("adding %s to pattern %s…", pad, at)
 		return m, func() tea.Msg {
 			ops.Lock()
 			defer ops.Unlock()
-			added, err := app.AddPadNote(unit, at, pad)
+			added, created, err := app.AddPadNote(unit, at, pad, bars, create)
 			if err != nil {
 				return doneMsg{message: fmt.Sprintf("%s was not added to pattern %s: %v", pad, at, err)}
 			}
@@ -432,7 +433,7 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 				return doneMsg{message: fmt.Sprintf("%s is in pattern %s already, on beat 1 for the whole pattern", pad, at)}
 			}
 			detail, derr := app.OpenPattern(unit, at)
-			return patAddedMsg{slot: at, pad: pad, detail: detail, err: derr}
+			return patAddedMsg{slot: at, pad: pad, detail: detail, err: derr, created: created}
 		}
 	case "solo":
 		// A hold on a pad: it keeps its bus and the others on that bus go dry; held again, it lets go (when
