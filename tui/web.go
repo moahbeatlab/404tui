@@ -123,6 +123,7 @@ type webLoopPad struct {
 	Has    bool   `json:"has"`
 	Target bool   `json:"target"`
 	Del    bool   `json:"del"` // waits to be deleted on the last beat
+	Muted  bool   `json:"muted"`
 }
 
 type webPad struct {
@@ -358,7 +359,7 @@ func (m Model) webLooper() webLooper {
 		}
 	}
 	for i, row := range m.snap.Bank(bank) {
-		l.Pads = append(l.Pads, webLoopPad{N: i + 1, Name: row.Name, Has: row.HasSample, Target: l.Target == row.Pad.String(), Del: m.looperQueued(fmt.Sprintf("del:%d", i))})
+		l.Pads = append(l.Pads, webLoopPad{N: i + 1, Name: row.Name, Has: row.HasSample, Target: l.Target == row.Pad.String(), Del: m.looperQueued(fmt.Sprintf("del:%d", i)), Muted: m.lvlMuted(row.Pad)})
 	}
 	l.Later = m.laterText()
 	return l
@@ -467,14 +468,18 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		nm, cmd := m.setIsolated(keep)
 		return nm, tea.Batch(undo, cmd)
 	case "lpbankset":
-		if m.snap == nil || m.busy != "" {
+		if m.snap == nil {
 			return m, nil
 		}
 		return m.looperBankSet(c.I)
-	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset":
+	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute":
 		return m.slicerCommand(c.A, c.N, c.I)
 	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel", "lpgain", "lpnorm", "lpcal", "lpalign", "lpslices", "lpremix":
-		if m.snap == nil || m.busy != "" {
+		if m.snap == nil {
+			return m, nil
+		}
+		if m.busy != "" && !lpSettings[c.A] {
+			m.message = "busy (" + m.busy + "): try again in a moment"
 			return m, nil
 		}
 		switch c.A {
@@ -572,4 +577,10 @@ func (m Model) levelSet2(i int, v int32) (Model, tea.Cmd) {
 	}
 	delete(m.lvlWas, pad)
 	return m.levelSet(pad, v)
+}
+
+// lpSettings are the commands of the Looper and the Slicer that only change a setting: they do not wait for the unit.
+var lpSettings = map[string]bool{
+	"lpbank": true, "lpbankset": true, "lpbars": true, "lpdelay": true, "lpgain": true, "lpnorm": true, "lpalign": true, "lpslices": true,
+	"slbank": true, "slbankset": true, "sltbank": true, "sltbankset": true, "slslices": true, "slcut": true, "slorder": true, "sldiv": true, "slswing": true,
 }

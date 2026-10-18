@@ -149,3 +149,7 @@ Holding a pad (0.4 s) opens a small menu beside it: **ISOLATE** (what a hold alw
 to the pattern that plays (or the next one): one note on beat 1, as long as the whole pattern, so the pad plays through each
 round. Slide the finger onto an option and let go; letting go without sliding isolates. A pad that is in the pattern that way
 already says so and is not added twice. An empty pad has no menu.
+
+In the Slicer, holding a pad (0.5 s) mutes it, in the bank the grid shows (again brings it back); muted pads are striped red. A tap
+chooses the pad. The Looper's settings (bank, bars, delay, gain …) are no longer held up while the unit is busy reading; a command that
+needs the unit says "busy (…)" and why, instead of doing nothing.

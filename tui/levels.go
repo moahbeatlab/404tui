@@ -42,7 +42,15 @@ func (m Model) levelTurn(i, steps int) (Model, tea.Cmd) {
 // levelMute silences a pad, or brings its level back.
 func (m Model) levelMute(i int) (Model, tea.Cmd) {
 	pad, ok := m.levelPad(i)
-	if !ok || m.unit == nil {
+	if !ok {
+		return m, nil
+	}
+	return m.levelMutePad(pad)
+}
+
+// levelMutePad mutes a pad, or brings it back to the level it had.
+func (m Model) levelMutePad(pad proto.PadIndex) (Model, tea.Cmd) {
+	if m.unit == nil {
 		return m, nil
 	}
 	if was, muted := m.lvlWas[pad]; muted {
@@ -55,6 +63,12 @@ func (m Model) levelMute(i int) (Model, tea.Cmd) {
 	}
 	m.lvlWas[pad] = cur
 	return m.levelSet(pad, 0)
+}
+
+// lvlMuted says whether a pad was muted from here.
+func (m Model) lvlMuted(pad proto.PadIndex) bool {
+	_, muted := m.lvlWas[pad]
+	return muted
 }
 
 // levelSet puts a pad's level on the screen and sends it to the unit.

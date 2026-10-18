@@ -413,3 +413,5 @@ button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
   box-shadow: 0 0 0 2px var(--faint), 0 6px 18px #000a; display: grid; place-content: center; gap: 1px; }
 #padMenu button small { font-weight: 500; font-size: 10px; letter-spacing: 0; color: var(--dim); }
 #padMenu button.on { background: var(--accent); color: var(--ink); box-shadow: 0 0 0 3px var(--text); } #padMenu button.on small { color: rgba(0,0,0,.6); }
+.lpad.muted { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--hot) 42%, #000) 0 9px, color-mix(in srgb, var(--hot) 16%, #000) 9px 18px); box-shadow: inset 0 0 0 2px var(--hot); }
+.lpad.muted b, .lpad.muted span { color: #ffd9d9; text-decoration: line-through; }

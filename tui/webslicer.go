@@ -293,12 +293,38 @@ func cycleInt(list []int, cur, dir int) int {
 
 // slicerCommand handles the buttons of the page's Slicer.
 func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
-	if m.snap == nil || m.busy != "" {
+	if m.snap == nil {
+		return m, nil
+	}
+	if m.busy != "" && !lpSettings[act] && act != "slmute" {
+		m.message = "busy (" + m.busy + "): try again in a moment"
 		return m, nil
 	}
 	m.looper() // made here, so that what is chosen stays with the model that goes back
 	bank, pad := m.slSource()
 	lp := m.looper()
+	if act == "slmute" {
+		// Holding a pad mutes it (again brings it back), in the bank the grid shows.
+		grid := bank
+		if lp.slHave {
+			grid = m.slTargetBank()
+		}
+		if i < 0 || i > 15 || !m.snap.Bank(grid)[i].HasSample {
+			return m, nil
+		}
+		pad := m.snap.Bank(grid)[i].Pad
+		was, silent := m.lvlMuted(pad), m.snap.Pads[pad.Index()].Level == 0
+		nm, cmd := m.levelMutePad(pad)
+		switch {
+		case nm.lvlMuted(pad):
+			nm.message = fmt.Sprintf("%s is muted: hold it again to bring it back", pad)
+		case was:
+			nm.message = fmt.Sprintf("%s is back", pad)
+		case silent:
+			nm.message = fmt.Sprintf("%s is silent already (level 0)", pad)
+		}
+		return nm, cmd
+	}
 	if lp.slHave {
 		// The slices wait: the grid is the bank they go to.
 		switch act {
@@ -418,7 +444,7 @@ func (m Model) webSlicer() webSlicer {
 		s.Played = lp.slOrder
 	}
 	for i, row := range m.snap.Bank(grid) {
-		s.Pads = append(s.Pads, webLoopPad{N: i + 1, Name: row.Name, Has: row.HasSample})
+		s.Pads = append(s.Pads, webLoopPad{N: i + 1, Name: row.Name, Has: row.HasSample, Muted: m.lvlMuted(row.Pad)})
 		if s.Phase == "ready" && i == s.Dest {
 			s.Free, s.DestName = row.Pad.String(), ""
 			if row.HasSample {

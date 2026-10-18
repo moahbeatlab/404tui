@@ -224,7 +224,24 @@
     const d = document.createElement('div');
     d.className = 'lpad';
     d.innerHTML = '<b></b><span></span>';
-    d.addEventListener('pointerdown', (e) => { e.preventDefault(); if ($('looper').dataset.lp === 'slice') return send({ a: 'slpad', i }); lpSel = lpSel === i ? -1 : i; lpAsk = 0; render(); });
+    // In the Slicer a tap chooses the pad and holding it mutes it (again brings it back).
+    let hold = null;
+    const stopHold = () => { if (hold) clearTimeout(hold.t); };
+    d.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if ($('looper').dataset.lp !== 'slice') { lpSel = lpSel === i ? -1 : i; lpAsk = 0; render(); return; }
+      try { d.setPointerCapture(e.pointerId); } catch (x) { /* not everywhere */ }
+      stopHold();
+      const h = hold = { x: e.clientX, y: e.clientY, done: false, t: 0 };
+      const p = state && state.slicer && state.slicer.pads[i];
+      if (p && p.has) h.t = setTimeout(() => { h.done = true; if (navigator.vibrate) navigator.vibrate(20); send({ a: 'slmute', i }); }, 500);
+    });
+    d.addEventListener('pointermove', (e) => { if (hold && !hold.done && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 10) { stopHold(); hold.done = true; } });
+    d.addEventListener('pointerup', () => {
+      const h = hold; stopHold(); hold = null;
+      if (h && !h.done && $('looper').dataset.lp === 'slice') send({ a: 'slpad', i });
+    });
+    d.addEventListener('pointercancel', () => { stopHold(); hold = null; });
     lpGrid.appendChild(d);
     lpPads.push({ d, n: d.children[0], nm: d.children[1] });
   }
@@ -349,7 +366,7 @@
       const e = lpPads[i];
       set(e.n, 'textContent', p.n);
       set(e.nm, 'textContent', p.has ? p.name : !slMode && p.target ? 'next' : '');
-      cls(e.d, 'del', !!p.del);
+      cls(e.d, 'del', !!p.del); cls(e.d, 'muted', !!p.muted);
       cls(e.d, 'has', p.has); cls(e.d, 'target', !slMode && p.target && !p.has); cls(e.d, 'sel', slMode ? i === (sl.phase === 'ready' ? sl.dest : sl.pad) : i === lpSel);
     });
     if (sl) renderSlicer(sl);

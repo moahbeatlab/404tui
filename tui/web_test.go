@@ -630,3 +630,41 @@ func TestAHeldPadCanBeAddedToThePatternThatPlays(t *testing.T) {
 		t.Errorf("second time: %q", got)
 	}
 }
+
+func TestHoldingAPadInTheSlicerMutesIt(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	if !r.s.m().snap.Bank(0)[0].HasSample {
+		t.Skip("A1 holds no sample")
+	}
+	m := r.s.m()
+	m.snap.Pads[0].Level = 100 // the simulated pad is silent at first
+	r.s.model = m
+	r.web(`{"a":"slmute","i":0}`)
+	s := w.last(t).Slicer
+	if !s.Pads[0].Muted || r.s.m().snap.Bank(0)[0].Level != 0 {
+		t.Fatalf("A1 is not muted: %+v level %d (%q)", s.Pads[0], r.s.m().snap.Bank(0)[0].Level, r.s.m().message)
+	}
+	r.web(`{"a":"slmute","i":0}`)
+	if s = w.last(t).Slicer; s.Pads[0].Muted || r.s.m().snap.Bank(0)[0].Level == 0 {
+		t.Errorf("A1 is not back: %+v", s.Pads[0])
+	}
+	r.web(`{"a":"slmute","i":15}`) // an empty pad: nothing
+}
+
+func TestTheLooperSettingsDoNotWaitForTheUnit(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	m.busy = "reading the unit"
+	r.s.model = m
+	r.web(`{"a":"lpbank","n":1}`)
+	r.web(`{"a":"lpbankset","i":4}`)
+	if got := w.last(t).Looper.Bank; got != "E" {
+		t.Errorf("looper bank %s while the unit was busy, want E", got)
+	}
+	r.web(`{"a":"lppattern"}`)
+	if got := r.s.m().message; !strings.Contains(got, "busy") {
+		t.Errorf("a command that needs the unit did not say why it waits: %q", got)
+	}
+}
