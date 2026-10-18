@@ -221,6 +221,7 @@
     if (ws && ws.readyState === 1 && rtt !== null) setConn(s.unit ? 'ok' : 'nounit', (s.unit ? '' : 'no unit · ') + rtt + ' ms');
     $('waiting').hidden = s.unit;
     set($('bank'), 'textContent', s.bank || '–');
+    set($('bankTop'), 'textContent', s.bank || '–');
     set($('bpm'), 'textContent', s.bpm ? s.bpm.toFixed(1) : '–');
     set($('bar'), 'textContent', s.running || s.beat >= 0 ? 'BAR ' + s.bar + ' · BEAT ' + (s.beat + 1) + (s.running ? '' : ' (stopped)') : 'no clock');
     const beats = $('beats').children;
