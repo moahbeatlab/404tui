@@ -83,7 +83,10 @@ type webLooper struct {
 	Gain  int    `json:"gain"`  // dB
 	Norm  bool   `json:"norm"`
 	OnBar bool   `json:"onBar"`
-	Cal   bool   `json:"cal"`
+	// Watch is the watching of the unit's own looper; StopLeft the beats until it is stopped (-1 for not waiting).
+	Watch    bool    `json:"watch"`
+	StopLeft float64 `json:"stopLeft"`
+	Cal      bool    `json:"cal"`
 	// Phase is idle, starting, armed, recording or saving; Bar of Of is where a recording is; Left the beats until
 	// bar 1 while it waits.
 	Phase  string  `json:"phase"`
@@ -298,7 +301,10 @@ func (m Model) webLevel() *webLevel {
 // webLooper is the Looper for the page.
 func (m Model) webLooper() webLooper {
 	bank := m.loopBank()
-	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), Delay: m.mem.LooperDelay, Gain: m.mem.LooperGain, Norm: m.mem.LooperNormalize, OnBar: !m.mem.LooperOnBeat, Phase: "idle", Of: m.loopBars(), Pads: []webLoopPad{}}
+	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), Delay: m.mem.LooperDelay, Gain: m.mem.LooperGain, Norm: m.mem.LooperNormalize, OnBar: !m.mem.LooperOnBeat, Watch: m.mem.LooperWatch, StopLeft: -1, Phase: "idle", Of: m.loopBars(), Pads: []webLoopPad{}}
+	if m.lp != nil && m.lp.stopTick > 0 && m.clock != nil {
+		l.StopLeft = float64(m.lp.stopTick-m.clock.ticks) / 24
+	}
 	free, ok := m.loopFreePad()
 	if ok {
 		l.Target = free.String()
@@ -414,7 +420,7 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("%s kept on %s: hold it again to let it go", pad, busName(m.busOf(pad)))
 		nm, cmd := m.setIsolated(keep)
 		return nm, tea.Batch(undo, cmd)
-	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel", "lpgain", "lpnorm", "lpcal", "lpalign":
+	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel", "lpgain", "lpnorm", "lpcal", "lpalign", "lpwatch":
 		if m.snap == nil || m.busy != "" {
 			return m, nil
 		}
@@ -437,6 +443,8 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 			return m.looperArmWith(true)
 		case "lpalign":
 			return m.looperAlignToggle()
+		case "lpwatch":
+			return m.looperWatchToggle()
 		default:
 			return m.looperDelete(c.I)
 		}

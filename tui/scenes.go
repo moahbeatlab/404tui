@@ -244,6 +244,10 @@ func (m Model) sceneSend(sc *sceneState, msg []byte) {
 
 // closeScenes lets go of the output.
 func (m Model) closeScenes() {
+	if m.lp != nil && m.lp.out != nil {
+		m.lp.out.Close()
+		m.lp.out = nil
+	}
 	if m.sc != nil && m.sc.out != nil {
 		m.sc.out.Close()
 		m.sc.out = nil

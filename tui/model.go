@@ -1230,7 +1230,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.facts = map[factKey]padFacts{}
 		m.padAudio.clear()
+		oldSnap := m.snap
 		m.snap = msg.snap
+		found := m.looperFound(oldSnap, msg.snap)
 		if m.hasSelected = msg.snap.HasSelected; m.hasSelected {
 			m.selected = msg.snap.Selected
 		}
@@ -1238,9 +1240,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.message = msg.message
 		}
 		if cmd := m.rememberProject(); cmd != nil {
-			return m, cmd
+			return m, tea.Batch(cmd, found)
 		}
-		return m, m.wanted()
+		return m, tea.Batch(m.wanted(), found)
 	case loopStartedMsg:
 		return m.loopStarted(msg)
 	case loopSavedMsg:
@@ -1673,6 +1675,10 @@ func (m Model) polled(msg pollMsg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.openPattern(m.pattern.Slot, "changed on the unit"))
 		}
 		return m, tea.Batch(cmds...)
+	}
+	if m.mem.LooperWatch && m.busy == "" && m.unit != nil && time.Since(m.looper().loadedAt) > looperWatchEvery {
+		m.lp.loadedAt = time.Now()
+		return m, tea.Batch(codeCmd, m.load(""))
 	}
 	return m, tea.Batch(codeCmd, m.wanted())
 }
