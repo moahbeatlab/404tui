@@ -145,10 +145,6 @@ The bank chip at the top left of the page opens a list of the ten banks with the
 
 In the Looper and the Slicer the bank boxes (BANK, FROM, TO) can be tapped for a list of all ten banks, so a bank is chosen in one tap.
 
-Holding a pad (0.4 s) opens a small menu beside it: **ISOLATE** (what a hold always did) and **+ PATTERN**, which adds the pad
-to the pattern that plays (or the next one): one note on beat 1, as long as the whole pattern, so the pad plays through each
-round. Slide the finger onto an option and let go; letting go without sliding isolates. A pad that is in the pattern that way
-already says so and is not added twice. An empty pad has no menu.
 
 In the Slicer, holding a pad (0.5 s) mutes it, in the bank the grid shows (again brings it back); muted pads are striped red. A tap
 chooses the pad. The Looper's settings (bank, bars, delay, gain …) are no longer held up while the unit is busy reading; a command that
@@ -158,4 +154,3 @@ The bank chip at the top follows the page: on the Pads and Stage pages it is the
 
 The Slicer page has a **MANGLE** button: a list of dice that are rolled for every slice each time SLICE is pressed: DROP-OUTS (slices that stay silent), REVERSE (played backwards), PITCH (each slice up or down by up to 2, 5 or 12 semitones, at random), ROLLS (slices that stutter 2 to 8 times), HUMANIZE (loudness, and timing on a grid) and FADE (at the ends of every slice). The result always has the length of the original, so it still fits the pattern; a pitched slice keeps its place in the rhythm (a shorter one ends in silence, a longer one is cut).
 
-The pattern that plays is guessed from what the unit plays, or chosen on the page. It is forgotten when the project changes (a pattern slot of the other project is not this one's). + PATTERN on a guessed pattern that has no notes in this project says so and changes nothing; on a pattern chosen on the page that is still empty it makes the pattern (as long as a loop is set to be) with the pad on beat 1.

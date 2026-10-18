@@ -8,7 +8,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/record"
 )
@@ -401,40 +400,6 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.clickPad(m.snap.Bank(m.perfBank())[c.I].Pad)
-	case "padpat":
-		// A pad is added to the pattern that plays (else the one that is next): one note on beat 1, as long as the pattern.
-		if m.snap == nil || c.I < 0 || c.I > 15 {
-			return m, nil
-		}
-		row := m.snap.Bank(m.perfBank())[c.I]
-		slot := m.perfNow
-		if slot == nil {
-			slot = m.perfNext
-		}
-		switch {
-		case !row.HasSample:
-			m.message = fmt.Sprintf("%s holds no sample", row.Pad)
-			return m, nil
-		case slot == nil:
-			m.message = "no pattern is playing or next: choose one first"
-			return m, nil
-		}
-		// A slot the program guessed from what it heard has a pattern; one that was chosen on the page may be empty: it gets a new one.
-		unit, ops, pad, at, bars, create := m.unit, m.ops, row.Pad, *slot, m.loopBars(), !m.perfAuto
-		m.message = fmt.Sprintf("adding %s to pattern %s…", pad, at)
-		return m, func() tea.Msg {
-			ops.Lock()
-			defer ops.Unlock()
-			added, created, err := app.AddPadNote(unit, at, pad, bars, create)
-			if err != nil {
-				return doneMsg{message: fmt.Sprintf("%s was not added to pattern %s: %v", pad, at, err)}
-			}
-			if !added {
-				return doneMsg{message: fmt.Sprintf("%s is in pattern %s already, on beat 1 for the whole pattern", pad, at)}
-			}
-			detail, derr := app.OpenPattern(unit, at)
-			return patAddedMsg{slot: at, pad: pad, detail: detail, err: derr, created: created}
-		}
 	case "solo":
 		// A hold on a pad: it keeps its bus and the others on that bus go dry; held again, it lets go (when
 		// no pad is kept any more, everything goes back). A muted pad is brought back first.

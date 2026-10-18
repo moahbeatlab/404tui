@@ -1,7 +1,6 @@
 package app
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 
@@ -364,52 +363,6 @@ func EditPattern(u PatternFiles, slot proto.PadIndex, edit func(b []byte) ([]byt
 		return nil, fmt.Errorf("%s: write failed (%w)", slot, err)
 	}
 	return before, nil
-}
-
-var errPadInPattern = errors.New("the pad has that note already")
-
-// AddPadNote puts a note for a pad on beat 1 of a pattern, as long as the whole pattern. It says false (and writes
-// nothing) when the pad has such a note already.
-//
-// A slot that holds no pattern file yet (a pattern that was never recorded) gets a new one when create is set, bars long, with the
-// pad's note in it; created says so. Otherwise it is an error.
-func AddPadNote(u PatternFiles, slot, pad proto.PadIndex, bars int, create bool) (added, created bool, err error) {
-	current, err := u.CurrentProject()
-	if err != nil {
-		return false, false, err
-	}
-	path := formats.PatternPath(current+1, slot)
-	if _, exists, err := u.Stat(path); err != nil {
-		return false, false, fmt.Errorf("%s: %w", slot, err)
-	} else if !exists {
-		if !create {
-			return false, false, fmt.Errorf("pattern %s holds no notes in this project", slot)
-		}
-		if err := WriteStartPattern(u, slot, []proto.PadIndex{pad}, min(max(bars, 1), formats.MaxStartBars)); err != nil {
-			return false, false, err
-		}
-		return true, true, nil
-	}
-	_, err = EditPattern(u, slot, func(b []byte) ([]byte, error) {
-		p, err := formats.ParsePattern(b)
-		if err != nil {
-			return nil, err
-		}
-		notes, err := formats.NoteRecords(b)
-		if err != nil {
-			return nil, err
-		}
-		for _, n := range notes {
-			if n.Pad == pad && n.Tick == 0 && uint32(n.Length) >= p.Length {
-				return nil, errPadInPattern
-			}
-		}
-		return formats.InsertNote(b, 0, pad, 127, uint16(min(p.Length, 65535)))
-	})
-	if errors.Is(err, errPadInPattern) {
-		return false, false, nil
-	}
-	return err == nil, false, err
 }
 
 // WithRowsFor adds an empty row to the grid for each of pads that has none, in pad order, so

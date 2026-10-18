@@ -1251,17 +1251,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.loopSaved(msg)
 	case slicerDoneMsg:
 		return m.slicerDone(msg)
-	case patAddedMsg:
-		m.message = fmt.Sprintf("%s is in pattern %s now: one note on beat 1, the whole pattern long", msg.pad, msg.slot)
-		if msg.created {
-			m.message = fmt.Sprintf("pattern %s had no notes yet: it is made now with %s on beat 1, the whole pattern long (%s)", msg.slot, msg.pad, plural(m.loopBars(), "bar"))
-			m.patterns = map[int][]app.PatternRow{}
-		}
-		if msg.err == nil && msg.detail != nil {
-			m.patPreview[msg.slot] = msg.detail
-			delete(m.patUnread, msg.slot)
-		}
-		return m, nil
 	case doneMsg:
 		m.message = msg.message
 		for _, p := range msg.muted {
@@ -2179,15 +2168,6 @@ func (m Model) patternBankPads(d *app.PatternDetail) []proto.PadIndex {
 }
 
 // patPreviewMsg is a pattern read for the panel beside the patterns.
-// patAddedMsg says a pad was added to a pattern, with the pattern as it is now.
-type patAddedMsg struct {
-	slot, pad proto.PadIndex
-	detail    *app.PatternDetail
-	err       error
-	// created says the slot had no pattern: a new one was made.
-	created bool
-}
-
 type patPreviewMsg struct {
 	slot   proto.PadIndex
 	detail *app.PatternDetail

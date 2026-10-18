@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -610,53 +609,6 @@ func TestTheBanksOfTheLooperAndTheSlicerCanBeChosenDirectly(t *testing.T) {
 	}
 }
 
-func TestAHeldPadCanBeAddedToThePatternThatPlays(t *testing.T) {
-	r, w := webRig(t)
-	r.s.press("r")
-	m := r.s.m()
-	slot := m.snap.Bank(0)[15].Pad // a pattern slot (the same index space as the pads)
-	pad := m.snap.Bank(0)[0].Pad
-	if !m.snap.Bank(0)[0].HasSample {
-		t.Skip("A1 holds no sample")
-	}
-	if err := app.WriteStartPattern(m.unit, slot, []proto.PadIndex{m.snap.Bank(0)[1].Pad}, 2); err != nil {
-		t.Fatal(err)
-	}
-	r.web(`{"a":"padpat","i":0}`)
-	if got := w.last(t).Msg; !strings.Contains(got, "no pattern") {
-		t.Errorf("without a pattern: %q", got)
-	}
-	m.perfNow = &slot
-	r.s.model = m
-	r.web(`{"a":"padpat","i":0}`)
-	m = r.s.m()
-	if !strings.Contains(m.message, "is in pattern") {
-		t.Fatalf("message %q", m.message)
-	}
-	detail, err := app.OpenPattern(m.unit, slot)
-	if err != nil || !slices.Contains(detail.PadsUsed, pad) {
-		t.Fatalf("A1 is not in the pattern: %+v (%v)", detail, err)
-	}
-	notes := 0
-	b, _ := m.unit.ReadFile(formats.PatternPath(1, slot))
-	recs, _ := formats.NoteRecords(b)
-	for _, n := range recs {
-		if n.Pad == pad {
-			notes++
-			if n.Tick != 0 || uint32(n.Length) != 2*4*formats.PPQ {
-				t.Errorf("note at %d, length %d; want beat 1 and the whole 2 bars", n.Tick, n.Length)
-			}
-		}
-	}
-	if notes != 1 {
-		t.Errorf("%d notes for A1, want 1", notes)
-	}
-	r.web(`{"a":"padpat","i":0}`)
-	if got := r.s.m().message; !strings.Contains(got, "already") {
-		t.Errorf("second time: %q", got)
-	}
-}
-
 func TestHoldingAPadInTheSlicerMutesIt(t *testing.T) {
 	r, w := webRig(t)
 	r.s.press("r")
@@ -749,41 +701,6 @@ func TestTheDiceCanBeSetFromThePage(t *testing.T) {
 	if s = w.last(t).Slicer; s.Active != 0 {
 		t.Errorf("not all off: %v", s.Mangle)
 	}
-}
-
-func TestAddingAPadToAnEmptyPatternSlot(t *testing.T) {
-	r, w := webRig(t)
-	r.s.press("r")
-	m := r.s.m()
-	slot := m.snap.Bank(0)[14].Pad
-	if _, exists, _ := m.unit.Stat(formats.PatternPath(1, slot)); exists {
-		t.Skip("the slot holds a pattern")
-	}
-	if !m.snap.Bank(0)[0].HasSample {
-		t.Skip("A1 holds no sample")
-	}
-	// A slot the program guessed has to have a pattern: nothing is made.
-	m.perfNow, m.perfAuto = &slot, true
-	r.s.model = m
-	r.web(`{"a":"padpat","i":0}`)
-	if got := r.s.m().message; !strings.Contains(got, "holds no notes") {
-		t.Errorf("guessed empty slot: %q", got)
-	}
-	if _, exists, _ := m.unit.Stat(formats.PatternPath(1, slot)); exists {
-		t.Fatal("a pattern was made for a slot that was only guessed")
-	}
-	// A slot that was chosen is made.
-	m = r.s.m()
-	m.perfAuto = false
-	r.s.model = m
-	r.web(`{"a":"padpat","i":0}`)
-	if got := r.s.m().message; !strings.Contains(got, "is made now") {
-		t.Fatalf("chosen empty slot: %q", got)
-	}
-	if _, exists, _ := m.unit.Stat(formats.PatternPath(1, slot)); !exists {
-		t.Error("no pattern was made")
-	}
-	_ = w
 }
 
 func TestTheCurrentPatternIsForgottenWhenTheProjectChanges(t *testing.T) {
