@@ -55,6 +55,8 @@ type monitor struct {
 	// playedAt is the clock tick each of them was last heard on: a pad that has not been heard for a
 	// long time belongs to a pattern that played before.
 	playedAt map[int]int
+	// hitLog are the pads heard lately (bank*16 + pad) with the clock tick of each.
+	hitLog []hitAt
 }
 
 func newMonitor() *monitor {
@@ -386,6 +388,11 @@ func (mo *monitor) heard(key, tick int) {
 		mo.playedAt = map[int]int{}
 	}
 	mo.played[key], mo.playedAt[key] = true, tick
+	// The hits are kept for a while, with their ticks: they show where the pattern that plays began.
+	mo.hitLog = append(mo.hitLog, hitAt{key, tick})
+	if len(mo.hitLog) > 600 {
+		mo.hitLog = mo.hitLog[len(mo.hitLog)-400:]
+	}
 	for k, at := range mo.playedAt {
 		if at > tick || tick-at > 8*ticksPerBar {
 			delete(mo.played, k)
@@ -421,3 +428,6 @@ func (mo *monitor) setCC(ch, cc, val int, at time.Time) {
 	}
 	mo.ccs[k].val, mo.ccs[k].at = val, at
 }
+
+// hitAt is a pad heard on a clock tick.
+type hitAt struct{ key, tick int }

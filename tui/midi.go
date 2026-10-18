@@ -246,9 +246,6 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(next, cmd)
 	case midiin.Start:
 		m.clock.ticks, m.clock.running, m.clock.at = 0, true, time.Now()
-		if m.lp != nil {
-			m.lp.ptPhase, m.lp.ptBoundary = 0, 0
-		}
 		m.perfSync = 0
 		m.mon.beatAt = time.Time{}
 		m.mon.played, m.mon.playedAt = map[int]bool{}, map[int]int{}
@@ -303,7 +300,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 				// The sequencer runs: these notes are what the pattern plays (the unit sends them
 				// over MIDI), not pads hit by hand. They find the pattern, not the pad codes.
 				m.mon.heard((e.Channel-1)*16+pad-1, m.clock.ticks)
-				nm := m.detectPattern()
+				nm := m.detectPattern().ptnConfirm()
 				if nm.perfNow != m.perfNow {
 					// A new pattern: its notes are read for the Perform view.
 					return nm, tea.Batch(nm.wanted(), next)

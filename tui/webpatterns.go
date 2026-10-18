@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/proto"
 )
 
@@ -65,7 +66,7 @@ func (m Model) ptnCommand(act string, i int) (tea.Model, tea.Cmd) {
 		}
 		slot := rows[i].Slot
 		m.perfNext = &slot
-		lp.ptBoundary = m.ptnBoundary()
+		lp.ptFallback = m.ptnDue()
 		m.logCue()
 		m.message = fmt.Sprintf("pattern %s is sent: the unit plays it next (the unit needs PC Rx on)", slot)
 		return m, m.wanted()
@@ -73,9 +74,125 @@ func (m Model) ptnCommand(act string, i int) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// ptnBoundary is the clock tick at which the pattern that plays ends and the next one starts: the next multiple of its length
-// from where it began (the unit's start, or when the last one took over). 0 when its length is not known.
-func (m Model) ptnBoundary() int {
+// ptnNotes are the places of the notes of a pattern in clock ticks within it, by pad (bank*16 + pad), and its length in clock ticks.
+func (m Model) ptnNotes(slot proto.PadIndex) (map[int][]int, int, bool) {
+	d := m.patPreview[slot]
+	if d == nil {
+		return nil, 0, false
+	}
+	per := formats.PPQ / 24 // the pattern's ticks are 480 to the beat, the clock's 24
+	length := int(d.Length) / per
+	if length <= 0 {
+		return nil, 0, false
+	}
+	notes := map[int][]int{}
+	for _, n := range d.Notes {
+		key := int(n.Pad.Bank())*16 + int(n.Pad.Pad())
+		notes[key] = append(notes[key], int(n.Tick)/per)
+	}
+	return notes, length, true
+}
+
+// ptnFit says how many of the hits fit the notes of a pattern, at the bar it could have begun on that fits best (a pattern of one
+// bar has just the one).
+func (m Model) ptnFit(slot proto.PadIndex, hits []hitAt) (score, phase int, ok bool) {
+	notes, length, ok := m.ptnNotes(slot)
+	if !ok {
+		return 0, 0, false
+	}
+	step := ticksPerBar
+	if length <= ticksPerBar {
+		length = ticksPerBar
+	}
+	best, bestPhase := -1, 0
+	for ph := 0; ph < length; ph += step {
+		n := 0
+		for _, h := range hits {
+			pos := ((h.tick-ph)%length + length) % length
+			for _, at := range notes[h.key] {
+				if diff := min((pos-at+length)%length, (at-pos+length)%length); diff <= 4 {
+					n++
+					break
+				}
+			}
+		}
+		if n > best {
+			best, bestPhase = n, ph
+		}
+	}
+	return best, bestPhase, true
+}
+
+// ptnHits are the pads heard within the last ticks.
+func (m Model) ptnHits(ticks int) []hitAt {
+	var hits []hitAt
+	if m.mon == nil || m.clock == nil {
+		return hits
+	}
+	for _, h := range m.mon.hitLog {
+		if h.tick <= m.clock.ticks && m.clock.ticks-h.tick <= ticks {
+			hits = append(hits, h)
+		}
+	}
+	return hits
+}
+
+// ptnConfirm makes the pattern that was sent the one that plays when the pads heard lately fit its notes clearly better than the
+// notes of the pattern that played: only then has the unit really switched. Called when a pad is heard.
+func (m Model) ptnConfirm() Model {
+	if m.perfNext == nil || m.clock == nil {
+		return m
+	}
+	hits := m.ptnHits(ticksPerBar)
+	if len(hits) < 3 {
+		return m
+	}
+	next, _, ok := m.ptnFit(*m.perfNext, hits)
+	if !ok {
+		return m
+	}
+	now := 0
+	if m.perfNow != nil {
+		now, _, _ = m.ptnFit(*m.perfNow, hits)
+	}
+	if next*10 < len(hits)*7 || next*10 < now*10+len(hits)*2 {
+		return m
+	}
+	return m.ptnTakeOver()
+}
+
+// ptnTakeOver makes the pattern that was sent the one that plays.
+func (m Model) ptnTakeOver() Model {
+	lp := m.looper()
+	m.perfNow, m.perfNext, m.perfAuto = m.perfNext, nil, false
+	lp.ptFallback = 0
+	if m.mon != nil {
+		m.mon.played, m.mon.playedAt = map[int]bool{}, map[int]int{} // the new pattern starts with nothing heard
+	}
+	m.logCue()
+	return m
+}
+
+// ptnTick is the last resort: a pattern that was sent and that sounds like the one that plays (so that no pad tells them apart) is
+// taken for the one that plays when a whole pattern has gone by after the time it was due. A pattern the unit has been seen to
+// play (found from the pads heard) ends the wait too.
+func (m Model) ptnTick() Model {
+	if m.perfNext == nil || m.clock == nil {
+		return m
+	}
+	lp := m.looper()
+	switch {
+	case m.perfNow != nil && *m.perfNow == *m.perfNext:
+		m.perfNext, lp.ptFallback = nil, 0
+	case lp.ptFallback > 0 && m.clock.ticks >= lp.ptFallback:
+		return m.ptnTakeOver()
+	}
+	return m
+}
+
+// ptnDue is the clock tick after which a pattern that was sent is taken for the one that plays, whatever is heard: one pattern
+// length after the pattern that plays was due to end. 0 when that is not known.
+func (m Model) ptnDue() int {
 	if m.perfNow == nil || m.clock == nil || !m.clockRuns() {
 		return 0
 	}
@@ -84,32 +201,7 @@ func (m Model) ptnBoundary() int {
 		return 0
 	}
 	length := d.Bars() * ticksPerBar
-	phase := 0
-	if m.lp != nil {
-		phase = m.lp.ptPhase
-	}
-	n := (m.clock.ticks-phase)/length + 1
-	return phase + n*length
-}
-
-// ptnTick lets the pattern that was sent take over when its time has come, or when the notes heard say it plays already.
-func (m Model) ptnTick() Model {
-	if m.perfNext == nil || m.clock == nil {
-		return m
-	}
-	lp := m.looper()
-	switch {
-	case m.perfNow != nil && *m.perfNow == *m.perfNext:
-		m.perfNext, lp.ptBoundary = nil, 0
-	case lp.ptBoundary > 0 && m.clock.ticks >= lp.ptBoundary:
-		m.perfNow, m.perfNext, m.perfAuto = m.perfNext, nil, false
-		lp.ptBoundary, lp.ptPhase = 0, m.clock.ticks
-		if m.mon != nil {
-			m.mon.played, m.mon.playedAt = map[int]bool{}, map[int]int{} // the new pattern starts with nothing heard
-		}
-		m.logCue()
-	}
-	return m
+	return m.clock.ticks + 2*length
 }
 
 // webPtn is the Patterns page.
