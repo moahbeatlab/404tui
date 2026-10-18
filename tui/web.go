@@ -77,13 +77,14 @@ type webLevel struct {
 
 // webLooper is the Looper: where the loops go, and how a take is going.
 type webLooper struct {
-	Bank  string `json:"bank"`
-	Bars  int    `json:"bars"`
-	Delay int    `json:"delay"` // ms
-	Gain  int    `json:"gain"`  // dB
-	Norm  bool   `json:"norm"`
-	OnBar bool   `json:"onBar"`
-	Cal   bool   `json:"cal"`
+	Bank   string `json:"bank"`
+	Bars   int    `json:"bars"`
+	Delay  int    `json:"delay"` // ms
+	Gain   int    `json:"gain"`  // dB
+	Norm   bool   `json:"norm"`
+	OnBar  bool   `json:"onBar"`
+	Slices int    `json:"slices"`
+	Cal    bool   `json:"cal"`
 	// Phase is idle, starting, armed, recording or saving; Bar of Of is where a recording is; Left the beats until
 	// bar 1 while it waits.
 	Phase  string  `json:"phase"`
@@ -298,7 +299,7 @@ func (m Model) webLevel() *webLevel {
 // webLooper is the Looper for the page.
 func (m Model) webLooper() webLooper {
 	bank := m.loopBank()
-	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), Delay: m.mem.LooperDelay, Gain: m.mem.LooperGain, Norm: m.mem.LooperNormalize, OnBar: !m.mem.LooperOnBeat, Phase: "idle", Of: m.loopBars(), Pads: []webLoopPad{}}
+	l := webLooper{Bank: string(rune('A' + bank)), Bars: m.loopBars(), Delay: m.mem.LooperDelay, Gain: m.mem.LooperGain, Norm: m.mem.LooperNormalize, OnBar: !m.mem.LooperOnBeat, Slices: m.loopSlices(), Phase: "idle", Of: m.loopBars(), Pads: []webLoopPad{}}
 	free, ok := m.loopFreePad()
 	if ok {
 		l.Target = free.String()
@@ -414,7 +415,7 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("%s kept on %s: hold it again to let it go", pad, busName(m.busOf(pad)))
 		nm, cmd := m.setIsolated(keep)
 		return nm, tea.Batch(undo, cmd)
-	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel", "lpgain", "lpnorm", "lpcal", "lpalign":
+	case "lparm", "lpbank", "lpbars", "lpdelay", "lppattern", "lpdel", "lpgain", "lpnorm", "lpcal", "lpalign", "lpslices", "lpremix":
 		if m.snap == nil || m.busy != "" {
 			return m, nil
 		}
@@ -437,6 +438,10 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 			return m.looperArmWith(true)
 		case "lpalign":
 			return m.looperAlignToggle()
+		case "lpslices":
+			return m.looperSlicesNext()
+		case "lpremix":
+			return m.looperRemix(c.I)
 		default:
 			return m.looperDelete(c.I)
 		}

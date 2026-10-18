@@ -7,6 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/moahbeatlab/404tui/app"
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/record"
 )
@@ -260,5 +262,66 @@ func TestTheLooperCutsATakeOutOfTheMemoryItListensInto(t *testing.T) {
 	}
 	if m.ring == nil || m.lvl == nil {
 		t.Error("the listening stopped with the take")
+	}
+}
+
+func TestARemixKeepsTheLengthAndMovesTheSlices(t *testing.T) {
+	src := formats.Sample{Channels: 1}
+	for i := 0; i < 8000; i++ {
+		src.Samples = append(src.Samples, int16(i/1000*1000+100))
+	}
+	out := remixSample(src, 8)
+	if out.Frames() != src.Frames() {
+		t.Fatalf("a remix is %d frames, the loop %d", out.Frames(), src.Frames())
+	}
+	same := true
+	for i := range src.Samples {
+		if out.Samples[i] != src.Samples[i] {
+			same = false
+			break
+		}
+	}
+	if same {
+		t.Error("the slices are in their old order")
+	}
+}
+
+func TestTheLooperRemixesAPadOntoTheNextFreePad(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 200, Height: 40})
+	s.press("8")
+	m := s.m()
+	from, ok := m.loopFreePad()
+	if !ok {
+		t.Skip("the bank is full")
+	}
+	src := formats.Sample{Channels: 1}
+	for i := 0; i < 48000; i++ {
+		src.Samples = append(src.Samples, int16(i/6000*2000))
+	}
+	if _, err := app.PutSample(m.unit, from, src, "SRC"); err != nil {
+		t.Fatal(err)
+	}
+	s.run(m.load(""))
+	m = s.m()
+	m.looper().cursor = int(from.Pad())
+	s.model = m
+	s.press("s")
+	if got := s.m().loopSlices(); got != 16 {
+		t.Fatalf("s: %d slices, want 16 after 8", got)
+	}
+	s.press("x")
+	m = s.m()
+	if !strings.Contains(m.message, "remixed in 16 slices") {
+		t.Fatalf("message %q", m.message)
+	}
+	found := false
+	for _, r := range m.snap.Bank(m.loopBank()) {
+		if strings.HasPrefix(r.Name, "RMX ") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no remix on the bank (%q)", m.message)
 	}
 }

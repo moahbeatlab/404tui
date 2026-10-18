@@ -159,6 +159,10 @@ func (m Model) looperKey(name string) (tea.Model, tea.Cmd) {
 		return m.looperArmWith(true)
 	case "t":
 		return m.looperAlignToggle()
+	case "s":
+		return m.looperSlicesNext()
+	case "x":
+		return m.looperRemix(lp.cursor)
 	case "[":
 		return m.looperBankStep(-1)
 	case "]":
@@ -647,7 +651,7 @@ func (m Model) looperBody(g geom) string {
 			}
 		}
 	}
-	keys := st.dim.Render("a arm   b length   [ ] bank   p pattern   d delete   g G gain   n normalise   t beat/bar   c calibrate   , . delay   h j k l pad")
+	keys := st.dim.Render("a arm   b length   [ ] bank   p pattern   d delete   g G gain   n normalise   t beat/bar   s slices   x remix   c calibrate   , . delay   h j k l pad")
 	top := []string{head, "", status, pattern, ""}
 	bottom := []string{"", keys}
 	avail := g.bodyH - 2 - len(top) - len(bottom) - 3

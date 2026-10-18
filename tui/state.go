@@ -64,6 +64,8 @@ type State struct {
 	LooperDelay int `json:"looperDelay,omitempty"`
 	// LooperOnBeat makes a take start on the next beat instead of the next bar (beat 1 of the next bar).
 	LooperOnBeat bool `json:"looperOnBeat,omitempty"`
+	// LooperSlices is how many slices a remix cuts a loop in (4, 8, 16 or 32; 8 when unset).
+	LooperSlices int `json:"looperSlices,omitempty"`
 	// LooperGain makes a loop louder by that many dB (it can be negative); LooperNormalize makes it as loud as it can be.
 	LooperGain      int  `json:"looperGain,omitempty"`
 	LooperNormalize bool `json:"looperNormalize,omitempty"`

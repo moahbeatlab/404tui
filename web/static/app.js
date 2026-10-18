@@ -216,6 +216,8 @@
   press('lpDp', () => send({ a: 'lpdelay', n: 5 }));
   press('lpPat', () => send({ a: 'lppattern' }));
   press('lpAlign', () => send({ a: 'lpalign' }));
+  press('lpSlices', () => send({ a: 'lpslices' }));
+  press('lpRemix', () => { if (lpSel >= 0) send({ a: 'lpremix', i: lpSel }); });
   press('lpCal', () => send({ a: 'lpcal' }));
   press('lpGm', () => send({ a: 'lpgain', n: -1 }));
   press('lpGp', () => send({ a: 'lpgain', n: 1 }));
@@ -267,6 +269,7 @@
     cls($('lpArm'), 'on', run);
     $('lpArm').disabled = l.phase === 'saving' || (!run && !target);
     set($('lpBank'), 'textContent', l.bank);
+    set($('lpSlicesT'), 'textContent', l.slices + ' SLICES');
     set($('lpAlignT'), 'textContent', 'START: ' + (l.onBar ? 'BAR' : 'BEAT'));
     $('lpCal').disabled = busy;
     set($('lpBarsT'), 'textContent', l.bars + (l.bars === 1 ? ' BAR' : ' BARS'));
@@ -278,6 +281,9 @@
     cls($('lpPat'), 'warn', l.known && !l.pattern);
     const sel = l.pads[lpSel];
     $('lpDel').disabled = !sel || !sel.has;
+    $('lpRemix').disabled = busy || !sel || !sel.has || !l.target;
+    $('lpSlices').disabled = busy;
+    set($('lpRemixS'), 'textContent', sel ? (sel.has ? 'pad ' + sel.n + ' → ' + (l.target || 'bank full') : 'pad ' + sel.n + ' is empty') : 'tap a pad first');
     const asking = lpAsk === lpSel + 1 && sel && sel.has;
     cls($('lpDel'), 'danger', asking);
     set($('lpDelT'), 'textContent', asking ? 'TAP AGAIN TO DELETE' : 'DELETE');

@@ -71,3 +71,9 @@ loud it is ("peak -8.3 dB"). How loud that is depends on what the unit sends ove
 level, the effects) and on the input volume of the computer's own sound settings. If the loops are too quiet or too
 loud next to the rest, set the **gain** (`g` `G`) once, or switch **normalise** on (`n`) to have every loop come out
 at the same peak. The pad itself is set to level 127.
+
+## Remix
+
+`x` (web: REMIX PAD, after tapping a pad) cuts the sample of the pad in front into equal slices, plays every slice once
+in a random order, and puts the result on the next free pad of the bank, ungated. The loop keeps its length, so it
+fills the pattern as before. `s` (web: SLICES) sets how many slices: 4, 8, 16 or 32.
