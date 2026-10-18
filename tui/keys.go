@@ -118,12 +118,19 @@ var commands = []command{
 	{"a", "Slicer: choose a pad, or a new sample from the file view, to slice", []int{secSlicer}},
 	{"a", "Sequencer: choose a pattern to edit (a again, in the editor, chooses another)", []int{secSequencer}},
 	{"N", "Sequencer: make a new pattern", []int{secSequencer}},
+	{"a", "Looper: arm a take: the unit's sound is recorded for the bars set, from the next bar 1, and put on the next free pad of the bank", []int{secLooper}},
+	{"b", "Looper: how long a loop is (1, 2, 4 or 8 bars)", []int{secLooper}},
+	{"[", "Looper: the bank the loops go to ( ] the next)", []int{secLooper}},
+	{"p", "Looper: make the pattern of the bank in which all 16 pads start on beat 1", []int{secLooper}},
+	{"d", "Looper: delete the sample of the pad in front (d twice)", []int{secLooper}},
+	{",", "Looper: the recording is 5 ms less behind the clock ( . is more)", []int{secLooper}},
 	{"1", "Go to Pads", nil},
 	{"2", "Go to Files", nil},
 	{"3", "Go to Projects", nil},
 	{"4", "Go to the Slicer; a there chooses a pad or a new sample to slice", nil},
 	{"5", "Go to the Sequencer; a there chooses a pattern to edit", nil},
 	{"6", "Go to Config: the words, colours and buses (inside the slicer 6 is an envelope key: use the tab)", nil},
+	{"8", "Go to the Looper: record loops from the unit's sound onto pads", nil},
 	{"H", "Set up pads that were never set up (hold 1, pan at its left end): pan in the centre, hold 100, time stretch 100%", []int{secPads}},
 	{"K", "Check the sample on the pad (or the marked pads) against the file it came from: same length, channels and samples?", []int{secPads}},
 	{"B", "Set the bus of the bank's pads (the marked ones; p: the whole project) by their names, as Config says", []int{secPads}},
@@ -347,7 +354,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "esc":
 		return m.escape()
-	case "1", "2", "3", "4", "5", "6", "7":
+	case "1", "2", "3", "4", "5", "6", "7", "8":
 		return m.goTo(railSections[int(name[0]-'1')])
 	case "shift+tab", "tab":
 		switch m.section {
@@ -418,6 +425,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.configKey(name)
 	case secPerform:
 		return m.perfKey(name)
+	case secLooper:
+		return m.looperKey(name)
 	case secFiles:
 		return m.filesKey(name)
 	}
@@ -427,6 +436,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 // escape backs out of the innermost thing: a pattern, a pick-up, marks; else it quits.
 func (m Model) escape() (tea.Model, tea.Cmd) {
 	switch {
+	case m.section == secLooper && m.lp != nil && m.lp.phase != lpIdle && m.lp.phase != lpSaving:
+		return m.looperCancel("the take was cancelled")
 	case m.selecting() && m.section == secPatterns:
 		// Esc ends a selection of notes before it leaves the pattern.
 		m.patSel = nil

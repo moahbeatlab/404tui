@@ -12,6 +12,7 @@ view in front, searchable; these pages explain what they are for.
 | `6` Config | [config.md](config.md) |
 | `7` Perform | [perform.md](perform.md) |
 | Faderfox EC4 map for Perform | [ec4.md](ec4.md) |
+| `8` Looper | [looper.md](looper.md) |
 | Perform on a phone (`sp404 serve`) | [web.md](web.md) |
 
 Everywhere: `1`–`7` change tab, `Ctrl-R` records the unit's audio, `Ctrl-F` full screen, `Ctrl-T` next

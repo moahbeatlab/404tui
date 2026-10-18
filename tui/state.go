@@ -57,6 +57,11 @@ type State struct {
 	MidiMap  [4]string `json:"midiMap,omitempty"`
 	// MidiLevelChan is the channel of the pad volumes (Levels): "15" when empty, "off" for none.
 	MidiLevelChan string `json:"midiLevelChan,omitempty"`
+	// LooperBank is the bank loops go to (0 to 9), LooperBars how long a loop is (2 when empty), LooperDelay how many
+	// milliseconds the recording is behind the clock.
+	LooperBank  int `json:"looperBank,omitempty"`
+	LooperBars  int `json:"looperBars,omitempty"`
+	LooperDelay int `json:"looperDelay,omitempty"`
 	// BusNotes are what the user wrote of the effect on each bus (the unit does not say), shown in
 	// the Perform view.
 	BusNotes [2]string `json:"busNotes,omitempty"`

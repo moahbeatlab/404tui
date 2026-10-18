@@ -234,10 +234,15 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		m.logMIDI(e)
 		m = m.sceneTick()
 		m.motionTick()
+		at := e.At
+		if at.IsZero() {
+			at = m.clock.at
+		}
+		cmd := m.looperTick(at)
 		if m.vc != nil && m.clock.ticks%6 != 0 {
 			m.vc.keep = true
 		}
-		return m, next
+		return m, tea.Batch(next, cmd)
 	case midiin.Start:
 		m.clock.ticks, m.clock.running, m.clock.at = 0, true, time.Now()
 		m.perfSync = 0

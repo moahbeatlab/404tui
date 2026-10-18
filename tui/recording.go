@@ -93,6 +93,10 @@ func (m Model) stopRecordingNow() {
 	if m.rec != nil {
 		_ = m.rec.Stop()
 	}
+	if m.lp != nil && m.lp.session != nil {
+		_ = m.lp.session.Stop()
+		_ = os.Remove(m.lp.session.Path)
+	}
 	m.closePerfLog()
 }
 
@@ -107,7 +111,7 @@ func (m Model) closePerfLog() {
 // how big the file is. Its dot blinks.
 func (m Model) recBadge() string {
 	if m.rec == nil {
-		return ""
+		return m.looperBadge()
 	}
 	dot := "●"
 	if (m.frame/4)%2 == 1 {

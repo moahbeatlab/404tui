@@ -37,10 +37,11 @@ const (
 	secSequencer
 	secConfig
 	secPerform
+	secLooper
 	secCount
 )
 
-var sectionNames = [secCount]string{"Pads", "Patterns", "Files", "Projects", "Slicer", "Sequencer", "Config", "Perform"}
+var sectionNames = [secCount]string{"Pads", "Patterns", "Files", "Projects", "Slicer", "Sequencer", "Config", "Perform", "Looper"}
 
 // previewStopAfter is how long a preview plays before it is stopped; tests shorten it.
 var previewStopAfter = func(d time.Duration) time.Duration { return d }
@@ -430,6 +431,8 @@ type Model struct {
 	muted, soloed map[proto.PadIndex]bool
 	// lvlWas holds the level of a pad that was muted from the controller.
 	lvlWas map[proto.PadIndex]int32
+	// lp is the Looper: a take that is on, and where the cursor is.
+	lp *looperState
 	// web is where the state of Perform is published for the browsers, when there is a web side.
 	web    WebSink
 	webURL string
@@ -1161,6 +1164,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.midiEvent(msg)
 	case tickMsg:
 		m.frame++
+		m = m.looperWatch()
 		m.sampleLevel()
 		if m.midiSrc != nil && m.midi == nil && !m.midiOpening && m.frame%50 == 25 {
 			// The unit's MIDI input appears when it is plugged in: it is looked for now and then.
@@ -1231,6 +1235,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, m.wanted()
+	case loopStartedMsg:
+		return m.loopStarted(msg)
+	case loopSavedMsg:
+		return m.loopSaved(msg)
 	case doneMsg:
 		m.message = msg.message
 		if msg.origins != nil {
@@ -1817,6 +1825,10 @@ func (m *Model) wanted() tea.Cmd {
 			m.previewBusy = true
 			return m.loadPreview(slot)
 		}
+	}
+	if m.section == secLooper && m.patterns[m.loopBank()] == nil && !m.stripBusy {
+		m.stripBusy = true
+		return m.loadPatternsQuietly(m.loopBank())
 	}
 	switch m.section {
 	case secPatterns:
