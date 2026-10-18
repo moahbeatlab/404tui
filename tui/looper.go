@@ -373,7 +373,7 @@ func (m Model) looperPattern() (tea.Model, tea.Cmd) {
 		if err := app.WriteStartPattern(unit, slot, pads, bars); err != nil {
 			return doneMsg{message: "the pattern was not made: " + err.Error()}
 		}
-		return doneMsg{message: fmt.Sprintf("pattern %s made: all 16 pads on beat 1, %s", slot, plural(bars, "bar")), reload: true, patterns: true}
+		return doneMsg{message: fmt.Sprintf("pattern %s made (bank %c, pad %d): all 16 pads on beat 1, %s", slot, 'A'+slot.Bank(), slot.Pad()+1, plural(bars, "bar")), reload: true, patterns: true}
 	})
 }
 
@@ -436,7 +436,7 @@ func (m Model) looperBody(g geom) string {
 		pattern = lipgloss.NewStyle().Foreground(st.th.hot).Render("no pattern with all 16 pads: p makes one")
 		for i, r := range rows {
 			if r.Exists && len(r.Pads) == proto.PadsPerBank {
-				pattern = st.dim.Render(fmt.Sprintf("pattern %d plays all 16 pads", i+1))
+				pattern = st.dim.Render(fmt.Sprintf("pattern %s plays all 16 pads", rows[i].Slot))
 				break
 			}
 		}

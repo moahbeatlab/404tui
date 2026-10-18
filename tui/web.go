@@ -74,9 +74,10 @@ type webLooper struct {
 	Target string  `json:"target"` // the pad the next loop goes on, "" when the bank is full
 	// Pattern is the number of the pattern of the bank in which all 16 pads play, 0 when there is none (or it is
 	// not read yet: Known says which).
-	Pattern int          `json:"pattern"`
-	Known   bool         `json:"known"`
-	Pads    []webLoopPad `json:"pads"`
+	Pattern     int          `json:"pattern"`
+	PatternName string       `json:"patternName"` // the slot it is in, such as "A2"
+	Known       bool         `json:"known"`
+	Pads        []webLoopPad `json:"pads"`
 }
 
 type webLoopPad struct {
@@ -263,7 +264,7 @@ func (m Model) webLooper() webLooper {
 		l.Known = true
 		for i, r := range rows {
 			if r.Exists && len(r.Pads) == proto.PadsPerBank {
-				l.Pattern = i + 1
+				l.Pattern, l.PatternName = i+1, r.Slot.String()
 				break
 			}
 		}

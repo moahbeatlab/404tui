@@ -227,7 +227,7 @@
     set($('lpBarsT'), 'textContent', l.bars + (l.bars === 1 ? ' BAR' : ' BARS'));
     set($('lpDelay'), 'textContent', l.delay + ' ms');
     for (const id of ['lpPrev', 'lpNext', 'lpBars']) $(id).disabled = busy;
-    set($('lpPatS'), 'textContent', !l.known ? 'reading…' : l.pattern ? 'pattern ' + l.pattern + ' plays all 16 pads ✓' : 'no pattern with all 16 pads');
+    set($('lpPatS'), 'textContent', !l.known ? 'reading…' : l.pattern ? 'pattern ' + l.patternName + ' plays all 16 pads ✓' : 'no pattern with all 16 pads');
     cls($('lpPat'), 'warn', l.known && !l.pattern);
     const sel = l.pads[lpSel];
     $('lpDel').disabled = !sel || !sel.has;

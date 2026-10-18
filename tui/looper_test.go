@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/moahbeatlab/404tui/midiin"
 )
 
@@ -101,5 +103,17 @@ func TestTheLooperDropsATakeWhenTheClockStops(t *testing.T) {
 	r.s.press("esc")
 	if r.s.m().lp.phase != lpIdle || stopped != 1 {
 		t.Errorf("Esc did not cancel the take: phase %d, stopped %d", r.s.m().lp.phase, stopped)
+	}
+}
+
+func TestTheLooperSaysWhichPatternItMade(t *testing.T) {
+	s := open(t)
+	s.send(tea.WindowSizeMsg{Width: 200, Height: 40})
+	s.press("8", "p")
+	if msg := s.m().message; !strings.Contains(msg, "made (bank A, pad ") || !strings.Contains(msg, "all 16 pads") {
+		t.Fatalf("message %q", msg)
+	}
+	if name := s.m().message; !strings.Contains(name, "pattern A") {
+		t.Errorf("no pattern name in %q", name)
 	}
 }
