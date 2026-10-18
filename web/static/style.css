@@ -325,7 +325,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
   .lpctl .big { min-height: 46px; } .lpctl .big small { display: none; }
   .lpctl { gap: 6px; }
 }
-@media (orientation: portrait) { .lpctl { overflow: visible; } }
+@media (orientation: portrait) { .lpctl { overflow: visible; min-height: max-content; } #looper { grid-template-rows: max-content minmax(230px, 1fr); } }
 .lpbtn { border: 0; color: var(--text); font: inherit; touch-action: manipulation; }
 .lpbtn.on { background: var(--accent); color: var(--ink); } .lpbtn.on small { color: rgba(0,0,0,.6); }
 .lprow2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
