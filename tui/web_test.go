@@ -808,3 +808,21 @@ func TestAPatternSentThatSoundsTheSameTakesOverAfterAWholePattern(t *testing.T) 
 		t.Errorf("now %d next %d, want 3 and -1", p.Now, p.Next)
 	}
 }
+
+func TestADoubleTapOnPatternsShowsTheBankOfThePatternThatPlays(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	slot := m.snap.Bank(0)[2].Pad // A3
+	m.perfNow = &slot
+	r.s.model = m
+	r.s.press("r")
+	r.web(`{"a":"ptnbankset","i":6}`)
+	if got := w.last(t).Ptn.Bank; got != "G" {
+		t.Fatalf("bank %s, want G", got)
+	}
+	r.web(`{"a":"ptnfollow"}`)
+	if got := w.last(t).Ptn; got.Bank != "A" || got.Now != 2 {
+		t.Errorf("after the double tap: %+v", got)
+	}
+}

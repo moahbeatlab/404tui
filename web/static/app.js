@@ -189,12 +189,28 @@
     $('viewBtn').classList.toggle('on', app.dataset.view !== 'perform');
   }
   function setView(v) { app.dataset.view = v; store.set('view', v); syncTabs(); send({ a: 'view', name: v }); try { if (state) render(); } catch (e) { /* before the first state */ } }
+  // A double tap on the Patterns button (the tab, or the button at the top) shows the bank of the pattern that plays.
+  let ptnTapAt = 0;
+  function ptnDouble() {
+    const now = performance.now(), dbl = now - ptnTapAt < 450 && app.dataset.view === 'patterns';
+    ptnTapAt = now;
+    if (dbl) send({ a: 'ptnfollow' });
+    return dbl;
+  }
   tabBtns.forEach((b) => b.addEventListener('pointerdown', (e) => {
     e.preventDefault();
+    if (b.dataset.tab === 'patterns' && ptnDouble()) return;
     if (b.dataset.tab === 'looper' || b.dataset.tab === 'patterns') return setView(b.dataset.tab);
     app.dataset.tab = b.dataset.tab; store.set('tab', b.dataset.tab); setView('perform');
   }));
-  $('viewBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); setView({ perform: 'looper', looper: 'patterns', patterns: 'perform' }[app.dataset.view]); });
+  $('viewBtn').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    // Tapped twice quickly where it said PATTERNS: stay on the Patterns page, and show the bank of the pattern that plays.
+    if (app.dataset.view === 'patterns' && performance.now() - ptnTapAt < 450) { ptnTapAt = performance.now(); send({ a: 'ptnfollow' }); return; }
+    const to = { perform: 'looper', looper: 'patterns', patterns: 'perform' }[app.dataset.view];
+    if (to === 'patterns') ptnTapAt = performance.now();
+    setView(to);
+  });
   syncTabs();
 
   // ---- the Looper ----

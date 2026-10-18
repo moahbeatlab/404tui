@@ -40,6 +40,11 @@ func (m Model) ptnCommand(act string, i int) (tea.Model, tea.Cmd) {
 	lp := m.looper()
 	bank := m.ptnBankNow()
 	switch act {
+	case "ptnfollow":
+		// Back to the bank of the pattern that plays (or the unit's).
+		lp.ptSet = false
+		m.message = "the Patterns page follows the pattern that plays"
+		return m, m.wanted()
 	case "ptnbank", "ptnbankset":
 		if act == "ptnbank" {
 			i = bank + i
