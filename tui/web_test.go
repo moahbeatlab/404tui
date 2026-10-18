@@ -258,6 +258,20 @@ func TestATapFromTheBrowserIsolatesAPadAndADoubleTapMutesIt(t *testing.T) {
 	if busOf("A1") != 1 || busOf("A2") != 1 || busOf("A3") != 2 || w.last(t).Focus.On {
 		t.Error("the second tap did not bring the buses back")
 	}
+	// Two pads on one bus kept, then one let go.
+	r.web(`{"a":"solo","i":0}`)
+	r.web(`{"a":"solo","i":1}`)
+	if busOf("A1") != 1 || busOf("A2") != 1 || busOf("A3") != 2 {
+		t.Errorf("two held pads: buses %d %d %d, want 1 1 2", busOf("A1"), busOf("A2"), busOf("A3"))
+	}
+	r.web(`{"a":"solo","i":0}`)
+	if busOf("A1") != 0 || busOf("A2") != 1 {
+		t.Errorf("A1 let go: buses %d %d, want 0 1", busOf("A1"), busOf("A2"))
+	}
+	r.web(`{"a":"solo","i":1}`)
+	if busOf("A1") != 1 || w.last(t).Focus.On {
+		t.Error("the last pad let go did not bring everything back")
+	}
 	// A double tap: the first tap isolates, the second undoes that and mutes.
 	r.web(`{"a":"solo","i":0}`)
 	r.web(`{"a":"mute","i":0,"n":1}`)

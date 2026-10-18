@@ -73,13 +73,13 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 .bankbpm { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: end; }
 .bankbpm b { font-size: 34px; line-height: 1; display: block; }
 .bank b { color: var(--accent); font-size: 44px; }
-.clock { display: grid; gap: 6px; }
-#beats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-#beats i { height: 14px; border-radius: 5px; background: var(--tile); transition: background .05s; }
+.clock { display: flex; align-items: center; gap: 10px; flex: 1; justify-content: center; min-width: 0; }
+#beats { display: grid; grid-template-columns: repeat(4, 22px); gap: 4px; }
+#beats i { height: 10px; border-radius: 4px; background: var(--tile); transition: background .05s; }
 #beats i.on { background: var(--good); }
 #beats i.on:first-child { background: var(--hot); }
 #beats.stopped i { opacity: .4; }
-#bar { font-weight: 700; font-size: 15px; }
+#bar { font-weight: 700; font-size: 13px; white-space: nowrap; }
 .cue { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .cue button { text-align: left; background: var(--tile); border-radius: 10px; padding: 6px 10px; min-height: 54px; display: grid; align-content: center; }
 .cue button:active { background: #45454c; }
@@ -189,17 +189,16 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 }
 @media (orientation: landscape) and (max-height: 430px) {
   :root { --gap: 6px; --r: 10px; }
-  #top { display: none; }
-  #app { grid-template-rows: 1fr; grid-template-areas: "rail pads motion"; }
+  #top { min-height: 18px; } .brand { display: none; }
+  #app { grid-template-rows: auto 1fr; grid-template-areas: "top top top" "rail pads motion"; }
   .panel { padding: 8px; }
   #rail { gap: 6px; }
-  .cue b { font-size: 18px; } #bar { font-size: 13px; }
+  .cue b { font-size: 18px; }
   .big { min-height: 42px; padding: 4px; font-size: 13px; }
   .ctl { grid-auto-flow: column; gap: 8px; } .ctl b { font-size: 14px; }
   .slot b { font-size: 17px; } .slot svg { height: 16px; }
   .seg button { min-height: 40px; } .dub { min-height: 40px; }
   .pad { padding: 5px 6px 0; } .pad .lv { margin: 0 -6px; height: 9px; }
-  .conn { display: none; } #conn2 { display: flex; margin-top: 2px; }
   .bankbpm { gap: 10px; } .bank b { font-size: 30px; } .bankbpm b { font-size: 24px; }
 }
 @media (orientation: landscape) and (min-width: 1100px) {
@@ -208,7 +207,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 
 /* ---- narrow landscape (a small phone): the pads and one side panel, with two tabs ---- */
 @media (orientation: landscape) and (max-width: 759px) {
-  #app { grid-template-columns: minmax(0, 1fr) minmax(250px, 47%); grid-template-rows: auto 1fr; grid-template-areas: "pads tabs" "pads side"; }
+  #app { grid-template-columns: minmax(0, 1fr) minmax(250px, 47%); grid-template-rows: auto auto 1fr; grid-template-areas: "top top" "pads tabs" "pads side"; }
   #pads { grid-area: pads; }
   #rail, #motion { grid-area: side; display: none; }
   #app[data-tab="pads"] #motion, #app[data-tab="motion"] #motion { display: grid; }
@@ -224,7 +223,6 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
   #rail { overflow-y: auto; gap: 6px; padding: 8px; }
   #rail .big { min-height: 40px; padding: 2px; } #rail .big small { display: none; }
   .bank b { font-size: 28px; } .bankbpm b { font-size: 24px; } .cue b { font-size: 18px; }
-  #beats i { height: 10px; }
   .buttons { gap: 6px; }
 }
 @container (max-width: 100px) { .pad .bars { display: none; } }
@@ -238,7 +236,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
   #app[data-tab="motion"] #motion { display: grid; }
   #app[data-tab="rail"] #rail { display: grid; }
   #grid { width: 100cqw; height: 100cqh; }
-  #rail { grid-template-rows: auto auto auto 1fr; }
+  #rail { grid-template-rows: auto auto 1fr; }
   .buttons { grid-auto-rows: 1fr; min-height: 0; }
   .buttons .big { min-height: 64px; }
   #tabs { grid-area: tabs; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }

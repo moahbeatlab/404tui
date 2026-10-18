@@ -51,7 +51,7 @@ to the program at the top right (a few milliseconds on a good network).
 | Tap | Does |
 | --- | --- |
 | a pad | mutes it (its volume goes to 0 on the unit; another tap brings back the level it had) |
-| a pad, held (0.4 s) | makes it the only one on its bus (the others on that bus go dry, the phone vibrates); hold it again to bring them back |
+| a pad, held (0.4 s) | it keeps its bus and the others on that bus go dry (the phone vibrates); hold more pads to keep them too; hold a kept pad again to let it go, the last one brings everything back |
 | a pad while **FOCUS** is on | picks the pad: the picked ones keep their bus; FOCUS again puts everything back |
 
 The tile shows the number, the name, the bus (a coloured box), the volume (the bar under the name),

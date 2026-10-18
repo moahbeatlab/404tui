@@ -237,14 +237,26 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		}
 		return m.clickPad(m.snap.Bank(m.perfBank())[c.I].Pad)
 	case "solo":
-		// A tap: the pad is the only one on its bus; on the pad that is alone already, everything goes
-		// back. A muted pad is brought back first.
+		// A hold on a pad: it keeps its bus and the others on that bus go dry; held again, it lets go (when
+		// no pad is kept any more, everything goes back). A muted pad is brought back first.
 		if m.snap == nil || c.I < 0 || c.I > 15 {
 			return m, nil
 		}
 		pad := m.snap.Bank(m.perfBank())[c.I].Pad
-		if m.iso != nil && len(m.iso.pads) == 1 && m.iso.pads[pad] {
-			return m.isolateOff()
+		// The pads kept so far: a hold adds the pad, or takes it out when it is kept already.
+		keep := map[proto.PadIndex]bool{}
+		if m.iso != nil {
+			for p := range m.iso.pads {
+				keep[p] = true
+			}
+		}
+		if keep[pad] {
+			delete(keep, pad)
+			if len(keep) == 0 && (m.iso == nil || !m.iso.multi) {
+				return m.isolateOff()
+			}
+			m.message = fmt.Sprintf("%s is no longer kept on its bus", pad)
+			return m.setIsolated(keep)
 		}
 		var undo tea.Cmd
 		if _, muted := m.lvlWas[pad]; muted {
@@ -254,8 +266,9 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 			m.message = fmt.Sprintf("%s goes to no bus: nothing to isolate", pad)
 			return m, undo
 		}
-		m.message = fmt.Sprintf("%s alone on %s: tap it again to bring the others back", pad, busName(m.busOf(pad)))
-		nm, cmd := m.setIsolated(map[proto.PadIndex]bool{pad: true})
+		keep[pad] = true
+		m.message = fmt.Sprintf("%s kept on %s: hold it again to let it go", pad, busName(m.busOf(pad)))
+		nm, cmd := m.setIsolated(keep)
 		return nm, tea.Batch(undo, cmd)
 	case "level":
 		nm, cmd := m.levelSet2(c.I, int32(c.Value))
