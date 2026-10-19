@@ -19,6 +19,8 @@ type punchRun struct {
 	held int // the snapshot held, 1 to 4; 0 for none
 	was  PunchSnap
 	arm  bool
+	// edit: what is changed on the unit while a snapshot is held is kept in it when it is let go.
+	edit bool
 	// morph: a tap on a snapshot does not hold it but starts the morph (see morph.go).
 	morph bool
 	// active is the snapshot the morph goes to (1 to 4, 0 for none), mix how far it is (0 to 127), from the state
@@ -122,10 +124,14 @@ func (m Model) punchAct(act string, slot int) Model {
 		}
 		return m
 	case "mode":
-		run.morph = !run.morph
-		if run.morph {
+		// slot is the mode here: 0 hold, 1 morph, 2 edit.
+		run.morph, run.edit = slot == 1, slot == 2
+		switch slot {
+		case 1:
 			m.message = "MORPH: tap a snapshot, then the slider (or the encoder) moves to it; tap it again to stop"
-		} else {
+		case 2:
+			m.message = "EDIT: hold a snapshot and turn the knobs on the unit; let go to keep what you changed in it"
+		default:
 			m.message = "HOLD: hold a snapshot to punch it"
 		}
 		return m
@@ -180,14 +186,62 @@ func (m Model) punchUp() Model {
 		return m
 	}
 	snap := m.mem.Punch[run.held-1]
-	for b, p := range snap {
-		if p.Set && !m.punchBusy(b) {
-			m = m.punchGo(b, run.was[b])
+	text := "let go"
+	if run.edit {
+		n := 0
+		cur := m.capturePunch()
+		for b := range snap {
+			if merged, changed := punchMerge(snap[b], cur[b], run.was[b]); changed {
+				snap[b], n = merged, n+1
+			}
+		}
+		m.mem.Punch[run.held-1] = snap
+		text = "let go, nothing changed"
+		if n > 0 {
+			text = fmt.Sprintf("let go, %s kept: %s", plural(n, "bus"), punchText(snap))
 		}
 	}
-	m.message = fmt.Sprintf("PUNCH %d let go", run.held)
+	for b, p := range snap {
+		if (p.Set || run.edit) && !m.punchBusy(b) {
+			back := run.was[b]
+			if p.On == 1 && back.On < 0 {
+				// The unit never said whether this effect was on: a punch that switched it on switches it off again.
+				back.On = 0
+			}
+			m = m.punchGo(b, back)
+		}
+	}
+	m.message = fmt.Sprintf("PUNCH %d %s", run.held, text)
 	run.held = 0
 	return m
+}
+
+// punchMerge takes what was changed on a bus while a snapshot was held into the snapshot: every value that is not
+// what it was before the hold (was) and not what the snapshot had. A bus the snapshot did not hold joins it when
+// something on it changed. changed says whether anything did.
+func punchMerge(snap, cur, was PunchBus) (PunchBus, bool) {
+	out, changed := snap, false
+	if !snap.Set {
+		out = PunchBus{On: -1, Num: -1, Knobs: [6]int{-1, -1, -1, -1, -1, -1}}
+	}
+	take := func(snapV, curV, wasV int, to *int) {
+		if curV < 0 || curV == snapV && snap.Set {
+			return
+		}
+		if !snap.Set && curV == wasV {
+			return
+		}
+		*to, changed = curV, true
+	}
+	take(snap.Num, cur.Num, was.Num, &out.Num)
+	take(snap.On, cur.On, was.On, &out.On)
+	for k := range out.Knobs {
+		take(snap.Knobs[k], cur.Knobs[k], was.Knobs[k], &out.Knobs[k])
+	}
+	if changed {
+		out.Set = true
+	}
+	return out, changed
 }
 
 func punchSet(s PunchSnap) bool {
@@ -221,6 +275,7 @@ func punchText(s PunchSnap) string {
 // webPunch is the snapshots for the page.
 type webPunch struct {
 	Arm     bool            `json:"arm"`
+	Edit    bool            `json:"edit"`
 	Morph   bool            `json:"morph"`
 	Active  int             `json:"active"`
 	Mix     int             `json:"mix"`
@@ -243,7 +298,7 @@ type webPunchSlot struct {
 
 func (m Model) webPunch() webPunch {
 	run := m.scenes().punch
-	w := webPunch{Arm: run.arm, Morph: run.morph, Active: run.active, Mix: run.mix, Presets: make([]webPreset, len(punchPresets))}
+	w := webPunch{Arm: run.arm, Morph: run.morph, Edit: run.edit, Active: run.active, Mix: run.mix, Presets: make([]webPreset, len(punchPresets))}
 	for i, p := range punchPresets {
 		w.Presets[i] = webPreset{Name: p.name, Note: p.note}
 		for b, f := range p.bus {

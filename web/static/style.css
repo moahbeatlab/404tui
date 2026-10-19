@@ -188,8 +188,9 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 #punch { display: grid; gap: 8px; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
 #pnSlots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; min-height: 0; }
 #pnBar { min-height: 42px; display: grid; }
-#pnTools { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 6px; }
-#pnTools .big, #pnTools .seg button { min-height: 46px; font-size: 13px; padding: 0 4px; }
+#pnTools { display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(0, 0.9fr) minmax(0, 1.2fr); gap: 6px; }
+#pnTools > * { min-width: 0; } #pnTools .seg { gap: 4px; }
+#pnTools .big, #pnTools .seg button { min-height: 46px; font-size: 12px; padding: 0 2px; letter-spacing: 0; }
 #pnMorph { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
 #pnMorph[hidden], #pnTools[hidden] { display: none; }
 #pnMorph .big { min-height: 56px; padding: 0 16px; font-size: 13px; }

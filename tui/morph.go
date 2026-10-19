@@ -22,6 +22,10 @@ const morphStep = 2
 // morphBus is the state of a bus at mix (0 to 127) of the way from a to b.
 func morphBus(a, b PunchBus, mix int) PunchBus {
 	out := a
+	if a.On < 0 && b.On == 1 {
+		// Not known to be on at the start: back at the start it is off again.
+		out.On = 0
+	}
 	half := mix >= 64
 	same := a.Num < 0 || b.Num < 0 || a.Num == b.Num
 	if b.Num >= 0 && half {

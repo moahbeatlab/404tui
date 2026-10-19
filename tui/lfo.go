@@ -224,10 +224,8 @@ func (m Model) lfoRestore(i int) Model {
 		return m
 	}
 	if set.Knob == lfoSwitch {
-		if run.wasOn < 0 {
-			return m
-		}
-		return m.lfoSend(i, run.wasOn*127)
+		// A switch the unit never said anything about goes back off, not left as the gate stopped.
+		return m.lfoSend(i, max(run.wasOn, 0)*127)
 	}
 	return m.lfoSend(i, run.center)
 }

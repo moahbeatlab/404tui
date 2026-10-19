@@ -87,7 +87,15 @@ before, wherever you had moved it since. Nothing waits for the clock: it is plai
 To store: tap **SAVE** (it lights, and the four buttons say SAVE HERE), then tap a snapshot; it keeps what the
 four buses are doing now. The dots show which buses a snapshot holds. They are kept between runs.
 
-**MORPH** (the switch HOLD / MORPH): in this mode a tap does not hold a snapshot but starts a morph to it. A
+**EDIT** (the switch HOLD / EDIT / MORPH): hold a snapshot as usual, and turn the knobs (or change the effect) on the
+unit while you hold it; when you let go the changes are kept in the snapshot, and the buses still go back to what they
+were before. A bus the snapshot did not hold joins it when you change something on it. In HOLD a tweak is only a
+preview and is thrown away. Nothing is kept if nothing was changed (the message says so).
+
+When a snapshot (or a morph back at 0, or an LFO gate) is let go, an effect that it switched on goes **off** again
+if the unit had never said whether it was on: the effect is not left running.
+
+**MORPH** (the switch HOLD / EDIT / MORPH): in this mode a tap does not hold a snapshot but starts a morph to it. A
 slider takes the place of the buttons: 0 is the state the buses were in when you tapped, 127 is the snapshot, and you
 move between with a finger (or an encoder, below). Where the effect is the same the knobs move smoothly; an effect
 that changes, a bus that goes on or off, and knobs that were not known at the start change halfway (at 64). Back at

@@ -443,7 +443,7 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 	case "lfoon":
 		return m.lfoToggle(c.I), nil
 	case "punchmode":
-		return m.punchAct("mode", 0), nil
+		return m.punchAct("mode", c.N), nil
 	case "punchsave":
 		return m.punchAct("save", 0), nil
 	case "mclear":

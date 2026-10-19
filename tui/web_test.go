@@ -971,7 +971,7 @@ func TestMorphMovesTheBusesFromWhereTheyAreToTheSnapshot(t *testing.T) {
 	r.cc(1, 80, 60)
 	r.cc(2, ccFxNumber, 11)
 	r.cc(3, ccFxSwitch, 0)
-	r.web(`{"a":"punchmode"}`)
+	r.web(`{"a":"punchmode","n":1}`)
 	r.clearSent()
 	r.web(`{"a":"punch","i":0,"n":1}`) // starts the morph, sends nothing
 	if n := len(r.sent()); n != 0 {
@@ -1097,5 +1097,69 @@ func TestLfoPumpDipsOnTheBeatAndTheSwitchGates(t *testing.T) {
 	r.tick(12)
 	if got := ccOut(r.sent(), 2, ccFxSwitch); got != 0 {
 		t.Errorf("second half of the square: switch = %d", got)
+	}
+}
+
+func TestPunchEditKeepsWhatIsChangedWhileASnapshotIsHeld(t *testing.T) {
+	r, _ := webRig(t)
+	for ch := 1; ch <= 2; ch++ {
+		r.cc(ch, ccFxNumber, 10)
+		r.cc(ch, 16, 50)
+		r.cc(ch, ccFxSwitch, 127)
+	}
+	r.web(`{"a":"punchsave"}`)
+	r.web(`{"a":"punch","i":0,"n":1}`)
+	r.cc(1, 16, 90) // later the buses are somewhere else
+	r.cc(2, 16, 90)
+	// Held in HOLD mode, a tweak is only a preview.
+	r.web(`{"a":"punch","i":0,"n":1}`)
+	r.cc(1, 16, 33)
+	r.web(`{"a":"punch","i":0,"n":0}`)
+	if got := r.s.m().mem.Punch[0][0].Knobs[0]; got != 50 {
+		t.Fatalf("a tweak in HOLD changed the snapshot: %d", got)
+	}
+	// In EDIT: bus 1's knob is turned (it is in the snapshot), bus 2's CTRL 2 too (not known there before).
+	r.cc(1, 16, 90)
+	r.web(`{"a":"punchmode","n":2}`)
+	r.web(`{"a":"punch","i":0,"n":1}`)
+	r.cc(1, 16, 33)
+	r.cc(2, 17, 77)
+	r.clearSent()
+	r.web(`{"a":"punch","i":0,"n":0}`)
+	snap := r.s.m().mem.Punch[0]
+	if snap[0].Knobs[0] != 33 {
+		t.Errorf("bus 1 CTRL 1 in the snapshot = %d, want 33", snap[0].Knobs[0])
+	}
+	if snap[1].Knobs[1] != 77 || snap[1].Knobs[0] != 50 {
+		t.Errorf("bus 2 in the snapshot: %+v", snap[1])
+	}
+	if got := ccOut(r.sent(), 1, 16); got != 90 {
+		t.Errorf("after the edit bus 1 went back to %d, want 90", got)
+	}
+}
+
+func TestPunchReleaseSwitchesAnEffectOffThatWasNotKnownToBeOn(t *testing.T) {
+	r, _ := webRig(t)
+	// The snapshot has bus 1 on; the unit has never said whether bus 1 is on now.
+	m := r.s.m()
+	m.mem.Punch[0][0] = PunchBus{Set: true, On: 1, Num: 10, Knobs: [6]int{40, -1, -1, -1, -1, -1}}
+	r.s.model = m
+	r.web(`{"a":"punch","i":0,"n":1}`)
+	if got := ccOut(r.sent(), 1, ccFxSwitch); got != 127 {
+		t.Fatalf("held: switch = %d", got)
+	}
+	r.clearSent()
+	r.web(`{"a":"punch","i":0,"n":0}`)
+	if got := ccOut(r.sent(), 1, ccFxSwitch); got != 0 {
+		t.Errorf("released: the effect was left on (switch = %d)", got)
+	}
+	// Morph back to 0 does the same.
+	r.web(`{"a":"punchmode","n":1}`)
+	r.web(`{"a":"punch","i":0,"n":1}`)
+	r.web(`{"a":"morph","n":127}`)
+	r.clearSent()
+	r.web(`{"a":"morph","n":0}`)
+	if got := ccOut(r.sent(), 1, ccFxSwitch); got != 0 {
+		t.Errorf("morph back at 0: the effect was left on (switch = %d)", got)
 	}
 }

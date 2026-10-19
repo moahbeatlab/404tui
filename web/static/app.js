@@ -209,9 +209,11 @@
     punchEls.push({ b, dots: [...b.querySelectorAll('i')], small: b.querySelector('small') });
   }
   const pnMode = document.createElement('div'); pnMode.className = 'seg';
-  const pnModeBtns = ['HOLD', 'MORPH'].map((t, k) => {
+  const PN_MODES = [['HOLD', 0], ['EDIT', 2], ['MORPH', 1]];
+  const pnModeNow = (p) => (p.morph ? 1 : p.edit ? 2 : 0);
+  const pnModeBtns = PN_MODES.map(([t, v]) => {
     const b = document.createElement('button'); b.textContent = t;
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!!(state && state.punch && state.punch.morph) !== (k === 1)) send({ a: 'punchmode' }); });
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); if (state && state.punch && pnModeNow(state.punch) !== v) send({ a: 'punchmode', n: v }); });
     pnMode.appendChild(b); return b;
   });
   const pnSave = document.createElement('button');
@@ -287,11 +289,11 @@
       const run = p.active === i + 1;
       cls(e.b, 'empty', !s.set); cls(e.b, 'held', s.held || run); cls(e.b, 'arm', p.arm);
       s.buses.forEach((on, n) => cls(e.dots[n], 'on', on));
-      set(e.small, 'textContent', p.arm ? 'SAVE HERE' : run ? 'MORPH' : s.held ? 'HELD' : s.set ? (p.morph ? 'morph' : 'hold') : 'empty');
+      set(e.small, 'textContent', p.arm ? 'SAVE HERE' : run ? 'MORPH' : s.held ? 'HELD' : s.set ? (p.morph ? 'morph' : p.edit ? 'hold + edit' : 'hold') : 'empty');
     });
     cls(pnSave, 'arm', p.arm);
     set(pnSave.firstChild, 'textContent', p.arm ? 'TAP ONE' : 'SAVE');
-    pnModeBtns.forEach((b, k) => cls(b, 'on', p.morph === (k === 1)));
+    pnModeBtns.forEach((b, k) => cls(b, 'on', pnModeNow(p) === PN_MODES[k][1]));
     pnMorph.hidden = !p.active; pnTools.hidden = !!p.active;
     if (p.active && !pnDrag) {
       pnFader.firstChild.style.width = (p.mix / 127 * 100) + '%'; pnFader.querySelector('b').textContent = 'TO ' + p.active + '  ' + p.mix; pnLast = p.mix;
