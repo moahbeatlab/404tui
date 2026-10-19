@@ -197,10 +197,51 @@
     punchEl.appendChild(b);
     punchEls.push({ b, dots: [...b.querySelectorAll('i')], small: b.querySelector('small') });
   }
+  const pnSide = document.createElement('div');
+  pnSide.id = 'pnSide';
   const pnSave = document.createElement('button');
   pnSave.id = 'pnSave'; pnSave.className = 'big'; pnSave.innerHTML = '<span>SAVE</span><small>hold to punch</small>';
   pnSave.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'punchsave' }); });
-  punchEl.appendChild(pnSave);
+  const pnPre = document.createElement('button');
+  pnPre.className = 'big'; pnPre.innerHTML = '<span>PRESETS</span>';
+  pnPre.addEventListener('pointerdown', (e) => { e.preventDefault(); $('presetPick').hidden = false; drawPresets(); });
+  pnSide.appendChild(pnSave); pnSide.appendChild(pnPre);
+  punchEl.appendChild(pnSide);
+  // The presets: pick the snapshot they go into (the first empty one to begin with, then the next), tap a preset.
+  let presetInto = -1;
+  const intoEl = $('presetInto');
+  for (let i = 0; i < 4; i++) {
+    const b = document.createElement('button');
+    b.textContent = i + 1;
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); presetInto = i; drawPresets(); });
+    intoEl.appendChild(b);
+  }
+  function drawPresets() {
+    const p = state && state.punch;
+    if (!p) return;
+    if (presetInto < 0) { const e = p.slots.findIndex((s) => !s.set); presetInto = e < 0 ? 0 : e; }
+    [...intoEl.children].forEach((b, i) => { cls(b, 'on', i === presetInto); cls(b, 'set', p.slots[i].set); });
+    const list = $('presetList');
+    if (list.children.length !== p.presets.length) {
+      list.innerHTML = '';
+      p.presets.forEach((pr, i) => {
+        const b = document.createElement('button');
+        b.innerHTML = '<b></b><span class="dots">' + [1, 2, 3, 4].map((n) => '<i style="--c:var(--bus' + n + ')"></i>').join('') + '</span><small></small>';
+        b.querySelector('b').textContent = pr.name; b.querySelector('small').textContent = pr.note;
+        pr.buses.forEach((on, n) => cls(b.querySelectorAll('i')[n], 'on', on));
+        b.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          send({ a: 'punchpreset', i, n: presetInto });
+          presetInto = (presetInto + 1) % 4;
+          if (navigator.vibrate) navigator.vibrate(10);
+          drawPresets();
+        });
+        list.appendChild(b);
+      });
+    }
+  }
+  $('presetX').addEventListener('pointerdown', (e) => { e.preventDefault(); $('presetPick').hidden = true; });
+  $('presetPick').addEventListener('pointerdown', (e) => { if (e.target === $('presetPick')) $('presetPick').hidden = true; });
   // A finger that is lost (the page hidden, the screen locked) must not leave the buses punched.
   window.addEventListener('blur', () => [...punchHeld].forEach(punchUp));
   document.addEventListener('visibilitychange', () => { if (document.hidden) [...punchHeld].forEach(punchUp); });
@@ -496,6 +537,7 @@
     $('waiting').hidden = s.unit;
     renderLooper(s);
     renderPunch(s.punch);
+    if (!$('presetPick').hidden) drawPresets();
     if (s.ptn) renderPatterns(s.ptn);
     renderMeters(s.level, s.levelNote);
     set($('bank'), 'textContent', s.bank || '–');

@@ -174,7 +174,7 @@ func punchText(s PunchSnap) string {
 		}
 		t := fmt.Sprintf("BUS %d", b+1)
 		if p.Num >= 0 {
-			t += " " + fxName(p.Num)
+			t += " " + fxNameOf(b, p.Num)
 		}
 		parts = append(parts, t)
 	}
@@ -186,8 +186,16 @@ func punchText(s PunchSnap) string {
 
 // webPunch is the snapshots for the page.
 type webPunch struct {
-	Arm   bool            `json:"arm"`
-	Slots [4]webPunchSlot `json:"slots"`
+	Arm     bool            `json:"arm"`
+	Slots   [4]webPunchSlot `json:"slots"`
+	Presets []webPreset     `json:"presets"`
+}
+
+// webPreset is a preset to choose from: its name, what it does and the buses it sets.
+type webPreset struct {
+	Name  string  `json:"name"`
+	Note  string  `json:"note"`
+	Buses [4]bool `json:"buses"`
 }
 
 type webPunchSlot struct {
@@ -198,7 +206,13 @@ type webPunchSlot struct {
 
 func (m Model) webPunch() webPunch {
 	run := m.scenes().punch
-	w := webPunch{Arm: run.arm}
+	w := webPunch{Arm: run.arm, Presets: make([]webPreset, len(punchPresets))}
+	for i, p := range punchPresets {
+		w.Presets[i] = webPreset{Name: p.name, Note: p.note}
+		for b, f := range p.bus {
+			w.Presets[i].Buses[b] = f.fx != ""
+		}
+	}
 	for i, s := range m.mem.Punch {
 		w.Slots[i] = webPunchSlot{Set: punchSet(s), Held: run.held == i+1}
 		for b, p := range s {
@@ -206,4 +220,18 @@ func (m Model) webPunch() webPunch {
 		}
 	}
 	return w
+}
+
+// punchPreset puts a preset into a snapshot. One that is held is let go first, so what it gave back is not lost.
+func (m Model) punchPreset(preset, slot int) Model {
+	if preset < 0 || preset >= len(punchPresets) || slot < 0 || slot > 3 {
+		return m
+	}
+	m.sc = m.scenes()
+	if m.sc.punch.held != 0 {
+		m = m.punchUp()
+	}
+	m.mem.Punch[slot] = punchPresets[preset].snap()
+	m.message = fmt.Sprintf("PUNCH %d: %s", slot+1, punchPresets[preset].name)
+	return m
 }

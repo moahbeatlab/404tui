@@ -911,3 +911,47 @@ func TestPunchHoldsASnapshotOfAllFourBusesAndGivesThePreviousStateBackOnRelease(
 		t.Errorf("an empty snapshot sent %d messages", n)
 	}
 }
+
+func TestPunchPresetsFillASnapshotAndUseTheEffectsOfTheirBus(t *testing.T) {
+	for _, p := range punchPresets {
+		s := p.snap()
+		used := false
+		for b, f := range p.bus {
+			if f.fx == "" {
+				if s[b].Set {
+					t.Errorf("%s: bus %d has no effect but is set", p.name, b+1)
+				}
+				continue
+			}
+			used = true
+			if fxNum(b, f.fx) < 1 {
+				t.Errorf("%s: bus %d does not have %q", p.name, b+1, f.fx)
+			}
+			for k, v := range f.k {
+				if v < -1 || v > 127 {
+					t.Errorf("%s: bus %d knob %d = %d", p.name, b+1, k+1, v)
+				}
+			}
+		}
+		if !used {
+			t.Errorf("%s sets no bus", p.name)
+		}
+	}
+	r, _ := webRig(t)
+	r.web(`{"a":"punchpreset","i":2,"n":3}`) // ECHO THROW into snapshot 4
+	r.clearSent()
+	r.web(`{"a":"punch","i":3,"n":1}`)
+	sent := r.sent()
+	if got := ccOut(sent, 1, ccFxNumber); got != fxNum(0, "Tape Echo") {
+		t.Errorf("bus 1 effect = %d", got)
+	}
+	if got := ccOut(sent, 3, ccFxNumber); got != fxNum(2, "SX Delay") {
+		t.Errorf("bus 3 effect = %d, want SX Delay of the bus 3 list (%d)", got, fxNum(2, "SX Delay"))
+	}
+	if got := ccOut(sent, 2, ccFxNumber); got != -1 {
+		t.Errorf("bus 2 is not in the preset but was sent an effect: %d", got)
+	}
+	if got := ccOut(sent, 1, ccFxSwitch); got != 127 {
+		t.Errorf("the preset's effect is not switched on: %d", got)
+	}
+}

@@ -18,6 +18,39 @@ const (
 	ccFxNumber = 83
 )
 
+// fxNames34 is the same for bus 3 and 4, which have another list (and not all effects of buses 1 and 2).
+var fxNames34 = []string{"(OFF)", "303 VinylSim", "404 VinylSim", "Cassette Sim", "Lo-fi", "Downer", "Compressor", "Equalizer",
+	"Isolator", "Super Filter", "Filter+Drive", "WrmSaturator", "Overdrive", "Distortion", "Crusher", "Ring Mod", "SBF",
+	"Resonator", "Hyper-Reso", "Chromatic PS", "Reverb", "Ha-Dou", "Zan-Zou", "Sync Delay", "TimeCtrlDly", "Ko-Da-Ma",
+	"Tape Echo", "Chorus", "JUNO Chorus", "Flanger", "Phaser", "Wah", "Slicer", "Tremolo/Pan", "To-Gu-Ro", "DJFX Looper",
+	"Scatter", "SX Reverb", "SX Delay", "Cloud Delay", "DJFX Delay"}
+
+// fxTable is the list of effects of bus 0 to 3.
+func fxTable(bus int) []string {
+	if bus >= 2 {
+		return fxNames34
+	}
+	return fxNames
+}
+
+// fxNum is the number of an effect on a bus, -1 when the bus does not have it.
+func fxNum(bus int, name string) int {
+	for i, n := range fxTable(bus) {
+		if n == name {
+			return i
+		}
+	}
+	return -1
+}
+
+// fxNameOf is the name of an effect number on a bus (0 to 3).
+func fxNameOf(bus, num int) string {
+	if t := fxTable(bus); num >= 0 && num < len(t) {
+		return t[num]
+	}
+	return "?"
+}
+
 // fxName is the name of an effect number.
 func fxName(num int) string {
 	if num >= 0 && num < len(fxNames) {

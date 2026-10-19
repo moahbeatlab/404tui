@@ -87,6 +87,12 @@ before, wherever you had moved it since. Nothing waits for the clock: it is plai
 To store: tap **SAVE** (it lights, and the four buttons say SAVE HERE), then tap a snapshot; it keeps what the
 four buses are doing now. The dots show which buses a snapshot holds. They are kept between runs.
 
+**PRESETS** opens a list of ready-made snapshots (RISER, TAPE, ECHO THROW, STUTTER, TAPE STOP, TELEPHONE). Pick the
+snapshot they go into at the top (it starts at the first empty one and moves on after each tap), then tap a
+preset. Each sets the effect, knobs and on for the buses it uses (the dots show which) and leaves the others
+alone. The knob values are worked out from the unit's parameter lists but were chosen on paper, not by ear:
+treat them as a start, hold one, and re-save your own version with SAVE.
+
 Only what the unit has said over MIDI is saved: turn a knob of a bus once (or switch its effect) and it is
 known. A bus with a motion playing is left alone. A value that was unknown when you pressed cannot be given
 back and stays as the snapshot had it. If the finger is lost (the page hidden, the screen locked), the
