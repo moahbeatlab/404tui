@@ -483,6 +483,7 @@
   press('slTPrev', () => send({ a: 'sltbank', n: -1 }));
   press('slTNext', () => send({ a: 'sltbank', n: 1 }));
   // The settings are chosen from a list, as in the LFO page.
+  const SWING = { 0: 'OFF', 54: 'LIGHT', 58: 'MEDIUM', 62: 'HEAVY', 66: 'TRIPLET' };
   const SLICES = [2, 4, 8, 16, 32], DIVS = [0, 2, 4, 8, 16], SWINGS = [0, 54, 58, 62, 66], ORDERS = ['SHUFFLE', 'IN ORDER', 'RANDOM'];
   const slPicker = (id, title, names, cur, act, cols, hints) => press(id, () => { const sl = state && state.slicer; if (sl) openOpts(title, names, cur(sl), (n) => send({ a: act, pick: n }), cols, hints); });
   slPicker('slSlices', 'Slices', SLICES.map((n) => n + ' slices'), (sl) => SLICES.indexOf(sl.slices), 'slslices', 3);
@@ -533,7 +534,6 @@
       set(m.txt, 'textContent', (lv.src === 'input' ? '' : 'REC ') + (top <= -60 ? '−∞ dB' : top + ' dB'));
     }
   }
-  const SWING = { 0: 'OFF', 54: 'LIGHT', 58: 'MEDIUM', 62: 'HEAVY', 66: 'TRIPLET' };
   function renderSlicer(sl) {
     set($('slBank'), 'textContent', sl.bank);
     set($('slTBank'), 'textContent', sl.target);
