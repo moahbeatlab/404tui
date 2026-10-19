@@ -1163,3 +1163,70 @@ func TestPunchReleaseSwitchesAnEffectOffThatWasNotKnownToBeOn(t *testing.T) {
 		t.Errorf("morph back at 0: the effect was left on (switch = %d)", got)
 	}
 }
+
+func TestPunchShowsTheValuesOfTheSnapshotAndWhatChangedWhileHeld(t *testing.T) {
+	r, _ := webRig(t)
+	r.cc(1, ccFxNumber, fxNum(0, "Super Filter"))
+	r.cc(1, 16, 76) // CUTOFF: 60
+	r.cc(1, 18, 64) // FLT TYPE
+	r.cc(1, ccFxSwitch, 127)
+	r.web(`{"a":"punchsave"}`)
+	r.web(`{"a":"punch","i":0,"n":1}`)
+	r.web(`{"a":"punchmode","n":2}`)
+	r.web(`{"a":"punch","i":0,"n":1}`)
+	r.cc(1, 16, 100)
+	r.s.press("r")
+	p := r.s.m().webPunch()
+	if p.Sel != 1 || !p.Snap[0].Set || p.Snap[0].Name != "Super Filter" {
+		t.Fatalf("snapshot values: sel %d %+v", p.Sel, p.Snap[0])
+	}
+	if p.Snap[0].Params[0] != "CUTOFF" || p.Snap[0].Text[0] != "60" {
+		t.Errorf("snapshot CUTOFF = %q %q, want CUTOFF 60", p.Snap[0].Params[0], p.Snap[0].Text[0])
+	}
+	if p.Live[0].Raw[0] != 100 || p.Live[0].Text[0] != "79" {
+		t.Errorf("live CUTOFF = %d %q, want 100, 79", p.Live[0].Raw[0], p.Live[0].Text[0])
+	}
+	if p.Snap[0].Params[2] != "FLT TYPE" || p.Snap[0].Text[2] != "BPF" {
+		t.Errorf("FLT TYPE = %q %q", p.Snap[0].Params[2], p.Snap[0].Text[2])
+	}
+	if p.Snap[1].Set {
+		t.Error("a bus that is not in the snapshot is shown as set")
+	}
+}
+
+func TestAPunchWaitsForALfoOnItsBusAndGivesBackTheStateBeforeTheLfo(t *testing.T) {
+	r, _ := webRig(t)
+	r.cc(1, ccFxNumber, 10)
+	r.cc(1, 16, 50)
+	r.cc(1, ccFxSwitch, 127)
+	m := r.s.m()
+	m.mem.Punch[0][0] = PunchBus{Set: true, On: 1, Num: 14, Knobs: [6]int{100, -1, -1, -1, -1, -1}}
+	r.s.model = m
+	r.web(`{"a":"lfoset","i":0,"name":"depth","n":100}`)
+	r.web(`{"a":"lfoset","i":0,"name":"rate","n":2}`) // 1/4: 24 ticks
+	r.web(`{"a":"lfoon","i":0}`)
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.tick(6) // the LFO is off its centre
+	if got := ccOut(r.sent(), 1, 16); got == 50 || got == -1 {
+		t.Fatalf("the LFO is not moving the knob: %d", got)
+	}
+	r.web(`{"a":"punch","i":0,"n":1}`)
+	r.clearSent()
+	r.tick(12) // held: the LFO must not touch the bus
+	if got := ccOut(r.sent(), 1, 16); got != -1 {
+		t.Errorf("an LFO moved the knob while the punch was held: %d", got)
+	}
+	r.web(`{"a":"punch","i":0,"n":0}`)
+	sent := r.sent()
+	if got := ccOut(sent, 1, 16); got != 50 {
+		t.Errorf("released: the knob = %d, want the LFO's centre 50", got)
+	}
+	if got := ccOut(sent, 1, ccFxNumber); got != 10 {
+		t.Errorf("released: the effect = %d, want 10", got)
+	}
+	r.clearSent()
+	r.tick(6)
+	if got := ccOut(r.sent(), 1, 16); got == -1 {
+		t.Error("the LFO did not go on after the punch let go")
+	}
+}

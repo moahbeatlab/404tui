@@ -230,6 +230,39 @@ func (m Model) lfoRestore(i int) Model {
 	return m.lfoSend(i, run.center)
 }
 
+// lfoPaused is whether a Punch that is held, or a Morph, has the bus of an LFO: it waits and goes on when they let go.
+func (m Model) lfoPaused(bus int) bool {
+	run := m.scenes().punch
+	if run.held != 0 && (run.edit || m.mem.Punch[run.held-1][bus].Set) {
+		return true
+	}
+	return run.active != 0 && m.mem.Punch[run.active-1][bus].Set
+}
+
+// lfoBase puts the state an LFO swings around into a capture of the buses: the knob at its centre, the effect switch as it
+// was, not where the LFO happens to have it at this moment. What a Punch or a Morph goes back to is then the effect
+// as it was before the LFO.
+func (m Model) lfoBase(cap PunchSnap) PunchSnap {
+	if m.sc == nil {
+		return cap
+	}
+	for i := range lfoCount {
+		run := m.sc.lfo[i]
+		if !run.on {
+			continue
+		}
+		set := m.lfoSetting(i)
+		if set.Knob == lfoSwitch {
+			if run.wasOn >= 0 {
+				cap[set.Bus].On = run.wasOn
+			}
+		} else {
+			cap[set.Bus].Knobs[set.Knob] = run.center
+		}
+	}
+	return cap
+}
+
 // lfoTick moves the LFOs on one tick of the clock.
 func (m Model) lfoTick() Model {
 	if m.sc == nil || m.clock == nil {
@@ -242,6 +275,10 @@ func (m Model) lfoTick() Model {
 		}
 		set := m.lfoSetting(i)
 		if m.punchBusy(set.Bus) {
+			continue
+		}
+		if m.lfoPaused(set.Bus) {
+			run.last = -1
 			continue
 		}
 		m = m.lfoSend(i, lfoValue(set, run.center, m.clock.ticks, run))

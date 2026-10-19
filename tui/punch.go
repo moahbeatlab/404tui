@@ -19,6 +19,8 @@ type punchRun struct {
 	held int // the snapshot held, 1 to 4; 0 for none
 	was  PunchSnap
 	arm  bool
+	// sel is the snapshot whose values the page shows (1 to 4), the last one held or tapped.
+	sel int
 	// edit: what is changed on the unit while a snapshot is held is kept in it when it is let go.
 	edit bool
 	// morph: a tap on a snapshot does not hold it but starts the morph (see morph.go).
@@ -139,6 +141,7 @@ func (m Model) punchAct(act string, slot int) Model {
 		if slot < 0 || slot > 3 {
 			return m
 		}
+		run.sel = slot + 1
 		if run.morph && !run.arm {
 			return m.morphStart(slot)
 		}
@@ -160,7 +163,7 @@ func (m Model) punchAct(act string, slot int) Model {
 			m.message = fmt.Sprintf("PUNCH %d is empty: tap SAVE, then it", slot+1)
 			return m
 		}
-		run.held, run.was = slot+1, m.capturePunch()
+		run.held, run.was = slot+1, m.lfoBase(m.capturePunch())
 		for b, p := range snap {
 			if p.Set && !m.punchBusy(b) {
 				m = m.punchGo(b, p)
@@ -274,8 +277,12 @@ func punchText(s PunchSnap) string {
 
 // webPunch is the snapshots for the page.
 type webPunch struct {
-	Arm     bool            `json:"arm"`
-	Edit    bool            `json:"edit"`
+	Arm  bool `json:"arm"`
+	Edit bool `json:"edit"`
+	Sel  int  `json:"sel"`
+	// Snap are the values of the selected snapshot, Live what the buses are now (to see what was changed).
+	Snap    [4]webBusVals   `json:"snap"`
+	Live    [4]webBusVals   `json:"live"`
 	Morph   bool            `json:"morph"`
 	Active  int             `json:"active"`
 	Mix     int             `json:"mix"`
@@ -299,6 +306,14 @@ type webPunchSlot struct {
 func (m Model) webPunch() webPunch {
 	run := m.scenes().punch
 	w := webPunch{Arm: run.arm, Morph: run.morph, Edit: run.edit, Active: run.active, Mix: run.mix, Presets: make([]webPreset, len(punchPresets))}
+	w.Sel = run.sel
+	if run.sel > 0 {
+		live := m.capturePunch()
+		for b := range live {
+			w.Snap[b] = webVals(b, m.mem.Punch[run.sel-1][b])
+			w.Live[b] = webVals(b, live[b])
+		}
+	}
 	for i, p := range punchPresets {
 		w.Presets[i] = webPreset{Name: p.name, Note: p.note}
 		for b, f := range p.bus {
@@ -326,4 +341,35 @@ func (m Model) punchPreset(preset, slot int) Model {
 	m.mem.Punch[slot] = punchPresets[preset].snap()
 	m.message = fmt.Sprintf("PUNCH %d: %s", slot+1, punchPresets[preset].name)
 	return m
+}
+
+// webBusVals is the effect of a bus with its knobs as the unit says them, for the page.
+type webBusVals struct {
+	Set    bool      `json:"set"`
+	Name   string    `json:"name"`
+	Num    int       `json:"num"`
+	On     int       `json:"on"`
+	Params [6]string `json:"params"`
+	Text   [6]string `json:"text"`
+	Raw    [6]int    `json:"raw"`
+}
+
+func webVals(bus int, p PunchBus) webBusVals {
+	if !p.Set {
+		return webBusVals{}
+	}
+	v := webBusVals{Set: true, Num: p.Num, On: p.On, Raw: p.Knobs, Name: "?"}
+	if p.Num >= 0 {
+		v.Name = fxNameOf(bus, p.Num)
+	}
+	knobs := fxKnobs(bus, max(p.Num, 0))
+	for k, kn := range knobs {
+		if p.Num < 0 {
+			kn = fxParam{name: fmt.Sprintf("CTRL %d", k+1), kind: "c", hi: 127}
+		}
+		if kn.name != "" {
+			v.Params[k], v.Text[k] = kn.name, kn.valueText(p.Knobs[k])
+		}
+	}
+	return v
 }

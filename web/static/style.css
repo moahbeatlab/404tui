@@ -191,6 +191,19 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 #punch { display: grid; gap: 8px; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
 #pnSlots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; min-height: 0; }
 #pnBar { min-height: 42px; display: grid; }
+#pnVals { display: none; }
+#punch[data-edit="1"] { grid-template-rows: auto auto minmax(0, 1fr); }
+#punch[data-edit="1"] #pnSlots { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: 64px; }
+#punch[data-edit="1"] .pn b { font-size: 22px; } #punch[data-edit="1"] .pn small, #punch[data-edit="1"] .pn .dots { display: none; }
+#punch[data-edit="1"] #pnVals { display: grid; align-content: start; gap: 6px; overflow-y: auto; min-height: 0; }
+.pv { background: var(--tile); border-radius: 10px; padding: 6px 8px; display: grid; gap: 4px; }
+.pvh { display: flex; align-items: baseline; gap: 8px; font-size: 13px; } .pvh span { color: var(--text); flex: 1; } .pvh em { font-style: normal; font-weight: 800; color: var(--good); }
+.pvk { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.pvk span { display: grid; gap: 1px; min-width: 0; text-align: center; }
+.pvk small { font-size: 9px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pvk b { font-size: 12px; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chg { color: var(--accent) !important; } .pvk .chg b { background: var(--accent); color: var(--ink); border-radius: 5px; }
+.pvhint { color: var(--dim); font-size: 12px; text-align: center; padding: 4px; }
 #pnTools { display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(0, 0.9fr) minmax(0, 1.2fr); gap: 6px; }
 #pnTools > * { min-width: 0; } #pnTools .seg { gap: 4px; }
 #pnTools .big, #pnTools .seg button { min-height: 46px; font-size: 12px; padding: 0 2px; letter-spacing: 0; }

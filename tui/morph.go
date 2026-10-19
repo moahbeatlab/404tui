@@ -75,7 +75,7 @@ func (m Model) morphStart(slot int) Model {
 		return m
 	}
 	run.active, run.mix = slot+1, 0
-	run.from = m.capturePunch()
+	run.from = m.lfoBase(m.capturePunch())
 	run.sent = run.from
 	m.message = fmt.Sprintf("MORPH to %d: move the slider or the encoder", slot+1)
 	return m

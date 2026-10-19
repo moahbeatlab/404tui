@@ -89,7 +89,9 @@ four buses are doing now. The dots show which buses a snapshot holds. They are k
 
 **EDIT** (the switch HOLD / EDIT / MORPH): hold a snapshot as usual, and turn the knobs (or change the effect) on the
 unit while you hold it; when you let go the changes are kept in the snapshot, and the buses still go back to what they
-were before. A bus the snapshot did not hold joins it when you change something on it. In HOLD a tweak is only a
+were before. The page shows the snapshot's values as the unit does (effect, then each knob with its name and unit, like CUTOFF 60,
+TIME 377 ms, FLT TYPE BPF): while you hold, what the buses are now, with whatever you changed lit; otherwise what is
+stored. (The names and ranges are the unit's parameter lists; a knob that is tempo-synced shows its plain number.) A bus the snapshot did not hold joins it when you change something on it, but only shows up after you let go. In HOLD a tweak is only a
 preview and is thrown away. Nothing is kept if nothing was changed (the message says so).
 
 When a snapshot (or a morph back at 0, or an LFO gate) is let go, an effect that it switched on goes **off** again
@@ -133,8 +135,9 @@ Punch, so they move the effects the unit has (no others). Pick an LFO (1 to 4), 
   the clock, so an LFO is always in step with the pattern.
 * It swings around where the knob was when you started it (a knob the unit has not said yet starts at the middle: turn
   it once on the unit first) and puts it back when you stop it, or when the clock stops (it goes on with the next
-  start). A bus with a motion playing is left alone. Two things that move the same knob (an LFO, a Morph, a Punch)
-  fight: the last one to send wins.
+  start). A bus with a motion playing is left alone. A Punch that is held, or a Morph, takes the bus from
+  an LFO on it: the LFO waits, and what the punch gives back is the knob where the LFO had it as its centre (and
+  the effect switch as it was), then the LFO goes on.
 
 Not tried on the unit yet: how the 7-bit steps sound on each knob, and how tight a pump feels against a kick.
 

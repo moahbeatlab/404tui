@@ -208,6 +208,8 @@
     pnSlots.appendChild(b);
     punchEls.push({ b, dots: [...b.querySelectorAll('i')], small: b.querySelector('small') });
   }
+  const pnVals = document.createElement('div'); pnVals.id = 'pnVals';
+  punchEl.appendChild(pnVals);
   const pnMode = document.createElement('div'); pnMode.className = 'seg';
   const PN_MODES = [['HOLD', 0], ['EDIT', 2], ['MORPH', 1]];
   const pnModeNow = (p) => (p.morph ? 1 : p.edit ? 2 : 0);
@@ -282,8 +284,36 @@
   // A finger that is lost (the page hidden, the screen locked) must not leave the buses punched.
   window.addEventListener('blur', () => [...punchHeld].forEach(punchUp));
   document.addEventListener('visibilitychange', () => { if (document.hidden) [...punchHeld].forEach(punchUp); });
+  const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  let pnValsLast = '';
+  // EDIT: the values of the snapshot (what the buses are now while it is held, with what changed lit).
+  function renderVals(p) {
+    punchEl.dataset.edit = p.edit ? '1' : '0';
+    if (!p.edit) return;
+    let html = '';
+    if (!p.sel) html = '<p class="pvhint">Hold a snapshot to see its values. Turn the knobs on the unit while you hold it: what you change lights up and is kept when you let go.</p>';
+    else {
+      const held = p.slots[p.sel - 1].held;
+      let any = false;
+      for (let b = 0; b < 4; b++) {
+        const s = p.snap[b];
+        if (!s.set) continue;
+        any = true;
+        const v = held ? p.live[b] : s;
+        const chg = (k) => held && v.raw[k] >= 0 && v.raw[k] !== s.raw[k];
+        html += '<div class="pv"><div class="pvh"><b style="color:var(--bus' + (b + 1) + ')">BUS ' + (b + 1) + '</b><span class="' + (held && v.num >= 0 && v.num !== s.num ? 'chg' : '') + '">' + esc(held && v.num >= 0 ? v.name : s.name) + '</span><em class="' +
+          (held && v.on >= 0 && v.on !== s.on ? 'chg' : '') + '">' + (((held && v.on >= 0) ? v.on : s.on) === 1 ? 'ON' : ((held && v.on >= 0) ? v.on : s.on) === 0 ? 'off' : '') + '</em></div><div class="pvk">';
+        for (let k = 0; k < 6; k++) if (s.params[k]) html += '<span class="' + (chg(k) ? 'chg' : '') + '"><small>' + esc(s.params[k]) + '</small><b>' + esc(held && v.raw[k] >= 0 ? v.text[k] : s.text[k]) + '</b></span>';
+        html += '</div></div>';
+      }
+      if (!any) html = '<p class="pvhint">Snapshot ' + p.sel + ' is empty.</p>';
+      else html += '<p class="pvhint">' + (held ? 'Turn knobs on the unit: changes light up and are kept when you let go.' : 'Hold it to edit.') + '</p>';
+    }
+    if (html !== pnValsLast) { pnValsLast = html; pnVals.innerHTML = html; }
+  }
   function renderPunch(p) {
     if (!p) return;
+    renderVals(p);
     p.slots.forEach((s, i) => {
       const e = punchEls[i];
       const run = p.active === i + 1;
