@@ -955,3 +955,75 @@ func TestPunchPresetsFillASnapshotAndUseTheEffectsOfTheirBus(t *testing.T) {
 		t.Errorf("the preset's effect is not switched on: %d", got)
 	}
 }
+
+func TestMorphMovesTheBusesFromWhereTheyAreToTheSnapshot(t *testing.T) {
+	r, _ := webRig(t)
+	for ch := 1; ch <= 4; ch++ {
+		r.cc(ch, ccFxNumber, 10)
+		r.cc(ch, 16, 100)
+		r.cc(ch, 80, 0)
+		r.cc(ch, ccFxSwitch, 127)
+	}
+	r.web(`{"a":"punchsave"}`)
+	r.web(`{"a":"punch","i":0,"n":1}`)
+	// Now: bus 1 the same effect with other knobs, bus 2 another effect, bus 3 off.
+	r.cc(1, 16, 20)
+	r.cc(1, 80, 60)
+	r.cc(2, ccFxNumber, 11)
+	r.cc(3, ccFxSwitch, 0)
+	r.web(`{"a":"punchmode"}`)
+	r.clearSent()
+	r.web(`{"a":"punch","i":0,"n":1}`) // starts the morph, sends nothing
+	if n := len(r.sent()); n != 0 {
+		t.Fatalf("starting the morph sent %d messages", n)
+	}
+	r.web(`{"a":"morph","n":127}`)
+	sent := r.sent()
+	if got := ccOut(sent, 1, 16); got != 100 {
+		t.Errorf("full: bus 1 CTRL 1 = %d, want 100", got)
+	}
+	if got := ccOut(sent, 2, ccFxNumber); got != 10 {
+		t.Errorf("full: bus 2 effect = %d, want 10", got)
+	}
+	if got := ccOut(sent, 3, ccFxSwitch); got != 127 {
+		t.Errorf("full: bus 3 is not switched on: %d", got)
+	}
+	// Half way: the same effect is half way between its knobs, the other effect has not changed yet.
+	r.clearSent()
+	r.web(`{"a":"morph","n":0}`)
+	r.clearSent()
+	r.web(`{"a":"morph","n":63}`)
+	sent = r.sent()
+	if got := ccOut(sent, 1, 16); got != 60 {
+		t.Errorf("63: bus 1 CTRL 1 = %d", got)
+	}
+	if got := ccOut(sent, 2, ccFxNumber); got != -1 {
+		t.Errorf("63: bus 2 changed its effect already: %d", got)
+	}
+	// Back at 0 is the state of the start.
+	r.clearSent()
+	r.web(`{"a":"morph","n":0}`)
+	sent = r.sent()
+	if got := ccOut(sent, 1, 16); got != 20 {
+		t.Errorf("0: bus 1 CTRL 1 = %d, want 20", got)
+	}
+	if got := ccOut(sent, 1, 80); got != 60 {
+		t.Errorf("0: bus 1 CTRL 4 = %d, want 60", got)
+	}
+	// The encoder of the EC4's morph group: a turn moves it by two a click.
+	r.clearSent()
+	r.feed(midiin.Event{Kind: midiin.CC, Channel: morphChan, Data1: ec4FirstCC, Data2: 65})
+	r.feed(midiin.Event{Kind: midiin.CC, Channel: morphChan, Data1: ec4FirstCC, Data2: 65})
+	if got := r.s.m().webPunch().Mix; got != 4 {
+		t.Errorf("two clicks: mix = %d, want 4", got)
+	}
+	// A push stops it, and an empty snapshot does not start.
+	r.feed(midiin.Event{Kind: midiin.NoteOn, Channel: morphChan, Data1: ec4FirstNote, Data2: 100})
+	if got := r.s.m().webPunch().Active; got != 0 {
+		t.Errorf("the push did not stop the morph: %d", got)
+	}
+	r.feed(midiin.Event{Kind: midiin.CC, Channel: morphChan, Data1: ec4FirstCC + 2, Data2: 65})
+	if got := r.s.m().webPunch().Active; got != 0 {
+		t.Errorf("an empty snapshot started a morph: %d", got)
+	}
+}

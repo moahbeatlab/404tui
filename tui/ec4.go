@@ -70,5 +70,6 @@ func EC4Sheet() string {
 	}
 	fmt.Fprintf(&b, "\nA second group, on channel %d, is for the pad volumes: the turn of each encoder (type CCr2, relative 63/65) sends CC %d to %d, its push Note %d to %d.\n", defaultLevelChan, ec4FirstCC, ec4FirstCC+15, ec4FirstNote, ec4FirstNote+15)
 	b.WriteString("Turn = the level of pad 1 to 16 of the bank, push = mute / bring back. Set the Push function of the EC4 (setup mode, encoder 16) to Note.\n")
+	fmt.Fprintf(&b, "\nA third group, on channel %d, is the Morph of Punch: encoder 1 to 4 (CC %d to %d, relative; push Note %d to %d) belongs to snapshot 1 to 4: turn = move the buses to it, push = start / stop.\n", morphChan, ec4FirstCC, ec4FirstCC+3, ec4FirstNote, ec4FirstNote+3)
 	return b.String()
 }

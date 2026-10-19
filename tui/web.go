@@ -434,6 +434,10 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		return m.punchAct(map[int]string{0: "up", 1: "down"}[c.N], c.I), nil
 	case "punchpreset":
 		return m.punchPreset(c.I, c.N), nil
+	case "morph":
+		return m.morphSet(c.N), nil
+	case "punchmode":
+		return m.punchAct("mode", 0), nil
 	case "punchsave":
 		return m.punchAct("save", 0), nil
 	case "mclear":

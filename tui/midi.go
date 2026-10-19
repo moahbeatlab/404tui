@@ -264,6 +264,11 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 	m.motionIn(e)
 	m = m.fxEvent(e)
 	ctl := m.midiChan()
+	// The morph group of the EC4 has a channel of its own too.
+	if e.Channel == morphChan && morphChan != ctl {
+		nm, _ := m.morphEvent(e)
+		return nm, next
+	}
 	// The pad volumes have a channel of their own: always on, in any view.
 	if lc := m.levelChan(); lc != 0 && lc != ctl && e.Channel == lc {
 		if nm, cmd, ok := m.levelEvent(e); ok {

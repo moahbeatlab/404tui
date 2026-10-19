@@ -177,11 +177,21 @@
     busEls.push({ w, fx: w.querySelector('.fx'), knobs: [...w.querySelectorAll('.knob i')], slotEls, ctlEls });
   }
 
-  // PUNCH: four snapshots of all four buses. Held, a snapshot is on the buses; let go, they go back.
+  // MOTION or PUNCH in the side panel.
+  const mpBtns = document.querySelectorAll('#mpSw button');
+  function setMp(v) { $('motion').dataset.mp = v; store.set('mp', v); mpBtns.forEach((b) => b.classList.toggle('on', b.dataset.mp === v)); }
+  mpBtns.forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); setMp(b.dataset.mp); }));
+  setMp(store.get('mp') === 'punch' ? 'punch' : 'motion');
+
+  // PUNCH: four snapshots of all four buses. Held, a snapshot is on the buses and let go they go back; in MORPH mode a
+  // tap starts it and the slider (or an encoder) moves the buses to it, 0 to 127.
   const punchEl = $('punch');
   const punchEls = [];
   const punchHeld = new Set();
   function punchUp(i) { if (punchHeld.delete(i)) send({ a: 'punch', i, n: 0 }); }
+  const pnBar = document.createElement('div'); pnBar.id = 'pnBar';
+  const pnSlots = document.createElement('div'); pnSlots.id = 'pnSlots';
+  punchEl.appendChild(pnBar); punchEl.appendChild(pnSlots);
   for (let i = 0; i < 4; i++) {
     const b = document.createElement('button');
     b.className = 'big pn empty';
@@ -189,24 +199,49 @@
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       try { b.setPointerCapture(e.pointerId); } catch (err) {}
-      punchHeld.add(i); send({ a: 'punch', i, n: 1 });
+      if (!(state && state.punch && state.punch.morph)) punchHeld.add(i);
+      send({ a: 'punch', i, n: 1 });
       if (navigator.vibrate) navigator.vibrate(10);
     });
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => b.addEventListener(ev, () => punchUp(i)));
     b.addEventListener('contextmenu', (e) => e.preventDefault());
-    punchEl.appendChild(b);
+    pnSlots.appendChild(b);
     punchEls.push({ b, dots: [...b.querySelectorAll('i')], small: b.querySelector('small') });
   }
-  const pnSide = document.createElement('div');
-  pnSide.id = 'pnSide';
+  const pnMode = document.createElement('div'); pnMode.className = 'seg';
+  const pnModeBtns = ['HOLD', 'MORPH'].map((t, k) => {
+    const b = document.createElement('button'); b.textContent = t;
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!!(state && state.punch && state.punch.morph) !== (k === 1)) send({ a: 'punchmode' }); });
+    pnMode.appendChild(b); return b;
+  });
   const pnSave = document.createElement('button');
-  pnSave.id = 'pnSave'; pnSave.className = 'big'; pnSave.innerHTML = '<span>SAVE</span><small>hold to punch</small>';
+  pnSave.id = 'pnSave'; pnSave.className = 'big'; pnSave.innerHTML = '<span>SAVE</span>';
   pnSave.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'punchsave' }); });
   const pnPre = document.createElement('button');
   pnPre.className = 'big'; pnPre.innerHTML = '<span>PRESETS</span>';
   pnPre.addEventListener('pointerdown', (e) => { e.preventDefault(); $('presetPick').hidden = false; drawPresets(); });
-  pnSide.appendChild(pnSave); pnSide.appendChild(pnPre);
-  punchEl.appendChild(pnSide);
+  const pnTools = document.createElement('div'); pnTools.id = 'pnTools';
+  [pnMode, pnSave, pnPre].forEach((x) => pnTools.appendChild(x));
+  // The morph slider, in place of the tools while a morph runs.
+  const pnMorph = document.createElement('div'); pnMorph.id = 'pnMorph'; pnMorph.hidden = true;
+  pnMorph.innerHTML = '<div id="pnFader"><i></i><b></b></div><button class="big" id="pnStop"><span>STOP</span></button>';
+  const pnFader = pnMorph.querySelector('#pnFader');
+  let pnDrag = false, pnSentAt = 0, pnLast = -1;
+  function pnPos(e) {
+    const r = pnFader.getBoundingClientRect();
+    const v = Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * 127);
+    pnFader.firstChild.style.width = (v / 127 * 100) + '%'; pnFader.querySelector('b').textContent = v;
+    const now = performance.now();
+    if (v !== pnLast && (now - pnSentAt > 33 || v === 0 || v === 127)) { pnSentAt = now; pnLast = v; send({ a: 'morph', n: v }); }
+  }
+  pnFader.addEventListener('pointerdown', (e) => { e.preventDefault(); pnDrag = true; try { pnFader.setPointerCapture(e.pointerId); } catch (err) {} pnPos(e); });
+  pnFader.addEventListener('pointermove', (e) => { if (pnDrag) pnPos(e); });
+  ['pointerup', 'pointercancel'].forEach((ev) => pnFader.addEventListener(ev, () => { pnDrag = false; }));
+  pnMorph.querySelector('#pnStop').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (state && state.punch && state.punch.active) send({ a: 'punch', i: state.punch.active - 1, n: 1 });
+  });
+  pnBar.appendChild(pnTools); pnBar.appendChild(pnMorph);
   // The presets: pick the snapshot they go into (the first empty one to begin with, then the next), tap a preset.
   let presetInto = -1;
   const intoEl = $('presetInto');
@@ -249,12 +284,18 @@
     if (!p) return;
     p.slots.forEach((s, i) => {
       const e = punchEls[i];
-      cls(e.b, 'empty', !s.set); cls(e.b, 'held', s.held); cls(e.b, 'arm', p.arm);
+      const run = p.active === i + 1;
+      cls(e.b, 'empty', !s.set); cls(e.b, 'held', s.held || run); cls(e.b, 'arm', p.arm);
       s.buses.forEach((on, n) => cls(e.dots[n], 'on', on));
-      set(e.small, 'textContent', p.arm ? 'SAVE HERE' : s.held ? 'HELD' : s.set ? 'hold' : 'empty');
+      set(e.small, 'textContent', p.arm ? 'SAVE HERE' : run ? 'MORPH' : s.held ? 'HELD' : s.set ? (p.morph ? 'morph' : 'hold') : 'empty');
     });
     cls(pnSave, 'arm', p.arm);
-    set(pnSave.querySelector('small'), 'textContent', p.arm ? 'tap a snapshot' : 'hold to punch');
+    set(pnSave.firstChild, 'textContent', p.arm ? 'TAP ONE' : 'SAVE');
+    pnModeBtns.forEach((b, k) => cls(b, 'on', p.morph === (k === 1)));
+    pnMorph.hidden = !p.active; pnTools.hidden = !!p.active;
+    if (p.active && !pnDrag) {
+      pnFader.firstChild.style.width = (p.mix / 127 * 100) + '%'; pnFader.querySelector('b').textContent = 'TO ' + p.active + '  ' + p.mix; pnLast = p.mix;
+    }
   }
 
   // tabs (portrait), and the switch between Perform and the Looper (the tab in portrait, the button in the top bar)

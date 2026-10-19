@@ -80,12 +80,23 @@ Motion needs the unit's MIDI clock: start its sequencer.
 
 ### Punch
 
-Four snapshots of the effects of **all four buses** (the effect, its six knobs, on or off), under the motion
-slots. **Hold** one and every bus goes into that state; **let go** and each bus goes back to what it was just
+The side panel has two pages, **MOTION** and **PUNCH** (the choice is remembered). Punch is four snapshots of the
+effects of **all four buses** (the effect, its six knobs, on or off). **Hold** one and every bus goes into that state; **let go** and each bus goes back to what it was just
 before, wherever you had moved it since. Nothing waits for the clock: it is plain MIDI controllers.
 
 To store: tap **SAVE** (it lights, and the four buttons say SAVE HERE), then tap a snapshot; it keeps what the
 four buses are doing now. The dots show which buses a snapshot holds. They are kept between runs.
+
+**MORPH** (the switch HOLD / MORPH): in this mode a tap does not hold a snapshot but starts a morph to it. A
+slider takes the place of the buttons: 0 is the state the buses were in when you tapped, 127 is the snapshot, and you
+move between with a finger (or an encoder, below). Where the effect is the same the knobs move smoothly; an effect
+that changes, a bus that goes on or off, and knobs that were not known at the start change halfway (at 64). Back at
+0 everything is as it was. Tap the snapshot again, or STOP, to end it: the buses stay where they are. Tapping another
+snapshot starts a new morph from the state the buses are in then.
+
+On a **Faderfox EC4** a third group on channel 14 does the same: encoders 1 to 4 belong to snapshots 1 to 4. Turned
+(CC 60 to 63, relative, 2 of 127 a click) it starts that snapshot's morph if it does not run and moves it; the push
+(Note 60 to 63) starts or stops it. It works in either mode.
 
 **PRESETS** opens a list of ready-made snapshots (RISER, TAPE, ECHO THROW, STUTTER, TAPE STOP, TELEPHONE). Pick the
 snapshot they go into at the top (it starts at the first empty one and moves on after each tap), then tap a

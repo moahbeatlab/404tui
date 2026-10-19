@@ -60,6 +60,13 @@ The messages of Config (live mode, recording, next becomes now, clear next) are 
 and sixteenth push by default; changing them there moves those away from the map, the rest of the table
 stays.
 
+## Morph: a third group
+
+On **channel 14** the first four encoders are the Morph of Punch (see [web.md](web.md)): encoder 1 to 4 belongs to
+snapshot 1 to 4. **Turn** (type CCr2, relative 63/65, CC 60 to 63): moves the buses from the state they were in to
+the snapshot, two of 127 a click (it starts the morph if it is not running). **Push** (Note 60 to 63): starts the
+morph, or stops it when it runs. Set the group up like the others, with channel 14.
+
 ## Pad volumes: the second group
 
 On **channel 15** (Config: *Pad volumes channel*, 1 to 16 or off; the number 17 does not exist in MIDI, and

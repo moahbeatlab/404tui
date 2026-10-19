@@ -19,6 +19,12 @@ type punchRun struct {
 	held int // the snapshot held, 1 to 4; 0 for none
 	was  PunchSnap
 	arm  bool
+	// morph: a tap on a snapshot does not hold it but starts the morph (see morph.go).
+	morph bool
+	// active is the snapshot the morph goes to (1 to 4, 0 for none), mix how far it is (0 to 127), from the state
+	// the buses were in when it began and sent what was last sent to each bus.
+	active, mix int
+	from, sent  PunchSnap
 }
 
 // captureBus reads the effect of a bus as the unit last said it (or as this program last sent it).
@@ -56,25 +62,39 @@ func (m Model) capturePunch() PunchSnap {
 
 // punchGo sends a bus into a state: the effect first, then the knobs, then on or off.
 func (m Model) punchGo(bus int, p PunchBus) Model {
+	return m.punchSend(bus, p, nil)
+}
+
+// punchSend is punchGo, but with last (what the bus was sent before) it sends only what differs, and notes what it sent.
+func (m Model) punchSend(bus int, p PunchBus, last *PunchBus) Model {
 	sc := m.scenes()
 	ch := byte(bus)
 	f := m.fx[bus]
-	if p.Num >= 0 {
+	if p.Num >= 0 && (last == nil || last.Num != p.Num) {
 		m.sceneSend(sc, []byte{0xB0 | ch, ccFxNumber, byte(p.Num)})
 		f.num, f.numSeen = p.Num, true
-	}
-	for k, v := range p.Knobs {
-		if v >= 0 {
-			m.sceneSend(sc, []byte{0xB0 | ch, byte(punchCCs[k]), byte(clamp(v, 0, 127))})
+		if last != nil {
+			last.Num = p.Num
 		}
 	}
-	if p.On >= 0 {
+	for k, v := range p.Knobs {
+		if v >= 0 && (last == nil || last.Knobs[k] != v) {
+			m.sceneSend(sc, []byte{0xB0 | ch, byte(punchCCs[k]), byte(clamp(v, 0, 127))})
+			if last != nil {
+				last.Knobs[k] = v
+			}
+		}
+	}
+	if p.On >= 0 && (last == nil || last.On != p.On) {
 		v := byte(0)
 		if p.On == 1 {
 			v = 127
 		}
 		m.sceneSend(sc, []byte{0xB0 | ch, ccFxSwitch, v})
 		f.on, f.onSeen = p.On == 1, true
+		if last != nil {
+			last.On = p.On
+		}
 	}
 	m.fx[bus] = f
 	return m
@@ -101,9 +121,20 @@ func (m Model) punchAct(act string, slot int) Model {
 			m.message = ""
 		}
 		return m
+	case "mode":
+		run.morph = !run.morph
+		if run.morph {
+			m.message = "MORPH: tap a snapshot, then the slider (or the encoder) moves to it; tap it again to stop"
+		} else {
+			m.message = "HOLD: hold a snapshot to punch it"
+		}
+		return m
 	case "down":
 		if slot < 0 || slot > 3 {
 			return m
+		}
+		if run.morph && !run.arm {
+			return m.morphStart(slot)
 		}
 		if run.arm {
 			run.arm = false
@@ -131,6 +162,9 @@ func (m Model) punchAct(act string, slot int) Model {
 		}
 		m.message = fmt.Sprintf("PUNCH %d held: let go to go back", slot+1)
 	case "up":
+		if run.morph {
+			return m
+		}
 		if run.held == slot+1 {
 			return m.punchUp()
 		}
@@ -187,6 +221,9 @@ func punchText(s PunchSnap) string {
 // webPunch is the snapshots for the page.
 type webPunch struct {
 	Arm     bool            `json:"arm"`
+	Morph   bool            `json:"morph"`
+	Active  int             `json:"active"`
+	Mix     int             `json:"mix"`
 	Slots   [4]webPunchSlot `json:"slots"`
 	Presets []webPreset     `json:"presets"`
 }
@@ -206,7 +243,7 @@ type webPunchSlot struct {
 
 func (m Model) webPunch() webPunch {
 	run := m.scenes().punch
-	w := webPunch{Arm: run.arm, Presets: make([]webPreset, len(punchPresets))}
+	w := webPunch{Arm: run.arm, Morph: run.morph, Active: run.active, Mix: run.mix, Presets: make([]webPreset, len(punchPresets))}
 	for i, p := range punchPresets {
 		w.Presets[i] = webPreset{Name: p.name, Note: p.note}
 		for b, f := range p.bus {
