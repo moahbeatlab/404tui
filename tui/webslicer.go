@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"fmt"
 	"math/rand"
 	"slices"
@@ -43,6 +44,8 @@ type sliceOpts struct {
 	mangle     mangleOpts
 	// seed fixes every roll (the cuts, the order, the dice) so that a change of one setting leaves the rest as it was; 0 rolls anew.
 	seed int64
+	// orderSeed fixes the order of the slices on its own (0: from seed), so that it can be rolled again alone.
+	orderSeed int64
 }
 
 // mangleOpts are the dice: how many of the slices drop out, play backwards, get a pitch (up or down by up to pitch semitones)
@@ -94,17 +97,19 @@ func sliceSample(src formats.Sample, o sliceOpts) (formats.Sample, []int) {
 	sl.Seed = rng.Int63()
 	switch o.order {
 	case slOrderShuffle:
+		oseed := cmp.Or(o.orderSeed, seed)
 		for try := 0; try < 8; try++ {
-			shuffleOrderSeed(sl, seed+int64(try))
+			shuffleOrderSeed(sl, oseed+int64(try))
 			if !inOrder(sl.Order) {
 				break
 			}
 		}
 	case slOrderRandom:
 		// Picks by chance, made here so that the dice below work in every order.
+		orng := rand.New(rand.NewSource(cmp.Or(o.orderSeed, seed)))
 		sl.Order = make([]int, len(sl.Slices))
 		for i := range sl.Order {
-			sl.Order[i] = rng.Intn(len(sl.Slices))
+			sl.Order[i] = orng.Intn(len(sl.Slices))
 		}
 	}
 	mg := o.mangle
@@ -311,10 +316,12 @@ func (m Model) slicerDone(msg slicerDoneMsg) (tea.Model, tea.Cmd) {
 	m.message = fmt.Sprintf("%s in %d slices, order %s: choose the pad it goes on, then PLACE", msg.from, msg.n, msg.order)
 	if lp.slPrev {
 		m.message = fmt.Sprintf("%s in %d slices, order %s: looping; change the settings, then PLACE", msg.from, msg.n, msg.order)
-		if lp.slDirty {
-			lp.slDirty = false
-			return m.slPreviewRefresh()
-		}
+	}
+	if lp.slDirty {
+		lp.slDirty = false
+		return m.slPreviewRefresh()
+	}
+	if lp.slPrev {
 		return m.slPreviewPlay()
 	}
 	return m, nil
@@ -472,9 +479,8 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 		// The slices wait: the grid is the bank they go to.
 		switch act {
 		case "slslices", "slcut", "slorder", "sldiv", "slswing", "slmang":
-			if lp.slPrev {
-				return m.slParam(act, n, i).slPreviewRefresh()
-			}
+			// A setting cuts the waiting slices again from the same roll: the order stays, whatever else changes.
+			return m.slParam(act, n, i).slPreviewRefresh()
 		case "slprev":
 			return m.slPreviewToggle()
 		case "slpad":
@@ -494,8 +500,12 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 		case "slgo":
 			return m.slicerPlace()
 		case "slagain":
-			lp.slSeed = time.Now().UnixNano()
+			lp.slSeed, lp.slOrderSeed = time.Now().UnixNano(), 0
 			return m.sliceRender(m.snap.Bank(bank)[pad], m.sliceOptions(bank))
+		case "slreorder":
+			// Holding the order button: the same slices in a new order.
+			lp.slOrderSeed = time.Now().UnixNano()
+			return m.slPreviewRefresh()
 		case "slcancel":
 			lp.slHave, lp.slOut = false, formats.Sample{}
 			lp.slPrev = false
@@ -534,7 +544,7 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 			m.message = "tap the pad to slice first"
 			return m, nil
 		}
-		lp.slSeed = time.Now().UnixNano()
+		lp.slSeed, lp.slOrderSeed = time.Now().UnixNano(), 0
 		return m.sliceRender(m.snap.Bank(bank)[pad], m.sliceOptions(bank))
 	}
 	return m, nil
@@ -568,7 +578,7 @@ func (m Model) slParam(act string, n, i int) Model {
 // sliceOptions are the settings of the page's Slicer, for a pad of a bank.
 func (m Model) sliceOptions(bank int) sliceOpts {
 	return sliceOpts{n: m.slSlices(), randomCut: m.mem.SlicerRandomCut, order: m.slOrder(), div: m.mem.SlicerDiv, swing: m.mem.SlicerSwing, bpm: m.slBPM(bank),
-		mangle: m.mangleOptions(), seed: m.looper().slSeed}
+		mangle: m.mangleOptions(), seed: m.looper().slSeed, orderSeed: m.looper().slOrderSeed}
 }
 
 // mangleOptions are the dice as they are set: the counts cannot be more than the slices.

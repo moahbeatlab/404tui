@@ -488,8 +488,21 @@
   const slPicker = (id, title, names, cur, act, cols, hints) => press(id, () => { const sl = state && state.slicer; if (sl) openOpts(title, names, cur(sl), (n) => send({ a: act, pick: n }), cols, hints); });
   slPicker('slSlices', 'Slices', SLICES.map((n) => n + ' slices'), (sl) => SLICES.indexOf(sl.slices), 'slslices', 3);
   slPicker('slCut', 'Cuts', ['EQUAL CUTS', 'RANDOM CUTS'], (sl) => (sl.random ? 1 : 0), 'slcut', 2);
-  slPicker('slOrder', 'Order of the slices', ORDERS, (sl) => ['shuffle', 'in order', 'random'].indexOf(sl.order), 'slorder', 1, [
-    'every slice once, in a mixed order', 'the slices as they are in the sample', 'every step a slice at random: some twice, some never']);
+  // A tap on the order button opens the list; holding it (0.5 s) rolls a new order of the same slices.
+  {
+    const ob = $('slOrder'); let oT = 0, oHeld = false;
+    ob.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); oHeld = false; clearTimeout(oT);
+      oT = setTimeout(() => { oHeld = true; if (navigator.vibrate) navigator.vibrate(20); send({ a: 'slreorder' }); }, 500);
+    });
+    ob.addEventListener('pointerup', () => {
+      clearTimeout(oT);
+      const sl = state && state.slicer;
+      if (!oHeld && sl) openOpts('Order of the slices (hold the button: a new order)', ORDERS, ['shuffle', 'in order', 'random'].indexOf(sl.order), (n) => send({ a: 'slorder', pick: n }), 1,
+        ['every slice once, in a mixed order', 'the slices as they are in the sample', 'every step a slice at random: some twice, some never']);
+    });
+    ['pointercancel', 'pointerleave'].forEach((ev) => ob.addEventListener(ev, () => clearTimeout(oT)));
+  }
   slPicker('slDiv', 'Grid', DIVS.map((d) => (d ? '1/' + d : 'OWN LENGTH')), (sl) => DIVS.indexOf(sl.div), 'sldiv', 2);
   slPicker('slSwing', 'Swing', SWINGS.map((v) => SWING[v]), (sl) => SWINGS.indexOf(sl.swing), 'slswing', 3);
   let slAsk = 0, slAskT = 0;
@@ -559,7 +572,7 @@
     set($('slPreviewS'), 'textContent', sl.prev ? 'settings change the loop' : 'loop it from memory');
     $('slPreview').disabled = false;
     for (const id of ['slPrev', 'slNext']) $(id).disabled = sl.busy || ready;
-    for (const id of ['slSlices', 'slCut', 'slOrder', 'slDiv']) $(id).disabled = ready ? !sl.prev : sl.busy;
+    for (const id of ['slSlices', 'slCut', 'slOrder', 'slDiv']) $(id).disabled = sl.busy;
     for (const id of ['slTPrev', 'slTNext']) $(id).disabled = sl.busy;
     for (const id of ['slAgain', 'slCancel']) $(id).disabled = sl.busy;
   }

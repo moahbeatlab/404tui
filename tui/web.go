@@ -392,7 +392,7 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		return m, m.wanted()
 	case "ptn", "ptnbank", "ptnbankset", "ptnfollow":
 		return m.ptnCommand(c.A, c.I)
-	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute", "slmang", "slprev":
+	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute", "slmang", "slprev", "slreorder":
 		i := c.I
 		switch c.A {
 		case "slslices", "slcut", "slorder", "sldiv", "slswing":
