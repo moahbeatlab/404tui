@@ -23,6 +23,10 @@ const morphStep = 2
 // morphBus is the state of a bus at mix (0 to 127) of the way from a to b.
 func morphBus(a, b PunchBus, mix int) PunchBus {
 	out := a
+	if a.On < 0 && b.On == 1 {
+		// Not known to be on at the start: back at the start it is off again.
+		out.On = 0
+	}
 	half := mix >= 64
 	same := a.Num < 0 || b.Num < 0 || a.Num == b.Num
 	if b.Num >= 0 && half {
@@ -74,17 +78,15 @@ func (m Model) morphStart(slot int) Model {
 	run.active, run.mix = slot+1, 0
 	run.from = m.lfoBase(m.capturePunch())
 	run.sent = run.from
-	run.skip = [4]bool{}
 	var unknown []string
 	for b, p := range m.mem.Punch[slot] {
 		if p.Set && !m.punchBusy(b) && !m.punchKnown(b, p) {
-			run.skip[b] = true
 			unknown = append(unknown, fmt.Sprint(b+1))
 		}
 	}
 	m.message = fmt.Sprintf("MORPH to %d: move the slider or the encoder", slot+1)
 	if len(unknown) > 0 {
-		m.message = fmt.Sprintf("MORPH %d: BUS %s left alone, the app does not know what it has: tap its chip at the top and tell it", slot+1, strings.Join(unknown, ", "))
+		m.message = fmt.Sprintf("MORPH to %d. BUS %s: the app does not know what it has, so it cannot go back to it exactly (tap its chip at the top and tell it)", slot+1, strings.Join(unknown, ", "))
 	}
 	return m
 }
@@ -99,7 +101,7 @@ func (m Model) morphSet(mix int) Model {
 	}
 	run.mix = clamp(mix, 0, 127)
 	for b, to := range m.mem.Punch[run.active-1] {
-		if !to.Set || m.punchBusy(b) || run.skip[b] {
+		if !to.Set || m.punchBusy(b) {
 			continue
 		}
 		last := run.sent[b]

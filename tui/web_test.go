@@ -1142,7 +1142,7 @@ func TestPunchEditKeepsWhatIsChangedWhileASnapshotIsHeld(t *testing.T) {
 	}
 }
 
-func TestAPunchLeavesABusAloneWhoseEffectTheAppDoesNotKnow(t *testing.T) {
+func TestAPunchLoadsItsEffectOnABusTheAppDoesNotKnowAndDoesNotPretendToKnowItAfter(t *testing.T) {
 	r, _ := webRig(t)
 	// The snapshot has buses 1 and 2; the unit has never said anything of bus 1, bus 2 is known.
 	r.cc(2, ccFxNumber, 10)
@@ -1154,39 +1154,41 @@ func TestAPunchLeavesABusAloneWhoseEffectTheAppDoesNotKnow(t *testing.T) {
 	r.clearSent()
 	r.web(`{"a":"punch","i":0,"n":1}`)
 	sent := r.sent()
-	if len(sent) == 0 || ccOut(sent, 2, ccFxNumber) != 14 {
-		t.Fatalf("the known bus was not punched: %v", sent)
-	}
-	for _, msg := range sent {
-		if msg[0]&0x0F == 0 {
-			t.Fatalf("bus 1 is not known but was sent %v", msg)
-		}
+	if ccOut(sent, 1, ccFxNumber) != 14 || ccOut(sent, 1, ccFxSwitch) != 127 || ccOut(sent, 2, ccFxNumber) != 14 {
+		t.Fatalf("the preset's effects are not on the buses: %v", sent)
 	}
 	if !strings.Contains(r.s.m().message, "BUS 1") {
-		t.Errorf("no word of the bus that was left alone: %q", r.s.m().message)
+		t.Errorf("no word of the bus that cannot be put back: %q", r.s.m().message)
 	}
 	r.clearSent()
 	r.web(`{"a":"punch","i":0,"n":0}`)
-	for _, msg := range r.sent() {
-		if msg[0]&0x0F == 0 {
-			t.Errorf("the release touched bus 1: %v", msg)
-		}
-	}
 	if got := ccOut(r.sent(), 2, ccFxNumber); got != 10 {
 		t.Errorf("bus 2 went back to %d, want 10", got)
 	}
-	// Told what bus 1 has, it is punched and given back.
+	if got := ccOut(r.sent(), 1, ccFxSwitch); got != 0 {
+		t.Errorf("bus 1: the effect that was not known to be on is left running (%d)", got)
+	}
+	// What was sent to bus 1 is not what the unit had: it stays unknown, so a chip stays red and a later punch does not "give back" it.
+	r.s.press("r")
+	if b := r.s.m().webPunch().Bus[0]; b.Num != -1 || b.On != -1 {
+		t.Errorf("bus 1 is shown as known after the punch: %+v", b)
+	}
+	// Told what bus 1 has, it is given back.
 	r.web(`{"a":"fxdeclare","i":0,"name":"num","n":16}`)
 	r.web(`{"a":"fxdeclare","i":0,"name":"on","n":1}`)
 	r.clearSent()
 	r.web(`{"a":"punch","i":0,"n":1}`)
-	if got := ccOut(r.sent(), 1, ccFxNumber); got != 14 {
-		t.Errorf("bus 1 told: held effect = %d", got)
-	}
 	r.clearSent()
 	r.web(`{"a":"punch","i":0,"n":0}`)
 	if got := ccOut(r.sent(), 1, ccFxNumber); got != 16 {
 		t.Errorf("bus 1 told: released effect = %d, want 16", got)
+	}
+	if got := ccOut(r.sent(), 1, ccFxSwitch); got != 127 {
+		t.Errorf("bus 1 told: released switch = %d, want on", got)
+	}
+	// What the unit says (or the user told) is kept for the next run.
+	if got := r.s.m().mem.BusFx[0]; got.Num != 17 || got.On != 2 {
+		t.Errorf("kept: %+v", got)
 	}
 }
 

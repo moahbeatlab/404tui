@@ -23,8 +23,6 @@ type punchRun struct {
 	sel int
 	// edit: what is changed on the unit while a snapshot is held is kept in it when it is let go.
 	edit bool
-	// skip are the buses a held snapshot or a morph does not touch, because what they have is not known (see punchKnown).
-	skip [4]bool
 	// morph: a tap on a snapshot does not hold it but starts the morph (see morph.go).
 	morph bool
 	// active is the snapshot the morph goes to (1 to 4, 0 for none), mix how far it is (0 to 127), from the state
@@ -179,21 +177,18 @@ func (m Model) punchAct(act string, slot int) Model {
 			m.log.Info("punch: held", "slot", slot+1, "bus", b+1, "in snapshot", snap[b].Set, "was effect", w.Num, "was on", w.On, "was knobs", w.Knobs)
 		}
 		var unknown []string
-		run.skip = [4]bool{}
 		for b, p := range snap {
 			if !p.Set || m.punchBusy(b) {
 				continue
 			}
 			if !m.punchKnown(b, p) {
-				run.skip[b] = true
 				unknown = append(unknown, fmt.Sprint(b+1))
-				continue
 			}
 			m = m.punchGo(b, p)
 		}
 		m.message = fmt.Sprintf("PUNCH %d held: let go to go back", slot+1)
 		if len(unknown) > 0 {
-			m.message = fmt.Sprintf("PUNCH %d: BUS %s left alone, the app does not know what it has: tap its chip at the top and tell it", slot+1, strings.Join(unknown, ", "))
+			m.message = fmt.Sprintf("PUNCH %d held. BUS %s: the app does not know what it had, so it cannot be put back exactly (tap its chip at the top and tell it)", slot+1, strings.Join(unknown, ", "))
 		}
 	case "up":
 		if run.morph {
@@ -230,10 +225,25 @@ func (m Model) punchUp() Model {
 		}
 	}
 	for b, p := range snap {
-		if (p.Set || run.edit) && !m.punchBusy(b) && !run.skip[b] {
+		if (p.Set || run.edit) && !m.punchBusy(b) {
 			back := run.was[b]
 			m.log.Info("punch: let go", "slot", run.held, "bus", b+1, "back to effect", back.Num, "on", back.On, "knobs", back.Knobs)
+			numLost, onLost := p.Num >= 0 && back.Num < 0, p.On == 1 && back.On < 0
+			if onLost {
+				// The effect the snapshot switched on is not known to have been on: it goes off, not left running.
+				back.On = 0
+			}
 			m = m.punchGo(b, back)
+			// What the app does not know about the bus stays unknown: it only sent the snapshot's values, they are not what
+			// the unit had, and a later punch must not "give back" them.
+			f := m.fx[b]
+			if numLost {
+				f.numSeen = false
+			}
+			if onLost {
+				f.onSeen = false
+			}
+			m.fx[b] = f
 		}
 	}
 	m.message = fmt.Sprintf("PUNCH %d %s", run.held, text)
@@ -439,5 +449,5 @@ func (m Model) fxDeclare(bus int, what string, n int) Model {
 		return m
 	}
 	m.fx[bus] = f
-	return m
+	return m.rememberFx(bus, f)
 }

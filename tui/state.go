@@ -73,6 +73,12 @@ type State struct {
 	SlicerDrop, SlicerRev, SlicerPitch, SlicerRoll, SlicerHuman, SlicerFade int
 	// Punch are the four snapshots of the effects of all four buses (see punch.go).
 	Punch [4]PunchSnap `json:"punch"`
+	// BusFx is what the unit last said (or the user told) of each bus's effect, kept for the next run since the unit only
+	// says it when it changes: Num is the effect plus one (0 unknown), On is 0 unknown, 1 off, 2 on.
+	BusFx [4]struct {
+		Num int `json:"num,omitempty"`
+		On  int `json:"on,omitempty"`
+	} `json:"busFx"`
 	// Lfo are the settings of the four LFOs (see lfo.go).
 	Lfo [4]LfoSet `json:"lfo"`
 	// BusNotes are what the user wrote of the effect on each bus (the unit does not say), shown in

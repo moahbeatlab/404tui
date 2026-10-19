@@ -100,10 +100,11 @@ TIME 377 ms, FLT TYPE BPF): while you hold, what the buses are now, with whateve
 stored. (The names and ranges are the unit's parameter lists; a knob that is tempo-synced shows its plain number.) A bus the snapshot did not hold joins it when you change something on it, but only shows up after you let go. In HOLD a tweak is only a
 preview and is thrown away. Nothing is kept if nothing was changed (the message says so).
 
-A bus the app does not know the effect of is **left alone** by a punch and a morph (the message names it): the unit says
-what a bus has only when it changes, and a punch that changed an effect the app cannot name could not put it back.
-Tell the app with the chips (below) and it is punched like the others. An LFO gate whose switch was never known goes
-back off when it stops.
+A snapshot (a preset too) always puts its effects on its buses. If the app does not know what a bus had before (the
+unit says it only when it changes), the message names the bus: it cannot be put back exactly. On release the effect that the
+snapshot switched on goes **off**, and the bus stays unknown (the chip stays red), because what the app sent is not what
+the unit had. Tell the app with the chip (below), or change the effect once on the unit, and the punch gives it back. What
+the unit says, and what you tell the app, is kept for the next run.
 
 **MORPH** (the switch HOLD / EDIT / MORPH): in this mode a tap does not hold a snapshot but starts a morph to it. A
 slider takes the place of the buttons: 0 is the state the buses were in when you tapped, 127 is the snapshot, and you

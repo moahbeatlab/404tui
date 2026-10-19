@@ -617,6 +617,7 @@ func New(unit app.Unit, player app.Player, store Store) Model {
 	}
 	if store != nil {
 		m.mem = store.Load()
+		m = m.recallFx()
 		if m.mem.Theme >= 0 && m.mem.Theme < len(themes) {
 			m.themeAt = m.mem.Theme
 			m.st = newStyles(themes[m.themeAt])

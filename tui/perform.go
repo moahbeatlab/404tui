@@ -538,6 +538,7 @@ func (m Model) fxEvent(e midiin.Event) Model {
 		m.perfLog.Add(e.At, "fx", ps...)
 	}
 	m.fx[bus] = f
+	m = m.rememberFx(bus, f)
 	return m
 }
 
@@ -747,4 +748,32 @@ func (m Model) perfButton(b hitBtn, x int) (tea.Model, tea.Cmd) {
 		return m.toggleFullScreen()
 	}
 	return m.sceneAct(b.act, b.arg, 0), nil
+}
+
+// rememberFx keeps what the unit said of a bus for the next run (see State.BusFx).
+func (m Model) rememberFx(bus int, f busFx) Model {
+	r := &m.mem.BusFx[bus]
+	if f.numSeen {
+		r.Num = f.num + 1
+	}
+	if f.onSeen {
+		r.On = 1
+		if f.on {
+			r.On = 2
+		}
+	}
+	return m
+}
+
+// recallFx gives the model what was kept of the buses.
+func (m Model) recallFx() Model {
+	for b, r := range m.mem.BusFx {
+		if r.Num > 0 {
+			m.fx[b].num, m.fx[b].numSeen = r.Num-1, true
+		}
+		if r.On > 0 {
+			m.fx[b].on, m.fx[b].onSeen = r.On == 2, true
+		}
+	}
+	return m
 }
