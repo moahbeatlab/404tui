@@ -177,6 +177,45 @@
     busEls.push({ w, fx: w.querySelector('.fx'), knobs: [...w.querySelectorAll('.knob i')], slotEls, ctlEls });
   }
 
+  // PUNCH: four snapshots of all four buses. Held, a snapshot is on the buses; let go, they go back.
+  const punchEl = $('punch');
+  const punchEls = [];
+  const punchHeld = new Set();
+  function punchUp(i) { if (punchHeld.delete(i)) send({ a: 'punch', i, n: 0 }); }
+  for (let i = 0; i < 4; i++) {
+    const b = document.createElement('button');
+    b.className = 'big pn empty';
+    b.innerHTML = '<b>' + (i + 1) + '</b><span class="dots">' + [1, 2, 3, 4].map((n) => '<i style="--c:var(--bus' + n + ')"></i>').join('') + '</span><small>empty</small>';
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { b.setPointerCapture(e.pointerId); } catch (err) {}
+      punchHeld.add(i); send({ a: 'punch', i, n: 1 });
+      if (navigator.vibrate) navigator.vibrate(10);
+    });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => b.addEventListener(ev, () => punchUp(i)));
+    b.addEventListener('contextmenu', (e) => e.preventDefault());
+    punchEl.appendChild(b);
+    punchEls.push({ b, dots: [...b.querySelectorAll('i')], small: b.querySelector('small') });
+  }
+  const pnSave = document.createElement('button');
+  pnSave.id = 'pnSave'; pnSave.className = 'big'; pnSave.innerHTML = '<span>SAVE</span><small>hold to punch</small>';
+  pnSave.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'punchsave' }); });
+  punchEl.appendChild(pnSave);
+  // A finger that is lost (the page hidden, the screen locked) must not leave the buses punched.
+  window.addEventListener('blur', () => [...punchHeld].forEach(punchUp));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) [...punchHeld].forEach(punchUp); });
+  function renderPunch(p) {
+    if (!p) return;
+    p.slots.forEach((s, i) => {
+      const e = punchEls[i];
+      cls(e.b, 'empty', !s.set); cls(e.b, 'held', s.held); cls(e.b, 'arm', p.arm);
+      s.buses.forEach((on, n) => cls(e.dots[n], 'on', on));
+      set(e.small, 'textContent', p.arm ? 'SAVE HERE' : s.held ? 'HELD' : s.set ? 'hold' : 'empty');
+    });
+    cls(pnSave, 'arm', p.arm);
+    set(pnSave.querySelector('small'), 'textContent', p.arm ? 'tap a snapshot' : 'hold to punch');
+  }
+
   // tabs (portrait), and the switch between Perform and the Looper (the tab in portrait, the button in the top bar)
   const app = $('app');
   app.dataset.tab = store.get('tab') === 'looper' ? 'pads' : (store.get('tab') || 'pads');
@@ -456,6 +495,7 @@
     if (ws && ws.readyState === 1 && rtt !== null) setConn(s.unit ? 'ok' : 'nounit', (s.unit ? '' : 'no unit · ') + rtt + ' ms');
     $('waiting').hidden = s.unit;
     renderLooper(s);
+    renderPunch(s.punch);
     if (s.ptn) renderPatterns(s.ptn);
     renderMeters(s.level, s.levelNote);
     set($('bank'), 'textContent', s.bank || '–');

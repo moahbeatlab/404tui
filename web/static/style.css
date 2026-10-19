@@ -12,6 +12,8 @@
   --hot: #ff5f5f;
   --bus1: #5fafff;
   --bus2: #ff3b30;
+  --bus3: #3ddc84;
+  --bus4: #ffb300;
   --ink: #161618;
   --gap: 8px;
   --r: 12px;
@@ -128,7 +130,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 .mixing .pad.muted::after { content: "MUTED"; inset: auto auto 8% 50%; right: auto; display: block; font-size: clamp(10px, 13cqw, 16px); }
 
 /* ---- motion ---- */
-#motion { display: grid; gap: 10px; overflow: hidden; grid-template-rows: auto repeat(2, minmax(0, 1fr)); }
+#motion { display: grid; gap: 10px; overflow: hidden; grid-template-rows: auto repeat(2, minmax(0, 1fr)) auto; }
 #buses { display: contents; }
 .len { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
@@ -163,6 +165,20 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 .ctl { min-height: 0; font-size: 12px; }
 .ctl small { font-size: 12px; }
 .ctl b { font-size: 16px; }
+
+/* ---- punch: four snapshots of the four buses, held ---- */
+#punch { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) 0.8fr; gap: 6px; }
+.pn { min-height: 64px; display: grid; align-content: space-between; justify-items: center; padding: 6px 2px; }
+.pn b { font-size: 20px; line-height: 1; }
+.pn .dots { display: flex; gap: 4px; }
+.pn .dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); }
+.pn .dots i.on { background: var(--c); }
+.pn small { font-size: 10px; letter-spacing: .04em; }
+.pn.empty { color: var(--faint); }
+.pn.held { background: var(--accent); color: var(--ink); }
+.pn.held .dots i.on { background: var(--ink); }
+.pn.arm { box-shadow: inset 0 0 0 3px var(--hot); }
+#pnSave.arm { background: var(--hot); color: var(--ink); }
 
 /* ---- pattern picker ---- */
 #picker, .modal { position: fixed; inset: 0; background: #000a; display: grid; place-items: center; z-index: 8; padding: 12px; }
@@ -205,6 +221,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
   .ctl { grid-auto-flow: column; gap: 8px; } .ctl b { font-size: 14px; }
   .slot b { font-size: 17px; } .slot svg { height: 16px; }
   .seg button { min-height: 40px; } .dub { min-height: 40px; }
+  .pn { min-height: 48px; }
   .pad { padding: 14px 6px 4px; } .pad .lv { height: 9px; }
   .bankbpm { gap: 10px; } .bank b { font-size: 30px; } .bankbpm b { font-size: 24px; }
 }
@@ -223,7 +240,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
   #tabs button[data-tab="pads"] { display: none; }
   #tabs button { min-height: 36px; background: var(--panel); border-radius: var(--r); font-weight: 800; letter-spacing: .06em; color: var(--dim); font-size: 13px; }
   #app[data-tab="pads"] #tabs button[data-tab="motion"], #tabs button.on { background: var(--accent); color: var(--ink); }
-  #motion { overflow-y: auto; grid-template-rows: auto auto auto; gap: 8px; align-content: start; }
+  #motion { overflow-y: auto; grid-template-rows: auto auto auto auto; gap: 8px; align-content: start; }
   .slot { min-height: 56px; padding: 4px 2px 5px; gap: 0; align-content: center; } .slot svg { height: 13px; } .slot b { font-size: 16px; } .ctl { min-height: 38px; }
   .slots { grid-template-rows: auto auto; }
   .seg button, .dub { min-height: 38px; }

@@ -514,10 +514,10 @@ type busFx struct {
 	num        int
 }
 
-// fxEvent takes a message from the unit about the effect of a bus: on channel 1 (bus 1) or 2 (bus 2)
+// fxEvent takes a message from the unit about the effect of a bus: on channel 1 to 4 (bus 1 to 4)
 // CC 19 switches it and CC 83 says which effect it is.
 func (m Model) fxEvent(e midiin.Event) Model {
-	if e.Kind != midiin.CC || e.Channel < 1 || e.Channel > 2 {
+	if e.Kind != midiin.CC || e.Channel < 1 || e.Channel > 4 {
 		return m
 	}
 	bus := e.Channel - 1

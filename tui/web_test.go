@@ -826,3 +826,88 @@ func TestADoubleTapOnPatternsShowsTheBankOfThePatternThatPlays(t *testing.T) {
 		t.Errorf("after the double tap: %+v", got)
 	}
 }
+
+// ccOut is the last value sent on a channel for a controller (-1 for none).
+func ccOut(sent [][]byte, ch, cc int) int {
+	v := -1
+	for _, msg := range sent {
+		if len(msg) == 3 && int(msg[0]&0x0F)+1 == ch && int(msg[1]) == cc {
+			v = int(msg[2])
+		}
+	}
+	return v
+}
+
+func TestPunchHoldsASnapshotOfAllFourBusesAndGivesThePreviousStateBackOnRelease(t *testing.T) {
+	r, _ := webRig(t)
+	// The unit says what the four buses do: effect, knobs (CTRL 1 and CTRL 4) and on.
+	setBuses := func(num, k1, k4, on int) {
+		for ch := 1; ch <= 4; ch++ {
+			r.cc(ch, ccFxNumber, num+ch)
+			r.cc(ch, 16, k1+ch)
+			r.cc(ch, 80, k4+ch)
+			r.cc(ch, ccFxSwitch, on)
+		}
+	}
+	setBuses(10, 20, 30, 127)
+	r.web(`{"a":"punchsave"}`)
+	r.web(`{"a":"punch","i":1,"n":1}`) // saves into snapshot 2
+	if !r.s.m().mem.Punch[1][3].Set || r.s.m().mem.Punch[1][3].Knobs[3] != 34 {
+		t.Fatalf("snapshot 2 did not keep bus 4: %+v", r.s.m().mem.Punch[1])
+	}
+	// Later the buses are somewhere else, bus 2 is off.
+	setBuses(40, 60, 70, 127)
+	r.cc(2, ccFxSwitch, 0)
+	r.clearSent()
+	r.web(`{"a":"punch","i":1,"n":1}`)
+	sent := r.sent()
+	for ch := 1; ch <= 4; ch++ {
+		if got := ccOut(sent, ch, ccFxNumber); got != 10+ch {
+			t.Errorf("held: bus %d effect = %d, want %d", ch, got, 10+ch)
+		}
+		if got := ccOut(sent, ch, 16); got != 20+ch {
+			t.Errorf("held: bus %d CTRL 1 = %d", ch, got)
+		}
+		if got := ccOut(sent, ch, 80); got != 30+ch {
+			t.Errorf("held: bus %d CTRL 4 = %d", ch, got)
+		}
+		if got := ccOut(sent, ch, ccFxSwitch); got != 127 {
+			t.Errorf("held: bus %d switch = %d", ch, got)
+		}
+	}
+	r.s.press("r")
+	if !r.s.m().webPunch().Slots[1].Held {
+		t.Fatal("the held snapshot is not shown as held")
+	}
+	// A second snapshot cannot be held at the same time.
+	r.clearSent()
+	r.web(`{"a":"punch","i":0,"n":1}`)
+	if n := len(r.sent()); n != 0 {
+		t.Errorf("another snapshot sent %d messages while one is held", n)
+	}
+	r.web(`{"a":"punch","i":1,"n":0}`)
+	sent = r.sent()
+	for ch := 1; ch <= 4; ch++ {
+		if got := ccOut(sent, ch, ccFxNumber); got != 40+ch {
+			t.Errorf("released: bus %d effect = %d, want %d", ch, got, 40+ch)
+		}
+		if got := ccOut(sent, ch, 16); got != 60+ch {
+			t.Errorf("released: bus %d CTRL 1 = %d", ch, got)
+		}
+		if got := ccOut(sent, ch, 80); got != 70+ch {
+			t.Errorf("released: bus %d CTRL 4 = %d", ch, got)
+		}
+	}
+	if got := ccOut(sent, 2, ccFxSwitch); got != 0 {
+		t.Errorf("released: bus 2 was off but the switch = %d", got)
+	}
+	if got := ccOut(sent, 1, ccFxSwitch); got != 127 {
+		t.Errorf("released: bus 1 was on but the switch = %d", got)
+	}
+	// An empty snapshot does nothing.
+	r.clearSent()
+	r.web(`{"a":"punch","i":3,"n":1}`)
+	if n := len(r.sent()); n != 0 {
+		t.Errorf("an empty snapshot sent %d messages", n)
+	}
+}

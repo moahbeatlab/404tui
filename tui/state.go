@@ -71,6 +71,8 @@ type State struct {
 	SlicerTarget    int  `json:"slicerTarget,omitempty"`
 	// The dice of the Slicer (see mangleOpts): drop-outs, reversed, pitch spread, rolls, humanize (percent), fade (ms).
 	SlicerDrop, SlicerRev, SlicerPitch, SlicerRoll, SlicerHuman, SlicerFade int
+	// Punch are the four snapshots of the effects of all four buses (see punch.go).
+	Punch [4]PunchSnap `json:"punch"`
 	// BusNotes are what the user wrote of the effect on each bus (the unit does not say), shown in
 	// the Perform view.
 	BusNotes [2]string `json:"busNotes,omitempty"`
@@ -82,6 +84,18 @@ type State struct {
 	AssignExpanded []string `json:"assignExpanded"`
 	AssignAt       string   `json:"assignAt"`
 }
+
+// PunchBus is the effect of one bus as a snapshot holds it: which effect (CC 83), on or off (1, 0), and its six
+// knobs; -1 is a value the unit had not said.
+type PunchBus struct {
+	Set   bool   `json:"set,omitempty"`
+	On    int    `json:"on"`
+	Num   int    `json:"num"`
+	Knobs [6]int `json:"knobs"`
+}
+
+// PunchSnap is a snapshot of the four buses.
+type PunchSnap [4]PunchBus
 
 // SearchMemory is one remembered search.
 type SearchMemory struct {

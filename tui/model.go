@@ -329,7 +329,7 @@ type Model struct {
 	perfLog *perflog.Log
 	// fx is what the unit last said of the effect of each bus: switched on or off (CC 19), and which
 	// effect it is (CC 83).
-	fx [2]busFx
+	fx [4]busFx
 	// codes holds the pads hit lately, for the codes that start the live mode and a recording;
 	// liveOn is set while the live mode is on, liveBack the view it goes back to.
 	codes    *codeState

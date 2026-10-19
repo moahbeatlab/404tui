@@ -47,6 +47,8 @@ type sceneState struct {
 	out     midiin.Out
 	outErr  string
 	tried   time.Time
+	// punch is the snapshots that are held (see punch.go).
+	punch punchRun
 	// last is the last message sent to the unit, as text, for the panel and the log.
 	last string
 }
@@ -231,7 +233,7 @@ func (m Model) sceneSend(sc *sceneState, msg []byte) {
 		m.log.Info("midi: sending to", "output", name)
 	}
 	if len(msg) == 3 {
-		if m.mon != nil && msg[1] >= 16 && msg[1] <= 18 {
+		if m.mon != nil && ((msg[1] >= 16 && msg[1] <= 18) || (msg[1] >= 80 && msg[1] <= 82)) {
 			m.mon.setCC(int(msg[0]&0x0F)+1, int(msg[1]), int(msg[2]), time.Now())
 		}
 		sc.last = fmt.Sprintf("channel %d, controller %d = %d", int(msg[0]&0x0F)+1, msg[1], msg[2])

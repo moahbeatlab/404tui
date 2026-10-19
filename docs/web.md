@@ -78,6 +78,20 @@ loop is. Under BUS 1 and BUS 2 are the effect the unit reported and its three kn
 
 Motion needs the unit's MIDI clock: start its sequencer.
 
+### Punch
+
+Four snapshots of the effects of **all four buses** (the effect, its six knobs, on or off), under the motion
+slots. **Hold** one and every bus goes into that state; **let go** and each bus goes back to what it was just
+before, wherever you had moved it since. Nothing waits for the clock: it is plain MIDI controllers.
+
+To store: tap **SAVE** (it lights, and the four buttons say SAVE HERE), then tap a snapshot; it keeps what the
+four buses are doing now. The dots show which buses a snapshot holds. They are kept between runs.
+
+Only what the unit has said over MIDI is saved: turn a knob of a bus once (or switch its effect) and it is
+known. A bus with a motion playing is left alone. A value that was unknown when you pressed cannot be given
+back and stays as the snapshot had it. If the finger is lost (the page hidden, the screen locked), the
+snapshot lets go by itself; tapping the held one again does the same.
+
 ## What it needs
 
 * The computer runs 404tui (`sp404 serve` or the terminal program), with the unit plugged in by USB.

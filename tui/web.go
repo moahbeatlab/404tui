@@ -57,6 +57,7 @@ type webState struct {
 	Focus    webFocus  `json:"focus"`
 	Motion   webMotion `json:"motion"`
 	Fx       [2]webFx  `json:"fx"`
+	Punch    webPunch  `json:"punch"`
 	// Patterns are the 16 slots of the bank, to choose what plays now and next.
 	Patterns []webPattern `json:"patterns"`
 	Version  string       `json:"version"`
@@ -216,6 +217,7 @@ func (m Model) webSnapshot() webState {
 	if m.iso != nil {
 		s.Focus = webFocus{On: true, Multi: m.iso.multi, Dry: len(m.iso.was)}
 	}
+	s.Punch = m.webPunch()
 	s.Looper = m.webLooper()
 	s.Slicer = m.webSlicer()
 	s.Ptn = m.webPtn()
@@ -428,6 +430,10 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		return m.toggleRecording()
 	case "motion":
 		return m.motionAct(bus, c.Slot), nil
+	case "punch":
+		return m.punchAct(map[int]string{0: "up", 1: "down"}[c.N], c.I), nil
+	case "punchsave":
+		return m.punchAct("save", 0), nil
 	case "mclear":
 		return m.motionClear(bus), nil
 	case "mspeed":
