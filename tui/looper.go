@@ -31,11 +31,10 @@ type looperState struct {
 	slFrom      string
 	slOrder     string
 	slN, slDest int
-	// The Slicer's preview (see slpreview.go): slPrev says the slices are heard as a loop on the pad slPPad while they are
-	// worked on; slWritten is whether the sample is on that pad, slArm that its start waits for beat 1, slPlay that it plays
-	// (its note is held), slDirty that a setting changed while the pad was being written.
-	slPrev, slWritten, slArm, slPlay, slDirty bool
-	slPPad                                    proto.PadIndex
+	// The Slicer's preview (see slpreview.go): slPrev says the slices are heard as a loop on the computer's audio output while they
+	// are worked on, slArm that its start waits for beat 1, slPlay that it plays, slDirty that a setting changed while the slices were
+	// being cut.
+	slPrev, slArm, slPlay, slDirty bool
 	// jobs wait for the pattern to come round.
 	jobs []lpJob
 	// The Patterns page: the bank shown (ptSet says it was chosen); ptFallback is the clock tick after which the pattern sent last

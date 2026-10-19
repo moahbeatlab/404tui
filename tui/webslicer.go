@@ -279,14 +279,22 @@ func (m Model) slicerDone(msg slicerDoneMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	lp := m.looper()
+	had := lp.slHave
 	lp.slOut, lp.slHave, lp.slFrom, lp.slN, lp.slOrder = msg.out, true, msg.from, msg.n, msg.order
-	lp.slDest = -1
-	if free, ok := m.slFreePad(m.slTargetBank()); ok {
-		lp.slDest = int(free.Pad())
+	if !had || lp.slDest < 0 {
+		lp.slDest = -1
+		if free, ok := m.slFreePad(m.slTargetBank()); ok {
+			lp.slDest = int(free.Pad())
+		}
 	}
 	m.message = fmt.Sprintf("%s in %d slices, order %s: choose the pad it goes on, then PLACE", msg.from, msg.n, msg.order)
 	if lp.slPrev {
-		return m.slPreviewWrite()
+		m.message = fmt.Sprintf("%s in %d slices, order %s: looping; change the settings, then PLACE", msg.from, msg.n, msg.order)
+		if lp.slDirty {
+			lp.slDirty = false
+			return m.slPreviewRefresh()
+		}
+		return m.slPreviewPlay()
 	}
 	return m, nil
 }
@@ -302,6 +310,8 @@ func (m Model) slicerPlace() (tea.Model, tea.Cmd) {
 	target := m.snap.Bank(tb)[lp.slDest].Pad
 	out, from, n := lp.slOut, lp.slFrom, lp.slN
 	lp.slHave, lp.slOut = false, formats.Sample{}
+	lp.slPrev = false
+	m = m.slPreviewStop()
 	unit, edit := m.unit, m.edit
 	name := "SLC " + time.Now().Format("15:04:05")
 	cmd := edit(func() tea.Msg {
@@ -429,12 +439,15 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 		}
 		return nm, cmd
 	}
-	if lp.slHave && lp.slPrev {
-		return m.slPreviewCommand(act, n, i)
-	}
 	if lp.slHave {
 		// The slices wait: the grid is the bank they go to.
 		switch act {
+		case "slslices", "slcut", "slorder", "sldiv", "slswing", "slmang":
+			if lp.slPrev {
+				return m.slParam(act, n, i).slPreviewRefresh()
+			}
+		case "slprev":
+			return m.slPreviewToggle()
 		case "slpad":
 			if i >= 0 && i <= 15 {
 				lp.slDest = i
@@ -455,6 +468,8 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 			return m.sliceRender(m.snap.Bank(bank)[pad], m.sliceOptions(bank))
 		case "slcancel":
 			lp.slHave, lp.slOut = false, formats.Sample{}
+			lp.slPrev = false
+			m = m.slPreviewStop()
 			m.message = "the slices were dropped"
 		}
 		return m, nil
@@ -608,18 +623,7 @@ func (m Model) webSlicer() webSlicer {
 	}
 	grid := bank
 	if lp := m.lp; lp != nil {
-		s.Prev = lp.slPrev
-		switch {
-		case !lp.slPrev:
-		case m.busy != "":
-			s.Loop = "sending to " + lp.slPPad.String() + "…"
-		case lp.slArm:
-			s.Loop = "starts on beat 1"
-		case lp.slPlay:
-			s.Loop = "looping on " + lp.slPPad.String()
-		case lp.slWritten:
-			s.Loop = "on " + lp.slPPad.String()
-		}
+		s.Prev, s.Loop = lp.slPrev, m.slPreviewState()
 	}
 	if lp := m.lp; lp != nil && lp.slHave {
 		s.Phase, s.Dest, grid, s.Free = "ready", lp.slDest, tb, ""

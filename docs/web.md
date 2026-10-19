@@ -211,14 +211,14 @@ The bank chip at the top follows the page: on the Pads and Stage pages it is the
 
 The Slicer page has a **MANGLE** button: a list of dice that are rolled for every slice each time SLICE is pressed: DROP-OUTS (slices that stay silent), REVERSE (played backwards), PITCH (each slice up or down by up to 2, 5 or 12 semitones, at random), ROLLS (slices that stutter 2 to 8 times), HUMANIZE (loudness, and timing on a grid) and FADE (at the ends of every slice). The result always has the length of the original, so it still fits the pattern; a pitched slice keeps its place in the rhythm (a shorter one ends in silence, a longer one is cut).
 
-**PREVIEW** (next to SLICE): hear the result as a loop before you commit. With it on, SLICE cuts the slices and writes them to the free pad
-(gate and loop on), and the unit plays them in a loop, started by a MIDI note on the next beat 1 (at once when there is no clock). Then
-change any setting (slices, cuts, order, grid, swing, the dice, NEW VERSION): the slices are cut again and sent again, and the loop comes
-back on the next beat 1. Sending takes a second or so, in which the loop is gone; changes made meanwhile are collected into one more send.
-**APPLY** (where PLACE was) lets the pad go back to a normal one (ungated, not looping, muted like a new pad): the sample is on it already,
-so nothing is sent again. **DISCARD** stops the loop and deletes the pad. While previewing, the pad and the target bank stay as they are.
-Needs the MIDI output to the unit (the same one the effects use). Not tried on the unit yet: that a note starts a looping pad and that
-letting go stops it, and what the unit does when a playing pad's sample is replaced.
+**PREVIEW** (next to SLICE): hear the result before it is on any pad. The slices stay in the computer's memory and play as a loop
+on the computer's audio output, as the Slicer of the terminal does; send that output to the unit (USB cable, the unit's EXT SOURCE
+button, and the unit as the computer's sound output) and the loop is in the mix. The loop starts on beat 1 of the unit's clock (at once
+without a clock) and has the length of the sample, so it stays in step with a pattern of that length. Change any setting (slices, cuts,
+order, grid, swing, the dice, NEW VERSION): the slices are cut again and take over from the loop's next round, without a break. Then
+choose the pad and press **PLACE** as ever: the loop stops and the slices go on the pad (on beat 1 of the pattern). **DISCARD** stops the loop.
+The loop can drift from the unit's clock over a long time (two clocks), and the audio output has a delay of its own: it is a preview,
+not a replacement for the pad. Needs an audio output on the computer.
 
 
 ## Patterns

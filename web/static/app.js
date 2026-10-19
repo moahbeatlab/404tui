@@ -489,7 +489,7 @@
   let slAsk = 0, slAskT = 0;
   press('slGo', () => {
     const sl = state && state.slicer;
-    if (sl && sl.phase === 'ready' && !sl.prev && sl.destName && slAsk !== sl.dest + 1) {
+    if (sl && sl.phase === 'ready' && sl.destName && slAsk !== sl.dest + 1) {
       slAsk = sl.dest + 1; clearTimeout(slAskT); slAskT = setTimeout(() => { slAsk = 0; render(); }, 3000); return render();
     }
     slAsk = 0; send({ a: 'slgo' });
@@ -544,19 +544,19 @@
     const ready = sl.phase === 'ready';
     $('slReady').hidden = !ready;
     set($('slT'), 'textContent', ready ? sl.src : sl.pad >= 0 ? sl.src : 'SLICER');
-    set($('slSub'), 'textContent', sl.later ? sl.later : ready && sl.prev ? sl.loop || 'preview' : ready ? 'order ' + sl.played + ' · tap a pad of bank ' + sl.target + ', then PLACE' : sl.pad >= 0 ? (sl.free ? 'next free pad: ' + sl.free : 'bank ' + sl.target + ' is full') : 'tap a pad of bank ' + sl.bank + ' to slice');
-    const asking = ready && !sl.prev && sl.destName && slAsk === sl.dest + 1;
+    set($('slSub'), 'textContent', sl.later ? sl.later : ready && sl.prev ? 'order ' + sl.played + ' · ' + sl.loop + ' · tap a pad of bank ' + sl.target + ', then PLACE' : ready ? 'order ' + sl.played + ' · tap a pad of bank ' + sl.target + ', then PLACE' : sl.pad >= 0 ? (sl.free ? 'next free pad: ' + sl.free : 'bank ' + sl.target + ' is full') : 'tap a pad of bank ' + sl.bank + ' to slice');
+    const asking = ready && sl.destName && slAsk === sl.dest + 1;
     cls($('slGo'), 'on', !!asking);
-    set($('slGoT'), 'textContent', sl.busy ? 'WORKING…' : ready ? (sl.prev ? 'APPLY ' + sl.free : sl.dest < 0 ? 'TAP A PAD' : asking ? 'TAP AGAIN: REPLACE ' + sl.free : sl.destName ? 'REPLACE ' + sl.free + ' …' : 'PLACE → ' + sl.free) : 'SLICE');
+    set($('slGoT'), 'textContent', sl.busy ? 'WORKING…' : ready ? (sl.dest < 0 ? 'TAP A PAD' : asking ? 'TAP AGAIN: REPLACE ' + sl.free : sl.destName ? 'REPLACE ' + sl.free + ' …' : 'PLACE → ' + sl.free) : 'SLICE');
     $('slGo').disabled = sl.busy || (ready ? sl.dest < 0 : sl.pad < 0 || !(sl.pads[sl.pad] && sl.pads[sl.pad].has));
     cls($('slPreview'), 'on', !!sl.prev);
     set($('slPreviewT'), 'textContent', sl.prev ? 'PREVIEW: ' + (sl.loop || 'ON').toUpperCase() : 'PREVIEW: OFF');
-    set($('slPreviewS'), 'textContent', sl.prev ? 'settings change the loop · APPLY keeps it' : 'loop it on the unit');
-    $('slPreview').disabled = ready && !sl.prev;
+    set($('slPreviewS'), 'textContent', sl.prev ? 'settings change the loop' : 'loop it from memory');
+    $('slPreview').disabled = false;
     for (const id of ['slPrev', 'slNext']) $(id).disabled = sl.busy || ready;
     for (const id of ['slSlices', 'slCut', 'slOrder', 'slDiv']) $(id).disabled = ready ? !sl.prev : sl.busy;
-    for (const id of ['slTPrev', 'slTNext']) $(id).disabled = sl.busy || (ready && sl.prev);
-    for (const id of ['slAgain', 'slCancel']) $(id).disabled = sl.busy && !(sl.prev && id === 'slCancel');
+    for (const id of ['slTPrev', 'slTNext']) $(id).disabled = sl.busy;
+    for (const id of ['slAgain', 'slCancel']) $(id).disabled = sl.busy;
   }
   function renderLooper(s) {
     const l = s.looper;

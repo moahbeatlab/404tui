@@ -1259,60 +1259,52 @@ func TestAPunchWaitsForALfoOnItsBusAndGivesBackTheStateBeforeTheLfo(t *testing.T
 	}
 }
 
-func TestSlicerPreviewLoopsTheSlicesOnTheUnitAndFollowsTheSettings(t *testing.T) {
+func TestSlicerPreviewLoopsTheSlicesFromMemoryOnBeat1AndSwapsInNewOnes(t *testing.T) {
 	r, _ := webRig(t)
-	r.s.model = r.s.m()
 	r.web(`{"a":"view","name":"looper"}`)
 	r.web(`{"a":"slpad","i":0}`)
 	r.web(`{"a":"slprev"}`)
 	if !r.s.m().webSlicer().Prev {
 		t.Fatal("the preview did not turn on")
 	}
-	r.clearSent()
-	r.web(`{"a":"slgo"}`) // renders; in the test rig the pad holds no valid audio, so only the commands are checked
-	// A note is held on while the preview plays and let go when it is discarded.
+	// Slices wait in memory (the rig's pads hold no audio to cut, so they are put there by hand).
 	m := r.s.m()
 	lp := m.looper()
-	lp.slHave, lp.slPrev, lp.slWritten, lp.slDest = true, true, true, 3
-	lp.slPPad = m.snap.Bank(m.slTargetBank())[3].Pad
-	m.busy = ""
+	a := formats.Sample{Channels: 2, Samples: make([]int16, 9600)}
+	lp.slHave, lp.slOut, lp.slDest = true, a, 3
 	r.s.model = m
 	r.feed(midiin.Event{Kind: midiin.Start})
-	nm, _ := r.s.m().slPreviewed(lp.slPPad)
+	nm, _ := r.s.m().slPreviewPlay()
 	r.s.model = nm
-	r.tick(1)
-	if r.s.m().lp.slPlay {
-		t.Fatal("the preview started before beat 1")
+	player := r.s.player
+	if len(player.looped) != 0 {
+		t.Fatal("the loop started before beat 1")
+	}
+	if r.s.m().webSlicer().Loop != "starts on beat 1" {
+		t.Errorf("state: %q", r.s.m().webSlicer().Loop)
 	}
 	r.tick(ticksPerBar)
-	var on []byte
+	if len(player.looped) != 1 {
+		t.Fatalf("the loop did not start on beat 1: %d", len(player.looped))
+	}
+	// A new cut takes over on the next round.
+	b := formats.Sample{Channels: 2, Samples: make([]int16, 4800)}
+	m2 := r.s.m()
+	m2.looper().slOut = b
+	nm, _ = m2.slPreviewPlay()
+	r.s.model = nm
+	if len(player.queued) != 1 || len(player.queued[0].Samples) != 4800 {
+		t.Errorf("the new cut was not queued for the next round: %d", len(player.queued))
+	}
+	// No pad was touched, no note sent.
 	for _, msg := range r.sent() {
-		if len(msg) == 3 && msg[0]&0xF0 == 0x90 {
-			on = msg
+		if len(msg) == 3 && msg[0]&0xF0 != 0xB0 {
+			t.Errorf("a note was sent: %v", msg)
 		}
 	}
-	if on == nil {
-		t.Fatal("no note was sent on beat 1")
-	}
-	if int(on[0]&0x0F) != int(lp.slPPad.Bank()) {
-		t.Errorf("the note is on channel %d, want the bank %d", on[0]&0x0F, lp.slPPad.Bank())
-	}
-	if pad, ok := padOfNote(int(on[1])); !ok || pad-1 != int(lp.slPPad.Pad()) {
-		t.Errorf("the note %d is for pad %d, want pad %d", on[1], pad, lp.slPPad.Pad()+1)
-	}
-	// Discard lets go of the note.
-	r.clearSent()
+	// Discard stops it.
 	r.web(`{"a":"slcancel"}`)
-	var off bool
-	for _, msg := range r.sent() {
-		if len(msg) == 3 && msg[0]&0xF0 == 0x80 && msg[1] == on[1] {
-			off = true
-		}
-	}
-	if !off {
-		t.Error("DISCARD did not let go of the note")
-	}
-	if r.s.m().webSlicer().Prev {
-		t.Error("the preview is still on after DISCARD")
+	if player.stopped == 0 || r.s.m().webSlicer().Prev {
+		t.Error("DISCARD did not stop the preview")
 	}
 }
