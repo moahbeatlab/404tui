@@ -309,6 +309,19 @@
     shift: ['0', '1/4', '1/2', '3/4'],
   };
   const LFOT = { bus: 'BUS', knob: 'KNOB', shape: 'SHAPE', rate: 'RATE', shift: 'SHIFT' };
+  // A list of choices to pick from: tap the button, tap the choice.
+  function openOpts(title, names, cur, pick, cols) {
+    $('optT').textContent = title;
+    const g = $('optGrid'); g.innerHTML = ''; g.style.setProperty('--cols', cols);
+    names.forEach((t, n) => {
+      const b = document.createElement('button'); b.textContent = t; b.className = n === cur ? 'on' : '';
+      b.addEventListener('pointerdown', (e) => { e.preventDefault(); pick(n); $('optPick').hidden = true; });
+      g.appendChild(b);
+    });
+    $('optPick').hidden = false;
+  }
+  $('optX').addEventListener('pointerdown', (e) => { e.preventDefault(); $('optPick').hidden = true; });
+  $('optPick').addEventListener('pointerdown', (e) => { if (e.target === $('optPick')) $('optPick').hidden = true; });
   let lfoSel = 0;
   const lfoEl = $('lfo');
   lfoEl.innerHTML = '<div class="seg" id="lfoSel"></div><div id="lfoEd"></div><div id="lfoDepth"><i></i><b></b></div><button class="big" id="lfoOn"><span></span><i></i></button>';
@@ -323,7 +336,8 @@
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       const cur = state && state.lfo && state.lfo[lfoSel]; if (!cur) return;
-      send({ a: 'lfoset', i: lfoSel, name: k, n: (cur[k] + 1) % LFO[k].length });
+      const i = lfoSel;
+      openOpts('LFO ' + (i + 1) + ' · ' + LFOT[k], LFO[k], cur[k], (n) => send({ a: 'lfoset', i, name: k, n }), 4);
     });
     $('lfoEd').appendChild(b); lfoBtns[k] = b.querySelector('b');
   });

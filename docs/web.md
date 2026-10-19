@@ -120,7 +120,7 @@ snapshot lets go by itself; tapping the held one again does the same.
 ### LFO
 
 Four LFOs that move a knob of a bus in time with the unit's MIDI clock. They send the controllers of the knobs, like
-Punch, so they move the effects the unit has (no others). Pick an LFO (1 to 4), step each setting with a tap, set the
+Punch, so they move the effects the unit has (no others). Pick an LFO (1 to 4), tap a setting to get a list of its choices and tap one, set the
 **DEPTH** with the slider, and start it:
 
 * **BUS** 1 to 4 and **KNOB** CTRL 1 to 6, or **ON/OFF**, the effect switch (a square makes a rhythmic gate).
