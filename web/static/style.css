@@ -285,7 +285,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 }
 @media (orientation: landscape) and (min-width: 1100px) {
   .slots { grid-template-columns: repeat(4, minmax(0, 1.2fr)) repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); }
-  .slots .slot, .slots .ctl { grid-column: auto; } #app { grid-template-columns: minmax(200px, 20%) auto minmax(380px, 1fr); } }
+  .slots .slot, .slots .ctl { grid-column: auto; } #app { grid-template-columns: minmax(200px, 18%) minmax(0, 1fr) minmax(380px, 1fr); } }
 
 /* ---- narrow landscape (a small phone): the pads and one side panel, with two tabs ---- */
 @media (orientation: landscape) and (max-width: 759px) {
@@ -535,3 +535,4 @@ button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
 .startbox p { color: var(--dim); margin: 0; } .startbox small { color: var(--dim); line-height: 1.4; }
 .startbox .big { min-height: 56px; font-size: 16px; }
 #start[hidden] { display: none; }
+#app.local .pad .lv { display: none; } #app.local .pad { padding-top: 8px; }

@@ -435,7 +435,11 @@
   const app = $('app');
   app.dataset.tab = store.get('tab') === 'looper' ? 'pads' : (store.get('tab') || 'pads');
   app.dataset.view = ['looper', 'patterns'].includes(store.get('view')) && !(LOCAL && store.get('view') === 'looper') ? store.get('view') : 'perform';
-  if (LOCAL) app.classList.add('local');
+  if (LOCAL) {
+    app.classList.add('local');
+    const hint = document.querySelector('#rail .hint');
+    if (hint) hint.innerHTML = 'pad: <b>tap</b> plays it on the unit';
+  }
   const tabBtns = document.querySelectorAll('#tabs button');
   function syncTabs() {
     tabBtns.forEach((x) => x.classList.toggle('on', app.dataset.view !== 'perform' ? x.dataset.tab === app.dataset.view : x.dataset.tab === app.dataset.tab));
