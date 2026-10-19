@@ -123,7 +123,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 .pad.muted::after { content: "MUTED"; position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); padding: 2px 8px; border-radius: 6px; background: var(--hot); color: var(--ink);
   font-size: clamp(10px, 13cqw, 16px); font-weight: 900; letter-spacing: .1em; pointer-events: none; }
 .pad::before { content: ""; position: absolute; inset: 0; background: var(--hot); opacity: var(--glow, 0); pointer-events: none; transition: opacity .1s; }
-.pad:active { filter: brightness(1.25); }
+.pad:active, .pad.hit { filter: brightness(1.25); }
 .mixing .pad .lv { height: 18px; }
 .mixing .pad .lv i { background: var(--accent); opacity: 1; }
 .mixing .pad::after { content: attr(data-lv); position: absolute; right: 8px; bottom: 22px; font-size: 20px; font-weight: 800; color: var(--accent); inset: auto 8px 22px auto; display: block; font-size: clamp(14px, 22cqw, 28px); }

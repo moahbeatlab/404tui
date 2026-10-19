@@ -123,6 +123,14 @@
 
   function pad(el, i) {
     let down = null;
+    // The site build has no serial link, so mute, isolate and volume cannot work: a pad just plays, the moment it is touched.
+    if (LOCAL) {
+      el.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'pad', i }); el.classList.add('hit'); });
+      const off = () => el.classList.remove('hit');
+      el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off);
+      el.addEventListener('contextmenu', (e) => e.preventDefault());
+      return;
+    }
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       try { el.setPointerCapture(e.pointerId); } catch (err) {}
