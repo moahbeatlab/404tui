@@ -184,6 +184,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 #lfoOn { position: relative; overflow: hidden; }
 #lfoOn i { position: absolute; inset: auto 0 0 0; height: 8px; background: var(--ink); opacity: .55; width: 0; }
 #lfoOn.on { background: var(--accent); color: var(--ink); }
+#optGrid, #presetList { touch-action: pan-y; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 #optGrid { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 8px; overflow-y: auto; max-height: 70vh; }
 #optGrid button { min-height: 56px; border-radius: 12px; background: var(--tile); font-weight: 800; font-size: 17px; }
 #optGrid button.on { background: var(--accent); color: var(--ink); }

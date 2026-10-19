@@ -282,7 +282,7 @@
         b.innerHTML = '<b></b><span class="dots">' + [1, 2, 3, 4].map((n) => '<i style="--c:var(--bus' + n + ')"></i>').join('') + '</span><small></small>';
         b.querySelector('b').textContent = pr.name; b.querySelector('small').textContent = pr.note;
         pr.buses.forEach((on, n) => cls(b.querySelectorAll('i')[n], 'on', on));
-        b.addEventListener('pointerdown', (e) => {
+        b.addEventListener('click', (e) => {
           e.preventDefault();
           send({ a: 'punchpreset', i, n: presetInto });
           presetInto = (presetInto + 1) % 4;
@@ -360,7 +360,7 @@
     const g = $('optGrid'); g.innerHTML = ''; g.style.setProperty('--cols', cols);
     names.forEach((t, n) => {
       const b = document.createElement('button'); b.textContent = t; b.className = n === cur ? 'on' : '';
-      b.addEventListener('pointerdown', (e) => { e.preventDefault(); pick(n); $('optPick').hidden = true; });
+      b.addEventListener('click', (e) => { e.preventDefault(); pick(n); $('optPick').hidden = true; });
       g.appendChild(b);
     });
     $('optPick').hidden = false;

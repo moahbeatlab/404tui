@@ -23,6 +23,8 @@ type punchRun struct {
 	sel int
 	// edit: what is changed on the unit while a snapshot is held is kept in it when it is let go.
 	edit bool
+	// skip are the buses a held snapshot or a morph does not touch, because what they have is not known (see punchKnown).
+	skip [4]bool
 	// morph: a tap on a snapshot does not hold it but starts the morph (see morph.go).
 	morph bool
 	// active is the snapshot the morph goes to (1 to 4, 0 for none), mix how far it is (0 to 127), from the state
@@ -104,6 +106,15 @@ func (m Model) punchSend(bus int, p PunchBus, last *PunchBus) Model {
 	return m
 }
 
+// punchKnown is whether the app knows what a bus has well enough to give it back after a snapshot changed it: its
+// effect when the snapshot sets one, whether it is on when the snapshot says so. The unit says these only when they change
+// on it, so an effect loaded before the app listened is not known, and a bus like that is left alone: changing it
+// would leave it in a state the app cannot undo.
+func (m Model) punchKnown(bus int, p PunchBus) bool {
+	f := m.fx[bus]
+	return (p.Num < 0 || f.numSeen) && (p.On < 0 || f.onSeen)
+}
+
 // punchBusy is whether a motion owns the knobs of a bus: it is left alone.
 func (m Model) punchBusy(bus int) bool {
 	sc := m.scenes()
@@ -167,12 +178,23 @@ func (m Model) punchAct(act string, slot int) Model {
 		for b, w := range run.was {
 			m.log.Info("punch: held", "slot", slot+1, "bus", b+1, "in snapshot", snap[b].Set, "was effect", w.Num, "was on", w.On, "was knobs", w.Knobs)
 		}
+		var unknown []string
+		run.skip = [4]bool{}
 		for b, p := range snap {
-			if p.Set && !m.punchBusy(b) {
-				m = m.punchGo(b, p)
+			if !p.Set || m.punchBusy(b) {
+				continue
 			}
+			if !m.punchKnown(b, p) {
+				run.skip[b] = true
+				unknown = append(unknown, fmt.Sprint(b+1))
+				continue
+			}
+			m = m.punchGo(b, p)
 		}
 		m.message = fmt.Sprintf("PUNCH %d held: let go to go back", slot+1)
+		if len(unknown) > 0 {
+			m.message = fmt.Sprintf("PUNCH %d: BUS %s left alone, the app does not know what it has: tap its chip at the top and tell it", slot+1, strings.Join(unknown, ", "))
+		}
 	case "up":
 		if run.morph {
 			return m
@@ -208,12 +230,8 @@ func (m Model) punchUp() Model {
 		}
 	}
 	for b, p := range snap {
-		if (p.Set || run.edit) && !m.punchBusy(b) {
+		if (p.Set || run.edit) && !m.punchBusy(b) && !run.skip[b] {
 			back := run.was[b]
-			if p.On == 1 && back.On < 0 {
-				// The unit never said whether this effect was on: a punch that switched it on switches it off again.
-				back.On = 0
-			}
 			m.log.Info("punch: let go", "slot", run.held, "bus", b+1, "back to effect", back.Num, "on", back.On, "knobs", back.Knobs)
 			m = m.punchGo(b, back)
 		}

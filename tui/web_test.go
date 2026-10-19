@@ -938,6 +938,10 @@ func TestPunchPresetsFillASnapshotAndUseTheEffectsOfTheirBus(t *testing.T) {
 		}
 	}
 	r, _ := webRig(t)
+	for _, b := range []int{0, 2} { // the app knows what buses 1 and 3 have
+		r.web(fmt.Sprintf(`{"a":"fxdeclare","i":%d,"name":"num","n":1}`, b))
+		r.web(fmt.Sprintf(`{"a":"fxdeclare","i":%d,"name":"on","n":0}`, b))
+	}
 	r.web(`{"a":"punchpreset","i":2,"n":3}`) // ECHO THROW into snapshot 4
 	r.clearSent()
 	r.web(`{"a":"punch","i":3,"n":1}`)
@@ -1138,29 +1142,51 @@ func TestPunchEditKeepsWhatIsChangedWhileASnapshotIsHeld(t *testing.T) {
 	}
 }
 
-func TestPunchReleaseSwitchesAnEffectOffThatWasNotKnownToBeOn(t *testing.T) {
+func TestAPunchLeavesABusAloneWhoseEffectTheAppDoesNotKnow(t *testing.T) {
 	r, _ := webRig(t)
-	// The snapshot has bus 1 on; the unit has never said whether bus 1 is on now.
+	// The snapshot has buses 1 and 2; the unit has never said anything of bus 1, bus 2 is known.
+	r.cc(2, ccFxNumber, 10)
+	r.cc(2, ccFxSwitch, 127)
 	m := r.s.m()
-	m.mem.Punch[0][0] = PunchBus{Set: true, On: 1, Num: 10, Knobs: [6]int{40, -1, -1, -1, -1, -1}}
+	m.mem.Punch[0][0] = PunchBus{Set: true, On: 1, Num: 14, Knobs: [6]int{40, -1, -1, -1, -1, -1}}
+	m.mem.Punch[0][1] = PunchBus{Set: true, On: 1, Num: 14, Knobs: [6]int{40, -1, -1, -1, -1, -1}}
 	r.s.model = m
+	r.clearSent()
 	r.web(`{"a":"punch","i":0,"n":1}`)
-	if got := ccOut(r.sent(), 1, ccFxSwitch); got != 127 {
-		t.Fatalf("held: switch = %d", got)
+	sent := r.sent()
+	if len(sent) == 0 || ccOut(sent, 2, ccFxNumber) != 14 {
+		t.Fatalf("the known bus was not punched: %v", sent)
+	}
+	for _, msg := range sent {
+		if msg[0]&0x0F == 0 {
+			t.Fatalf("bus 1 is not known but was sent %v", msg)
+		}
+	}
+	if !strings.Contains(r.s.m().message, "BUS 1") {
+		t.Errorf("no word of the bus that was left alone: %q", r.s.m().message)
 	}
 	r.clearSent()
 	r.web(`{"a":"punch","i":0,"n":0}`)
-	if got := ccOut(r.sent(), 1, ccFxSwitch); got != 0 {
-		t.Errorf("released: the effect was left on (switch = %d)", got)
+	for _, msg := range r.sent() {
+		if msg[0]&0x0F == 0 {
+			t.Errorf("the release touched bus 1: %v", msg)
+		}
 	}
-	// Morph back to 0 does the same.
-	r.web(`{"a":"punchmode","n":1}`)
-	r.web(`{"a":"punch","i":0,"n":1}`)
-	r.web(`{"a":"morph","n":127}`)
+	if got := ccOut(r.sent(), 2, ccFxNumber); got != 10 {
+		t.Errorf("bus 2 went back to %d, want 10", got)
+	}
+	// Told what bus 1 has, it is punched and given back.
+	r.web(`{"a":"fxdeclare","i":0,"name":"num","n":16}`)
+	r.web(`{"a":"fxdeclare","i":0,"name":"on","n":1}`)
 	r.clearSent()
-	r.web(`{"a":"morph","n":0}`)
-	if got := ccOut(r.sent(), 1, ccFxSwitch); got != 0 {
-		t.Errorf("morph back at 0: the effect was left on (switch = %d)", got)
+	r.web(`{"a":"punch","i":0,"n":1}`)
+	if got := ccOut(r.sent(), 1, ccFxNumber); got != 14 {
+		t.Errorf("bus 1 told: held effect = %d", got)
+	}
+	r.clearSent()
+	r.web(`{"a":"punch","i":0,"n":0}`)
+	if got := ccOut(r.sent(), 1, ccFxNumber); got != 16 {
+		t.Errorf("bus 1 told: released effect = %d, want 16", got)
 	}
 }
 
