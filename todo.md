@@ -72,3 +72,21 @@ Goal: review the layers and keep them honest. The layering is `cmd/sp404` → `t
   append-only log of changes folded in now and then, or SQLite on the computer with only a
   copy on the card). The origins and folder notes are bounded (2560 and 160 entries) and can
   stay JSON.
+
+## Check the web features on the real unit
+
+Written after the Punch, Morph, LFO and Slicer preview were built against the simulator and the tests only. Run
+`sp404 -v -log debug.log serve` with the unit attached (one program on the serial port; the Linux release build has MIDI) and
+use a spare project.
+
+- [ ] **Punch** (effects of all four buses): buses 3 and 4 really answer on MIDI channels 3 and 4 with CC 16-18, 80-82, 19, 83.
+  A preset sounds like its name. Release gives back a bus whose chip is known (tell the app with the chips, or change the effect
+  once on the unit); a bus the app never heard of is switched off on release and stays red. EDIT keeps what is turned on the unit
+  while a snapshot is held (needs the unit to send the knob CCs). MORPH slider and the EC4 group on channel 14.
+- [ ] **LFO**: how the 7-bit steps sound per knob, a pump on an Isolator LOW (bus 3 or 4) or a LEVEL knob, the clock lock, what
+  dense CC does to the unit.
+- [ ] **Slicer preview**: computer audio output to the unit (USB, EXT SOURCE), the delay and the drift against the MIDI clock, the
+  swap to a new cut at the loop's next round.
+- [ ] **Patterns page**: Program Change switching (unit: PC Rx on, MIDI mode B) and the blink and takeover of the page.
+- [ ] **Queued PLACE and DELETE on beat 1**, and the import without a Stop: is the gap in the pattern gone?
+- [ ] A pattern file rewritten while it plays (earlier: the write worked, nothing changed audibly).
