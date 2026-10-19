@@ -84,6 +84,12 @@ The side panel has three pages, **MOTION**, **PUNCH** and **LFO** (the choice is
 effects of **all four buses** (the effect, its six knobs, on or off). **Hold** one and every bus goes into that state; **let go** and each bus goes back to what it was just
 before, wherever you had moved it since. Nothing waits for the clock: it is plain MIDI controllers.
 
+The four chips at the top of the page show what the app knows of each bus: its effect and whether it is on (● on, ○ off).
+**The unit only tells the app when something changes on it**, so an effect that was loaded and switched on before the app
+listened shows as `fx ?` in red: a punch cannot put that back (it does not know what was there). Tap the chip and tell
+the app (ON or OFF, and the effect from the list); nothing is sent to the unit. Or change the effect once on the unit.
+Punch, Morph and the LFOs give back what the app knows.
+
 To store: tap **SAVE** (it lights, and the four buttons say SAVE HERE), then tap a snapshot; it keeps what the
 four buses are doing now. The dots show which buses a snapshot holds. They are kept between runs.
 

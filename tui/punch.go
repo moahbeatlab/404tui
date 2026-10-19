@@ -164,6 +164,9 @@ func (m Model) punchAct(act string, slot int) Model {
 			return m
 		}
 		run.held, run.was = slot+1, m.lfoBase(m.capturePunch())
+		for b, w := range run.was {
+			m.log.Info("punch: held", "slot", slot+1, "bus", b+1, "in snapshot", snap[b].Set, "was effect", w.Num, "was on", w.On, "was knobs", w.Knobs)
+		}
 		for b, p := range snap {
 			if p.Set && !m.punchBusy(b) {
 				m = m.punchGo(b, p)
@@ -211,6 +214,7 @@ func (m Model) punchUp() Model {
 				// The unit never said whether this effect was on: a punch that switched it on switches it off again.
 				back.On = 0
 			}
+			m.log.Info("punch: let go", "slot", run.held, "bus", b+1, "back to effect", back.Num, "on", back.On, "knobs", back.Knobs)
 			m = m.punchGo(b, back)
 		}
 	}
@@ -280,6 +284,8 @@ type webPunch struct {
 	Arm  bool `json:"arm"`
 	Edit bool `json:"edit"`
 	Sel  int  `json:"sel"`
+	// Bus is what the app knows of each bus's effect now (Num -1 and On -1 when the unit never said).
+	Bus [4]webBusState `json:"bus"`
 	// Snap are the values of the selected snapshot, Live what the buses are now (to see what was changed).
 	Snap    [4]webBusVals   `json:"snap"`
 	Live    [4]webBusVals   `json:"live"`
@@ -307,6 +313,19 @@ func (m Model) webPunch() webPunch {
 	run := m.scenes().punch
 	w := webPunch{Arm: run.arm, Morph: run.morph, Edit: run.edit, Active: run.active, Mix: run.mix, Presets: make([]webPreset, len(punchPresets))}
 	w.Sel = run.sel
+	for b := range w.Bus {
+		f := m.fx[b]
+		w.Bus[b] = webBusState{Num: -1, On: -1}
+		if f.numSeen {
+			w.Bus[b].Num, w.Bus[b].Name = f.num, fxNameOf(b, f.num)
+		}
+		if f.onSeen {
+			w.Bus[b].On = 0
+			if f.on {
+				w.Bus[b].On = 1
+			}
+		}
+	}
 	if run.sel > 0 {
 		live := m.capturePunch()
 		for b := range live {
@@ -372,4 +391,35 @@ func webVals(bus int, p PunchBus) webBusVals {
 		}
 	}
 	return v
+}
+
+// webBusState is what is known of a bus: the effect and whether it is on.
+type webBusState struct {
+	Num  int    `json:"num"`
+	Name string `json:"name"`
+	On   int    `json:"on"`
+}
+
+// fxDeclare tells the app what a bus has: the unit only says it when it changes, so what was loaded before the app
+// listened is unknown, and a punch cannot put it back. "num" says the effect, "on" whether it is on (1 or 0). Nothing is sent.
+func (m Model) fxDeclare(bus int, what string, n int) Model {
+	if bus < 0 || bus > 3 {
+		return m
+	}
+	f := m.fx[bus]
+	switch what {
+	case "num":
+		if n < 0 || n >= len(fxTable(bus)) {
+			return m
+		}
+		f.num, f.numSeen = n, true
+		m.message = fmt.Sprintf("BUS %d: %s noted (nothing sent to the unit)", bus+1, fxNameOf(bus, n))
+	case "on":
+		f.on, f.onSeen = n == 1, true
+		m.message = fmt.Sprintf("BUS %d: noted as %s (nothing sent to the unit)", bus+1, map[bool]string{true: "on", false: "off"}[n == 1])
+	default:
+		return m
+	}
+	m.fx[bus] = f
+	return m
 }

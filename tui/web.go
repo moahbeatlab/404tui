@@ -438,6 +438,8 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		return m.punchPreset(c.I, c.N), nil
 	case "morph":
 		return m.morphSet(c.N), nil
+	case "fxdeclare":
+		return m.fxDeclare(c.I, c.Name, c.N), nil
 	case "lfoset":
 		return m.lfoSet(c.I, c.Name, c.N), nil
 	case "lfoon":

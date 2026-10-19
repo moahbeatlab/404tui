@@ -210,6 +210,20 @@
   }
   const pnVals = document.createElement('div'); pnVals.id = 'pnVals';
   punchEl.appendChild(pnVals);
+  // What the app knows of each bus (the unit only says it when it changes): tap a chip to tell it what a bus has, so a punch can put it back.
+  const FX_TABLES = [["(OFF)", "Direct FX1", "Direct FX2", "Direct FX3", "Direct FX4", "Direct FX5", "Scatter", "Downer", "Ha-Dou", "Ko-Da-Ma", "Zan-Zou", "To-Gu-Ro", "SBF", "Stopper", "Tape Echo", "TimeCtrlDly", "Super Filter", "WrmSaturator", "303 VinylSim", "404 VinylSim", "Cassette Sim", "Lo-fi", "Reverb", "Chorus", "JUNO Chorus", "Flanger", "Phaser", "Wah", "Slicer", "Tremolo/Pan", "Chromatic PS", "Hyper-Reso", "Ring Mod", "Crusher", "Overdrive", "Distortion", "Equalizer", "Compressor", "SX Reverb", "SX Delay", "Cloud Delay", "Back Spin", "DJFX Delay"], ["(OFF)", "303 VinylSim", "404 VinylSim", "Cassette Sim", "Lo-fi", "Downer", "Compressor", "Equalizer", "Isolator", "Super Filter", "Filter+Drive", "WrmSaturator", "Overdrive", "Distortion", "Crusher", "Ring Mod", "SBF", "Resonator", "Hyper-Reso", "Chromatic PS", "Reverb", "Ha-Dou", "Zan-Zou", "Sync Delay", "TimeCtrlDly", "Ko-Da-Ma", "Tape Echo", "Chorus", "JUNO Chorus", "Flanger", "Phaser", "Wah", "Slicer", "Tremolo/Pan", "To-Gu-Ro", "DJFX Looper", "Scatter", "SX Reverb", "SX Delay", "Cloud Delay", "DJFX Delay"]];
+  const pnBus = document.createElement('div'); pnBus.id = 'pnBus';
+  const pnBusBtns = [0, 1, 2, 3].map((b) => {
+    const x = document.createElement('button'); x.className = 'chip';
+    x.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const t = FX_TABLES[b < 2 ? 0 : 1], bs = state && state.punch && state.punch.bus[b];
+      if (!bs) return;
+      openOpts('BUS ' + (b + 1) + ' has…', ['ON', 'OFF'].concat(t), bs.num >= 0 ? bs.num + 2 : -1, (n) => send(n < 2 ? { a: 'fxdeclare', i: b, name: 'on', n: 1 - n } : { a: 'fxdeclare', i: b, name: 'num', n: n - 2 }), 3);
+    });
+    pnBus.appendChild(x); return x;
+  });
+  punchEl.insertBefore(pnBus, pnBar);
   const pnMode = document.createElement('div'); pnMode.className = 'seg';
   const PN_MODES = [['HOLD', 0], ['EDIT', 2], ['MORPH', 1]];
   const pnModeNow = (p) => (p.morph ? 1 : p.edit ? 2 : 0);
@@ -289,6 +303,7 @@
   // EDIT: the values of the snapshot (what the buses are now while it is held, with what changed lit).
   function renderVals(p) {
     punchEl.dataset.edit = p.edit ? '1' : '0';
+    p.bus.forEach((x, b) => { const t = (b + 1) + ' ' + (x.num >= 0 ? x.name : 'fx ?') + (x.on === 1 ? ' ●' : x.on === 0 ? ' ○' : ' ?'); set(pnBusBtns[b], 'textContent', t); cls(pnBusBtns[b], 'unk', x.num < 0 || x.on < 0); });
     if (!p.edit) return;
     let html = '';
     if (!p.sel) html = '<p class="pvhint">Hold a snapshot to see its values. Turn the knobs on the unit while you hold it: what you change lights up and is kept when you let go.</p>';
