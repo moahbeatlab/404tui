@@ -230,3 +230,19 @@ The **PATTERNS** tab in portrait (the button at the top right in landscape goes 
 Tapping a pattern makes the unit play it **next**: the program sends a MIDI Program Change on the channel of the bank (1 for A to 10 for J) with the number of the pattern, as 404jam does. The unit needs **PC Rx** switched on (and the MIDI mode B of its MIDI settings). The pattern sent **blinks until it is really playing**: it becomes the lit one when the pads heard in the last bar fit its notes clearly better than the notes of the pattern that played (so the old pattern keeps the light until the unit has switched, whenever that is). Two patterns that no pad tells apart (or one that has too few notes to hear) take over after a whole pattern has gone by after the time the old one was due to end. The unit does not confirm anything, so all of this is the program's reading of what the unit plays.
 
 A **double tap** on the Patterns button (the tab in portrait, the button at the top right in landscape) shows the bank of the pattern that plays, whatever bank was chosen on the page.
+
+
+## Without a server: the page on GitHub Pages
+
+The same page also runs on its own at <https://moahbeatlab.github.io/404tui/> (built by `make site`, deployed by `.github/workflows/pages.yml`).
+There is no program behind it: `web/static/engine.js` does in the browser what `sp404 serve` does for Perform, and talks to the unit by **Web MIDI**.
+It needs Chrome or Edge on a computer, or the MIDIWeb Browser app on an iPhone or iPad (the other iOS browsers have no Web MIDI). **Connect the
+SP-404MKII** picks the unit's MIDI port (as 404jam does), **Try the demo** runs the same page against a made-up unit with a clock at 125 BPM.
+
+What works there, as in the program: the clock (BPM, bar and beat), the pads (a tap plays the pad on the channel of the bank), **Motion**, **Punch**
+with its presets, **Morph** (slider, and the EC4 group on channel 14), the four **LFOs**, and the **Patterns** page (a Program Change). The effects
+and the knobs a bus has are what the unit says over MIDI, and what was punched is kept in the browser. What needs the unit's USB serial link is
+not there: the pad names, levels and samples, recording, the level meter, the Looper and the Slicer.
+
+`engine.js` is a port of `tui/motion.go`, `punch.go`, `morph.go`, `lfo.go` and of what `midi.go` does with a message: change one, change the other.
+`fxdata.js` (the effects, their knobs and the presets) is made from `tui/fxnames.go`, `fxparams.go` and `punchpresets.go`; a test fails when they differ.

@@ -17,6 +17,8 @@ checks sequencing and data handling, not the unit's actual behaviour.
 
 Documentation per tab, with all keys and modes: [`docs/`](docs/README.md).
 
+The phone page also runs without any program, over Web MIDI, at <https://moahbeatlab.github.io/404tui/> (see [`docs/web.md`](docs/web.md)).
+
 ## Getting started without the terminal
 
 404tui is a program that runs in a terminal window, and it opens one by itself when you double-click it:

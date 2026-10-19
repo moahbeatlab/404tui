@@ -26,6 +26,17 @@
   </form>
 </div>
 
+<div id="start" class="screen" hidden>
+  <div class="startbox">
+    <h1>404<span>tui</span></h1>
+    <p>Perform for the Roland SP-404MKII in the browser: Motion, Punch, Morph, LFOs and the patterns, over MIDI. Nothing to install, no server.</p>
+    <button id="startLive" class="big on">Connect the SP-404MKII</button>
+    <button id="startDemo" class="big">Try the demo</button>
+    <p id="startErr" class="err"></p>
+    <small>Plug the unit in with USB. Needs Web MIDI: Chrome or Edge on a computer, or the MIDIWeb Browser app on an iPhone or iPad. The unit sends its MIDI clock when its sequencer runs: Motion and the LFOs follow it. Pattern switching needs PC Rx on and MIDI mode B.</small>
+  </div>
+</div>
+
 <div id="app" hidden>
   <header id="top">
     <div class="brand">404<span>tui</span></div>
@@ -159,6 +170,9 @@
 
 <div id="lost" hidden><div><b>Connection lost</b><span id="lostS">reconnecting…</span><button id="lostB">Change address</button></div></div>
 
+<script src="mode.js"></script>
+<script src="fxdata.js"></script>
+<script src="engine.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

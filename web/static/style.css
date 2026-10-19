@@ -526,3 +526,12 @@ button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
 #lpSlice .big small { display: none; }
 #optGrid button small { display: block; font-weight: 500; font-size: 12px; color: var(--dim); margin-top: 2px; }
 #optGrid button.on small { color: rgba(0,0,0,.6); }
+
+/* ---- the hosted page: no server, so no Looper, Slicer, recording or level ---- */
+#app.local #tabs button[data-tab="looper"], #app.local #bRec, #app.local [data-meter] { display: none; }
+#start { display: grid; place-items: center; }
+.startbox { display: grid; gap: 12px; max-width: 420px; padding: 24px 16px; text-align: center; }
+.startbox h1 { margin: 0; font-size: 44px; } .startbox h1 span { color: var(--accent); }
+.startbox p { color: var(--dim); margin: 0; } .startbox small { color: var(--dim); line-height: 1.4; }
+.startbox .big { min-height: 56px; font-size: 16px; }
+#start[hidden] { display: none; }

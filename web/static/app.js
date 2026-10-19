@@ -8,6 +8,9 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   };
 
+  // On the hosted page (mode.js says so) there is no server: the engine in engine.js talks to the unit by Web MIDI, or plays a demo.
+  const LOCAL = !!window.SP404_LOCAL;
+  let eng = null;
   // ---- connection ----
   let ws = null, retry = 0, retryTimer = 0, host = '', key = '', everOpen = false, state = null, rtt = null;
   const servedByUs = location.protocol.startsWith('http') && !qs.get('host');
@@ -29,10 +32,13 @@
   }
   function open() {
     clearTimeout(retryTimer);
-    if (!target()) return showConnect('');
-    try { ws = new WebSocket(wsURL()); } catch (e) { return showConnect('That address does not work.'); }
+    if (LOCAL) { if (!eng) return showStart(''); ws = eng.socket(); }
+    else {
+      if (!target()) return showConnect('');
+      try { ws = new WebSocket(wsURL()); } catch (e) { return showConnect('That address does not work.'); }
+    }
     ws.onopen = () => { retry = 0; everOpen = true; $('lost').hidden = true; $('connect').hidden = true; $('app').hidden = false;
-      store.set('host', host); if (key) store.set('key', key); setConn('ok', 'connected'); ping(); send({ a: 'view', name: $('app').dataset.view }); };
+      if (!LOCAL) { store.set('host', host); if (key) store.set('key', key); } setConn('ok', 'connected'); ping(); send({ a: 'view', name: $('app').dataset.view }); };
     ws.onmessage = (ev) => { let o; try { o = JSON.parse(ev.data); } catch (e) { return; }
       if (o.pong !== undefined) { pong(); return; } state = o; schedule(); };
     ws.onclose = () => { ws = null; setConn('bad', 'offline'); if (!everOpen && retry >= 2) return showConnect('No answer from ' + host + '. Is sp404 serve running, and the key right?');
@@ -40,7 +46,20 @@
       retry++; retryTimer = setTimeout(open, Math.min(500 * retry, 3000)); };
     ws.onerror = () => {};
   }
+  // The start screen of the hosted page: the unit by Web MIDI, or the demo.
+  async function startEngine(demo) {
+    $('startErr').textContent = '';
+    if (!demo && !SP404Local.supported()) { $('startErr').textContent = 'This browser has no Web MIDI. Use Chrome or Edge on a computer, or the MIDIWeb Browser app on an iPhone or iPad.'; return; }
+    const e = await SP404Local.start({ demo });
+    if (!demo && e.midi.error) { $('startErr').textContent = e.midi.error; return; }
+    eng = window.__eng = e; store.set('mode', demo ? 'demo' : 'live');
+    $('start').hidden = true; $('app').hidden = false; open();
+  }
+  function showStart(err) {
+    $('app').hidden = true; $('lost').hidden = true; $('connect').hidden = true; $('start').hidden = false; $('startErr').textContent = err || '';
+  }
   function showConnect(err) {
+    if (LOCAL) return showStart(err);
     $('app').hidden = true; $('lost').hidden = true; $('connect').hidden = false;
     $('hostIn').value = host || store.get('host'); $('keyIn').value = key || store.get('key'); $('connectErr').textContent = err || '';
   }
@@ -63,6 +82,7 @@
   }
   function pong() {
     rtt = Math.round(performance.now() - pingAt);
+    if (LOCAL) return;
     if (state && state.unit === false) setConn('nounit', 'no unit · ' + rtt + ' ms'); else setConn('ok', rtt + ' ms');
   }
   function send(o) {
@@ -414,12 +434,13 @@
   // tabs (portrait), and the switch between Perform and the Looper (the tab in portrait, the button in the top bar)
   const app = $('app');
   app.dataset.tab = store.get('tab') === 'looper' ? 'pads' : (store.get('tab') || 'pads');
-  app.dataset.view = ['looper', 'patterns'].includes(store.get('view')) ? store.get('view') : 'perform';
+  app.dataset.view = ['looper', 'patterns'].includes(store.get('view')) && !(LOCAL && store.get('view') === 'looper') ? store.get('view') : 'perform';
+  if (LOCAL) app.classList.add('local');
   const tabBtns = document.querySelectorAll('#tabs button');
   function syncTabs() {
     tabBtns.forEach((x) => x.classList.toggle('on', app.dataset.view !== 'perform' ? x.dataset.tab === app.dataset.view : x.dataset.tab === app.dataset.tab));
     // The button in the top bar (landscape) names the view it goes to: Perform, Looper, Patterns, and round.
-    $('viewBtn').textContent = { perform: 'LOOPER', looper: 'PATTERNS', patterns: 'PERFORM' }[app.dataset.view];
+    $('viewBtn').textContent = { perform: LOCAL ? 'PATTERNS' : 'LOOPER', looper: 'PATTERNS', patterns: 'PERFORM' }[app.dataset.view];
     $('viewBtn').classList.toggle('on', app.dataset.view !== 'perform');
   }
   function setView(v) { app.dataset.view = v; store.set('view', v); syncTabs(); send({ a: 'view', name: v }); try { if (state) render(); } catch (e) { /* before the first state */ } }
@@ -441,7 +462,7 @@
     e.preventDefault();
     // Tapped twice quickly where it said PATTERNS: stay on the Patterns page, and show the bank of the pattern that plays.
     if (app.dataset.view === 'patterns' && performance.now() - ptnTapAt < 450) { ptnTapAt = performance.now(); send({ a: 'ptnfollow' }); return; }
-    const to = { perform: 'looper', looper: 'patterns', patterns: 'perform' }[app.dataset.view];
+    const to = { perform: LOCAL ? 'patterns' : 'looper', looper: 'patterns', patterns: 'perform' }[app.dataset.view];
     if (to === 'patterns') ptnTapAt = performance.now();
     setView(to);
   });
@@ -719,8 +740,10 @@
   function render() {
     const s = state;
     if (!s) return;
-    if (ws && ws.readyState === 1 && rtt !== null) setConn(s.unit ? 'ok' : 'nounit', (s.unit ? '' : 'no unit · ') + rtt + ' ms');
+    if (LOCAL) setConn(s.unit ? 'ok' : 'nounit', s.demo ? 'demo' : s.unit ? s.midiName : 'no MIDI port');
+    else if (ws && ws.readyState === 1 && rtt !== null) setConn(s.unit ? 'ok' : 'nounit', (s.unit ? '' : 'no unit · ') + rtt + ' ms');
     $('waiting').hidden = s.unit;
+    if (LOCAL) $('waiting').innerHTML = '<b>No MIDI port to the SP-404MKII</b><span>Plug it in with USB and switch it on, or reload and try the demo.</span>';
     renderLooper(s);
     renderPunch(s.punch);
     renderLfo(s.lfo);
@@ -794,5 +817,10 @@
   document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
   window.__render = render; window.__setState = (s) => { state = s; app.hidden = false; $('connect').hidden = true; render(); };
-  open();
+  if (LOCAL) {
+    $('startLive').addEventListener('click', () => startEngine(false));
+    $('startDemo').addEventListener('click', () => startEngine(true));
+    // Back to the unit when it was used last time (the browser remembers the permission).
+    if (store.get('mode') === 'live' && SP404Local.supported()) startEngine(false); else showStart('');
+  } else open();
 })();

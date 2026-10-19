@@ -26,7 +26,7 @@ GOBUILD := go build -trimpath -ldflags "$(LDFLAGS)"
 LINUX   := linux-amd64 linux-arm64
 WINDOWS := windows-amd64 windows-arm64
 
-.PHONY: build test check vet fmt dist linux windows macos clean
+.PHONY: site build test check vet fmt dist linux windows macos clean
 
 # MIDI input needs cgo on a Mac (CoreMIDI) and Linux (ALSA headers: libasound2-dev); Windows has it
 # always (no cgo). Where the headers are missing the build goes on without MIDI.
@@ -77,6 +77,12 @@ ifeq ($(shell uname -s),Darwin)
 else
 	@echo "the macOS binaries need cgo for the serial port: build them on a Mac"; exit 1
 endif
+
+# The page without a server (web/static with mode.js set), for GitHub Pages: it talks to the unit by Web MIDI.
+site:
+	rm -rf $(DIST)/site && mkdir -p $(DIST)/site && cp web/static/* $(DIST)/site/
+	echo "window.SP404_LOCAL = true; // the unit is reached by Web MIDI, there is no server" > $(DIST)/site/mode.js
+	touch $(DIST)/site/.nojekyll
 
 clean:
 	rm -rf $(DIST) $(BIN)
