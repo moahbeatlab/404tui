@@ -234,7 +234,10 @@ func (m Model) sceneSend(sc *sceneState, msg []byte) {
 		sc.out, sc.outErr = o, ""
 		m.log.Info("midi: sending to", "output", name)
 	}
-	if len(msg) == 3 {
+	if len(msg) == 3 && msg[0]&0xF0 != 0xB0 {
+		sc.last = fmt.Sprintf("channel %d, note %d, velocity %d", int(msg[0]&0x0F)+1, msg[1], msg[2])
+		m.log.Info("midi: sent", "channel", int(msg[0]&0x0F)+1, "note", msg[1], "velocity", msg[2], "on", msg[0]&0xF0 == 0x90)
+	} else if len(msg) == 3 {
 		if m.mon != nil && ((msg[1] >= 16 && msg[1] <= 18) || (msg[1] >= 80 && msg[1] <= 82)) {
 			m.mon.setCC(int(msg[0]&0x0F)+1, int(msg[1]), int(msg[2]), time.Now())
 		}

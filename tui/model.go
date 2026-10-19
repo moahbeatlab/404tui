@@ -761,6 +761,8 @@ type (
 		folderUses *app.FolderUses
 		// muted are pads put at level 0 from here: their level is kept, so that a mute brings them back.
 		muted []proto.PadIndex
+		// previewed is the pad a Slicer preview was just written to.
+		previewed *proto.PadIndex
 	}
 	patternsMsg struct {
 		bank int
@@ -1277,11 +1279,18 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.patPreview = map[proto.PadIndex]*app.PatternDetail{}
 			m.usage, m.usageState = nil, 0
 		}
+		var extra tea.Cmd
+		if msg.previewed != nil {
+			m, extra = m.slPreviewed(*msg.previewed)
+		}
 		if msg.reload {
 			m.busy = "reading the unit"
-			return m, m.load(msg.message)
+			return m, tea.Batch(m.load(msg.message), extra)
 		}
 		m.busy = ""
+		if extra != nil {
+			return m, extra
+		}
 	case noteMsg:
 		m.message = string(msg)
 		// A pad setting changed (the level, say): a looping pattern is mixed again.

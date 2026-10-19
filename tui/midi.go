@@ -234,6 +234,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		m.logMIDI(e)
 		m = m.sceneTick()
 		m = m.lfoTick()
+		m = m.slPreviewTick()
 		m.motionTick()
 		at := e.At
 		if at.IsZero() {

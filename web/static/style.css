@@ -409,6 +409,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 .lpbtn { border: 0; color: var(--text); font: inherit; touch-action: manipulation; }
 .lpbtn.on { background: var(--accent); color: var(--ink); } .lpbtn.on small { color: rgba(0,0,0,.6); }
 .lprow2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.lprow2 > .lparm { grid-column: auto; }
 @media (orientation: portrait) { .lprow2 { grid-column: 1 / -1; } }
 
 .lpgroup { display: grid; gap: 8px; align-content: start; }
@@ -418,7 +419,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 #looper[data-lp="loop"] #lpSlice { display: none; }
 #looper[data-lp="slice"] #lpMain, #looper[data-lp="slice"] #lpStatus { display: none; }
 #looper[data-lp="slice"] .lpgroup { grid-template-columns: 1fr 1fr; }
-#looper[data-lp="slice"] .lpgroup > .lprow, #looper[data-lp="slice"] .lpgroup > .lprow2, #looper[data-lp="slice"] .lpgroup > .lpstatus, #looper[data-lp="slice"] .lpgroup > .lpinfo, #looper[data-lp="slice"] #slGo { grid-column: 1 / -1; }
+#looper[data-lp="slice"] .lpgroup > .lprow, #looper[data-lp="slice"] .lpgroup > .lprow2, #looper[data-lp="slice"] .lpgroup > .lpstatus, #looper[data-lp="slice"] .lpgroup > .lpinfo { grid-column: 1 / -1; }
 
 #lvPop { position: fixed; z-index: 20; pointer-events: none; transform: translateX(-50%); background: var(--accent); color: var(--ink); border-radius: 12px;
   padding: 4px 14px; display: grid; justify-items: center; line-height: 1.05; box-shadow: 0 4px 18px rgba(0,0,0,.5); }

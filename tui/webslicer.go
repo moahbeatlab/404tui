@@ -285,6 +285,9 @@ func (m Model) slicerDone(msg slicerDoneMsg) (tea.Model, tea.Cmd) {
 		lp.slDest = int(free.Pad())
 	}
 	m.message = fmt.Sprintf("%s in %d slices, order %s: choose the pad it goes on, then PLACE", msg.from, msg.n, msg.order)
+	if lp.slPrev {
+		return m.slPreviewWrite()
+	}
 	return m, nil
 }
 
@@ -426,6 +429,9 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 		}
 		return nm, cmd
 	}
+	if lp.slHave && lp.slPrev {
+		return m.slPreviewCommand(act, n, i)
+	}
 	if lp.slHave {
 		// The slices wait: the grid is the bank they go to.
 		switch act {
@@ -474,6 +480,23 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 			n = i - cur
 		}
 		m.mem.SlicerTarget = (cur+n+proto.Banks)%proto.Banks + 1
+	case "slslices", "slmang", "slcut", "slorder", "sldiv", "slswing":
+		m = m.slParam(act, n, i)
+	case "slprev":
+		return m.slPreviewToggle()
+	case "slgo":
+		if pad < 0 {
+			m.message = "tap the pad to slice first"
+			return m, nil
+		}
+		return m.sliceRender(m.snap.Bank(bank)[pad], m.sliceOptions(bank))
+	}
+	return m, nil
+}
+
+// slParam changes one setting of the Slicer.
+func (m Model) slParam(act string, n, i int) Model {
+	switch act {
 	case "slslices":
 		m.mem.SlicerSlices = cycleInt(slSliceChoices, m.slSlices(), 1)
 	case "slmang":
@@ -486,14 +509,8 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 		m.mem.SlicerDiv = cycleInt(slDivChoices, m.mem.SlicerDiv, 1)
 	case "slswing":
 		m.mem.SlicerSwing = cycleInt(slSwingChoices, m.mem.SlicerSwing, 1)
-	case "slgo":
-		if pad < 0 {
-			m.message = "tap the pad to slice first"
-			return m, nil
-		}
-		return m.sliceRender(m.snap.Bank(bank)[pad], m.sliceOptions(bank))
 	}
-	return m, nil
+	return m
 }
 
 // sliceOptions are the settings of the page's Slicer, for a pad of a bank.
@@ -565,6 +582,9 @@ type webSlicer struct {
 	Played string `json:"played"`
 	// Later says what waits for the last beat of the pattern.
 	Later string `json:"later"`
+	// Prev is the preview mode; Loop says how it is going: sending, waiting for beat 1 or looping.
+	Prev bool   `json:"prev"`
+	Loop string `json:"loop"`
 	// Mangle are the dice (drop, reverse, pitch, roll, humanize, fade) and Active how many are not 0.
 	Mangle []int `json:"mangle"`
 	Active int   `json:"active"`
@@ -587,6 +607,20 @@ func (m Model) webSlicer() webSlicer {
 		}
 	}
 	grid := bank
+	if lp := m.lp; lp != nil {
+		s.Prev = lp.slPrev
+		switch {
+		case !lp.slPrev:
+		case m.busy != "":
+			s.Loop = "sending to " + lp.slPPad.String() + "…"
+		case lp.slArm:
+			s.Loop = "starts on beat 1"
+		case lp.slPlay:
+			s.Loop = "looping on " + lp.slPPad.String()
+		case lp.slWritten:
+			s.Loop = "on " + lp.slPPad.String()
+		}
+	}
 	if lp := m.lp; lp != nil && lp.slHave {
 		s.Phase, s.Dest, grid, s.Free = "ready", lp.slDest, tb, ""
 		s.Src = lp.slFrom + " in " + fmt.Sprint(lp.slN) + " slices"
