@@ -355,11 +355,12 @@
   };
   const LFOT = { bus: 'BUS', knob: 'KNOB', shape: 'SHAPE', rate: 'RATE', shift: 'SHIFT' };
   // A list of choices to pick from: tap the button, tap the choice.
-  function openOpts(title, names, cur, pick, cols) {
+  function openOpts(title, names, cur, pick, cols, hints) {
     $('optT').textContent = title;
     const g = $('optGrid'); g.innerHTML = ''; g.style.setProperty('--cols', cols);
     names.forEach((t, n) => {
-      const b = document.createElement('button'); b.textContent = t; b.className = n === cur ? 'on' : '';
+      const b = document.createElement('button'); b.className = n === cur ? 'on' : '';
+      if (hints) { b.innerHTML = '<b></b><small></small>'; b.firstChild.textContent = t; b.lastChild.textContent = hints[n]; } else b.textContent = t;
       b.addEventListener('click', (e) => { e.preventDefault(); pick(n); $('optPick').hidden = true; });
       g.appendChild(b);
     });
@@ -481,11 +482,15 @@
   press('slNext', () => send({ a: 'slbank', n: 1 }));
   press('slTPrev', () => send({ a: 'sltbank', n: -1 }));
   press('slTNext', () => send({ a: 'sltbank', n: 1 }));
-  press('slSlices', () => send({ a: 'slslices' }));
-  press('slCut', () => send({ a: 'slcut' }));
-  press('slOrder', () => send({ a: 'slorder' }));
-  press('slDiv', () => send({ a: 'sldiv' }));
-  press('slSwing', () => send({ a: 'slswing' }));
+  // The settings are chosen from a list, as in the LFO page.
+  const SLICES = [2, 4, 8, 16, 32], DIVS = [0, 2, 4, 8, 16], SWINGS = [0, 54, 58, 62, 66], ORDERS = ['SHUFFLE', 'IN ORDER', 'RANDOM'];
+  const slPicker = (id, title, names, cur, act, cols, hints) => press(id, () => { const sl = state && state.slicer; if (sl) openOpts(title, names, cur(sl), (n) => send({ a: act, pick: n }), cols, hints); });
+  slPicker('slSlices', 'Slices', SLICES.map((n) => n + ' slices'), (sl) => SLICES.indexOf(sl.slices), 'slslices', 3);
+  slPicker('slCut', 'Cuts', ['EQUAL CUTS', 'RANDOM CUTS'], (sl) => (sl.random ? 1 : 0), 'slcut', 2);
+  slPicker('slOrder', 'Order of the slices', ORDERS, (sl) => ['shuffle', 'in order', 'random'].indexOf(sl.order), 'slorder', 1, [
+    'every slice once, in a mixed order', 'the slices as they are in the sample', 'every step a slice at random: some twice, some never']);
+  slPicker('slDiv', 'Grid', DIVS.map((d) => (d ? '1/' + d : 'OWN LENGTH')), (sl) => DIVS.indexOf(sl.div), 'sldiv', 2);
+  slPicker('slSwing', 'Swing', SWINGS.map((v) => SWING[v]), (sl) => SWINGS.indexOf(sl.swing), 'slswing', 3);
   let slAsk = 0, slAskT = 0;
   press('slGo', () => {
     const sl = state && state.slicer;
@@ -604,29 +609,36 @@
   }
 
   // ---- the Slicer's dice ----
+  // The first four dice are numbers of slices (of the ones the sample is cut in), the others amounts.
+  const nSl = (v, n) => v + (v === 1 ? ' slice' : ' of ' + n);
   const DICE = [
-    ['DROP-OUTS', 'slices that stay silent', (v) => v + ' %'],
-    ['REVERSE', 'slices played backwards', (v) => v + ' %'],
-    ['PITCH', 'up or down by up to', (v) => '±' + v + ' st'],
-    ['ROLLS', 'slices that stutter', (v) => v + ' %'],
-    ['HUMANIZE', 'loudness and timing wander', (v) => v + ' %'],
-    ['FADE', 'at the ends of every slice', (v) => v + ' ms'],
+    ['DROP-OUTS', 'slices that stay silent', nSl, 0],
+    ['REVERSE', 'slices played backwards', nSl, 1],
+    ['PITCH', 'slices moved up or down', nSl, 2],
+    ['PITCH RANGE', 'the most a slice moves', (v) => '±' + v + ' st', 7],
+    ['ROLLS', 'slices that stutter', nSl, 3],
+    ['HUMANIZE', 'loudness and timing wander', (v) => v + ' %', 4],
+    ['FADE', 'at the ends of every slice', (v) => v + ' ms', 5],
   ];
   const diceEls = [];
-  DICE.forEach(([name, hint], k) => {
+  DICE.forEach(([name, hint, , field]) => {
     const r = document.createElement('div');
     r.className = 'dicerow';
     r.innerHTML = '<span>' + name + '</span><button>−</button><b></b><button>+</button><small>' + hint + '</small>';
     const [lo, , hi] = [r.children[1], r.children[2], r.children[3]];
-    lo.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'slmang', i: k, n: -1 }); });
-    hi.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'slmang', i: k, n: 1 }); });
+    lo.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'slmang', i: field, n: -1 }); });
+    hi.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'slmang', i: field, n: 1 }); });
     $('mangleRows').appendChild(r);
     diceEls.push(r.children[2]);
   });
   function drawDice() {
     const sl = state && state.slicer;
     if (!sl || !sl.mangle) return;
-    diceEls.forEach((b, k) => { b.textContent = sl.mangle[k] ? DICE[k][2](sl.mangle[k]) : 'off'; b.classList.toggle('on', sl.mangle[k] > 0); });
+    diceEls.forEach((b, k) => {
+      const field = DICE[k][3], v = sl.mangle[field === 7 ? 6 : field];
+      const off = field === 7 ? !sl.mangle[2] : !v;
+      b.textContent = field === 7 || v ? DICE[k][2](v, sl.slices) : 'off'; b.classList.toggle('on', !off);
+    });
   }
   $('slMangle').addEventListener('pointerdown', (e) => { e.preventDefault(); $('manglePick').hidden = false; drawDice(); });
   $('mangleX').addEventListener('pointerdown', (e) => { e.preventDefault(); $('manglePick').hidden = true; });
@@ -680,6 +692,7 @@
   let toastT = 0, lastMsg = '';
   function toast(t) {
     if (!t || t === lastMsg) { lastMsg = t; return; }
+    return; // the banner covered the header with the buses' effects: messages are not shown
     lastMsg = t; const el = $('toast'); el.textContent = t; el.classList.add('show');
     clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 3200);
   }

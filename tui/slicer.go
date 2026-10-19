@@ -1189,8 +1189,11 @@ func (m Model) slicerLaneKey(name string) bool {
 }
 
 // shuffleOrder puts the steps of the order in a random order.
-func shuffleOrder(sl *formats.Slicing) {
-	q := formats.NewSequencer(&formats.Slicing{Frames: sl.Frames, Slices: sl.Slices, Order: sl.Order, Mode: formats.ModeShuffle, Seed: time.Now().UnixNano()})
+func shuffleOrder(sl *formats.Slicing) { shuffleOrderSeed(sl, time.Now().UnixNano()) }
+
+// shuffleOrderSeed shuffles from a seed: the same seed gives the same order.
+func shuffleOrderSeed(sl *formats.Slicing, seed int64) {
+	q := formats.NewSequencer(&formats.Slicing{Frames: sl.Frames, Slices: sl.Slices, Order: sl.Order, Mode: formats.ModeShuffle, Seed: seed})
 	n := len(sl.Order)
 	// One shuffled pass of every slice, then the repeats of the old order kept in length.
 	out := make([]int, 0, n)

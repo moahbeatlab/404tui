@@ -387,6 +387,10 @@ func TestSlicerOnAFile(t *testing.T) {
 func TestSlicerGrid(t *testing.T) {
 	s := slicerOpen(t)
 	s.press("T")
+	if sl := s.slicing(); sl.Division != 2 {
+		t.Fatalf("the first grid is %d, want halves", sl.Division)
+	}
+	s.press("T")
 	sl := s.slicing()
 	if sl.Division != 4 || sl.BPM != 120 {
 		t.Fatalf("division %d, bpm %g", sl.Division, sl.BPM)
@@ -740,7 +744,7 @@ func TestSlicerGridTicksShowWithGrid(t *testing.T) {
 	if strings.Contains(s.m().View(), "┃") {
 		t.Fatal("ticks shown with the grid off")
 	}
-	s.press("T")
+	s.press("T", "T")
 	v := s.m().View()
 	if !strings.Contains(v, "┃") || !strings.Contains(v, "╵") {
 		t.Fatalf("no bar and beat ticks with the grid on:\n%s", v)
@@ -1154,7 +1158,7 @@ func TestSlicerClearThenPlaceEdgesByHand(t *testing.T) {
 
 func TestSlicerCutCursorJumpsAGridStep(t *testing.T) {
 	s := slicerOpen(t)
-	s.press("T") // a grid
+	s.press("T", "T") // a grid of quarters (the first is halves)
 	step := s.slicing().StepFrames()
 	if step == 0 {
 		t.Fatal("no grid")

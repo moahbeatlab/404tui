@@ -35,6 +35,8 @@ type looperState struct {
 	// are worked on, slArm that its start waits for beat 1, slPlay that it plays, slDirty that a setting changed while the slices were
 	// being cut.
 	slPrev, slArm, slPlay, slDirty bool
+	// slSeed is what the slices were rolled from: a setting that changes cuts again from the same seed, SLICE and NEW VERSION roll anew.
+	slSeed int64
 	// jobs wait for the pattern to come round.
 	jobs []lpJob
 	// The Patterns page: the bank shown (ptSet says it was chosen); ptFallback is the clock tick after which the pattern sent last

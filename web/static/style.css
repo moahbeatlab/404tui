@@ -511,3 +511,18 @@ button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
   #patterns { grid-area: main; }
   #tabs { grid-template-columns: repeat(5, 1fr); } #tabs button { font-size: 11px; letter-spacing: .02em; }
 }
+
+/* ---- the Slicer on a phone: small controls, the settings three to a row, each chosen from a list ---- */
+.lprow3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+#looper[data-lp="slice"] .lpgroup > .lprow3 { grid-column: 1 / -1; }
+#lpSlice { gap: 6px; }
+#lpSlice .big { min-height: 38px; padding: 2px 4px; font-size: 12px; letter-spacing: 0; }
+#lpSlice .lparm { min-height: 44px; font-size: 16px; }
+#lpSlice .lprow .big { font-size: 15px; }
+#lpSlice .lpmid { min-height: 38px; } #lpSlice .lpmid small { display: none; } #lpSlice .lpmid b { font-size: 16px; }
+#lpSlice .lpstatus { padding: 5px 10px; } #lpSlice .lpstatus b { font-size: 17px; }
+#lpSlice .lpstatus span { font-size: 12px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+#lpSlice .lpinfo { display: none; }
+#lpSlice .big small { display: none; }
+#optGrid button small { display: block; font-weight: 500; font-size: 12px; color: var(--dim); margin-top: 2px; }
+#optGrid button.on small { color: rgba(0,0,0,.6); }

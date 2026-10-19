@@ -331,6 +331,7 @@ type webCmd struct {
 	N     int     `json:"n"`
 	Value float64 `json:"v"`
 	Name  string  `json:"name"`
+	Pick  *int    `json:"pick"`
 }
 
 // webCommand does what the page asked for.
@@ -392,7 +393,16 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 	case "ptn", "ptnbank", "ptnbankset", "ptnfollow":
 		return m.ptnCommand(c.A, c.I)
 	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute", "slmang", "slprev":
-		return m.slicerCommand(c.A, c.N, c.I)
+		i := c.I
+		switch c.A {
+		case "slslices", "slcut", "slorder", "sldiv", "slswing":
+			// A choice from a list comes as "pick"; without one the setting steps on to the next.
+			i = -1
+			if c.Pick != nil {
+				i = *c.Pick
+			}
+		}
+		return m.slicerCommand(c.A, c.N, i)
 	case "lpbank", "lppattern", "lpdel", "lpslices", "lpremix":
 		if m.snap == nil {
 			return m, nil

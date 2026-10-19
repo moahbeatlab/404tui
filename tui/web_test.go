@@ -411,7 +411,7 @@ func TestTheSlicerOfThePageCutsAPadOntoTheNextFreePad(t *testing.T) {
 	r.web(`{"a":"sltbank","n":1}`)
 	r.web(`{"a":"sltbank","n":-1}`)
 	s = w.last(t).Slicer
-	if s.Pad != int(from.Pad()) || s.Slices != 16 || s.Order != "in order" || s.Div != 4 || s.Target != "A" || s.Free == "" {
+	if s.Pad != int(from.Pad()) || s.Slices != 16 || s.Order != "in order" || s.Div != 2 || s.Target != "A" || s.Free == "" {
 		t.Fatalf("slicer after the buttons: %+v", s)
 	}
 	r.web(`{"a":"slgo"}`)
@@ -635,10 +635,10 @@ func TestTheDiceOfTheSlicerKeepTheLengthAndChangeTheSound(t *testing.T) {
 		}
 	}
 	for _, o := range []sliceOpts{
-		{n: 8, order: slOrderShuffle, mangle: mangleOpts{drop: 75}},
-		{n: 8, order: slOrderInOrder, mangle: mangleOpts{rev: 100}},
-		{n: 16, order: slOrderRandom, mangle: mangleOpts{pitch: 12, roll: 100, fade: 50}},
-		{n: 8, order: slOrderShuffle, div: 8, bpm: 120, mangle: mangleOpts{drop: 25, rev: 50, pitch: 5, roll: 50, human: 100, fade: 10}},
+		{n: 8, order: slOrderShuffle, mangle: mangleOpts{drop: 6}},
+		{n: 8, order: slOrderInOrder, mangle: mangleOpts{rev: 8}},
+		{n: 16, order: slOrderRandom, mangle: mangleOpts{pitchN: 16, pitch: 12, roll: 16, fade: 50}},
+		{n: 8, order: slOrderShuffle, div: 8, bpm: 120, mangle: mangleOpts{drop: 2, rev: 4, pitchN: 4, pitch: 5, roll: 4, human: 100, fade: 10}},
 	} {
 		out, order := sliceSample(src, o)
 		if out.Frames() != src.Frames() {
@@ -664,9 +664,11 @@ func TestTheDiceCanBeSetFromThePage(t *testing.T) {
 	r, w := webRig(t)
 	r.s.press("r")
 	r.web(`{"a":"slmang","i":0,"n":1}`)
+	r.web(`{"a":"slmang","i":0,"n":1}`)
+	r.web(`{"a":"slmang","i":3,"n":1}`)
 	r.web(`{"a":"slmang","i":2,"n":-1}`)
 	s := w.last(t).Slicer
-	if len(s.Mangle) != 6 || s.Mangle[0] != 25 || s.Mangle[2] != 12 || s.Active != 2 {
+	if len(s.Mangle) != 7 || s.Mangle[0] != 2 || s.Mangle[2] != 0 || s.Mangle[3] != 1 || s.Active != 2 {
 		t.Fatalf("dice %v, active %d", s.Mangle, s.Active)
 	}
 	r.web(`{"a":"slmang","i":6,"n":0}`)

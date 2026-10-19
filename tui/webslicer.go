@@ -27,7 +27,7 @@ const (
 var (
 	slOrderNames   = []string{"shuffle", "in order", "random"}
 	slSliceChoices = []int{2, 4, 8, 16, 32}
-	slDivChoices   = []int{0, 4, 8, 16}
+	slDivChoices   = []int{0, 2, 4, 8, 16}
 	slSwingChoices = []int{0, 54, 58, 62, 66}
 )
 
@@ -41,32 +41,32 @@ type sliceOpts struct {
 	div, swing int
 	bpm        float64
 	mangle     mangleOpts
+	// seed fixes every roll (the cuts, the order, the dice) so that a change of one setting leaves the rest as it was; 0 rolls anew.
+	seed int64
 }
 
-// mangleOpts are the dice that are rolled for every slice: what share of the slices drop out, play backwards, get a pitch (up
-// or down by up to pitch semitones) or a roll, how much the loudness and the timing wander, and the fades at the ends of the slices.
+// mangleOpts are the dice: how many of the slices drop out, play backwards, get a pitch (up or down by up to pitch semitones)
+// or a roll, how much the loudness and the timing wander (percent), and the fades at the ends of the slices (ms).
 type mangleOpts struct {
-	drop, rev, pitch, roll, human, fade int
+	drop, rev, pitchN, roll, human, fade int
+	pitch                                int // the most semitones a pitched slice moves
 }
 
-// The choices of each die, in the order of the page's list.
+// The choices of the dice that are not a number of slices, in the order of the page's list.
 var (
-	mangleDrop  = []int{0, 25, 50, 75}
-	mangleRev   = []int{0, 25, 50, 100}
-	manglePitch = []int{0, 2, 5, 12}
-	mangleRoll  = []int{0, 25, 50, 100}
+	manglePitch = []int{2, 5, 12}
 	mangleHuman = []int{0, 25, 50, 100}
 	mangleFade  = []int{0, 10, 50, 200}
-	mangleLists = [][]int{mangleDrop, mangleRev, manglePitch, mangleRoll, mangleHuman, mangleFade}
 )
 
+// values are the dice in the page's order, the last one the pitch range.
 func (o mangleOpts) values() []int {
-	return []int{o.drop, o.rev, o.pitch, o.roll, o.human, o.fade}
+	return []int{o.drop, o.rev, o.pitchN, o.roll, o.human, o.fade, o.pitch}
 }
 
 func (o mangleOpts) active() int {
 	n := 0
-	for _, v := range o.values() {
+	for _, v := range o.values()[:6] {
 		if v != 0 {
 			n++
 		}
@@ -78,7 +78,14 @@ func (o mangleOpts) active() int {
 // it has as many steps as it takes to be as long. Whatever the dice do, the result has the length of the sample, so that it
 // still fits the pattern. It also says in which order the slices play.
 func sliceSample(src formats.Sample, o sliceOpts) (formats.Sample, []int) {
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	seed := o.seed
+	if seed == 0 {
+		seed = time.Now().UnixNano()
+	}
+	rng := rand.New(rand.NewSource(seed))
+	// The dice have a generator of their own that draws the same numbers for every slice whatever they are set to, so that
+	// turning one die does not change what the others did.
+	dice := rand.New(rand.NewSource(seed ^ 0x2545f4914f6cdd1d))
 	n := max(o.n, 1)
 	sl := formats.NewSlicing(src.Frames(), n)
 	if o.randomCut {
@@ -88,7 +95,7 @@ func sliceSample(src formats.Sample, o sliceOpts) (formats.Sample, []int) {
 	switch o.order {
 	case slOrderShuffle:
 		for try := 0; try < 8; try++ {
-			shuffleOrder(sl)
+			shuffleOrderSeed(sl, seed+int64(try))
 			if !inOrder(sl.Order) {
 				break
 			}
@@ -102,22 +109,36 @@ func sliceSample(src formats.Sample, o sliceOpts) (formats.Sample, []int) {
 	}
 	mg := o.mangle
 	mod := src
-	if mg.pitch > 0 {
+	if mg.pitchN > 0 {
 		// A pitched slice is as long as its slot again: shorter ones end in silence, longer ones are cut, so that the
 		// rhythm stays where it is.
 		mod = formats.Sample{Channels: src.Channels, Samples: slices.Clone(src.Samples)}
 	}
 	ch := max(src.Channels, 1)
+	// Each effect has its own order of the slices, fixed by the seed, and takes the first few of it: one more slice added
+	// to an effect leaves the ones it had.
+	chosen := func(k int) []bool {
+		is := make([]bool, len(sl.Slices))
+		for _, i := range dice.Perm(len(sl.Slices))[:min(max(k, 0), len(sl.Slices))] {
+			is[i] = true
+		}
+		return is
+	}
+	drop, rev, pitched, roll := chosen(mg.drop), chosen(mg.rev), chosen(mg.pitchN), chosen(mg.roll)
 	for i := range sl.Slices {
 		sc := &sl.Slices[i]
-		sc.Chance = 100 - mg.drop
-		sc.Reverse = rng.Intn(100) < mg.rev
-		sc.Attack, sc.Release = mg.fade, mg.fade
-		if mg.roll > 0 && rng.Intn(100) < mg.roll {
-			sc.Roll = formats.Rolls[1+rng.Intn(len(formats.Rolls)-1)]
+		dRollPick, dPitch := dice.Intn(len(formats.Rolls)-1), dice.Float64()
+		sc.Chance = 100
+		if drop[i] {
+			sc.Chance = 0
 		}
-		if mg.pitch > 0 {
-			if p := rng.Intn(2*mg.pitch+1) - mg.pitch; p != 0 {
+		sc.Reverse = rev[i]
+		sc.Attack, sc.Release = mg.fade, mg.fade
+		if roll[i] {
+			sc.Roll = formats.Rolls[1+dRollPick]
+		}
+		if pitched[i] {
+			if p := int(dPitch*float64(2*mg.pitch+1)) - mg.pitch; p != 0 {
 				from, to := min(sc.Start, src.Frames()), min(sc.End, src.Frames())
 				part := formats.Sample{Channels: src.Channels, Samples: src.Samples[from*ch : to*ch]}.Pitched(p)
 				region := mod.Samples[from*ch : to*ch]
@@ -395,6 +416,14 @@ func (m Model) slBPM(bank int) float64 {
 	return 120
 }
 
+// pickInt is the choice number i of the list, or the one after cur when i is not one (the button of the terminal-like cycle).
+func pickInt(list []int, cur, i int) int {
+	if i >= 0 && i < len(list) {
+		return list[i]
+	}
+	return cycleInt(list, cur, 1)
+}
+
 func cycleInt(list []int, cur, dir int) int {
 	at := 0
 	for i, v := range list {
@@ -465,6 +494,7 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 		case "slgo":
 			return m.slicerPlace()
 		case "slagain":
+			lp.slSeed = time.Now().UnixNano()
 			return m.sliceRender(m.snap.Bank(bank)[pad], m.sliceOptions(bank))
 		case "slcancel":
 			lp.slHave, lp.slOut = false, formats.Sample{}
@@ -504,6 +534,7 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 			m.message = "tap the pad to slice first"
 			return m, nil
 		}
+		lp.slSeed = time.Now().UnixNano()
 		return m.sliceRender(m.snap.Bank(bank)[pad], m.sliceOptions(bank))
 	}
 	return m, nil
@@ -513,17 +544,23 @@ func (m Model) slicerCommand(act string, n, i int) (tea.Model, tea.Cmd) {
 func (m Model) slParam(act string, n, i int) Model {
 	switch act {
 	case "slslices":
-		m.mem.SlicerSlices = cycleInt(slSliceChoices, m.slSlices(), 1)
+		m.mem.SlicerSlices = pickInt(slSliceChoices, m.slSlices(), i)
 	case "slmang":
 		m = m.slMangle(i, n)
 	case "slcut":
 		m.mem.SlicerRandomCut = !m.mem.SlicerRandomCut
+		if i >= 0 {
+			m.mem.SlicerRandomCut = i == 1
+		}
 	case "slorder":
 		m.mem.SlicerOrder = (m.slOrder() + 1) % slOrders
+		if i >= 0 && i < slOrders {
+			m.mem.SlicerOrder = i
+		}
 	case "sldiv":
-		m.mem.SlicerDiv = cycleInt(slDivChoices, m.mem.SlicerDiv, 1)
+		m.mem.SlicerDiv = pickInt(slDivChoices, m.mem.SlicerDiv, i)
 	case "slswing":
-		m.mem.SlicerSwing = cycleInt(slSwingChoices, m.mem.SlicerSwing, 1)
+		m.mem.SlicerSwing = pickInt(slSwingChoices, m.mem.SlicerSwing, i)
 	}
 	return m
 }
@@ -531,45 +568,55 @@ func (m Model) slParam(act string, n, i int) Model {
 // sliceOptions are the settings of the page's Slicer, for a pad of a bank.
 func (m Model) sliceOptions(bank int) sliceOpts {
 	return sliceOpts{n: m.slSlices(), randomCut: m.mem.SlicerRandomCut, order: m.slOrder(), div: m.mem.SlicerDiv, swing: m.mem.SlicerSwing, bpm: m.slBPM(bank),
-		mangle: m.mangleOptions()}
+		mangle: m.mangleOptions(), seed: m.looper().slSeed}
 }
 
-// mangleOptions are the dice as they are set, each one a value of its list.
+// mangleOptions are the dice as they are set: the counts cannot be more than the slices.
 func (m Model) mangleOptions() mangleOpts {
 	pick := func(list []int, v int) int {
 		if slices.Contains(list, v) {
 			return v
 		}
-		return 0
+		return list[0]
 	}
-	return mangleOpts{drop: pick(mangleDrop, m.mem.SlicerDrop), rev: pick(mangleRev, m.mem.SlicerRev), pitch: pick(manglePitch, m.mem.SlicerPitch),
-		roll: pick(mangleRoll, m.mem.SlicerRoll), human: pick(mangleHuman, m.mem.SlicerHuman), fade: pick(mangleFade, m.mem.SlicerFade)}
+	n := m.slSlices()
+	return mangleOpts{drop: min(m.mem.SlicerDrop, n), rev: min(m.mem.SlicerRev, n), pitchN: min(m.mem.SlicerPitchN, n), roll: min(m.mem.SlicerRoll, n),
+		human: pick(mangleHuman, m.mem.SlicerHuman), fade: pick(mangleFade, m.mem.SlicerFade), pitch: pickPitch(m.mem.SlicerPitch)}
 }
 
-// slMangle steps a die (field 0 to 5) up or down its list; field 6 puts them all back to 0.
+// pickPitch is the pitch range as it is set, 5 semitones to begin with.
+func pickPitch(v int) int {
+	if slices.Contains(manglePitch, v) {
+		return v
+	}
+	return 5
+}
+
+// slMangle steps a die (field 0 to 5, or 7 for the pitch range) up or down; field 6 puts them all back to 0. The first four
+// count slices, from 0 to all of them.
 func (m Model) slMangle(field, dir int) Model {
 	if field == 6 {
-		m.mem.SlicerDrop, m.mem.SlicerRev, m.mem.SlicerPitch, m.mem.SlicerRoll, m.mem.SlicerHuman, m.mem.SlicerFade = 0, 0, 0, 0, 0, 0
+		m.mem.SlicerDrop, m.mem.SlicerRev, m.mem.SlicerPitchN, m.mem.SlicerRoll, m.mem.SlicerHuman, m.mem.SlicerFade = 0, 0, 0, 0, 0, 0
 		return m
 	}
-	if field < 0 || field >= len(mangleLists) {
-		return m
-	}
-	cur := m.mangleOptions().values()[field]
-	next := cycleInt(mangleLists[field], cur, dir)
+	o := m.mangleOptions()
+	n := m.slSlices()
+	count := func(cur int) int { return min(max(cur+dir, 0), n) }
 	switch field {
 	case 0:
-		m.mem.SlicerDrop = next
+		m.mem.SlicerDrop = count(o.drop)
 	case 1:
-		m.mem.SlicerRev = next
+		m.mem.SlicerRev = count(o.rev)
 	case 2:
-		m.mem.SlicerPitch = next
+		m.mem.SlicerPitchN = count(o.pitchN)
 	case 3:
-		m.mem.SlicerRoll = next
+		m.mem.SlicerRoll = count(o.roll)
 	case 4:
-		m.mem.SlicerHuman = next
+		m.mem.SlicerHuman = cycleInt(mangleHuman, o.human, dir)
 	case 5:
-		m.mem.SlicerFade = next
+		m.mem.SlicerFade = cycleInt(mangleFade, o.fade, dir)
+	case 7:
+		m.mem.SlicerPitch = cycleInt(manglePitch, o.pitch, dir)
 	}
 	return m
 }

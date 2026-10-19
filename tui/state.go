@@ -69,8 +69,9 @@ type State struct {
 	SlicerDiv       int  `json:"slicerDiv,omitempty"`
 	SlicerSwing     int  `json:"slicerSwing,omitempty"`
 	SlicerTarget    int  `json:"slicerTarget,omitempty"`
-	// The dice of the Slicer (see mangleOpts): drop-outs, reversed, pitch spread, rolls, humanize (percent), fade (ms).
-	SlicerDrop, SlicerRev, SlicerPitch, SlicerRoll, SlicerHuman, SlicerFade int
+	// The dice of the Slicer (see mangleOpts): drop-outs, reversed, pitched, rolls (slices), humanize (percent), fade (ms).
+	// Drop, rev, pitch (SlicerPitchN) and roll are numbers of slices; SlicerPitch is the pitch range in semitones.
+	SlicerDrop, SlicerRev, SlicerPitch, SlicerPitchN, SlicerRoll, SlicerHuman, SlicerFade int
 	// Punch are the four snapshots of the effects of all four buses (see punch.go).
 	Punch [4]PunchSnap `json:"punch"`
 	// BusFx is what the unit last said (or the user told) of each bus's effect, kept for the next run since the unit only

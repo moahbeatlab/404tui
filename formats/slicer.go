@@ -54,7 +54,7 @@ const (
 )
 
 // Divisions are the grids a slicing can be put on, as notes to the bar: 4 is a quarter note.
-var Divisions = []int{0, 4, 8, 16}
+var Divisions = []int{0, 2, 4, 8, 16}
 
 // StepFrames is how long a step lasts on the grid, 0 when the slices play at their own
 // length.
