@@ -49,6 +49,8 @@ type sceneState struct {
 	tried   time.Time
 	// punch is the snapshots that are held (see punch.go).
 	punch punchRun
+	// lfo is what the LFOs are doing (see lfo.go).
+	lfo [4]lfoRun
 	// last is the last message sent to the unit, as text, for the panel and the log.
 	last string
 }

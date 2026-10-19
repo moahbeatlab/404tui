@@ -168,9 +168,23 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
 
 /* ---- punch: four snapshots of the four buses, held ---- */
 #mpSw button { min-height: 38px; font-size: 13px; letter-spacing: .08em; }
-#motion[data-mp="punch"] { grid-template-rows: auto minmax(0, 1fr); }
-#motion[data-mp="punch"] .len, #motion[data-mp="punch"] #buses { display: none; }
-#motion:not([data-mp="punch"]) #punch { display: none; }
+#motion[data-mp="punch"], #motion[data-mp="lfo"] { grid-template-rows: auto minmax(0, 1fr); }
+#motion[data-mp="punch"] .len, #motion[data-mp="punch"] #buses, #motion[data-mp="lfo"] .len, #motion[data-mp="lfo"] #buses { display: none; }
+#motion:not([data-mp="punch"]) #punch, #motion:not([data-mp="lfo"]) #lfo { display: none; }
+#lfo { display: grid; gap: 8px; grid-template-rows: auto auto auto minmax(0, 1fr); min-height: 0; }
+#lfoSel button.run { background: var(--accent); color: var(--ink); }
+#lfoSel button.sel { box-shadow: inset 0 0 0 3px var(--text); }
+#lfoEd { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+#lfoEd .big { min-height: 52px; align-content: center; gap: 2px; padding: 4px 2px; }
+#lfoEd .big small { font-size: 10px; letter-spacing: .08em; color: var(--dim); }
+#lfoEd .big b { font-size: 16px; }
+#lfoDepth { position: relative; min-height: 48px; background: var(--tile); border-radius: var(--r, 12px); overflow: hidden; touch-action: none; }
+#lfoDepth i { position: absolute; inset: 0 auto 0 0; background: var(--faint); width: 0; }
+#lfoDepth b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 15px; text-shadow: 0 0 4px #000a; }
+#lfoOn { position: relative; overflow: hidden; }
+#lfoOn i { position: absolute; inset: auto 0 0 0; height: 8px; background: var(--ink); opacity: .55; width: 0; }
+#lfoOn.on { background: var(--accent); color: var(--ink); }
+#lfoNote { color: var(--dim); font-size: 12px; text-align: center; }
 #punch { display: grid; gap: 8px; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
 #pnSlots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; min-height: 0; }
 #pnBar { min-height: 42px; display: grid; }
@@ -244,7 +258,7 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
   .ctl { grid-auto-flow: column; gap: 8px; } .ctl b { font-size: 14px; }
   .slot b { font-size: 17px; } .slot svg { height: 16px; }
   .seg button { min-height: 40px; } .dub { min-height: 40px; }
-  #mpSw button { min-height: 30px; }
+  #mpSw button { min-height: 30px; } #lfoEd .big { min-height: 40px; } #lfoDepth { min-height: 36px; }
   .pad { padding: 14px 6px 4px; } .pad .lv { height: 9px; }
   .bankbpm { gap: 10px; } .bank b { font-size: 30px; } .bankbpm b { font-size: 24px; }
 }

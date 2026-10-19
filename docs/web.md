@@ -80,7 +80,7 @@ Motion needs the unit's MIDI clock: start its sequencer.
 
 ### Punch
 
-The side panel has two pages, **MOTION** and **PUNCH** (the choice is remembered). Punch is four snapshots of the
+The side panel has three pages, **MOTION**, **PUNCH** and **LFO** (the choice is remembered). Punch is four snapshots of the
 effects of **all four buses** (the effect, its six knobs, on or off). **Hold** one and every bus goes into that state; **let go** and each bus goes back to what it was just
 before, wherever you had moved it since. Nothing waits for the clock: it is plain MIDI controllers.
 
@@ -108,6 +108,27 @@ Only what the unit has said over MIDI is saved: turn a knob of a bus once (or sw
 known. A bus with a motion playing is left alone. A value that was unknown when you pressed cannot be given
 back and stays as the snapshot had it. If the finger is lost (the page hidden, the screen locked), the
 snapshot lets go by itself; tapping the held one again does the same.
+
+### LFO
+
+Four LFOs that move a knob of a bus in time with the unit's MIDI clock. They send the controllers of the knobs, like
+Punch, so they move the effects the unit has (no others). Pick an LFO (1 to 4), step each setting with a tap, set the
+**DEPTH** with the slider, and start it:
+
+* **BUS** 1 to 4 and **KNOB** CTRL 1 to 6, or **ON/OFF**, the effect switch (a square makes a rhythmic gate).
+* **SHAPE**: sine, triangle, saw up, saw down, square, random (a new value each cycle) and **pump**: a dip at the
+  start of each cycle that comes back (the depth is how far it dips, down from where the knob was). Pump at **1/4**
+  on a level knob of a bus effect, or on the LOW of an Isolator (bus 3 or 4), ducks what is on that bus on every beat:
+  a pump by time, not a real sidechain, since it does not hear the kick. **SHIFT** moves it by a quarter of a
+  cycle, to line the dip up with an off-beat kick.
+* **RATE**: a cycle takes 1/16, 1/8, 1/4, 1/2 of a beat-note, or 1, 2, 4, 8 bars. The cycle begins with the bar of
+  the clock, so an LFO is always in step with the pattern.
+* It swings around where the knob was when you started it (a knob the unit has not said yet starts at the middle: turn
+  it once on the unit first) and puts it back when you stop it, or when the clock stops (it goes on with the next
+  start). A bus with a motion playing is left alone. Two things that move the same knob (an LFO, a Morph, a Punch)
+  fight: the last one to send wins.
+
+Not tried on the unit yet: how the 7-bit steps sound on each knob, and how tight a pump feels against a kick.
 
 ## What it needs
 

@@ -233,6 +233,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		m.mon.tick(e.At, m.clock.ticks)
 		m.logMIDI(e)
 		m = m.sceneTick()
+		m = m.lfoTick()
 		m.motionTick()
 		at := e.At
 		if at.IsZero() {
@@ -257,6 +258,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		return m, next
 	case midiin.Stop:
 		m.clock.running = false
+		m = m.lfoStop()
 		m.logMIDI(e)
 		return m, next
 	}

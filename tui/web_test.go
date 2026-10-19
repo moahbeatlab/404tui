@@ -1027,3 +1027,75 @@ func TestMorphMovesTheBusesFromWhereTheyAreToTheSnapshot(t *testing.T) {
 		t.Errorf("an empty snapshot started a morph: %d", got)
 	}
 }
+
+func TestLfoSwingsAKnobWithTheClockAndPutsItBack(t *testing.T) {
+	r, _ := webRig(t)
+	r.cc(1, 16, 64)
+	r.cc(1, ccFxSwitch, 127)
+	r.web(`{"a":"lfoset","i":0,"name":"depth","n":100}`)
+	r.web(`{"a":"lfoset","i":0,"name":"rate","n":4}`) // one bar: 96 ticks
+	r.web(`{"a":"lfoon","i":0}`)
+	if !r.s.m().webLfo()[0].On {
+		t.Fatal("the LFO did not start")
+	}
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.clearSent()
+	r.tick(24) // a quarter of the cycle: the top of the sine
+	if got := ccOut(r.sent(), 1, 16); got != 127 {
+		t.Errorf("top of the sine = %d, want 127", got)
+	}
+	r.tick(48) // three quarters: the bottom
+	if got := ccOut(r.sent(), 1, 16); got != 1 && got != 0 {
+		t.Errorf("bottom of the sine = %d, want about 0", got)
+	}
+	// The clock stops: the knob goes back to where it was.
+	r.feed(midiin.Event{Kind: midiin.Stop})
+	if got := ccOut(r.sent(), 1, 16); got != 64 {
+		t.Errorf("after the stop the knob = %d, want 64", got)
+	}
+	// Off again, nothing more is sent.
+	r.web(`{"a":"lfoon","i":0}`)
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.clearSent()
+	r.tick(30)
+	if n := len(r.sent()); n != 0 {
+		t.Errorf("an LFO that is off sent %d messages", n)
+	}
+}
+
+func TestLfoPumpDipsOnTheBeatAndTheSwitchGates(t *testing.T) {
+	r, _ := webRig(t)
+	r.cc(3, 16, 100)
+	r.web(`{"a":"lfoset","i":1,"name":"bus","n":2}`)
+	r.web(`{"a":"lfoset","i":1,"name":"shape","n":6}`) // pump
+	r.web(`{"a":"lfoset","i":1,"name":"rate","n":2}`)  // 1/4: 24 ticks
+	r.web(`{"a":"lfoset","i":1,"name":"depth","n":50}`)
+	r.web(`{"a":"lfoon","i":1}`)
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.clearSent()
+	r.tick(24) // ticks%24 == 0: the start of a cycle, dipped by half the range
+	if got := ccOut(r.sent(), 3, 16); got != 100-int(0.5*127+0.5) && got != 100-63 {
+		t.Errorf("dip = %d, want 36 or 37", got)
+	}
+	r.tick(23)
+	if got := ccOut(r.sent(), 3, 16); got < 90 {
+		t.Errorf("end of the cycle = %d, should be back near 100", got)
+	}
+	// The switch: a square on the effect switch of bus 2 gates it.
+	r.cc(2, ccFxSwitch, 127)
+	r.web(`{"a":"lfoset","i":2,"name":"bus","n":1}`)
+	r.web(`{"a":"lfoset","i":2,"name":"knob","n":6}`)
+	r.web(`{"a":"lfoset","i":2,"name":"shape","n":4}`)
+	r.web(`{"a":"lfoset","i":2,"name":"rate","n":2}`)
+	r.web(`{"a":"lfoon","i":2}`)
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.clearSent()
+	r.tick(6)
+	if got := ccOut(r.sent(), 2, ccFxSwitch); got != 127 {
+		t.Errorf("first half of the square: switch = %d", got)
+	}
+	r.tick(12)
+	if got := ccOut(r.sent(), 2, ccFxSwitch); got != 0 {
+		t.Errorf("second half of the square: switch = %d", got)
+	}
+}

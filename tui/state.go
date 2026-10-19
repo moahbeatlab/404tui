@@ -73,6 +73,8 @@ type State struct {
 	SlicerDrop, SlicerRev, SlicerPitch, SlicerRoll, SlicerHuman, SlicerFade int
 	// Punch are the four snapshots of the effects of all four buses (see punch.go).
 	Punch [4]PunchSnap `json:"punch"`
+	// Lfo are the settings of the four LFOs (see lfo.go).
+	Lfo [4]LfoSet `json:"lfo"`
 	// BusNotes are what the user wrote of the effect on each bus (the unit does not say), shown in
 	// the Perform view.
 	BusNotes [2]string `json:"busNotes,omitempty"`
@@ -83,6 +85,19 @@ type State struct {
 	AssignRoot     string   `json:"assignRoot"`
 	AssignExpanded []string `json:"assignExpanded"`
 	AssignAt       string   `json:"assignAt"`
+}
+
+// LfoSet is one LFO: the bus (0 to 3), the knob (0 to 5 for CTRL 1 to 6, 6 for the effect switch), the shape, the rate (an
+// index of lfoRates), the depth (percent) and the shift of the phase (quarters of a cycle). Set is false until it
+// is changed, and then the defaults of lfoSetting hold.
+type LfoSet struct {
+	Set   bool `json:"set,omitempty"`
+	Bus   int  `json:"bus"`
+	Knob  int  `json:"knob"`
+	Shape int  `json:"shape"`
+	Rate  int  `json:"rate"`
+	Depth int  `json:"depth"`
+	Shift int  `json:"shift"`
 }
 
 // PunchBus is the effect of one bus as a snapshot holds it: which effect (CC 83), on or off (1, 0), and its six

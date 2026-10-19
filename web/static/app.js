@@ -181,7 +181,7 @@
   const mpBtns = document.querySelectorAll('#mpSw button');
   function setMp(v) { $('motion').dataset.mp = v; store.set('mp', v); mpBtns.forEach((b) => b.classList.toggle('on', b.dataset.mp === v)); }
   mpBtns.forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); setMp(b.dataset.mp); }));
-  setMp(store.get('mp') === 'punch' ? 'punch' : 'motion');
+  setMp(['punch', 'lfo'].includes(store.get('mp')) ? store.get('mp') : 'motion');
 
   // PUNCH: four snapshots of all four buses. Held, a snapshot is on the buses and let go they go back; in MORPH mode a
   // tap starts it and the slider (or an encoder) moves the buses to it, 0 to 127.
@@ -296,6 +296,57 @@
     if (p.active && !pnDrag) {
       pnFader.firstChild.style.width = (p.mix / 127 * 100) + '%'; pnFader.querySelector('b').textContent = 'TO ' + p.active + '  ' + p.mix; pnLast = p.mix;
     }
+  }
+
+  // LFO: four LFOs on the knobs of the buses, in time with the unit's clock. Each button steps through its choices.
+  const LFO = {
+    bus: ['1', '2', '3', '4'],
+    knob: ['CTRL 1', 'CTRL 2', 'CTRL 3', 'CTRL 4', 'CTRL 5', 'CTRL 6', 'ON/OFF'],
+    shape: ['sine', 'triangle', 'saw up', 'saw down', 'square', 'random', 'pump'],
+    rate: ['1/16', '1/8', '1/4', '1/2', '1 bar', '2 bars', '4 bars', '8 bars'],
+    shift: ['0', '1/4', '1/2', '3/4'],
+  };
+  const LFOT = { bus: 'BUS', knob: 'KNOB', shape: 'SHAPE', rate: 'RATE', shift: 'SHIFT' };
+  let lfoSel = 0;
+  const lfoEl = $('lfo');
+  lfoEl.innerHTML = '<div class="seg" id="lfoSel"></div><div id="lfoEd"></div><div id="lfoDepth"><i></i><b></b></div><button class="big" id="lfoOn"><span></span><i></i></button>';
+  const lfoSelBtns = [0, 1, 2, 3].map((i) => {
+    const b = document.createElement('button'); b.textContent = 'LFO ' + (i + 1);
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); lfoSel = i; if (state) renderLfo(state.lfo); });
+    $('lfoSel').appendChild(b); return b;
+  });
+  const lfoBtns = {};
+  Object.keys(LFOT).forEach((k) => {
+    const b = document.createElement('button'); b.className = 'big'; b.innerHTML = '<small>' + LFOT[k] + '</small><b></b>';
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const cur = state && state.lfo && state.lfo[lfoSel]; if (!cur) return;
+      send({ a: 'lfoset', i: lfoSel, name: k, n: (cur[k] + 1) % LFO[k].length });
+    });
+    $('lfoEd').appendChild(b); lfoBtns[k] = b.querySelector('b');
+  });
+  const lfoDepth = $('lfoDepth');
+  let lfoDrag = false, lfoSent = 0, lfoLastD = -1;
+  function lfoDepthPos(e) {
+    const r = lfoDepth.getBoundingClientRect();
+    const v = Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * 100);
+    lfoDepth.firstChild.style.width = v + '%'; lfoDepth.querySelector('b').textContent = 'DEPTH ' + v + '%';
+    const now = performance.now();
+    if (v !== lfoLastD && (now - lfoSent > 50 || v === 0 || v === 100)) { lfoSent = now; lfoLastD = v; send({ a: 'lfoset', i: lfoSel, name: 'depth', n: v }); }
+  }
+  lfoDepth.addEventListener('pointerdown', (e) => { e.preventDefault(); lfoDrag = true; try { lfoDepth.setPointerCapture(e.pointerId); } catch (err) {} lfoDepthPos(e); });
+  lfoDepth.addEventListener('pointermove', (e) => { if (lfoDrag) lfoDepthPos(e); });
+  ['pointerup', 'pointercancel'].forEach((ev) => lfoDepth.addEventListener(ev, () => { lfoDrag = false; }));
+  $('lfoOn').addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: 'lfoon', i: lfoSel }); });
+  function renderLfo(l) {
+    if (!l) return;
+    l.forEach((x, i) => { cls(lfoSelBtns[i], 'run', x.on); cls(lfoSelBtns[i], 'sel', i === lfoSel); });
+    const x = l[lfoSel];
+    Object.keys(LFOT).forEach((k) => set(lfoBtns[k], 'textContent', LFO[k][x[k]]));
+    if (!lfoDrag) { lfoDepth.firstChild.style.width = x.depth + '%'; lfoDepth.querySelector('b').textContent = 'DEPTH ' + x.depth + '%'; }
+    cls($('lfoOn'), 'on', x.on);
+    set($('lfoOn').firstChild, 'textContent', x.on ? 'LFO ' + (lfoSel + 1) + ' ON  ·  ' + (x.knob === 6 ? (x.value ? 'on' : 'off') : x.value) + '  (tap to stop)' : 'START LFO ' + (lfoSel + 1) + (state && state.running ? '' : '  ·  needs the unit clock'));
+    $('lfoOn').lastChild.style.width = x.on && x.knob !== 6 ? (x.value / 127 * 100) + '%' : '0';
   }
 
   // tabs (portrait), and the switch between Perform and the Looper (the tab in portrait, the button in the top bar)
@@ -578,6 +629,7 @@
     $('waiting').hidden = s.unit;
     renderLooper(s);
     renderPunch(s.punch);
+    renderLfo(s.lfo);
     if (!$('presetPick').hidden) drawPresets();
     if (s.ptn) renderPatterns(s.ptn);
     renderMeters(s.level, s.levelNote);
