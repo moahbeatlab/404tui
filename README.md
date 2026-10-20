@@ -212,6 +212,14 @@ progress bar with a line per step.
   computer: `a s d f g h j k l ; '` are the white keys and `w e t y u o p` the black ones,
   `a` being the sample as it is. `z`/`x` shift an octave. The pitch changes with the speed,
   as on the unit; one note sounds at a time.
+- **Chords & arps:** `A` makes a chord or an arp out of the pad's sample and puts it on a pad
+  (over MIDI alone a sample cannot be sent to the unit; this does it over USB). Say which key the
+  sample is tuned to, pick a root and a chord (or a scale, then the whole scale or a chord on a
+  degree), or switch single notes with the piano keys, then choose the pattern (one held chord, up,
+  down, up-down, down-up, random, as entered, a chromatic run, thirds, pedal, or the whole chord on
+  every step), the rate, gate, octaves, swing, bars and BPM. The sample is pitched once per note, as
+  the chromatic mode does it, and the result loops without a click. `Space` plays it on this computer,
+  `Enter` asks for a pad (it opens on the next free pad).
 - `e` exports the bank (one WAV per pad plus a `samples.json` with each pad's settings), and
   `R` restores an export onto a bank you choose. `p` there also makes a pattern: every
   restored pad starts together on beat 1 and is held for 2 bars.

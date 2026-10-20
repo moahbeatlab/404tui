@@ -33,6 +33,7 @@ var helpText = [][2]string{
 	{"o, P (Pads)", "o switches where pads preview (unit / this computer; O and 0 work too); P plays the pad once on this computer"},
 	{"Z (Pads, Files)", "slicer: cut a sample into slices on a waveform (equal, random, onsets, or tapped while it plays), put samples together with A, play the slices in an order or at random, roll, swing, then b bounces takes onto pads; the keys are listed in the dialog"},
 	{"C (Pads)", "chromatic: play the pad as notes on this computer (a w s e d f … are piano keys, z / x shift the octave)"},
+	{"A (Pads)", "chords & arps: make a chord or an arp of the pad's sample (pitched once per note, in the sample's key, over a scale or chord type; n, ↑ ↓ ← →, Space plays it) and put it on a pad"},
 	{"n / d (Pads)", "rename / delete the sample"},
 	{"v / V (Pads)", "mark a pad / every pad with a sample"},
 	{"S, , . (Pads)", "edit the pad's settings in a dialog; step its level down/up"},
@@ -103,6 +104,8 @@ func (m Model) draw() string {
 		main = dialog(m.editorBox())
 	case m.chromatic != nil:
 		main = dialog(m.chromaticBox())
+	case m.harmony != nil:
+		main = dialog(m.harmonyBox())
 	case m.browser != nil:
 		main = dialog(m.browserBox(g))
 	case m.prompt != nil:
@@ -2211,6 +2214,9 @@ func (m Model) pickerBox() string {
 	}
 	if p.bounceWhat == "stretch" {
 		title = "Put the stretched sample on a pad\n" + st.dim.Render(p.note)
+	}
+	if p.bounceWhat == "harmony" {
+		title = "Put the chords on a pad\n" + st.dim.Render(p.note)
 	}
 	if len(p.bounces) == 0 {
 		title = fmt.Sprintf("Assign %s to a pad", app.Base(p.files[0]))

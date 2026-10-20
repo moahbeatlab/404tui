@@ -35,6 +35,7 @@ Most keys work on the pad in front, or on every **marked** pad when some are mar
 | `o` (`O`, `0`) | switch where pads preview: unit / this computer |
 | `P` | play the pad once on this computer |
 | `C` | **Chromatic** (computer): play the pad as notes. `a w s e d f …` are piano keys, `z` / `x` move the octave, `Space` / `Enter` play the note, `Esc` leaves |
+| `A` | **Chords & arps** (computer): make a chord or an arp of the pad's sample and put it on a pad. `↑ ↓` pick a setting, `← →` change it, `a w s e d f t g y h u j` switch the twelve notes, `Space` plays it, `Enter` asks for the pad, `Esc` leaves |
 | `Z` | the **Slicer** on this pad's sample (see [slicer.md](slicer.md)) |
 
 ## Samples

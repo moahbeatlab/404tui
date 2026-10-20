@@ -206,6 +206,8 @@ func (m Model) overlayName() string {
 		return "editor"
 	case m.chromatic != nil:
 		return "chromatic"
+	case m.harmony != nil:
+		return "harmony"
 	case m.slicer != nil:
 		return "slicer"
 	case m.browser != nil:
@@ -271,6 +273,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.editorKey(key)
 	case m.chromatic != nil:
 		return m.chromaticKey(key)
+	case m.harmony != nil:
+		return m.harmonyKey(key)
 	case m.browser != nil:
 		return m.browserKey(key)
 	case m.prompt != nil:
@@ -743,6 +747,8 @@ func (m Model) padsKey(name string) (tea.Model, tea.Cmd) {
 		return m.previewPadLocal(row)
 	case "C":
 		return m.openChromatic(row)
+	case "A":
+		return m.openHarmony(row)
 	case "Z":
 		return m.openSlicerPad(row)
 	case "o", "O", "0":

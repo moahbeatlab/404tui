@@ -47,7 +47,7 @@ func (m Model) contextCommands() (items []command, title string, ok bool) {
 		return groupCommands(m.slicer.slicerHelp()), "Slicer", true
 	case m.lenPick != nil:
 		return listCommands("h l fewer or more bars", "1-8 that many bars", "Enter make the pattern", "Esc back to the templates"), "How long", true
-	case m.editor != nil, m.chromatic != nil, m.toggles != nil, m.tmplPicker != nil, m.rangePick != nil, m.laneMap != nil, m.patTool != nil:
+	case m.editor != nil, m.chromatic != nil, m.harmony != nil, m.toggles != nil, m.tmplPicker != nil, m.rangePick != nil, m.laneMap != nil, m.patTool != nil:
 		return nil, "", false
 	case m.section == secPatterns && m.pattern != nil:
 		return groupCommands(m.patternHelp(m.pattern)), "Pattern " + m.pattern.Slot.String(), true

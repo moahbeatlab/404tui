@@ -175,7 +175,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if msg.Action == tea.MouseActionPress {
 		m.log.Debug("mouse", "x", msg.X, "y", msg.Y, "button", fmt.Sprint(msg.Button), "section", sectionNames[m.section], "busy", m.busy)
 	}
-	if m.unit == nil || m.busy != "" || m.snap == nil || m.help || m.prompt != nil || m.picker != nil || m.palette != nil || m.toggles != nil || m.browser != nil || m.chromatic != nil || (m.slicer != nil && m.section == secSlicer) {
+	if m.unit == nil || m.busy != "" || m.snap == nil || m.help || m.prompt != nil || m.picker != nil || m.palette != nil || m.toggles != nil || m.browser != nil || m.chromatic != nil || m.harmony != nil || (m.slicer != nil && m.section == secSlicer) {
 		return m, nil
 	}
 	wheel := 0

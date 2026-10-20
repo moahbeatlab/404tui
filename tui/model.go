@@ -290,6 +290,9 @@ type Model struct {
 	editor  *editor
 	// chromatic is the dialog that plays a pad as notes from the keyboard.
 	chromatic *chromatic
+	// harmony is the dialog that makes a chord or an arp of a pad's sample; harmonyMem is what it was left at.
+	harmony    *harmony
+	harmonyMem *harmonySettings
 	// slicer is the dialog that cuts a sample into slices and plays them in an order or at
 	// random; slices keeps what it was set to for each sample.
 	slicer *slicer
@@ -1312,6 +1315,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 	case chromaticMsg:
 		return m.chromaticLoaded(msg)
+	case harmonyMsg:
+		return m.harmonyLoaded(msg)
 	case slicerLoadedMsg:
 		return m.slicerLoaded(msg)
 	case slicerTickMsg:
@@ -1741,7 +1746,7 @@ func (m Model) leaveOffline() (tea.Model, tea.Cmd) {
 	m.unit, m.closer, m.snap = nil, nil, nil
 	m.offline, m.unitBack, m.previewLocal = "", false, m.previewWas
 	m.busy, m.polling, m.connecting = "", false, true
-	m.prompt, m.picker, m.palette, m.browser, m.chromatic, m.toggles, m.slicer = nil, nil, nil, nil, nil, nil, nil
+	m.prompt, m.picker, m.palette, m.browser, m.chromatic, m.harmony, m.toggles, m.slicer = nil, nil, nil, nil, nil, nil, nil, nil
 	m.pattern, m.patterns, m.patPreview = nil, map[int][]app.PatternRow{}, map[proto.PadIndex]*app.PatternDetail{}
 	m.tree, m.infos = nil, map[string]fileInfo{}
 	clear(m.indexes)
@@ -1764,7 +1769,7 @@ func (m Model) lose() (tea.Model, tea.Cmd) {
 	m.stopListening()
 	m.unit, m.closer, m.snap = nil, nil, nil
 	m.lost, m.busy, m.polling, m.connecting = true, "", false, false
-	m.prompt, m.picker, m.palette, m.browser, m.chromatic, m.toggles, m.slicer = nil, nil, nil, nil, nil, nil, nil
+	m.prompt, m.picker, m.palette, m.browser, m.chromatic, m.harmony, m.toggles, m.slicer = nil, nil, nil, nil, nil, nil, nil, nil
 	m.message = ""
 	return m, nil
 }

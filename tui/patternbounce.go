@@ -58,6 +58,9 @@ func bouncedMessage(what string, sample formats.Sample, target, name string) str
 	if what == "pattern" {
 		return fmt.Sprintf("bounced the pattern, %.1f s as you hear it, to %s as %q", seconds, target, name)
 	}
+	if what == "harmony" {
+		return fmt.Sprintf("put %.1f s of chords on %s as %q", seconds, target, name)
+	}
 	if what == "stretch" {
 		return fmt.Sprintf("stretched to %.1f s on %s as %q: slice it there, at the tempo", seconds, target, name)
 	}
