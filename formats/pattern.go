@@ -183,6 +183,15 @@ func StartPattern(pads []proto.PadIndex, bars int) ([]byte, error) {
 	return append(b, byte(bars), 0, 0, 0, 0, 0x80, 0x04, 0x01), nil
 }
 
+// EmptyPattern builds a PTNnnnnn.BIN of bars bars of 4/4 with no notes. Like StartPattern it
+// writes bars in the trailer's first byte; only 4 has been seen on a real unit.
+func EmptyPattern(bars int) ([]byte, error) {
+	if bars < 1 || bars > MaxPatternBars {
+		return nil, errors.New("a pattern is 1 to 64 bars long")
+	}
+	return writeRecords(nil, uint32(bars*4*PPQ), []byte{byte(bars), 0, 0, 0, 0, 0x80, 0x04, 0x01}), nil
+}
+
 // PatternPath is the card path of a pattern slot's file in a project (1-based project).
 func PatternPath(project uint8, slot proto.PadIndex) string {
 	return projectDir(project) + "/PTN/PTN" + pad5(int(slot.Index())+1) + ".BIN"
