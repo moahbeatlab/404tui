@@ -26,11 +26,20 @@ GOBUILD := go build -trimpath -ldflags "$(LDFLAGS)"
 LINUX   := linux-amd64 linux-arm64
 WINDOWS := windows-amd64 windows-arm64
 
-.PHONY: site build test check vet fmt dist linux windows macos clean
+.PHONY: site build test check vet fmt dist linux windows macos clean lab-wasm
 
 # MIDI input needs cgo on a Mac (CoreMIDI) and Linux (ALSA headers: libasound2-dev); Windows has it
 # always (no cgo). Where the headers are missing the build goes on without MIDI.
 MIDITAGS := $(if $(filter Darwin,$(shell uname -s)),-tags midi,$(if $(shell pkg-config --exists alsa 2>/dev/null && echo y),-tags midi,))
+
+# lab-wasm builds the file engine (package lab) as WebAssembly, with Go's loader, for the browser:
+# 404jam's Sample Lab loads lab.wasm in a Web Worker. make lab-wasm LAB_OUT=../404jam/public/lab
+LAB_OUT ?= dist/lab
+
+lab-wasm:
+	mkdir -p $(LAB_OUT)
+	GOOS=js GOARCH=wasm go build -trimpath -ldflags "$(LDFLAGS)" -o $(LAB_OUT)/lab.wasm ./cmd/labwasm
+	cp -f "$$(go env GOROOT)/lib/wasm/wasm_exec.js" $(LAB_OUT)/wasm_exec.js && chmod u+w $(LAB_OUT)/wasm_exec.js
 
 build:
 	go build $(MIDITAGS) -ldflags "$(LDFLAGS)" -o $(BIN) $(PKG)
