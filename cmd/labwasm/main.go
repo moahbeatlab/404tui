@@ -182,6 +182,11 @@ func main() {
 	reg(api, "patternOp", func(a []js.Value) (any, error) {
 		return none(l.PatternOp(a[0].Int(), a[1].String(), []byte(a[2].String())))
 	})
+	reg(api, "patternBytes", func(a []js.Value) (any, error) {
+		b, err := l.PatternBytes(a[0].Int())
+		return u8(b), err
+	})
+	reg(api, "setPatternBytes", func(a []js.Value) (any, error) { return none(l.SetPatternBytes(a[0].Int(), bytesIn(a[1]))) })
 	reg(api, "writeProgression", func(a []js.Value) (any, error) {
 		return none(l.WriteProgression(a[0].Int(), []byte(a[1].String())))
 	})

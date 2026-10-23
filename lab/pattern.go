@@ -344,3 +344,27 @@ func (l *Lab) WriteProgression(n int, spec []byte) error {
 	l.files[patFile(n)] = b
 	return nil
 }
+
+// PatternBytes is the file of pattern n as it is (for undo); empty when there is none.
+func (l *Lab) PatternBytes(n int) ([]byte, error) {
+	if n < 1 || n > 160 {
+		return nil, fmt.Errorf("no pattern %d", n)
+	}
+	return append([]byte(nil), l.files[patFile(n)]...), nil
+}
+
+// SetPatternBytes puts a pattern file back (from PatternBytes); an empty one removes the pattern.
+func (l *Lab) SetPatternBytes(n int, b []byte) error {
+	if n < 1 || n > 160 {
+		return fmt.Errorf("no pattern %d", n)
+	}
+	if len(b) == 0 {
+		delete(l.files, patFile(n))
+		return nil
+	}
+	if _, err := formats.ParsePattern(b); err != nil {
+		return err
+	}
+	l.files[patFile(n)] = append([]byte(nil), b...)
+	return nil
+}

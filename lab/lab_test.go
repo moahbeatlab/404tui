@@ -709,6 +709,32 @@ func TestPatterns(t *testing.T) {
 	}
 }
 
+func TestPatternBytesUndo(t *testing.T) {
+	defer catch(t)
+	l := New()
+	l.NewProject("U")
+	ok(t, l.NewPattern(3, 1))
+	before := must(l.PatternBytes(3))
+	ok(t, l.PatternOp(3, "insert", mustJSON(map[string]any{"pad": 2, "tick": 0, "vel": 100, "len": 50})))
+	if bytes.Equal(before, must(l.PatternBytes(3))) {
+		t.Fatal("the insert changed nothing")
+	}
+	ok(t, l.SetPatternBytes(3, before))
+	if !bytes.Equal(before, must(l.PatternBytes(3))) {
+		t.Error("undo did not restore the pattern")
+	}
+	ok(t, l.SetPatternBytes(3, nil))
+	if _, ok := l.files[patFile(3)]; ok {
+		t.Error("an empty file should remove the pattern")
+	}
+	if len(must(l.PatternBytes(4))) != 0 {
+		t.Error("a missing pattern has bytes")
+	}
+	if err := l.SetPatternBytes(3, []byte("junk")); err == nil {
+		t.Error("junk accepted as a pattern")
+	}
+}
+
 func TestProgressionPattern(t *testing.T) {
 	defer catch(t)
 	l := New()
