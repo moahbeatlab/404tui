@@ -9,11 +9,19 @@ them searchable.
 **Open it:** `Z` on a pad (Pads) or on an audio file (Files), or tab `4` then `a`: `p` chooses a pad,
 `f` a new sample from the file view. `Esc` closes it; it stays as it was when you come back.
 
-![The Slicer on an empty tab: the view opens over the tab and says what `a` is for](img/slicer.png)
+![The Slicer on a pad's sample: the waveform with its slice boundaries, the slice in front and its controls, and the order lane](img/slicer.png)
 
-The screenshot is of the simulated device (`sp404 -sim`) with no sample loaded, so the waveform is
-empty and the tab only names the way in (`a`). Open a sample and the slices, the waveform and the key
-groups fill it.
+A pad's sample open in the slicer: the waveform across the top with the slice boundaries drawn on it
+and the slices numbered, the slice in front below it with its start, end and length, its chance, gain,
+pitch, attack and release, and the order lane the slices play in. The screenshot is of the simulated
+device's `vocal loop` (B5, 2.500 s) in `p` a pad — the same picture comes from any sample.
+
+![Sixteen slices after `e` (equal), the boundaries an even division of the sample](img/slicer-slices.png)
+
+`e` cuts the sample into equal slices — sixteen here — so the boundaries stop following the sound and
+divide the length evenly. `t` (onsets) cuts where the sound starts instead, `/` cuts in 2, 3, 4, 6 or
+8 parts, and `c` cuts one slice in two.
+
 
 ## Keys by group
 
