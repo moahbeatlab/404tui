@@ -9,6 +9,12 @@ them searchable.
 **Open it:** `Z` on a pad (Pads) or on an audio file (Files), or tab `4` then `a`: `p` chooses a pad,
 `f` a new sample from the file view. `Esc` closes it; it stays as it was when you come back.
 
+![The Slicer on an empty tab: the view opens over the tab and says what `a` is for](img/slicer.png)
+
+The screenshot is of the simulated device (`sp404 -sim`) with no sample loaded, so the waveform is
+empty and the tab only names the way in (`a`). Open a sample and the slices, the waveform and the key
+groups fill it.
+
 ## Keys by group
 
 | Group | Keys |

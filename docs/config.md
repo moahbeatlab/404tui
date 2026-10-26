@@ -4,6 +4,11 @@ Settings of the program, kept in `state.json` in the user's config folder under 
 (`~/Library/Application Support/404tui` on a Mac, `~/.config/404tui` on Linux, `%AppData%\404tui` on
 Windows).
 
+![The Config tab: every setting on one page, the buses by pad name and the MIDI monitor](img/config.png)
+
+Screenshot against the simulated device (`sp404 -sim`). The bus colour and the words of each bus are
+the two edited lines under the header; the MIDI monitor at the foot of the page is what `c` clears.
+
 ## Keys
 
 | Key | What |

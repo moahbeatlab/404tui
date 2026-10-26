@@ -3,6 +3,11 @@
 One page per part of the program, with its keys and modes. `?` in the program lists the keys of the
 view in front, searchable; these pages explain what they are for.
 
+Every page carries a picture of its tab, taken against the simulated device (`sp404 -sim`) in the
+screenshots under [`img/`](img/) (see [`img/README.md`](img/README.md) for how they are made). They
+show the layout and what is on the screen in a fresh project; a real unit fills in the samples, the
+clock and the levels.
+
 | Tab | Page |
 | --- | --- |
 | `1` Pads | [pads.md](pads.md) |

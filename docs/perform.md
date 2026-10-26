@@ -9,6 +9,12 @@ also takes you back to where you were.
 
 ## Layout
 
+![Perform on a wide screen: the pads of the bank on the right, CLOCK, the level meter and the two buses on the left](img/perform.png)
+
+Screenshot against the simulated device (`sp404 -sim`). With no unit sending MIDI there is no clock
+and no level, so CLOCK and REC LEVEL stay quiet; the pads and the bus panels are drawn from what
+404tui was told.
+
 Wide screens (110 columns and up): the pads of the bank the unit is on in the right 60 %, with their whole
 names in plain text, hit pads lighting up by how hard they were hit (a stripe on the tile's edge is
 its bus, the selected pad is tinted, a × marks a track inferred as muted); the left 40 % in titled

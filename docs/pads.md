@@ -3,6 +3,11 @@
 The sixteen pads of a bank, the ten banks (A to J) of the project in front, and under the grid the
 patterns of that bank. Everything that changes a pad is done here.
 
+![The Pads tab: bank A, the pad detail panel on the right, the patterns under the grid](img/pads.png)
+
+Screenshot taken against the simulated device (`sp404 -sim`), bank A of a fresh project: kick, snare
+and hat assigned, the pad in front open in the detail panel, and the History on the right.
+
 Press `?` in the view for the searchable list of its keys (the same list as `:`). Keys marked
 *computer* play on this computer's audio output, not on the unit.
 

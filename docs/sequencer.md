@@ -4,6 +4,12 @@ A bank has 16 pattern slots. They are a panel under the pads (Pads tab, `Tab` mo
 the highlighted pattern is previewed on the right) and are edited in the **Sequencer** tab: `5`, then
 `a` chooses the pattern to edit and `N` makes a new one. `Esc` leaves the pattern.
 
+![The Sequencer with no pattern open: `a` lists the slots of a bank](img/sequencer.png)
+
+Screenshot against the simulated device (`sp404 -sim`), before a pattern is opened, so the editor is
+empty and the tab names the way in (`a`). The header still shows the project's tempo and the bank's
+patterns.
+
 ## Opening, making and moving patterns
 
 | Key | What |
