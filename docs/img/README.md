@@ -9,12 +9,35 @@ the Slicer and the Sequencer show their working state and not an empty one.
 | `pads.png` | `1` Pads | [pads.md](../pads.md) |
 | `files.png` | `2` Files | [files.md](../files.md) |
 | `projects.png` | `3` Projects | [files.md](../files.md) |
-| `slicer.png` | `4` Slicer (B5 `vocal loop`, 8 slices) | [slicer.md](../slicer.md) |
-| `slicer-slices.png` | `4` Slicer (after `e`, 16 slices) | [slicer.md](../slicer.md) |
+| `slicer.png` | `4` Slicer (`drum_break.wav`, 8 slices) | [slicer.md](../slicer.md) |
+| `slicer-slices.png` | `4` Slicer (after `t` onsets, 32 slices) | [slicer.md](../slicer.md) |
 | `sequencer.png` | `5` Sequencer (pattern B2 open) | [sequencer.md](../sequencer.md) |
 | `config.png` | `6` Config | [config.md](../config.md) |
 | `perform.png` | `7` Perform | [perform.md](../perform.md) |
 | `looper.png` | `8` Looper | [looper.md](../looper.md) |
+
+## The samples in the shots
+
+The sim's own material is generated tones: a constant-amplitude sine. Its waveform renders as an even
+block with no peaks, which reads as an empty placeholder even though the view is correct. The Slicer
+shots therefore use a **real recording** instead, so the picture shows the sound.
+
+A simulated unit can be built from a real folder — `sp404 -offline <dir>` runs `sim.OpenFolder` over
+it — so the break is loaded from a folder, not from the sim's built-in tones:
+
+    mkdir -p /tmp/404lib/PROJECT_01 /tmp/404lib/SD/IMPORT
+    # a folder holding PADCONF.BIN is a project; a valid blank one can be made
+    # with formats.NewPadconf(nil, "PROJECT_01").Bytes()
+    cp drum_break.wav /tmp/404lib/SD/IMPORT/
+    tmux -L shots new-session -d -s ui -x 140 -y 45 "/tmp/sp404 -offline /tmp/404lib"
+
+Then tab `2` (Files), `Tab` into the file column, and `Z` on the WAV — the Slicer opens on it. `t`
+finds the onsets (32 on this break), which is the clearest proof the boundaries follow the audio.
+
+The break used is Wikimedia Commons' **Drum beat.ogg** (CC), converted to 44.1 kHz 16-bit WAV. Only
+WAV, AIFF, FLAC and MP3 are decoded, so an OGG has to be converted first:
+
+    ffmpeg -i drum_beat.ogg -ar 44100 -ac 2 -c:a pcm_s16le drum_break.wav
 
 ## How they are taken
 
@@ -31,7 +54,7 @@ ended a work session before; `tmux -L shots kill-server` only touches the captur
 The Slicer and the Sequencer need keys, not just the tab number, and the view settles a few seconds
 after each one — send the key, **wait, then capture**, or the shot lands on the previous state:
 
-    # Slicer on the sim's own sample: tab 4, `a`, then `p` (a pad), pick B5, Enter
+    # Slicer on a real file: -offline (above), tab 2, Tab, Z, then ~10 s
     # Sequencer on the sim's own pattern: tab 5, `a`, then Enter on slot 2 (B2)
     #   the pattern chooser loads asynchronously; give it ~8 s before the shot
 
