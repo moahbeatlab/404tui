@@ -3,8 +3,12 @@ package record
 import (
 	"errors"
 	"math"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/moahbeatlab/404tui/formats"
 )
 
 // ErrNoNative is what StartRing says on a system where the program cannot listen to the input itself.
@@ -30,6 +34,11 @@ type Ring struct {
 	mu    sync.Mutex
 	buf   []int16 // stereo, a ring
 	total int64   // frames written
+	// bars, beats and bpm are the grid a retroactive capture is cut to: how many bars the take
+	// should be, the beats to a bar, and the tempo. Zero bars means no capture has been asked for.
+	bars  int
+	beats int
+	bpm   float64
 	// origin is when frame 0 was heard, as an estimate; the buckets hold the least of each half second.
 	origin  time.Time
 	buckets [ringBuckets]float64 // seconds since the epoch of the first arrival
@@ -50,6 +59,134 @@ func NewRing(rate, seconds int) *Ring {
 
 // Rate is the frames a second.
 func (r *Ring) Rate() int { return r.rate }
+
+// Channels is how many channels a frame has: a ring keeps stereo, so two.
+func (r *Ring) Channels() int { return 2 }
+
+// Running says whether frames are still being heard.
+func (r *Ring) Running() bool {
+	select {
+	case <-r.done:
+		return false
+	default:
+		return true
+	}
+}
+
+// Span is how much sound the ring keeps, in frames.
+func (r *Ring) Span() int64 { return int64(len(r.buf) / 2) }
+
+// Widen makes the ring keep at least seconds of sound, and says whether it had to grow. A ring
+// cannot be narrowed: takes already in it are still wanted. It is what a retroactive capture calls
+// before waiting for the phrase, so the ring reaches back over the bars it was asked for.
+//
+// Frame n lives at n modulo the number of frames the buffer holds, so growing the buffer moves every
+// frame. The frames that were heard keep their numbers, which means the take that was cut out before
+// the widening is the same take afterwards.
+func (r *Ring) Widen(seconds int) bool {
+	if seconds <= 0 {
+		return false
+	}
+	want := seconds * r.rate
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if want <= len(r.buf)/2 {
+		return false
+	}
+	old, oldFrames := r.buf, int64(len(r.buf)/2)
+	keep := min(oldFrames, r.total)
+	grown := make([]int16, 2*want)
+	// The oldest frame that is still held goes to its own place in the new buffer, and so does
+	// each frame after it: the numbers do not change, only where they sit.
+	from := r.total - keep
+	for f := from; f < r.total; f++ {
+		src := int((f % oldFrames) * 2)
+		dst := int((f % int64(want)) * 2)
+		grown[dst], grown[dst+1] = old[src], old[src+1]
+	}
+	r.buf = grown
+	return true
+}
+
+// SetGrid says where the bars of the take are: how many bars and beats to a bar, and the tempo.
+// The frame a capture starts on is worked out from these at the frame of the trigger.
+func (r *Ring) SetGrid(bars, beatsPerBar int, bpm float64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.bars, r.beats, r.bpm = bars, beatsPerBar, bpm
+}
+
+// Grid is the bars, beats to a bar and tempo a capture is cut to.
+func (r *Ring) Grid() (bars, beatsPerBar int, bpm float64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.bars, r.beats, r.bpm
+}
+
+// Capture cuts the phrase before the trigger out of the ring as a whole number of bars at the
+// tempo of the grid, and says which frames it kept. frame is where the trigger fell, counted from
+// the first frame ever heard. The take is measured back from the trigger, so a phrase played just
+// after a bar line still comes out as whole bars, and preBars of the sound before it are kept as
+// the run-up so nothing that was played before the trigger is clipped.
+//
+// It returns io.ErrShortBuffer when the ring has already been overwritten past where the take
+// starts: widening it first, and reading promptly, is what avoids that.
+func (r *Ring) Capture(frame int64, preBars int) (start, end int64, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.bpm <= 0 || r.beats <= 0 || r.bars < 1 {
+		return 0, 0, errors.New("no grid: set the tempo and the bars a take is cut to")
+	}
+	rate := r.rate
+	samplesPerBar := int64(float64(rate) * 60 * float64(r.beats) / r.bpm)
+	if samplesPerBar < 1 {
+		return 0, 0, errors.New("the tempo is too fast to cut a bar")
+	}
+	if frame < 0 {
+		frame = 0
+	}
+	// The take is the bars before the trigger, ending on the bar line the trigger fell after. It is
+	// cut backwards from the moment the key was pressed, which is the whole point: the phrase that
+	// has already gone by is what gets kept, and everything in it is in the buffer already.
+	anchor := frame / samplesPerBar * samplesPerBar
+	end = anchor + int64(r.bars)*samplesPerBar
+	// The kick can land a hair before the bar line; take the bar before it when it does.
+	for end < frame {
+		end += samplesPerBar
+	}
+	start = end - int64(r.bars+preBars)*samplesPerBar
+	if start < 0 {
+		start = 0
+	}
+	if end > r.total {
+		return 0, 0, errors.New("the take is not over yet: let it run to the end of the bar")
+	}
+	if end-start < samplesPerBar {
+		return 0, 0, errors.New("the take is shorter than a bar: let it run longer")
+	}
+	if start < r.total-r.Span() {
+		return 0, 0, errors.New("the take is older than the sound the ring keeps: let it run longer")
+	}
+	return start, end, nil
+}
+
+// Save writes frames frames from start on to a 16 bit stereo WAV in dir, and says where it went. It
+// is a plain file, so a capture is still there after the program has ended.
+func (r *Ring) Save(dir, name string, start, frames int64) (string, error) {
+	got, err := r.Copy(start, frames)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	sample := formats.Sample{Channels: 2, Samples: got}
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, sample.WAV(), 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
 
 // Done is closed when listening ends; Err says why (nil when it was stopped on purpose).
 func (r *Ring) Done() <-chan struct{} { return r.done }
@@ -100,7 +237,10 @@ func (r *Ring) Write(frames []int16, at time.Time) {
 	// The latest arrival says: frame 0 was heard at most this long ago.
 	cand := at.Sub(r.epoch).Seconds() - float64(r.total)/float64(r.rate)
 	b := int64(at.Sub(r.epoch).Seconds() * 2)
-	slot := int(b % ringBuckets)
+	// A frame can arrive stamped before the one that started the clock — a driver that hands over a
+	// backlog, or a test that lays its stamps out in one go — and Go's % keeps the sign, so a
+	// negative bucket would index off the front of the array.
+	slot := int(((b % ringBuckets) + ringBuckets) % ringBuckets)
 	if r.bucketN[slot] != b {
 		r.bucketN[slot], r.buckets[slot] = b, cand
 	} else if cand < r.buckets[slot] {

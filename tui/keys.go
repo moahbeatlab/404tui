@@ -136,6 +136,7 @@ var commands = []command{
 	{"U", "Working offline: leave offline mode and connect to the unit once it is plugged in", nil},
 	{"ctrl+f", "Full screen: the header and the tabs go and the view gets their rows; again brings them back", nil},
 	{"ctrl+r", "Record the unit's audio input to a WAV file in the folder set in Config; again stops it", nil},
+	{"ctrl+g", "Keep the bars just played as a loop: the last seconds of the input are cut to whole bars at the tempo of the unit (again to take it)", nil},
 	{"ctrl+t", "Next colour theme", nil},
 	{"r", "Refresh from the unit", nil},
 	{"?", "Keybindings", nil},
@@ -240,6 +241,11 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Ctrl-R records the unit's audio from anywhere, in a dialog too.
 	if name == "ctrl+r" && !m.typingText() && m.palette == nil {
 		return m.toggleRecording()
+	}
+	// Ctrl-G takes a retroactive capture: the ring keeps the last seconds of the input, and this
+	// cuts the bars before the key was pressed out of it as a loop.
+	if name == "ctrl+g" && !m.typingText() && m.palette == nil {
+		return m.armRetro()
 	}
 	// ? lists what can be done with the view or dialog in front, searchable, wherever it is; in a
 	// text being typed it is a letter.

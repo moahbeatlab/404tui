@@ -444,6 +444,15 @@ type Model struct {
 	ringBusy  bool
 	ringAgain time.Time
 	ringOff   bool
+	// retroArmed is set while a retroactive capture is waiting for the phrase to be played and the
+	// key pressed again; retroAt is the frame of the ring the key was pressed at, which is what the
+	// take is cut back from. retroBusy is set while a take is being cut and written.
+	retroArmed bool
+	retroAt    int64
+	retroBusy  bool
+	// retroSaved is the file the last take went to, and retroFor is the folder it is in.
+	retroSaved string
+	retroFor   string
 	// web is where the state of Perform is published for the browsers, when there is a web side.
 	web    WebSink
 	webURL string
@@ -1613,6 +1622,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.message = fmt.Sprintf("recorded %s to %s", humanBytes(msg.size), display(msg.path))
 		}
 		return m, nil
+	case retroDoneMsg:
+		return m.retroFinished(msg)
 	case checkMsg:
 		m.busy = ""
 		m.report = &report{title: "Sample check", lines: msg.lines}

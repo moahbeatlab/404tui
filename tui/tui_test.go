@@ -184,6 +184,7 @@ func (s *screen) press(keys ...string) {
 		"ctrl+o":    {Type: tea.KeyCtrlO},
 		"ctrl+t":    {Type: tea.KeyCtrlT},
 		"ctrl+r":    {Type: tea.KeyCtrlR},
+		"ctrl+g":    {Type: tea.KeyCtrlG},
 		"ctrl+f":    {Type: tea.KeyCtrlF},
 		"up":        {Type: tea.KeyUp},
 		"down":      {Type: tea.KeyDown},
@@ -195,6 +196,16 @@ func (s *screen) press(keys ...string) {
 			s.send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)})
 		}
 	}
+}
+
+// pressRunning presses a key and runs the command it returned, the way the program does. It is for
+// a key whose work happens off the key press itself, such as a retroactive capture cutting a take.
+func (s *screen) pressRunning(name string) {
+	model, cmd := s.m().handleKey(keyMsg(name))
+	if m, ok := model.(Model); ok {
+		s.model = m
+	}
+	s.run(cmd)
 }
 
 func (s *screen) typeText(text string) {
@@ -1810,6 +1821,9 @@ func TestSelectingTheCurrentProjectSaysSo(t *testing.T) {
 func keyMsg(name string) tea.KeyMsg {
 	if name == "ctrl+a" {
 		return tea.KeyMsg{Type: tea.KeyCtrlA}
+	}
+	if name == "ctrl+g" {
+		return tea.KeyMsg{Type: tea.KeyCtrlG}
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(name)}
 }
