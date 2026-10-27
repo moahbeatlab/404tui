@@ -81,8 +81,8 @@ Things learned the hard way:
 The project is in `presentation/`. `build.py` writes `index.html` and `compositions/*.html` (one scene each); edit
 `build.py`, not the generated files. The feature scenes are one template filled from `FEATURES`: which clip, which stretch of
 it, its speed, and the **beats**: at a time of the clip, a key, a caption (about 6 words), and the part of the screen to
-punch in on, as cells (`column, row, width, height` of the 140×45 terminal). The camera moves there, a ring is drawn round
-the part, the caption changes. Because beats are times of the clip, the captions stay in step with the footage whatever
+punch in on, as cells (`column, row, width, height` of the 140×45 terminal). The camera moves there, everything else is blurred and dimmed round
+the part (a hairline edge marks it), the caption changes. Because beats are times of the clip, the captions stay in step with the footage whatever
 the speed.
 
     mkdir -p /tmp/404film && cp -r docs/video/presentation/. /tmp/404film && cd /tmp/404film
@@ -100,7 +100,7 @@ What `check` taught, and `build.py` now does:
 - A caption needs **0.5 s plus 0.3 s a word** on screen. `build.py` prints `too quick` for a beat that gets less; slow
   the clip (`rate`), shorten the caption, or move the next beat.
 - Text after any zoom has to stay at **28 px or more**: keep the part you punch in on at most about 100 columns wide.
-- Show the ring whole: the camera is framed on the part **plus a margin**.
+- Pick the part so its edge falls between rows of text (rects are whole cells): a cut through a line of text looks like a mistake. Check the beats with `snapshot --at` before rendering.
 - The first frame must show the title (it is the thumbnail), the first caption must not wait for an animation.
 - A clip's speed has to leave room: a feature scene runs `(to - from) / rate` seconds.
 

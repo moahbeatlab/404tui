@@ -17,10 +17,10 @@ S0 = WIN_W / 1920
 # ---- the feature scenes: clip, from, to, speed, tab, title, beats = (clip time, key, caption, rect cols/rows or None)
 FEATURES = [
     dict(id="files", clip="files", a=3.0, b=17.4, rate=1.1, tab="TAB 2", name="FILES", enter="wipe", beats=[
-        (3.2, "Tab", "Tab opens a folder in the next column", (18, 1, 70, 11)),
-        (8.6, "j", "Details: length, rate, waveform", (86, 1, 54, 21)),
-        (11.0, "Space", "Space listens before it goes anywhere", (0, 38, 70, 7)),
-        (13.8, "]", "[ ] chooses the target bank", (0, 1, 100, 13))]),
+        (3.2, "Tab", "Tab opens a folder in the next column", (0, 1, 90, 14)),
+        (8.6, "j", "Details: length, rate, waveform", (86, 1, 54, 23)),
+        (11.0, "Space", "Space listens before it goes anywhere", (0, 43, 70, 2)),
+        (13.8, "]", "[ ] chooses the target bank", (0, 6, 100, 12))]),
     dict(id="pads", clip="pads", a=7.4, b=20.4, rate=1.0, tab="TAB 1", name="PADS", enter="push", beats=[
         (7.7, "Enter", "Enter previews the pad", (80, 33, 60, 9)),
         (9.9, "S", "S opens the pad's settings", (24, 10, 92, 23)),
@@ -39,18 +39,28 @@ FEATURES = [
         (20.7, "+", "+ makes it longer", (0, 5, 76, 9)),
         (23.0, "<", "< makes it softer", (0, 5, 76, 9))]),
     dict(id="looper", clip="looper", a=8.2, b=18.0, rate=1.0, tab="TAB 8", name="LOOPER", enter="push", beats=[
-        (8.4, "[", "Bank A holds three loops", (0, 1, 76, 9)),
-        (10.6, "p", "p: all 16 pads start on beat 1", (0, 1, 76, 9)),
-        (14.3, "x", "x remixes a pad into slices", (0, 1, 76, 9))]),
+        (8.4, "[", "Bank A holds three loops", (0, 1, 140, 12)),
+        (10.6, "p", "p: all 16 pads start on beat 1", (0, 43, 100, 2)),
+        (14.3, "x", "x remixes a pad into slices", (0, 1, 140, 27))]),
     dict(id="perform", clip="perform", a=0.3, b=11.4, rate=1.0, tab="TAB 7", name="PERFORM", enter="wipe", beats=[
         (0.6, None, "A dashboard for the stage", None),
-        (3.9, None, "The pads of the bank the unit is on", (60, 1, 80, 30)),
-        (7.2, None, "Clock, level and the bus effects", (0, 10, 62, 34))]),
+        (3.9, None, "The pads of the bank the unit is on", (58, 1, 82, 43)),
+        (7.2, None, "Clock, level and the bus effects", (0, 2, 60, 41))]),
     dict(id="config", clip="config", a=3.2, b=15.6, rate=1.1, tab="TAB 6", name="CONFIG", enter="zoom", beats=[
-        (3.9, "Enter", "Enter edits a text setting", (20, 10, 95, 16)),
-        (8.8, "j", "j k moves between settings", (0, 1, 100, 14)),
-        (12.2, "l", "h l changes a colour in place", (0, 1, 100, 14))]),
+        (3.9, "Enter", "Enter edits a text setting", (20, 16, 95, 11)),
+        (8.8, "j", "j k moves between settings", (0, 1, 115, 12)),
+        (12.2, "l", "h l changes a colour in place", (0, 4, 115, 6))]),
 ]
+
+def focus_panels(fid, i, x, y, w, h, W, H):
+    """four blurred, dimmed panels round the part in focus (cam pixels), plus a hairline edge; the part stays sharp"""
+    x, y, w, h = round(x), round(y), round(w), round(h)
+    x0, y0 = max(0, x), max(0, y)
+    x1, y1 = min(W, x + w), min(H, y + h)
+    box = [(0, 0, W, y0), (0, y1, W, H - y1), (0, y0, x0, y1 - y0), (x1, y0, W - x1, y1 - y0)]
+    out = [f'<div class="dim {fid}-f{i}" style="left:{a}px;top:{b}px;width:{c}px;height:{d}px"></div>' for a, b, c, d in box if c > 0 and d > 0]
+    out.append(f'<div class="edge {fid}-f{i}" style="left:{x}px;top:{y}px;width:{w}px;height:{h}px"></div>')
+    return "".join(out)
 
 def cam_for(rect):
     """camera x, y, scale to show a rectangle of cells in the window"""
@@ -107,14 +117,15 @@ def feature(f):
         tl.append(f'tl.to("#cam", {{ x: {x}, y: {y}, scale: {s}, duration: 0.55, ease: "power3.inOut" }}, {max(0.0, t0 - 0.25):.3f});')
         if rect:
             c, r, w, h = rect
-            rings.append(f'<div class="ring" id="{f["id"]}-ring{i}" style="left:{c*CW-10:.0f}px;top:{r*CH-8:.0f}px;width:{w*CW+20:.0f}px;height:{h*CH+16:.0f}px"></div>')
-            tl.append(f'tl.fromTo("#{f["id"]}-ring{i}", {{ opacity: 0, scale: 1.05 }}, {{ opacity: 1, scale: 1, duration: 0.35, ease: "power3.out" }}, {t0 + 0.3:.3f});')
-            tl.append(f'tl.to("#{f["id"]}-ring{i}", {{ opacity: 0, duration: 0.25 }}, {t1 - 0.25:.3f});')
+            rings.append(focus_panels(f['id'], i, c*CW-12, r*CH, w*CW+24, h*CH, 1920, 982))
+            tl.append(f'tl.fromTo(".{f["id"]}-f{i}", {{ opacity: 0 }}, {{ opacity: 1, duration: 0.4, ease: "power2.out" }}, {t0 + 0.3:.3f});')
+            tl.append(f'tl.to(".{f["id"]}-f{i}", {{ opacity: 0, duration: 0.25 }}, {t1 - 0.25:.3f});')
     tl.append(f'tl.to("#cam", {{ x: 0, y: 0, scale: {S0:.4f}, duration: 0.5, ease: "power3.inOut" }}, {dur - 0.55:.3f});')
     html = HEAD + f"""    #win {{ position: absolute; left: 40px; top: 20px; width: {WIN_W}px; height: {WIN_H}px; border-radius: 14px; overflow: hidden; background: #121216; box-shadow: 0 0 0 2px #2a2a31; }}
     #cam {{ position: absolute; left: 0; top: 0; width: 1920px; height: 982px; overflow: hidden; }}
     #cam video {{ position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }}
-    .ring {{ position: absolute; border: 5px solid #ffb000; border-radius: 12px; opacity: 0; box-shadow: 0 0 24px rgba(255,176,0,.45); }}
+    .dim {{ position: absolute; opacity: 0; background: rgba(10,10,14,.42); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }}
+    .edge {{ position: absolute; opacity: 0; border: 2px solid rgba(255,255,255,.55); border-radius: 10px; }}
     #band {{ position: absolute; left: 40px; right: 40px; top: 982px; height: 86px; display: flex; align-items: center; gap: 30px; }}
     .tag {{ font: 600 28px "IBM Plex Mono", monospace; color: #ffb000; letter-spacing: .06em; white-space: nowrap; width: 400px; }}
     .tag b {{ color: #9a9aa6; font-weight: 400; }}
