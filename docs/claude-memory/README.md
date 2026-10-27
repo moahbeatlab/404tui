@@ -11,6 +11,7 @@ machine's Claude memory directory for the project (or just ask Claude to read th
 - `feedback-commit-messages.md` — no Claude-Session URL in commits (the trailer is `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`)
 - `feedback_show_keys_for_modes.md` — any active mode must show its keys on screen
 - `feedback_tmux_private_socket.md` — never a bare `tmux kill-server`; use `tmux -L shots` for TUI captures
+- `reference_videos.md` — how the clips of every tab and the presentation film are made (`docs/video/`), and when to redo them
 - `feedback-no-stray-scripts.md` — one-off scripts via heredoc, not files in the project
 
 Current branch: `main` (`perform` was merged into it on another machine; see the perform note). Build: `go build -o sp404 ./cmd/sp404`;
