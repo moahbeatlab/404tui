@@ -4,6 +4,13 @@ A bank has 16 pattern slots. They are a panel under the pads (Pads tab, `Tab` mo
 the highlighted pattern is previewed on the right) and are edited in the **Sequencer** tab: `5`, then
 `a` chooses the pattern to edit and `N` makes a new one. `Esc` leaves the pattern.
 
+![Pattern B2 open in the sequencer: three tracks on a step grid, with the header's BPM, time signature and step count, and the note under the cursor](img/sequencer.png)
+
+A pattern open in the editor: a row per pad that plays in it (`kick`, `snare`, `hat` here), the notes
+drawn on the step grid with the bar numbers over it, and under the grid the note in front — its
+position, velocity and length. The screenshot is of the simulated device's pattern **B2**
+(120.00 BPM, 5/4, 1 bar, 3 pads), which the unit already holds, opened with tab `5` then `a`.
+
 ## Opening, making and moving patterns
 
 | Key | What |

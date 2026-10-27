@@ -34,6 +34,8 @@ The phone page also runs without any program, over Web MIDI, at <https://moahbea
 Plug the SP-404MKII in with its USB cable; 404tui finds it by itself and waits if it is not there yet. `?` shows
 the keys, `q` quits. From a terminal, `sp404 -sim` tries it without a unit and `sp404 check` tests the installation.
 
+![The Pads tab: bank A of a project, with the pad detail panel and the History](docs/img/pads.png)
+
 ## Usage
 
     go run ./cmd/sp404                 # the terminal UI (same as `menu`)
@@ -42,6 +44,17 @@ the keys, `q` quits. From a terminal, `sp404 -sim` tries it without a unit and `
 
 The header says `404tui by moahbeatlab` and the project, then the state of the link and the version. The tabs are in the top right corner (on the row under the header when it is too narrow): **Pads** (`1`), **Files** (`2`), **Projects** (`3`), **Slicer** (`4`) and **Sequencer** (`5`); click one or press its number. A rail down the left lists the banks or file sources of the section you are in. Dialogs open over the
 screen. A History panel on the right keeps what happened, with times.
+
+The pictures below are of the program against the simulated device (`-sim`), one per tab; each page
+under [`docs/`](docs/README.md) carries the one for its part.
+
+| | |
+| --- | --- |
+| ![Files](docs/img/files.png) | ![Projects](docs/img/projects.png) |
+| ![Slicer](docs/img/slicer.png) | ![Sequencer](docs/img/sequencer.png) |
+| ![Config](docs/img/config.png) | ![Perform](docs/img/perform.png) |
+| ![Looper](docs/img/looper.png) | |
+
 
 `?` anywhere lists, searchable, what can be done with the view or dialog in front (the same list as `:` for a view; for the slicer, the pattern editor and the file dialogs, their own keys; Enter sends a single key); `1`–`5` always change the view; the slicer and the Sequencer's pattern stay as they were when you come back (Esc closes them). In the Slicer tab, `a` chooses what to slice: `p` a pad (a list of the pads, over the tab) or `f` a new sample from the file view (`Z` slices it). The slicer opens over the tab, with the tab lit. In the Sequencer tab, `a` lists the slots of a bank with a preview of the one in front (`[ ]` for another bank; Enter opens it in the editor, Esc closes the editor); `a` in the editor chooses another pattern, and `N` makes a new one.
 

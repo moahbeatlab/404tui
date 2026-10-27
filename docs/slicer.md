@@ -9,6 +9,25 @@ them searchable.
 **Open it:** `Z` on a pad (Pads) or on an audio file (Files), or tab `4` then `a`: `p` chooses a pad,
 `f` a new sample from the file view. `Esc` closes it; it stays as it was when you come back.
 
+![The Slicer on a real drum break: the waveform with its slice boundaries, the slice in front and its controls, and the order lane](img/slicer.png)
+
+A drum break open in the slicer: the waveform across the top with the slice boundaries drawn on it and
+the slices numbered, the slice in front below it with its start, end and length, its chance, gain,
+pitch, attack and release, and the order lane the slices play in. The peaks are the drum hits and the
+gaps between them are audible, so the picture is the sound, not a placeholder. The screenshot is of
+`drum_break.wav` (8.781 s) on the SD card, opened with `Z` in the file view.
+
+![Thirty-two slices found on the onsets with `t`, the boundaries following the drum hits](img/slicer-slices.png)
+
+`t` (onsets) cuts where the sound starts rather than where the sample divides evenly — 32 slices here,
+with the boundaries sitting on the hits. `e` cuts equal slices instead, so the boundaries stop
+following the sound and divide the length evenly, `/` cuts in 2, 3, 4, 6 or 8 parts, and `c` cuts one
+slice in two.
+
+Both shots are the **simulated** device, `sp404 -offline <folder>` on a folder holding that WAV; see
+[`img/README.md`](img/README.md) for how to reproduce them.
+
+
 ## Keys by group
 
 | Group | Keys |

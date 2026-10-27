@@ -1,5 +1,11 @@
 # Files (tab 2) and Projects (tab 3)
 
+![Files: the three-column view, with the source rail on the left and the target bank under it](img/files.png)
+
+![Projects: the projects on the card, with the one in front in the panel on the right](img/projects.png)
+
+Both taken against the simulated device (`sp404 -sim`).
+
 ## Files
 
 The files of the SD card, the unit's own storage, or this computer (`t` changes the source). It is

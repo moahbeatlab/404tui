@@ -3,6 +3,11 @@
 The Looper is a bank of loops that play together. The loops come from wherever you like (the unit's own looper, copied to a pad;
 the Slicer; a file), and this view keeps the bank and its pattern in order. It does not record sound itself.
 
+![The Looper: the bank's pads, which of them play, and the pattern that starts them](img/looper.png)
+
+Screenshot against the simulated device (`sp404 -sim`); the rail on the left is the bank, `[` `]`
+change it.
+
 - A **pattern** in which all 16 pads of the bank start on beat 1 and last the whole pattern (`p`, "MAKE PATTERN" on the page): a
   sample put on any pad plays from the next round on, and a pad that is deleted is silent, its note still in the pattern.
 - **Bank** (`[` `]`). The length of the pattern is the unit's: it is read from the pattern of the bank in which all 16 pads play, or else from how long the loops on the pads are (2 bars when neither is known).
