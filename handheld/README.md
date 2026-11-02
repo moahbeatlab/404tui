@@ -304,3 +304,8 @@ Octaves -3..+3 repeat the notes down or up. A piano at the foot of the menu ligh
 Length are the ones of the marked-pad arp. Make it: hear it (a change is heard at once), bounce the arp to a new pad, bounce the
 chord (all notes at once) to a new pad, or put the pitched copies on free pads and print the arp to the pattern. The sample is
 taken as a C: the pitch of a pattern note cannot be set yet (the pitch byte is unknown), so the keys are pitched copies.
+
+## Steps on the slicer
+
+The slicer menu starts with a STEPS group (play order, Grid, Swing, Humanize, Length), then the slice in front, CUT, and PLAY AND KEEP.
+L2 on the SLICE screen takes the next grid step (off, 1/2, 1/4, 1/8, 1/16) and plays the order in it (X still plays the slice).

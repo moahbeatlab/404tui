@@ -3040,3 +3040,23 @@ func TestArpFromOneSample(t *testing.T) {
 		t.Fatalf("keys and notes written: %s", a.msg)
 	}
 }
+
+func TestL2StepsTheGridOnTheSlicer(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Slice)
+	if a.sl == nil {
+		t.Skip("no slicer")
+	}
+	a.sl.Division = 0
+	keys(t, a, "{")
+	if a.sl.Division != formats.Divisions[1] {
+		t.Fatalf("L2 takes the next grid: %d", a.sl.Division)
+	}
+	for i := 0; i < len(formats.Divisions)-1; i++ {
+		keys(t, a, "{")
+	}
+	if a.sl.Division != 0 {
+		t.Fatalf("round to off again: %d", a.sl.Division)
+	}
+}

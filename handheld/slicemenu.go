@@ -76,7 +76,19 @@ func (a *App) sliceMenu() {
 	set := func(label string, vals []string, cur int, change func(v int)) {
 		m.items = append(m.items, menuItem{label: label, vals: vals, val: cur, keepOpen: true, onChange: change})
 	}
+	m.head("STEPS (L2 on the screen: next grid)")
+	set("Play order", modeNames, int(a.sl.Mode), func(v int) { a.sl.Mode = formats.PlayMode(v) })
+	set("Grid", gridNames, near(formats.Divisions, a.sl.Division), func(v int) { a.sl.Division = formats.Divisions[v] })
+	set("Swing", names(formats.Swings, pct), near(formats.Swings, a.sl.Swing), func(v int) { a.sl.Swing = formats.Swings[v] })
+	set("Humanize", names(formats.Humanizes, pct), near(formats.Humanizes, a.sl.Humanize), func(v int) { a.sl.Humanize = formats.Humanizes[v] })
+	set("Length", names(stepsVals, func(v int) string {
+		if v == 0 {
+			return fmt.Sprintf("auto, %d steps", lab.RoundSteps(a.sl))
+		}
+		return fmt.Sprintf("%d steps", v)
+	}), near(stepsVals, a.sliceSteps), func(v int) { a.sliceSteps = stepsVals[v] })
 	if sel >= 0 {
+		m.head("THE SLICE IN FRONT")
 		s := &a.sl.Slices[sel]
 		audition := func() { a.playSlice() }
 		pre := fmt.Sprintf("Slice %d: ", sel+1)
@@ -99,6 +111,7 @@ func (a *App) sliceMenu() {
 			a.say(fmt.Sprintf("slice %d is as it was cut", sel+1), false)
 		}})
 	}
+	m.head("CUT")
 	parts := []int{2, 4, 8, 16, 32}
 	m.items = append(m.items, menuItem{label: "Cut in equal parts", vals: names(parts, func(v int) string { return fmt.Sprint(v) }), val: 2,
 		run: func(v int) { a.equalParts(parts[v]) }})
@@ -122,16 +135,7 @@ func (a *App) sliceMenu() {
 		}
 	}
 	set("Auto-cut (Y+A): sensitivity", []string{"low", "less", "normal", "more", "high"}, cur, func(v int) { a.autoSens = sens[v] })
-	set("Play order", modeNames, int(a.sl.Mode), func(v int) { a.sl.Mode = formats.PlayMode(v) })
-	set("Grid", gridNames, near(formats.Divisions, a.sl.Division), func(v int) { a.sl.Division = formats.Divisions[v] })
-	set("Swing", names(formats.Swings, pct), near(formats.Swings, a.sl.Swing), func(v int) { a.sl.Swing = formats.Swings[v] })
-	set("Humanize", names(formats.Humanizes, pct), near(formats.Humanizes, a.sl.Humanize), func(v int) { a.sl.Humanize = formats.Humanizes[v] })
-	set("Length", names(stepsVals, func(v int) string {
-		if v == 0 {
-			return fmt.Sprintf("auto, %d steps", lab.RoundSteps(a.sl))
-		}
-		return fmt.Sprintf("%d steps", v)
-	}), near(stepsVals, a.sliceSteps), func(v int) { a.sliceSteps = stepsVals[v] })
+	m.head("PLAY AND KEEP")
 	m.items = append(m.items,
 		menuItem{label: "Mangle the slices (dice)...", run: func(int) { a.mangleMenu() }},
 		menuItem{label: "Play the whole order", keepOpen: true, run: func(int) { a.playResult(false) }},
@@ -239,4 +243,16 @@ func orderText(o []int) string {
 		fmt.Fprint(&sb, v+1)
 	}
 	return sb.String()
+}
+
+// cycleGrid is L2 on the slicer: the next step of the grid (off, 1/2 ... 1/16), and the order is heard in it.
+func (a *App) cycleGrid() {
+	if a.sl == nil {
+		return
+	}
+	i := (near(formats.Divisions, a.sl.Division) + 1) % len(formats.Divisions)
+	a.sl.Division = formats.Divisions[i]
+	a.say("grid "+gridNames[i], false)
+	a.playResult(false)
+	a.say("grid "+gridNames[i]+", "+fmt.Sprintf("%d steps", a.steps2()), false)
 }

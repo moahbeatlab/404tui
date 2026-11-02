@@ -318,7 +318,7 @@ func (a *App) triggerKey(whole bool) {
 	if whole {
 		a.playResult(false)
 	} else {
-		a.playSlice()
+		a.cycleGrid()
 	}
 }
 

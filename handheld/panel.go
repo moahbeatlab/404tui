@@ -61,7 +61,7 @@ func (a *App) hints() (plain, shift []hint) {
 		return []hint{pick, listen, {"^v", "browse"}, {">", "open"}, up, {"L1 R1", "page"}, {"B", "pads"}},
 			[]hint{screen, {"Y+X", "places"}, {"Y+A", "search"}, {"Y+B", "favourite"}}
 	case Slice:
-		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play slice"}, {"R2", "play order"}, {"<>", "move"}, {"^v", "marker"}, {"L1 R1", "jump 1/4"}},
+		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play slice"}, {"R2", "play order"}, {"L2", "step 1/n"}, {"<>", "move"}, {"^v", "marker"}, {"L1 R1", "jump 1/4"}},
 			[]hint{screen, {"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+B", "slice menu"}, {"Y+^v", "zoom"}}
 	case Seq:
 		if a.aHeld { // A is down: what the arrows do now
