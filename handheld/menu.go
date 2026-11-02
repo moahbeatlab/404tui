@@ -156,9 +156,11 @@ type carry struct {
 	copy bool
 }
 
-// openPadMenu is the actions on a pad: what is done with its sample (the sample tools), and the pad itself.
-func (a *App) openPadMenu() {
-	n := a.padN()
+// openPadMenu is the actions on a pad, as a menu of their own.
+func (a *App) openPadMenu() { a.menu = a.padToolsMenu(a.padN()) }
+
+// padToolsMenu is the actions on a pad: what is done with its sample (the sample tools), and the pad itself.
+func (a *App) padToolsMenu(n int) *menu {
 	has := a.info.Pads[n].File
 	m := &menu{title: "pad " + a.label(n)}
 	add := func(l string, run func(int)) { m.items = append(m.items, menuItem{label: l, run: run}) }
@@ -190,7 +192,7 @@ func (a *App) openPadMenu() {
 	m.head(fmt.Sprintf("MARKED PADS (%d)", len(a.marks)))
 	add("Arp the marked pads...", func(int) { a.openMarkedArpMenu() })
 	add("Clear the marks", func(int) { a.clearMarks() })
-	a.menu = m
+	return m
 }
 
 // transform makes a changed copy of a pad's sample and puts it back on the pad.

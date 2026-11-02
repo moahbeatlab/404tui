@@ -205,3 +205,31 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 - 30 steps deep, and cut shorter when the undo steps would keep more than 192 MB of samples alive that the project no longer has.
 - An edit after an undo ends the redo steps. Cursor moves, marks, the screen and what is playing are not part of it.
 - A pattern that loops goes on with the project that undo gives back; if it is left with no notes it stops.
+
+## Pad settings, note editing, track tools (eleventh round)
+
+- **A on a pad opens the pad panel**: three pages (L1/R1 turn them). **SOUND**: level, pan, pitch, fine pitch, time stretch, sample
+  BPM, each a horizontal fader with a mark for its default (A puts it back). **SHAPE**: attack, hold, release, play mode, gate, loop,
+  one shot, fixed velocity, vinyl, BPM sync, mute group, bus. **TOOLS**: the actions on the sample and the pad (slice, chords & arps,
+  keyboard, reverse, normalize, pitch, pattern, move, copy, clear, the marked pads). An empty pad opens on the tools. **X hears the
+  pad with its settings** (level, pan, pitch in semitones, direction, hold). The settings are the project file's own (PADCONF), so
+  they go to the SP. Undo covers them.
+- **On the right of PADS**: the pad's name, length and waveform, its **volume** and **pan** as bars, and its **envelope** (attack,
+  hold, release) drawn to scale with the three numbers.
+- **Notes: hold A and use the arrows.** A tap puts a note, or takes it off (when A is let go). With A held on a note: **Up/Down
+  velocity** (1 at a time, faster the longer the key is held), **Left/Right length** (an eighth of a step at a time, up to the end of
+  the pattern), **L1/R1 nudge** the note 5 ticks earlier or later. Placing a note and shaping it is one undo step; each change plays
+  the note so it is heard. **L2 plays the note under the cursor** as it sounds in the pattern (its velocity, cut at its length). The
+  grid draws a short note narrow and a long one with a tie over the steps it lasts.
+- **The note under the cursor** is described in the footer (when there is no message) and on the right: bar and step, velocity,
+  length in steps and ticks, how far it is from the 16th grid in ticks and ms at the bank's tempo (early or late), how far into its
+  beat, and plain or chromatic (a pitch byte other than 0).
+- **B opens the pattern menu while the pattern plays**; its changes go into the loop. Only X stops it.
+- **Timing tools** (swing, humanize, quantize, shift, reverse) have *Applies to: every pad / only this pad*. Length (double, halve) is
+  for the whole pattern.
+- **Track tools** (the pad of the row in front), after Loop Cartographer's MIDI FX: *Euclid* (rate, steps 1-32, hits, rotate, gate,
+  velocity), *Chance* (keep each note with a chance, fresh or repeating every 1-16 notes), *Randomize velocity* (amount, even or
+  bell, bias), *Echo* (rate, repeats 1-16, decay, gate), *Cycle* (repeat the first N steps over the pattern), *Dispatch* (share the notes
+  over the marked pads in turn or at random), *Copy to a pad*, *Fill with* (rhythm presets), *Invert*, *Clear*. They stay open to try
+  again; Y+L2 undoes.
+- The arp over the columns is gone from the pattern menu; the arp is over the marked pads (PADS).

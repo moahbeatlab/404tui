@@ -38,6 +38,9 @@ func (a *App) Render() *image.RGBA {
 	if a.kb != nil {
 		a.drawKeyboard(c)
 	}
+	if a.pp != nil {
+		a.drawPadPanel(c)
+	}
 	a.drawPanel(c)
 	a.footer(c)
 	if a.menu != nil {
@@ -72,6 +75,11 @@ func (a *App) footer(c *canvas) {
 			col = cBad
 		}
 		c.text(margin, panelBot+8, fit(a.msg, (W-2*margin)/CellW), col, true)
+	} else if a.scr == Seq && a.menu == nil && a.picker == nil {
+		// no message: what is known of the note under the cursor
+		if info := a.noteInfo(); info != "" {
+			c.text(margin, panelBot+8, fit(info, (W-2*margin)/CellW), cText, false)
+		}
 	}
 	const hintLine = "Y keys  Y+L2 undo  Y+R2 redo  Sel+Start quit"
 	c.text(margin, panelBot+28, hintLine, cDim, false)

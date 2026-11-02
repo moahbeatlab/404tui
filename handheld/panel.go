@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"path/filepath"
+	"strings"
 )
 
 // The right of the screen is a panel that is always there, as on the M8: where you are among the screens, the tempo,
@@ -22,6 +23,12 @@ type hint struct{ key, what string }
 // hints are the keys of the screen: the plain ones and the ones with Y held.
 func (a *App) hints() (plain, shift []hint) {
 	screen := hint{"Y+<>", "screen"}
+	if a.pp != nil {
+		if a.pp.page == 2 {
+			return []hint{{"^v", "choose"}, {"<>", "change"}, {"A", "run"}, {"L1 R1", "page"}, {"B", "close"}}, nil
+		}
+		return []hint{{"^v", "setting"}, {"<>", "change"}, {"A", "reset/toggle"}, {"X", "hear pad"}, {"L1 R1", "page"}, {"B", "close"}}, nil
+	}
 	if a.picker != nil {
 		return []hint{{"^v<>", "choose"}, {"L1 R1", "bank"}, {"A", "open it"}, {"B", "cancel"}}, nil
 	}
@@ -64,7 +71,7 @@ func (a *App) hints() (plain, shift []hint) {
 		if a.seqOn {
 			play = hint{"X", "stop"}
 		}
-		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"<>", "step"}, {"^v", "pad"}, {"L1 R1", "bar"}},
+		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}},
 			[]hint{screen, {"Y+X", "row pad"}, {"Y+B", "pick pattern"}, {"Y+^v", "pattern +-"}}
 	case Unit:
 		return []hint{{"A", "send"}, {"X", "look again"}, {"^v", "choose"}, {"L1 R1", "page"}, {"B", "back"}}, []hint{screen}
@@ -179,22 +186,71 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 	case Pads:
 		n := a.padN()
 		p := a.info.Pads[n]
-		c.big(x, y0, a.label(n), cAmber, 2)
 		if !p.File {
+			c.big(x, y0, a.label(n), cAmber, 2)
 			c.text(x, y0+40, "empty", cDim, false)
 			c.text(x, y0+58, "A: pick a sample", cDim, false)
 			return
 		}
-		c.text(x, y0+38, fit(p.Name, w/CellW), cText, true)
+		c.text(x, y0, a.label(n), cAmber, true)
+		c.text(x+textW("A00 "), y0, fit(p.Name, w/CellW-4), cText, true)
 		ch := "mono"
 		if p.Ch == 2 {
 			ch = "stereo"
 		}
-		c.text(x, y0+56, fmt.Sprintf("%.2fs %s lvl %d", float64(p.Frames)/48000, ch, p.Level), cDim, false)
-		c.rect(x, y0+76, w, 32, cPanel2)
+		c.text(x, y0+18, fmt.Sprintf("%.2fs %s", float64(p.Frames)/48000, ch), cDim, false)
+		c.rect(x, y0+36, w, 24, cPanel2)
 		if id, ok := a.padSample(n); ok {
-			a.waveform(c, id, 0, p.Frames, x+1, y0+76, w-2, 32, cAmber)
+			a.waveform(c, id, 0, p.Frames, x+1, y0+36, w-2, 24, cAmber)
 		}
+		get := func(id byte, def int32) int32 {
+			if v, err := a.lab.PadParam(n, id); err == nil {
+				return v
+			}
+			return def
+		}
+		// the level: a bar and its number
+		level := get(0x69, 127)
+		c.text(x, y0+64, "VOL", cDim, false)
+		c.rect(x+28, y0+68, w-28-30, 8, cPanel2)
+		c.rect(x+28, y0+68, int(level)*(w-28-30)/127, 8, cAmber)
+		c.text(x+w-textW(fmt.Sprint(level)), y0+64, fmt.Sprint(level), cText, false)
+		// the pan: a bar from the middle, and L, C or R with its amount
+		bal := get(0x78, 64)
+		c.text(x, y0+80, "PAN", cDim, false)
+		bx, bw := x+28, w-28-30
+		c.rect(bx, y0+84, bw, 8, cPanel2)
+		mid := bx + bw*(64-13)/102
+		pos := bx + int(bal-13)*bw/102
+		c.rect(min(mid, pos), y0+84, abs(pos-mid)+2, 8, cAmber)
+		c.rect(mid, y0+82, 1, 12, cDim)
+		c.text(x+w-textW(padPages[0][1].show(bal)), y0+80, padPages[0][1].show(bal), cText, false)
+		// the envelope: attack up, hold along, release down, drawn to scale
+		att, hold, rel := get(0x7D, 0), get(0x7E, 100), get(0x7F, 0)
+		c.text(x, y0+98, "ENV", cDim, false)
+		ex, ew, ey, eh := x+28, 64, y0+98, 18
+		c.rect(ex, ey, ew, eh, cPanel2)
+		ta := 4 + int(att)*20/127 // widths in the little drawing
+		th := 6 + int(hold)*28/100
+		tr := 4 + int(rel)*20/127
+		tot := ta + th + tr
+		x1 := ex + ta*ew/tot
+		x2 := x1 + th*ew/tot
+		for dx := 0; dx < ew; dx++ {
+			px := ex + dx
+			var f float64
+			switch {
+			case px < x1:
+				f = float64(px-ex) / float64(max(x1-ex, 1))
+			case px < x2:
+				f = 1
+			default:
+				f = 1 - float64(px-x2)/float64(max(ex+ew-x2, 1))
+			}
+			hh := int(f * float64(eh-2))
+			c.rect(px, ey+eh-1-hh, 1, hh+1, cAmber)
+		}
+		c.text(ex+ew+8, y0+98, fmt.Sprintf("%d %d %d", att, hold, rel), cDim, false)
 	case Files:
 		c.text(x, y0, "TARGET", cDim, false)
 		c.big(x+textW("TARGET")+8, y0-4, a.label(a.padN()), cAmber, 2)
@@ -257,6 +313,13 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 				col = cGood
 			}
 			c.text(x, y0+54, fmt.Sprintf("vel %d  len %.2f", n.Vel, float64(n.Len)/stepTicks), col, true)
+			off := a.noteTiming(n, pad)
+			c.text(x, y0+72, fit(strings.SplitN(off, " (", 2)[0], w/CellW), cText, false)
+			if n.Pitch != 0 {
+				c.text(x, y0+90, fmt.Sprintf("chromatic %d", n.Pitch), cAmber, false)
+			} else if a.info.Pads[pad].File {
+				c.text(x, y0+90, "plain note", cDim, false)
+			}
 		} else {
 			c.text(x, y0+54, "no note", cLine, false)
 		}

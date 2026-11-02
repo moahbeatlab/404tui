@@ -191,20 +191,20 @@ func TestMovePadAndCopyPad(t *testing.T) {
 	keys(t, a, "A A D R D D A") // some drum on A1
 	name := a.info.Pads[0].Name
 	keys(t, a, "A")
-	if a.menu == nil {
-		t.Fatal("the menu is open")
+	if a.pp == nil || a.pp.page != 0 {
+		t.Fatal("A on a pad with a sample opens its settings first")
 	}
 	keys(t, a, "B")
-	if a.menu != nil {
-		t.Fatal("B closes the menu")
+	if a.pp != nil {
+		t.Fatal("B closes the pad panel")
 	}
-	keys(t, a, "A")
+	keys(t, a, "A [") // the settings, and L1 round to the tools
 	chooseMenu(t, a, "Move or swap")
 	keys(t, a, "R R A")
 	if a.info.Pads[0].File || a.info.Pads[2].Name != name {
 		t.Fatalf("moved to A3: A1 %v A3 %q (was %q)", a.info.Pads[0].File, a.info.Pads[2].Name, name)
 	}
-	keys(t, a, "A")
+	keys(t, a, "A [")
 	chooseMenu(t, a, "Copy to")
 	keys(t, a, "L A")
 	if !a.info.Pads[1].File {
@@ -731,17 +731,29 @@ func TestPatternPickerBankThenPattern(t *testing.T) {
 // chooseMenu moves the cursor of the open menu to the item that starts with label and presses A.
 func chooseMenu(t *testing.T, a *App, label string) {
 	t.Helper()
-	if a.menu == nil {
+	m := menuOf(a)
+	if m == nil {
 		t.Fatalf("no menu is open to choose %q from", label)
 	}
-	for i := 0; i < len(a.menu.items); i++ {
-		if strings.HasPrefix(a.menu.item().label, label) {
+	for i := 0; i < len(m.items); i++ {
+		if !m.item().header && strings.HasPrefix(m.item().label, label) {
 			keys(t, a, "A")
 			return
 		}
 		keys(t, a, "D")
 	}
 	t.Fatalf("no menu item %q", label)
+}
+
+// menuOf is the menu in front: an open one, or the tools page of the pad panel.
+func menuOf(a *App) *menu {
+	if a.menu != nil {
+		return a.menu
+	}
+	if a.pp != nil && a.pp.page == 2 {
+		return a.pp.tools
+	}
+	return nil
 }
 
 func TestShuffledOrderIsVisibleAndGoesToThePads(t *testing.T) {
@@ -1100,7 +1112,7 @@ func TestSampleToolsArpAndKeyboard(t *testing.T) {
 	keys(t, a, kit)
 	a.cur = 0 // A1, the kick
 	a.go_(Pads)
-	keys(t, a, "A")
+	keys(t, a, "A [")
 	chooseMenu(t, a, "Chords & arps")
 	if a.menu == nil || !strings.Contains(a.menu.title, "A1") {
 		t.Fatalf("the arp menu: %+v", a.menu)
@@ -1420,8 +1432,9 @@ func typeOn(t *testing.T, a *App, ch byte) {
 // chooseMenuContaining is chooseMenu for an item with the text somewhere in its label.
 func chooseMenuContaining(t *testing.T, a *App, text string) {
 	t.Helper()
-	for i := 0; i < len(a.menu.items); i++ {
-		it := a.menu.item()
+	m := menuOf(a)
+	for i := 0; i < len(m.items); i++ {
+		it := m.item()
 		if !it.header && strings.Contains(it.label, text) {
 			keys(t, a, "A")
 			return
@@ -1876,4 +1889,207 @@ func TestTrackToolsInThePattern(t *testing.T) {
 			t.Fatalf("a leftover in the pattern menu: %q", it.label)
 		}
 	}
+}
+
+func TestNoteInfoSaysHowFarOffTheGrid(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.row, a.step = 0, 4
+	if a.noteInfo() != "" {
+		t.Fatal("no note, no info")
+	}
+	a.Press(A, 0)
+	a.Release(A)
+	info := a.noteInfo()
+	for _, want := range []string{"A1 1.5", "vel 100", "len 1.00", "on the grid", "plain"} {
+		if !strings.Contains(info, want) {
+			t.Fatalf("%q is missing from %q", want, info)
+		}
+	}
+	// nudged 5 ticks later: 5 ticks at 120 BPM is 5.2 ms
+	a.Press(A, 0)
+	a.Press(R1, 0)
+	a.Release(A)
+	info = a.noteInfo()
+	if !strings.Contains(info, "5t late (5.2ms)") || !strings.Contains(info, "beat+5t") {
+		t.Fatalf("late: %q", info)
+	}
+	// nudged to nearly the next step it is early for that one
+	n, _ := noteOn(a, 0)
+	if got := a.noteTiming(lab.Note{Tick: n.Tick - 5 + 110}, 0); !strings.Contains(got, "10 ticks early") {
+		t.Fatalf("early: %q", got)
+	}
+	// the footer shows it when there is no message, and a message wins
+	a.msg = ""
+	a.Render()
+	if img := a.Render(); img.Bounds().Dx() != W {
+		t.Fatal("frame")
+	}
+	// a chromatic note is told apart: a note with a pitch byte
+	if got := fmt.Sprint(lab.Note{Pitch: 3}.Pitch); got != "3" {
+		t.Fatal(got)
+	}
+}
+
+func TestPadPanelFadersAndSwitches(t *testing.T) {
+	a, au := newApp(t)
+	keys(t, a, kit)
+	a.go_(Pads)
+	a.cur = 0
+	keys(t, a, "A")
+	if a.pp == nil || a.pp.page != 0 || padPages[0][0].label != "Level" {
+		t.Fatal("A opens SOUND, the level first")
+	}
+	get := func(id byte) int32 { v, _ := a.lab.PadParam(0, id); return v }
+	if get(0x69) != 127 {
+		t.Fatalf("level %d", get(0x69))
+	}
+	for i := 0; i < 20; i++ {
+		keys(t, a, "L")
+	}
+	if get(0x69) != 107 {
+		t.Fatalf("Left lowers the level: %d", get(0x69))
+	}
+	// a key held runs faster: repeats 6 and up are 4 at a time
+	a.Press(Left, 0)
+	a.Press(Left, 7)
+	a.Press(Left, 15)
+	if get(0x69) != 107-1-4-8 {
+		t.Fatalf("held: %d", get(0x69))
+	}
+	keys(t, a, "A") // back to the default
+	if get(0x69) != 127 {
+		t.Fatalf("A puts a fader to its default: %d", get(0x69))
+	}
+	keys(t, a, "D D") // pitch
+	keys(t, a, "R R R")
+	if get(0x73) != 3 {
+		t.Fatalf("pitch %d", get(0x73))
+	}
+	for i := 0; i < 40; i++ {
+		keys(t, a, "R")
+	}
+	if get(0x73) != 12 {
+		t.Fatalf("held to the end of its range: %d", get(0x73))
+	}
+	keys(t, a, "D D D D D D") // wraps round to the first row again
+	if a.pp.row[0] != (2+6)%len(padPages[0]) {
+		t.Fatalf("row %d", a.pp.row[0])
+	}
+	// the second page: switches, flags and choices
+	keys(t, a, "]")
+	if a.pp.page != 1 {
+		t.Fatal("R1 turns to SHAPE")
+	}
+	keys(t, a, "D D D") // play mode
+	keys(t, a, "R")
+	if get(0x75) != 1 {
+		t.Fatalf("play mode reverse: %d", get(0x75))
+	}
+	keys(t, a, "D D") // loop (gate then loop)
+	keys(t, a, "A")
+	if get(0x6B) != 1 {
+		t.Fatal("A switches the loop on")
+	}
+	keys(t, a, "D D") // fixed velocity is the bit 0 of the mode flags, one shot the bit 5
+	keys(t, a, "A")
+	keys(t, a, "U")
+	keys(t, a, "A")
+	flags := get(0x70)
+	if flags&(1<<5) == 0 || flags&1 == 0 {
+		t.Fatalf("one shot and fixed velocity are bits of 0x70: %b", flags)
+	}
+	if get(0x75) != 1 {
+		t.Fatal("other settings are untouched")
+	}
+	// X plays the pad as set: quieter at a low level, turned away on one side with the pan
+	au.Played = 0
+	keys(t, a, "X")
+	if au.Played != 1 {
+		t.Fatal("X plays the pad")
+	}
+	a.lab.SetPadParam(0, 0x69, 40)
+	a.lab.SetPadParam(0, 0x78, 13) // all the way left: the right side is silent
+	a.lab.SetPadParam(0, 0x75, 0)
+	v, _ := a.padVoice(0)
+	var l, r int
+	for i := 0; i+1 < len(v.Samples); i += 2 {
+		l = max(l, abs(int(v.Samples[i])))
+		r = max(r, abs(int(v.Samples[i+1])))
+	}
+	if l == 0 || r != 0 {
+		t.Fatalf("the pan sends it left: %d %d", l, r)
+	}
+	full, _ := a.noteSample(0, 127, 0)
+	var fl int
+	for _, x := range full.Samples {
+		fl = max(fl, abs(int(x)))
+	}
+	if l >= fl {
+		t.Fatalf("level 40 is quieter than full: %d vs %d", l, fl)
+	}
+	// the pitch changes its length, the direction turns it round
+	a.lab.SetPadParam(0, 0x78, 64)
+	a.lab.SetPadParam(0, 0x69, 127)
+	a.lab.SetPadParam(0, 0x73, 0) // (the panel test above left the pitch at +12)
+	norm, _ := a.padVoice(0)
+	a.lab.SetPadParam(0, 0x73, 12)
+	up, _ := a.padVoice(0)
+	if up.Frames() >= norm.Frames() {
+		t.Fatalf("an octave up is half as long: %d vs %d", up.Frames(), norm.Frames())
+	}
+	// every change is one undo step, and a held key is one
+	keys(t, a, "B")
+	if a.pp != nil {
+		t.Fatal("B closes")
+	}
+	a.Render()
+}
+
+func TestPadPanelTheToolsPageAndEmptyPads(t *testing.T) {
+	a, _ := newApp(t)
+	a.go_(Pads)
+	a.cur = 5 // an empty pad
+	keys(t, a, "A")
+	if a.pp == nil || a.pp.page != 2 {
+		t.Fatalf("an empty pad has no settings: it opens on the tools")
+	}
+	a.Render()
+	chooseMenu(t, a, "Pick a sample")
+	if a.scr != Files || a.pp != nil {
+		t.Fatalf("Pick a sample goes to the files: %v", a.scr)
+	}
+	a.go_(Pads)
+	a.cur = 0
+	keys(t, a, kit)
+	a.go_(Pads)
+	a.cur = 0
+	keys(t, a, "A [")
+	if a.pp == nil || a.pp.page != 2 {
+		t.Fatalf("L1 round from SOUND is the tools page: %d", a.pp.page)
+	}
+	keys(t, a, "] ] ]")
+	if a.pp.page != 2 {
+		t.Fatalf("three pages: %d", a.pp.page)
+	}
+	a.Render()
+	keys(t, a, "B")
+	if a.pp != nil {
+		t.Fatal("B closes the tools page")
+	}
+	// the setting of a pad is in the undo stack
+	a.cur = 1
+	keys(t, a, "A")
+	before := len(a.undo)
+	keys(t, a, "L L L")
+	keys(t, a, "B")
+	if v, _ := a.lab.PadParam(1, 0x69); v != 124 {
+		t.Fatalf("level %d", v)
+	}
+	keys(t, a, "Y+{")
+	if v, _ := a.lab.PadParam(1, 0x69); v == 124 {
+		t.Fatal("undo takes the fader change back")
+	}
+	_ = before
 }

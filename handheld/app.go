@@ -112,8 +112,9 @@ type App struct {
 	playing    int // pad lit by X, -1 for none
 
 	menu      *menu
-	picker    *picker // the pattern picker, when it is open
-	splash    *splash // the logo and dashboard at the start
+	pp        *padPanel // the pad panel, when it is open
+	picker    *picker   // the pattern picker, when it is open
+	splash    *splash   // the logo and dashboard at the start
 	as        autosave
 	aHeld     bool // A is down in SEQ: the arrows edit the note under it
 	aDelete   bool // A went down on a note: if nothing is edited, letting go takes it off
@@ -374,6 +375,12 @@ func (a *App) press(k Key, repeat int) {
 		a.help = false
 		return
 	}
+	if a.pp != nil {
+		if k != Y {
+			a.ppKey(k, repeat)
+		}
+		return
+	}
 	if a.kb != nil {
 		if k != Y {
 			a.kbKey(k)
@@ -543,7 +550,7 @@ func (a *App) padsKey(k Key) {
 	case Right:
 		a.cur = a.cur&^3 | (a.cur+1)&3
 	case A:
-		a.openPadMenu()
+		a.openPadPanel()
 	case X:
 		a.playPad(a.padN())
 	case B:
@@ -615,18 +622,56 @@ func (a *App) padSample(n int) (int, bool) {
 }
 
 func (a *App) playPad(n int) {
-	id, ok := a.padSample(n)
+	s, ok := a.padVoice(n)
 	if !ok {
 		a.say("nothing on "+a.label(n), true)
 		return
 	}
+	a.playing = n
+	a.play(s)
+}
+
+// padVoice is the pad's sample as its settings make it sound: the level, the pan, the pitch in semitones, the direction
+// (play mode reverse) and the part that is held. (The envelope and the time stretch are not rendered here.)
+func (a *App) padVoice(n int) (formats.Sample, bool) {
+	id, ok := a.padSample(n)
+	if !ok {
+		return formats.Sample{}, false
+	}
 	s, err := a.lab.Sample(id)
 	if err != nil {
 		a.say(err.Error(), true)
-		return
+		return formats.Sample{}, false
 	}
-	a.playing = n
-	a.play(s)
+	param := func(id byte, def int32) int32 {
+		if v, err := a.lab.PadParam(n, id); err == nil {
+			return v
+		}
+		return def
+	}
+	level, bal, pitch, mode, hold := param(0x69, 127), param(0x78, 64), param(0x73, 0), param(0x75, 0), param(0x7E, 100)
+	if pitch != 0 {
+		s = s.Pitched(int(pitch))
+	}
+	ch := max(s.Channels, 1)
+	frames := s.Frames() * int(min(max(hold, 1), 100)) / 100
+	frames = max(frames, min(s.Frames(), 2))
+	// the pan: the centre leaves both sides as they are, a side turned away goes down to nothing
+	l := min(float64(115-bal)/51, 1)
+	r := min(float64(bal-13)/51, 1)
+	out := make([]int16, frames*2)
+	for f := 0; f < frames; f++ {
+		src := f
+		if mode == 1 || mode == 3 {
+			src = frames - 1 - f
+		}
+		lv := float64(s.Samples[src*ch])
+		rv := float64(s.Samples[src*ch+ch-1])
+		g := float64(level) / 127
+		out[f*2] = int16(max(-32768, min(32767, lv*g*l)))
+		out[f*2+1] = int16(max(-32768, min(32767, rv*g*r)))
+	}
+	return formats.Sample{Channels: 2, Samples: out}, true
 }
 
 func (a *App) filesKey(k Key) {

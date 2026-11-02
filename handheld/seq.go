@@ -716,3 +716,45 @@ func (a *App) playNote() {
 	}
 	a.play(s)
 }
+
+// noteTiming says how far a note is from the 16th grid: "on the grid", or "5 ticks late (5.2 ms)". The short form is "5t late".
+func (a *App) noteTiming(n lab.Note, pad int) string { return a.noteTimingForm(n, pad, false) }
+
+func (a *App) noteTimingForm(n lab.Note, pad int, short bool) string {
+	off := int(n.Tick) % stepTicks
+	if off == 0 {
+		return "on the grid"
+	}
+	late := off
+	word := "late"
+	if off > stepTicks/2 { // nearer the next step: it is early for that one
+		late = off - stepTicks
+		word = "early"
+	}
+	ms := float64(abs(late)) * 60000 / (a.tempoOf(pad/16) * formats.PPQ)
+	if short {
+		return fmt.Sprintf("%dt %s (%.1fms)", abs(late), word, ms)
+	}
+	return fmt.Sprintf("%d ticks %s (%.1f ms)", abs(late), word, ms)
+}
+
+// noteInfo is what is known of the note under the cursor, for the footer: where, how loud, how long, how far off the grid, and
+// whether it is a chromatic note (a pitch byte other than 0) or a plain one.
+func (a *App) noteInfo() string {
+	d, ok := a.doc()
+	if !ok {
+		return ""
+	}
+	pad := a.rowPad()
+	n, ok := noteAt(d, pad, a.step)
+	if !ok {
+		return ""
+	}
+	beat := int(n.Tick) % formats.PPQ
+	kind := "plain"
+	if n.Pitch != 0 {
+		kind = fmt.Sprintf("chromatic %d", n.Pitch)
+	}
+	return fmt.Sprintf("%s %d.%d  vel %d  len %.2f st  %s  beat+%dt  %s", a.label(pad), int(n.Tick)/(16*stepTicks)+1,
+		int(n.Tick)/stepTicks%16+1, n.Vel, float64(n.Len)/stepTicks, a.noteTimingForm(n, pad, true), beat, kind)
+}
