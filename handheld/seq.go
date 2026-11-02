@@ -116,6 +116,18 @@ func (a *App) addTrack(p int) {
 	a.say(fmt.Sprintf("a track for %s", a.label(p)), false)
 }
 
+// notesIn are the notes of a pad that start in a step: one, or several for a split (ratcheted) step.
+func notesIn(d lab.PatternDoc, pad, step int) []lab.Note {
+	var out []lab.Note
+	for _, n := range d.Notes {
+		if n.Pad == pad && int(n.Tick) >= step*stepTicks && int(n.Tick) < (step+1)*stepTicks {
+			out = append(out, n)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Tick < out[j].Tick })
+	return out
+}
+
 // noteAt finds the note of a pad that starts in a step.
 func noteAt(d lab.PatternDoc, pad, step int) (lab.Note, bool) {
 	for _, n := range d.Notes {
@@ -426,17 +438,23 @@ func (a *App) seqMenu() {
 	m.items = append(m.items, menuItem{label: "Double", keepOpen: true, run: func(int) { a.opSay("double", []byte(`{"pad":-1}`)); a.step = min(a.step, a.steps()-1) }})
 	m.items = append(m.items, menuItem{label: "Halve", keepOpen: true, run: func(int) { a.opSay("halve", []byte(`{"pad":-1}`)); a.step = min(a.step, a.steps()-1) }})
 
-	m.head(fmt.Sprintf("THE TRACK (%s)", a.label(pad)))
+	m.head(fmt.Sprintf("TRACK %s: WRITE NOTES", a.label(pad)))
+	run("Fill...", a.fillMenu)
 	run("Euclid...", a.euclidMenu)
+	run("Evolve over the bars...", a.evolveMenu)
+	m.head(fmt.Sprintf("TRACK %s: CHANGE THE NOTES", a.label(pad)))
+	run("Ratchet (sub-steps)...", a.ratchetMenu)
+	run("Accents and ghosts...", a.accentMenu)
+	run("Echo...", a.echoMenu)
 	run("Chance...", a.chanceMenu)
 	run("Randomize velocity...", a.randomizeMenu)
-	run("Echo...", a.echoMenu)
+	run("Shape (gate, decay)...", a.shapeMenu)
 	run("Cycle...", a.cycleMenu)
+	run("Nudge (push, pull)...", a.nudgeMenu)
+	run("Invert", a.invert)
+	m.head("TRACKS")
 	run("Dispatch over the marked pads...", a.dispatchMenu)
 	run("Copy to a pad...", a.copyTrackMenu)
-	run("Fill...", a.fillMenu)
-	run("Shape (gate, decay)...", a.shapeMenu)
-	run("Invert", a.invert)
 	run("Clear", func() {
 		args, _ := json.Marshal(lab.PatternArgs{Pad: pad})
 		a.lab.PatternOp(a.pat, "clearPad", args)
@@ -639,7 +657,7 @@ func (a *App) drawSeq(c *canvas) {
 				bg = cLine
 			}
 			c.rect(x, y, cw-2, rh-2, bg)
-			if n, ok := noteAt(d, pad, st); ok {
+			for _, n := range notesIn(d, pad, st) { // every note that starts in the step, where it starts: sub-steps and nudges show
 				h := max((rh-2)*n.Vel/127, 4) // as tall as it is loud
 				col := cAmber
 				if ph == st {
@@ -648,11 +666,13 @@ func (a *App) drawSeq(c *canvas) {
 				if a.aHeld && pad == a.aPad && n.Tick == a.aTick {
 					col = cWhite // the note being edited
 				}
-				w := cw - 2
+				off := (int(n.Tick) - st*stepTicks) * (cw - 2) / stepTicks // how far into the step it starts
+				w := cw - 2 - off
 				if n.Len < stepTicks { // shorter than a step: as wide as it lasts
-					w = max((cw-2)*n.Len/stepTicks, 3)
+					w = max((cw-2)*n.Len/stepTicks, 2)
 				}
-				c.rect(x, y+(rh-2)-h, w, h, col)
+				w = max(min(w, cw-2-off), 2)
+				c.rect(x+off, y+(rh-2)-h, w, h, col)
 				// longer than a step: a tie runs on over the steps it lasts
 				if n.Len > stepTicks {
 					end := int(n.Tick) + n.Len

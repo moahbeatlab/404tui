@@ -2383,3 +2383,239 @@ func TestFillGateDecayAndShape(t *testing.T) {
 		t.Fatalf("legato to the next note: %d", notes[0].Len)
 	}
 }
+
+func TestRatchetUsesTheUnitsSubsteps(t *testing.T) {
+	base := []lab.Note{{Tick: 240, Pad: 3, Vel: 100, Len: 120}, {Tick: 480, Pad: 3, Vel: 90, Len: 120}}
+	// 3 parts: three notes on the parts of the step, each a third of a step long
+	r := ratchetNotes(base, 0, 3, 0, 0, 1)
+	if len(r) != 6 {
+		t.Fatalf("2 notes x 3 parts: %d", len(r))
+	}
+	want := []uint32{240, 280, 320, 480, 520, 560}
+	for i, n := range r {
+		if n.Tick != want[i] || n.Len != 40 || n.Pad != 3 {
+			t.Fatalf("part %d: %+v, want tick %d len 40", i, n, want[i])
+		}
+	}
+	// 2 and 4 parts divide the step evenly too
+	if r := ratchetNotes(base[:1], 0, 2, 0, 0, 1); r[1].Tick != 300 || r[1].Len != 60 {
+		t.Fatalf("2 parts: %+v", r)
+	}
+	if r := ratchetNotes(base[:1], 0, 4, 0, 0, 1); len(r) != 4 || r[3].Tick != 330 || r[3].Len != 30 {
+		t.Fatalf("4 parts: %+v", r)
+	}
+	// which notes: every 2nd leaves the others alone
+	if r := ratchetNotes(base, 1, 2, 0, 0, 1); len(r) != 3 || r[2].Len != 120 {
+		t.Fatalf("every 2nd note: %+v", r)
+	}
+	// parts that play, and the velocity ramp
+	if r := ratchetNotes(base[:1], 0, 3, 1, 0, 1); len(r) != 2 || r[0].Tick != 280 {
+		t.Fatalf("skip the first: %+v", r)
+	}
+	if r := ratchetNotes(base[:1], 0, 4, 3, 0, 1); len(r) != 2 || r[1].Tick != 300 {
+		t.Fatalf("every other part: %+v", r)
+	}
+	up := ratchetNotes(base[:1], 0, 3, 0, 1, 1)
+	if !(up[0].Vel < up[1].Vel && up[1].Vel < up[2].Vel && up[2].Vel == 100) {
+		t.Fatalf("louder: %+v", up)
+	}
+	if ac := ratchetNotes(base[:1], 0, 3, 0, 3, 1); ac[0].Vel != 100 || ac[1].Vel != 60 {
+		t.Fatalf("accent the first: %+v", ac)
+	}
+	// the last note of each bar
+	two := []lab.Note{{Tick: 0, Vel: 100, Len: 120}, {Tick: 1800, Vel: 100, Len: 120}, {Tick: 1920, Vel: 100, Len: 120}, {Tick: 3720, Vel: 100, Len: 120}}
+	if r := ratchetNotes(two, 4, 2, 0, 0, 1); len(r) != 2+2*2 {
+		t.Fatalf("2 of 4 notes split: %d", len(r))
+	}
+	// what the unit's substeps look like to 404tui: a step of n parts has notes a part long, on the parts
+	for _, parts := range ratchetParts {
+		if stepTicks%parts != 0 {
+			t.Fatalf("%d parts do not divide a step", parts)
+		}
+	}
+}
+
+func TestEvolveMutatesEachBarFromTheOneBefore(t *testing.T) {
+	var first []lab.Note
+	for _, s := range []int{0, 4, 8, 12} { // a kick on the beats in bar 1
+		first = append(first, lab.Note{Tick: uint32(s * stepTicks), Pad: 0, Vel: 100, Len: stepTicks})
+	}
+	out := evolveNotes(first, 4*1920, 40, 0, 0, 5)
+	byBar := map[int][]lab.Note{}
+	for _, n := range out {
+		byBar[int(n.Tick)/1920] = append(byBar[int(n.Tick)/1920], n)
+	}
+	if len(byBar) != 4 {
+		t.Fatalf("notes in %d bars", len(byBar))
+	}
+	if len(byBar[0]) != 4 || byBar[0][1].Tick != 480 {
+		t.Fatalf("bar 1 is the seed, untouched: %+v", byBar[0])
+	}
+	same := true
+	sig := func(ns []lab.Note) string {
+		s := ""
+		for _, n := range ns {
+			s += fmt.Sprintf("%d/%d ", int(n.Tick)%1920, n.Vel)
+		}
+		return s
+	}
+	for b := 1; b < 4; b++ {
+		same = same && sig(byBar[b]) == sig(byBar[0])
+	}
+	if same {
+		t.Fatal("40% change did not change any bar")
+	}
+	for _, n := range out {
+		if int(n.Tick) >= 4*1920 || n.Pad != 0 || n.Vel < 1 || n.Vel > 127 {
+			t.Fatalf("a note out of its bounds: %+v", n)
+		}
+	}
+	// the same seed gives the same result, another seed another
+	if sig(evolveNotes(first, 4*1920, 40, 0, 0, 5)) != sig(out) {
+		t.Fatal("the same seed must give the same bars")
+	}
+	if sig(evolveNotes(first, 4*1920, 40, 0, 0, 6)) == sig(out) {
+		t.Fatal("another seed should give other bars")
+	}
+	// velocities only: the rhythm stays, the velocities move
+	vo := evolveNotes(first, 2*1920, 100, 4, 0, 9)
+	for _, n := range vo {
+		if int(n.Tick)%480 != 0 {
+			t.Fatalf("velocities only keeps the steps: %+v", n)
+		}
+	}
+	if len(vo) != 8 {
+		t.Fatalf("and the notes: %d", len(vo))
+	}
+	// drops only: never more notes; adds only: never fewer
+	if got := len(evolveNotes(first, 4*1920, 60, 3, 0, 11)); got > 16 {
+		t.Fatalf("drops only: %d", got)
+	}
+	if got := len(evolveNotes(first, 4*1920, 60, 2, 0, 11)); got < 16 {
+		t.Fatalf("adds only: %d", got)
+	}
+	// back to the first bar every 2 bars: bar 3 grows from bar 1 again
+	rs := evolveNotes(first, 4*1920, 0, 0, 1, 3) // no change at all: all bars equal the first
+	if len(rs) != 16 {
+		t.Fatalf("no change: %d notes", len(rs))
+	}
+	// in the pattern, through the menu: a one-bar pattern says so
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.addTrack(0)
+	a.setTrack(0, first)
+	a.seqMenu()
+	chooseMenu(t, a, "Evolve")
+	chooseMenuContaining(t, a, "Evolve the bars")
+	if len(a.trackNotes(0)) < 8 { // the pattern is 4 bars: the first bar was copied into the later ones with mutations
+		t.Fatalf("evolved: %d notes", len(a.trackNotes(0)))
+	}
+}
+
+func TestAccentsAndGhostsForHats(t *testing.T) {
+	var hats []lab.Note
+	for s := 0; s < 16; s += 2 { // eighths
+		hats = append(hats, lab.Note{Tick: uint32(s * stepTicks), Pad: 2, Vel: 90, Len: 60})
+	}
+	out := accentGhostNotes(hats, 2, 1920, 1, 120, 70, 0, 30, 100, 1) // the beats accented, the rest at 70
+	for _, n := range out {
+		want := 70
+		if int(n.Tick)%480 == 0 {
+			want = 120
+		}
+		if n.Vel != want {
+			t.Fatalf("tick %d: vel %d, want %d", n.Tick, n.Vel, want)
+		}
+	}
+	if len(out) != 8 {
+		t.Fatalf("no ghosts, no new notes: %d", len(out))
+	}
+	// off-beat accents (the ands)
+	oa := accentGhostNotes(hats, 2, 1920, 2, 127, 80, 0, 30, 100, 1)
+	if oa[1].Vel != 127 || oa[0].Vel != 80 { // tick 240 is an and
+		t.Fatalf("off-beats: %d %d", oa[0].Vel, oa[1].Vel)
+	}
+	// ghosts: soft notes only on empty steps, none where there is a hit
+	g := accentGhostNotes(hats, 2, 1920, 0, 0, 0, 4, 30, 100, 1) // every empty step
+	if len(g) != 16 {
+		t.Fatalf("eighths plus a ghost on each empty 16th: %d", len(g))
+	}
+	ghosts := 0
+	steps := map[int]int{}
+	for _, n := range g {
+		steps[int(n.Tick)/stepTicks]++
+		if n.Vel == 30 {
+			ghosts++
+			if int(n.Tick)/stepTicks%2 == 0 {
+				t.Fatalf("a ghost on a hit: %+v", n)
+			}
+		}
+	}
+	for s, c := range steps {
+		if c != 1 {
+			t.Fatalf("two notes on step %d", s)
+		}
+	}
+	if ghosts != 8 {
+		t.Fatalf("8 ghosts: %d", ghosts)
+	}
+	// before each hit: the step before; the chance thins them
+	if b := accentGhostNotes(hats, 2, 1920, 0, 0, 0, 1, 30, 100, 1); len(b) != 8+7 { // the first hit has no step before it
+		t.Fatalf("before each hit: %d", len(b))
+	}
+	half := 0
+	for seed := int64(1); seed <= 20; seed++ {
+		half += len(accentGhostNotes(hats, 2, 1920, 0, 0, 0, 2, 30, 50, seed)) - 8
+	}
+	if half < 20*8/4 || half > 20*8*3/4 {
+		t.Fatalf("a 50%% chance on 8 candidates, 20 runs: %d ghosts", half)
+	}
+	// every 3rd note, first of each bar
+	if e := accentGhostNotes(hats, 2, 1920, 4, 127, 0, 0, 30, 100, 1); e[0].Vel != 127 || e[1].Vel != 90 || e[3].Vel != 127 {
+		t.Fatalf("every 3rd: %d %d %d", e[0].Vel, e[1].Vel, e[3].Vel)
+	}
+	if f := accentGhostNotes(hats, 2, 3840, 6, 127, 0, 0, 30, 100, 1); f[0].Vel != 127 || f[1].Vel != 90 {
+		t.Fatalf("first of the bar: %d %d", f[0].Vel, f[1].Vel)
+	}
+}
+
+func TestNudgeAndTheSlicerCursor(t *testing.T) {
+	ns := nudgeNotes([]lab.Note{{Tick: 480}, {Tick: 3}}, 1920, -10)
+	if ns[0].Tick != 470 || ns[1].Tick != 0 {
+		t.Fatalf("nudge: %d %d", ns[0].Tick, ns[1].Tick)
+	}
+	if nudgeNotes([]lab.Note{{Tick: 1900}}, 1920, 40)[0].Tick != 1919 {
+		t.Fatal("stays inside the pattern")
+	}
+	if cursorPixels(0) != 2 || cursorPixels(3) != 8 || cursorPixels(6) != 32 || cursorPixels(10) != 128 {
+		t.Fatalf("tiers: %d %d %d %d", cursorPixels(0), cursorPixels(3), cursorPixels(6), cursorPixels(10))
+	}
+	a, _ := newApp(t)
+	keys(t, a, "A A D D R A") // a loop on A1
+	a.go_(Slice)
+	if a.sl == nil {
+		t.Skip("no slicer")
+	}
+	a.at = 0
+	from, to := a.view()
+	col := max((to-from)/waveCols, 1)
+	a.Press(Right, 0)
+	one := a.at
+	a.Press(Right, 12) // held for two seconds
+	if far := a.at - one; far != col*128 {
+		t.Fatalf("a long hold moves 128 pixels at a press: %d frames, want %d", far, col*128)
+	}
+	if one != col*2 {
+		t.Fatalf("the first press is 2 pixels: %d", one)
+	}
+	a.at = 0
+	keys(t, a, "]") // R1 jumps a quarter of the view
+	if a.at != max((to-from)/4, 1) {
+		t.Fatalf("R1 jumps a quarter of the view: %d", a.at)
+	}
+	keys(t, a, "[")
+	if a.at != 0 {
+		t.Fatalf("and L1 back: %d", a.at)
+	}
+}

@@ -122,6 +122,7 @@ type App struct {
 	aTick     uint32
 	aSession  int // counts the holds of A, so that an edit session is one undo step
 	undoSes   int
+	tt2       trackState2
 	tt        trackState  // the settings of the track tools
 	scopeRow  bool        // the timing tools act on the row under the cursor only, not on every pad
 	undo      []undoEntry // the project before each change, newest last
@@ -315,9 +316,10 @@ func (a *App) pageKey(fwd bool) {
 		a.bank = (a.bank + 10 + d) % 10
 	case Files:
 		a.fcur = max(0, min(a.fcur+d*20, len(a.entries)-1))
-	case Slice:
+	case Slice: // L1 and R1 jump a quarter of the view (zoom is Y+Up/Down)
 		if a.sl != nil {
-			a.zoom = max(0, min(a.zoom+d, 8))
+			from, to := a.view()
+			a.at = max(0, min(a.at+d*max((to-from)/4, 1), a.sl.Frames-1))
 		}
 	case Seq:
 		a.step = max(0, min(a.step+d*16, a.steps()-1))

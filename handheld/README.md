@@ -256,3 +256,21 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
   **gate** (25-200% of a step; over 100% it ties on) and **decay** (the velocity lost on each hit of a bar, 0-40%).
   **Shape (gate, decay)...** applies gate (also "to the next note") and decay to the notes the track already has. **Euclid** has decay too;
   **Echo** already had both.
+
+## Thirteenth round: more track tools, the slicer cursor
+
+- **The track menu is in groups**: *WRITE NOTES* (Fill, Euclid, Evolve), *CHANGE THE NOTES* (Ratchet, Accents and ghosts, Echo, Chance,
+  Randomize velocity, Shape, Cycle, Nudge, Invert) and *TRACKS* (Dispatch, Copy, Clear, Add a track).
+- **Ratchet (sub-steps)**: a note becomes the parts of its step, as the unit's SUBSTEP lays them out: the step divided into 2, 3 or
+  4 parts, each part a note as long as the part (60, 40 or 30 ticks). Which notes (every note, every 2nd to 4th, the last of each bar,
+  25 / 50 / 75% at random), which parts play (all, skip the first, skip the last, every other) and a velocity ramp (flat, louder,
+  quieter, accent the first). The grid draws every note where it starts inside its step, so a split step shows its parts.
+- **Evolve over the bars**: bar 1 stays; each later bar is a mutation of the one before: change 10-60% a bar by moving a note a step,
+  dropping it or adding one (or only one of those, or only velocities); optionally back to bar 1 every 2, 3 or 4 bars; for this track or
+  every track with notes. The same seed gives the same bars.
+- **Accents and ghosts** (for hi-hats): accent the beats, the ands, every 2nd-4th note or the first of each bar, set the others to a fixed
+  velocity, and add soft ghost notes on empty steps (before or after each hit, off-beat 16ths, every empty step) with a velocity and a chance.
+- **Nudge**: push (-) or pull (+) the whole track by -40 to +40 ticks: the late snare, the groove. (Swing and humanize were already
+  under TIMING, with per-track scope; the groove templates of the template list carry swing and nudge per voice.)
+- **Slicer cursor**: a held Left or Right moves 2, then 8 (after half a second), 32 (a second) and 128 pixels at a press (the pad
+  sends the press again and again; hold time is counted). **L1/R1 jump a quarter of the view**; zoom is Y+Up/Down.

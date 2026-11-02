@@ -52,6 +52,20 @@ func (a *App) sliceAt(frame int) int {
 	return -1
 }
 
+// cursorPixels is how many pixels of the waveform the cursor moves at a press of a key held for repeat units of 160 ms:
+// 2 at first, 8 after half a second, 32 after a second, 128 after a second and a half.
+func cursorPixels(repeat int) int {
+	switch {
+	case repeat >= 10:
+		return 128
+	case repeat >= 6:
+		return 32
+	case repeat >= 3:
+		return 8
+	}
+	return 2
+}
+
 func (a *App) sliceKey(k Key, repeat int) {
 	if a.sl == nil {
 		a.go_(Pads)
@@ -62,7 +76,7 @@ func (a *App) sliceKey(k Key, repeat int) {
 	col := max((to-from)/waveCols, 1)
 	switch k {
 	case Left, Right:
-		step := col * 2 * (1 + repeat/2)
+		step := col * cursorPixels(repeat) // a held key runs from fine to far: 2, 8, 32, then 128 pixels at a press
 		if k == Left {
 			step = -step
 		}
