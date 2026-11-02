@@ -35,6 +35,9 @@ func (a *App) Render() *image.RGBA {
 	if a.picker != nil {
 		a.drawPicker(c)
 	}
+	if a.kb != nil {
+		a.drawKeyboard(c)
+	}
 	a.drawPanel(c)
 	a.footer(c)
 	if a.menu != nil {
@@ -174,7 +177,19 @@ func (a *App) waveform(c *canvas, id, from, to, x, y, w, h int, col color.RGBA) 
 // ---- FILES
 
 func (a *App) drawFiles(c *canvas) {
-	c.text(margin, 38, short2(a.dir, 48), cDim, false)
+	head := short2(a.dir, 48)
+	if a.isFavourite(a.dir) {
+		head = "* " + short2(a.dir, 46)
+	}
+	col := cDim
+	if a.searchQ != "" {
+		head = fmt.Sprintf("search %q in %s", a.searchQ, short2(a.dir, 26))
+		if a.searchCut {
+			head += " (cut short)"
+		}
+		col = cAmber
+	}
+	c.text(margin, 38, fit(head, 56), col, a.searchQ != "")
 	const rows = 21
 	top := max(0, min(a.fcur-rows/2, len(a.entries)-rows))
 	if len(a.entries) == 0 {
@@ -193,6 +208,9 @@ func (a *App) drawFiles(c *canvas) {
 			c.rect(margin-4, y-1, 3, 17, cAmber)
 		}
 		name := fit(e.name, 50)
+		if a.searchQ != "" { // a result is a path below the folder: its end says which file
+			name = short2(e.name, 50)
+		}
 		col := cText
 		if e.dir {
 			name = fit(e.name, 49) + "/"

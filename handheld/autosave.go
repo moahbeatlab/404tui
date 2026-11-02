@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,16 +31,14 @@ type autosave struct {
 	pending  string // a message for the screen, when a run has finished
 }
 
-func (a *App) autosaveRoot() string { return filepath.Join(a.OutDir, "autosave") }
+func (a *App) autosaveRoot() string { return filepath.Join(a.dataDir(), "autosave") }
 
 // loadAutosaveSetting reads the interval the user chose last time (3 minutes at first).
 func (a *App) loadAutosaveSetting() {
 	a.as.lastRun = time.Now() // the first run is an interval after the start
 	a.as.every = 3 * time.Minute
-	if b, err := os.ReadFile(filepath.Join(a.autosaveRoot(), "interval.txt")); err == nil {
-		if m, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil && m >= 0 && m <= 60 {
-			a.as.every = time.Duration(m) * time.Minute
-		}
+	if m := a.set.AutosaveMin; m != nil && *m >= 0 && *m <= 60 {
+		a.as.every = time.Duration(*m) * time.Minute
 	}
 }
 
@@ -58,8 +55,8 @@ func (a *App) setAutosave(dir int) {
 	a.as.mu.Lock()
 	a.as.every = time.Duration(m) * time.Minute
 	a.as.mu.Unlock()
-	os.MkdirAll(a.autosaveRoot(), 0o755)
-	os.WriteFile(filepath.Join(a.autosaveRoot(), "interval.txt"), []byte(strconv.Itoa(m)+"\n"), 0o644)
+	a.set.AutosaveMin = &m
+	a.saveSettings()
 	a.autosaveLog(fmt.Sprintf("autosave %s", a.autosaveSetting()))
 	a.changed = true // the next run is due at the new interval
 }
@@ -73,14 +70,18 @@ func (a *App) autosaveSetting() string {
 
 // autosaveLog puts a line in the log shown on the SAVE screen (and in logs.log).
 func (a *App) autosaveLog(s string) {
-	line := fmt.Sprintf("%s  %s", a.clock().Format("15:04:05"), s)
 	a.as.mu.Lock()
-	a.as.history = append(a.as.history, line)
+	a.appendLog(s)
+	a.as.mu.Unlock()
+	log.Println("autosave:", s)
+}
+
+// appendLog adds a line to the history; the caller holds the lock.
+func (a *App) appendLog(s string) {
+	a.as.history = append(a.as.history, fmt.Sprintf("%s  %s", a.clock().Format("15:04:05"), s))
 	if len(a.as.history) > 30 {
 		a.as.history = a.as.history[len(a.as.history)-30:]
 	}
-	a.as.mu.Unlock()
-	log.Println("autosave:", s)
 }
 
 // autosaveTick starts a run when one is due and says when one has finished. Run from Tick, on the main goroutine.
@@ -143,20 +144,21 @@ func (a *App) startAutosave() {
 		if a.Now != nil {
 			took = a.Now().Sub(started)
 		}
+		// the log line goes in before the run counts as finished, so whoever waits for it finds the line
 		as.mu.Lock()
-		as.busy = false
+		var line string
 		if err != nil {
 			as.pending = "autosave failed: " + err.Error()
+			line = "failed: " + err.Error()
 		} else {
 			as.lastDone = a.clock()
 			as.pending = fmt.Sprintf("autosaved: %d of %d files", wrote, total)
+			line = fmt.Sprintf("saved %d of %d files to %s in %.1f s", wrote, total, filepath.Base(dir), took.Seconds())
 		}
+		a.appendLog(line)
+		as.busy = false
 		as.mu.Unlock()
-		if err != nil {
-			a.autosaveLog("failed: " + err.Error())
-		} else {
-			a.autosaveLog(fmt.Sprintf("saved %d of %d files to %s in %.1f s", wrote, total, filepath.Base(dir), took.Seconds()))
-		}
+		log.Println("autosave:", line)
 	}()
 }
 

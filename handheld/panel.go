@@ -3,6 +3,7 @@ package handheld
 import (
 	"fmt"
 	"image/color"
+	"path/filepath"
 )
 
 // The right of the screen is a panel that is always there, as on the M8: where you are among the screens, the tempo,
@@ -35,12 +36,23 @@ func (a *App) hints() (plain, shift []hint) {
 		return []hint{{"A", "menu"}, {"X", "play"}, {"B", "stop"}, {"^v<>", "move"}, {"L1 R1", "bank"}, {"R2", "arp marked"}},
 			[]hint{screen, {"Y+A", "mark pad"}, {"Y+^v", "bank"}, {"Y+B", "clear pad"}}
 	case Files:
+		if a.kb != nil {
+			return []hint{{"^v<>", "move"}, {"A", "type it"}, {"B", "delete"}, {"X", "done"}}, []hint{{"Y+B", "clear all"}}
+		}
 		pick := hint{"A", "to pad " + a.label(a.padN())}
 		if e, ok := a.current(); ok && e.project {
 			pick = hint{"A", "load project"}
 		}
-		return []hint{pick, {"X", "listen"}, {"^v", "browse"}, {">", "open"}, {"<", "up"}, {"L1 R1", "page"}, {"B", "pads"}},
-			[]hint{screen, {"Y+X", "places"}}
+		listen := hint{"X", "listen"}
+		if a.seqOn && a.padInPattern(a.padN()) {
+			listen = hint{"X", "in pattern"}
+		}
+		up := hint{"<", "up"}
+		if a.searchQ != "" {
+			up = hint{"<", "end search"}
+		}
+		return []hint{pick, listen, {"^v", "browse"}, {">", "open"}, up, {"L1 R1", "page"}, {"B", "pads"}},
+			[]hint{screen, {"Y+X", "places"}, {"Y+A", "search"}, {"Y+B", "favourite"}}
 	case Slice:
 		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play slice"}, {"R2", "play order"}, {"<>", "move"}, {"^v", "marker"}, {"L1 R1", "zoom"}},
 			[]hint{screen, {"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+B", "slice menu"}}
@@ -186,19 +198,22 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 		e, ok := a.current()
 		if !ok || e.dir {
 			if ok && e.project {
-				c.text(x, y0+40, "a project folder", cGood, false)
-				c.text(x, y0+58, "A loads it", cDim, false)
+				c.text(x, y0+36, "a project folder", cGood, false)
+				c.text(x, y0+54, "A loads it", cDim, false)
 			}
 			return
 		}
-		c.text(x, y0+40, fit(e.name, w/CellW), cText, true)
+		c.text(x, y0+34, fit(filepath.Base(e.name), w/CellW), cText, true)
 		if id, err := a.decode(e); err == nil {
 			s, _ := a.lab.Sample(id)
-			c.text(x, y0+58, fmt.Sprintf("%.2f s", float64(s.Frames())/48000), cDim, false)
-			c.rect(x, y0+78, w, 44, cPanel2)
-			a.waveform(c, id, 0, s.Frames(), x+1, y0+78, w-2, 44, cText)
+			c.text(x, y0+52, fmt.Sprintf("%.2f s", float64(s.Frames())/48000), cDim, false)
+			if _, in := a.aud[a.padN()]; in {
+				c.text(x+textW("00.00 s  "), y0+52, "in pattern", cGood, true)
+			}
+			c.rect(x, y0+70, w, 32, cPanel2)
+			a.waveform(c, id, 0, s.Frames(), x+1, y0+70, w-2, 32, cText)
 		} else {
-			c.text(x, y0+58, fit(err.Error(), w/CellW), cBad, false)
+			c.text(x, y0+52, fit(err.Error(), w/CellW), cBad, false)
 		}
 	case Slice:
 		if a.sl == nil {

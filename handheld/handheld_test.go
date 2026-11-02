@@ -327,18 +327,14 @@ func TestBrowseTheWholeFilesystem(t *testing.T) {
 	if len(a.entries) == 0 {
 		t.Fatal("/ lists nothing")
 	}
-	// Y+X goes to the samples folder first, then through the places that exist
+	// Y+X is the places menu: the samples folder is one of them
 	keys(t, a, "Y+X")
-	if !strings.HasPrefix(a.dir, "/") || a.dir == "" {
-		t.Fatalf("a place was not a folder: %q", a.dir)
+	if a.menu == nil || !strings.Contains(a.menu.title, "places") {
+		t.Fatal("Y+X opens the places and favourites")
 	}
-	seen := map[string]bool{}
-	for i := 0; i < 8; i++ {
-		seen[a.dir] = true
-		keys(t, a, "Y+X")
-	}
-	if !seen[a.Root] {
-		t.Fatal("the places must include the samples folder")
+	chooseMenu(t, a, "samples")
+	if a.dir != a.Root {
+		t.Fatalf("the samples place goes to the samples folder: %q", a.dir)
 	}
 	// the cursor returns to the folder we came from
 	a.dir = filepath.Join(a.Root, "drums")
@@ -907,7 +903,7 @@ func TestAutosaveWritesOnlyWhatChanged(t *testing.T) {
 	now = now.Add(4 * time.Minute)
 	a.Tick()
 	waitAutosave(t, a)
-	dir := filepath.Join(a.OutDir, "autosave", "PROJECT_01")
+	dir := filepath.Join(a.autosaveRoot(), "PROJECT_01")
 	if _, err := os.Stat(filepath.Join(dir, "PADCONF.BIN")); err != nil {
 		t.Fatalf("no autosave: %v (%s)", err, lastLog(a))
 	}
@@ -948,9 +944,14 @@ func TestAutosaveWritesOnlyWhatChanged(t *testing.T) {
 	// the interval is chosen on SAVE and remembered
 	a.go_(Save)
 	keys(t, a, "U")
-	b, err := os.ReadFile(filepath.Join(a.autosaveRoot(), "interval.txt"))
-	if err != nil || strings.TrimSpace(string(b)) != "5" || a.as.every != 5*time.Minute {
-		t.Fatalf("interval file %q (%v), every %v", b, err, a.as.every)
+	if a.set.AutosaveMin == nil || *a.set.AutosaveMin != 5 || a.as.every != 5*time.Minute {
+		t.Fatalf("every %v, settings %v", a.as.every, a.set.AutosaveMin)
+	}
+	if raw, err := os.ReadFile(a.settingsPath()); err != nil || !strings.Contains(string(raw), `"autosave_min": 5`) {
+		t.Fatalf("the interval is in settings.json beside the card folder: %q (%v)", raw, err)
+	}
+	if strings.HasPrefix(a.settingsPath(), a.OutDir+string(filepath.Separator)) || strings.HasPrefix(a.autosaveRoot(), a.OutDir+string(filepath.Separator)) {
+		t.Fatal("settings and autosaves must stay out of the card folder")
 	}
 	keys(t, a, "D D D D") // 5 -> 3 -> 2 -> 1 -> off
 	if a.as.every != 0 || a.autosaveSetting() != "off" {
@@ -1240,4 +1241,191 @@ func TestMarkPadsAndLiveArp(t *testing.T) {
 	if len(a.marks) != 0 {
 		t.Fatal("L2 clears the marks")
 	}
+}
+
+func TestFileBrowserRemembersWhereYouWere(t *testing.T) {
+	a, _ := newApp(t)
+	a.go_(Pads)
+	keys(t, a, "A A D R D") // pick a sample: into FILES, bass, drums, ... open drums
+	if filepath.Base(a.dir) != "drums" {
+		t.Fatalf("in %s", a.dir)
+	}
+	keys(t, a, "D D")
+	cursor, dir := a.fcur, a.dir
+	keys(t, a, "A") // assigned: back on the pads
+	if a.scr != Pads {
+		t.Fatal("assigned")
+	}
+	a.cur = 3
+	keys(t, a, "A A")
+	if a.dir != dir || a.fcur != cursor {
+		t.Fatalf("the browser comes back to %s item %d, not %s item %d", dir, cursor, a.dir, a.fcur)
+	}
+	// leaving a folder and coming back puts the cursor where it was
+	keys(t, a, "L")
+	keys(t, a, "R") // the folder under the cursor is drums again
+	if a.fcur != cursor {
+		t.Fatalf("drums again: cursor %d, was %d", a.fcur, cursor)
+	}
+	// the folder is kept for the next start
+	b := New(a.Root, a.OutDir, nil)
+	if b.dir != dir {
+		t.Fatalf("the next start is in %s, not %s", b.dir, dir)
+	}
+}
+
+func TestPreviewDoesNotCutThePatternAndAuditionsInIt(t *testing.T) {
+	a, au := newApp(t)
+	keys(t, a, kit) // kick, snare, hat on A1..A3
+	a.go_(Seq)
+	a.setRow(0, rowPresets[0].mask) // the kick on every beat
+	keys(t, a, "X")
+	if !a.seqOn || au.Loops != 1 {
+		t.Fatalf("the pattern plays: on %v loops %d", a.seqOn, au.Loops)
+	}
+	// a file for pad A1, listened to while the pattern plays
+	a.cur, a.bank = 0, 0
+	a.go_(Files)
+	a.dir = filepath.Join(a.Root, "drums")
+	a.list()
+	for i, e := range a.entries {
+		if strings.HasPrefix(e.name, "snare") {
+			a.fcur = i
+		}
+	}
+	au.Loops = 0
+	keys(t, a, "X")
+	if !a.seqOn {
+		t.Fatal("listening must not stop the pattern")
+	}
+	if _, in := a.aud[0]; !in || au.Loops == 0 {
+		t.Fatalf("A1 has notes, so the file is heard in the pattern in its place: aud %v, loops %d", a.aud, au.Loops)
+	}
+	// a pad without notes in the pattern: the file plays over the loop
+	a.aud = nil
+	a.cur = 9
+	au.Previewed = 0
+	keys(t, a, "X")
+	if au.Previewed != 1 || !a.seqOn {
+		t.Fatalf("a preview over the loop: %d previews, pattern on %v", au.Previewed, a.seqOn)
+	}
+	// assigning on A1 keeps the pattern going, with the new sample
+	a.cur = 0
+	keys(t, a, "X")
+	before := a.info.Pads[0].Name
+	au.Loops = 0
+	keys(t, a, "A")
+	if !a.seqOn || au.Loops == 0 {
+		t.Fatalf("the pattern goes on with the new sample: on %v loops %d", a.seqOn, au.Loops)
+	}
+	if a.info.Pads[0].Name == before || a.aud != nil {
+		t.Fatalf("the sample changed (%q -> %q) and the audition is over: %v", before, a.info.Pads[0].Name, a.aud)
+	}
+	// B on the pads stops everything
+	keys(t, a, "B")
+	if a.seqOn {
+		t.Fatal("B stops the pattern")
+	}
+}
+
+func TestSearchFavouritesAndMemory(t *testing.T) {
+	a, _ := newApp(t)
+	a.go_(Files)
+	a.cd(a.Root)
+	// search: kick_808.wav is in drums/
+	keys(t, a, "Y+A")
+	if a.kb == nil {
+		t.Fatal("Y+A opens the on-screen keyboard")
+	}
+	for _, ch := range "kick" {
+		typeOn(t, a, byte(ch))
+	}
+	if a.searchQ != "kick" || len(a.entries) != 1 || !strings.Contains(a.entries[0].name, "kick") {
+		t.Fatalf("search %q: %v", a.searchQ, a.entries)
+	}
+	a.Render()
+	keys(t, a, "B B") // delete two letters: "ki" matches more files? at least the kick
+	if a.searchQ != "ki" {
+		t.Fatalf("B deletes a letter: %q", a.searchQ)
+	}
+	keys(t, a, "X") // done
+	if a.kb != nil || len(a.entries) == 0 {
+		t.Fatal("X closes the keyboard and keeps the results")
+	}
+	keys(t, a, "A") // a result goes to the pad
+	if !a.info.Pads[a.padN()].File || !strings.HasPrefix(a.info.Pads[a.padN()].Name, "kick") {
+		t.Fatalf("assigned %q (a result is a path: the pad gets the file's name)", a.info.Pads[a.padN()].Name)
+	}
+	a.go_(Files)
+	keys(t, a, "L") // ends the search
+	if a.searchQ != "" || a.dir != a.Root {
+		t.Fatalf("Left ends the search and stays in the folder: %q %q", a.searchQ, a.dir)
+	}
+	// favourites
+	drums := filepath.Join(a.Root, "drums")
+	a.cd(drums)
+	keys(t, a, "Y+B")
+	if !a.isFavourite(drums) {
+		t.Fatal("Y+B makes the folder a favourite")
+	}
+	a.cd(a.Root)
+	keys(t, a, "Y+X")
+	chooseMenuContaining(t, a, "drums") // the label is the end of the path
+	if a.dir != drums {
+		t.Fatalf("the favourite is in the places menu: in %s", a.dir)
+	}
+	b := New(a.Root, a.OutDir, nil)
+	if !b.isFavourite(drums) {
+		t.Fatal("favourites are kept")
+	}
+	// browsing many files does not keep them all decoded
+	wav, _ := os.ReadFile(filepath.Join(drums, "kick_808.wav"))
+	big := filepath.Join(a.Root, "many")
+	os.MkdirAll(big, 0o755)
+	for i := 0; i < 20; i++ {
+		os.WriteFile(filepath.Join(big, fmt.Sprintf("s%02d.wav", i)), wav, 0o644)
+	}
+	a.cd(big)
+	for i := range a.entries {
+		a.fcur = i
+		a.Render()
+	}
+	if len(a.prev) > 8 {
+		t.Fatalf("%d files kept decoded, the limit is 8", len(a.prev))
+	}
+}
+
+// typeOn moves the cursor of the on-screen keyboard to a character and types it.
+func typeOn(t *testing.T, a *App, ch byte) {
+	t.Helper()
+	for r, row := range kbRows {
+		for c := 0; c < len(row); c++ {
+			if row[c] != ch {
+				continue
+			}
+			for a.kb.r != r {
+				keys(t, a, "D")
+			}
+			for a.kb.c != c {
+				keys(t, a, "R")
+			}
+			keys(t, a, "A")
+			return
+		}
+	}
+	t.Fatalf("no key %q", ch)
+}
+
+// chooseMenuContaining is chooseMenu for an item with the text somewhere in its label.
+func chooseMenuContaining(t *testing.T, a *App, text string) {
+	t.Helper()
+	for i := 0; i < len(a.menu.items); i++ {
+		it := a.menu.item()
+		if !it.header && strings.Contains(it.label, text) {
+			keys(t, a, "A")
+			return
+		}
+		keys(t, a, "D")
+	}
+	t.Fatalf("no menu item with %q", text)
 }

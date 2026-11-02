@@ -177,3 +177,18 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
   (held: faster), Up/Down the pad, **L1/R1 turn the bar** to the left and right, and the cursor turns it by itself at a bar line.
   `bar 2/4` at the top right, with a marker for the bar that plays. Y+X gives the row the next pad that has a sample; the menu's
   *Pad of this row* any pad. Marked pads (Y+A on PADS) are the rows.
+
+## Files and samples (ninth round)
+
+- **The browser keeps its place**: the folder and the cursor in it come back after assigning a file, the cursor of every folder is
+  remembered while the app runs, and the last folder is the start folder of the next run (settings.json, beside the card folder,
+  not in it; the autosaves moved there too).
+- **Listening while the pattern plays**: the audio has a second voice for previews, so a preview no longer stops the loop (it
+  did before, and the panel still said PLAY). With the pattern looping, **X on a file plays it *in the pattern*, in place of the
+  target pad's sample** (the pad's notes play the file; X on another file tries that one); A keeps it, and the loop goes on with
+  the new sample. A target pad with no notes in the pattern gets a plain preview over the loop. B on PADS stops everything.
+- **Search (Y+A)**: an on-screen keyboard (arrows, A types, B deletes, X done, Y+B clears); the list is filtered live to the audio
+  files in this folder *and below* whose path has all the words. `<` ends the search. A search gives up after 1.5 s or 400 hits and says so.
+- **Favourites and places (Y+X)**: a menu of the places (samples, usb drive, games card, the top) and the favourite folders (go there
+  or remove), with *Add this folder*. Y+B toggles the folder as a favourite at once; a favourite shows a `*` in the path.
+- **Memory**: only the last 8 files looked at are kept decoded (browsing a big folder used to keep every file in memory).

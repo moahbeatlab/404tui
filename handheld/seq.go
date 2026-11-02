@@ -376,6 +376,9 @@ func (a *App) render() (formats.Sample, bool) {
 	mix := make([]int32, n*2)
 	for _, nt := range d.Notes {
 		id, ok := a.padSample(nt.Pad)
+		if over, auditioned := a.aud[nt.Pad]; auditioned { // a file heard in place of the pad's sample
+			id, ok = over, true
+		}
 		if !ok {
 			continue
 		}

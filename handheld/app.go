@@ -111,24 +111,31 @@ type App struct {
 	sel        int // slice under the cursor
 	playing    int // pad lit by X, -1 for none
 
-	menu     *menu
-	picker   *picker // the pattern picker, when it is open
-	splash   *splash // the logo and dashboard at the start
-	as       autosave
-	arp      arpState // the settings of the sample arp, kept between visits
-	arpp     arpPrint // and of the pattern arp
-	marks    []int    // the pads marked as keys of the arp, in the order they were marked
-	arpOn    bool     // the live arp is looping
-	changed  bool     // something was edited since the last autosave run
-	carry    *carry   // a pad being moved or copied
-	pat      int      // pattern in the sequencer, 1..160
-	step     int      // the cursor's step, 16 to a bar
-	row      int      // the cursor's row in the step grid: an index into rows
-	rows     [16]int  // the pad of each row
-	rowsSet  bool     // the rows were chosen (by default or by the user)
-	rowsOwn  bool     // the user changed a row: they stay when the pattern changes
-	seqOn    bool     // the pattern is playing
-	seqStart time.Time
+	menu      *menu
+	picker    *picker // the pattern picker, when it is open
+	splash    *splash // the logo and dashboard at the start
+	as        autosave
+	set       settings
+	dcur      map[string]int // the cursor in each folder of the file browser, for the next visit
+	searchQ   string         // the search in the file browser, "" for none
+	searchCut bool           // the search gave up before the end
+	kb        *keyboard      // the on-screen keyboard of the search, when open
+	aud       map[int]int    // pads whose sample is being auditioned in the pattern: pad -> handle
+	prevOrder []string       // the files decoded for the browser, oldest first
+	arp       arpState       // the settings of the sample arp, kept between visits
+	arpp      arpPrint       // and of the pattern arp
+	marks     []int          // the pads marked as keys of the arp, in the order they were marked
+	arpOn     bool           // the live arp is looping
+	changed   bool           // something was edited since the last autosave run
+	carry     *carry         // a pad being moved or copied
+	pat       int            // pattern in the sequencer, 1..160
+	step      int            // the cursor's step, 16 to a bar
+	row       int            // the cursor's row in the step grid: an index into rows
+	rows      [16]int        // the pad of each row
+	rowsSet   bool           // the rows were chosen (by default or by the user)
+	rowsOwn   bool           // the user changed a row: they stay when the pattern changes
+	seqOn     bool           // the pattern is playing
+	seqStart  time.Time
 	// Now is the clock; nil is the real one. A test sets it.
 	Now func() time.Time
 
@@ -149,10 +156,16 @@ type App struct {
 
 // New starts an app on a folder of samples, with an empty project.
 func New(root, outDir string, a Audio) *App {
-	app := &App{pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, playing: -1, slot: 1}
+	app := &App{pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, dcur: map[string]int{}, playing: -1, slot: 1}
 	app.lab.NewProject("PROJECT_01")
 	app.dir = root
+	app.loadSettings()
 	app.loadAutosaveSetting()
+	if d := app.set.LastDir; d != "" { // back in the folder the browser was in
+		if st, err := os.Stat(d); err == nil && st.IsDir() {
+			app.dir = d
+		}
+	}
 	app.refresh()
 	app.list()
 	app.changed = false
@@ -197,6 +210,10 @@ func (a *App) refresh() {
 
 func (a *App) list() {
 	a.entries = nil
+	if a.searchQ != "" {
+		a.searchList()
+		return
+	}
 	des, err := os.ReadDir(a.dir)
 	if err != nil {
 		a.say(err.Error(), true)
@@ -224,7 +241,7 @@ func (a *App) list() {
 		}
 		return strings.ToLower(a.entries[i].name) < strings.ToLower(a.entries[j].name)
 	})
-	a.fcur = 0
+	a.fcur = min(a.dcur[a.dir], max(len(a.entries)-1, 0))
 }
 
 func (a *App) padN() int { return a.bank*16 + a.cur }
@@ -341,6 +358,12 @@ func (a *App) Press(k Key, repeat int) {
 		a.help = false
 		return
 	}
+	if a.kb != nil {
+		if k != Y {
+			a.kbKey(k)
+		}
+		return
+	}
 	if a.picker != nil {
 		if k != Y {
 			a.pickerKey(k)
@@ -403,8 +426,13 @@ func (a *App) shifted(k Key) {
 	}
 	switch a.scr {
 	case Files:
-		if k == X {
-			a.nextPlace()
+		switch k {
+		case X:
+			a.placesMenu()
+		case A:
+			a.openSearch()
+		case B:
+			a.toggleFavourite(a.dir)
 		}
 	case Seq:
 		a.seqShifted(k)
@@ -444,6 +472,10 @@ func (a *App) shifted(k Key) {
 func (a *App) go_(s Screen) {
 	if a.arpOn && s != Pads {
 		a.stop()
+	}
+	if a.aud != nil && s != Files {
+		a.aud = nil
+		a.replay()
 	}
 	a.scr = s
 	if s == Slice && (a.sl == nil || a.spad != a.padN()) {
@@ -495,11 +527,38 @@ func (a *App) stop() {
 	}
 	a.playing = -1
 	a.arpOn = false
+	a.seqOn = false
+}
+
+// previewer is an audio output that can play a short sound over a loop without stopping it.
+type previewer interface {
+	Preview(formats.Sample) error
+	StopPreview()
+}
+
+// looping says whether a loop (the pattern or the arp) is playing.
+func (a *App) looping() bool { return a.seqOn || a.arpOn }
+
+// stopPreview stops a sound that was being auditioned: while a loop plays, only that sound.
+func (a *App) stopPreview() {
+	if a.looping() {
+		if pv, ok := a.Audio.(previewer); ok {
+			pv.StopPreview()
+		}
+		return
+	}
+	a.stop()
 }
 
 func (a *App) play(s formats.Sample) {
 	if a.Audio == nil {
 		a.say("no audio output", true)
+		return
+	}
+	if pv, ok := a.Audio.(previewer); ok && a.looping() { // over the loop, which goes on
+		if err := pv.Preview(s); err != nil {
+			a.say(err.Error(), true)
+		}
 		return
 	}
 	if err := a.Audio.Play(s); err != nil {
@@ -552,19 +611,21 @@ func (a *App) filesKey(k Key) {
 	case Left:
 		a.up()
 	case B:
-		a.stop()
+		a.stopPreview()
 		a.go_(Pads)
 	case Right:
 		a.openEntry()
 	case X:
-		if e, ok := a.current(); ok && !e.dir {
-			if id, err := a.decode(e); err == nil {
-				s, _ := a.lab.Sample(id)
-				a.play(s)
-			} else {
-				a.say(err.Error(), true)
-			}
+		e, ok := a.current()
+		if !ok || e.dir {
+			return
 		}
+		id, err := a.decode(e)
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		a.listen(e, id)
 	case A:
 		e, ok := a.current()
 		if !ok {
@@ -583,19 +644,53 @@ func (a *App) filesKey(k Key) {
 			a.say(err.Error(), true)
 			return
 		}
-		name := strings.TrimSuffix(e.name, filepath.Ext(e.name))
+		name := strings.TrimSuffix(filepath.Base(e.name), filepath.Ext(e.name))
 		n := a.padN()
 		if err := a.lab.Assign(n, id, name); err != nil {
 			a.say(err.Error(), true)
 			return
 		}
 		delete(a.pcm, n)
+		a.aud = nil
 		a.refresh()
-		a.stop()
+		a.stopPreview()
+		a.replay() // a pattern that plays goes on with the new sample
 		a.say(fmt.Sprintf("%s on %s", fit(name, 20), a.label(n)), false)
 		a.sl = nil
 		a.go_(Pads)
 	}
+}
+
+// listen plays the file. While the pattern loops and the target pad has notes in it, the file is heard in the pattern, in
+// place of the pad's sample (X on another file tries that one); otherwise it plays on its own, over the loop if there is one.
+func (a *App) listen(e entry, id int) {
+	s, err := a.lab.Sample(id)
+	if err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	pad := a.padN()
+	if a.seqOn && a.padInPattern(pad) {
+		a.aud = map[int]int{pad: id}
+		a.replay()
+		a.say(fmt.Sprintf("%s plays in the pattern as %s: A keeps it", fit(filepath.Base(e.name), 24), a.label(pad)), false)
+		return
+	}
+	a.play(s)
+}
+
+// padInPattern says whether the pattern in front has notes on the pad.
+func (a *App) padInPattern(pad int) bool {
+	d, ok := a.doc()
+	if !ok {
+		return false
+	}
+	for _, n := range d.Notes {
+		if n.Pad == pad {
+			return true
+		}
+	}
+	return false
 }
 
 // loadProject replaces the project in memory with a project folder. With unsaved work it asks first: A again.
@@ -629,49 +724,26 @@ func (a *App) loadProject(e entry) {
 	a.go_(Pads)
 }
 
-// up goes to the parent folder, with the cursor on the folder it came from. Anywhere on the card is reachable.
+// up goes to the parent folder, with the cursor on the folder it came from. Anywhere on the card is reachable. In a
+// search it ends the search first.
 func (a *App) up() {
+	if a.searchQ != "" {
+		a.searchQ = ""
+		a.list()
+		a.say("search ended", false)
+		return
+	}
 	if a.dir == "/" || a.dir == filepath.Dir(a.dir) {
 		a.say("this is the top", false)
 		return
 	}
 	from := filepath.Base(a.dir)
-	a.dir = filepath.Dir(a.dir)
-	a.list()
+	a.cd(filepath.Dir(a.dir))
 	for i, e := range a.entries {
 		if e.dir && e.name == from {
 			a.fcur = i
 		}
 	}
-}
-
-// places are where Y+X in FILES jumps to: the samples folder, the usb drive, the games card, the top.
-func (a *App) places() []string {
-	return []string{a.Root, "/mnt/usbdrive", "/roms", "/"}
-}
-
-func (a *App) nextPlace() {
-	ps := a.places()
-	next := ps[0]
-	for i, p := range ps {
-		if p == a.dir {
-			next = ps[(i+1)%len(ps)]
-		}
-	}
-	for tries := 0; tries < len(ps); tries++ {
-		if st, err := os.Stat(next); err == nil && st.IsDir() {
-			break
-		}
-		for i, p := range ps {
-			if p == next {
-				next = ps[(i+1)%len(ps)]
-				break
-			}
-		}
-	}
-	a.dir = next
-	a.list()
-	a.say("in "+next, false)
 }
 
 func (a *App) current() (entry, bool) {
@@ -683,8 +755,7 @@ func (a *App) current() (entry, bool) {
 
 func (a *App) openEntry() {
 	if e, ok := a.current(); ok && e.dir {
-		a.dir = filepath.Join(a.dir, e.name)
-		a.list()
+		a.cd(filepath.Join(a.dir, e.name))
 	}
 }
 
@@ -692,6 +763,12 @@ func (a *App) openEntry() {
 func (a *App) decode(e entry) (int, error) {
 	p := filepath.Join(a.dir, e.name)
 	if id, ok := a.prev[p]; ok {
+		for i, q := range a.prevOrder { // the most recently used goes last
+			if q == p {
+				a.prevOrder = append(append(a.prevOrder[:i:i], a.prevOrder[i+1:]...), p)
+				break
+			}
+		}
 		return id, nil
 	}
 	b, err := os.ReadFile(p)
@@ -705,7 +782,31 @@ func (a *App) decode(e entry) (int, error) {
 	var m lab.Meta
 	json.Unmarshal(mb, &m)
 	a.prev[p] = m.ID
+	a.prevOrder = append(a.prevOrder, p)
+	a.evictPreviews()
 	return m.ID, nil
+}
+
+// evictPreviews frees the files decoded longest ago, keeping 8: browsing a big folder must not fill the memory.
+func (a *App) evictPreviews() {
+	for len(a.prevOrder) > 8 {
+		old := a.prevOrder[0]
+		id := a.prev[old]
+		inUse := false
+		for _, v := range a.aud {
+			inUse = inUse || v == id
+		}
+		if inUse { // the one auditioned in the pattern stays; the next oldest goes
+			a.prevOrder = append(a.prevOrder[1:], old)
+			if len(a.prevOrder) <= 9 {
+				return
+			}
+			continue
+		}
+		a.prevOrder = a.prevOrder[1:]
+		a.lab.Free(id)
+		delete(a.prev, old)
+	}
 }
 
 // Save writes the project to OutDir/PROJECT_nn.

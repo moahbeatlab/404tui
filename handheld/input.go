@@ -41,12 +41,21 @@ func (a *App) Dispatch(e Event) {
 //	R*8               a key held down: pressed, then seven repeats
 //	@name             take a snapshot called name
 //	!splash !autosave the splash in front; an autosave run now
+//	/text             the search text of the file browser, typed at once
 func (a *App) Script(s string, snap func(name string)) error {
 	for _, w := range strings.Fields(s) {
 		if strings.HasPrefix(w, "@") {
 			if snap != nil {
 				snap(w[1:])
 			}
+			continue
+		}
+		if strings.HasPrefix(w, "/") && len(w) > 1 { // /kick: the text of a search, typed at once
+			if a.kb == nil {
+				a.openSearch()
+			}
+			a.searchQ = w[1:]
+			a.list()
 			continue
 		}
 		if w == "!splash" { // the splash, for a screenshot
