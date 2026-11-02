@@ -48,6 +48,9 @@ func (a *App) titleBar(c *canvas) {
 	c.rect(0, 28, W, 1, cLine)
 }
 
+// Version is the commit the program was built from, shown in the corner so it is always known which one runs.
+var Version string
+
 // footer is the message line; the keys are in the panel.
 func (a *App) footer(c *canvas) {
 	c.rect(0, panelBot, W, 1, cLine)
@@ -60,6 +63,9 @@ func (a *App) footer(c *canvas) {
 		c.text(margin, panelBot+8, fit(a.msg, (W-2*margin)/CellW), col, true)
 	}
 	c.text(margin, panelBot+28, "Y alone: all keys    Select+Start: quit", cDim, false)
+	if Version != "" {
+		c.text(W-margin-textW(Version), panelBot+28, Version, cDim, false)
+	}
 }
 
 func (a *App) drawHelp(c *canvas) {

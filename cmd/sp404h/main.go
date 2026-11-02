@@ -33,8 +33,14 @@ func main() {
 	web := flag.String("web", "", "serve the screen and buttons as a web page on this address, e.g. :8405")
 	silent := flag.Bool("silent", false, "no audio")
 	simulate := flag.Bool("sim", false, "the UNIT screen finds a simulated unit")
+	showVersion := flag.Bool("version", false, "print the version (the commit it was built from) and exit")
 	logPath := flag.String("log", "", "the log file (default: logs.log next to the program)")
 	flag.Parse()
+	handheld.Version = version()
+	if *showVersion {
+		fmt.Println("404h", version())
+		return
+	}
 
 	if *script == "" {
 		closeLog := openLog(*logPath)
@@ -153,15 +159,33 @@ func openLog(want string) (closeFn func()) {
 	return func() {}
 }
 
+// buildRev can be set when building: -ldflags "-X main.buildRev=abc1234" (for a build outside the git folder).
+var buildRev string
+
+// version is the commit the program was built from, with a + when the folder had changes that are not committed.
 func version() string {
+	if buildRev != "" {
+		return buildRev
+	}
+	rev, dirty := "", ""
 	if bi, ok := debug.ReadBuildInfo(); ok {
 		for _, s := range bi.Settings {
-			if s.Key == "vcs.revision" && len(s.Value) >= 7 {
-				return s.Value[:7]
+			switch s.Key {
+			case "vcs.revision":
+				if len(s.Value) >= 7 {
+					rev = s.Value[:7]
+				}
+			case "vcs.modified":
+				if s.Value == "true" {
+					dirty = "+"
+				}
 			}
 		}
 	}
-	return "dev"
+	if rev == "" {
+		return "unknown"
+	}
+	return rev + dirty
 }
 
 func fatal(err error) {

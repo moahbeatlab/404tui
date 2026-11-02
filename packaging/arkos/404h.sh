@@ -84,11 +84,12 @@ if [ "${H404_FB+set}" = set ]; then FBARGS=(); [ -n "$H404_FB" ] && FBARGS=(-fb 
 RUN="$DIR/sp404h-arm64"
 for d in /dev/shm /tmp; do
   if cp "$DIR/sp404h-arm64" "$d/404h-run.$$" 2>>"$LOG" && chmod 755 "$d/404h-run.$$"; then
-    "$d/404h-run.$$" -h >/dev/null 2>&1; rc=$?
+    "$d/404h-run.$$" -version >/dev/null 2>&1; rc=$?
     if [ $rc -ne 126 ] && [ $rc -ne 127 ]; then RUN="$d/404h-run.$$"; break; fi
     echo "launcher: $d does not run programs (status $rc)" >>"$LOG"; rm -f "$d/404h-run.$$"
   fi
 done
+echo "$(date '+%F %T') launcher: version $("$RUN" -version 2>&1)" >>"$LOG"
 echo "$(date '+%F %T') launcher: running $RUN, uptime $(cut -d' ' -f1 /proc/uptime) s, load $(cut -d' ' -f1-3 /proc/loadavg)" >>"$LOG"
 "$RUN" -log "$LOG" -samples "$SAMPLES" -out "$CARD" "${FBARGS[@]}" $H404_ARGS >/dev/null 2>"$DIR/stderr.log" &
 PID=$!
