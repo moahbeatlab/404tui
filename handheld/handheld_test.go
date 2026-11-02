@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/sim"
@@ -852,5 +853,137 @@ func TestRealProjectsBankTempo(t *testing.T) {
 	a.pat = 145
 	if a.tempo() != 90 {
 		t.Fatalf("bank J is 90: %v", a.tempo())
+	}
+}
+
+// waitAutosave waits for a background autosave to finish.
+func waitAutosave(t *testing.T, a *App) {
+	t.Helper()
+	for i := 0; i < 300; i++ {
+		a.as.mu.Lock()
+		busy := a.as.busy
+		a.as.mu.Unlock()
+		if !busy {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the autosave did not finish")
+}
+
+func lastLog(a *App) string {
+	a.as.mu.Lock()
+	defer a.as.mu.Unlock()
+	if len(a.as.history) == 0 {
+		return ""
+	}
+	return a.as.history[len(a.as.history)-1]
+}
+
+func TestAutosaveWritesOnlyWhatChanged(t *testing.T) {
+	a, _ := newApp(t)
+	now := time.Now()
+	a.Now = func() time.Time { return now }
+	a.as.lastRun = now
+	keys(t, a, kit)
+	a.Tick()
+	if lastLog(a) != "" {
+		t.Fatal("nothing is due before the interval")
+	}
+	now = now.Add(4 * time.Minute)
+	a.Tick()
+	waitAutosave(t, a)
+	dir := filepath.Join(a.OutDir, "autosave", "PROJECT_01")
+	if _, err := os.Stat(filepath.Join(dir, "PADCONF.BIN")); err != nil {
+		t.Fatalf("no autosave: %v (%s)", err, lastLog(a))
+	}
+	if smp, _ := filepath.Glob(filepath.Join(dir, "SMPL", "*.SMP")); len(smp) != 3 {
+		t.Fatalf("3 samples expected, %d", len(smp))
+	}
+	if !strings.Contains(lastLog(a), "saved ") || strings.Contains(lastLog(a), "failed") {
+		t.Fatalf("log: %q", lastLog(a))
+	}
+	t.Log(lastLog(a))
+	// the saved folder (not the autosave) is untouched
+	if _, err := os.Stat(filepath.Join(a.OutDir, cardFolder, "PROJECT_01")); err == nil {
+		t.Fatal("an autosave must not write where a save does")
+	}
+	// one pad cleared: PADCONF changes and one sample goes
+	a.go_(Pads)
+	keys(t, a, "Y+B")
+	now = now.Add(4 * time.Minute)
+	a.Tick()
+	waitAutosave(t, a)
+	if !strings.Contains(lastLog(a), "saved 2 of") {
+		t.Fatalf("only the changed files are written: %q", lastLog(a))
+	}
+	if smp, _ := filepath.Glob(filepath.Join(dir, "SMPL", "*.SMP")); len(smp) != 2 {
+		t.Fatalf("the cleared pad's sample should be gone: %d", len(smp))
+	}
+	// no change, no run
+	n := len(a.as.history)
+	a.as.mu.Lock()
+	a.changed = false
+	a.as.mu.Unlock()
+	now = now.Add(10 * time.Minute)
+	a.Tick()
+	waitAutosave(t, a)
+	if len(a.as.history) != n {
+		t.Fatal("an unchanged project is not saved again")
+	}
+	// the interval is chosen on SAVE and remembered
+	a.go_(Save)
+	keys(t, a, "U")
+	b, err := os.ReadFile(filepath.Join(a.autosaveRoot(), "interval.txt"))
+	if err != nil || strings.TrimSpace(string(b)) != "5" || a.as.every != 5*time.Minute {
+		t.Fatalf("interval file %q (%v), every %v", b, err, a.as.every)
+	}
+	keys(t, a, "D D D D") // 5 -> 3 -> 2 -> 1 -> off
+	if a.as.every != 0 || a.autosaveSetting() != "off" {
+		t.Fatalf("off: %v", a.as.every)
+	}
+	a.Render()
+	if a.autosaveAgo() != "autosave off" {
+		t.Fatal(a.autosaveAgo())
+	}
+	// a restart finds it and the splash offers it
+	c := New(a.Root, a.OutDir, nil)
+	c.ShowSplash(time.Second)
+	if c.splash == nil || c.splash.restore == "" {
+		t.Fatal("the splash should offer the autosave to an empty project")
+	}
+	c.Render()
+	c.Press(A, 0)
+	if c.splash != nil || padsWithSamples(c) != 2 {
+		t.Fatalf("A restores it: %d pads", padsWithSamples(c))
+	}
+	if c.saved {
+		t.Fatal("a restored autosave is not a save")
+	}
+}
+
+func TestSplashGoesAwayByItselfOrByAKey(t *testing.T) {
+	a, _ := newApp(t)
+	now := time.Now()
+	a.Now = func() time.Time { return now }
+	a.ShowSplash(2 * time.Second)
+	if a.splash == nil || a.splash.restore != "" {
+		t.Fatal("no autosave, so the splash only shows")
+	}
+	a.Render()
+	now = now.Add(1 * time.Second)
+	a.Tick()
+	if a.splash == nil {
+		t.Fatal("still showing")
+	}
+	now = now.Add(2 * time.Second)
+	a.Tick()
+	if a.splash != nil {
+		t.Fatal("it ends by itself")
+	}
+	a.ShowSplash(time.Minute)
+	keys(t, a, "D") // a key skips it and is not used otherwise
+	if a.splash != nil || a.cur != 0 {
+		t.Fatalf("a key only closes the splash (cursor %d)", a.cur)
 	}
 }

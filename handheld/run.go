@@ -76,6 +76,7 @@ func Run(a *App, fbPath, inputPath, webAddr string) error {
 			a.Tick()
 		}
 		if a.Quit {
+			a.FlushAutosave()
 			log.Println("quit")
 			return nil
 		}

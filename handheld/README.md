@@ -119,3 +119,14 @@ on hardware too. Patterns are always 4 bars (other lengths are a guess).
   *of the project*) changes the one that plays, and *Tempo select* switches between the two. Before, the app read only
   the project tempo word, which also holds the Tempo Select flag (it came out as a nonsense value that fell back to 120
   BPM) and which the unit ignores in bank mode.
+
+## Autosave and the splash (fifth round)
+
+- **Autosave**: every few minutes (off, 1, 2, 3, 5, 10 or 15; Up/Down on the SAVE screen, remembered) the project is written to
+  `<card>/autosave/PROJECT_nn`, never to where a save writes, and only when something changed. Only the files that differ
+  from the last autosave are written (checksums), in the background, so a 100 MB project does not stop the screen after the
+  first one; PADCONF.BIN goes last so a power cut leaves a project that opens. A quit writes a last one first. The SAVE
+  screen shows the interval and the last lines of the log (also in logs.log); the footer says how long ago it was.
+- **Splash** (about 2.5 s, any key skips it): the logo and a dashboard (project, samples folder, card, autosave, version). When an
+  autosave of an earlier session is there and nothing is open, it stays until a key: **A restores it**, any other key starts
+  empty. A restored project counts as not saved: SAVE writes it.

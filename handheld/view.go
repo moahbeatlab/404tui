@@ -13,6 +13,10 @@ import (
 // Render draws the frame for the state of the app.
 func (a *App) Render() *image.RGBA {
 	c := newCanvas()
+	if a.splash != nil {
+		a.drawSplash(c)
+		return c.img
+	}
 	a.titleBar(c)
 	switch a.scr {
 	case Pads:
@@ -66,7 +70,8 @@ func (a *App) footer(c *canvas) {
 		}
 		c.text(margin, panelBot+8, fit(a.msg, (W-2*margin)/CellW), col, true)
 	}
-	c.text(margin, panelBot+28, "Y alone: all keys    Select+Start: quit", cDim, false)
+	c.text(margin, panelBot+28, "Y alone: keys   Select+Start: quit", cDim, false)
+	c.text(margin+textW("Y alone: keys   Select+Start: quit")+24, panelBot+28, a.autosaveAgo(), cDim, false)
 	if Version != "" {
 		c.text(W-margin-textW(Version), panelBot+28, Version, cDim, false)
 	}
@@ -288,17 +293,44 @@ func (a *App) drawSave(c *canvas) {
 		c.text(margin+16, 214, "A  WRITE TO THE CARD", cBg, true)
 		c.text(margin, 262, "Left/Right changes the project number.", cDim, false)
 		c.text(margin, 280, "An existing folder with that number is replaced.", cDim, false)
+		a.drawAutosave(c)
 		return
 	}
 	c.text(margin, 196, "WRITTEN", cGood, true)
 	show := a.wrote
-	if len(show) > 9 {
-		show = append(append([]string{}, show[:8]...), fmt.Sprintf("... and %d more", len(a.wrote)-8))
+	if len(show) > 5 {
+		show = append(append([]string{}, show[:4]...), fmt.Sprintf("... and %d more", len(a.wrote)-4))
 	}
 	for i, n := range show {
 		c.text(margin, 220+i*17, "  "+n, cText, false)
 	}
-	c.text(margin, 372, "Put the card in the SP-404MKII.", cDim, false)
+	c.text(margin, 312, "Put the card in the SP-404MKII.", cDim, false)
+	a.drawAutosave(c)
+}
+
+// drawAutosave is the interval and the log of the autosave, at the foot of the SAVE screen.
+func (a *App) drawAutosave(c *canvas) {
+	c.rect(margin, 332, contentW-2*margin, 1, cLine)
+	c.text(margin, 340, "AUTOSAVE", cDim, false)
+	c.text(margin+textW("AUTOSAVE")+12, 340, a.autosaveSetting(), cAmber, true)
+	c.text(contentW-margin-textW("^v changes"), 340, "^v changes", cDim, false)
+	a.as.mu.Lock()
+	h := append([]string{}, a.as.history...)
+	a.as.mu.Unlock()
+	if len(h) == 0 {
+		c.text(margin, 362, "nothing yet: it saves when the project has changed", cDim, false)
+		return
+	}
+	if len(h) > 4 {
+		h = h[len(h)-4:]
+	}
+	for i, l := range h {
+		col := cText
+		if i == len(h)-1 {
+			col = cGood
+		}
+		c.text(margin, 362+i*17, fit(l, (contentW-2*margin)/CellW), col, false)
+	}
 }
 
 // Clock is for the playing-pad flash: a screen is a function of the state, not of the time, so tests are repeatable.

@@ -121,6 +121,7 @@ func main() {
 		}
 		return
 	}
+	app.ShowSplash(2500 * time.Millisecond)
 	log.Println("main: starting the screen and the keys")
 	if err := handheld.Run(app, *fbPath, *input, *web); err != nil {
 		fatal(err)

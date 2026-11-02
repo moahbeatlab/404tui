@@ -40,12 +40,33 @@ func (a *App) Dispatch(e Event) {
 //	Y+R               a chord: Y held, R pressed
 //	R*8               a key held down: pressed, then seven repeats
 //	@name             take a snapshot called name
+//	!splash !autosave the splash in front; an autosave run now
 func (a *App) Script(s string, snap func(name string)) error {
 	for _, w := range strings.Fields(s) {
 		if strings.HasPrefix(w, "@") {
 			if snap != nil {
 				snap(w[1:])
 			}
+			continue
+		}
+		if w == "!splash" { // the splash, for a screenshot
+			a.ShowSplash(time.Hour)
+			continue
+		}
+		if w == "!autosave" { // an autosave now, waited for
+			a.changed = true
+			a.as.lastRun = time.Time{}
+			a.autosaveTick()
+			for i := 0; i < 300; i++ {
+				a.as.mu.Lock()
+				busy := a.as.busy
+				a.as.mu.Unlock()
+				if !busy {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			a.autosaveTick() // the message of the run that finished
 			continue
 		}
 		if w == "~" { // wait for the transfer

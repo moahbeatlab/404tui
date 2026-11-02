@@ -113,14 +113,17 @@ type App struct {
 
 	menu     *menu
 	picker   *picker // the pattern picker, when it is open
-	carry    *carry  // a pad being moved or copied
-	pat      int     // pattern in the sequencer, 1..160
-	step     int     // the cursor's step, 16 to a bar
-	col      int     // the cursor's column in the tracker, 0..7
-	cols     [8]int  // the pad of each column
-	colsSet  bool    // the columns were chosen (by default or by the user)
-	colsOwn  bool    // the user changed a column: they stay when the pattern changes
-	seqOn    bool    // the pattern is playing
+	splash   *splash // the logo and dashboard at the start
+	as       autosave
+	changed  bool   // something was edited since the last autosave run
+	carry    *carry // a pad being moved or copied
+	pat      int    // pattern in the sequencer, 1..160
+	step     int    // the cursor's step, 16 to a bar
+	col      int    // the cursor's column in the tracker, 0..7
+	cols     [8]int // the pad of each column
+	colsSet  bool   // the columns were chosen (by default or by the user)
+	colsOwn  bool   // the user changed a column: they stay when the pattern changes
+	seqOn    bool   // the pattern is playing
 	seqStart time.Time
 	// Now is the clock; nil is the real one. A test sets it.
 	Now func() time.Time
@@ -145,8 +148,10 @@ func New(root, outDir string, a Audio) *App {
 	app := &App{pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, playing: -1, slot: 1}
 	app.lab.NewProject("PROJECT_01")
 	app.dir = root
+	app.loadAutosaveSetting()
 	app.refresh()
 	app.list()
+	app.changed = false
 	return app
 }
 
@@ -178,6 +183,7 @@ func (a *App) OpenProject(dir string) error {
 
 func (a *App) refresh() {
 	a.saved = false
+	a.changed = true
 	b, err := a.lab.Info()
 	if err == nil {
 		a.info = lab.Info{}
@@ -298,6 +304,12 @@ func (a *App) hasWork() bool {
 // Press handles one key going down. repeat counts the repeats of a held key (0 for the first press), which
 // make a cursor move faster.
 func (a *App) Press(k Key, repeat int) {
+	if a.splash != nil {
+		if repeat == 0 {
+			a.splashKey(k)
+		}
+		return
+	}
 	a.msg = ""
 	a.quitAsk = false
 	if k != X {
@@ -691,6 +703,10 @@ func (a *App) saveKey(k Key) {
 		a.go_(Pads)
 	case A:
 		a.write()
+	case Up:
+		a.setAutosave(1)
+	case Down:
+		a.setAutosave(-1)
 	case X: // quit: asks once when there is unsaved work
 		if a.saved || !a.hasWork() || a.saveAsk {
 			a.Quit = true
