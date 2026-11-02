@@ -31,19 +31,19 @@ func (a *App) steps() int {
 	return d.Bars * d.Beats * 4
 }
 
-// colPad is the pad of the column under the cursor.
-func (a *App) colPad() int { return a.cols[a.col] }
+// rowPad is the pad of the row under the cursor.
+func (a *App) rowPad() int { return a.rows[a.row] }
 
-// autoCols picks the 8 pads of the columns, unless the user chose some: first the pad that was in front on PADS,
+// autoRows picks the 8 pads of the columns, unless the user chose some: first the pad that was in front on PADS,
 // then pads that have notes in the pattern, then pads with samples, then the pads that follow.
-func (a *App) autoCols() {
-	if a.colsOwn && a.colsSet {
+func (a *App) autoRows() {
+	if a.rowsOwn && a.rowsSet {
 		return
 	}
 	var picks []int
 	seen := map[int]bool{}
 	add := func(p int) {
-		if p >= 0 && p < 160 && !seen[p] && len(picks) < len(a.cols) {
+		if p >= 0 && p < 160 && !seen[p] && len(picks) < len(a.rows) {
 			seen[p] = true
 			picks = append(picks, p)
 		}
@@ -67,15 +67,15 @@ func (a *App) autoCols() {
 			add(p)
 		}
 	}
-	for p := a.padN() + 1; len(picks) < len(a.cols) && p < 320; p++ {
+	for p := a.padN() + 1; len(picks) < len(a.rows) && p < 320; p++ {
 		add(p % 160)
 	}
 	sort.Ints(picks) // in pad order; the cursor starts on the pad that was in front
-	copy(a.cols[:], picks)
-	a.colsSet = true
+	copy(a.rows[:], picks)
+	a.rowsSet = true
 	for i, p := range picks {
 		if p == a.padN() {
-			a.col = i
+			a.row = i
 		}
 	}
 }
@@ -93,16 +93,16 @@ func noteAt(d lab.PatternDoc, pad, step int) (lab.Note, bool) {
 func (a *App) seqKey(k Key, repeat int) {
 	jump := 1 + repeat/8 // a held key runs faster
 	switch k {
-	case Up:
+	case Left: // the steps run across the screen
 		a.step = max(a.step-jump, 0)
-	case Down:
-		a.step = min(a.step+jump, a.steps()-1)
-	case Left:
-		a.col = max(a.col-1, 0)
 	case Right:
-		a.col = min(a.col+1, len(a.cols)-1)
+		a.step = min(a.step+jump, a.steps()-1)
+	case Up: // the pads run down it
+		a.row = max(a.row-1, 0)
+	case Down:
+		a.row = min(a.row+1, len(a.rows)-1)
 	case A:
-		a.toggle(a.colPad(), a.step)
+		a.toggle(a.rowPad(), a.step)
 	case X:
 		a.togglePlay()
 	case B:
@@ -126,11 +126,11 @@ func (a *App) seqShifted(k Key) {
 	case X:
 		// the column's pad: the next pad that has a sample
 		for off := 1; off < 160; off++ {
-			p := (a.colPad() + off) % 160
+			p := (a.rowPad() + off) % 160
 			if a.info.Pads[p].File {
-				a.cols[a.col] = p
-				a.colsOwn = true
-				a.say(fmt.Sprintf("column %d is pad %s", a.col+1, a.label(p)), false)
+				a.rows[a.row] = p
+				a.rowsOwn = true
+				a.say(fmt.Sprintf("row %d is pad %s", a.row+1, a.label(p)), false)
 				return
 			}
 		}
@@ -140,7 +140,7 @@ func (a *App) seqShifted(k Key) {
 		if !ok {
 			return
 		}
-		if n, ok := noteAt(d, a.colPad(), a.step); ok {
+		if n, ok := noteAt(d, a.rowPad(), a.step); ok {
 			next := velSteps[0]
 			for i, v := range velSteps {
 				if n.Vel >= v-5 {
@@ -162,7 +162,7 @@ func (a *App) seqShifted(k Key) {
 func (a *App) setPattern(n int) {
 	a.pat = (n+159)%160 + 1
 	a.step = min(a.step, a.steps()-1)
-	a.autoCols()
+	a.autoRows()
 	if a.seqOn {
 		a.replay()
 	}
@@ -237,8 +237,8 @@ var rowPresets = []struct {
 
 // seqMenu is the pattern tools: the pattern as a whole, its tempo, its timing, and the notes of the column in front.
 func (a *App) seqMenu() {
-	pad := a.colPad()
-	m := &menu{title: fmt.Sprintf("pattern %s  column %s", a.label(a.pat-1), a.label(pad))}
+	pad := a.rowPad()
+	m := &menu{title: fmt.Sprintf("pattern %s  row %s", a.label(a.pat-1), a.label(pad))}
 	run := func(label string, f func()) {
 		m.items = append(m.items, menuItem{label: label, run: func(int) { f() }})
 	}
@@ -257,7 +257,7 @@ func (a *App) seqMenu() {
 		}
 		a.pat = to
 		a.refresh()
-		a.autoCols()
+		a.autoRows()
 		a.say("copied to "+a.label(to-1), false)
 	})
 	run("Delete the pattern", func() {
@@ -343,10 +343,10 @@ func (a *App) seqMenu() {
 	for i := range padNames {
 		padNames[i] = a.label(i)
 	}
-	m.items = append(m.items, menuItem{label: "Pad of this column", vals: padNames, val: pad, run: func(v int) {
-		a.cols[a.col] = v
-		a.colsOwn = true
-		a.say(fmt.Sprintf("column %d is pad %s", a.col+1, a.label(v)), false)
+	m.items = append(m.items, menuItem{label: "Pad of this row", vals: padNames, val: pad, run: func(v int) {
+		a.rows[a.row] = v
+		a.rowsOwn = true
+		a.say(fmt.Sprintf("row %d is pad %s", a.row+1, a.label(v)), false)
 	}})
 
 	m.head("GENERATE")
@@ -467,8 +467,8 @@ func lerp(a, b color.RGBA, t float64) color.RGBA {
 	return color.RGBA{f(a.R, b.R), f(a.G, b.G), f(a.B, b.B), 255}
 }
 
-// drawSeq is the tracker: a row for each step (16 to a bar, scrolling), a column for each of 8 pads, the velocity of a
-// note in hex as in a tracker, "--" where there is none.
+// drawSeq is the step grid, as on the unit: a row for each pad (up to 16), the 16 steps of one bar across, a lit block
+// where a pad plays, as tall as its velocity. L1/R1 (or the cursor) turn the bar.
 func (a *App) drawSeq(c *canvas) {
 	d, ok := a.doc()
 	title := fmt.Sprintf("PATTERN %s", a.label(a.pat-1))
@@ -479,61 +479,73 @@ func (a *App) drawSeq(c *canvas) {
 	}
 	c.text(margin+textW(title)+16, 36, sub, cDim, false)
 
-	const x0, cw = 52, 51
-	const hy, ry = 52, 88 // the column heads, the first row
-	// the column heads
-	for i, pad := range a.cols {
-		x := x0 + i*cw
-		bg, fg := cPanel, cDim
-		if i == a.col {
-			bg, fg = cAmber, cBg
-		} else if a.info.Pads[pad].File {
-			fg = cText
-		}
-		c.rect(x, hy, cw-2, 32, bg)
-		c.text(x+3, hy+1, a.label(pad), fg, true)
-		c.text(x+3, hy+16, short(a.info.Pads[pad].Name, 6), fg, false)
-	}
-	// one bar at a time: 16 steps, the rows as tall as the screen allows, L1/R1 (or the cursor) turn the page
+	const lx, x0, cw, gap = margin, 58, 24, 4 // the pad labels, the first step, a step's width, the gap between beats
 	steps := a.steps()
 	page := a.step / 16
 	bars := (steps + 15) / 16
-	rh := (panelBot - 6 - ry) / 16
 	ph := a.playStep()
-	for r := 0; r < 16 && page*16+r < steps; r++ {
-		st := page*16 + r
-		y := ry + r*rh
-		ty := y + (rh-CellH)/2 // the text, centred in its row
-		if r%4 == 0 && r > 0 {
-			c.rect(margin, y-1, contentW-margin-4, 1, cLine) // a line at each beat
-		}
-		switch {
-		case ph == st:
-			c.rect(margin-2, y, contentW-margin-2, rh-1, cLine)
-		case st == a.step:
-			c.rect(margin-2, y, contentW-margin-2, rh-1, cPanel2)
-		}
-		lab, fg := fmt.Sprintf("%02d", st+1), cDim
-		if st%4 == 0 {
-			fg = cText
+	const ry = 74
+	rh := (panelBot - 6 - ry) / len(a.rows)
+	stepX := func(s int) int { return x0 + s*cw + (s/4)*gap }
+
+	// the step numbers
+	for s := 0; s < 16 && page*16+s < steps; s++ {
+		st := page*16 + s
+		col := cDim
+		if s%4 == 0 {
+			col = cText
 		}
 		if ph == st {
-			fg = cGood
+			col = cGood
 		}
-		c.text(margin, ty, lab, fg, st%4 == 0)
-		for i, pad := range a.cols {
-			x := x0 + i*cw + 3
+		if st == a.step {
+			col = cAmber
+		}
+		c.text(stepX(s)+(cw-textW(fmt.Sprint(s+1)))/2, 54, fmt.Sprint(s+1), col, s%4 == 0)
+	}
+	// a band for the step the cursor is on and for the one that plays, over the rows
+	for s := 0; s < 16 && page*16+s < steps; s++ {
+		st := page*16 + s
+		switch {
+		case ph == st:
+			c.rect(stepX(s)-1, ry-2, cw, rh*len(a.rows)+2, cLine)
+		case st == a.step:
+			c.rect(stepX(s)-1, ry-2, cw, rh*len(a.rows)+2, cPanel2)
+		}
+	}
+	for i, pad := range a.rows {
+		y := ry + i*rh
+		has := a.info.Pads[pad].File
+		fg := cDim
+		if has {
+			fg = cText
+		}
+		if i == a.row {
+			c.rect(lx-4, y-1, x0-lx+0, rh-1, cAmberD)
+			fg = cWhite
+		}
+		c.text(lx, y+(rh-CellH)/2, a.label(pad), fg, i == a.row)
+		for s := 0; s < 16 && page*16+s < steps; s++ {
+			st := page*16 + s
+			x := stepX(s)
+			bg := cPanel
+			if (s/4)%2 == 1 {
+				bg = cPanel2
+			}
+			if ph == st {
+				bg = cLine
+			}
+			c.rect(x, y, cw-2, rh-2, bg)
 			if n, ok := noteAt(d, pad, st); ok {
-				col := lerp(cAmberD, cAmber, float64(n.Vel)/127)
+				h := max((rh-2)*n.Vel/127, 4) // as tall as it is loud
+				col := cAmber
 				if ph == st {
 					col = cGood
 				}
-				c.text(x, ty, fmt.Sprintf("%3d", n.Vel), col, true)
-			} else {
-				c.text(x, ty, "--", cLine, false)
+				c.rect(x, y+(rh-2)-h, cw-2, h, col)
 			}
-			if i == a.col && st == a.step {
-				c.box(x-3, y, cw-2, rh-1, 2, cWhite)
+			if i == a.row && st == a.step {
+				c.box(x-1, y-1, cw, rh, 2, cWhite)
 			}
 		}
 	}

@@ -66,7 +66,7 @@ func (a *App) blankPattern(bars int) {
 func (a *App) openPattern(n int) {
 	a.pat, a.step = n, 0
 	a.refresh()
-	a.autoCols()
+	a.autoRows()
 	a.replay()
 }
 
@@ -87,7 +87,7 @@ func (a *App) laneMap(g formats.GrooveTemplate) (map[formats.Lane]proto.PadIndex
 	}
 	// voices without a name match: the pads of the columns that have a sample, then any pad that has one
 	var spare []proto.PadIndex
-	cands := append([]int{}, a.cols[:]...)
+	cands := append([]int{}, a.rows[:]...)
 	for i := range a.info.Pads {
 		cands = append(cands, i)
 	}
@@ -132,7 +132,7 @@ func (a *App) fromTemplate(g formats.GrooveTemplate, bars int) {
 		a.say(err.Error(), true)
 		return
 	}
-	a.colsOwn = false // the columns follow the pads of the new pattern
+	a.rowsOwn = false // the columns follow the pads of the new pattern
 	a.openPattern(n)
 	a.say(fmt.Sprintf("%s %s: %s", a.label(n-1), g.Name, strings.Join(said, ", ")), false)
 }

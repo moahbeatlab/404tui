@@ -118,7 +118,7 @@ func arpSequence(n, typ, steps int, rng *rand.Rand) [][]int {
 // arpKeys are the pads of the columns that have a sample, in the order of the columns (UP puts them in pad order).
 func (a *App) arpKeys(typ int) []int {
 	var keys []int
-	for _, p := range a.cols {
+	for _, p := range a.rows {
 		if a.info.Pads[p].File {
 			keys = append(keys, p)
 		}
@@ -157,7 +157,7 @@ func (a *App) printArp() { a.printArpKeys(a.arpKeys(a.arpp.typ)) }
 func (a *App) printArpKeys(keys []int) {
 	st := a.arpp
 	if len(keys) < 2 {
-		a.say("the arp needs 2 or more pads with a sample (mark pads with Y+A, or Y+X changes a column's pad)", true)
+		a.say("the arp needs 2 or more pads with a sample (mark pads with Y+A, or Y+X changes a row's pad)", true)
 		return
 	}
 	d, ok := a.doc()

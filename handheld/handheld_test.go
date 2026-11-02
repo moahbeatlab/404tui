@@ -118,7 +118,7 @@ func TestAssignSliceAndSequence(t *testing.T) {
 	if a.Screen() != Seq {
 		t.Fatalf("screen %v", a.Screen())
 	}
-	keys(t, a, "A D D D D A") // two notes in the first column, four steps apart
+	keys(t, a, "A R R R R A") // two notes in the first row, four steps apart
 	d, ok := a.doc()
 	if !ok || len(d.Notes) != 2 || d.Bars != 4 {
 		t.Fatalf("two notes in a 4 bar pattern, got %+v", d)
@@ -127,7 +127,7 @@ func TestAssignSliceAndSequence(t *testing.T) {
 	if d, _ = a.doc(); len(d.Notes) != 1 {
 		t.Fatalf("A on a note takes it off, notes %d", len(d.Notes))
 	}
-	keys(t, a, "R B") // the next column, the menu: fill it with "every beat"
+	keys(t, a, "D B") // the next row, the menu: fill it with "every beat"
 	chooseMenu(t, a, "Fill with")
 	d, _ = a.doc()
 	if len(d.Notes) != 1+16 {
@@ -481,27 +481,32 @@ func TestSlicesNeverLandOnUsedPads(t *testing.T) {
 	}
 }
 
-func TestTrackerRowsAreStepsColumnsArePads(t *testing.T) {
+func TestStepGridPadsDownStepsAcross(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit) // kick, snare, hat on A1..A3, the cursor on A3
 	a.go_(Seq)
-	for i := 1; i < len(a.cols); i++ {
-		if a.cols[i-1] >= a.cols[i] {
-			t.Fatalf("columns are not in pad order: %v", a.cols)
+	for i := 1; i < len(a.rows); i++ {
+		if a.rows[i-1] >= a.rows[i] {
+			t.Fatalf("rows are not in pad order: %v", a.rows)
 		}
 	}
-	if a.cols[0] != 0 || a.cols[1] != 1 || a.cols[2] != 2 {
-		t.Fatalf("the pads with samples come first: %v", a.cols)
+	if a.rows[0] != 0 || a.rows[1] != 1 || a.rows[2] != 2 {
+		t.Fatalf("the pads with samples come first: %v", a.rows)
 	}
-	if a.colPad() != 2 {
-		t.Fatalf("the cursor starts on the pad that was in front (A3), not %d", a.colPad())
+	if a.rowPad() != 2 {
+		t.Fatalf("the cursor starts on the pad that was in front (A3), not %d", a.rowPad())
 	}
-	// Left/Right change the column, Up/Down the step
-	keys(t, a, "L L")
-	if a.col != 0 {
-		t.Fatalf("column %d", a.col)
+	// Up/Down change the pad (the row), Left/Right the step
+	keys(t, a, "U U")
+	if a.row != 0 {
+		t.Fatalf("row %d", a.row)
 	}
-	keys(t, a, strings.Repeat("D ", 40)+"A")
+	keys(t, a, "D")
+	if a.row != 1 {
+		t.Fatalf("Down is the next pad: row %d", a.row)
+	}
+	keys(t, a, "U")
+	keys(t, a, strings.Repeat("R ", 40)+"A")
 	if a.step != 40 {
 		t.Fatalf("step %d", a.step)
 	}
@@ -514,18 +519,18 @@ func TestTrackerRowsAreStepsColumnsArePads(t *testing.T) {
 		t.Fatal("no frame")
 	}
 	// the end is the end
-	keys(t, a, strings.Repeat("D ", 100))
+	keys(t, a, strings.Repeat("R ", 100))
 	if a.step != a.steps()-1 {
 		t.Fatalf("stops at the last step, got %d of %d", a.step, a.steps())
 	}
-	// Y+X gives the column the next pad with a sample, and it stays when the pattern changes
+	// Y+X gives the row the next pad with a sample, and it stays when the pattern changes
 	keys(t, a, "Y+X")
-	if a.colPad() != 1 || !a.colsOwn {
-		t.Fatalf("column 1 should be pad A2 now, is %d", a.colPad())
+	if a.rowPad() != 1 || !a.rowsOwn {
+		t.Fatalf("row 1 should be pad A2 now, is %d", a.rowPad())
 	}
 	keys(t, a, "Y+U")
-	if a.cols[0] != 1 {
-		t.Fatalf("the user's column was reset by the pattern change: %v", a.cols)
+	if a.rows[0] != 1 {
+		t.Fatalf("the user's row was reset by the pattern change: %v", a.rows)
 	}
 }
 
@@ -1120,12 +1125,12 @@ func TestSampleToolsArpAndKeyboard(t *testing.T) {
 		t.Fatalf("scale steps: %d %d %d", keySemis(2, 0), keySemis(7, 0), keySemis(3, -1))
 	}
 	// the arp lays the notes over the keyboard
-	a.cols = [8]int{}
-	a.colsOwn = false
+	a.rows = [16]int{}
+	a.rowsOwn = false
 	a.go_(Pads)
 	a.go_(Seq)
 	if len(a.arpKeys(0)) < 5 {
-		t.Fatalf("the keyboard pads are the columns: %v", a.cols)
+		t.Fatalf("the keyboard pads are the columns: %v", a.rows)
 	}
 }
 
@@ -1221,8 +1226,8 @@ func TestMarkPadsAndLiveArp(t *testing.T) {
 	if !ok || len(d.Notes) == 0 {
 		t.Fatalf("no notes written: %s", a.msg)
 	}
-	if a.cols[0] != 0 || a.cols[1] != 1 || a.cols[2] != 2 {
-		t.Fatalf("the marked pads are the columns: %v", a.cols)
+	if a.rows[0] != 0 || a.rows[1] != 1 || a.rows[2] != 2 {
+		t.Fatalf("the marked pads are the columns: %v", a.rows)
 	}
 	// and bounced to a pad
 	before := padsWithSamples(a)

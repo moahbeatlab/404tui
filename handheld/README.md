@@ -65,7 +65,7 @@ on hardware too. Patterns are always 4 bars (other lengths are a guess).
 - **Right panel on every screen**, as on the M8: a map of the six screens with the current one lit, the tempo and the
   loop's state, what is under the cursor (pad, file preview, slice numbers, pattern and note), and the keys that work
   right now with their letters. Hold Y and the panel lights the shifted set (`SHIFT`). The footer is only the message line.
-- **SEQ is a tracker**: a row for each step (16 to a bar, scrolling, a line at each bar), a column for each of 8 pads,
+- **SEQ was a tracker** (rows were steps, columns pads; see the next rounds for the grid it is now): a row for each step (16 to a bar, scrolling, a line at each bar), a column for each of 8 pads,
   the velocity of a note as a number (100), `--` where there is none. Up/Down move the step (held: faster),
   Left/Right the column, `A` puts or takes a note, `Y+A` cycles the velocity, `Y+X` gives the column the next pad with a
   sample, `Y+Up/Down` changes the pattern. The columns start as the pad that was in front, then pads with notes, then
@@ -169,3 +169,11 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
   - **Write it into the pattern**: the notes over the marked pads, in the pattern in front (their notes are replaced)
   - **Clear the marks**
 - The marked pads are the **columns** of SEQ, so the same keys are in front when the pattern is opened.
+
+## The step grid (eighth round)
+
+- **SEQ is the unit's step grid**: the pads are the rows (up to 16, A1 at the top by default), the 16 steps of a bar run across.
+  A note is a block as tall as its velocity (the number is in the panel for the note under the cursor). Left/Right move the step
+  (held: faster), Up/Down the pad, **L1/R1 turn the bar** to the left and right, and the cursor turns it by itself at a bar line.
+  `bar 2/4` at the top right, with a marker for the bar that plays. Y+X gives the row the next pad that has a sample; the menu's
+  *Pad of this row* any pad. Marked pads (Y+A on PADS) are the rows.

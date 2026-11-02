@@ -49,8 +49,8 @@ func (a *App) hints() (plain, shift []hint) {
 		if a.seqOn {
 			play, stop = hint{"X", "stop"}, hint{"B", "stop"}
 		}
-		return []hint{{"A", "note on/off"}, play, stop, {"^v", "step"}, {"<>", "column"}, {"L1 R1", "bar"}},
-			[]hint{screen, {"Y+A", "velocity"}, {"Y+X", "column pad"}, {"Y+B", "pick pattern"}, {"Y+^v", "pattern +-"}}
+		return []hint{{"A", "note on/off"}, play, stop, {"<>", "step"}, {"^v", "pad"}, {"L1 R1", "bar"}},
+			[]hint{screen, {"Y+A", "velocity"}, {"Y+X", "row pad"}, {"Y+B", "pick pattern"}, {"Y+^v", "pattern +-"}}
 	case Unit:
 		return []hint{{"A", "send"}, {"X", "look again"}, {"^v", "choose"}, {"L1 R1", "page"}, {"B", "back"}}, []hint{screen}
 	default:
@@ -233,7 +233,7 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 		}
 		c.text(x, y0+40, fmt.Sprintf("%d bars  %d steps", d.Bars, a.steps()), cText, false)
 		c.text(x, y0+58, fmt.Sprintf("step %d.%d", a.step/16+1, a.step%16+1), cText, false)
-		pad := a.colPad()
+		pad := a.rowPad()
 		line := fmt.Sprintf("%s %s", a.label(pad), short(a.info.Pads[pad].Name, 9))
 		if n, ok := noteAt(d, pad, a.step); ok {
 			line = fmt.Sprintf("%s  %d", line, n.Vel)
