@@ -2,6 +2,7 @@ package handheld
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/moahbeatlab/404tui/formats"
 )
@@ -130,11 +131,48 @@ func (a *App) openPadPanel() {
 	pp.tools = a.padToolsMenu(n)
 	if !a.info.Pads[n].File {
 		pp.page = 2 // an empty pad has no settings: the tools (pick a sample...)
-	} else if fixed, _ := a.lab.SetupPad(n); fixed > 0 {
-		a.refresh() // a pad that was never set up: the pan at its centre, the hold at 100% ...
-		a.say(fmt.Sprintf("%s was never set up: pan centre, hold 100%%", a.label(n)), false)
+	} else {
+		a.pp = pp
+		fixed := 0
+		for _, t := range a.padTargets() {
+			f, _ := a.lab.SetupPad(t)
+			fixed += f
+		}
+		if fixed > 0 {
+			a.refresh() // a pad that was never set up: the pan at its centre, the hold at 100% ...
+			a.say(fmt.Sprintf("%s was never set up: pan centre, hold 100%%", a.label(n)), false)
+		}
 	}
 	a.pp = pp
+}
+
+// padTargets are the pads a change in the panel goes to: the marked pads that have a sample when some are marked (bulk editing),
+// else the pad in front.
+func (a *App) padTargets() []int { return a.targetsFor(a.pp.pad) }
+
+// targetsFor is padTargets for a pad in front.
+func (a *App) targetsFor(front int) []int {
+	var out []int
+	for _, p := range a.marks {
+		if a.info.Pads[p].File {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return []int{front}
+	}
+	sort.Ints(out)
+	return out
+}
+
+// refPad is the pad whose values the panel shows: the pad in front when it is one of the targets, else the first target.
+func (a *App) refPad(targets []int) int {
+	for _, t := range targets {
+		if t == a.pp.pad {
+			return t
+		}
+	}
+	return targets[0]
 }
 
 // ppKey is a key in the pad panel.
@@ -169,7 +207,9 @@ func (a *App) ppKey(k Key, repeat int) {
 		*r = (*r + 1) % len(rows)
 	case Left, Right:
 		st := rows[*r]
-		v := a.settingValue(pp.pad, st)
+		targets := a.padTargets()
+		ref := a.refPad(targets)
+		v := a.settingValue(ref, st)
 		d := int32(1)
 		if k == Left {
 			d = -1
@@ -187,10 +227,12 @@ func (a *App) ppKey(k Key, repeat int) {
 			}
 			v += d * st.step * acc
 		}
-		a.setSetting(pp.pad, st, v)
+		a.setEach(targets, ref, st, v, false)
 	case A:
 		st := rows[*r]
-		v := a.settingValue(pp.pad, st)
+		targets := a.padTargets()
+		ref := a.refPad(targets)
+		v := a.settingValue(ref, st)
 		switch st.kind {
 		case kSwitch, kFlag:
 			v = 1 - v
@@ -199,11 +241,27 @@ func (a *App) ppKey(k Key, repeat int) {
 		default:
 			v = st.def // a fader goes back to its default
 		}
-		a.setSetting(pp.pad, st, v)
+		a.setEach(targets, ref, st, v, true) // every pad to the same, the default or the switch
 	case X:
 		a.playPad(pp.pad)
 	case B:
 		a.pp = nil
+	}
+}
+
+// setEach puts a setting on every target: a fader moves each pad by the same amount (so that the differences between the pads are
+// kept, a pad at its end stays there), a switch or a choice is set to the same on all of them. v is the new value of the ref pad.
+func (a *App) setEach(targets []int, ref int, st padSetting, v int32, absolute bool) {
+	old := a.settingValue(ref, st)
+	for _, t := range targets {
+		nv := v
+		if st.kind == kFader && !absolute {
+			nv = a.settingValue(t, st) + (v - old)
+			if t == ref {
+				nv = v
+			}
+		}
+		a.setSetting(t, st, nv)
 	}
 }
 
@@ -215,9 +273,16 @@ func (a *App) drawPadPanel(c *canvas) {
 	x0, y0, w, h := 16, 34, contentW-32, 392
 	c.rect(x0, y0, w, h, cPanel2)
 	c.box(x0, y0, w, h, 2, cAmber)
-	title := fmt.Sprintf("PAD %s", a.label(pp.pad))
+	targets := a.padTargets()
+	ref := a.refPad(targets)
+	title := fmt.Sprintf("PAD %s", a.label(ref))
+	if len(targets) > 1 {
+		title = fmt.Sprintf("%d MARKED PADS", len(targets))
+	}
 	c.text(x0+14, y0+10, title, cAmber, true)
-	if has {
+	if len(targets) > 1 {
+		c.text(x0+14+textW(title)+10, y0+10, "all change", cText, false)
+	} else if has {
 		c.text(x0+14+textW(title)+10, y0+10, fit(a.info.Pads[pp.pad].Name, 22), cText, false)
 	}
 	tx := x0 + w - 14
@@ -246,7 +311,11 @@ func (a *App) drawPadPanel(c *canvas) {
 	}
 	for i, st := range rows {
 		y := y0 + 46 + i*rh
-		v := a.settingValue(pp.pad, st)
+		v := a.settingValue(ref, st)
+		mixed := false
+		for _, t := range targets {
+			mixed = mixed || a.settingValue(t, st) != v
+		}
 		if i == pp.row[pp.page] {
 			c.rect(x0+8, y-4, w-16, rh-2, cAmberD)
 			c.rect(x0+8, y-4, 3, rh-2, cAmber)
@@ -279,6 +348,9 @@ func (a *App) drawPadPanel(c *canvas) {
 		case kChoice:
 			c.text(bx, y+1, "< "+vt+" >", cAmber, i == pp.row[pp.page])
 			vt = ""
+		}
+		if mixed { // the marked pads differ: the value shown is the first one's
+			vt += " *"
 		}
 		if vt != "" {
 			c.text(bx+bw+14, y+1, vt, cAmber, true)

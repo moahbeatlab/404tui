@@ -25,6 +25,9 @@ type trackState struct {
 	cycle                                         int
 	dispatch                                      int
 	copyTo                                        int
+	euDecay                                       int
+	fillPat, fillGate, fillDecay, fillVel         int
+	shapeGate, shapeDecay                         int
 	seed                                          int64
 	init                                          bool
 }
@@ -32,13 +35,15 @@ type trackState struct {
 func (a *App) trackDefaults() *trackState {
 	t := &a.tt
 	if !t.init {
-		*t = trackState{euSteps: 16, euHits: 5, euRate: 3, euGate: 1, euVel: 1, chance: 70, ecRate: 1, ecRepeats: 3, ecDecay: 1, ecGate: 1, cycle: 12, init: true}
+		*t = trackState{euSteps: 16, euHits: 5, euRate: 3, euGate: 1, euVel: 1, chance: 70, ecRate: 1, ecRepeats: 3, ecDecay: 1, ecGate: 1, cycle: 12, fillGate: 2, fillVel: 1, shapeGate: 2, init: true}
 	}
 	return t
 }
 
 var (
 	euGates    = []int{25, 50, 75, 100}
+	longGates  = []int{25, 50, 75, 100, 150, 200} // a note's length as a part of a step: over 100 it ties into the next
+	decayPcts  = []int{0, 5, 10, 15, 20, 30, 40}  // the velocity lost on each hit of a bar, in percent
 	chancePcts = []int{0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	echoDecays = []int{85, 70, 55, 40, 25}
 )
@@ -152,13 +157,15 @@ func (a *App) euclidMenu() {
 		val("Rotate", nums(0, 31), t.euRot, func(v int) { t.euRot = v }),
 		val("Gate", names(euGates, func(v int) string { return fmt.Sprintf("%d%%", v) }), t.euGate, func(v int) { t.euGate = v }),
 		val("Velocity", names(printVels, func(v int) string { return fmt.Sprint(v) }), t.euVel, func(v int) { t.euVel = v }),
+		val("Decay per hit", names(decayPcts, func(v int) string { return pct(v) }), t.euDecay, func(v int) { t.euDecay = v }),
 	}, "Write it over the track", func() {
 		d, err := a.ensurePattern()
 		if err != nil {
 			a.say(err.Error(), true)
 			return
 		}
-		a.finishTrack(pad, euclidNotes(pad, int(d.Length), rateTicks(t.euRate), t.euSteps, t.euHits, t.euRot, euGates[t.euGate], printVels[t.euVel]),
+		ns := euclidNotes(pad, int(d.Length), rateTicks(t.euRate), t.euSteps, t.euHits, t.euRot, euGates[t.euGate], printVels[t.euVel])
+		a.finishTrack(pad, decayNotes(ns, decayPcts[t.euDecay]),
 			fmt.Sprintf("euclid %d/%d", min(t.euHits, t.euSteps), t.euSteps))
 	})
 }
@@ -452,4 +459,133 @@ func (a *App) copyTrackMenu() {
 		}
 		a.finishTrack(t.copyTo, out, "copied")
 	})
+}
+
+// ---- Fill
+
+// fillPresets are rhythms over the 16 steps of a bar; the track is filled with them in every bar.
+var fillPresets = []struct {
+	name string
+	mask []int
+}{
+	{"every beat", []int{0, 4, 8, 12}},
+	{"beats 1 and 3", []int{0, 8}},
+	{"backbeat (2 and 4)", []int{4, 12}},
+	{"off-beats (the ands)", []int{2, 6, 10, 14}},
+	{"eighths", []int{0, 2, 4, 6, 8, 10, 12, 14}},
+	{"sixteenths", []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	{"off-beat sixteenths", []int{1, 3, 5, 7, 9, 11, 13, 15}},
+	{"boom-bap kick", []int{0, 7, 10}},
+	{"tresillo 3+3+2", []int{0, 3, 6, 8, 11, 14}},
+	{"son clave 3-2", []int{0, 3, 6, 10, 12}},
+	{"rumba clave 3-2", []int{0, 3, 7, 10, 12}},
+	{"bossa nova clave", []int{0, 3, 6, 10, 13}},
+	{"every third step", []int{0, 3, 6, 9, 12, 15}},
+	{"every fifth step", []int{0, 5, 10, 15}},
+	{"first step only", []int{0}},
+	{"first half of the bar", []int{0, 1, 2, 3, 4, 5, 6, 7}},
+	{"second half of the bar", []int{8, 9, 10, 11, 12, 13, 14, 15}},
+	{"last beat stutter", []int{12, 13, 14, 15}},
+	{"pickup before the next bar", []int{0, 8, 14, 15}},
+}
+
+func (a *App) fillMenu() {
+	t := a.trackDefaults()
+	pad := a.rowPad()
+	pats := make([]string, len(fillPresets))
+	for i, f := range fillPresets {
+		pats[i] = f.name
+	}
+	a.toolMenu(fmt.Sprintf("fill %s", a.label(pad)), []menuItem{
+		val("Pattern", pats, t.fillPat, func(v int) { t.fillPat = v }),
+		val("Velocity", names(printVels, func(v int) string { return fmt.Sprint(v) }), t.fillVel, func(v int) { t.fillVel = v }),
+		val("Gate", names(longGates, func(v int) string { return fmt.Sprintf("%d%%", v) }), t.fillGate, func(v int) { t.fillGate = v }),
+		val("Decay per hit", names(decayPcts, func(v int) string { return pct(v) }), t.fillDecay, func(v int) { t.fillDecay = v }),
+	}, "Fill the track", func() {
+		d, err := a.ensurePattern()
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		ns := fillNotes(pad, int(d.Length), fillPresets[t.fillPat].mask, printVels[t.fillVel], longGates[t.fillGate], decayPcts[t.fillDecay])
+		a.finishTrack(pad, ns, fillPresets[t.fillPat].name)
+	})
+}
+
+// fillNotes puts a note on the steps of the mask in every bar: gate percent of a step long, each hit of a bar decay percent
+// quieter than the one before it.
+func fillNotes(pad, length int, mask []int, vel, gate, decay int) []lab.Note {
+	var out []lab.Note
+	for bar := 0; bar*16*stepTicks < length; bar++ {
+		for _, s := range mask {
+			tick := (bar*16 + s) * stepTicks
+			if tick >= length {
+				continue
+			}
+			out = append(out, lab.Note{Tick: uint32(tick), Pad: pad, Vel: vel, Len: max(stepTicks*gate/100, 1)})
+		}
+	}
+	return decayNotes(out, decay)
+}
+
+// decayNotes makes each note of a bar decay percent quieter than the one before it, counting from the first of the bar.
+func decayNotes(notes []lab.Note, decay int) []lab.Note {
+	if decay <= 0 {
+		return notes
+	}
+	sorted := append([]lab.Note(nil), notes...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Tick < sorted[j].Tick })
+	bar, k := -1, 0
+	for i := range sorted {
+		b := int(sorted[i].Tick) / (16 * stepTicks)
+		if b != bar {
+			bar, k = b, 0
+		}
+		v := float64(sorted[i].Vel) * math.Pow(1-float64(decay)/100, float64(k))
+		sorted[i].Vel = min(max(int(math.Round(v)), 1), 127)
+		k++
+	}
+	return sorted
+}
+
+// ---- Shape: gate and decay on the notes the track has
+
+func (a *App) shapeMenu() {
+	t := a.trackDefaults()
+	pad := a.rowPad()
+	gates := append([]string{"to the next note"}, names(longGates, func(v int) string { return fmt.Sprintf("%d%% of a step", v) })...)
+	a.toolMenu(fmt.Sprintf("shape the notes of %s", a.label(pad)), []menuItem{
+		val("Gate", gates, t.shapeGate, func(v int) { t.shapeGate = v }),
+		val("Decay per hit", names(decayPcts, func(v int) string { return pct(v) }), t.shapeDecay, func(v int) { t.shapeDecay = v }),
+	}, "Shape them", func() {
+		notes := a.trackNotes(pad)
+		if len(notes) == 0 {
+			a.say("this track has no notes", true)
+			return
+		}
+		d, _ := a.doc()
+		gate := 0
+		if t.shapeGate > 0 {
+			gate = longGates[t.shapeGate-1]
+		}
+		a.finishTrack(pad, decayNotes(gateNotes(notes, int(d.Length), gate), decayPcts[t.shapeDecay]), "shaped")
+	})
+}
+
+// gateNotes sets the length of each note: gate percent of a step, or with gate 0 up to the next note (the last up to the end).
+func gateNotes(notes []lab.Note, length, gate int) []lab.Note {
+	out := append([]lab.Note(nil), notes...)
+	sort.Slice(out, func(i, j int) bool { return out[i].Tick < out[j].Tick })
+	for i := range out {
+		if gate > 0 {
+			out[i].Len = max(stepTicks*gate/100, 1)
+			continue
+		}
+		next := length
+		if i+1 < len(out) {
+			next = int(out[i+1].Tick)
+		}
+		out[i].Len = max(next-int(out[i].Tick), 1)
+	}
+	return out
 }

@@ -233,3 +233,26 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
   over the marked pads in turn or at random), *Copy to a pad*, *Fill with* (rhythm presets), *Invert*, *Clear*. They stay open to try
   again; Y+L2 undoes.
 - The arp over the columns is gone from the pattern menu; the arp is over the marked pads (PADS).
+
+## Twelfth round
+
+- **SEQ is right after PADS** (PADS SEQ FILES SLICE SAVE UNIT).
+- **SEQ shows only the tracks in use**: the pads that have notes in the pattern, the marked pads and the tracks you add; an empty
+  pattern shows the pad that was in front, to start with. The track under the cursor stays while the cursor is on it, even when its
+  last note was taken off; an added track with no notes drops out when the cursor leaves it. **Y+X adds a track** (the next pad with a
+  sample that is not a row), as does the menu's *Add a track for the pad*. With fewer tracks the rows are taller; more than 16 scroll.
+- **Gate and loop on the pads**: a `G` and an `L` on the tile of a pad that has them on, and GATE / LOOP next to its length on the right.
+- **A pad never set up** (zeros in the project file where the unit wants more: pan 0 showed as L125, hold 0%) reads as the defaults,
+  pan centre and hold 100%, and is set up when its panel is opened.
+- **A held arrow steps bigger**: the pad's own repeats are counted by how long the key has been down (the R36S's pad sends the press
+  again and again rather than key repeats): x1, x4 after half a second, x10 after a second and a bit. In the note editor (A held)
+  and on the pad faders; only the direction keys and L1/R1 mean anything held down.
+- **Bulk editing**: with pads marked (Y+A, or *Mark every pad of this bank with a sample* in the pad tools), A opens a panel that edits
+  them all: a fader moves each pad by the same amount (the differences are kept, `*` marks a value that differs), A puts every
+  pad to the default or switch, switches and choices are set to the same. The tools Reverse, Normalize, Pitch and Clear act on all of
+  them. One undo takes a bulk change back.
+- **Fill...** (THE TRACK): 19 rhythms (beats, backbeat, off-beats, eighths, sixteenths, off-beat sixteenths, boom-bap, tresillo,
+  son / rumba / bossa clave, every third and fifth step, first step, halves of the bar, last-beat stutter, pickup...), with velocity,
+  **gate** (25-200% of a step; over 100% it ties on) and **decay** (the velocity lost on each hit of a bar, 0-40%).
+  **Shape (gate, decay)...** applies gate (also "to the next note") and decay to the notes the track already has. **Euclid** has decay too;
+  **Echo** already had both.

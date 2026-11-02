@@ -162,6 +162,12 @@ func (a *App) openPadMenu() { a.menu = a.padToolsMenu(a.padN()) }
 // padToolsMenu is the actions on a pad: what is done with its sample (the sample tools), and the pad itself.
 func (a *App) padToolsMenu(n int) *menu {
 	has := a.info.Pads[n].File
+	tg := a.targetsFor(n) // the marked pads, when some are marked: the bulk of the tools below
+	bulk := len(tg) > 1
+	count := ""
+	if bulk {
+		count = fmt.Sprintf(" (%d marked pads)", len(tg))
+	}
 	m := &menu{title: "pad " + a.label(n)}
 	add := func(l string, run func(int)) { m.items = append(m.items, menuItem{label: l, run: run}) }
 	m.head("SAMPLE")
@@ -170,26 +176,35 @@ func (a *App) padToolsMenu(n int) *menu {
 		add("Slice...", func(int) { a.go_(Slice) })
 		add("Chords & arps...", func(int) { a.openArpMenu(n) })
 		add("Keyboard from it...", func(int) { a.openKeyboardMenu(n) })
-		add("Reverse", func(int) { a.transform(n, "reverse", 0) })
-		add("Normalize", func(int) { a.transform(n, "normalize", 0) })
-		m.items = append(m.items, menuItem{label: "Pitch", vals: []string{"-12", "-5", "-2", "-1", "+1", "+2", "+5", "+12"}, val: 4,
-			run: func(v int) {
-				st := []int{-12, -5, -2, -1, 1, 2, 5, 12}[v]
-				a.transform(n, "pitch", st)
-			}})
+		each := func(op string, arg int) {
+			if bulk {
+				a.transformMany(tg, op, arg)
+				return
+			}
+			a.transform(n, op, arg)
+		}
+		add("Reverse"+count, func(int) { each("reverse", 0) })
+		add("Normalize"+count, func(int) { each("normalize", 0) })
+		m.items = append(m.items, menuItem{label: "Pitch" + count, vals: []string{"-12", "-5", "-2", "-1", "+1", "+2", "+5", "+12"}, val: 4,
+			run: func(v int) { each("pitch", []int{-12, -5, -2, -1, 1, 2, 5, 12}[v]) }})
 		m.head("THE PAD")
 		add("Pattern with this pad...", func(int) { a.go_(Seq) })
 		add("Move or swap to...", func(int) { a.carry = &carry{from: n}; a.say("choose the pad, A puts it down", false) })
 		add("Copy to...", func(int) { a.carry = &carry{from: n, copy: true}; a.say("choose the pad, A puts it down", false) })
-		add("Clear the pad", func(int) {
-			if err := a.lab.ClearPad(n); err == nil {
-				delete(a.pcm, n)
-				a.refresh()
-				a.say("cleared "+a.label(n), false)
+		add("Clear"+map[bool]string{true: count, false: " the pad"}[bulk], func(int) {
+			cleared := 0
+			for _, p := range tg {
+				if err := a.lab.ClearPad(p); err == nil {
+					delete(a.pcm, p)
+					cleared++
+				}
 			}
+			a.refresh()
+			a.say(fmt.Sprintf("cleared %d pads", cleared), false)
 		})
 	}
 	m.head(fmt.Sprintf("MARKED PADS (%d)", len(a.marks)))
+	add("Mark every pad of this bank with a sample", func(int) { a.markBank() })
 	add("Arp the marked pads...", func(int) { a.openMarkedArpMenu() })
 	add("Clear the marks", func(int) { a.clearMarks() })
 	return m
@@ -197,9 +212,34 @@ func (a *App) padToolsMenu(n int) *menu {
 
 // transform makes a changed copy of a pad's sample and puts it back on the pad.
 func (a *App) transform(n int, op string, arg int) {
+	if err := a.transformPad(n, op, arg); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	a.sl = nil
+	a.refresh()
+	a.say(fmt.Sprintf("%s: %s %s", a.label(n), op, map[bool]string{true: fmt.Sprintf("%+d", arg), false: ""}[op == "pitch"]), false)
+}
+
+// transformMany does it on every pad of a bulk selection and says how many it changed.
+func (a *App) transformMany(pads []int, op string, arg int) {
+	done := 0
+	for _, n := range pads {
+		if err := a.transformPad(n, op, arg); err != nil {
+			a.say(err.Error(), true)
+			continue
+		}
+		done++
+	}
+	a.sl = nil
+	a.refresh()
+	a.say(fmt.Sprintf("%s on %d pads", op, done), false)
+}
+
+func (a *App) transformPad(n int, op string, arg int) error {
 	id, ok := a.padSample(n)
 	if !ok {
-		return
+		return fmt.Errorf("nothing on %s", a.label(n))
 	}
 	var nid int
 	var err error
@@ -212,19 +252,15 @@ func (a *App) transform(n int, op string, arg int) {
 		nid, err = a.lab.Pitched(id, arg)
 	}
 	if err != nil {
-		a.say(err.Error(), true)
-		return
+		return err
 	}
 	name := a.info.Pads[n].Name
 	if err := a.lab.Assign(n, nid, name); err != nil {
-		a.say(err.Error(), true)
-		return
+		return err
 	}
 	a.lab.Free(nid)
 	delete(a.pcm, n)
-	a.sl = nil
-	a.refresh()
-	a.say(fmt.Sprintf("%s: %s %s", a.label(n), op, map[bool]string{true: fmt.Sprintf("%+d", arg), false: ""}[op == "pitch"]), false)
+	return nil
 }
 
 func (a *App) carryKey(k Key) {

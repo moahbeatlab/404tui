@@ -434,11 +434,8 @@ func (a *App) seqMenu() {
 	run("Cycle...", a.cycleMenu)
 	run("Dispatch over the marked pads...", a.dispatchMenu)
 	run("Copy to a pad...", a.copyTrackMenu)
-	names := make([]string, len(rowPresets))
-	for i, p := range rowPresets {
-		names[i] = p.name
-	}
-	m.items = append(m.items, menuItem{label: "Fill with", vals: names, run: func(v int) { a.setRow(pad, rowPresets[v].mask) }})
+	run("Fill...", a.fillMenu)
+	run("Shape (gate, decay)...", a.shapeMenu)
 	run("Invert", a.invert)
 	run("Clear", func() {
 		args, _ := json.Marshal(lab.PatternArgs{Pad: pad})

@@ -129,11 +129,13 @@ func TestAssignSliceAndSequence(t *testing.T) {
 		t.Fatalf("A on a note takes it off, notes %d", len(d.Notes))
 	}
 	keys(t, a, "Y+X B") // a second track (the next pad with a sample), the menu: fill it with "every beat"
-	chooseMenu(t, a, "Fill with")
+	chooseMenu(t, a, "Fill...")
+	chooseMenu(t, a, "Fill the track")
 	d, _ = a.doc()
 	if len(d.Notes) != 1+16 {
 		t.Fatalf("every beat in 4 bars is 16 notes (and the other one): %d", len(d.Notes))
 	}
+	keys(t, a, "B") // the tool's menu stays open until it is closed
 	keys(t, a, "X")
 	if !a.seqOn || au.Loops != 1 {
 		t.Fatalf("X plays the pattern: on %v, loops %d", a.seqOn, au.Loops)
@@ -2224,5 +2226,160 @@ func TestAHeldKeyStepsBiggerTheLongerItIsHeld(t *testing.T) {
 	a.Release(A)
 	if n, _ := noteOn(a, 0); n.Vel != 100+1+4+10 {
 		t.Fatalf("velocity %d", n.Vel)
+	}
+}
+
+func TestBulkEditOfMarkedPads(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit) // A1..A3
+	a.go_(Pads)
+	a.lab.SetPadParam(0, 0x69, 100)
+	a.lab.SetPadParam(1, 0x69, 80)
+	a.lab.SetPadParam(2, 0x69, 127)
+	a.refresh()
+	level := func(p int) int32 { v, _ := a.lab.PadParam(p, 0x69); return v }
+	// mark the bank's pads with samples
+	a.cur = 0
+	a.markBank()
+	if len(a.marks) != 3 {
+		t.Fatalf("3 pads marked: %v", a.marks)
+	}
+	keys(t, a, "A")
+	if a.pp == nil || len(a.padTargets()) != 3 {
+		t.Fatal("the panel edits the 3 marked pads")
+	}
+	a.Render() // "3 MARKED PADS", the level shows a * (they differ)
+	keys(t, a, "L L L L L")
+	if level(0) != 95 || level(1) != 75 || level(2) != 122 {
+		t.Fatalf("each pad moves by the same amount, keeping the differences: %d %d %d", level(0), level(1), level(2))
+	}
+	keys(t, a, "A") // the default, on all
+	if level(0) != 127 || level(1) != 127 || level(2) != 127 {
+		t.Fatalf("A puts every pad to the default: %d %d %d", level(0), level(1), level(2))
+	}
+	// a switch is set on all of them (SHAPE: gate, loop are the 5th and 6th rows)
+	keys(t, a, "]")
+	keys(t, a, "D D D D D A")
+	for p := 0; p < 3; p++ {
+		if v, _ := a.lab.PadParam(p, 0x6B); v != 1 {
+			t.Fatalf("pad %d: loop is on", p)
+		}
+	}
+	// the tools act on all the marked pads
+	keys(t, a, "[ [") // round to the tools page
+	if a.pp.page != 2 {
+		t.Fatalf("page %d", a.pp.page)
+	}
+	m := menuOf(a)
+	found := false
+	for _, it := range m.items {
+		found = found || strings.Contains(it.label, "Reverse (3 marked pads)")
+	}
+	if !found {
+		t.Fatal("the tools say they act on 3 pads")
+	}
+	before := make([]int16, 3)
+	for p := 0; p < 3; p++ {
+		id, _ := a.padSample(p)
+		s, _ := a.lab.Sample(id)
+		before[p] = s.Samples[len(s.Samples)-1]
+	}
+	chooseMenuContaining(t, a, "Reverse (3 marked pads)")
+	if !strings.Contains(a.msg, "reverse on 3 pads") {
+		t.Fatalf("message %q", a.msg)
+	}
+	for p := 0; p < 3; p++ {
+		id, _ := a.padSample(p)
+		s, _ := a.lab.Sample(id)
+		if s.Samples[0] != before[p] {
+			t.Fatalf("pad %d is reversed: first sample %d, last was %d", p, s.Samples[0], before[p])
+		}
+	}
+	// one undo takes the whole bulk change back
+	keys(t, a, "Y+{")
+	id, _ := a.padSample(0)
+	s0, _ := a.lab.Sample(id)
+	if s0.Samples[len(s0.Samples)-1] != before[0] {
+		t.Fatal("undo gave the first pad's direction back")
+	}
+	// clear them all
+	a.go_(Pads)
+	a.cur = 0
+	keys(t, a, "A [")
+	chooseMenuContaining(t, a, "Clear (3 marked pads)")
+	if padsWithSamples(a) != 0 {
+		t.Fatalf("all 3 are cleared: %d left", padsWithSamples(a))
+	}
+}
+
+func TestFillGateDecayAndShape(t *testing.T) {
+	// every beat, gate 50%, decay 20%: the velocity falls on the hits of a bar and starts again in the next bar
+	ns := fillNotes(0, 2*1920, []int{0, 4, 8, 12}, 100, 50, 20)
+	if len(ns) != 8 {
+		t.Fatalf("4 hits in 2 bars: %d", len(ns))
+	}
+	want := []int{100, 80, 64, 51, 100, 80, 64, 51}
+	for i, n := range ns {
+		if n.Vel != want[i] || n.Len != 60 {
+			t.Fatalf("note %d: vel %d len %d, want vel %d len 60", i, n.Vel, n.Len, want[i])
+		}
+	}
+	if ln := fillNotes(0, 1920, []int{0}, 100, 200, 0)[0].Len; ln != 240 {
+		t.Fatalf("gate 200%% ties over a second step: %d", ln)
+	}
+	if len(fillPresets) < 15 {
+		t.Fatalf("only %d rhythms", len(fillPresets))
+	}
+	for _, f := range fillPresets {
+		for _, s := range f.mask {
+			if s < 0 || s > 15 {
+				t.Fatalf("%s has a step %d outside the bar", f.name, s)
+			}
+		}
+	}
+	// gate on notes that are there: a part of a step, or up to the next note
+	base := []lab.Note{{Tick: 0, Vel: 100, Len: 120}, {Tick: 480, Vel: 100, Len: 120}, {Tick: 1200, Vel: 100, Len: 120}}
+	g := gateNotes(base, 1920, 0)
+	if g[0].Len != 480 || g[1].Len != 720 || g[2].Len != 720 {
+		t.Fatalf("legato: %d %d %d", g[0].Len, g[1].Len, g[2].Len)
+	}
+	if g := gateNotes(base, 1920, 25); g[1].Len != 30 {
+		t.Fatalf("25%% of a step: %d", g[1].Len)
+	}
+	// decay counts from the first hit of each bar, whatever the order they were given in
+	d := decayNotes([]lab.Note{{Tick: 2040, Vel: 100}, {Tick: 0, Vel: 100}, {Tick: 240, Vel: 100}, {Tick: 1920, Vel: 100}}, 50)
+	got := map[uint32]int{}
+	for _, n := range d {
+		got[n.Tick] = n.Vel
+	}
+	if got[0] != 100 || got[240] != 50 || got[1920] != 100 || got[2040] != 50 {
+		t.Fatalf("decay: %v", got)
+	}
+	// euclid takes the decay as well
+	e := decayNotes(euclidNotes(0, 1920, 120, 16, 4, 0, 50, 100), 20)
+	if e[0].Vel != 100 || e[1].Vel != 80 || e[3].Vel != 51 {
+		t.Fatalf("euclid with decay: %d %d %d", e[0].Vel, e[1].Vel, e[3].Vel)
+	}
+	// in the pattern: fill, then shape the notes that are there
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.addTrack(0)
+	a.seqMenu()
+	chooseMenu(t, a, "Fill...")
+	a.tt.fillPat, a.tt.fillDecay = 3, 3 // off-beats, 15% decay
+	chooseMenu(t, a, "Fill the track")
+	notes := a.trackNotes(0)
+	if len(notes) != 16 || notes[0].Tick != 240 || notes[1].Vel != 85 {
+		t.Fatalf("off-beats over 4 bars with decay: %d notes, first %+v, second vel %d", len(notes), notes[0], notes[1].Vel)
+	}
+	keys(t, a, "B")
+	a.seqMenu()
+	chooseMenu(t, a, "Shape")
+	a.tt.shapeGate, a.tt.shapeDecay = 0, 0 // to the next note
+	chooseMenu(t, a, "Shape them")
+	notes = a.trackNotes(0)
+	if notes[0].Len != 480 {
+		t.Fatalf("legato to the next note: %d", notes[0].Len)
 	}
 }

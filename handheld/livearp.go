@@ -50,7 +50,7 @@ func (a *App) toggleMark() {
 		return
 	}
 	a.marks = append(a.marks, n)
-	a.say(fmt.Sprintf("%s marked, %d marked: R2 arps them", a.label(n), len(a.marks)), false)
+	a.say(fmt.Sprintf("%s marked, %d marked: A edits them all, R2 arps them", a.label(n), len(a.marks)), false)
 	a.liveArpUpdate()
 }
 
@@ -224,4 +224,15 @@ func (a *App) bounceMarkedArp() {
 	delete(a.pcm, to)
 	a.refresh()
 	a.say(fmt.Sprintf("the arp is on %s", a.label(to)), false)
+}
+
+// markBank marks every pad with a sample in the bank in front (the marks are replaced), for bulk editing and the arp.
+func (a *App) markBank() {
+	a.marks = nil
+	for i := 0; i < 16; i++ {
+		if p := a.bank*16 + i; a.info.Pads[p].File {
+			a.marks = append(a.marks, p)
+		}
+	}
+	a.say(fmt.Sprintf("%d pads of bank %c marked: A edits them all", len(a.marks), 'A'+rune(a.bank)), false)
 }
