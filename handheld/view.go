@@ -104,7 +104,7 @@ func (a *App) drawHelp(c *canvas) {
 		fmt.Sprintf("Y+L2  undo (%d)    Y+R2  redo (%d)", len(a.undo), len(a.redo)),
 		"Select+Start  quit (asks when not saved)",
 		"",
-		"PADS  FILES  SLICE  SEQ  SAVE  UNIT",
+		"PADS  SEQ  FILES  SLICE  SAVE  UNIT",
 		"SAVE writes a folder for the SD card; UNIT sends",
 		"the project over USB to an SP-404MKII (OTG port).",
 	}
@@ -138,6 +138,19 @@ func (a *App) drawPads(c *canvas) {
 		}
 		num := fmt.Sprint(i + 1)
 		c.text(x+tw-textW(num)-6, y+4, num, cDim, false)
+		if p.File { // the switches that are on: G for gate, L for loop
+			cx := x + tw - textW(num) - 10
+			for _, sw := range []struct {
+				id byte
+				ch string
+			}{{0x6B, "L"}, {0x6A, "G"}} {
+				if v, err := a.lab.PadParam(n, sw.id); err == nil && v != 0 {
+					cx -= 14
+					c.rect(cx, y+4, 12, 14, cAmberD)
+					c.text(cx+2, y+3, sw.ch, cAmber, true)
+				}
+			}
+		}
 		for mi, mp := range a.marks { // a pad that is a key of the arp: its place among the keys
 			if mp == n {
 				c.rect(x+4, y+4, 20, 14, cAmber)

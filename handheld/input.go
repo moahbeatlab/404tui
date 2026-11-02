@@ -174,7 +174,7 @@ func Evdev(path string, m map[uint16]Key, out chan<- Event) error {
 	go func() {
 		defer f.Close()
 		buf := make([]byte, 24) // struct input_event on 64 bit: timeval (16), type, code (2 each), value (4)
-		held := map[Key]int{}
+		held := newChain()
 		var hatX, hatY int32
 		unknown := map[uint16]bool{}
 		quitHeld := map[uint16]bool{}
@@ -214,7 +214,7 @@ func Evdev(path string, m map[uint16]Key, out chan<- Event) error {
 	return nil
 }
 
-func hat(out chan<- Event, held map[Key]int, old *int32, v int32, neg, pos Key) {
+func hat(out chan<- Event, held *chain, old *int32, v int32, neg, pos Key) {
 	if *old < 0 {
 		emit(out, held, neg, 0)
 	}
@@ -230,16 +230,52 @@ func hat(out chan<- Event, held map[Key]int, old *int32, v int32, neg, pos Key) 
 	*old = v
 }
 
-func emit(out chan<- Event, held map[Key]int, k Key, val int32) {
+// chain counts how long a direction key has been held, in units of 160 ms, whatever the pad sends while it is held: key
+// repeats (value 2), or the same press again and again (value 1), as the R36S's pad seems to do. A press within 350 ms of the
+// last event of that key goes on with the hold.
+type chain struct {
+	start, last map[Key]time.Time
+}
+
+const (
+	chainGap  = 350 * time.Millisecond
+	chainUnit = 160 * time.Millisecond
+)
+
+func newChain() *chain { return &chain{start: map[Key]time.Time{}, last: map[Key]time.Time{}} }
+
+// down is the Repeat of a press: 0 for the first of a hold, then the time held in units, at least 1.
+func (c *chain) down(k Key, now time.Time) int {
+	if t, ok := c.last[k]; ok && now.Sub(t) < chainGap {
+		c.last[k] = now
+		return max(int(now.Sub(c.start[k])/chainUnit), 1)
+	}
+	c.start[k], c.last[k] = now, now
+	return 0
+}
+
+func (c *chain) up(k Key, now time.Time) { c.last[k] = now }
+
+// holds are the keys whose hold makes a step bigger.
+func holds(k Key) bool { return k <= Right || k == L1 || k == R1 }
+
+func emit(out chan<- Event, held *chain, k Key, val int32) {
+	now := time.Now()
 	switch val {
 	case 0:
-		delete(held, k)
+		held.up(k, now)
 		out <- Event{Key: k}
-	case 1:
-		held[k] = 0
-		out <- Event{Key: k, Down: true}
-	case 2:
-		held[k]++
-		out <- Event{Key: k, Down: true, Repeat: held[k]}
+	case 1, 2:
+		rep := 0
+		if val == 2 {
+			rep = 1
+		}
+		if holds(k) {
+			rep = held.down(k, now)
+			if val == 2 {
+				rep = max(rep, 1)
+			}
+		}
+		out <- Event{Key: k, Down: true, Repeat: rep}
 	}
 }

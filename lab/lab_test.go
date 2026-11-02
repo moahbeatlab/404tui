@@ -944,3 +944,33 @@ func TestPadParams(t *testing.T) {
 		t.Fatal("an unknown parameter")
 	}
 }
+
+func TestSetupPadFixesWhatWasNeverSetUp(t *testing.T) {
+	l := New()
+	l.NewProject("S")
+	w := formats.Sample{Channels: 1, Samples: make([]int16, 4800)}
+	b, err := l.Decode(w.WAV(), "wav")
+	ok(t, err)
+	var m Meta
+	json.Unmarshal(b, &m)
+	ok(t, l.Assign(3, m.ID, "x"))
+	if n, _ := l.SetupPad(3); n != 0 {
+		t.Fatalf("a pad with sensible values is left alone: %d", n)
+	}
+	// what a pad of a project written by another tool can have: zeros
+	ok(t, l.SetPadParamRaw(3, 0x78, 0))
+	ok(t, l.SetPadParamRaw(3, 0x7E, 0))
+	if v, _ := l.PadParam(3, 0x78); v != 0 {
+		t.Fatalf("setup: %d", v)
+	}
+	n, err := l.SetupPad(3)
+	ok(t, err)
+	if n != 2 {
+		t.Fatalf("pan and hold were out of range: %d fixed", n)
+	}
+	for id, want := range map[byte]int32{0x78: 64, 0x7E: 100, 0x76: 10000} {
+		if v, _ := l.PadParam(3, id); v != want {
+			t.Errorf("param %#x: %d, want %d", id, v, want)
+		}
+	}
+}

@@ -32,68 +32,88 @@ func (a *App) steps() int {
 }
 
 // rowPad is the pad of the row under the cursor.
-func (a *App) rowPad() int { return a.rows[a.row] }
-
-// autoRows picks the 8 pads of the columns, unless the user chose some: first the pad that was in front on PADS,
-// then pads that have notes in the pattern, then pads with samples, then the pads that follow.
-func (a *App) autoRows() {
-	if a.rowsOwn && a.rowsSet {
-		return
+func (a *App) rowPad() int {
+	if a.row < 0 || a.row >= len(a.rows) {
+		return a.padN()
 	}
-	keep := -1 // the pad the cursor is on stays under it when the rows are worked out again
-	if a.rowsSet {
+	return a.rows[a.row]
+}
+
+const maxRows = 16
+
+// autoRows works out the rows of the step grid: only the tracks in use, the pads that have notes in the pattern, with the marked
+// pads (the keys of an arp) and the tracks the user added; for an empty pattern the pad that was in front, to start with. The pad
+// the cursor is on stays while the cursor is on it, even when its last note has been taken off. In pad order.
+func (a *App) autoRows() {
+	keep := -1
+	if a.rowFocus >= 0 {
+		keep, a.rowFocus = a.rowFocus, -1
+	} else if a.rowsSet && a.row >= 0 && a.row < len(a.rows) {
 		keep = a.rows[a.row]
 	}
-	var picks []int
-	seen := map[int]bool{}
-	add := func(p int) {
-		if p >= 0 && p < 160 && !seen[p] && len(picks) < len(a.rows) {
-			seen[p] = true
-			picks = append(picks, p)
-		}
-	}
+	set := map[int]bool{}
 	d, _ := a.doc()
-	withNotes := map[int]bool{}
 	for _, n := range d.Notes {
-		withNotes[n.Pad] = true
+		set[n.Pad] = true
 	}
-	for _, p := range a.marks { // the marked pads are the keys: they are the columns
-		add(p)
+	for _, p := range a.marks {
+		set[p] = true
 	}
-	add(a.padN())
-	for p := 0; p < 160; p++ {
-		if withNotes[p] {
-			add(p)
+	if keep >= 0 {
+		set[keep] = true
+	}
+	var extras []int // a track that was added stays while it has notes or the cursor is on it
+	for _, p := range a.rowExtra {
+		if set[p] {
+			extras = append(extras, p)
 		}
 	}
-	for off := 0; off < 160; off++ {
-		if p := (a.padN() + off) % 160; a.info.Pads[p].File {
-			add(p)
-		}
+	a.rowExtra = extras
+	for _, p := range extras {
+		set[p] = true
 	}
-	for p := a.padN() + 1; len(picks) < len(a.rows) && p < 320; p++ {
-		add(p % 160)
+	if len(set) == 0 {
+		set[a.padN()] = true // nothing yet: the pad that was in front
 	}
-	sort.Ints(picks) // in pad order; the cursor starts on the pad that was in front
-	copy(a.rows[:], picks)
+	picks := make([]int, 0, len(set))
+	for p := range set {
+		picks = append(picks, p)
+	}
+	sort.Ints(picks)
+	a.rows = picks
 	a.rowsSet = true
 	target := keep
 	if target < 0 {
-		target = a.padN() // the first time: the pad that was in front
+		target = a.padN()
 	}
-	found := false
+	a.row = 0
 	for i, p := range picks {
 		if p == target {
-			a.row, found = i, true
+			a.row = i
 		}
 	}
-	if !found {
-		for i, p := range picks {
-			if p == a.padN() {
-				a.row = i
-			}
+	if a.row < a.rowTop {
+		a.rowTop = a.row
+	}
+	if a.row >= a.rowTop+maxRows {
+		a.rowTop = a.row - maxRows + 1
+	}
+	a.rowTop = max(0, min(a.rowTop, len(picks)-maxRows))
+}
+
+// addTrack puts a pad among the rows (it has no notes yet) and the cursor on it.
+func (a *App) addTrack(p int) {
+	for _, q := range a.rowExtra {
+		if q == p {
+			a.rowFocus = p
+			a.autoRows()
+			return
 		}
 	}
+	a.rowExtra = append(a.rowExtra, p)
+	a.rowFocus = p
+	a.autoRows()
+	a.say(fmt.Sprintf("a track for %s", a.label(p)), false)
 }
 
 // noteAt finds the note of a pad that starts in a step.
@@ -111,7 +131,7 @@ func (a *App) seqKey(k Key, repeat int) {
 		a.noteEditKey(k, repeat)
 		return
 	}
-	jump := 1 + repeat/8 // a held key runs faster
+	jump := 1 + repeat/4 // a held key runs faster
 	switch k {
 	case Left: // the steps run across the screen
 		a.step = max(a.step-jump, 0)
@@ -119,8 +139,10 @@ func (a *App) seqKey(k Key, repeat int) {
 		a.step = min(a.step+jump, a.steps()-1)
 	case Up: // the pads run down it
 		a.row = max(a.row-1, 0)
+		a.autoRows() // the track left drops out when it has no notes
 	case Down:
 		a.row = min(a.row+1, len(a.rows)-1)
+		a.autoRows()
 	case A:
 		a.holdNote()
 	case X:
@@ -162,12 +184,7 @@ func (a *App) noteEditKey(k Key, repeat int) {
 	if !found {
 		return
 	}
-	acc := 1
-	if repeat >= 14 {
-		acc = 8
-	} else if repeat >= 6 {
-		acc = 4
-	}
+	acc := accel(repeat)
 	vel, ln, move := n.Vel, n.Len, 0
 	switch k {
 	case Up:
@@ -213,21 +230,24 @@ func (a *App) seqShifted(k Key) {
 	case B:
 		a.openPicker()
 	case X:
-		// the column's pad: the next pad that has a sample
+		// a track for the next pad that has a sample and is not a row yet
+		shown := map[int]bool{}
+		for _, p := range a.rows {
+			shown[p] = true
+		}
 		for off := 1; off < 160; off++ {
 			p := (a.rowPad() + off) % 160
-			if a.info.Pads[p].File {
-				a.rows[a.row] = p
-				a.rowsOwn = true
-				a.say(fmt.Sprintf("row %d is pad %s", a.row+1, a.label(p)), false)
+			if a.info.Pads[p].File && !shown[p] {
+				a.addTrack(p)
 				return
 			}
 		}
-		a.say("no other pad has a sample", true)
+		a.say("every pad with a sample is a track already", false)
 	}
 }
 
 func (a *App) setPattern(n int) {
+	a.rowExtra = nil // the tracks added belong to the pattern they were added to
 	a.pat = (n+159)%160 + 1
 	a.step = min(a.step, a.steps()-1)
 	a.autoRows()
@@ -430,11 +450,7 @@ func (a *App) seqMenu() {
 	for i := range padNames {
 		padNames[i] = a.label(i)
 	}
-	m.items = append(m.items, menuItem{label: "Pad of this row", vals: padNames, val: pad, run: func(v int) {
-		a.rows[a.row] = v
-		a.rowsOwn = true
-		a.say(fmt.Sprintf("row %d is pad %s", a.row+1, a.label(v)), false)
-	}})
+	m.items = append(m.items, menuItem{label: "Add a track for the pad", vals: padNames, val: (pad + 1) % 160, run: func(v int) { a.addTrack(v) }})
 	a.menu = m
 }
 
@@ -573,7 +589,8 @@ func (a *App) drawSeq(c *canvas) {
 	bars := (steps + 15) / 16
 	ph := a.playStep()
 	const ry = 74
-	rh := (panelBot - 6 - ry) / len(a.rows)
+	shown := a.rows[a.rowTop:min(len(a.rows), a.rowTop+maxRows)]
+	rh := min((panelBot-6-ry)/max(len(shown), 6), 36) // few tracks: taller rows
 	stepX := func(s int) int { return x0 + s*cw + (s/4)*gap }
 
 	// the step numbers
@@ -596,13 +613,14 @@ func (a *App) drawSeq(c *canvas) {
 		st := page*16 + s
 		switch {
 		case ph == st:
-			c.rect(stepX(s)-1, ry-2, cw, rh*len(a.rows)+2, cLine)
+			c.rect(stepX(s)-1, ry-2, cw, rh*len(shown)+2, cLine)
 		case st == a.step:
-			c.rect(stepX(s)-1, ry-2, cw, rh*len(a.rows)+2, cPanel2)
+			c.rect(stepX(s)-1, ry-2, cw, rh*len(shown)+2, cPanel2)
 		}
 	}
-	for i, pad := range a.rows {
-		y := ry + i*rh
+	for si, pad := range shown {
+		i := a.rowTop + si // the index in all the rows
+		y := ry + si*rh
 		has := a.info.Pads[pad].File
 		fg := cDim
 		if has {

@@ -52,3 +52,56 @@ func (l *Lab) SetPadParam(n int, id byte, v int32) error {
 	l.pad.Blocks[n] = blk.Raw()
 	return nil
 }
+
+// SetupPad puts the settings a pad that was never set up has at zero, where the unit wants more, to their defaults: the pan at its
+// centre, the hold at 100%, the time stretch at 100%, the sample's BPM at 120. It says how many it changed. A pad that already
+// has sensible values is left as it is.
+func (l *Lab) SetupPad(n int) (int, error) {
+	if l.pad == nil {
+		return 0, errors.New("there is no project")
+	}
+	if n < 0 || n > 159 {
+		return 0, fmt.Errorf("no pad %d", n)
+	}
+	blk, err := proto.ParsePadBlock(l.pad.Blocks[n])
+	if err != nil {
+		return 0, err
+	}
+	fixed := 0
+	for _, f := range []struct {
+		id       byte
+		lo, hi   int32
+		def      int32
+		hasField bool
+	}{{0x78, 13, 115, 64, true}, {0x7E, 1, 100, 100, true}, {0x76, 5000, 15000, 10000, true}, {0x6F, 4000, 20000, 12000, true}} {
+		v, ok := blk.Param(f.id)
+		field, fok := proto.BlockField(f.id)
+		if !ok || !fok || (v >= f.lo && v <= f.hi) {
+			continue
+		}
+		blk.SetField(field, uint32(f.def))
+		fixed++
+	}
+	if fixed > 0 {
+		l.pad.Blocks[n] = blk.Raw()
+	}
+	return fixed, nil
+}
+
+// SetPadParamRaw sets a field without keeping it inside its range (for what other tools wrote, and for tests of SetupPad).
+func (l *Lab) SetPadParamRaw(n int, id byte, v int32) error {
+	if l.pad == nil || n < 0 || n > 159 {
+		return errors.New("no such pad")
+	}
+	field, ok := proto.BlockField(id)
+	if !ok {
+		return fmt.Errorf("parameter %#x is not in the project file", id)
+	}
+	blk, err := proto.ParsePadBlock(l.pad.Blocks[n])
+	if err != nil {
+		return err
+	}
+	blk.SetField(field, uint32(v))
+	l.pad.Blocks[n] = blk.Raw()
+	return nil
+}

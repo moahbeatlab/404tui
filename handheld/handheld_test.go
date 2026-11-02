@@ -99,7 +99,7 @@ func TestAssignSliceAndSequence(t *testing.T) {
 		t.Fatalf("the loop is on %s", a.label(a.padN()))
 	}
 	loopPad := a.padN()
-	keys(t, a, "Y+R Y+R Y+A")
+	keys(t, a, "Y+R Y+R Y+R Y+A") // PADS, SEQ, FILES, SLICE
 	if a.Slices() < 3 {
 		t.Fatalf("auto slice found %d slices in a loop of hits", a.Slices())
 	}
@@ -115,7 +115,7 @@ func TestAssignSliceAndSequence(t *testing.T) {
 	}
 
 	// the sequencer: A puts a note, A again takes it off, the menu fills a row
-	keys(t, a, "Y+R Y+R Y+R")
+	keys(t, a, "Y+R")
 	if a.Screen() != Seq {
 		t.Fatalf("screen %v", a.Screen())
 	}
@@ -128,7 +128,7 @@ func TestAssignSliceAndSequence(t *testing.T) {
 	if d, _ = a.doc(); len(d.Notes) != 1 {
 		t.Fatalf("A on a note takes it off, notes %d", len(d.Notes))
 	}
-	keys(t, a, "D B") // the next row, the menu: fill it with "every beat"
+	keys(t, a, "Y+X B") // a second track (the next pad with a sample), the menu: fill it with "every beat"
 	chooseMenu(t, a, "Fill with")
 	d, _ = a.doc()
 	if len(d.Notes) != 1+16 {
@@ -159,7 +159,7 @@ func TestAssignSliceAndSequence(t *testing.T) {
 	}
 
 	// save, then open the folder again
-	keys(t, a, "Y+R")
+	keys(t, a, "Y+R Y+R Y+R") // SEQ, FILES, SLICE, SAVE
 	if a.Screen() != Save {
 		t.Fatalf("screen %v", a.Screen())
 	}
@@ -257,7 +257,7 @@ func TestWebKeysAreTheSameEightKeys(t *testing.T) {
 func TestHelpDoesNotEatAChord(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, "Y Y+R")
-	if a.Screen() != Files || a.help {
+	if a.Screen() != Seq || a.help {
 		t.Fatalf("screen %v help %v: Y with the help open closes it and the chord goes on", a.Screen(), a.help)
 	}
 }
@@ -470,7 +470,7 @@ func TestSlicesNeverLandOnUsedPads(t *testing.T) {
 		return n
 	}
 	before := names()
-	keys(t, a, "Y+R Y+R R*6 A Y+X") // cut the kick in two, put the slices on pads
+	keys(t, a, "Y+R Y+R Y+R R*6 A Y+X") // to SLICE: cut the kick in two, put the slices on pads
 	if a.scr != Pads {
 		t.Fatalf("expected the pads after Y+X, on %v: %s", a.scr, a.msg)
 	}
@@ -486,35 +486,19 @@ func TestStepGridPadsDownStepsAcross(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit) // kick, snare, hat on A1..A3, the cursor on A3
 	a.go_(Seq)
-	for i := 1; i < len(a.rows); i++ {
-		if a.rows[i-1] >= a.rows[i] {
-			t.Fatalf("rows are not in pad order: %v", a.rows)
-		}
+	// nothing is in the pattern yet: one track, the pad that was in front
+	if len(a.rows) != 1 || a.rowPad() != 2 {
+		t.Fatalf("an empty pattern shows the pad in front, A3: rows %v", a.rows)
 	}
-	if a.rows[0] != 0 || a.rows[1] != 1 || a.rows[2] != 2 {
-		t.Fatalf("the pads with samples come first: %v", a.rows)
-	}
-	if a.rowPad() != 2 {
-		t.Fatalf("the cursor starts on the pad that was in front (A3), not %d", a.rowPad())
-	}
-	// Up/Down change the pad (the row), Left/Right the step
-	keys(t, a, "U U")
-	if a.row != 0 {
-		t.Fatalf("row %d", a.row)
-	}
-	keys(t, a, "D")
-	if a.row != 1 {
-		t.Fatalf("Down is the next pad: row %d", a.row)
-	}
-	keys(t, a, "U")
+	// Left/Right move the step; the first note makes the track a used one
 	keys(t, a, strings.Repeat("R ", 40)+"A")
 	if a.step != 40 {
 		t.Fatalf("step %d", a.step)
 	}
 	d, _ := a.doc()
-	n, ok := noteAt(d, 0, 40)
+	n, ok := noteAt(d, 2, 40)
 	if !ok || int(n.Tick) != 40*stepTicks {
-		t.Fatalf("no note at step 41 of the kick: %+v", d.Notes)
+		t.Fatalf("no note at step 41 of the hat: %+v", d.Notes)
 	}
 	if img := a.Render(); img.Bounds().Dx() != W { // the view has scrolled to step 40
 		t.Fatal("no frame")
@@ -524,15 +508,110 @@ func TestStepGridPadsDownStepsAcross(t *testing.T) {
 	if a.step != a.steps()-1 {
 		t.Fatalf("stops at the last step, got %d of %d", a.step, a.steps())
 	}
-	// Y+X gives the row the next pad with a sample, and it stays when the pattern changes
+	// Y+X adds a track for the next pad with a sample that is not a row; the cursor goes to it
 	keys(t, a, "Y+X")
-	if a.rowPad() != 1 || !a.rowsOwn {
-		t.Fatalf("row 1 should be pad A2 now, is %d", a.rowPad())
+	if len(a.rows) != 2 || a.rowPad() != 3 && a.rowPad() != 0 && a.rowPad() != 1 {
+		t.Fatalf("a track was added: %v on %d", a.rows, a.rowPad())
 	}
+	added := a.rowPad()
+	if !a.info.Pads[added].File {
+		t.Fatalf("the track is a pad with a sample: %d", added)
+	}
+	for i := 1; i < len(a.rows); i++ {
+		if a.rows[i-1] >= a.rows[i] {
+			t.Fatalf("rows are in pad order: %v", a.rows)
+		}
+	}
+	// the added track has no notes: when the cursor leaves it, it drops out
+	keys(t, a, "U")
+	if a.rowPad() == added {
+		keys(t, a, "D")
+	}
+	if len(a.rows) != 1 || a.rowPad() != 2 {
+		t.Fatalf("the added track dropped out when the cursor left it: %v on %d", a.rows, a.rowPad())
+	}
+	// up and down change the pad (the row)
+	a.addTrack(0)
+	a.addTrack(1)
+	a.step = 3
+	keys(t, a, "A") // a note on A2, so that its track stays
+	a.addTrack(0)
+	keys(t, a, "A")
+	a.step = 4
+	a.addTrack(2)
+	if len(a.rows) != 3 {
+		t.Fatalf("A1, A2 and A3 are tracks with notes: %v", a.rows)
+	}
+	a.row = 0
+	keys(t, a, "D")
+	if a.row != 1 {
+		t.Fatalf("Down is the next pad: row %d", a.row)
+	}
+	keys(t, a, "U U")
+	if a.row != 0 {
+		t.Fatalf("Up stops at the first: %d", a.row)
+	}
+	// a new pattern forgets the tracks added to the old one
 	keys(t, a, "Y+U")
-	if a.rows[0] != 1 {
-		t.Fatalf("the user's row was reset by the pattern change: %v", a.rows)
+	if len(a.rowExtra) != 0 {
+		t.Fatalf("the tracks added belong to their pattern: %v", a.rowExtra)
 	}
+}
+
+func TestOnlyTheTracksInUseShow(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.row = 0
+	// put a note on A3 (the pad in front), then add A1 and A2 as tracks and put notes there
+	keys(t, a, "A")
+	a.addTrack(0)
+	keys(t, a, "A")
+	a.addTrack(1)
+	keys(t, a, "A")
+	if fmt.Sprint(a.rows) != "[0 1 2]" {
+		t.Fatalf("three tracks in use: %v", a.rows)
+	}
+	// take the only note off a track and move away: it drops out
+	a.row = 1
+	a.step = 0
+	keys(t, a, "A") // the note on A2 goes (on release)
+	if _, ok := noteOn(a, 1); ok {
+		t.Fatal("the note should be off")
+	}
+	if fmt.Sprint(a.rows) != "[0 1 2]" {
+		t.Fatalf("the track the cursor is on stays: %v", a.rows)
+	}
+	keys(t, a, "U")
+	if fmt.Sprint(a.rows) != "[0 2]" {
+		t.Fatalf("an empty track drops out when the cursor leaves it: %v", a.rows)
+	}
+	if a.rowPad() != 0 {
+		t.Fatalf("the cursor is on A1: %d", a.rowPad())
+	}
+	// marked pads are tracks too (the keys of the arp)
+	a.marks = []int{5}
+	a.autoRows()
+	if fmt.Sprint(a.rows) != "[0 2 5]" {
+		t.Fatalf("a marked pad is a row: %v", a.rows)
+	}
+	// more than 16 tracks: the view scrolls with the cursor
+	a.marks = nil
+	a.rowExtra = nil
+	for p := 0; p < 24; p++ {
+		a.setTrack(p, []lab.Note{{Tick: 0, Pad: p, Vel: 100, Len: stepTicks}})
+	}
+	a.autoRows()
+	if len(a.rows) != 24 || a.rowTop != 0 {
+		t.Fatalf("24 rows: %d, top %d", len(a.rows), a.rowTop)
+	}
+	for i := 0; i < 20; i++ {
+		keys(t, a, "D")
+	}
+	if a.row < a.rowTop || a.row >= a.rowTop+maxRows || a.rowTop == 0 {
+		t.Fatalf("the cursor is in view: row %d top %d", a.row, a.rowTop)
+	}
+	a.Render()
 }
 
 func TestPanelShowsTheKeysOfTheScreen(t *testing.T) {
@@ -1064,23 +1143,24 @@ func TestArpTypes(t *testing.T) {
 	}
 }
 
-func TestPatternArpPrintsOverTheColumns(t *testing.T) {
+func TestPatternArpPrintsOverTheMarkedPads(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit) // A1..A3 have samples
 	a.go_(Seq)
-	if len(a.arpKeys(0)) < 3 {
-		t.Fatalf("keys %v", a.arpKeys(0))
-	}
+	a.marks = []int{0, 1, 2}
 	a.arpPrintDefaults()
+	keys3 := a.markedKeys()
+	if len(keys3) != 3 {
+		t.Fatalf("keys %v", keys3)
+	}
 	// 1/16 over 2 bars = 32 steps: UP over 3 keys puts a note on every step, on the keys in turn
 	a.arpp.rate, a.arpp.typ = 3, 0
-	a.printArp()
+	a.printArpKeys(keys3)
 	d, ok := a.doc()
 	if !ok || d.Bars != 2 || len(d.Notes) != 32 {
 		t.Fatalf("%d notes in %d bars", len(d.Notes), d.Bars)
 	}
 	sort.Slice(d.Notes, func(i, j int) bool { return d.Notes[i].Tick < d.Notes[j].Tick })
-	keys3 := a.arpKeys(0)
 	for i, n := range d.Notes {
 		if int(n.Tick) != i*stepTicks || n.Pad != keys3[i%len(keys3)] {
 			t.Fatalf("note %d: tick %d pad %d, want tick %d pad %d", i, n.Tick, n.Pad, i*stepTicks, keys3[i%len(keys3)])
@@ -1092,7 +1172,7 @@ func TestPatternArpPrintsOverTheColumns(t *testing.T) {
 	// printing again replaces the notes of the key pads, it does not add
 	a.arpp.typ = 6 // CHRD: every key on every step
 	a.arpp.rate = 1
-	a.printArp()
+	a.printArpKeys(keys3)
 	d, _ = a.doc()
 	if len(d.Notes) != 2*4*2*len(keys3) {
 		t.Fatalf("CHRD at 1/8 over 2 bars: %d notes", len(d.Notes))
@@ -1101,7 +1181,7 @@ func TestPatternArpPrintsOverTheColumns(t *testing.T) {
 	a2, _ := newApp(t)
 	keys(t, a2, "A A D R D D A")
 	a2.go_(Seq)
-	a2.printArp()
+	a2.printArpKeys(a2.markedKeys())
 	if !a2.msgBad {
 		t.Fatal("one key is not an arp")
 	}
@@ -1139,12 +1219,11 @@ func TestSampleToolsArpAndKeyboard(t *testing.T) {
 		t.Fatalf("scale steps: %d %d %d", keySemis(2, 0), keySemis(7, 0), keySemis(3, -1))
 	}
 	// the arp lays the notes over the keyboard
-	a.rows = [16]int{}
-	a.rowsOwn = false
+	a.marks = []int{a.padN(), a.padN() + 1, a.padN() + 2, a.padN() + 3, a.padN() + 4}
 	a.go_(Pads)
 	a.go_(Seq)
-	if len(a.arpKeys(0)) < 5 {
-		t.Fatalf("the keyboard pads are the columns: %v", a.rows)
+	if len(a.markedKeys()) < 5 || len(a.rows) < 5 {
+		t.Fatalf("the marked keyboard pads are the rows: %v", a.rows)
 	}
 }
 
@@ -1625,7 +1704,8 @@ func TestHoldAEditsTheNote(t *testing.T) {
 	a, au := newApp(t)
 	keys(t, a, kit)
 	a.go_(Seq)
-	a.row, a.step = 0, 4 // A1, step 5
+	a.addTrack(0) // A1
+	a.step = 4    // step 5
 	base := len(a.undo)
 	// A down puts a note; with A held the arrows shape it: Up velocity, Right length, R1 nudge
 	a.Press(A, 0)
@@ -1637,7 +1717,7 @@ func TestHoldAEditsTheNote(t *testing.T) {
 		t.Fatalf("a new note: %+v", n)
 	}
 	for i := 0; i < 5; i++ {
-		a.Press(Up, i%3)
+		a.Press(Up, i%3) // short holds: one at a time
 	}
 	for i := 0; i < 4; i++ {
 		a.Press(Right, 0)
@@ -1704,7 +1784,7 @@ func TestHoldAEditsTheNote(t *testing.T) {
 	a2, _ := newApp(t)
 	keys(t, a2, kit)
 	a2.go_(Seq)
-	a2.row = 0
+	a2.addTrack(0)
 	keys(t, a2, "A+U A+U A+R")
 	if n6, ok := noteOn(a2, 0); !ok || n6.Vel != 102 || n6.Len != stepTicks+15 {
 		t.Fatalf("chord: %+v %v", n6, ok)
@@ -1715,7 +1795,7 @@ func TestHearTheNoteUnderTheCursor(t *testing.T) {
 	a, au := newApp(t)
 	keys(t, a, kit)
 	a.go_(Seq)
-	a.row = 0
+	a.addTrack(0)
 	au.Played = 0
 	keys(t, a, "{")
 	if au.Played != 1 {
@@ -1755,7 +1835,8 @@ func TestTimingAppliesToEveryPadOrOneTrack(t *testing.T) {
 		return out
 	}
 	before1 := fmt.Sprint(ticks(1))
-	a.row = 0
+	a.autoRows()
+	a.addTrack(0)
 	a.seqMenu()
 	chooseMenu(t, a, "Applies to")
 	keys(t, a, "R")
@@ -1851,7 +1932,7 @@ func TestTrackToolsInThePattern(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit)
 	a.go_(Seq)
-	a.row = 0
+	a.addTrack(0)
 	a.seqMenu()
 	chooseMenu(t, a, "Euclid")
 	if a.menu == nil || !strings.Contains(a.menu.title, "euclid") {
@@ -1895,7 +1976,8 @@ func TestNoteInfoSaysHowFarOffTheGrid(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit)
 	a.go_(Seq)
-	a.row, a.step = 0, 4
+	a.addTrack(0)
+	a.step = 4
 	if a.noteInfo() != "" {
 		t.Fatal("no note, no info")
 	}
@@ -1953,9 +2035,9 @@ func TestPadPanelFadersAndSwitches(t *testing.T) {
 	}
 	// a key held runs faster: repeats 6 and up are 4 at a time
 	a.Press(Left, 0)
-	a.Press(Left, 7)
-	a.Press(Left, 15)
-	if get(0x69) != 107-1-4-8 {
+	a.Press(Left, 4) // held half a second: steps of 4
+	a.Press(Left, 9) // held more than a second: steps of 10
+	if get(0x69) != 107-1-4-10 {
 		t.Fatalf("held: %d", get(0x69))
 	}
 	keys(t, a, "A") // back to the default
@@ -2092,4 +2174,55 @@ func TestPadPanelTheToolsPageAndEmptyPads(t *testing.T) {
 		t.Fatal("undo takes the fader change back")
 	}
 	_ = before
+}
+
+func TestAHeldKeyStepsBiggerTheLongerItIsHeld(t *testing.T) {
+	if accel(0) != 1 || accel(2) != 1 || accel(3) != 4 || accel(7) != 4 || accel(8) != 10 || accel(30) != 10 {
+		t.Fatalf("accel: %d %d %d %d %d", accel(0), accel(3), accel(7), accel(8), accel(30))
+	}
+	// the chain counts the time held, whatever the pad sends (value 1 again and again, or value 2)
+	c := newChain()
+	t0 := time.Now()
+	if r := c.down(Down, t0); r != 0 {
+		t.Fatalf("the first press: %d", r)
+	}
+	var last int
+	for i := 1; i <= 12; i++ { // a press every 170 ms, never let go
+		last = c.down(Down, t0.Add(time.Duration(i)*170*time.Millisecond))
+		if last < 1 {
+			t.Fatalf("repeat %d is %d", i, last)
+		}
+	}
+	if accel(last) != 10 {
+		t.Fatalf("held for two seconds: repeat %d, step x%d", last, accel(last))
+	}
+	// a pause starts a new hold
+	if r := c.down(Down, t0.Add(5*time.Second)); r != 0 {
+		t.Fatalf("after a pause: %d", r)
+	}
+	// only the direction keys and the shoulders go on when held; a repeat of A does nothing
+	if holds(A) || holds(B) || !holds(Up) || !holds(R1) {
+		t.Fatal("holds")
+	}
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.addTrack(0)
+	a.step = 2
+	a.Press(A, 0)
+	a.Press(A, 3) // the pad repeating the A press: nothing
+	a.Press(A, 5)
+	a.Release(A)
+	if _, ok := noteOn(a, 0); !ok {
+		t.Fatal("a held A is one note, not a note taken off again")
+	}
+	// the note edit takes the big steps
+	a.Press(A, 0)
+	a.Press(Up, 0)
+	a.Press(Up, 4)
+	a.Press(Up, 9)
+	a.Release(A)
+	if n, _ := noteOn(a, 0); n.Vel != 100+1+4+10 {
+		t.Fatalf("velocity %d", n.Vel)
+	}
 }

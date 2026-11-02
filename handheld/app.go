@@ -53,14 +53,14 @@ type Screen int
 
 const (
 	Pads Screen = iota
+	Seq         // right next to the pads: pads and patterns are worked on together
 	Files
 	Slice
-	Seq
 	Save
 	Unit
 )
 
-var screenNames = []string{"PADS", "FILES", "SLICE", "SEQ", "SAVE", "UNIT"}
+var screenNames = []string{"PADS", "SEQ", "FILES", "SLICE", "SAVE", "UNIT"}
 
 // Audio plays a sample for the ear; a nil Audio is silent.
 type Audio interface {
@@ -144,9 +144,11 @@ type App struct {
 	pat       int            // pattern in the sequencer, 1..160
 	step      int            // the cursor's step, 16 to a bar
 	row       int            // the cursor's row in the step grid: an index into rows
-	rows      [16]int        // the pad of each row
+	rows      []int          // the pads of the rows of the step grid: the pads with notes, the marked pads, the tracks added
 	rowsSet   bool           // the rows were chosen (by default or by the user)
-	rowsOwn   bool           // the user changed a row: they stay when the pattern changes
+	rowTop    int            // the first row shown, when there are more than 16
+	rowExtra  []int          // tracks the user added, which have no notes yet
+	rowFocus  int            // a pad the cursor should go to when the rows are worked out again (-1: none)
 	seqOn     bool           // the pattern is playing
 	seqStart  time.Time
 	// Now is the clock; nil is the real one. A test sets it.
@@ -169,7 +171,7 @@ type App struct {
 
 // New starts an app on a folder of samples, with an empty project.
 func New(root, outDir string, a Audio) *App {
-	app := &App{pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, dcur: map[string]int{}, playing: -1, slot: 1}
+	app := &App{pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, dcur: map[string]int{}, playing: -1, slot: 1, rowFocus: -1}
 	app.lab.NewProject("PROJECT_01")
 	app.dir = root
 	app.loadSettings()
@@ -349,7 +351,22 @@ func (a *App) hasWork() bool {
 
 // press handles one key going down. repeat counts the repeats of a held key (0 for the first press), which
 // make a cursor move faster.
+// accel is how many times bigger a step is for a key held this long (repeat is in units of 160 ms): 1, then 4 after half a second,
+// then 10 after a second and a bit.
+func accel(repeat int) int {
+	switch {
+	case repeat >= 8:
+		return 10
+	case repeat >= 3:
+		return 4
+	}
+	return 1
+}
+
 func (a *App) press(k Key, repeat int) {
+	if repeat > 0 && !holds(k) { // only the direction keys and the shoulders mean anything held down
+		return
+	}
 	if a.splash != nil {
 		if repeat == 0 {
 			a.splashKey(k)
@@ -643,12 +660,7 @@ func (a *App) padVoice(n int) (formats.Sample, bool) {
 		a.say(err.Error(), true)
 		return formats.Sample{}, false
 	}
-	param := func(id byte, def int32) int32 {
-		if v, err := a.lab.PadParam(n, id); err == nil {
-			return v
-		}
-		return def
-	}
+	param := func(id byte, def int32) int32 { return a.padValue(n, id, def) }
 	level, bal, pitch, mode, hold := param(0x69, 127), param(0x78, 64), param(0x73, 0), param(0x75, 0), param(0x7E, 100)
 	if pitch != 0 {
 		s = s.Pitched(int(pitch))

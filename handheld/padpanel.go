@@ -82,6 +82,9 @@ func (a *App) settingValue(pad int, st padSetting) int32 {
 	if st.kind == kFlag {
 		return (v >> st.bit) & 1
 	}
+	if st.kind != kSwitch && (v < st.lo || v > st.hi) { // a pad that was never set up has zeros here: the default
+		return st.def
+	}
 	return v
 }
 
@@ -127,6 +130,9 @@ func (a *App) openPadPanel() {
 	pp.tools = a.padToolsMenu(n)
 	if !a.info.Pads[n].File {
 		pp.page = 2 // an empty pad has no settings: the tools (pick a sample...)
+	} else if fixed, _ := a.lab.SetupPad(n); fixed > 0 {
+		a.refresh() // a pad that was never set up: the pan at its centre, the hold at 100% ...
+		a.say(fmt.Sprintf("%s was never set up: pan centre, hold 100%%", a.label(n)), false)
 	}
 	a.pp = pp
 }
@@ -176,10 +182,8 @@ func (a *App) ppKey(k Key, repeat int) {
 			v = st.lo + ((v-st.lo+d)%n+n)%n
 		default:
 			acc := int32(1)
-			if st.fast && repeat >= 14 {
-				acc = 8
-			} else if st.fast && repeat >= 6 {
-				acc = 4
+			if st.fast {
+				acc = int32(accel(repeat))
 			}
 			v += d * st.step * acc
 		}
@@ -318,3 +322,19 @@ func (a *App) drawToolsList(c *canvas, x, y, w, h int, m *menu) {
 }
 
 var _ = formats.SampleRate
+
+// padValue is a setting of a pad as it counts: a value outside what the unit allows (zero in a pad never set up) is the default.
+func (a *App) padValue(n int, id byte, def int32) int32 {
+	for _, page := range padPages {
+		for _, st := range page {
+			if st.id == id && st.kind != kFlag {
+				v := a.settingValue(n, st)
+				return v
+			}
+		}
+	}
+	if v, err := a.lab.PadParam(n, id); err == nil {
+		return v
+	}
+	return def
+}

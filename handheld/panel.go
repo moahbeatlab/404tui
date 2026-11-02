@@ -198,17 +198,22 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 		if p.Ch == 2 {
 			ch = "stereo"
 		}
+		tags := ""
+		for _, sw := range []struct {
+			id  byte
+			tag string
+		}{{0x6A, " GATE"}, {0x6B, " LOOP"}} {
+			if v, err := a.lab.PadParam(n, sw.id); err == nil && v != 0 {
+				tags += sw.tag
+			}
+		}
 		c.text(x, y0+18, fmt.Sprintf("%.2fs %s", float64(p.Frames)/48000, ch), cDim, false)
+		c.text(x+textW(fmt.Sprintf("%.2fs %s", float64(p.Frames)/48000, ch)), y0+18, tags, cAmber, true)
 		c.rect(x, y0+36, w, 24, cPanel2)
 		if id, ok := a.padSample(n); ok {
 			a.waveform(c, id, 0, p.Frames, x+1, y0+36, w-2, 24, cAmber)
 		}
-		get := func(id byte, def int32) int32 {
-			if v, err := a.lab.PadParam(n, id); err == nil {
-				return v
-			}
-			return def
-		}
+		get := func(id byte, def int32) int32 { return a.padValue(n, id, def) }
 		// the level: a bar and its number
 		level := get(0x69, 127)
 		c.text(x, y0+64, "VOL", cDim, false)

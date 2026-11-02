@@ -132,7 +132,7 @@ func (a *App) fromTemplate(g formats.GrooveTemplate, bars int) {
 		a.say(err.Error(), true)
 		return
 	}
-	a.rowsOwn = false // the columns follow the pads of the new pattern
+	a.rowExtra = nil // the rows follow the pads of the new pattern
 	a.openPattern(n)
 	a.say(fmt.Sprintf("%s %s: %s", a.label(n-1), g.Name, strings.Join(said, ", ")), false)
 }

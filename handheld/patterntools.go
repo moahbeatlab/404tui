@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"sort"
 
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
@@ -115,28 +114,11 @@ func arpSequence(n, typ, steps int, rng *rand.Rand) [][]int {
 	return out
 }
 
-// arpKeys are the pads of the columns that have a sample, in the order of the columns (UP puts them in pad order).
-func (a *App) arpKeys(typ int) []int {
-	var keys []int
-	for _, p := range a.rows {
-		if a.info.Pads[p].File {
-			keys = append(keys, p)
-		}
-	}
-	if typ != 5 { // everything but ORD goes by pitch, which the pads stand for in pad order
-		sort.Ints(keys)
-	}
-	return keys
-}
-
-// printArp writes the arp over the pads of the columns into the pattern.
-func (a *App) printArp() { a.printArpKeys(a.arpKeys(a.arpp.typ)) }
-
 // printArpKeys writes the arp into the pattern: the notes of the key pads are replaced.
 func (a *App) printArpKeys(keys []int) {
 	st := a.arpp
 	if len(keys) < 2 {
-		a.say("the arp needs 2 or more pads with a sample (mark pads with Y+A, or Y+X changes a row's pad)", true)
+		a.say("the arp needs 2 or more pads with a sample (mark pads with Y+A)", true)
 		return
 	}
 	d, ok := a.doc()
