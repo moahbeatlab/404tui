@@ -32,40 +32,77 @@ type Framebuffer struct {
 	yoff   int
 	bpp    int
 	stride int
+	smem   int // smem_len of the driver
+	buf    []byte
+	mapped int
+
+	fixErr, mmapErr error
 }
 
-// OpenFramebuffer opens and maps the device.
+// OpenFramebuffer opens the device and maps it; where the driver does not allow a mapping, frames are written
+// with write(2) instead. Every step that fails says which one it was.
 func OpenFramebuffer(path string) (*Framebuffer, error) {
 	f, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open: %w", err)
 	}
 	var v [40]uint32 // struct fb_var_screeninfo starts: xres, yres, xres_virtual, yres_virtual, xoffset, yoffset, bits_per_pixel
 	if _, _, e := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), 0x4600, uintptr(unsafe.Pointer(&v[0]))); e != 0 {
 		f.Close()
-		return nil, e
+		return nil, fmt.Errorf("FBIOGET_VSCREENINFO: %w", e)
 	}
 	var fix [20]uint32 // struct fb_fix_screeninfo on 64 bit: id[16], smem_start (8), smem_len, type, type_aux, visual, 3 x u16 steps (8 with padding), line_length
+	fixErr := error(nil)
 	if _, _, e := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), 0x4602, uintptr(unsafe.Pointer(&fix[0]))); e != 0 {
-		f.Close()
-		return nil, e
+		fixErr = fmt.Errorf("FBIOGET_FSCREENINFO: %w", e)
+		fix = [20]uint32{}
 	}
 	fb := &Framebuffer{f: f, w: int(v[0]), h: int(v[1]), vw: int(v[2]), vh: int(v[3]), xoff: int(v[4]), yoff: int(v[5]), bpp: int(v[6])}
+	if fb.bpp != 16 && fb.bpp != 32 {
+		f.Close()
+		return nil, fmt.Errorf("a framebuffer with %d bits per pixel (%dx%d) is not supported", fb.bpp, fb.w, fb.h)
+	}
 	fb.stride = int(fix[12])
 	if fb.stride == 0 {
 		fb.stride = fb.w * fb.bpp / 8
 	}
-	fb.mem, err = syscall.Mmap(int(f.Fd()), 0, fb.stride*fb.h, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
-	if err != nil {
-		f.Close()
-		return nil, err
+	fb.smem = int(fix[6])
+	fb.fixErr = fixErr
+	fb.buf = make([]byte, fb.stride*fb.h)
+	// the whole of the memory the driver says it has, else just the visible part
+	for _, n := range []int{fb.smem, fb.stride * fb.vh, fb.stride * fb.h} {
+		if n <= 0 {
+			continue
+		}
+		if fb.mem, err = syscall.Mmap(int(f.Fd()), 0, n, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED); err == nil {
+			fb.mapped = n
+			break
+		}
+		fb.mmapErr = fmt.Errorf("mmap of %d bytes: %w", n, err)
 	}
 	return fb, nil
 }
 
+// Info says what was found, for the log.
+func (fb *Framebuffer) Info() string {
+	how := "write(2)"
+	if fb.mem != nil {
+		how = fmt.Sprintf("mmap of %d bytes", fb.mapped)
+	}
+	s := fmt.Sprintf("%dx%d (virtual %dx%d, offset %d,%d) %d bpp, stride %d, smem_len %d; frames by %s", fb.w, fb.h, fb.vw, fb.vh, fb.xoff, fb.yoff, fb.bpp, fb.stride, fb.smem, how)
+	if fb.fixErr != nil {
+		s += "; " + fb.fixErr.Error()
+	}
+	if fb.mmapErr != nil {
+		s += "; " + fb.mmapErr.Error()
+	}
+	return s
+}
+
 // Show copies a 640x480 frame, centred and cut to the screen, in the pixel format of the device (16 or 32 bits).
-func (fb *Framebuffer) Show(img *image.RGBA) {
+func (fb *Framebuffer) Show(img *image.RGBA) error {
 	ox, oy := max((fb.w-W)/2, 0), max((fb.h-H)/2, 0)
+	buf := fb.buf
 	for y := 0; y < min(H, fb.h); y++ {
 		for x := 0; x < min(W, fb.w); x++ {
 			p := img.PixOffset(x, y)
@@ -73,16 +110,27 @@ func (fb *Framebuffer) Show(img *image.RGBA) {
 			o := (y+oy)*fb.stride + (x+ox)*fb.bpp/8
 			switch fb.bpp {
 			case 32:
-				fb.mem[o], fb.mem[o+1], fb.mem[o+2], fb.mem[o+3] = b, g, r, 255
+				buf[o], buf[o+1], buf[o+2], buf[o+3] = b, g, r, 255
 			case 16:
 				v := uint16(r>>3)<<11 | uint16(g>>2)<<5 | uint16(b>>3)
-				fb.mem[o], fb.mem[o+1] = byte(v), byte(v>>8)
+				buf[o], buf[o+1] = byte(v), byte(v>>8)
 			}
 		}
 	}
+	if fb.mem != nil {
+		copy(fb.mem, buf)
+		return nil
+	}
+	_, err := fb.f.WriteAt(buf, 0)
+	return err
 }
 
-func (fb *Framebuffer) Close() { syscall.Munmap(fb.mem); fb.f.Close() }
+func (fb *Framebuffer) Close() {
+	if fb.mem != nil {
+		syscall.Munmap(fb.mem)
+	}
+	fb.f.Close()
+}
 
 // Web serves the screen as a page with buttons, for trying the app in a browser on a computer or a phone.
 type Web struct {

@@ -25,8 +25,7 @@ func Run(a *App, fbPath, inputPath, webAddr string) error {
 			log.Printf("framebuffer %s: %v", fbPath, err)
 			return err
 		}
-		log.Printf("framebuffer %s: %dx%d (virtual %dx%d, offset %d,%d) %d bpp, stride %d; drawing %dx%d at %d,%d",
-			fbPath, fb.w, fb.h, fb.vw, fb.vh, fb.xoff, fb.yoff, fb.bpp, fb.stride, W, H, max((fb.w-W)/2, 0), max((fb.h-H)/2, 0))
+		log.Printf("framebuffer %s: %s; drawing %dx%d at %d,%d", fbPath, fb.Info(), W, H, max((fb.w-W)/2, 0), max((fb.h-H)/2, 0))
 		defer fb.Close()
 	}
 	if inputPath == "" {
@@ -54,7 +53,7 @@ func Run(a *App, fbPath, inputPath, webAddr string) error {
 	}
 	tick := time.NewTicker(100 * time.Millisecond)
 	log.Println("running: screen", screenNames[a.scr])
-	frames, beat := 0, time.Now()
+	frames, beat, showFailed := 0, time.Now(), false
 	for {
 		select {
 		case au := <-a.AudioLate:
@@ -78,8 +77,12 @@ func Run(a *App, fbPath, inputPath, webAddr string) error {
 			web.mu.Lock()
 		}
 		if fb != nil {
-			fb.Show(a.Render())
-			if frames++; frames == 1 {
+			if err := fb.Show(a.Render()); err != nil {
+				if !showFailed {
+					log.Println("framebuffer: drawing failed:", err)
+				}
+				showFailed = true
+			} else if frames++; frames == 1 {
 				log.Println("first frame drawn")
 				firstOnce.Do(func() { close(FirstFrame) })
 			}
