@@ -2807,3 +2807,67 @@ func TestSliceShuffleChangesTheOrderShown(t *testing.T) {
 	}
 	a.Render() // draws the order row without a panic
 }
+
+func TestFrozenBarScopesTheTools(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit+" Y+R")
+	keys(t, a, "A") // a note on A1, bar 1
+	pad := a.rowPad()
+	var all []lab.Note
+	for s := 0; s < 64; s += 4 { // every beat of the 4 bars
+		all = append(all, lab.Note{Tick: uint32(s * stepTicks), Pad: pad, Vel: 100, Len: stepTicks})
+	}
+	a.step = 16 + 2
+	a.freeze = true
+	if err := a.setTrack(pad, all); err != nil {
+		t.Fatal(err)
+	}
+	notes := a.trackNotes(pad)
+	inBar2, outside := 0, 0
+	for _, n := range notes {
+		if n.Tick >= 16*stepTicks && n.Tick < 32*stepTicks {
+			inBar2++
+		} else {
+			outside++
+		}
+	}
+	if inBar2 != 4 || outside != 1 {
+		t.Fatalf("bar 2 got the beats (%d), the other bars stay as they were (%d)", inBar2, outside)
+	}
+}
+
+func TestMangleDiceAreFixedByTheRoll(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit+" Y+R Y+R Y+R")
+	if a.Screen() != Slice {
+		t.Skip()
+	}
+	a.equalParts(8)
+	base := a.sl.Clone()
+	m := mangleSet{drop: 2, rev: 3, pitchN: 2, pitchRange: 5, roll: 1, seed: 7}
+	x := mangleSlicing(base, m)
+	y := mangleSlicing(base, m)
+	drops, revs := 0, 0
+	for i := range x.Slices {
+		if x.Slices[i] != y.Slices[i] {
+			t.Fatal("same seed, same slices")
+		}
+		if x.Slices[i].Chance == 0 {
+			drops++
+		}
+		if x.Slices[i].Reverse {
+			revs++
+		}
+	}
+	if drops != 2 || revs != 3 {
+		t.Fatalf("drops %d reversed %d", drops, revs)
+	}
+	a.mangleMenu()
+	if a.menu == nil {
+		t.Fatal("the dialog is open")
+	}
+	keys(t, a, "B")
+	if len(a.sl.Slices) != 8 || a.sl.Slices[0].Chance != base.Slices[0].Chance {
+		t.Fatal("B puts the slices back")
+	}
+}

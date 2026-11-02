@@ -79,6 +79,22 @@ func (a *App) setTrack(pad int, notes []lab.Note) error {
 	if _, err := a.ensurePattern(); err != nil {
 		return err
 	}
+	if a.freeze { // a frozen bar: the tool changes that bar, every other bar of the track stays as it is
+		lo := uint32(a.step / 16 * 16 * stepTicks)
+		hi := lo + 16*stepTicks
+		var out []lab.Note
+		for _, n := range a.trackNotes(pad) {
+			if n.Tick < lo || n.Tick >= hi {
+				out = append(out, n)
+			}
+		}
+		for _, n := range notes {
+			if n.Tick >= lo && n.Tick < hi {
+				out = append(out, n)
+			}
+		}
+		notes = out
+	}
 	args, _ := json.Marshal(lab.PatternArgs{Pad: pad})
 	if err := a.lab.PatternOp(a.pat, "clearPad", args); err != nil {
 		return err

@@ -133,6 +133,7 @@ func (a *App) sliceMenu() {
 		return fmt.Sprintf("%d steps", v)
 	}), near(stepsVals, a.sliceSteps), func(v int) { a.sliceSteps = stepsVals[v] })
 	m.items = append(m.items,
+		menuItem{label: "Mangle the slices (dice)...", run: func(int) { a.mangleMenu() }},
 		menuItem{label: "Play the whole order", keepOpen: true, run: func(int) { a.playResult(false) }},
 		menuItem{label: "Play again, new dice", keepOpen: true, run: func(int) { a.playResult(true) }},
 		menuItem{label: "Result to a free pad", run: func(int) { a.resultToPad() }},

@@ -287,3 +287,6 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 - **Slicer: speed and workflow.** Waveforms (slicer window and overview, pad tiles) used to scan the whole sample every frame (8.5 ms for a minute of stereo on a PC, several times that on the R36S, twice per frame); they now read cached per-64-frame peaks (0.03 ms). A cut (A) snaps to the nearest zero crossing within 1 ms so it does not click. Slicer menu (Y+B): "Cut in equal parts" (2–32), and Y+A's "up to N slices" and "sensitivity" can be set.
 
 - **Slicer cuts from 404tui.** Slicer menu: "Cut at random places" (2–32, new dice each time), "Cut on the grid" (1/4–1/32 of a beat at the bank's BPM), "Play order back to 1, 2, 3...", next to equal parts and the auto-cut settings.
+
+- **Mangle dice (slicer).** Slicer menu → "Mangle the slices (dice)...": how many slices drop out, play reversed, get a pitch (±2/5/12 semitones), get a roll, plus humanize and fades; every change plays the result, "Roll the dice again" re-rolls (the slices hit by one more die keep the ones they had), B puts the slices back, "Keep it" stays.
+- **Tools on a frozen bar (SEQ).** With a bar frozen (Y+A) the pattern tools (Euclid, Chance, Fill, Echo, ...) only change the notes of that bar: the rest of the track stays. Copy the pattern, freeze the last bar and use any tool to make a variation.
