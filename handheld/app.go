@@ -117,6 +117,9 @@ type App struct {
 	splash     *splash   // the logo and dashboard at the start
 	as         autosave
 	idx        indexJob
+	autoSens   float64 // how easily Y+A hears an onset (0: 0.5)
+	autoMax    int     // the most slices Y+A cuts at the onsets (0: 16)
+	peakCache  map[peakKey]*peakBlocks
 	aHeld      bool // A is down in SEQ: the arrows edit the note under it
 	aDelete    bool // A went down on a note: if nothing is edited, letting go takes it off
 	aPad       int  // the note being edited

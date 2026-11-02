@@ -2757,3 +2757,22 @@ func TestBounceWhatYouHear(t *testing.T) {
 		t.Fatal("the bounce is on a pad")
 	}
 }
+
+func TestSliceEqualPartsAndAutoLimit(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit+" Y+R Y+R Y+R") // a kit, then SLICE
+	if a.Screen() != Slice {
+		t.Skipf("screen %v", a.Screen())
+	}
+	a.equalParts(8)
+	if len(a.sl.Slices) != 8 {
+		t.Fatalf("8 equal parts: %d", len(a.sl.Slices))
+	}
+	a.autoMax = 4
+	a.equalParts(1)
+	a.autoSlice()
+	t.Log(a.msg)
+	if len(a.sl.Slices) > 4 {
+		t.Fatalf("auto-cut up to 4: %d", len(a.sl.Slices))
+	}
+}

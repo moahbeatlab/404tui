@@ -185,7 +185,7 @@ func (a *App) drawPads(c *canvas) {
 
 // waveform draws the peaks of frames from..to of a sample in a box, mirrored around its middle.
 func (a *App) waveform(c *canvas, id, from, to, x, y, w, h int, col color.RGBA) {
-	pk, err := a.lab.Peaks(id, from, to, w)
+	pk, err := a.peaks(id, from, to, w)
 	if err != nil {
 		return
 	}

@@ -85,6 +85,9 @@ func (a *App) sliceKey(k Key, repeat int) {
 		a.at = a.jump(k == Up)
 	case A:
 		i := a.sliceAt(a.at)
+		if zc, err := a.lab.ZeroCrossing(a.sid, a.at, 48); err == nil && a.sliceAt(zc) == i { // no click at the cut
+			a.at = zc
+		}
 		if i < 0 || a.sl.Split(i, a.at) < 0 {
 			a.say("cannot cut there: too close to an edge", true)
 			return
@@ -149,10 +152,31 @@ func (a *App) playSlice() {
 	a.play(s)
 }
 
+func (a *App) autoSensitivity() float64 {
+	if a.autoSens > 0 {
+		return a.autoSens
+	}
+	return 0.5
+}
+
+func (a *App) autoLimit() int {
+	if a.autoMax > 0 {
+		return a.autoMax
+	}
+	return 16
+}
+
+// equalParts cuts the whole sample into n slices of the same length.
+func (a *App) equalParts(n int) {
+	a.sl = formats.NewSlicing(a.sl.Frames, n)
+	a.at = 0
+	a.say(fmt.Sprintf("%d equal slices", len(a.sl.Slices)), false)
+}
+
 // autoSlice cuts where sounds start.
 func (a *App) autoSlice() {
 	sb, _ := json.Marshal(a.sl)
-	args, _ := json.Marshal(lab.SlicerArgs{ID: a.sid, Limit: 16, Sens: 0.5, Anchor: -1})
+	args, _ := json.Marshal(lab.SlicerArgs{ID: a.sid, Limit: a.autoLimit(), Sens: a.autoSensitivity(), Anchor: -1})
 	out, err := a.lab.Slicing("onsets", sb, args)
 	if err != nil {
 		a.say(err.Error(), true)
