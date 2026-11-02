@@ -1,5 +1,6 @@
 # Built binary
 /sp404
+/sp404h
 
 # Raw USB captures (may contain user samples)
 captures/

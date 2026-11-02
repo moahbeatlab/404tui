@@ -7,6 +7,13 @@
 #   make linux | windows | macos
 #   make dist VERSION=0.2 stamp a version (else the one in version/version.go stays)
 #
+# The handheld front end (sp404h, for an R36S with ArkOS; see handheld/README.md):
+#   make handheld          dist/sp404h-arm64, for the handheld (no cgo, builds anywhere)
+#   make handheld-card     dist/handheld/roms/..., laid out like the games card: copy its contents onto the card
+#   make handheld-local    ./sp404h for this computer (try it in a browser: ./sp404h -demo -silent -web :8405)
+#   make handheld-test     the tests of the handheld packages
+#   make handheld-emulator the ArkOS-like arm64 container with the screen as a web page (needs Docker)
+#
 # Windows builds without cgo, from any computer, MIDI included. Linux builds without cgo too, but then
 # has no MIDI input (that needs ALSA; the release builds it on Linux). macOS needs cgo (the serial port
 # library asks IOKit for the USB ports), so the macOS binaries are built on a Mac; there both
@@ -26,7 +33,7 @@ GOBUILD := go build -trimpath -ldflags "$(LDFLAGS)"
 LINUX   := linux-amd64 linux-arm64
 WINDOWS := windows-amd64 windows-arm64
 
-.PHONY: site build test check vet fmt dist linux windows macos clean lab-wasm
+.PHONY: site build test check vet fmt dist linux windows macos clean lab-wasm handheld handheld-card handheld-local handheld-test handheld-emulator
 
 # MIDI input needs cgo on a Mac (CoreMIDI) and Linux (ALSA headers: libasound2-dev); Windows has it
 # always (no cgo). Where the headers are missing the build goes on without MIDI.
@@ -61,6 +68,37 @@ fmt:
 
 dist: linux windows macos
 
+# ---- the handheld (R36S, ArkOS): a 64-bit ARM Linux program. The commit it was built from shows in its corner
+# and in logs.log; build from a clean, committed tree to know exactly which one runs (a + marks changes).
+HANDHELD     := sp404h
+HANDHELD_PKG := ./cmd/sp404h
+
+handheld:
+	mkdir -p $(DIST)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) -o $(DIST)/$(HANDHELD)-arm64 $(HANDHELD_PKG)
+	@echo "built $(DIST)/$(HANDHELD)-arm64, commit $$(go version -m $(DIST)/$(HANDHELD)-arm64 | sed -n 's/.*vcs.revision=\(.......\).*/\1/p')$$(go version -m $(DIST)/$(HANDHELD)-arm64 | grep -q 'vcs.modified=true' && echo ' + changes that are not committed')"
+
+# handheld-card lays out what goes on the games card: dist/handheld/roms/ports/404h.sh and
+# dist/handheld/roms/ports/404h/sp404h-arm64. Copy the contents of dist/handheld/roms onto the card's roms
+# folder (or a usb drive), then restart EmulationStation.
+handheld-card: handheld
+	rm -rf $(DIST)/handheld
+	mkdir -p $(DIST)/handheld/roms/ports/404h
+	cp packaging/arkos/404h.sh $(DIST)/handheld/roms/ports/404h.sh
+	cp $(DIST)/$(HANDHELD)-arm64 $(DIST)/handheld/roms/ports/404h/sp404h-arm64
+	chmod 755 $(DIST)/handheld/roms/ports/404h.sh $(DIST)/handheld/roms/ports/404h/sp404h-arm64
+	@echo "copy the contents of $(DIST)/handheld/roms onto the card (its /roms folder)"
+
+handheld-local:
+	go build -ldflags "-s -w" -o $(HANDHELD) $(HANDHELD_PKG)
+
+handheld-test:
+	go vet ./handheld ./cmd/sp404h ./lab
+	go test -race ./handheld ./lab ./formats
+
+handheld-emulator: handheld
+	cd packaging/arkos/emulator && ./prepare.sh ../../../$(DIST)/$(HANDHELD)-arm64 && docker compose up --build
+
 linux: $(addprefix $(DIST)/$(BIN)-,$(LINUX))
 
 windows: $(addprefix $(DIST)/$(BIN)-,$(addsuffix .exe,$(WINDOWS)))
@@ -94,6 +132,6 @@ site:
 	touch $(DIST)/site/.nojekyll
 
 clean:
-	rm -rf $(DIST) $(BIN)
+	rm -rf $(DIST) $(BIN) $(HANDHELD)
 
 FORCE:
