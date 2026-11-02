@@ -46,10 +46,24 @@ diag() {
 }
 diag >>"$LOG" 2>&1
 
+# keep a copy of the logs on the usb drive, so they can be read on a computer. The folder is never created: when
+# the drive is not there the logs just stay next to the program.
+USB=/mnt/usbdrive/r36s
+copylogs() {
+  [ -d "$USB" ] || return 0
+  cp -f "$DIR/logs.log" "$DIR/stderr.log" "$USB"/ 2>/dev/null
+  sync -f "$USB" 2>/dev/null || sync
+}
+[ -d "$USB" ] && echo "launcher: copying logs to $USB" >>"$LOG" || echo "launcher: $USB not found, logs stay in $DIR" >>"$LOG"
+copylogs
+
 sudo chmod 666 /dev/fb0 /dev/tty1 /dev/input/event* 2>>"$LOG" || echo "launcher: chmod of the devices failed" >>"$LOG"
 printf '\033c' >/dev/tty1
 setterm -cursor off >/dev/tty1 2>/dev/null
 echo "$(date '+%F %T') launcher: starting $DIR/sp404h-arm64" >>"$DIR/logs.log"
+( while sleep 5; do copylogs; done ) & COPIER=$!   # also while it runs: a program that hangs never gets to the end
 "$DIR/sp404h-arm64" -samples "$SAMPLES" -out "$CARD" -fb /dev/fb0 >/dev/null 2>"$DIR/stderr.log"
 echo "$(date '+%F %T') launcher: program ended with status $?" >>"$DIR/logs.log"
+kill $COPIER 2>/dev/null
+copylogs
 printf '\033c' >/dev/tty1
