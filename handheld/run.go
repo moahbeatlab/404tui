@@ -21,6 +21,7 @@ func Run(a *App, fbPath, inputPath, webAddr string) error {
 	var fb *Framebuffer
 	if fbPath != "" {
 		var err error
+		log.Printf("framebuffer %s: opening", fbPath)
 		if fb, err = OpenFramebuffer(fbPath); err != nil {
 			log.Printf("framebuffer %s: %v", fbPath, err)
 			return err
@@ -28,6 +29,7 @@ func Run(a *App, fbPath, inputPath, webAddr string) error {
 		log.Printf("framebuffer %s: %s; drawing %dx%d at %d,%d", fbPath, fb.Info(), W, H, max((fb.w-W)/2, 0), max((fb.h-H)/2, 0))
 		defer fb.Close()
 	}
+	log.Println("input: looking for the pad")
 	if inputPath == "" {
 		inputPath = findPad()
 		log.Printf("input: searched, found %q", inputPath)

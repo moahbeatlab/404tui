@@ -29,29 +29,29 @@ func (a *App) hints() (plain, shift []hint) {
 		if a.carry != nil {
 			return []hint{{"A", "put it here"}, {"B", "cancel"}, {"^v<>", "move"}}, []hint{screen}
 		}
-		return []hint{{"A", "menu"}, {"X", "play"}, {"B", "stop"}, {"^v<>", "move"}},
+		return []hint{{"A", "menu"}, {"X", "play"}, {"B", "stop"}, {"^v<>", "move"}, {"L1 R1", "bank"}},
 			[]hint{screen, {"Y+^v", "bank"}, {"Y+B", "clear pad"}}
 	case Files:
 		pick := hint{"A", "to pad " + a.label(a.padN())}
 		if e, ok := a.current(); ok && e.project {
 			pick = hint{"A", "load project"}
 		}
-		return []hint{pick, {"X", "listen"}, {"^v", "browse"}, {">", "open"}, {"<", "up"}, {"B", "pads"}},
+		return []hint{pick, {"X", "listen"}, {"^v", "browse"}, {">", "open"}, {"<", "up"}, {"L1 R1", "page"}, {"B", "pads"}},
 			[]hint{screen, {"Y+X", "places"}}
 	case Slice:
-		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play"}, {"<>", "move"}, {"^v", "marker"}},
+		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play"}, {"<>", "move"}, {"^v", "marker"}, {"L1 R1", "zoom"}},
 			[]hint{screen, {"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+^v", "zoom"}}
 	case Seq:
 		play, stop := hint{"X", "play"}, hint{"B", "menu"}
 		if a.seqOn {
 			play, stop = hint{"X", "stop"}, hint{"B", "stop"}
 		}
-		return []hint{{"A", "note on/off"}, play, stop, {"^v", "step"}, {"<>", "column"}},
+		return []hint{{"A", "note on/off"}, play, stop, {"^v", "step"}, {"<>", "column"}, {"L1 R1", "bar"}},
 			[]hint{screen, {"Y+A", "velocity"}, {"Y+X", "column pad"}, {"Y+^v", "pattern"}}
 	case Unit:
-		return []hint{{"A", "send"}, {"X", "look again"}, {"^v", "choose"}, {"B", "back"}}, []hint{screen}
+		return []hint{{"A", "send"}, {"X", "look again"}, {"^v", "choose"}, {"L1 R1", "page"}, {"B", "back"}}, []hint{screen}
 	default:
-		return []hint{{"A", "write"}, {"<>", "slot"}, {"X", "quit"}, {"B", "back"}}, []hint{screen}
+		return []hint{{"A", "write"}, {"<>", "slot"}, {"L1 R1", "slot 10"}, {"X", "quit"}, {"B", "back"}}, []hint{screen}
 	}
 }
 
@@ -124,7 +124,7 @@ func (a *App) keyBlock(c *canvas, x, y, w int, hs []hint, active bool) {
 	}
 	for i, h := range hs {
 		c.text(x+2, y+i*16, h.key, kc, true)
-		c.text(x+2+textW("Y+^v")+8, y+i*16, fit(h.what, (w-textW("Y+^v")-12)/CellW), tc, false)
+		c.text(x+2+textW("L1 R1")+6, y+i*16, fit(h.what, (w-textW("L1 R1")-10)/CellW), tc, false)
 	}
 }
 

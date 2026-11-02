@@ -146,12 +146,12 @@ img{width:min(100vw,640px);image-rendering:pixelated;margin-top:8px}.pad{display
 p{color:#6f7a87;max-width:640px;padding:0 12px}</style>
 <img id=s src=/frame.png><div class=row><div class=pad>
 <span></span><button data-k=U>^</button><span></span><button data-k=L><</button><span></span><button data-k=R>></button><span></span><button data-k=D>v</button><span></span></div>
-<div class=abxy><span></span><button data-k=X>X</button><span></span><button data-k=Y>Y</button><span></span><button data-k=A>A</button><span></span><button data-k=B>B</button><span></span></div></div>
-<p>Keyboard: arrow keys, a b x y. Hold Y and press a key for its second function (Y+left/right changes screen). Tap Y alone for the key map.</p>
+<div class=abxy style="grid-template-columns:repeat(3,56px)"><button data-k=[>L1</button><span></span><button data-k=]>R1</button><span></span><button data-k=X>X</button><span></span><button data-k=Y>Y</button><span></span><button data-k=A>A</button><span></span><button data-k=B>B</button><span></span></div></div>
+<p>Keyboard: arrow keys, a b x y; PageUp/PageDown (or q/e) are L1/R1. Hold Y and press a key for its second function (Y+left/right changes screen). Tap Y alone for the key map.</p>
 <script>
 const img=document.getElementById('s');let t=0;function r(){img.src='/frame.png?'+(t++)}
 async function send(k,d){await fetch('/key?k='+k+'&d='+d);r()}
-const map={ArrowUp:'U',ArrowDown:'D',ArrowLeft:'L',ArrowRight:'R',a:'A',b:'B',x:'X',y:'Y'};const down={};
+const map={ArrowUp:'U',ArrowDown:'D',ArrowLeft:'L',ArrowRight:'R',a:'A',b:'B',x:'X',y:'Y',PageUp:'[',PageDown:']',q:'[',e:']'};const down={};
 addEventListener('keydown',e=>{const k=map[e.key];if(!k||down[k])return;down[k]=1;e.preventDefault();send(k,1)});
 addEventListener('keyup',e=>{const k=map[e.key];if(!k)return;down[k]=0;send(k,0)});
 for(const b of document.querySelectorAll('button')){const k=b.dataset.k;

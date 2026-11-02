@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var keyNames = []string{"Up", "Down", "Left", "Right", "A", "B", "X", "Y"}
+var keyNames = []string{"Up", "Down", "Left", "Right", "A", "B", "X", "Y", "L1", "R1"}
 
 // Event is a key going down or up.
 type Event struct {
@@ -36,6 +36,7 @@ func (a *App) Dispatch(e Event) {
 // asked for with their frames' index. The words, separated by spaces:
 //
 //	U D L R A B X Y   a key pressed and let go
+//	[ ]               the shoulder buttons L1 and R1
 //	Y+R               a chord: Y held, R pressed
 //	R*8               a key held down: pressed, then seven repeats
 //	@name             take a snapshot called name
@@ -94,6 +95,12 @@ func parseKey(s string) (Key, error) {
 		if i := strings.Index("UDLRABXY", strings.ToUpper(s)); i >= 0 {
 			return Key(i), nil
 		}
+		switch s { // the shoulder buttons: [ is L1, ] is R1
+		case "[":
+			return L1, nil
+		case "]":
+			return R1, nil
+		}
 	}
 	return 0, fmt.Errorf("unknown key %q", s)
 }
@@ -107,10 +114,12 @@ const (
 
 var defaultMap = map[uint16]Key{
 	0x220: Up, 0x221: Down, 0x222: Left, 0x223: Right, // BTN_DPAD_*
-	0x131: A, // BTN_EAST: the right button
-	0x130: B, // BTN_SOUTH: the bottom one
-	0x133: X, // BTN_NORTH: the top one
-	0x134: Y, // BTN_WEST: the left one
+	0x131: A,  // BTN_EAST: the right button
+	0x130: B,  // BTN_SOUTH: the bottom one
+	0x133: X,  // BTN_NORTH: the top one
+	0x134: Y,  // BTN_WEST: the left one
+	0x136: L1, // BTN_TL, the left shoulder button (seen as 0x136 on the R36S)
+	0x137: R1, // BTN_TR
 }
 
 // quitCodes are Select and Start; any two of them held together quit. 0x13a/0x13b are BTN_SELECT and BTN_START;

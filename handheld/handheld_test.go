@@ -1,6 +1,7 @@
 package handheld
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -537,4 +538,52 @@ func TestPanelShowsTheKeysOfTheScreen(t *testing.T) {
 	}
 	a.Render() // the shifted set is lit
 	a.Release(Y)
+}
+
+func TestShoulderButtonsPage(t *testing.T) {
+	if defaultMap[0x136] != L1 || defaultMap[0x137] != R1 {
+		t.Fatal("0x136 and 0x137 are L1 and R1 on the R36S's pad")
+	}
+	a, _ := newApp(t)
+	// a long folder: 60 files
+	dir := filepath.Join(a.Root, "long")
+	os.MkdirAll(dir, 0o755)
+	wav, _ := os.ReadFile(filepath.Join(a.Root, "drums", "kick_808.wav"))
+	for i := 0; i < 60; i++ {
+		os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%02d.wav", i)), wav, 0o644)
+	}
+	a.go_(Files)
+	a.dir = dir
+	a.list()
+	keys(t, a, "]")
+	if a.fcur != 20 {
+		t.Fatalf("R1 is a page down: cursor %d", a.fcur)
+	}
+	keys(t, a, "] ] ]")
+	if a.fcur != 59 {
+		t.Fatalf("stops at the last file, cursor %d", a.fcur)
+	}
+	keys(t, a, "[")
+	if a.fcur != 39 {
+		t.Fatalf("L1 is a page up: cursor %d", a.fcur)
+	}
+	// pads: a bank at a time, wrapping
+	a.go_(Pads)
+	keys(t, a, "]")
+	if a.bank != 1 {
+		t.Fatalf("bank %d", a.bank)
+	}
+	keys(t, a, "[ [")
+	if a.bank != 9 {
+		t.Fatalf("L1 from bank A wraps to J, got %d", a.bank)
+	}
+	// seq: a bar
+	a.go_(Seq)
+	keys(t, a, "]")
+	if a.step != 16 {
+		t.Fatalf("R1 in SEQ is a bar: step %d", a.step)
+	}
+	if k, err := parseKey("]"); err != nil || k != R1 || R1.String() != "R1" {
+		t.Fatal("the script token for R1")
+	}
 }

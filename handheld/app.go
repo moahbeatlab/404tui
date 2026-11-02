@@ -23,7 +23,7 @@ import (
 	"github.com/moahbeatlab/404tui/lab"
 )
 
-// Key is one of the eight keys.
+// Key is one of the eight keys, and the two shoulder buttons for paging.
 type Key int
 
 const (
@@ -35,9 +35,16 @@ const (
 	B
 	X
 	Y
+	L1 // the shoulder buttons: page up and page down
+	R1
 )
 
-func (k Key) String() string { return "UDLRABXY"[k : k+1] }
+func (k Key) String() string {
+	if k >= L1 {
+		return []string{"L1", "R1"}[k-L1]
+	}
+	return "UDLRABXY"[k : k+1]
+}
 
 // Screen is one of the screens, side by side: Y with Left and Right moves between them.
 type Screen int
@@ -227,6 +234,31 @@ func (a *App) Slices() int {
 	return len(a.sl.Slices)
 }
 
+// pageKey is L1 (back) and R1 (forward): a page in a list, a bank, a bar, the zoom, ten slots.
+func (a *App) pageKey(fwd bool) {
+	d := -1
+	if fwd {
+		d = 1
+	}
+	switch a.scr {
+	case Pads:
+		a.bank = (a.bank + 10 + d) % 10
+	case Files:
+		a.fcur = max(0, min(a.fcur+d*20, len(a.entries)-1))
+	case Slice:
+		if a.sl != nil {
+			a.zoom = max(0, min(a.zoom+d, 8))
+		}
+	case Seq:
+		a.step = max(0, min(a.step+d*16, a.steps()-1))
+	case Save:
+		a.slot = max(1, min(a.slot+d*10, 99))
+		a.wrote = nil
+	case Unit:
+		a.unitCur = max(0, min(a.unitCur+d*8, 15))
+	}
+}
+
 // RequestQuit is Select+Start. A project with samples that was not written is asked about once: the
 // same request again quits, any other key cancels.
 func (a *App) RequestQuit() {
@@ -271,6 +303,10 @@ func (a *App) Press(k Key, repeat int) {
 	}
 	if a.menu != nil {
 		a.menuKey(k)
+		return
+	}
+	if k == L1 || k == R1 {
+		a.pageKey(k == R1)
 		return
 	}
 	if a.yHeld {

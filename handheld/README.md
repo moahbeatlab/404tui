@@ -71,3 +71,14 @@ on hardware too. Patterns are always 4 bars (other lengths are a guess).
   sample, `Y+Up/Down` changes the pattern. The columns start as the pad that was in front, then pads with notes, then
   pads with samples, in pad order; the menu's *Pad of this column* picks any pad. The menu's row operations (fill,
   euclid, clear, shift) now work on the column.
+
+## Shoulder buttons and the launcher's diagnostics
+
+- **L1 / R1 page** (codes 0x136 / 0x137 on the R36S's pad): a page of 20 in FILES, a bank in PADS, a bar in SEQ, the zoom
+  in SLICE, 10 slots in SAVE, 8 projects in UNIT. They are listed in the panel. In the browser: PageUp / PageDown (or q / e),
+  and in scripts `[` and `]`.
+- **When it starts with a black screen**, `logs.log` (copied to `/mnt/usbdrive/r36s/`) says why: the launcher writes the
+  uptime, memory, the biggest processes and any copy of the program that is still running; it samples the program's state
+  and kernel wait function at 1, 2, 3, 5, 7, 10 and 15 s; the program dumps all goroutines after 4 s without a first frame.
+  A copy of the program left running by an earlier start is stopped; the program runs from `/dev/shm` or `/tmp` when
+  those allow programs, so its code is not read from the card while it runs.

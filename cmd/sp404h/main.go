@@ -33,10 +33,11 @@ func main() {
 	web := flag.String("web", "", "serve the screen and buttons as a web page on this address, e.g. :8405")
 	silent := flag.Bool("silent", false, "no audio")
 	simulate := flag.Bool("sim", false, "the UNIT screen finds a simulated unit")
+	logPath := flag.String("log", "", "the log file (default: logs.log next to the program)")
 	flag.Parse()
 
 	if *script == "" {
-		closeLog := openLog()
+		closeLog := openLog(*logPath)
 		defer closeLog()
 		defer func() {
 			if r := recover(); r != nil {
@@ -80,10 +81,10 @@ func main() {
 		go func() { // a stuck start tells where it is stuck: every goroutine's stack goes to the log
 			select {
 			case <-handheld.FirstFrame:
-			case <-time.After(10 * time.Second):
+			case <-time.After(4 * time.Second):
 				var sb strings.Builder
 				pprof.Lookup("goroutine").WriteTo(&sb, 2)
-				log.Printf("NO FIRST FRAME after 10 s; goroutines:\n%s", sb.String())
+				log.Printf("NO FIRST FRAME after 4 s; goroutines:\n%s", sb.String())
 			}
 		}()
 	}
@@ -114,6 +115,7 @@ func main() {
 		}
 		return
 	}
+	log.Println("main: starting the screen and the keys")
 	if err := handheld.Run(app, *fbPath, *input, *web); err != nil {
 		fatal(err)
 	}
@@ -122,13 +124,19 @@ func main() {
 
 // openLog sends the log to logs.log next to the program (the working folder or /tmp when that cannot be
 // written), starting it afresh when it has grown past 512 kB, and to stderr as well.
-func openLog() (closeFn func()) {
+func openLog(want string) (closeFn func()) {
 	dirs := []string{"."}
 	if exe, err := os.Executable(); err == nil {
 		dirs = []string{filepath.Dir(exe), ".", os.TempDir()}
 	}
+	if want != "" {
+		dirs = append([]string{filepath.Dir(want)}, dirs...)
+	}
 	for _, d := range dirs {
 		path := filepath.Join(d, "logs.log")
+		if want != "" && d == filepath.Dir(want) {
+			path = want
+		}
 		flags := os.O_CREATE | os.O_WRONLY | os.O_APPEND
 		if st, err := os.Stat(path); err == nil && st.Size() > 512<<10 {
 			flags = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
