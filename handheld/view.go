@@ -249,7 +249,7 @@ func (a *App) drawFiles(c *canvas) {
 			col = cAmber
 		}
 		if e.project {
-			name = fit(e.name, 24) + "  project"
+			name = short(e.name, 24) + "  project"
 			col = cGood
 		}
 		c.text(margin+4, y, name, col, e.dir)

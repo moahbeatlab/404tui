@@ -423,3 +423,51 @@ func TestLoadAProjectFromTheFilesystem(t *testing.T) {
 		t.Fatalf("the second A must load (%s)", c.msg)
 	}
 }
+
+func TestSaveReplacesTheFolderAndLeavesNothingBehind(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Save)
+	keys(t, a, "A")
+	dir := filepath.Join(a.OutDir, cardFolder, "PROJECT_01")
+	before, _ := filepath.Glob(filepath.Join(dir, "SMPL", "*"))
+	if len(before) < 3 {
+		t.Fatalf("expected 3 samples written, got %d", len(before))
+	}
+	// clear a pad, write again: its file must be gone, not left over from the first write
+	a.go_(Pads)
+	keys(t, a, "Y+B")
+	a.go_(Save)
+	keys(t, a, "A")
+	after, _ := filepath.Glob(filepath.Join(dir, "SMPL", "*"))
+	if len(after) != len(before)-1 {
+		t.Fatalf("a cleared pad left its file behind: %d files before, %d after", len(before), len(after))
+	}
+	left, _ := filepath.Glob(filepath.Join(a.OutDir, cardFolder, ".404h-*"))
+	if len(left) != 0 {
+		t.Fatalf("staging folders left behind: %v", left)
+	}
+}
+
+func TestSlicesNeverLandOnUsedPads(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit) // kick, snare, hat on A1..A3
+	names := func() [3]string {
+		var n [3]string
+		for i := 0; i < 3; i++ {
+			n[i] = a.Info().Pads[i].Name
+		}
+		return n
+	}
+	before := names()
+	keys(t, a, "Y+R Y+R R*6 A Y+X") // cut the kick in two, put the slices on pads
+	if a.scr != Pads {
+		t.Fatalf("expected the pads after Y+X, on %v: %s", a.scr, a.msg)
+	}
+	if got := names(); got != before {
+		t.Fatalf("slices overwrote pads: %v -> %v", before, got)
+	}
+	if !a.Info().Pads[3].File || !a.Info().Pads[4].File {
+		t.Fatalf("the slices should be on A4 and A5 (the first free run)")
+	}
+}

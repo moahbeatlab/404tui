@@ -9,5 +9,5 @@ cp "$bin" "$here/roms/ports/404h/sp404h-arm64"
 cp "$here/../404h.sh" "$here/roms/ports/404h.sh"
 chmod 755 "$here/roms/ports/404h.sh" "$here/roms/ports/404h/sp404h-arm64"
 # the container's user (uid 1002) must be able to write the folders
-chmod -R a+rwX "$here/roms" "$here/usbdrive"
+chmod -R a+rwX "$here/roms" "$here/usbdrive" 2>/dev/null || true   # files the container made (uid 1002) cannot be changed by you, and are already writable
 echo "ready: now  docker compose up --build  in $here, then open http://localhost:8405"

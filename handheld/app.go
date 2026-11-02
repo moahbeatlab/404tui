@@ -640,12 +640,7 @@ const cardFolder = "ROLAND/SP-404MKII"
 func (a *App) ProjectName() string { return fmt.Sprintf("PROJECT_%02d", a.slot) }
 
 func (a *App) write() {
-	zb, err := a.lab.ExportZip(a.ProjectName())
-	if err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	names, err := unzipTo(zb, filepath.Join(a.OutDir, cardFolder))
+	names, err := a.exportTo(filepath.Join(a.OutDir, cardFolder))
 	if err != nil {
 		a.say(err.Error(), true)
 		return

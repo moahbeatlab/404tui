@@ -114,17 +114,15 @@ func (a *App) unitKey(k Key) {
 
 // send writes the project to a temporary folder and sends that over the project of the unit.
 func (a *App) send() {
-	zb, err := a.lab.ExportZip(a.ProjectName())
+	// the copy for the transfer goes next to the projects on the card: /tmp may be memory
+	os.MkdirAll(a.OutDir, 0o755)
+	tmp, err := os.MkdirTemp(a.OutDir, ".404h-send")
 	if err != nil {
 		a.say(err.Error(), true)
 		return
 	}
-	tmp, err := os.MkdirTemp("", "404h-send")
-	if err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	if _, err := unzipTo(zb, tmp); err != nil {
+	if _, err := a.exportTo(tmp); err != nil {
+		os.RemoveAll(tmp)
 		a.say(err.Error(), true)
 		return
 	}

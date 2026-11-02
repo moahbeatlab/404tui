@@ -155,16 +155,32 @@ func (l *Lab) ExportZip(folder string) ([]byte, error) {
 	}
 	var out bytes.Buffer
 	zw := zip.NewWriter(&out)
-	put := func(name string, data []byte) error {
+	err := l.ExportEach(func(name string, data []byte) error {
 		w, err := zw.CreateHeader(&zip.FileHeader{Name: folder + "/" + name, Method: zip.Store})
 		if err != nil {
 			return err
 		}
 		_, err = w.Write(data)
 		return err
-	}
-	if err := put("PADCONF.BIN", l.pad.Bytes()); err != nil {
+	})
+	if err != nil {
 		return nil, err
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
+// ExportEach hands the files of the project, PADCONF.BIN first and the rest in name order, to fn one at a time, so
+// a caller that writes them out never needs a second copy of the project in memory. The data is the lab's own: fn
+// must not keep or change it.
+func (l *Lab) ExportEach(fn func(name string, data []byte) error) error {
+	if l.pad == nil {
+		return errors.New("there is no project")
+	}
+	if err := fn("PADCONF.BIN", l.pad.Bytes()); err != nil {
+		return err
 	}
 	names := make([]string, 0, len(l.files))
 	for n := range l.files {
@@ -172,14 +188,11 @@ func (l *Lab) ExportZip(folder string) ([]byte, error) {
 	}
 	sort.Strings(names)
 	for _, n := range names {
-		if err := put(n, l.files[n]); err != nil {
-			return nil, err
+		if err := fn(n, l.files[n]); err != nil {
+			return err
 		}
 	}
-	if err := zw.Close(); err != nil {
-		return nil, err
-	}
-	return out.Bytes(), nil
+	return nil
 }
 
 // PadconfBytes is the PADCONF.BIN as it would be written.

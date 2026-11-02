@@ -1,11 +1,8 @@
 package handheld
 
 import (
-	"archive/zip"
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,7 +160,14 @@ func (a *App) slicesToPads() {
 	}
 	sb, _ := json.Marshal(a.sl)
 	base := a.info.Pads[a.spad].Name
-	first, done := a.spad+1, 0
+	// on pads that are free: the first run of empty pads after the one that was cut (then from the start), never on
+	// top of a sample the project already has
+	first := a.freeRun(len(a.sl.Slices), a.spad+1)
+	if first < 0 {
+		a.say(fmt.Sprintf("no room: %d empty pads in a row are needed (clear some with Y+B)", len(a.sl.Slices)), true)
+		return
+	}
+	done := 0
 	for i := range a.sl.Slices {
 		n := first + i
 		if n > 159 {
@@ -189,34 +193,69 @@ func (a *App) slicesToPads() {
 	a.say(fmt.Sprintf("%d slices on %s...", done, a.label(first)), false)
 }
 
-// unzipTo writes a zip under dir and returns the paths it wrote.
-func unzipTo(zb []byte, dir string) ([]string, error) {
-	zr, err := zip.NewReader(bytes.NewReader(zb), int64(len(zb)))
-	if err != nil {
+// freeRun is the first pad at or after from (wrapping round to the start) that begins n empty pads in a row, or -1.
+func (a *App) freeRun(n, from int) int {
+	pads := a.info.Pads
+	free := func(i int) bool { return i < len(pads) && !pads[i].File }
+	for off := 0; off < 160; off++ {
+		start := (from + off) % 160
+		if start+n > 160 {
+			continue
+		}
+		ok := true
+		for j := 0; j < n; j++ {
+			if !free(start + j) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return start
+		}
+	}
+	return -1
+}
+
+// exportTo writes the project as the folder dir/<project name>, one file at a time, into a staging folder that
+// replaces the old folder when all of it is written: a half-written project never stands where a good one was, and
+// files of an earlier save that the project no longer has do not stay behind. It returns the paths it wrote.
+func (a *App) exportTo(dir string) ([]string, error) {
+	name := a.ProjectName()
+	final := filepath.Join(dir, name)
+	stage := filepath.Join(dir, ".404h-writing-"+name)
+	if err := os.RemoveAll(stage); err != nil {
 		return nil, err
 	}
 	var names []string
-	for _, f := range zr.File {
-		dst := filepath.Join(dir, filepath.FromSlash(f.Name))
-		if !strings.HasPrefix(dst, filepath.Clean(dir)+string(filepath.Separator)) {
-			return nil, fmt.Errorf("bad path %q", f.Name)
+	// the folders the unit's own exports have, also when one is empty (PICTURE usually is)
+	for _, d := range []string{"PTN", "SMPL", "PICTURE"} {
+		if err := os.MkdirAll(filepath.Join(stage, d), 0o755); err != nil {
+			return nil, err
+		}
+	}
+	err := a.lab.ExportEach(func(rel string, data []byte) error {
+		dst := filepath.Join(stage, filepath.FromSlash(rel))
+		if !strings.HasPrefix(dst, stage+string(filepath.Separator)) {
+			return fmt.Errorf("bad path %q", rel)
 		}
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return nil, err
+			return err
 		}
-		rc, err := f.Open()
-		if err != nil {
-			return nil, err
+		if err := os.WriteFile(dst, data, 0o644); err != nil {
+			return err
 		}
-		b, err := io.ReadAll(rc)
-		rc.Close()
-		if err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(dst, b, 0o644); err != nil {
-			return nil, err
-		}
-		names = append(names, f.Name)
+		names = append(names, name+"/"+rel)
+		return nil
+	})
+	if err != nil {
+		os.RemoveAll(stage)
+		return nil, err
+	}
+	if err := os.RemoveAll(final); err != nil {
+		return nil, err
+	}
+	if err := os.Rename(stage, final); err != nil {
+		return nil, err
 	}
 	return names, nil
 }
