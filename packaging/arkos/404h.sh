@@ -4,7 +4,8 @@
 # roms2/404/card, the folder to copy to (or to use as) the SP-404MKII's card.
 #
 # NOT TRIED ON A DEVICE YET: the framebuffer, the input device and the permissions below are what ArkOS
-# is expected to have; a log is written to /tmp/404h.log.
+# is expected to have; the program writes logs.log next to itself (roms2/ports/404h/logs.log), and what it prints when it dies
+# without being able to log (a crash of the Go runtime) goes to stderr.log beside it.
 DIR="$(dirname "$(readlink -f "$0")")/404h"
 SAMPLES=/roms2/404/samples
 CARD=/roms2/404/card
@@ -12,5 +13,7 @@ mkdir -p "$SAMPLES" "$CARD"
 sudo chmod 666 /dev/fb0 /dev/tty1 /dev/input/event* 2>/dev/null
 printf '\033c' >/dev/tty1
 setterm -cursor off >/dev/tty1 2>/dev/null
-"$DIR/sp404h-arm64" -samples "$SAMPLES" -out "$CARD" -fb /dev/fb0 >/tmp/404h.log 2>&1
+echo "$(date '+%F %T') launcher: starting $DIR/sp404h-arm64" >>"$DIR/logs.log"
+"$DIR/sp404h-arm64" -samples "$SAMPLES" -out "$CARD" -fb /dev/fb0 >/dev/null 2>"$DIR/stderr.log"
+echo "$(date '+%F %T') launcher: program ended with status $?" >>"$DIR/logs.log"
 printf '\033c' >/dev/tty1

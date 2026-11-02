@@ -27,6 +27,9 @@ type Framebuffer struct {
 	f      *os.File
 	mem    []byte
 	w, h   int
+	vw, vh int // virtual size
+	xoff   int
+	yoff   int
 	bpp    int
 	stride int
 }
@@ -47,7 +50,7 @@ func OpenFramebuffer(path string) (*Framebuffer, error) {
 		f.Close()
 		return nil, e
 	}
-	fb := &Framebuffer{f: f, w: int(v[0]), h: int(v[1]), bpp: int(v[6])}
+	fb := &Framebuffer{f: f, w: int(v[0]), h: int(v[1]), vw: int(v[2]), vh: int(v[3]), xoff: int(v[4]), yoff: int(v[5]), bpp: int(v[6])}
 	fb.stride = int(fix[12])
 	if fb.stride == 0 {
 		fb.stride = fb.w * fb.bpp / 8

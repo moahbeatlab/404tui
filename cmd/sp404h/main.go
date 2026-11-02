@@ -5,8 +5,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/handheld"
@@ -29,6 +32,19 @@ func main() {
 	simulate := flag.Bool("sim", false, "the UNIT screen finds a simulated unit")
 	flag.Parse()
 
+	if *script == "" {
+		closeLog := openLog()
+		defer closeLog()
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("PANIC: %v\n%s", r, debug.Stack())
+				closeLog()
+				os.Exit(2)
+			}
+		}()
+		log.Printf("start: args %q", os.Args[1:])
+	}
+
 	if *out == "" {
 		*out = filepath.Join(filepath.Dir(*root), "out")
 	}
@@ -46,6 +62,7 @@ func main() {
 			audio = p
 		} else {
 			fmt.Fprintln(os.Stderr, "no audio:", err)
+			log.Println("no audio:", err)
 		}
 	}
 	app := handheld.New(*root, *out, audio)
@@ -79,9 +96,47 @@ func main() {
 	if err := handheld.Run(app, *fbPath, *input, *web); err != nil {
 		fatal(err)
 	}
+	log.Println("exit")
+}
+
+// openLog sends the log to logs.log next to the program (the working folder or /tmp when that cannot be
+// written), starting it afresh when it has grown past 512 kB, and to stderr as well.
+func openLog() (closeFn func()) {
+	dirs := []string{"."}
+	if exe, err := os.Executable(); err == nil {
+		dirs = []string{filepath.Dir(exe), ".", os.TempDir()}
+	}
+	for _, d := range dirs {
+		path := filepath.Join(d, "logs.log")
+		flags := os.O_CREATE | os.O_WRONLY | os.O_APPEND
+		if st, err := os.Stat(path); err == nil && st.Size() > 512<<10 {
+			flags = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+		}
+		f, err := os.OpenFile(path, flags, 0o644)
+		if err != nil {
+			continue
+		}
+		log.SetOutput(io.MultiWriter(f, os.Stderr))
+		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+		log.Printf("---- 404h %s, log %s", version(), path)
+		return func() { f.Sync(); f.Close() }
+	}
+	return func() {}
+}
+
+func version() string {
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range bi.Settings {
+			if s.Key == "vcs.revision" && len(s.Value) >= 7 {
+				return s.Value[:7]
+			}
+		}
+	}
+	return "dev"
 }
 
 func fatal(err error) {
+	log.Println("FATAL:", err)
 	fmt.Fprintln(os.Stderr, "sp404h:", err)
 	os.Exit(1)
 }

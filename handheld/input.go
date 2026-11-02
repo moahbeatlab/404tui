@@ -3,10 +3,13 @@ package handheld
 import (
 	"encoding/binary"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
 )
+
+var keyNames = []string{"Up", "Down", "Left", "Right", "A", "B", "X", "Y"}
 
 // Event is a key going down or up.
 type Event struct {
@@ -119,6 +122,7 @@ func Evdev(path string, m map[uint16]Key, out chan<- Event) error {
 		buf := make([]byte, 24) // struct input_event on 64 bit: timeval (16), type, code (2 each), value (4)
 		held := map[Key]int{}
 		var hatX, hatY int32
+		unknown := map[uint16]bool{}
 		for {
 			if _, err := f.Read(buf); err != nil {
 				return
@@ -128,6 +132,9 @@ func Evdev(path string, m map[uint16]Key, out chan<- Event) error {
 			case evKey:
 				if k, ok := m[code]; ok {
 					emit(out, held, k, val)
+				} else if val == 1 && !unknown[code] { // a button that is not mapped: tell which code it is
+					unknown[code] = true
+					log.Printf("input: unmapped button, code 0x%x", code)
 				}
 			case evAbs: // a hat for the D-pad: ABS_HAT0X, ABS_HAT0Y
 				if code == 0x10 {
