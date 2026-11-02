@@ -105,7 +105,10 @@ type App struct {
 	carry    *carry // a pad being moved or copied
 	pat      int    // pattern in the sequencer, 1..160
 	step     int    // the cursor's step, 16 to a bar
-	row      int    // the cursor's pad in the bank
+	col      int    // the cursor's column in the tracker, 0..7
+	cols     [8]int // the pad of each column
+	colsSet  bool   // the columns were chosen (by default or by the user)
+	colsOwn  bool   // the user changed a column: they stay when the pattern changes
 	seqOn    bool   // the pattern is playing
 	seqStart time.Time
 	// Now is the clock; nil is the real one. A test sets it.
@@ -358,6 +361,7 @@ func (a *App) go_(s Screen) {
 	}
 	if s == Seq {
 		a.refresh()
+		a.autoCols()
 	}
 	if s == Files && a.entries == nil {
 		a.list()

@@ -11,8 +11,8 @@ import (
 	"github.com/moahbeatlab/404tui/lab"
 )
 
-// waveCols is the width of the slicer's waveform in columns, one per pixel.
-const waveCols = 600
+// waveCols is the width of the slicer's waveform in columns, one per pixel (the panel has the right of the screen).
+const waveCols = 440
 
 // openSlicer takes the sample of the pad in front into the slicer: one slice over the whole of it.
 func (a *App) openSlicer() {

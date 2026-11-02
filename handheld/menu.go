@@ -58,7 +58,7 @@ func (a *App) drawMenu(c *canvas) {
 	m := a.menu
 	w := 328
 	h := 40 + len(m.items)*20
-	x, y := (W-w)/2, max(40, (H-h)/2-20)
+	x, y := (contentW-w)/2, max(40, (H-h)/2-20)
 	c.rect(x, y, w, h, cPanel2)
 	c.box(x, y, w, h, 2, cAmber)
 	c.text(x+14, y+10, strings.ToUpper(m.title), cAmber, true)

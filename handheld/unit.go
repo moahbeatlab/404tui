@@ -146,9 +146,10 @@ func (a *App) drawUnit(c *canvas) {
 	if a.link == nil {
 		c.big(margin, 70, "NO UNIT", cAmber, 3)
 		c.text(margin, 140, "Plug the SP-404MKII into the OTG port", cText, false)
-		c.text(margin, 158, "(the USB-C port marked OTG) with a USB-C cable.", cText, false)
+		c.text(margin, 158, "(the USB-C port marked OTG) with a cable.", cText, false)
 		c.text(margin, 190, "Looking for it...   A looks now", cDim, false)
-		c.text(margin, 240, "Without it, SAVE writes the project as a folder for the SD card.", cDim, false)
+		c.text(margin, 240, "Without it, SAVE writes the project as a", cDim, false)
+		c.text(margin, 258, "folder for the SD card.", cDim, false)
 		return
 	}
 	c.text(margin, 38, "CONNECTED", cGood, true)
@@ -165,43 +166,46 @@ func (a *App) drawUnit(c *canvas) {
 			nm = names[i]
 		}
 		if i == a.unitCur {
-			c.rect(margin-4, y-2, 380, 20, cAmberD)
+			c.rect(margin-4, y-2, contentW-margin, 20, cAmberD)
 			c.rect(margin-4, y-2, 3, 20, cAmber)
 		}
 		c.text(margin+4, y, fmt.Sprintf("%2d  %s", i+1, fit(nm, 28)), cText, i == a.unitCur)
 	}
-	x := 416
-	c.text(x, 62, "SENDING", cDim, false)
-	c.text(x, 80, fit(a.ProjectName(), 24), cAmber, true)
-	c.text(x, 100, fmt.Sprintf("to unit project %d", a.unitCur+1), cText, false)
+}
+
+// unitContext is the panel's part of the UNIT screen: what is being sent and how far it is.
+func (a *App) unitContext(c *canvas, x, y, w int) {
+	if a.link == nil {
+		c.text(x, y, "no unit", cDim, false)
+		return
+	}
+	c.text(x, y, "SENDING", cDim, false)
+	c.text(x, y+18, fit(a.ProjectName(), w/CellW), cAmber, true)
+	c.text(x, y+36, fmt.Sprintf("to unit project %d", a.unitCur+1), cText, false)
 	switch {
 	case a.job != nil:
 		done, total, name, err, fin := a.job.state()
-		c.rect(x, 140, 208, 14, cPanel)
+		c.rect(x, y+60, w, 12, cPanel2)
 		if fin && err == nil {
 			done = total
 		}
 		if total > 0 {
-			c.rect(x, 140, 208*done/total, 14, cAmber)
+			c.rect(x, y+60, w*done/total, 12, cAmber)
 		}
-		c.text(x, 162, fit(name, 24), cDim, false)
+		c.text(x, y+76, fit(name, w/CellW), cDim, false)
 		switch {
 		case fin && err != nil:
-			c.text(x, 190, fit(err.Error(), 26), cBad, true)
+			c.text(x, y+94, fit(err.Error(), w/CellW), cBad, true)
 		case fin:
-			c.text(x, 190, "DONE", cGood, true)
-			c.text(x, 208, "the unit has the project", cDim, false)
+			c.text(x, y+94, "DONE", cGood, true)
 		default:
-			c.text(x, 190, fmt.Sprintf("%d of %d files", done, total), cText, false)
+			c.text(x, y+94, fmt.Sprintf("%d of %d files", done, total), cText, false)
 		}
 	case a.confirm:
-		c.rect(x, 140, 208, 64, cAmberD)
-		c.box(x, 140, 208, 64, 2, cAmber)
-		c.text(x+10, 148, "REPLACES the unit's", cWhite, true)
-		c.text(x+10, 166, fmt.Sprintf("project %d.", a.unitCur+1), cWhite, true)
-		c.text(x+10, 184, "A again: send  B: no", cText, false)
-	default:
-		c.text(x, 140, "A  send", cText, false)
-		c.text(x, 158, "X  look again", cDim, false)
+		c.rect(x, y+58, w, 62, cAmberD)
+		c.box(x, y+58, w, 62, 2, cAmber)
+		c.text(x+6, y+64, "REPLACES unit", cWhite, true)
+		c.text(x+6, y+82, fmt.Sprintf("project %d.", a.unitCur+1), cWhite, true)
+		c.text(x+6, y+100, "A again: send", cText, false)
 	}
 }

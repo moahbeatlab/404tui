@@ -58,3 +58,16 @@ on hardware too. Patterns are always 4 bars (other lengths are a guess).
   places (samples folder, `/mnt/usbdrive`, `/roms`, `/`). An empty samples folder says where to put files.
 - **Projects load from the file system**: a folder with a PADCONF.BIN is marked `project`; `A` on it replaces the project
   in memory (asks first when there is unsaved work). Folders named PROJECT_nn also set the slot number.
+
+
+## The panel and the tracker (second round)
+
+- **Right panel on every screen**, as on the M8: a map of the six screens with the current one lit, the tempo and the
+  loop's state, what is under the cursor (pad, file preview, slice numbers, pattern and note), and the keys that work
+  right now with their letters. Hold Y and the panel lights the shifted set (`SHIFT`). The footer is only the message line.
+- **SEQ is a tracker**: a row for each step (16 to a bar, scrolling, a line at each bar), a column for each of 8 pads,
+  the velocity of a note in hex (`64` is 100), `--` where there is none. Up/Down move the step (held: faster),
+  Left/Right the column, `A` puts or takes a note, `Y+A` cycles the velocity, `Y+X` gives the column the next pad with a
+  sample, `Y+Up/Down` changes the pattern. The columns start as the pad that was in front, then pads with notes, then
+  pads with samples, in pad order; the menu's *Pad of this column* picks any pad. The menu's row operations (fill,
+  euclid, clear, shift) now work on the column.

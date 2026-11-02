@@ -27,6 +27,7 @@ func (a *App) Render() *image.RGBA {
 	case Unit:
 		a.drawUnit(c)
 	}
+	a.drawPanel(c)
 	a.footer(c)
 	if a.menu != nil {
 		a.drawMenu(c)
@@ -41,65 +42,24 @@ func (a *App) titleBar(c *canvas) {
 	c.rect(0, 0, W, 28, cPanel)
 	c.rect(0, 0, 56, 28, cAmber)
 	c.text(8, 6, "404h", cBg, true)
-	x := 76
-	for i, n := range screenNames {
-		on := Screen(i) == a.scr
-		col := cDim
-		if on {
-			col = cAmber
-		}
-		c.text(x, 6, n, col, on)
-		if on {
-			c.rect(x-4, 24, textW(n)+8, 3, cAmber)
-		}
-		x += textW(n) + 24
-	}
-	right := fmt.Sprintf("%s  %c", a.ProjectName(), 'A'+rune(a.bank))
+	c.big(72, 6, screenNames[a.scr], cAmber, 1)
+	right := fmt.Sprintf("%s  bank %c", a.ProjectName(), 'A'+rune(a.bank))
 	c.text(W-margin-textW(right), 6, right, cText, false)
 	c.rect(0, 28, W, 1, cLine)
 }
 
-// footer shows the keys of the screen: always on screen, because there is no keyboard to look them up on.
+// footer is the message line; the keys are in the panel.
 func (a *App) footer(c *canvas) {
-	c.rect(0, 436, W, 1, cLine)
-	c.rect(0, 437, W, H-437, cPanel)
+	c.rect(0, panelBot, W, 1, cLine)
+	c.rect(0, panelBot+1, W, H-panelBot-1, cPanel)
 	if a.msg != "" {
 		col := cGood
 		if a.msgBad {
 			col = cBad
 		}
-		c.text(margin, 410, a.msg, col, true)
+		c.text(margin, panelBot+8, fit(a.msg, (W-2*margin)/CellW), col, true)
 	}
-	l1, l2 := a.legend()
-	c.text(margin, 442, l1, cText, false)
-	c.text(margin, 460, l2, cDim, false)
-}
-
-func (a *App) legend() (string, string) {
-	shift := "Y+<> screen"
-	switch a.scr {
-	case Pads:
-		if a.carry != nil {
-			return "A put it down here  B cancel  arrows move", "pad " + a.label(a.carry.from) + " is in your hand"
-		}
-		return "A menu  X play  B stop  arrows move", shift + "  Y+^v bank  Y+B clear  Y help"
-	case Files:
-		if e, ok := a.current(); ok && e.project {
-			return "A load this project  > look inside  < up  ^v browse", shift + "  Y+X places  B pads"
-		}
-		return "A to pad " + a.label(a.padN()) + "  X listen  ^v browse  > open  < up", shift + "  Y+X places  B pads"
-	case Slice:
-		return "A cut  B join  X play  <> move (hold: faster)  ^v marker", shift + "  Y+A auto  Y+X to pads  Y+^v zoom"
-	case Seq:
-		if a.seqOn {
-			return "A note  X stop  B stop  arrows move", shift + "  Y+A velocity  Y+^v pattern  Y+X bank"
-		}
-		return "A note  X play  B menu  arrows move", shift + "  Y+A velocity  Y+^v pattern  Y+X bank"
-	case Unit:
-		return "A send the project  ^v choose a unit project  B back", shift
-	default:
-		return "A write project  <> slot  X quit  B back", shift + "  (Select+Start quits anywhere)"
-	}
+	c.text(margin, panelBot+28, "Y alone: all keys    Select+Start: quit", cDim, false)
 }
 
 func (a *App) drawHelp(c *canvas) {
@@ -174,37 +134,6 @@ func (a *App) drawPads(c *canvas) {
 		c.rect(x, by+27, 35, 3, cLine)
 		c.rect(x, by+27, used*35/16, 3, cAmber)
 	}
-	a.padDetail(c)
-}
-
-func (a *App) padDetail(c *canvas) {
-	x, w := 416, 208
-	n := a.padN()
-	p := a.info.Pads[n]
-	c.big(x, 44, a.label(n), cAmber, 3)
-	if !p.File {
-		c.text(x, 110, "empty", cDim, false)
-		c.text(x, 134, "A opens the menu", cDim, false)
-		c.text(x, 152, "to pick a sample", cDim, false)
-		return
-	}
-	c.text(x, 110, fit(p.Name, 24), cText, true)
-	ch := "mono"
-	if p.Ch == 2 {
-		ch = "stereo"
-	}
-	c.text(x, 130, fmt.Sprintf("%.2f s  %s  lvl %d", float64(p.Frames)/48000, ch, p.Level), cDim, false)
-	c.rect(x, 158, w, 72, cPanel)
-	if id, ok := a.padSample(n); ok {
-		a.waveform(c, id, 0, p.Frames, x+2, 158, w-4, 72, cAmber)
-	}
-	used := 0
-	for _, q := range a.info.Pads {
-		if q.File {
-			used++
-		}
-	}
-	c.text(x, 250, fmt.Sprintf("%d of 160 pads used", used), cDim, false)
 }
 
 // waveform draws the peaks of frames from..to of a sample in a box, mirrored around its middle.
@@ -239,13 +168,13 @@ func (a *App) drawFiles(c *canvas) {
 		e := a.entries[top+i]
 		y := 60 + i*17
 		if top+i == a.fcur {
-			c.rect(margin-4, y-1, 392, 17, cAmberD)
+			c.rect(margin-4, y-1, contentW-margin, 17, cAmberD)
 			c.rect(margin-4, y-1, 3, 17, cAmber)
 		}
-		name := fit(e.name, 34)
+		name := fit(e.name, 50)
 		col := cText
 		if e.dir {
-			name = fit(e.name, 33) + "/"
+			name = fit(e.name, 49) + "/"
 			col = cAmber
 		}
 		if e.project {
@@ -255,22 +184,7 @@ func (a *App) drawFiles(c *canvas) {
 		c.text(margin+4, y, name, col, e.dir)
 		if !e.dir {
 			sz := fmt.Sprintf("%dK", (e.size+512)/1024)
-			c.text(margin+4+392-textW(sz)-12, y, sz, cDim, false)
-		}
-	}
-	// preview
-	x, w := 416, 208
-	c.text(x, 44, "TARGET PAD", cDim, false)
-	c.big(x, 62, a.label(a.padN()), cAmber, 3)
-	if e, ok := a.current(); ok && !e.dir {
-		c.text(x, 130, fit(e.name, 24), cText, true)
-		if id, err := a.decode(e); err == nil {
-			s, _ := a.lab.Sample(id)
-			c.text(x, 150, fmt.Sprintf("%.2f s", float64(s.Frames())/48000), cDim, false)
-			c.rect(x, 176, w, 80, cPanel)
-			a.waveform(c, id, 0, s.Frames(), x+2, 176, w-4, 80, cText)
-		} else {
-			c.text(x, 150, fit(err.Error(), 24), cBad, false)
+			c.text(contentW-textW(sz)-12, y, sz, cDim, false)
 		}
 	}
 }
@@ -282,9 +196,7 @@ func (a *App) drawSlice(c *canvas) {
 	s, _ := a.lab.Sample(a.sid)
 	sec := func(f int) float64 { return float64(f) / 48000 }
 	name := a.info.Pads[a.spad].Name
-	c.text(margin, 38, fmt.Sprintf("%s  %s", a.label(a.spad), fit(name, 24)), cAmber, true)
-	hdr := fmt.Sprintf("%.2f s   %d slices   zoom %dx", sec(sl.Frames), len(sl.Slices), 1<<a.zoom)
-	c.text(W-margin-textW(hdr), 38, hdr, cDim, false)
+	c.text(margin, 38, fmt.Sprintf("%s  %s", a.label(a.spad), fit(name, 40)), cAmber, true)
 
 	const wx, wy, wh = 20, 64, 220
 	from, to := a.view()
@@ -327,10 +239,11 @@ func (a *App) drawSlice(c *canvas) {
 	c.text(margin, 360, fmt.Sprintf("cursor %.3f s", sec(a.at)), cDim, false)
 	// chips
 	for i := range sl.Slices {
-		if i >= 32 {
+		if i >= 22 {
+			c.text(margin+11*38, 404+20, fmt.Sprintf("+%d", len(sl.Slices)-22), cDim, false)
 			break
 		}
-		x, y := margin+(i%16)*38, 384+(i/16)*20
+		x, y := margin+(i%11)*38, 384+(i/11)*20
 		col, fg := cPanel2, cDim
 		if i == sel {
 			col, fg = cAmber, cBg
@@ -354,9 +267,9 @@ func (a *App) drawSave(c *canvas) {
 	c.text(margin, 44, "WRITE THE PROJECT", cDim, false)
 	c.big(margin, 66, a.ProjectName(), cAmber, 3)
 	dest := filepath.Join(a.OutDir, cardFolder, a.ProjectName())
-	c.text(margin, 120, fit(dest, 76), cText, false)
-	c.text(margin, 150, fmt.Sprintf("%d pads with samples    %.1f MB of audio    %d files", used, float64(bytesN)/1e6, a.info.Files), cText, false)
-	c.rect(margin, 180, W-2*margin, 1, cLine)
+	c.text(margin, 120, short2(dest, 55), cText, false)
+	c.text(margin, 150, fmt.Sprintf("%d pads with samples   %.1f MB   %d files", used, float64(bytesN)/1e6, a.info.Files), cText, false)
+	c.rect(margin, 180, contentW-2*margin, 1, cLine)
 	if a.wrote == nil {
 		c.rect(margin, 200, 260, 44, cAmber)
 		c.text(margin+16, 214, "A  WRITE TO THE CARD", cBg, true)
@@ -372,7 +285,7 @@ func (a *App) drawSave(c *canvas) {
 	for i, n := range show {
 		c.text(margin, 220+i*17, "  "+n, cText, false)
 	}
-	c.text(margin, 372, "Put the card in the SP-404MKII. Not yet tried on a real unit.", cDim, false)
+	c.text(margin, 372, "Put the card in the SP-404MKII.", cDim, false)
 }
 
 // Clock is for the playing-pad flash: a screen is a function of the state, not of the time, so tests are repeatable.

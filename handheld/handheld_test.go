@@ -113,7 +113,7 @@ func TestAssignSliceAndSequence(t *testing.T) {
 	if a.Screen() != Seq {
 		t.Fatalf("screen %v", a.Screen())
 	}
-	keys(t, a, "A R R R R A")
+	keys(t, a, "A D D D D A") // two notes in the first column, four steps apart
 	d, ok := a.doc()
 	if !ok || len(d.Notes) != 2 || d.Bars != 4 {
 		t.Fatalf("two notes in a 4 bar pattern, got %+v", d)
@@ -122,7 +122,7 @@ func TestAssignSliceAndSequence(t *testing.T) {
 	if d, _ = a.doc(); len(d.Notes) != 1 {
 		t.Fatalf("A on a note takes it off, notes %d", len(d.Notes))
 	}
-	keys(t, a, "D B A") // the menu: fill the row below with "every beat"
+	keys(t, a, "R B A") // the next column, the menu: fill it with "every beat"
 	d, _ = a.doc()
 	if len(d.Notes) != 1+16 {
 		t.Fatalf("every beat in 4 bars is 16 notes (and the other one): %d", len(d.Notes))
@@ -470,4 +470,71 @@ func TestSlicesNeverLandOnUsedPads(t *testing.T) {
 	if !a.Info().Pads[3].File || !a.Info().Pads[4].File {
 		t.Fatalf("the slices should be on A4 and A5 (the first free run)")
 	}
+}
+
+func TestTrackerRowsAreStepsColumnsArePads(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit) // kick, snare, hat on A1..A3, the cursor on A3
+	a.go_(Seq)
+	for i := 1; i < len(a.cols); i++ {
+		if a.cols[i-1] >= a.cols[i] {
+			t.Fatalf("columns are not in pad order: %v", a.cols)
+		}
+	}
+	if a.cols[0] != 0 || a.cols[1] != 1 || a.cols[2] != 2 {
+		t.Fatalf("the pads with samples come first: %v", a.cols)
+	}
+	if a.colPad() != 2 {
+		t.Fatalf("the cursor starts on the pad that was in front (A3), not %d", a.colPad())
+	}
+	// Left/Right change the column, Up/Down the step
+	keys(t, a, "L L")
+	if a.col != 0 {
+		t.Fatalf("column %d", a.col)
+	}
+	keys(t, a, strings.Repeat("D ", 40)+"A")
+	if a.step != 40 {
+		t.Fatalf("step %d", a.step)
+	}
+	d, _ := a.doc()
+	n, ok := noteAt(d, 0, 40)
+	if !ok || int(n.Tick) != 40*stepTicks {
+		t.Fatalf("no note at step 41 of the kick: %+v", d.Notes)
+	}
+	if img := a.Render(); img.Bounds().Dx() != W { // the view has scrolled to step 40
+		t.Fatal("no frame")
+	}
+	// the end is the end
+	keys(t, a, strings.Repeat("D ", 100))
+	if a.step != a.steps()-1 {
+		t.Fatalf("stops at the last step, got %d of %d", a.step, a.steps())
+	}
+	// Y+X gives the column the next pad with a sample, and it stays when the pattern changes
+	keys(t, a, "Y+X")
+	if a.colPad() != 1 || !a.colsOwn {
+		t.Fatalf("column 1 should be pad A2 now, is %d", a.colPad())
+	}
+	keys(t, a, "Y+U")
+	if a.cols[0] != 1 {
+		t.Fatalf("the user's column was reset by the pattern change: %v", a.cols)
+	}
+}
+
+func TestPanelShowsTheKeysOfTheScreen(t *testing.T) {
+	a, _ := newApp(t)
+	for s := Pads; s <= Unit; s++ {
+		a.go_(s)
+		plain, _ := a.hints()
+		if len(plain) == 0 {
+			t.Fatalf("screen %v has no keys listed", s)
+		}
+		a.Render()
+	}
+	a.go_(Pads)
+	a.Press(Y, 0)
+	if !a.yHeld {
+		t.Fatal("Y held")
+	}
+	a.Render() // the shifted set is lit
+	a.Release(Y)
 }
