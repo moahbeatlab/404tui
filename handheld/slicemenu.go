@@ -132,7 +132,7 @@ func (a *App) renderResult(newDice bool) (formats.Sample, int, error) {
 		a.sl.Seed++
 	}
 	if a.sl.Division > 0 {
-		a.sl.BPM = a.tempo()
+		a.sl.BPM = a.tempoOf(a.spad / 16)
 	}
 	sb, _ := json.Marshal(a.sl)
 	mb, err := a.lab.RenderSteps(a.sid, sb, a.sliceSteps, 0)

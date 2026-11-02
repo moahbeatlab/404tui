@@ -239,12 +239,16 @@ type PatternInfo struct {
 
 // Info is the overview of the project.
 type Info struct {
-	Open     bool          `json:"open"`
-	Name     string        `json:"name"`
-	Tempo    float64       `json:"tempo"`
-	Pads     []PadInfo     `json:"pads"`
-	Patterns []PatternInfo `json:"patterns"`
-	Files    int           `json:"files"`
+	Open  bool    `json:"open"`
+	Name  string  `json:"name"`
+	Tempo float64 `json:"tempo"` // the project tempo, BPM
+	// UsesProjectTempo is the unit's Tempo Select: when true every bank plays at the project tempo, else each bank at its own
+	// (BankTempos, A to J).
+	UsesProjectTempo bool          `json:"usesProjectTempo"`
+	BankTempos       []float64     `json:"bankTempos"`
+	Pads             []PadInfo     `json:"pads"`
+	Patterns         []PatternInfo `json:"patterns"`
+	Files            int           `json:"files"`
 }
 
 func padFile(n int) string {
@@ -262,7 +266,11 @@ func (l *Lab) Info() ([]byte, error) {
 	in := Info{Pads: []PadInfo{}, Patterns: []PatternInfo{}}
 	if l.pad != nil {
 		in.Open, in.Name, in.Files = true, l.pad.Name, len(l.files)+1
-		in.Tempo = float64(l.pad.Settings[0]) / 100
+		in.Tempo = float64(l.pad.Settings[0]&tempoMask) / 100 // the high bit of the word is Tempo Select, not tempo
+		in.UsesProjectTempo = l.pad.Settings[0]&tempoSelect != 0
+		for b := 0; b < 10; b++ {
+			in.BankTempos = append(in.BankTempos, float64(l.pad.Settings[12+b]>>1)/100)
+		}
 		for n := 0; n < 160; n++ {
 			pi := PadInfo{N: n, Label: padLabel(n)}
 			if blk, err := proto.ParsePadBlock(l.pad.Blocks[n]); err == nil {
@@ -320,14 +328,58 @@ func (l *Lab) SetName(name string) error {
 	return nil
 }
 
-// SetTempo sets the project tempo in BPM (20 to 300); the banks keep their own.
+// The first settings word holds the project tempo (BPM x 100) in its low half and the unit's Tempo Select in bit 16: set
+// means every bank plays at the project tempo. A bank's word is its tempo x 100, shifted up one, with its protect bit.
+const (
+	tempoMask   = 0xffff
+	tempoSelect = 1 << 16
+)
+
+func checkTempo(bpm float64) error {
+	if bpm < 20 || bpm > 300 {
+		return errors.New("the tempo is 20 to 300 BPM")
+	}
+	return nil
+}
+
+// SetTempo sets the project tempo in BPM (20 to 300). The banks keep their own, and Tempo Select stays as it is: it is
+// the project tempo that plays only when that is set (SetUsesProjectTempo).
 func (l *Lab) SetTempo(bpm float64) error {
 	if l.pad == nil {
 		return errors.New("there is no project")
 	}
-	if bpm < 20 || bpm > 300 {
-		return errors.New("the tempo is 20 to 300 BPM")
+	if err := checkTempo(bpm); err != nil {
+		return err
 	}
-	l.pad.Settings[0] = uint32(bpm*100 + 0.5)
+	l.pad.Settings[0] = l.pad.Settings[0]&^tempoMask | uint32(bpm*100+0.5)
+	return nil
+}
+
+// SetBankTempo sets the tempo of bank 0..9 (A..J) in BPM, keeping its protect bit.
+func (l *Lab) SetBankTempo(bank int, bpm float64) error {
+	if l.pad == nil {
+		return errors.New("there is no project")
+	}
+	if bank < 0 || bank > 9 {
+		return fmt.Errorf("no bank %d", bank)
+	}
+	if err := checkTempo(bpm); err != nil {
+		return err
+	}
+	w := &l.pad.Settings[12+bank]
+	*w = *w&1 | uint32(bpm*100+0.5)<<1
+	return nil
+}
+
+// SetUsesProjectTempo is the unit's Tempo Select: true plays every bank at the project tempo, false each at its own.
+func (l *Lab) SetUsesProjectTempo(on bool) error {
+	if l.pad == nil {
+		return errors.New("there is no project")
+	}
+	if on {
+		l.pad.Settings[0] |= tempoSelect
+	} else {
+		l.pad.Settings[0] &^= tempoSelect
+	}
 	return nil
 }

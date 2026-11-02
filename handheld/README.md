@@ -113,3 +113,9 @@ on hardware too. Patterns are always 4 bars (other lengths are a guess).
 - **SEQ shows one bar at a time**: the 16 steps of a bar fill the whole height, a line at each beat, `bar 2/4` at the top
   right with a marker for the bar the loop is in while it plays. L1/R1 turn to the next or previous bar (keeping the row);
   the cursor turns the page by itself when it runs past a bar line.
+- **Tempo is the bank's** (the SP-404MKII keeps a tempo for each bank A-J, and *Tempo Select* says whether the banks play
+  at their own or all at the project tempo). The panel shows the tempo that plays, `BPM 124 bank A` or `BPM 90 proj`; the
+  sequencer plays the pattern at it, and the slicer's grid uses its pad's bank. The SEQ menu's *Tempo of bank X* (or
+  *of the project*) changes the one that plays, and *Tempo select* switches between the two. Before, the app read only
+  the project tempo word, which also holds the Tempo Select flag (it came out as a nonsense value that fell back to 120
+  BPM) and which the unit ignores in bank mode.

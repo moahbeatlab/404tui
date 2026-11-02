@@ -798,3 +798,59 @@ func equalInts(a, b []int) bool {
 	}
 	return true
 }
+
+func TestTempoIsTheBanksOrTheProjects(t *testing.T) {
+	a, _ := newApp(t)
+	a.lab.SetTempo(90)
+	a.lab.SetBankTempo(0, 124)
+	a.lab.SetBankTempo(9, 70)
+	a.refresh()
+	a.pat = 1 // A1
+	if a.tempo() != 124 {
+		t.Fatalf("a pattern of bank A plays at the bank's tempo, not the project's 90: %v", a.tempo())
+	}
+	a.pat = 145 // J1
+	if a.tempo() != 70 || a.tempoSource() != "bank J" {
+		t.Fatalf("bank J: %v %s", a.tempo(), a.tempoSource())
+	}
+	a.lab.SetUsesProjectTempo(true)
+	a.refresh()
+	if a.tempo() != 90 || a.tempoSource() != "proj" {
+		t.Fatalf("with Tempo Select on, every bank plays at the project tempo: %v", a.tempo())
+	}
+	// the Tempo menu changes the one that plays
+	a.go_(Seq)
+	a.seqMenu()
+	chooseMenu(t, a, "Tempo of the project")
+	if a.menu != nil && a.menu.item().label != "Tempo of the project" {
+		t.Fatal("the menu names the tempo it changes")
+	}
+	a.menu = nil
+	a.lab.SetUsesProjectTempo(false)
+	a.refresh()
+	a.pat = 17 // B1
+	a.seqMenu()
+	if a.menu.items[2].label != "Tempo of bank B" {
+		t.Fatalf("menu item: %q", a.menu.items[2].label)
+	}
+	a.Render()
+}
+
+func TestRealProjectsBankTempo(t *testing.T) {
+	p := "/home/hermes/test-projects/Construction Kits House 01"
+	if _, err := os.Stat(p); err != nil {
+		t.Skip("the real project is not here")
+	}
+	a, _ := newApp(t)
+	if err := a.OpenProject(p); err != nil {
+		t.Fatal(err)
+	}
+	a.pat = 1
+	if a.info.UsesProjectTempo || a.tempo() != 124 {
+		t.Fatalf("this project plays bank A at 124 BPM (its project tempo says %v): got %v, project tempo in use %v", a.info.Tempo, a.tempo(), a.info.UsesProjectTempo)
+	}
+	a.pat = 145
+	if a.tempo() != 90 {
+		t.Fatalf("bank J is 90: %v", a.tempo())
+	}
+}

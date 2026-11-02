@@ -245,13 +245,34 @@ func (a *App) seqMenu() {
 	for v := 60; v <= 240; v++ {
 		bpms = append(bpms, fmt.Sprintf("%d BPM", v))
 	}
-	m.items = append(m.items, menuItem{label: "Tempo", vals: bpms, val: min(max(int(a.tempo()+0.5)-60, 0), len(bpms)-1), keepOpen: true, onChange: func(v int) {
-		if err := a.lab.SetTempo(float64(v + 60)); err != nil {
+	bank := (a.pat - 1) / 16
+	what := fmt.Sprintf("Tempo of bank %c", 'A'+bank)
+	if a.info.UsesProjectTempo {
+		what = "Tempo of the project"
+	}
+	m.items = append(m.items, menuItem{label: what, vals: bpms, val: min(max(int(a.tempo()+0.5)-60, 0), len(bpms)-1), keepOpen: true, onChange: func(v int) {
+		var err error
+		if a.info.UsesProjectTempo {
+			err = a.lab.SetTempo(float64(v + 60))
+		} else {
+			err = a.lab.SetBankTempo(bank, float64(v+60))
+		}
+		if err != nil {
 			a.say(err.Error(), true)
 			return
 		}
 		a.refresh()
 		a.replay()
+	}})
+	sel := 0
+	if a.info.UsesProjectTempo {
+		sel = 1
+	}
+	m.items = append(m.items, menuItem{label: "Tempo select", vals: []string{"each bank's own", "the project's"}, val: sel, keepOpen: true, onChange: func(v int) {
+		a.lab.SetUsesProjectTempo(v == 1)
+		a.refresh()
+		a.replay()
+		a.say(fmt.Sprintf("tempo: %s, %s BPM", map[bool]string{true: "the project's", false: "bank " + string(rune('A'+bank))}[v == 1], bpmText(a.tempo())), false)
 	}})
 	m.items = append(m.items, menuItem{label: "Fill the column with", vals: names, run: func(v int) { a.setRow(pad, rowPresets[v].mask) }})
 	hits := make([]string, 16)
@@ -325,10 +346,7 @@ func (a *App) render() (formats.Sample, bool) {
 	if !ok {
 		return formats.Sample{}, false
 	}
-	bpm := a.info.Tempo
-	if bpm < 30 || bpm > 300 {
-		bpm = 120
-	}
+	bpm := a.tempo()
 	perTick := 60 / bpm / formats.PPQ * formats.SampleRate
 	n := int(float64(d.Length) * perTick)
 	mix := make([]int32, n*2)
@@ -415,10 +433,7 @@ func (a *App) playStep() int {
 	if !a.seqOn {
 		return -1
 	}
-	bpm := a.info.Tempo
-	if bpm < 30 || bpm > 300 {
-		bpm = 120
-	}
+	bpm := a.tempo()
 	stepDur := time.Duration(float64(time.Minute) / bpm / 4)
 	return int(a.clock().Sub(a.seqStart)/stepDur) % a.steps()
 }

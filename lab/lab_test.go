@@ -820,3 +820,43 @@ func TestConstsAreValidJSON(t *testing.T) {
 		}
 	}
 }
+
+func TestTempoSelectAndBankTempos(t *testing.T) {
+	l := New()
+	l.NewProject("T")
+	read := func() Info {
+		var in Info
+		b, _ := l.Info()
+		if err := json.Unmarshal(b, &in); err != nil {
+			t.Fatal(err)
+		}
+		return in
+	}
+	in := read()
+	if in.Tempo != 120 || in.UsesProjectTempo || len(in.BankTempos) != 10 || in.BankTempos[3] != 120 {
+		t.Fatalf("a new project: %+v", in)
+	}
+	ok(t, l.SetBankTempo(2, 98.5)) // bank C
+	ok(t, l.SetUsesProjectTempo(true))
+	ok(t, l.SetTempo(101))
+	in = read()
+	if in.Tempo != 101 || !in.UsesProjectTempo || in.BankTempos[2] != 98.5 || in.BankTempos[1] != 120 {
+		t.Fatalf("set: %+v", in)
+	}
+	// Tempo Select lives in the same word as the project tempo: setting the tempo must not clear it, and the word must
+	// not be read as a tempo (it would be 655 BPM)
+	ok(t, l.SetTempo(140))
+	if in = read(); !in.UsesProjectTempo || in.Tempo != 140 {
+		t.Fatalf("SetTempo kept the flag: %+v", in)
+	}
+	ok(t, l.SetUsesProjectTempo(false))
+	if in = read(); in.UsesProjectTempo || in.Tempo != 140 {
+		t.Fatalf("flag off: %+v", in)
+	}
+	if err := l.SetBankTempo(10, 100); err == nil {
+		t.Fatal("there are 10 banks")
+	}
+	if err := l.SetBankTempo(0, 5); err == nil {
+		t.Fatal("5 BPM is out of range")
+	}
+}

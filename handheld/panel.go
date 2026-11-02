@@ -58,11 +58,35 @@ func (a *App) hints() (plain, shift []hint) {
 	}
 }
 
-func (a *App) tempo() float64 {
-	if a.info.Tempo < 30 || a.info.Tempo > 300 {
+// tempoOf is the tempo that plays in a bank (0..9): the project's when the project tempo is selected, else the bank's own.
+// An unreadable value falls back to 120.
+func (a *App) tempoOf(bank int) float64 {
+	t := a.info.Tempo
+	if !a.info.UsesProjectTempo && bank >= 0 && bank < len(a.info.BankTempos) {
+		t = a.info.BankTempos[bank]
+	}
+	if t < 30 || t > 300 {
 		return 120
 	}
-	return a.info.Tempo
+	return t
+}
+
+// tempo is the tempo of the pattern in front: that of its bank.
+func (a *App) tempo() float64 { return a.tempoOf((a.pat - 1) / 16) }
+
+// tempoSource says whose tempo it is, for the panel.
+func (a *App) tempoSource() string {
+	if a.info.UsesProjectTempo {
+		return "proj"
+	}
+	return "bank " + string(rune('A'+(a.pat-1)/16))
+}
+
+func bpmText(t float64) string {
+	if t == float64(int(t)) {
+		return fmt.Sprintf("%d", int(t))
+	}
+	return fmt.Sprintf("%.1f", t)
 }
 
 // drawPanel draws the panel over the right of the frame.
@@ -86,7 +110,8 @@ func (a *App) drawPanel(c *canvas) {
 
 	// tempo and the state of the loop
 	y := panelTop + 8 + 2*(ch+gap) + 4
-	c.text(x, y, fmt.Sprintf("BPM %.0f", a.tempo()), cText, false)
+	c.text(x, y, fmt.Sprintf("BPM %s", bpmText(a.tempo())), cText, true)
+	c.text(x+textW("BPM "+bpmText(a.tempo())+" "), y, a.tempoSource(), cDim, false)
 	if a.seqOn {
 		c.text(x+w-textW("PLAY"), y, "PLAY", cGood, true)
 	} else {
