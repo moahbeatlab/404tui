@@ -115,15 +115,17 @@ type App struct {
 	picker   *picker // the pattern picker, when it is open
 	splash   *splash // the logo and dashboard at the start
 	as       autosave
-	changed  bool   // something was edited since the last autosave run
-	carry    *carry // a pad being moved or copied
-	pat      int    // pattern in the sequencer, 1..160
-	step     int    // the cursor's step, 16 to a bar
-	col      int    // the cursor's column in the tracker, 0..7
-	cols     [8]int // the pad of each column
-	colsSet  bool   // the columns were chosen (by default or by the user)
-	colsOwn  bool   // the user changed a column: they stay when the pattern changes
-	seqOn    bool   // the pattern is playing
+	arp      arpState // the settings of the sample arp, kept between visits
+	arpp     arpPrint // and of the pattern arp
+	changed  bool     // something was edited since the last autosave run
+	carry    *carry   // a pad being moved or copied
+	pat      int      // pattern in the sequencer, 1..160
+	step     int      // the cursor's step, 16 to a bar
+	col      int      // the cursor's column in the tracker, 0..7
+	cols     [8]int   // the pad of each column
+	colsSet  bool     // the columns were chosen (by default or by the user)
+	colsOwn  bool     // the user changed a column: they stay when the pattern changes
+	seqOn    bool     // the pattern is playing
 	seqStart time.Time
 	// Now is the clock; nil is the real one. A test sets it.
 	Now func() time.Time

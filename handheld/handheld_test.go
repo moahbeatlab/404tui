@@ -3,8 +3,10 @@ package handheld
 import (
 	"fmt"
 	"github.com/moahbeatlab/404tui/formats"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -126,7 +128,7 @@ func TestAssignSliceAndSequence(t *testing.T) {
 		t.Fatalf("A on a note takes it off, notes %d", len(d.Notes))
 	}
 	keys(t, a, "R B") // the next column, the menu: fill it with "every beat"
-	chooseMenu(t, a, "Fill the column")
+	chooseMenu(t, a, "Fill with")
 	d, _ = a.doc()
 	if len(d.Notes) != 1+16 {
 		t.Fatalf("every beat in 4 bars is 16 notes (and the other one): %d", len(d.Notes))
@@ -183,7 +185,7 @@ func TestMovePadAndCopyPad(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, "A A D R D D A") // some drum on A1
 	name := a.info.Pads[0].Name
-	keys(t, a, "A D D D R") // menu: Move or swap
+	keys(t, a, "A")
 	if a.menu == nil {
 		t.Fatal("the menu is open")
 	}
@@ -191,12 +193,15 @@ func TestMovePadAndCopyPad(t *testing.T) {
 	if a.menu != nil {
 		t.Fatal("B closes the menu")
 	}
-	// Move: menu items are Pick, Slice, Pattern, Move, Copy, ...: Move is the 4th
-	keys(t, a, "A D D D A R R A")
+	keys(t, a, "A")
+	chooseMenu(t, a, "Move or swap")
+	keys(t, a, "R R A")
 	if a.info.Pads[0].File || a.info.Pads[2].Name != name {
 		t.Fatalf("moved to A3: A1 %v A3 %q (was %q)", a.info.Pads[0].File, a.info.Pads[2].Name, name)
 	}
-	keys(t, a, "A D D D D A L A")
+	keys(t, a, "A")
+	chooseMenu(t, a, "Copy to")
+	keys(t, a, "L A")
 	if !a.info.Pads[1].File {
 		t.Fatal("copied to A2")
 	}
@@ -831,8 +836,12 @@ func TestTempoIsTheBanksOrTheProjects(t *testing.T) {
 	a.refresh()
 	a.pat = 17 // B1
 	a.seqMenu()
-	if a.menu.items[2].label != "Tempo of bank B" {
-		t.Fatalf("menu item: %q", a.menu.items[2].label)
+	found := false
+	for _, it := range a.menu.items {
+		found = found || it.label == "Tempo of bank B"
+	}
+	if !found {
+		t.Fatal("the pattern menu names the tempo it changes: bank B")
 	}
 	a.Render()
 }
@@ -986,4 +995,163 @@ func TestSplashGoesAwayByItselfOrByAKey(t *testing.T) {
 	if a.splash != nil || a.cur != 0 {
 		t.Fatalf("a key only closes the splash (cursor %d)", a.cur)
 	}
+}
+
+func TestArpTypes(t *testing.T) {
+	flat := func(typ, n, steps int) []int {
+		var out []int
+		for _, s := range arpSequence(n, typ, steps, rand.New(rand.NewSource(1))) {
+			if len(s) != 1 {
+				t.Fatalf("type %d plays %d keys on a step", typ, len(s))
+			}
+			out = append(out, s[0])
+		}
+		return out
+	}
+	cases := []struct {
+		typ, n, steps int
+		want          []int
+	}{
+		{0, 5, 7, []int{0, 1, 2, 3, 4, 0, 1}},    // UP wraps
+		{1, 4, 5, []int{3, 2, 1, 0, 3}},          // DOWN
+		{2, 4, 8, []int{0, 1, 2, 3, 2, 1, 0, 1}}, // U/D: the ends once
+		{3, 3, 8, []int{0, 1, 2, 2, 1, 0, 0, 1}}, // U/D+: the ends twice
+		{7, 5, 5, []int{0, 4, 1, 3, 2}},          // CONV: outside in
+		{8, 5, 5, []int{2, 3, 1, 4, 0}},          // DIV: middle out
+		{9, 4, 6, []int{0, 3, 1, 3, 2, 3}},       // PNKY: the top key between
+		{10, 4, 6, []int{0, 1, 0, 2, 0, 3}},      // THMB: the bottom key between
+		{5, 3, 4, []int{0, 1, 2, 0}},             // ORD
+	}
+	for _, c := range cases {
+		got := flat(c.typ, c.n, c.steps)
+		if fmt.Sprint(got) != fmt.Sprint(c.want) {
+			t.Errorf("%s with %d keys: %v, want %v", arpTypes[c.typ], c.n, got, c.want)
+		}
+	}
+	if s := arpSequence(4, 6, 2, nil); len(s[0]) != 4 { // CHRD: every key on every step
+		t.Errorf("CHRD plays %v", s)
+	}
+	for _, s := range arpSequence(5, 4, 200, rand.New(rand.NewSource(3))) { // RND stays among the keys
+		if len(s) != 1 || s[0] < 0 || s[0] > 4 {
+			t.Fatalf("RND: %v", s)
+		}
+	}
+	if len(arpTypes) != 11 || len(arpTypeNotes) != 11 {
+		t.Fatal("each type has a name and a note")
+	}
+}
+
+func TestPatternArpPrintsOverTheColumns(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit) // A1..A3 have samples
+	a.go_(Seq)
+	if len(a.arpKeys(0)) < 3 {
+		t.Fatalf("keys %v", a.arpKeys(0))
+	}
+	a.seqMenu()
+	chooseMenu(t, a, "Arp over the columns")
+	if a.menu == nil || a.menu.item().label != "Type" {
+		t.Fatalf("the arp menu: %+v", a.menu)
+	}
+	// 1/16 over 2 bars = 32 steps: UP over 3 keys puts a note on every step, on the keys in turn
+	a.arpp.rate, a.arpp.typ = 3, 0
+	a.printArp()
+	d, ok := a.doc()
+	if !ok || d.Bars != 2 || len(d.Notes) != 32 {
+		t.Fatalf("%d notes in %d bars", len(d.Notes), d.Bars)
+	}
+	sort.Slice(d.Notes, func(i, j int) bool { return d.Notes[i].Tick < d.Notes[j].Tick })
+	keys3 := a.arpKeys(0)
+	for i, n := range d.Notes {
+		if int(n.Tick) != i*stepTicks || n.Pad != keys3[i%len(keys3)] {
+			t.Fatalf("note %d: tick %d pad %d, want tick %d pad %d", i, n.Tick, n.Pad, i*stepTicks, keys3[i%len(keys3)])
+		}
+		if n.Len != stepTicks/2 || n.Vel != 100 {
+			t.Fatalf("gate 50%% and velocity 100: len %d vel %d", n.Len, n.Vel)
+		}
+	}
+	// printing again replaces the notes of the key pads, it does not add
+	a.arpp.typ = 6 // CHRD: every key on every step
+	a.arpp.rate = 1
+	a.printArp()
+	d, _ = a.doc()
+	if len(d.Notes) != 2*4*2*len(keys3) {
+		t.Fatalf("CHRD at 1/8 over 2 bars: %d notes", len(d.Notes))
+	}
+	// with a single key there is nothing to arpeggiate
+	a2, _ := newApp(t)
+	keys(t, a2, "A A D R D D A")
+	a2.go_(Seq)
+	a2.printArp()
+	if !a2.msgBad {
+		t.Fatal("one key is not an arp")
+	}
+}
+
+func TestSampleToolsArpAndKeyboard(t *testing.T) {
+	a, au := newApp(t)
+	keys(t, a, kit)
+	a.cur = 0 // A1, the kick
+	a.go_(Pads)
+	keys(t, a, "A")
+	chooseMenu(t, a, "Chords & arps")
+	if a.menu == nil || !strings.Contains(a.menu.title, "A1") {
+		t.Fatalf("the arp menu: %+v", a.menu)
+	}
+	a.Render()
+	au.Played = 0
+	chooseMenu(t, a, "Play it")
+	if au.Played != 1 {
+		t.Fatalf("Play it plays the arp: %d (%s)", au.Played, a.msg)
+	}
+	before := padsWithSamples(a)
+	a.menu = nil
+	a.arpToPad(0)
+	if padsWithSamples(a) != before+1 {
+		t.Fatalf("the arp goes on a free pad: %s", a.msg)
+	}
+	// the keyboard: 5 pitched copies on free pads, a major scale
+	a.menu = nil
+	a.keyboard(0, 5, 0)
+	if padsWithSamples(a) != before+1+5 {
+		t.Fatalf("5 keys: %s", a.msg)
+	}
+	if keySemis(2, 0) != 4 || keySemis(7, 0) != 12 || keySemis(3, -1) != 3 {
+		t.Fatalf("scale steps: %d %d %d", keySemis(2, 0), keySemis(7, 0), keySemis(3, -1))
+	}
+	// the arp lays the notes over the keyboard
+	a.cols = [8]int{}
+	a.colsOwn = false
+	a.go_(Pads)
+	a.go_(Seq)
+	if len(a.arpKeys(0)) < 5 {
+		t.Fatalf("the keyboard pads are the columns: %v", a.cols)
+	}
+}
+
+func TestMenuHeadingsAreSkipped(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.seqMenu()
+	if a.menu.items[0].header != true {
+		t.Fatal("the menu starts with a heading")
+	}
+	keys(t, a, "D") // the first Down must not rest on a heading
+	for i := 0; i < len(a.menu.items)*2; i++ {
+		if a.menu.item().header {
+			t.Fatalf("the cursor is on the heading %q", a.menu.item().label)
+		}
+		keys(t, a, "D")
+	}
+	for i := 0; i < len(a.menu.items)*2; i++ {
+		keys(t, a, "U")
+		if a.menu.item().header {
+			t.Fatal("the cursor went up onto a heading")
+		}
+	}
+	keys(t, a, "]") // L1/R1 page the list and still miss the headings
+	if a.menu.item().header {
+		t.Fatal("a page lands on a heading")
+	}
+	a.Render()
 }

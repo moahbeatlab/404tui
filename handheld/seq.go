@@ -232,15 +232,38 @@ var rowPresets = []struct {
 	{"3+3+2", []int{0, 3, 6, 8, 11, 14}},
 }
 
+// seqMenu is the pattern tools: the pattern as a whole, its tempo, its timing, and the notes of the column in front.
 func (a *App) seqMenu() {
 	pad := a.colPad()
 	m := &menu{title: fmt.Sprintf("pattern %s  column %s", a.label(a.pat-1), a.label(pad))}
-	names := make([]string, len(rowPresets))
-	for i, p := range rowPresets {
-		names[i] = p.name
+	run := func(label string, f func()) {
+		m.items = append(m.items, menuItem{label: label, run: func(int) { f() }})
 	}
-	m.items = append(m.items, menuItem{label: "Choose a pattern (bank, then pattern)...", run: func(int) { a.openPicker() }})
-	m.items = append(m.items, menuItem{label: "New pattern from a template...", run: func(int) { a.templatesMenu() }})
+	set := func(label string, vals []string, cur int, change func(v int)) {
+		m.items = append(m.items, menuItem{label: label, vals: vals, val: cur, keepOpen: true, onChange: change})
+	}
+
+	m.head("THE PATTERN")
+	run("Choose a pattern (bank, then pattern)...", a.openPicker)
+	run("New pattern from a template...", a.templatesMenu)
+	run("Copy to the next pattern", func() {
+		to := a.pat%160 + 1
+		if err := a.lab.CopyPattern(a.pat, to); err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		a.pat = to
+		a.refresh()
+		a.autoCols()
+		a.say("copied to "+a.label(to-1), false)
+	})
+	run("Delete the pattern", func() {
+		a.lab.DeletePattern(a.pat)
+		a.refresh()
+		a.replay()
+	})
+
+	m.head("TEMPO")
 	bpms := make([]string, 0, 181)
 	for v := 60; v <= 240; v++ {
 		bpms = append(bpms, fmt.Sprintf("%d BPM", v))
@@ -250,7 +273,7 @@ func (a *App) seqMenu() {
 	if a.info.UsesProjectTempo {
 		what = "Tempo of the project"
 	}
-	m.items = append(m.items, menuItem{label: what, vals: bpms, val: min(max(int(a.tempo()+0.5)-60, 0), len(bpms)-1), keepOpen: true, onChange: func(v int) {
+	set(what, bpms, min(max(int(a.tempo()+0.5)-60, 0), len(bpms)-1), func(v int) {
 		var err error
 		if a.info.UsesProjectTempo {
 			err = a.lab.SetTempo(float64(v + 60))
@@ -263,31 +286,20 @@ func (a *App) seqMenu() {
 		}
 		a.refresh()
 		a.replay()
-	}})
+	})
 	sel := 0
 	if a.info.UsesProjectTempo {
 		sel = 1
 	}
-	m.items = append(m.items, menuItem{label: "Tempo select", vals: []string{"each bank's own", "the project's"}, val: sel, keepOpen: true, onChange: func(v int) {
+	set("Tempo select", []string{"each bank's own", "the project's"}, sel, func(v int) {
 		a.lab.SetUsesProjectTempo(v == 1)
 		a.refresh()
 		a.replay()
 		a.say(fmt.Sprintf("tempo: %s, %s BPM", map[bool]string{true: "the project's", false: "bank " + string(rune('A'+bank))}[v == 1], bpmText(a.tempo())), false)
-	}})
-	m.items = append(m.items, menuItem{label: "Fill the column with", vals: names, run: func(v int) { a.setRow(pad, rowPresets[v].mask) }})
-	hits := make([]string, 16)
-	for i := range hits {
-		hits[i] = fmt.Sprintf("%d per bar", i+1)
-	}
-	m.items = append(m.items, menuItem{label: "Euclidean column", vals: hits, val: 4, run: func(v int) { a.setRow(pad, euclid(v+1)) }})
-	m.items = append(m.items, menuItem{label: "Clear the column", run: func(int) {
-		args, _ := json.Marshal(lab.PatternArgs{Pad: pad})
-		a.lab.PatternOp(a.pat, "clearPad", args)
-		a.refresh()
-		a.replay()
-	}})
-	sw := []string{"54%", "58%", "62%", "66%", "70%"}
-	m.items = append(m.items, menuItem{label: "Swing", vals: sw, val: 2, run: func(v int) {
+	})
+
+	m.head("TIMING AND LENGTH (every pad)")
+	m.items = append(m.items, menuItem{label: "Swing", vals: []string{"54%", "58%", "62%", "66%", "70%"}, val: 2, run: func(v int) {
 		args, _ := json.Marshal(lab.PatternArgs{Pad: -1, Grid: stepTicks, Amount: float64([]int{54, 58, 62, 66, 70}[v])})
 		a.opSay("swing", args)
 	}})
@@ -295,14 +307,35 @@ func (a *App) seqMenu() {
 		args, _ := json.Marshal(lab.PatternArgs{Pad: -1, Timing: uint32([]int{6, 12, 24}[v]), Velocity: []int{6, 12, 24}[v], Seed: int64(a.step + 1)})
 		a.opSay("humanize", args)
 	}})
-	m.items = append(m.items, menuItem{label: "Quantize to 1/16", run: func(int) {
+	run("Quantize to 1/16", func() {
 		args, _ := json.Marshal(lab.PatternArgs{Pad: -1, Grid: stepTicks, Strength: 1})
 		a.opSay("quantize", args)
-	}})
-	m.items = append(m.items, menuItem{label: "Shift the column", vals: []string{"1 step <", "1 step >"}, val: 1, run: func(v int) {
+	})
+	run("Reverse the pattern", func() { a.opSay("reverse", []byte(`{"pad":-1}`)) })
+	run("Double its length", func() { a.opSay("double", []byte(`{"pad":-1}`)); a.step = min(a.step, a.steps()-1) })
+	run("Halve its length", func() { a.opSay("halve", []byte(`{"pad":-1}`)); a.step = min(a.step, a.steps()-1) })
+
+	m.head(fmt.Sprintf("THE COLUMN (%s)", a.label(pad)))
+	names := make([]string, len(rowPresets))
+	for i, p := range rowPresets {
+		names[i] = p.name
+	}
+	m.items = append(m.items, menuItem{label: "Fill with", vals: names, run: func(v int) { a.setRow(pad, rowPresets[v].mask) }})
+	hits := make([]string, 16)
+	for i := range hits {
+		hits[i] = fmt.Sprintf("%d per bar", i+1)
+	}
+	m.items = append(m.items, menuItem{label: "Euclidean", vals: hits, val: 4, run: func(v int) { a.setRow(pad, euclid(v+1)) }})
+	m.items = append(m.items, menuItem{label: "Shift", vals: []string{"1 step <", "1 step >"}, val: 1, run: func(v int) {
 		args, _ := json.Marshal(lab.PatternArgs{Pad: pad, Grid: stepTicks, Steps: []int{-1, 1}[v]})
 		a.opSay("shift", args)
 	}})
+	run("Clear", func() {
+		args, _ := json.Marshal(lab.PatternArgs{Pad: pad})
+		a.lab.PatternOp(a.pat, "clearPad", args)
+		a.refresh()
+		a.replay()
+	})
 	padNames := make([]string, 160)
 	for i := range padNames {
 		padNames[i] = a.label(i)
@@ -312,21 +345,9 @@ func (a *App) seqMenu() {
 		a.colsOwn = true
 		a.say(fmt.Sprintf("column %d is pad %s", a.col+1, a.label(v)), false)
 	}})
-	m.items = append(m.items, menuItem{label: "Copy to the next pattern", run: func(int) {
-		to := a.pat%160 + 1
-		if err := a.lab.CopyPattern(a.pat, to); err != nil {
-			a.say(err.Error(), true)
-			return
-		}
-		a.pat = to
-		a.refresh()
-		a.say("copied to "+a.label(to-1), false)
-	}})
-	m.items = append(m.items, menuItem{label: "Delete the pattern", run: func(int) {
-		a.lab.DeletePattern(a.pat)
-		a.refresh()
-		a.replay()
-	}})
+
+	m.head("GENERATE")
+	run("Arp over the columns...", a.openArpPrintMenu)
 	a.menu = m
 }
 

@@ -21,18 +21,40 @@ type menuItem struct {
 	val      int
 	run      func(val int) // what A does
 	onChange func(val int) // what Left and Right do to the value, as it changes
+	header   bool          // a heading for the items below it: not chosen, only read
 	keepOpen bool
 }
 
-func (m *menu) item() *menuItem { return &m.items[m.cur] }
+func (m *menu) item() *menuItem { m.settle(); return &m.items[m.cur] }
+
+// head adds a heading to the menu.
+func (m *menu) head(label string) { m.items = append(m.items, menuItem{label: label, header: true}) }
+
+// step moves the cursor d places (1 or -1), over the headings, round the ends.
+func (m *menu) step(d int) {
+	for i := 0; i < len(m.items); i++ {
+		m.cur = (m.cur + d + len(m.items)) % len(m.items)
+		if !m.items[m.cur].header {
+			return
+		}
+	}
+}
+
+// settle puts the cursor on an item that can be chosen (the menu opens on one).
+func (m *menu) settle() {
+	if len(m.items) > 0 && m.items[m.cur].header {
+		m.step(1)
+	}
+}
 
 func (a *App) menuKey(k Key) {
 	m := a.menu
+	m.settle()
 	switch k {
 	case Up:
-		m.cur = (m.cur + len(m.items) - 1) % len(m.items)
+		m.step(-1)
 	case Down:
-		m.cur = (m.cur + 1) % len(m.items)
+		m.step(1)
 	case Left, Right:
 		it := m.item()
 		if len(it.vals) > 0 {
@@ -59,6 +81,9 @@ func (a *App) menuKey(k Key) {
 			}
 		} else {
 			m.cur = max(0, min(m.cur+d*8, len(m.items)-1))
+			if m.items[m.cur].header {
+				m.step(d)
+			}
 		}
 	case B:
 		a.menu = nil
@@ -75,6 +100,7 @@ func (a *App) menuKey(k Key) {
 
 func (a *App) drawMenu(c *canvas) {
 	m := a.menu
+	m.settle()
 	w := 328
 	rh := 20
 	if len(m.items) > 14 {
@@ -95,6 +121,12 @@ func (a *App) drawMenu(c *canvas) {
 		i := top + r
 		it := m.items[i]
 		yy := y + 36 + r*rh
+		if it.header {
+			c.rect(x+6, yy+rh/2-1, w-12, 1, cLine)
+			c.rect(x+14, yy-1, textW(it.label)+10, rh-2, cPanel2)
+			c.text(x+18, yy, it.label, cDim, true)
+			continue
+		}
 		fg := cText
 		if i == m.cur {
 			c.rect(x+6, yy-2, w-12, rh, cAmberD)
@@ -124,17 +156,18 @@ type carry struct {
 	copy bool
 }
 
+// openPadMenu is the actions on a pad: what is done with its sample (the sample tools), and the pad itself.
 func (a *App) openPadMenu() {
 	n := a.padN()
 	has := a.info.Pads[n].File
 	m := &menu{title: "pad " + a.label(n)}
 	add := func(l string, run func(int)) { m.items = append(m.items, menuItem{label: l, run: run}) }
+	m.head("SAMPLE")
 	add("Pick a sample...", func(int) { a.go_(Files) })
 	if has {
 		add("Slice...", func(int) { a.go_(Slice) })
-		add("Pattern with this pad...", func(int) { a.go_(Seq) })
-		add("Move or swap to...", func(int) { a.carry = &carry{from: n}; a.say("choose the pad, A puts it down", false) })
-		add("Copy to...", func(int) { a.carry = &carry{from: n, copy: true}; a.say("choose the pad, A puts it down", false) })
+		add("Chords & arps...", func(int) { a.openArpMenu(n) })
+		add("Keyboard from it...", func(int) { a.openKeyboardMenu(n) })
 		add("Reverse", func(int) { a.transform(n, "reverse", 0) })
 		add("Normalize", func(int) { a.transform(n, "normalize", 0) })
 		m.items = append(m.items, menuItem{label: "Pitch", vals: []string{"-12", "-5", "-2", "-1", "+1", "+2", "+5", "+12"}, val: 4,
@@ -142,6 +175,10 @@ func (a *App) openPadMenu() {
 				st := []int{-12, -5, -2, -1, 1, 2, 5, 12}[v]
 				a.transform(n, "pitch", st)
 			}})
+		m.head("THE PAD")
+		add("Pattern with this pad...", func(int) { a.go_(Seq) })
+		add("Move or swap to...", func(int) { a.carry = &carry{from: n}; a.say("choose the pad, A puts it down", false) })
+		add("Copy to...", func(int) { a.carry = &carry{from: n, copy: true}; a.say("choose the pad, A puts it down", false) })
 		add("Clear the pad", func(int) {
 			if err := a.lab.ClearPad(n); err == nil {
 				delete(a.pcm, n)

@@ -130,3 +130,29 @@ on hardware too. Patterns are always 4 bars (other lengths are a guess).
 - **Splash** (about 2.5 s, any key skips it): the logo and a dashboard (project, samples folder, card, autosave, version). When an
   autosave of an earlier session is there and nothing is open, it stays until a key: **A restores it**, any other key starts
   empty. A restored project counts as not saved: SAVE writes it.
+
+## Actions: pads and patterns (sixth round)
+
+Every action belongs to a **pad** (its sample) or to a **pattern**; each has its own menu, with headings.
+
+| Menu | Group | Actions |
+| --- | --- | --- |
+| **PADS, A** (sample tools) | SAMPLE | pick a sample, slice, **chords & arps**, **keyboard**, reverse, normalize, pitch |
+| | THE PAD | pattern with this pad, move or swap, copy, clear |
+| **SLICE, Y+B** (the slicer, a sample tool) | slice / order / result | pitch, gain, reverse, fades, roll, chance; play order, grid, swing, length in steps; play, to a pad, shuffle |
+| **SEQ, B** (pattern tools) | THE PATTERN | choose a pattern, template, copy to the next, delete |
+| | TEMPO | tempo of the bank (or the project), tempo select |
+| | TIMING AND LENGTH | swing, humanize, quantize, reverse, double, halve (every pad) |
+| | THE COLUMN | fill, euclid, shift, clear, pad of the column (the notes of one pad) |
+| | GENERATE | **arp over the columns** |
+
+- **Chords & arps** (a sample tool): the pad's sample pitched once for each note of a chord, mixed or laid out in time (11
+  patterns, rates 1/4 to 1/32 with triplets, gate, swing, 1-3 octaves, 1-8 bars at the bank's tempo) and put on a free pad.
+  This is the computer app's engine.
+- **Keyboard**: 4 to 16 pitched copies of the sample on a run of free pads, chromatic or in one of the scales: the pads play like
+  keys.
+- **Arp over the columns** (a pattern tool, after the arpeggiator of the unit's DOOM OS): the pads of the columns that have a
+  sample are the keys; it lays notes over them in time and writes them into the pattern, replacing those pads' notes.
+  Types: UP, DOWN, U/D, U/D+ (the ends twice), RND, ORD (as the columns stand), CHRD, CONV (outside in), DIV (middle out), PNKY
+  (the top key between), THMB (the bottom key between); rate, gate, velocity, and the length when the pattern is new. With a
+  keyboard (above) as the columns it is an arp of one sample at different pitches, on the unit itself.
