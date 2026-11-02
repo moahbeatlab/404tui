@@ -3,6 +3,7 @@ package handheld
 import (
 	"fmt"
 	"github.com/moahbeatlab/404tui/formats"
+	"github.com/moahbeatlab/404tui/lab"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -133,7 +134,6 @@ func TestAssignSliceAndSequence(t *testing.T) {
 	if len(d.Notes) != 1+16 {
 		t.Fatalf("every beat in 4 bars is 16 notes (and the other one): %d", len(d.Notes))
 	}
-	keys(t, a, "Y+A") // velocity of the note under the cursor
 	keys(t, a, "X")
 	if !a.seqOn || au.Loops != 1 {
 		t.Fatalf("X plays the pattern: on %v, loops %d", a.seqOn, au.Loops)
@@ -143,8 +143,13 @@ func TestAssignSliceAndSequence(t *testing.T) {
 		t.Fatal("an edit while it plays goes into the loop")
 	}
 	keys(t, a, "B")
+	if !a.seqOn || a.menu == nil {
+		t.Fatal("B opens the menu and the pattern goes on playing")
+	}
+	keys(t, a, "B")
+	keys(t, a, "X")
 	if a.seqOn {
-		t.Fatal("B stops it")
+		t.Fatal("X stops it")
 	}
 
 	// the mix has the length of the pattern
@@ -1054,11 +1059,7 @@ func TestPatternArpPrintsOverTheColumns(t *testing.T) {
 	if len(a.arpKeys(0)) < 3 {
 		t.Fatalf("keys %v", a.arpKeys(0))
 	}
-	a.seqMenu()
-	chooseMenu(t, a, "Arp over the columns")
-	if a.menu == nil || a.menu.item().label != "Type" {
-		t.Fatalf("the arp menu: %+v", a.menu)
-	}
+	a.arpPrintDefaults()
 	// 1/16 over 2 bars = 32 steps: UP over 3 keys puts a note on every step, on the keys in turn
 	a.arpp.rate, a.arpp.typ = 3, 0
 	a.printArp()
@@ -1594,5 +1595,285 @@ func TestUndoAProjectLoad(t *testing.T) {
 	keys(t, b, "Y+}")
 	if padsWithSamples(b) != 3 {
 		t.Fatalf("redo loads it again: %d", padsWithSamples(b))
+	}
+}
+
+func noteOn(a *App, pad int) (lab.Note, bool) {
+	d, _ := a.doc()
+	for _, n := range d.Notes {
+		if n.Pad == pad {
+			return n, true
+		}
+	}
+	return lab.Note{}, false
+}
+
+func TestHoldAEditsTheNote(t *testing.T) {
+	a, au := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.row, a.step = 0, 4 // A1, step 5
+	base := len(a.undo)
+	// A down puts a note; with A held the arrows shape it: Up velocity, Right length, R1 nudge
+	a.Press(A, 0)
+	if !a.aHeld {
+		t.Fatal("A is held")
+	}
+	n, ok := noteOn(a, 0)
+	if !ok || n.Vel != 100 || n.Len != stepTicks {
+		t.Fatalf("a new note: %+v", n)
+	}
+	for i := 0; i < 5; i++ {
+		a.Press(Up, i%3)
+	}
+	for i := 0; i < 4; i++ {
+		a.Press(Right, 0)
+	}
+	a.Press(R1, 0)
+	au.Played = 0
+	a.Press(Down, 0)
+	a.Release(Up)
+	a.Release(A)
+	n, _ = noteOn(a, 0)
+	if n.Vel != 104 || n.Len != stepTicks+60 || int(n.Tick) != 4*stepTicks+5 {
+		t.Fatalf("velocity 100+5-1, length +4 quarter steps, nudged 5 ticks: %+v", n)
+	}
+	if au.Played == 0 {
+		t.Fatal("a change is heard: the note plays")
+	}
+	if len(a.undo) != base+1 {
+		t.Fatalf("placing and shaping a note is one undo step: %d -> %d", base, len(a.undo))
+	}
+	if a.aHeld {
+		t.Fatal("A is let go")
+	}
+	// keys no longer edit
+	a.Press(Up, 0)
+	a.Release(Up)
+	if n2, _ := noteOn(a, 0); n2.Vel != 104 || a.row != 0 {
+		t.Fatalf("with A up the arrows move the cursor: %+v row %d", n2, a.row)
+	}
+	// a tap of A on a note takes it off, on release
+	a.step = int(n.Tick) / stepTicks
+	a.row = 0
+	a.Press(A, 0)
+	if _, still := noteOn(a, 0); !still {
+		t.Fatal("the note waits for the release")
+	}
+	a.Release(A)
+	if _, still := noteOn(a, 0); still {
+		t.Fatal("a tap on a note removes it")
+	}
+	keys(t, a, "Y+{") // and undo brings it back, as it was
+	if n3, ok := noteOn(a, 0); !ok || n3.Vel != 104 {
+		t.Fatalf("undo: %+v %v", n3, ok)
+	}
+	// holding A on a note and using the arrows edits it and does not remove it
+	a.step = int(n.Tick) / stepTicks
+	a.Press(A, 0)
+	a.Press(Up, 0)
+	a.Release(A)
+	if n4, ok := noteOn(a, 0); !ok || n4.Vel != 105 {
+		t.Fatalf("held and edited: %+v %v", n4, ok)
+	}
+	// limits: velocity 1..127, length 15 ticks up to the end of the pattern
+	a.step = int(n.Tick) / stepTicks
+	a.Press(A, 0)
+	for i := 0; i < 200; i++ {
+		a.Press(Down, 0)
+		a.Press(Left, 0)
+	}
+	a.Release(A)
+	if n5, _ := noteOn(a, 0); n5.Vel != 1 || n5.Len != 15 {
+		t.Fatalf("lower limits: %+v", n5)
+	}
+	// the script chord does the same
+	a2, _ := newApp(t)
+	keys(t, a2, kit)
+	a2.go_(Seq)
+	a2.row = 0
+	keys(t, a2, "A+U A+U A+R")
+	if n6, ok := noteOn(a2, 0); !ok || n6.Vel != 102 || n6.Len != stepTicks+15 {
+		t.Fatalf("chord: %+v %v", n6, ok)
+	}
+}
+
+func TestHearTheNoteUnderTheCursor(t *testing.T) {
+	a, au := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.row = 0
+	au.Played = 0
+	keys(t, a, "{")
+	if au.Played != 1 {
+		t.Fatalf("L2 plays the pad even without a note: %d", au.Played)
+	}
+	keys(t, a, "A")
+	n, _ := noteOn(a, 0)
+	short, _ := a.noteSample(0, 64, 60)
+	long, _ := a.noteSample(0, 127, 100000)
+	if short.Frames() >= long.Frames() {
+		t.Fatalf("a short note is cut: %d vs %d frames", short.Frames(), long.Frames())
+	}
+	var maxS, maxL int
+	for _, v := range short.Samples {
+		maxS = max(maxS, int(abs(int(v))))
+	}
+	for _, v := range long.Samples {
+		maxL = max(maxL, int(abs(int(v))))
+	}
+	if maxS >= maxL {
+		t.Fatalf("a soft note is quieter: %d vs %d", maxS, maxL)
+	}
+	_ = n
+}
+
+func TestTimingAppliesToEveryPadOrOneTrack(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.setRow(0, rowPresets[4].mask) // sixteenths on A1: the off-beat ones swing
+	a.setRow(1, rowPresets[4].mask) // and on A2
+	ticks := func(pad int) []uint32 {
+		var out []uint32
+		for _, n := range a.trackNotes(pad) {
+			out = append(out, n.Tick)
+		}
+		return out
+	}
+	before1 := fmt.Sprint(ticks(1))
+	a.row = 0
+	a.seqMenu()
+	chooseMenu(t, a, "Applies to")
+	keys(t, a, "R")
+	if !a.scopeRow {
+		t.Fatal("Applies to: only this pad")
+	}
+	chooseMenu(t, a, "Swing")
+	if fmt.Sprint(ticks(1)) != before1 {
+		t.Fatal("A2 was not the track chosen: its notes must not move")
+	}
+	if fmt.Sprint(ticks(0)) == fmt.Sprint(ticks(0)[:0]) || len(ticks(0)) == 0 {
+		t.Fatal("A1 has notes")
+	}
+	moved := false
+	for _, tk := range ticks(0) {
+		moved = moved || tk%uint32(stepTicks) != 0
+	}
+	if !moved {
+		t.Fatalf("swing on A1: %v", ticks(0))
+	}
+	if a.menu == nil {
+		t.Fatal("the menu stays open: more can be changed")
+	}
+	// every pad again
+	a.scopeRow = false
+	chooseMenu(t, a, "Humanize")
+	if fmt.Sprint(ticks(1)) == before1 {
+		t.Fatal("with every pad, A2 changes too")
+	}
+}
+
+func TestTrackTools(t *testing.T) {
+	// euclid: 4 hits in 16 steps are every fourth step; rotate moves them; the cycle repeats over the length
+	ns := euclidNotes(0, 1920, 120, 16, 4, 0, 50, 100)
+	if len(ns) != 4 || ns[1].Tick != 480 || ns[0].Len != 60 || ns[0].Vel != 100 {
+		t.Fatalf("euclid 4/16: %+v", ns)
+	}
+	ns = euclidNotes(0, 3840, 120, 16, 4, 2, 100, 100) // two bars, rotated by 2 steps
+	if len(ns) != 8 || ns[0].Tick != 240 {
+		t.Fatalf("rotated, two bars: %d notes, first at %d", len(ns), ns[0].Tick)
+	}
+	if got := euclidNotes(0, 1920, 120, 8, 3, 0, 50, 100); len(got) != 6 { // 3 hits in 8 steps, 16 steps long: twice
+		t.Fatalf("euclid 3/8 over a bar: %d", len(got))
+	}
+	if got := euclidNotes(0, 1920, 120, 4, 0, 0, 50, 100); len(got) != 0 {
+		t.Fatal("no hits, no notes")
+	}
+	base := euclidNotes(0, 1920, 120, 16, 16, 0, 50, 90) // every step
+	if len(chanceNotes(base, 100, 0, 1)) != 16 || len(chanceNotes(base, 0, 0, 1)) != 0 {
+		t.Fatal("chance 100 keeps all, 0 none")
+	}
+	if k := len(chanceNotes(base, 50, 0, 7)); k < 3 || k > 13 {
+		t.Fatalf("about half: %d", k)
+	}
+	// with a loop of 4 the choices repeat
+	kept := chanceNotes(base, 50, 4, 9)
+	got := map[int]bool{}
+	for _, n := range kept {
+		got[int(n.Tick)/120] = true
+	}
+	for i := 4; i < 16; i++ {
+		if got[i] != got[i%4] {
+			t.Fatalf("the choices repeat every 4 notes: step %d", i)
+		}
+	}
+	r := randomizeNotes(base, 20, false, 0, 3)
+	for i, n := range r {
+		if n.Vel < 70 || n.Vel > 110 || n.Tick != base[i].Tick {
+			t.Fatalf("randomize keeps the timing and moves the velocity by at most 20: %+v", n)
+		}
+	}
+	if randomizeNotes(base, 5, true, 30, 3)[0].Vel < 90+30-5 {
+		t.Fatal("the bias lifts")
+	}
+	e := echoNotes([]lab.Note{{Tick: 0, Pad: 1, Vel: 100, Len: 120}}, 1920, 240, 3, 50, 50)
+	if len(e) != 4 || e[1].Tick != 240 || e[1].Vel != 50 || e[3].Vel != 12 {
+		t.Fatalf("echo x50%% three times: %+v", e)
+	}
+	if got := echoNotes([]lab.Note{{Tick: 1800, Pad: 1, Vel: 100, Len: 120}}, 1920, 240, 8, 70, 50); len(got) != 1 {
+		t.Fatalf("an echo past the end is cut: %d", len(got))
+	}
+	c := cycleNotes([]lab.Note{{Tick: 0, Vel: 100, Len: 120}, {Tick: 240, Vel: 100, Len: 120}, {Tick: 1200, Vel: 100, Len: 120}}, 1920, 480)
+	if len(c) != 8 || c[2].Tick != 480 {
+		t.Fatalf("cycle of 4 steps over a bar: %d %+v", len(c), c)
+	}
+	inv := invertNotes([]lab.Note{{Tick: 0}, {Tick: 240}}, 3, 480, 100)
+	if len(inv) != 2 || inv[0].Tick != 120 || inv[1].Tick != 360 || inv[0].Pad != 3 {
+		t.Fatalf("invert: %+v", inv)
+	}
+}
+
+func TestTrackToolsInThePattern(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.row = 0
+	a.seqMenu()
+	chooseMenu(t, a, "Euclid")
+	if a.menu == nil || !strings.Contains(a.menu.title, "euclid") {
+		t.Fatalf("euclid menu: %+v", a.menu)
+	}
+	chooseMenuContaining(t, a, "Write it")
+	if got := len(a.trackNotes(0)); got != 5*4 {
+		t.Fatalf("5 hits in 16 steps, 4 bars: %d notes", got)
+	}
+	keys(t, a, "B")
+	a.seqMenu()
+	chooseMenu(t, a, "Echo")
+	chooseMenuContaining(t, a, "Add the echoes")
+	if len(a.trackNotes(0)) <= 20 {
+		t.Fatal("echo adds notes")
+	}
+	keys(t, a, "B")
+	// dispatch over marked pads moves notes onto them
+	a.marks = []int{1, 2}
+	a.seqMenu()
+	chooseMenuContaining(t, a, "Dispatch")
+	chooseMenuContaining(t, a, "Share the notes out")
+	if len(a.trackNotes(0)) != 0 || len(a.trackNotes(1)) == 0 || len(a.trackNotes(2)) == 0 {
+		t.Fatalf("A1 %d, A2 %d, A3 %d notes", len(a.trackNotes(0)), len(a.trackNotes(1)), len(a.trackNotes(2)))
+	}
+	keys(t, a, "Y+{") // one undo: back before the dispatch
+	if len(a.trackNotes(0)) == 0 {
+		t.Fatal("undo gives the track back")
+	}
+	// Select+Start-free check that the arp over the columns is no longer in the menu
+	a.menu = nil
+	a.seqMenu()
+	for _, it := range a.menu.items {
+		if strings.Contains(it.label, "Arp over") || strings.Contains(it.label, "column") {
+			t.Fatalf("a leftover in the pattern menu: %q", it.label)
+		}
 	}
 }

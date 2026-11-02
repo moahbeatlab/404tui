@@ -57,12 +57,15 @@ func (a *App) hints() (plain, shift []hint) {
 		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play slice"}, {"R2", "play order"}, {"<>", "move"}, {"^v", "marker"}, {"L1 R1", "zoom"}},
 			[]hint{screen, {"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+B", "slice menu"}}
 	case Seq:
+		if a.aHeld { // A is down: what the arrows do now
+			return []hint{{"^v", "velocity"}, {"<>", "length"}, {"L1 R1", "move note"}, {"A", "let go: done"}}, nil
+		}
 		play, stop := hint{"X", "play"}, hint{"B", "menu"}
 		if a.seqOn {
-			play, stop = hint{"X", "stop"}, hint{"B", "stop"}
+			play = hint{"X", "stop"}
 		}
-		return []hint{{"A", "note on/off"}, play, stop, {"<>", "step"}, {"^v", "pad"}, {"L1 R1", "bar"}},
-			[]hint{screen, {"Y+A", "velocity"}, {"Y+X", "row pad"}, {"Y+B", "pick pattern"}, {"Y+^v", "pattern +-"}}
+		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"<>", "step"}, {"^v", "pad"}, {"L1 R1", "bar"}},
+			[]hint{screen, {"Y+X", "row pad"}, {"Y+B", "pick pattern"}, {"Y+^v", "pattern +-"}}
 	case Unit:
 		return []hint{{"A", "send"}, {"X", "look again"}, {"^v", "choose"}, {"L1 R1", "page"}, {"B", "back"}}, []hint{screen}
 	default:
@@ -246,15 +249,16 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 			c.text(x, y0+58, "A: first note", cDim, false)
 			return
 		}
-		c.text(x, y0+40, fmt.Sprintf("%d bars  %d steps", d.Bars, a.steps()), cText, false)
-		c.text(x, y0+58, fmt.Sprintf("step %d.%d", a.step/16+1, a.step%16+1), cText, false)
 		pad := a.rowPad()
-		line := fmt.Sprintf("%s %s", a.label(pad), short(a.info.Pads[pad].Name, 9))
+		c.text(x, y0+36, fmt.Sprintf("%d.%d %s %s", a.step/16+1, a.step%16+1, a.label(pad), short(a.info.Pads[pad].Name, 8)), cText, false)
 		if n, ok := noteAt(d, pad, a.step); ok {
-			line = fmt.Sprintf("%s  %d", line, n.Vel)
-			c.text(x, y0+76, line, cAmber, true)
+			col := cAmber
+			if a.aHeld {
+				col = cGood
+			}
+			c.text(x, y0+54, fmt.Sprintf("vel %d  len %.2f", n.Vel, float64(n.Len)/stepTicks), col, true)
 		} else {
-			c.text(x, y0+76, line, cDim, false)
+			c.text(x, y0+54, "no note", cLine, false)
 		}
 	case Save:
 		used, bytesN := 0, 0

@@ -39,12 +39,20 @@ func (a *App) Press(k Key, repeat int) {
 	}
 	pre := a.lab.Snapshot()
 	a.press(k, repeat)
+	a.commitUndo(pre, k, repeat)
+}
+
+// commitUndo keeps the project as it was before (pre) on the undo stack when it has changed since. A held key that goes on
+// changing something, or the edits made while A is held, are one step.
+func (a *App) commitUndo(pre *lab.Snap, k Key, repeat int) {
 	if !a.lab.Changed(pre) {
 		return
 	}
 	now := a.clock()
-	if repeat > 0 && k == a.undoKey && len(a.undo) > 0 && now.Sub(a.undoAt) < coalesceWith {
-		a.undoAt = now // the same key held: still the same step
+	merge := len(a.undo) > 0 && ((repeat > 0 && k == a.undoKey && now.Sub(a.undoAt) < coalesceWith) ||
+		(a.aHeld && a.undoSes == a.aSession))
+	if merge {
+		a.undoAt = now
 		return
 	}
 	label := a.msg
@@ -54,6 +62,10 @@ func (a *App) Press(k Key, repeat int) {
 	a.undo = append(a.undo, undoEntry{pre, fit(label, 40)})
 	a.redo = nil
 	a.undoKey, a.undoAt = k, now
+	a.undoSes = 0
+	if a.aHeld {
+		a.undoSes = a.aSession
+	}
 	a.trimUndo()
 }
 

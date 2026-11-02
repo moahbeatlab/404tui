@@ -903,3 +903,44 @@ func TestSnapshotAndRestore(t *testing.T) {
 		t.Fatalf("an empty project holds no file data: %d", s0.HeldBytes(nil))
 	}
 }
+
+func TestPadParams(t *testing.T) {
+	l := New()
+	l.NewProject("P")
+	wav := formats.Sample{Channels: 1, Samples: make([]int16, 4800)}
+	for i := range wav.Samples {
+		wav.Samples[i] = int16(i % 200)
+	}
+	b, err := l.Decode(wav.WAV(), "wav")
+	ok(t, err)
+	var m Meta
+	json.Unmarshal(b, &m)
+	ok(t, l.Assign(5, m.ID, "x"))
+	if v, err := l.PadParam(5, 0x69); err != nil || v != 127 {
+		t.Fatalf("a pad with a sample is at level 127: %d %v", v, err)
+	}
+	ok(t, l.SetPadParam(5, 0x69, 80))
+	ok(t, l.SetPadParam(5, 0x78, 90))  // balance
+	ok(t, l.SetPadParam(5, 0x73, -5))  // pitch, signed
+	ok(t, l.SetPadParam(5, 0x7D, 400)) // attack: beyond its range, held to 127
+	for id, want := range map[byte]int32{0x69: 80, 0x78: 90, 0x73: -5, 0x7D: 127} {
+		if v, _ := l.PadParam(5, id); v != want {
+			t.Errorf("param %#x: %d, want %d", id, v, want)
+		}
+	}
+	// it survives a save and a load of the project
+	z, err := l.ExportZip("P")
+	ok(t, err)
+	l2 := New()
+	_, err = l2.LoadZip(z)
+	ok(t, err)
+	if v, _ := l2.PadParam(5, 0x73); v != -5 {
+		t.Fatalf("the pitch is kept in the file: %d", v)
+	}
+	if err := l.SetPadParam(200, 0x69, 1); err == nil {
+		t.Fatal("there are 160 pads")
+	}
+	if err := l.SetPadParam(5, 0x7C, 1); err == nil {
+		t.Fatal("an unknown parameter")
+	}
+}

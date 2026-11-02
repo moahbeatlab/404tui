@@ -40,6 +40,10 @@ func (a *App) autoRows() {
 	if a.rowsOwn && a.rowsSet {
 		return
 	}
+	keep := -1 // the pad the cursor is on stays under it when the rows are worked out again
+	if a.rowsSet {
+		keep = a.rows[a.row]
+	}
 	var picks []int
 	seen := map[int]bool{}
 	add := func(p int) {
@@ -73,9 +77,21 @@ func (a *App) autoRows() {
 	sort.Ints(picks) // in pad order; the cursor starts on the pad that was in front
 	copy(a.rows[:], picks)
 	a.rowsSet = true
+	target := keep
+	if target < 0 {
+		target = a.padN() // the first time: the pad that was in front
+	}
+	found := false
 	for i, p := range picks {
-		if p == a.padN() {
-			a.row = i
+		if p == target {
+			a.row, found = i, true
+		}
+	}
+	if !found {
+		for i, p := range picks {
+			if p == a.padN() {
+				a.row = i
+			}
 		}
 	}
 }
@@ -91,6 +107,10 @@ func noteAt(d lab.PatternDoc, pad, step int) (lab.Note, bool) {
 }
 
 func (a *App) seqKey(k Key, repeat int) {
+	if a.aHeld {
+		a.noteEditKey(k, repeat)
+		return
+	}
 	jump := 1 + repeat/8 // a held key runs faster
 	switch k {
 	case Left: // the steps run across the screen
@@ -102,17 +122,86 @@ func (a *App) seqKey(k Key, repeat int) {
 	case Down:
 		a.row = min(a.row+1, len(a.rows)-1)
 	case A:
-		a.toggle(a.rowPad(), a.step)
+		a.holdNote()
 	case X:
 		a.togglePlay()
-	case B:
-		if a.seqOn {
-			a.stop()
-			a.seqOn = false
-			return
-		}
+	case B: // the menu, also while the pattern plays: the changes go into the loop. Only X stops it.
 		a.seqMenu()
 	}
+}
+
+// holdNote is A going down in the grid. On an empty cell it puts a note there (and A held goes on to shape it); on a note it
+// waits: if A is let go with nothing edited the note goes, if the arrows are used it is edited.
+func (a *App) holdNote() {
+	pad := a.rowPad()
+	a.aHeld, a.aDelete, a.aPad = true, false, pad
+	a.aSession++
+	d, _ := a.doc()
+	if n, ok := noteAt(d, pad, a.step); ok {
+		a.aTick, a.aDelete = n.Tick, true
+		return
+	}
+	a.toggle(pad, a.step) // a new note, a step long
+	a.aTick = uint32(a.step * stepTicks)
+}
+
+// noteEditKey is a key pressed while A is held on a note: Up and Down change the velocity, Left and Right the length, L1 and
+// R1 move the note earlier or later. A key held down goes faster.
+func (a *App) noteEditKey(k Key, repeat int) {
+	d, ok := a.doc()
+	if !ok {
+		return
+	}
+	var n lab.Note
+	found := false
+	for _, x := range d.Notes {
+		if x.Pad == a.aPad && x.Tick == a.aTick {
+			n, found = x, true
+		}
+	}
+	if !found {
+		return
+	}
+	acc := 1
+	if repeat >= 14 {
+		acc = 8
+	} else if repeat >= 6 {
+		acc = 4
+	}
+	vel, ln, move := n.Vel, n.Len, 0
+	switch k {
+	case Up:
+		vel += acc
+	case Down:
+		vel -= acc
+	case Right:
+		ln += 15 * acc
+	case Left:
+		ln -= 15 * acc
+	case R1:
+		move = 5 * acc
+	case L1:
+		move = -5 * acc
+	default:
+		return
+	}
+	a.aDelete = false // it is edited now: letting go keeps it
+	vel = min(max(vel, 1), 127)
+	ln = min(max(ln, 15), max(int(d.Length)-int(n.Tick), 15))
+	move = min(max(move, -int(n.Tick)), int(d.Length)-1-int(n.Tick))
+	args, _ := json.Marshal(lab.PatternArgs{Notes: []lab.PadAt{{Pad: n.Pad, Tick: n.Tick}}, Vel: vel, Len: ln, Move: move})
+	if err := a.lab.PatternOp(a.pat, "edit", args); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	a.aTick = uint32(int(n.Tick) + move)
+	a.step = int(a.aTick) / stepTicks
+	a.refresh()
+	a.replay()
+	if s, ok := a.noteSample(a.aPad, vel, ln); ok && k != L1 && k != R1 {
+		a.play(s)
+	}
+	a.say(fmt.Sprintf("%s: velocity %d, length %.2f steps, %+d ticks", a.label(a.aPad), vel, float64(ln)/stepTicks, int(a.aTick)-int(a.aTick)/stepTicks*stepTicks), false)
 }
 
 func (a *App) seqShifted(k Key) {
@@ -135,27 +224,6 @@ func (a *App) seqShifted(k Key) {
 			}
 		}
 		a.say("no other pad has a sample", true)
-	case A:
-		d, ok := a.doc()
-		if !ok {
-			return
-		}
-		if n, ok := noteAt(d, a.rowPad(), a.step); ok {
-			next := velSteps[0]
-			for i, v := range velSteps {
-				if n.Vel >= v-5 {
-					next = velSteps[(i+1)%len(velSteps)]
-					break
-				}
-			}
-			args, _ := json.Marshal(lab.PatternArgs{Notes: []lab.PadAt{{Pad: n.Pad, Tick: n.Tick}}, Vel: next})
-			if err := a.lab.PatternOp(a.pat, "edit", args); err != nil {
-				a.say(err.Error(), true)
-				return
-			}
-			a.say(fmt.Sprintf("velocity %d", next), false)
-			a.replay()
-		}
 	}
 }
 
@@ -235,7 +303,7 @@ var rowPresets = []struct {
 	{"3+3+2", []int{0, 3, 6, 8, 11, 14}},
 }
 
-// seqMenu is the pattern tools: the pattern as a whole, its tempo, its timing, and the notes of the column in front.
+// seqMenu is the pattern tools: the pattern as a whole, its tempo, timing and length, and the track (the pad of the row in front).
 func (a *App) seqMenu() {
 	pad := a.rowPad()
 	m := &menu{title: fmt.Sprintf("pattern %s  row %s", a.label(a.pat-1), a.label(pad))}
@@ -301,38 +369,57 @@ func (a *App) seqMenu() {
 		a.say(fmt.Sprintf("tempo: %s, %s BPM", map[bool]string{true: "the project's", false: "bank " + string(rune('A'+bank))}[v == 1], bpmText(a.tempo())), false)
 	})
 
-	m.head("TIMING AND LENGTH (every pad)")
-	m.items = append(m.items, menuItem{label: "Swing", vals: []string{"54%", "58%", "62%", "66%", "70%"}, val: 2, run: func(v int) {
-		args, _ := json.Marshal(lab.PatternArgs{Pad: -1, Grid: stepTicks, Amount: float64([]int{54, 58, 62, 66, 70}[v])})
+	scope := 0
+	if a.scopeRow {
+		scope = 1
+	}
+	m.head("TIMING")
+	set("Applies to", []string{"every pad", "only " + a.label(pad)}, scope, func(v int) { a.scopeRow = v == 1 })
+	target := func() int { // the pad the timing tools act on: -1 for every pad
+		if a.scopeRow {
+			return pad
+		}
+		return -1
+	}
+	m.items = append(m.items, menuItem{label: "Swing", vals: []string{"54%", "58%", "62%", "66%", "70%"}, val: 2, keepOpen: true, run: func(v int) {
+		args, _ := json.Marshal(lab.PatternArgs{Pad: target(), Grid: stepTicks, Amount: float64([]int{54, 58, 62, 66, 70}[v])})
 		a.opSay("swing", args)
 	}})
-	m.items = append(m.items, menuItem{label: "Humanize", vals: []string{"light", "medium", "loose"}, val: 1, run: func(v int) {
-		args, _ := json.Marshal(lab.PatternArgs{Pad: -1, Timing: uint32([]int{6, 12, 24}[v]), Velocity: []int{6, 12, 24}[v], Seed: int64(a.step + 1)})
+	m.items = append(m.items, menuItem{label: "Humanize", vals: []string{"light", "medium", "loose"}, val: 1, keepOpen: true, run: func(v int) {
+		args, _ := json.Marshal(lab.PatternArgs{Pad: target(), Timing: uint32([]int{6, 12, 24}[v]), Velocity: []int{6, 12, 24}[v], Seed: int64(a.step + 1)})
 		a.opSay("humanize", args)
 	}})
-	run("Quantize to 1/16", func() {
-		args, _ := json.Marshal(lab.PatternArgs{Pad: -1, Grid: stepTicks, Strength: 1})
+	m.items = append(m.items, menuItem{label: "Quantize to 1/16", keepOpen: true, run: func(int) {
+		args, _ := json.Marshal(lab.PatternArgs{Pad: target(), Grid: stepTicks, Strength: 1})
 		a.opSay("quantize", args)
-	})
-	run("Reverse the pattern", func() { a.opSay("reverse", []byte(`{"pad":-1}`)) })
-	run("Double its length", func() { a.opSay("double", []byte(`{"pad":-1}`)); a.step = min(a.step, a.steps()-1) })
-	run("Halve its length", func() { a.opSay("halve", []byte(`{"pad":-1}`)); a.step = min(a.step, a.steps()-1) })
+	}})
+	m.items = append(m.items, menuItem{label: "Shift", vals: []string{"1 step <", "1 step >"}, val: 1, keepOpen: true, run: func(v int) {
+		args, _ := json.Marshal(lab.PatternArgs{Pad: target(), Grid: stepTicks, Steps: []int{-1, 1}[v]})
+		a.opSay("shift", args)
+	}})
+	m.items = append(m.items, menuItem{label: "Reverse", keepOpen: true, run: func(int) {
+		args, _ := json.Marshal(lab.PatternArgs{Pad: target()})
+		a.opSay("reverse", args)
+	}})
 
-	m.head(fmt.Sprintf("THE COLUMN (%s)", a.label(pad)))
+	m.head("LENGTH (the whole pattern)")
+	m.items = append(m.items, menuItem{label: "Double", keepOpen: true, run: func(int) { a.opSay("double", []byte(`{"pad":-1}`)); a.step = min(a.step, a.steps()-1) }})
+	m.items = append(m.items, menuItem{label: "Halve", keepOpen: true, run: func(int) { a.opSay("halve", []byte(`{"pad":-1}`)); a.step = min(a.step, a.steps()-1) }})
+
+	m.head(fmt.Sprintf("THE TRACK (%s)", a.label(pad)))
+	run("Euclid...", a.euclidMenu)
+	run("Chance...", a.chanceMenu)
+	run("Randomize velocity...", a.randomizeMenu)
+	run("Echo...", a.echoMenu)
+	run("Cycle...", a.cycleMenu)
+	run("Dispatch over the marked pads...", a.dispatchMenu)
+	run("Copy to a pad...", a.copyTrackMenu)
 	names := make([]string, len(rowPresets))
 	for i, p := range rowPresets {
 		names[i] = p.name
 	}
 	m.items = append(m.items, menuItem{label: "Fill with", vals: names, run: func(v int) { a.setRow(pad, rowPresets[v].mask) }})
-	hits := make([]string, 16)
-	for i := range hits {
-		hits[i] = fmt.Sprintf("%d per bar", i+1)
-	}
-	m.items = append(m.items, menuItem{label: "Euclidean", vals: hits, val: 4, run: func(v int) { a.setRow(pad, euclid(v+1)) }})
-	m.items = append(m.items, menuItem{label: "Shift", vals: []string{"1 step <", "1 step >"}, val: 1, run: func(v int) {
-		args, _ := json.Marshal(lab.PatternArgs{Pad: pad, Grid: stepTicks, Steps: []int{-1, 1}[v]})
-		a.opSay("shift", args)
-	}})
+	run("Invert", a.invert)
 	run("Clear", func() {
 		args, _ := json.Marshal(lab.PatternArgs{Pad: pad})
 		a.lab.PatternOp(a.pat, "clearPad", args)
@@ -348,9 +435,6 @@ func (a *App) seqMenu() {
 		a.rowsOwn = true
 		a.say(fmt.Sprintf("row %d is pad %s", a.row+1, a.label(v)), false)
 	}})
-
-	m.head("GENERATE")
-	run("Arp over the columns...", a.openArpPrintMenu)
 	a.menu = m
 }
 
@@ -546,7 +630,25 @@ func (a *App) drawSeq(c *canvas) {
 				if ph == st {
 					col = cGood
 				}
-				c.rect(x, y+(rh-2)-h, cw-2, h, col)
+				if a.aHeld && pad == a.aPad && n.Tick == a.aTick {
+					col = cWhite // the note being edited
+				}
+				w := cw - 2
+				if n.Len < stepTicks { // shorter than a step: as wide as it lasts
+					w = max((cw-2)*n.Len/stepTicks, 3)
+				}
+				c.rect(x, y+(rh-2)-h, w, h, col)
+				// longer than a step: a tie runs on over the steps it lasts
+				if n.Len > stepTicks {
+					end := int(n.Tick) + n.Len
+					for t := s + 1; t < 16 && page*16+t < steps && (page*16+t)*stepTicks < end; t++ {
+						tw := cw
+						if rest := end - (page*16+t)*stepTicks; rest < stepTicks {
+							tw = max((cw-2)*rest/stepTicks, 2)
+						}
+						c.rect(stepX(t)-(stepX(t)-stepX(t-1)-cw), y+(rh-2)-4, tw, 3, lerp(cAmberD, col, 0.7))
+					}
+				}
 			}
 			if i == a.row && st == a.step {
 				c.box(x-1, y-1, cw, rh, 2, cWhite)
@@ -566,4 +668,51 @@ func (a *App) drawSeq(c *canvas) {
 		c.rect(bx+b*22, 36, 18, 6, col)
 	}
 	c.text(bx-8-textW(fmt.Sprintf("bar %d/%d", page+1, bars)), 36, fmt.Sprintf("bar %d/%d", page+1, bars), cText, true)
+}
+
+// noteSample is the sample of a pad as a note plays it: as loud as its velocity, and cut where the note ends (its length, at
+// the tempo of the pad's bank), with a short fade so the cut does not click.
+func (a *App) noteSample(pad, vel, lenTicks int) (formats.Sample, bool) {
+	id, ok := a.padSample(pad)
+	if !ok {
+		return formats.Sample{}, false
+	}
+	s, err := a.lab.Sample(id)
+	if err != nil {
+		return formats.Sample{}, false
+	}
+	ch := max(s.Channels, 1)
+	frames := s.Frames()
+	if lenTicks > 0 {
+		perTick := 60 / a.tempoOf(pad/16) / formats.PPQ * formats.SampleRate
+		frames = min(frames, max(int(float64(lenTicks)*perTick), 64))
+	}
+	fade := min(frames, int(0.008*formats.SampleRate))
+	out := make([]int16, frames*ch)
+	for f := 0; f < frames; f++ {
+		g := int32(vel)
+		if frames < s.Frames() && f >= frames-fade { // cut by the length: fade out
+			g = g * int32(frames-f) / int32(fade)
+		}
+		for c := 0; c < ch; c++ {
+			out[f*ch+c] = int16(int32(s.Samples[f*ch+c]) * g / 127)
+		}
+	}
+	return formats.Sample{Channels: ch, Samples: out}, true
+}
+
+// playNote plays the note under the cursor, as it sounds in the pattern (a cell without a note plays its pad at velocity 100).
+func (a *App) playNote() {
+	pad := a.rowPad()
+	d, _ := a.doc()
+	vel, ln := 100, 0
+	if n, ok := noteAt(d, pad, a.step); ok {
+		vel, ln = n.Vel, n.Len
+	}
+	s, ok := a.noteSample(pad, vel, ln)
+	if !ok {
+		a.say(a.label(pad)+" has no sample", true)
+		return
+	}
+	a.play(s)
 }

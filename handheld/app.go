@@ -115,6 +115,14 @@ type App struct {
 	picker    *picker // the pattern picker, when it is open
 	splash    *splash // the logo and dashboard at the start
 	as        autosave
+	aHeld     bool // A is down in SEQ: the arrows edit the note under it
+	aDelete   bool // A went down on a note: if nothing is edited, letting go takes it off
+	aPad      int  // the note being edited
+	aTick     uint32
+	aSession  int // counts the holds of A, so that an edit session is one undo step
+	undoSes   int
+	tt        trackState  // the settings of the track tools
+	scopeRow  bool        // the timing tools act on the row under the cursor only, not on every pad
 	undo      []undoEntry // the project before each change, newest last
 	redo      []undoEntry
 	undoKey   Key
@@ -279,6 +287,10 @@ func (a *App) triggerKey(whole bool) {
 		}
 		return
 	}
+	if a.scr == Seq && !whole { // L2 plays the note under the cursor
+		a.playNote()
+		return
+	}
 	if a.scr != Slice || a.sl == nil {
 		return
 	}
@@ -378,6 +390,10 @@ func (a *App) press(k Key, repeat int) {
 		a.menuKey(k)
 		return
 	}
+	if a.aHeld && a.scr == Seq && (k == L1 || k == R1) { // A held: L1 and R1 move the note
+		a.noteEditKey(k, repeat)
+		return
+	}
 	if k == L1 || k == R1 {
 		a.pageKey(k == R1)
 		return
@@ -409,6 +425,16 @@ func (a *App) press(k Key, repeat int) {
 
 // Release handles a key going up. Y let go with nothing pressed while it was held shows the help.
 func (a *App) Release(k Key) {
+	if k == A && a.aHeld {
+		a.aHeld = false
+		if a.aDelete { // A tapped on a note, nothing edited with it: the note goes
+			pre := a.lab.Snapshot()
+			a.toggle(a.aPad, int(a.aTick)/stepTicks)
+			a.commitUndo(pre, A, 0)
+		}
+		a.aDelete = false
+		return
+	}
 	if k != Y {
 		return
 	}

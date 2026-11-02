@@ -129,27 +129,6 @@ func (a *App) arpKeys(typ int) []int {
 	return keys
 }
 
-func (a *App) openArpPrintMenu() {
-	a.arpPrintDefaults()
-	st := &a.arpp
-	m := &menu{title: "arp over the columns"}
-	set := func(label string, vals []string, cur int, change func(v int)) {
-		m.items = append(m.items, menuItem{label: label, vals: vals, val: cur, keepOpen: true, onChange: change})
-	}
-	m.head("HOW IT PLAYS")
-	set("Type", arpTypes, st.typ, func(v int) { st.typ = v; a.say(arpTypeNotes[v], false) })
-	set("Rate", arpNames(formats.ArpRates, func(r formats.ArpRate) string { return r.Name }), st.rate, func(v int) { st.rate = v })
-	set("Gate", names(printGates, func(v int) string { return fmt.Sprintf("%d%%", v) }), st.gate, func(v int) { st.gate = v })
-	set("Velocity", names(printVels, func(v int) string { return fmt.Sprint(v) }), st.vel, func(v int) { st.vel = v })
-	if _, ok := a.doc(); !ok {
-		set("Length", names(printBars, func(v int) string { return fmt.Sprintf("%d bar", v) }), near(printBars, st.bars), func(v int) { st.bars = printBars[v] })
-	}
-	m.head("PRINT")
-	keys := a.arpKeys(st.typ)
-	m.items = append(m.items, menuItem{label: fmt.Sprintf("Write it (%d keys, their notes go)", len(keys)), run: func(int) { a.printArp() }})
-	a.menu = m
-}
-
 // printArp writes the arp over the pads of the columns into the pattern.
 func (a *App) printArp() { a.printArpKeys(a.arpKeys(a.arpp.typ)) }
 
