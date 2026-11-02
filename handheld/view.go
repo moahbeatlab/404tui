@@ -84,7 +84,10 @@ func (a *App) legend() (string, string) {
 		}
 		return "A menu  X play  B stop  arrows move", shift + "  Y+^v bank  Y+B clear  Y help"
 	case Files:
-		return "A to pad " + a.label(a.padN()) + "  X listen  ^v browse  > open  < back", shift + "  B pads"
+		if e, ok := a.current(); ok && e.project {
+			return "A load this project  > look inside  < up  ^v browse", shift + "  Y+X places  B pads"
+		}
+		return "A to pad " + a.label(a.padN()) + "  X listen  ^v browse  > open  < up", shift + "  Y+X places  B pads"
 	case Slice:
 		return "A cut  B join  X play  <> move (hold: faster)  ^v marker", shift + "  Y+A auto  Y+X to pads  Y+^v zoom"
 	case Seq:
@@ -95,7 +98,7 @@ func (a *App) legend() (string, string) {
 	case Unit:
 		return "A send the project  ^v choose a unit project  B back", shift
 	default:
-		return "A write project  <> slot  B back", shift
+		return "A write project  <> slot  X quit  B back", shift + "  (Select+Start quits anywhere)"
 	}
 }
 
@@ -111,6 +114,7 @@ func (a *App) drawHelp(c *canvas) {
 		"B        back / stop / join / SEQ menu",
 		"X        listen to what is under the cursor",
 		"Y alone  this page",
+		"Select+Start  quit (asks when not saved)",
 		"",
 		"PADS  FILES  SLICE  SEQ  SAVE  UNIT",
 		"SAVE writes a folder for the SD card; UNIT sends",
@@ -220,12 +224,16 @@ func (a *App) waveform(c *canvas, id, from, to, x, y, w, h int, col color.RGBA) 
 // ---- FILES
 
 func (a *App) drawFiles(c *canvas) {
-	rel, _ := filepath.Rel(filepath.Dir(a.Root), a.dir)
-	c.text(margin, 38, fit("/"+filepath.ToSlash(rel), 48), cDim, false)
+	c.text(margin, 38, short2(a.dir, 48), cDim, false)
 	const rows = 21
 	top := max(0, min(a.fcur-rows/2, len(a.entries)-rows))
 	if len(a.entries) == 0 {
-		c.text(margin, 70, "(no audio files here)", cDim, false)
+		c.text(margin, 70, "(no folders or audio files here)", cDim, false)
+		if a.dir == a.Root {
+			c.text(margin, 94, "Put .wav files in this folder:", cText, false)
+			c.text(margin, 112, fit(a.Root, 48), cAmber, false)
+		}
+		c.text(margin, 140, "< goes up    Y+X jumps to the usb drive", cDim, false)
 	}
 	for i := 0; i < rows && top+i < len(a.entries); i++ {
 		e := a.entries[top+i]
@@ -239,6 +247,10 @@ func (a *App) drawFiles(c *canvas) {
 		if e.dir {
 			name = fit(e.name, 33) + "/"
 			col = cAmber
+		}
+		if e.project {
+			name = fit(e.name, 24) + "  project"
+			col = cGood
 		}
 		c.text(margin+4, y, name, col, e.dir)
 		if !e.dir {

@@ -47,3 +47,14 @@ need swapping), audio output through ALSA, the permissions in `packaging/arkos/4
 for the SP-404MKII, and the speed of the slicer on the RK3326. Nothing written was loaded into a real SP-404MKII:
 the pad, sample and pattern files come from the same engine as the web Sample Lab, whose output is unverified
 on hardware too. Patterns are always 4 bars (other lengths are a guess).
+
+
+## Added after the first run on the R36S
+
+- **Select+Start quits** from any screen (the pad reports them as codes 0x2c0/0x2c1; 0x13a/0x13b are accepted too).
+  A project with samples that was not written is asked about once: Select+Start again quits, any other key stays.
+  On SAVE, X does the same without the chord.
+- **FILES browses the whole card**: `<` goes up to `/`, `>` opens a folder, `B` leaves for the pads, `Y+X` jumps between
+  places (samples folder, `/mnt/usbdrive`, `/roms`, `/`). An empty samples folder says where to put files.
+- **Projects load from the file system**: a folder with a PADCONF.BIN is marked `project`; `A` on it replaces the project
+  in memory (asks first when there is unsaved work). Folders named PROJECT_nn also set the slot number.

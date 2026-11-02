@@ -73,6 +73,10 @@ func Run(a *App, fbPath, inputPath, webAddr string) error {
 		case <-tick.C:
 			a.Tick()
 		}
+		if a.Quit {
+			log.Println("quit")
+			return nil
+		}
 		if web != nil {
 			web.mu.Lock()
 		}

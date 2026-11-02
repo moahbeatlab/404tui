@@ -247,3 +247,179 @@ func TestHelpDoesNotEatAChord(t *testing.T) {
 		t.Fatalf("screen %v help %v: Y with the help open closes it and the chord goes on", a.Screen(), a.help)
 	}
 }
+
+func padsWithSamples(a *App) int {
+	n := 0
+	for _, p := range a.Info().Pads {
+		if p.File {
+			n++
+		}
+	}
+	return n
+}
+
+func TestQuitAsksOnlyWhenWorkIsUnsaved(t *testing.T) {
+	a, _ := newApp(t)
+	a.Dispatch(Event{Quit: true})
+	if !a.Quit {
+		t.Fatal("an empty project should quit at once")
+	}
+
+	a, _ = newApp(t)
+	keys(t, a, kit)
+	a.Dispatch(Event{Quit: true})
+	if a.Quit || !a.quitAsk {
+		t.Fatal("unsaved samples: the first Select+Start must only ask")
+	}
+	keys(t, a, "D") // any key cancels
+	a.Dispatch(Event{Quit: true})
+	if a.Quit {
+		t.Fatal("a key in between must cancel the question")
+	}
+	a.Dispatch(Event{Quit: true})
+	if !a.Quit {
+		t.Fatal("the second Select+Start in a row must quit")
+	}
+
+	a, _ = newApp(t)
+	keys(t, a, kit)
+	a.go_(Save)
+	keys(t, a, "A")
+	if !a.saved {
+		t.Fatal("writing the project must count as saved")
+	}
+	a.Dispatch(Event{Quit: true})
+	if !a.Quit {
+		t.Fatal("a saved project quits at once")
+	}
+
+	a, _ = newApp(t)
+	keys(t, a, kit)
+	a.go_(Save)
+	keys(t, a, "X X") // X on SAVE: ask, then quit
+	if !a.Quit {
+		t.Fatal("X twice on SAVE must quit")
+	}
+}
+
+func TestBrowseTheWholeFilesystem(t *testing.T) {
+	a, _ := newApp(t)
+	a.go_(Files)
+	for i := 0; i < 40 && a.dir != "/"; i++ {
+		keys(t, a, "L")
+	}
+	if a.dir != "/" {
+		t.Fatalf("Left must climb to /, stopped at %s", a.dir)
+	}
+	keys(t, a, "L") // at the top: stays
+	if a.dir != "/" {
+		t.Fatal("went above /")
+	}
+	if len(a.entries) == 0 {
+		t.Fatal("/ lists nothing")
+	}
+	// Y+X goes to the samples folder first, then through the places that exist
+	keys(t, a, "Y+X")
+	if !strings.HasPrefix(a.dir, "/") || a.dir == "" {
+		t.Fatalf("a place was not a folder: %q", a.dir)
+	}
+	seen := map[string]bool{}
+	for i := 0; i < 8; i++ {
+		seen[a.dir] = true
+		keys(t, a, "Y+X")
+	}
+	if !seen[a.Root] {
+		t.Fatal("the places must include the samples folder")
+	}
+	// the cursor returns to the folder we came from
+	a.dir = filepath.Join(a.Root, "drums")
+	a.list()
+	keys(t, a, "L")
+	if e, ok := a.current(); !ok || e.name != "drums" {
+		t.Fatalf("after Left the cursor should sit on drums, got %+v", e)
+	}
+	// B leaves for the pads from any folder
+	keys(t, a, "B")
+	if a.scr != Pads {
+		t.Fatal("B must go back to the pads")
+	}
+}
+
+func TestEmptySamplesFolderSaysWhatToDo(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "404", "samples")
+	os.MkdirAll(root, 0o755)
+	a := New(root, filepath.Join(dir, "out"), &NullAudio{})
+	a.go_(Files)
+	img := a.Render()
+	if img.Bounds().Dx() != W {
+		t.Fatal("no frame")
+	}
+	if len(a.entries) != 0 {
+		t.Fatal("expected an empty folder")
+	}
+}
+
+func TestLoadAProjectFromTheFilesystem(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	want := padsWithSamples(a)
+	if want < 3 {
+		t.Fatalf("setup: %d pads", want)
+	}
+	a.go_(Save)
+	keys(t, a, "R R A") // slot 3
+	card := filepath.Join(a.OutDir, cardFolder)
+	if _, err := os.Stat(filepath.Join(card, "PROJECT_03", "PADCONF.BIN")); err != nil {
+		t.Fatalf("project not written: %v", err)
+	}
+
+	b, _ := newApp(t)
+	b.go_(Files)
+	b.dir = card
+	b.list()
+	found := false
+	for i, e := range b.entries {
+		if e.name == "PROJECT_03" {
+			found = true
+			b.fcur = i
+			if !e.project {
+				t.Fatal("a folder with PADCONF.BIN must be marked as a project")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("PROJECT_03 not listed")
+	}
+	keys(t, b, "A")
+	if b.scr != Pads {
+		t.Fatalf("after loading we expect the pads, on %v (%s)", b.scr, b.msg)
+	}
+	if got := padsWithSamples(b); got != want {
+		t.Fatalf("loaded %d pads with samples, saved %d", got, want)
+	}
+	if b.slot != 3 || b.ProjectName() != "PROJECT_03" {
+		t.Fatalf("slot after loading: %d", b.slot)
+	}
+
+	// with unsaved work the first A only asks
+	c, _ := newApp(t)
+	keys(t, c, kit)
+	c.saved = false
+	c.go_(Files)
+	c.dir = card
+	c.list()
+	for i, e := range c.entries {
+		if e.name == "PROJECT_03" {
+			c.fcur = i
+		}
+	}
+	keys(t, c, "A")
+	if c.scr != Files || c.loadAsk == "" {
+		t.Fatal("unsaved work: the first A must ask, not load")
+	}
+	keys(t, c, "A")
+	if c.scr != Pads {
+		t.Fatalf("the second A must load (%s)", c.msg)
+	}
+}

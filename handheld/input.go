@@ -13,6 +13,7 @@ var keyNames = []string{"Up", "Down", "Left", "Right", "A", "B", "X", "Y"}
 
 // Event is a key going down or up.
 type Event struct {
+	Quit   bool // Select+Start
 	Key    Key
 	Down   bool
 	Repeat int
@@ -20,6 +21,10 @@ type Event struct {
 
 // Dispatch gives an event to the app.
 func (a *App) Dispatch(e Event) {
+	if e.Quit {
+		a.RequestQuit()
+		return
+	}
 	if e.Down {
 		a.Press(e.Key, e.Repeat)
 	} else {
@@ -108,6 +113,10 @@ var defaultMap = map[uint16]Key{
 	0x134: Y, // BTN_WEST: the left one
 }
 
+// quitCodes are Select and Start; any two of them held together quit. 0x13a/0x13b are BTN_SELECT and BTN_START;
+// the R36S's pad (GO-Super Gamepad) reported its Select and Start as 0x2c0 and 0x2c1 (BTN_TRIGGER_HAPPY1, 2).
+var quitCodes = map[uint16]bool{0x13a: true, 0x13b: true, 0x2c0: true, 0x2c1: true}
+
 // Evdev reads keys from a Linux input device (/dev/input/eventN). Not tried on a device yet.
 func Evdev(path string, m map[uint16]Key, out chan<- Event) error {
 	f, err := os.Open(path)
@@ -123,6 +132,7 @@ func Evdev(path string, m map[uint16]Key, out chan<- Event) error {
 		held := map[Key]int{}
 		var hatX, hatY int32
 		unknown := map[uint16]bool{}
+		quitHeld := map[uint16]bool{}
 		for {
 			if _, err := f.Read(buf); err != nil {
 				return
@@ -130,6 +140,16 @@ func Evdev(path string, m map[uint16]Key, out chan<- Event) error {
 			typ, code, val := binary.LittleEndian.Uint16(buf[16:]), binary.LittleEndian.Uint16(buf[18:]), int32(binary.LittleEndian.Uint32(buf[20:]))
 			switch typ {
 			case evKey:
+				if quitCodes[code] { // Select and Start together
+					if val == 0 {
+						delete(quitHeld, code)
+					} else if val == 1 {
+						quitHeld[code] = true
+						if len(quitHeld) >= 2 {
+							out <- Event{Quit: true}
+						}
+					}
+				}
 				if k, ok := m[code]; ok {
 					emit(out, held, k, val)
 				} else if val == 1 && !unknown[code] { // a button that is not mapped: tell which code it is

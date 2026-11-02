@@ -122,3 +122,11 @@ func short(s string, n int) string {
 	}
 	return s[:n-3] + "~" + s[len(s)-2:]
 }
+
+// short2 cuts a path to n characters keeping its end: "~r/a/b/samples".
+func short2(s string, n int) string {
+	if len(s) <= n || n < 4 {
+		return fit(s, n)
+	}
+	return "~" + s[len(s)-(n-1):]
+}

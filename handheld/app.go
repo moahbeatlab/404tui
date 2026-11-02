@@ -60,9 +60,10 @@ type Audio interface {
 }
 
 type entry struct {
-	name string
-	dir  bool
-	size int64
+	name    string
+	dir     bool
+	project bool // a folder with a PADCONF.BIN: a project of the SP-404MKII
+	size    int64
 }
 
 // App is the state of the front end.
@@ -73,6 +74,13 @@ type App struct {
 	Audio  Audio
 	// AudioLate delivers an audio output that opened after the start (opening it can take long or block); Run takes it.
 	AudioLate chan Audio
+
+	// Quit is set when the app should end. quitAsk: an unsaved project was asked about, the next quit really ends.
+	Quit    bool
+	quitAsk bool
+	saveAsk bool   // X on SAVE asked once
+	saved   bool   // the project was written and not changed since
+	loadAsk string // the project folder A was pressed on once, which would replace the work
 
 	scr  Screen
 	bank int
@@ -155,6 +163,7 @@ func (a *App) OpenProject(dir string) error {
 }
 
 func (a *App) refresh() {
+	a.saved = false
 	b, err := a.lab.Info()
 	if err == nil {
 		a.info = lab.Info{}
@@ -166,6 +175,7 @@ func (a *App) list() {
 	a.entries = nil
 	des, err := os.ReadDir(a.dir)
 	if err != nil {
+		a.say(err.Error(), true)
 		return
 	}
 	for _, de := range des {
@@ -174,7 +184,8 @@ func (a *App) list() {
 			continue
 		}
 		if de.IsDir() {
-			a.entries = append(a.entries, entry{name: n, dir: true})
+			_, perr := os.Stat(filepath.Join(a.dir, n, "PADCONF.BIN"))
+			a.entries = append(a.entries, entry{name: n, dir: true, project: perr == nil})
 			continue
 		}
 		switch strings.ToLower(filepath.Ext(n)) {
@@ -213,10 +224,34 @@ func (a *App) Slices() int {
 	return len(a.sl.Slices)
 }
 
+// RequestQuit is Select+Start. A project with samples that was not written is asked about once: the
+// same request again quits, any other key cancels.
+func (a *App) RequestQuit() {
+	if !a.saved && !a.quitAsk && a.hasWork() {
+		a.quitAsk = true
+		a.say("not saved! Select+Start again to quit, any key to stay", true)
+		return
+	}
+	a.Quit = true
+}
+
+func (a *App) hasWork() bool {
+	for _, p := range a.info.Pads {
+		if p.File {
+			return true
+		}
+	}
+	return false
+}
+
 // Press handles one key going down. repeat counts the repeats of a held key (0 for the first press), which
 // make a cursor move faster.
 func (a *App) Press(k Key, repeat int) {
 	a.msg = ""
+	a.quitAsk = false
+	if k != X {
+		a.saveAsk = false
+	}
 	if k == Y {
 		if repeat == 0 {
 			a.yHeld, a.yUsed = true, false
@@ -278,6 +313,10 @@ func (a *App) shifted(k Key) {
 		return
 	}
 	switch a.scr {
+	case Files:
+		if k == X {
+			a.nextPlace()
+		}
 	case Seq:
 		a.seqShifted(k)
 	case Pads:
@@ -404,19 +443,19 @@ func (a *App) playPad(n int) {
 }
 
 func (a *App) filesKey(k Key) {
+	if k != A {
+		a.loadAsk = ""
+	}
 	switch k {
 	case Up:
 		a.fcur = max(a.fcur-1, 0)
 	case Down:
 		a.fcur = min(a.fcur+1, max(len(a.entries)-1, 0))
-	case Left, B:
-		if a.dir != a.Root {
-			a.dir = filepath.Dir(a.dir)
-			a.list()
-		} else if k == B {
-			a.stop()
-			a.go_(Pads)
-		}
+	case Left:
+		a.up()
+	case B:
+		a.stop()
+		a.go_(Pads)
 	case Right:
 		a.openEntry()
 	case X:
@@ -431,6 +470,10 @@ func (a *App) filesKey(k Key) {
 	case A:
 		e, ok := a.current()
 		if !ok {
+			return
+		}
+		if e.project {
+			a.loadProject(e)
 			return
 		}
 		if e.dir {
@@ -455,6 +498,82 @@ func (a *App) filesKey(k Key) {
 		a.sl = nil
 		a.go_(Pads)
 	}
+}
+
+// loadProject replaces the project in memory with a project folder. With unsaved work it asks first: A again.
+func (a *App) loadProject(e entry) {
+	dir := filepath.Join(a.dir, e.name)
+	if a.hasWork() && !a.saved && a.loadAsk != dir {
+		a.loadAsk = dir
+		a.say("replaces the project you are working on (not saved): A again", true)
+		return
+	}
+	a.loadAsk = ""
+	a.stop()
+	if err := a.OpenProject(dir); err != nil {
+		a.say("cannot load: "+err.Error(), true)
+		return
+	}
+	var n int
+	if _, err := fmt.Sscanf(strings.ToUpper(e.name), "PROJECT_%d", &n); err == nil && n >= 1 && n <= 99 {
+		a.slot = n
+	}
+	a.sl, a.pat, a.step = nil, 1, 0
+	a.bank, a.cur = 0, 0
+	a.saved = true // what is on screen is what is on the card
+	files := 0
+	for _, p := range a.info.Pads {
+		if p.File {
+			files++
+		}
+	}
+	a.say(fmt.Sprintf("loaded %s: %d pads with samples", e.name, files), false)
+	a.go_(Pads)
+}
+
+// up goes to the parent folder, with the cursor on the folder it came from. Anywhere on the card is reachable.
+func (a *App) up() {
+	if a.dir == "/" || a.dir == filepath.Dir(a.dir) {
+		a.say("this is the top", false)
+		return
+	}
+	from := filepath.Base(a.dir)
+	a.dir = filepath.Dir(a.dir)
+	a.list()
+	for i, e := range a.entries {
+		if e.dir && e.name == from {
+			a.fcur = i
+		}
+	}
+}
+
+// places are where Y+X in FILES jumps to: the samples folder, the usb drive, the games card, the top.
+func (a *App) places() []string {
+	return []string{a.Root, "/mnt/usbdrive", "/roms", "/"}
+}
+
+func (a *App) nextPlace() {
+	ps := a.places()
+	next := ps[0]
+	for i, p := range ps {
+		if p == a.dir {
+			next = ps[(i+1)%len(ps)]
+		}
+	}
+	for tries := 0; tries < len(ps); tries++ {
+		if st, err := os.Stat(next); err == nil && st.IsDir() {
+			break
+		}
+		for i, p := range ps {
+			if p == next {
+				next = ps[(i+1)%len(ps)]
+				break
+			}
+		}
+	}
+	a.dir = next
+	a.list()
+	a.say("in "+next, false)
 }
 
 func (a *App) current() (entry, bool) {
@@ -504,6 +623,13 @@ func (a *App) saveKey(k Key) {
 		a.go_(Pads)
 	case A:
 		a.write()
+	case X: // quit: asks once when there is unsaved work
+		if a.saved || !a.hasWork() || a.saveAsk {
+			a.Quit = true
+			return
+		}
+		a.saveAsk = true
+		a.say("not saved! X again to quit, any other key to stay", true)
 	}
 }
 
@@ -525,5 +651,6 @@ func (a *App) write() {
 		return
 	}
 	a.wrote = names
+	a.saved = true
 	a.say(fmt.Sprintf("wrote %d files", len(names)), false)
 }
