@@ -460,6 +460,7 @@ func (a *App) seqMenu() {
 	m.head(fmt.Sprintf("TRACK %s: CHANGE THE NOTES", a.label(pad)))
 	run("Ratchet (sub-steps)...", a.ratchetMenu)
 	run("Accents and ghosts...", a.accentMenu)
+	run("LFO on the notes (velocity, length, timing)...", a.lfoMenu)
 	run("Echo...", a.echoMenu)
 	run("Chance...", a.chanceMenu)
 	run("Randomize velocity...", a.randomizeMenu)

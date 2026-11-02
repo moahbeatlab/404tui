@@ -2871,3 +2871,65 @@ func TestMangleDiceAreFixedByTheRoll(t *testing.T) {
 		t.Fatal("B puts the slices back")
 	}
 }
+
+func TestLFOModulatesTheTrack(t *testing.T) {
+	var notes []lab.Note
+	for s := 0; s < 16; s++ {
+		notes = append(notes, lab.Note{Tick: uint32(s * stepTicks), Pad: 0, Vel: 64, Len: stepTicks})
+	}
+	shape := func(name string) int {
+		for i, n := range lfoShapes {
+			if n == name {
+				return i
+			}
+		}
+		t.Fatal(name)
+		return 0
+	}
+	st := lfoState{shape: shape("SIN"), rate: 3, depth: 5} // a sine over 1/1 (16 steps), 100%
+	out := lfoNotes(notes, st, 1)
+	if out[0].Vel != 64 || out[4].Vel != 127 || out[12].Vel != 1 {
+		t.Fatalf("a sine: middle, top at a quarter, bottom at three quarters: %d %d %d", out[0].Vel, out[4].Vel, out[12].Vel)
+	}
+	st.shape = shape("SAW")
+	if o := lfoNotes(notes, st, 1); o[0].Vel >= o[8].Vel || o[8].Vel >= o[15].Vel {
+		t.Fatal("a saw rises")
+	}
+	st.shape = shape("SAW DN")
+	if o := lfoNotes(notes, st, 1); o[0].Vel <= o[15].Vel {
+		t.Fatal("a falling saw falls")
+	}
+	st.shape = shape("PUMP")
+	if o := lfoNotes(notes, st, 1); o[0].Vel != 1 || o[15].Vel < 60 {
+		t.Fatalf("PUMP dips on the beat and swells back: %d ... %d", o[0].Vel, o[15].Vel)
+	}
+	st.shape, st.shift = shape("SQR"), 2 // half a round later: starts low
+	if o := lfoNotes(notes, st, 1); o[0].Vel >= 64 || o[8].Vel <= 64 {
+		t.Fatal("shift moves the wave")
+	}
+	st = lfoState{shape: shape("SAW"), rate: 3, depth: 5, target: 1}
+	if o := lfoNotes(notes, st, 1); o[0].Len >= o[15].Len {
+		t.Fatal("length follows the saw")
+	}
+	st.target, st.depth = 2, 3
+	if o := lfoNotes(notes, st, 1); o[15].Tick <= notes[15].Tick {
+		t.Fatal("timing moves late at the top of the saw")
+	}
+	for _, n := range []string{"RND", "S&H"} {
+		st = lfoState{shape: shape(n), rate: 5, depth: 3}
+		a, b := lfoNotes(notes, st, 1), lfoNotes(notes, st, 1)
+		c := lfoNotes(notes, st, 2)
+		same := true
+		for i := range a {
+			if a[i].Vel != b[i].Vel {
+				t.Fatalf("%s: the same seed rolls the same", n)
+			}
+			if a[i].Vel != c[i].Vel {
+				same = false
+			}
+		}
+		if same {
+			t.Fatalf("%s: another seed, another roll", n)
+		}
+	}
+}

@@ -130,7 +130,7 @@ func (a *App) finishTrack(pad int, notes []lab.Note, what string) {
 
 // randomTools are the tools with a roll of the dice in them: they get an "Another roll" item.
 var randomTools = map[string]bool{"Thin the track out": true, "Change the velocities": true, "Ratchet them": true, "Evolve the bars": true,
-	"Apply them": true, "Share the notes out": true}
+	"Apply them": true, "Modulate them": true, "Share the notes out": true}
 
 // toolMenu is a tool's dialog: the settings, and the tool at work while the dialog is open. Opening it, and every change of a
 // setting, puts the pattern back as it was and applies the tool again, and the loop plays it, so the effect is heard at once.
