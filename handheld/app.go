@@ -111,49 +111,51 @@ type App struct {
 	sel        int // slice under the cursor
 	playing    int // pad lit by X, -1 for none
 
-	menu      *menu
-	pp        *padPanel // the pad panel, when it is open
-	picker    *picker   // the pattern picker, when it is open
-	splash    *splash   // the logo and dashboard at the start
-	as        autosave
-	idx       indexJob
-	aHeld     bool // A is down in SEQ: the arrows edit the note under it
-	aDelete   bool // A went down on a note: if nothing is edited, letting go takes it off
-	aPad      int  // the note being edited
-	aTick     uint32
-	aSession  int // counts the holds of A, so that an edit session is one undo step
-	undoSes   int
-	toolBase  *lab.Snap // the project as it was when the open tool dialog began: its changes are trials
-	tt2       trackState2
-	tt        trackState  // the settings of the track tools
-	scopeRow  bool        // the timing tools act on the row under the cursor only, not on every pad
-	undo      []undoEntry // the project before each change, newest last
-	redo      []undoEntry
-	undoKey   Key
-	undoAt    time.Time
-	set       settings
-	dcur      map[string]int // the cursor in each folder of the file browser, for the next visit
-	searchQ   string         // the search in the file browser, "" for none
-	searchCut bool           // the search gave up before the end
-	kb        *keyboard      // the on-screen keyboard of the search, when open
-	aud       map[int]int    // pads whose sample is being auditioned in the pattern: pad -> handle
-	prevOrder []string       // the files decoded for the browser, oldest first
-	arp       arpState       // the settings of the sample arp, kept between visits
-	arpp      arpPrint       // and of the pattern arp
-	marks     []int          // the pads marked as keys of the arp, in the order they were marked
-	arpOn     bool           // the live arp is looping
-	changed   bool           // something was edited since the last autosave run
-	carry     *carry         // a pad being moved or copied
-	pat       int            // pattern in the sequencer, 1..160
-	step      int            // the cursor's step, 16 to a bar
-	row       int            // the cursor's row in the step grid: an index into rows
-	rows      []int          // the pads of the rows of the step grid: the pads with notes, the marked pads, the tracks added
-	rowsSet   bool           // the rows were chosen (by default or by the user)
-	rowTop    int            // the first row shown, when there are more than 16
-	rowExtra  []int          // tracks the user added, which have no notes yet
-	rowFocus  int            // a pad the cursor should go to when the rows are worked out again (-1: none)
-	seqOn     bool           // the pattern is playing
-	seqStart  time.Time
+	menu       *menu
+	pp         *padPanel // the pad panel, when it is open
+	picker     *picker   // the pattern picker, when it is open
+	splash     *splash   // the logo and dashboard at the start
+	as         autosave
+	idx        indexJob
+	aHeld      bool // A is down in SEQ: the arrows edit the note under it
+	aDelete    bool // A went down on a note: if nothing is edited, letting go takes it off
+	aPad       int  // the note being edited
+	aTick      uint32
+	aSession   int // counts the holds of A, so that an edit session is one undo step
+	undoSes    int
+	toolBase   *lab.Snap // the project as it was when the open tool dialog began: its changes are trials
+	tt2        trackState2
+	tt         trackState  // the settings of the track tools
+	scopeRow   bool        // the timing tools act on the row under the cursor only, not on every pad
+	undo       []undoEntry // the project before each change, newest last
+	redo       []undoEntry
+	undoKey    Key
+	undoAt     time.Time
+	set        settings
+	dcur       map[string]int // the cursor in each folder of the file browser, for the next visit
+	searchQ    string         // the search in the file browser, "" for none
+	searchCut  bool           // the search gave up before the end
+	kb         *keyboard      // the on-screen keyboard of the search, when open
+	aud        map[int]int    // pads whose sample is being auditioned in the pattern: pad -> handle
+	prevOrder  []string       // the files decoded for the browser, oldest first
+	arp        arpState       // the settings of the sample arp, kept between visits
+	arpp       arpPrint       // and of the pattern arp
+	marks      []int          // the pads marked as keys of the arp, in the order they were marked
+	arpOn      bool           // the live arp is looping
+	changed    bool           // something was edited since the last autosave run
+	carry      *carry         // a pad being moved or copied
+	pat        int            // pattern in the sequencer, 1..160
+	step       int            // the cursor's step, 16 to a bar
+	row        int            // the cursor's row in the step grid: an index into rows
+	rows       []int          // the pads of the rows of the step grid: the pads with notes, the marked pads, the tracks added
+	rowsSet    bool           // the rows were chosen (by default or by the user)
+	rowTop     int            // the first row shown, when there are more than 16
+	rowExtra   []int          // tracks the user added, which have no notes yet
+	rowFocus   int            // a pad the cursor should go to when the rows are worked out again (-1: none)
+	seqOn      bool           // the pattern is playing
+	seqStart   time.Time
+	freeze     bool // SEQ: loop only the bar in focus
+	frozenPage int
 	// Now is the clock; nil is the real one. A test sets it.
 	Now func() time.Time
 

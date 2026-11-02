@@ -239,6 +239,8 @@ func (a *App) seqShifted(k Key) {
 		a.setPattern(a.pat + 1)
 	case Down:
 		a.setPattern(a.pat - 1)
+	case A:
+		a.toggleFreeze()
 	case B:
 		a.openPicker()
 	case X:
@@ -349,6 +351,11 @@ func (a *App) seqMenu() {
 	m.head("THE PATTERN")
 	run("Choose a pattern (bank, then pattern)...", a.openPicker)
 	run("New pattern from a template...", a.templatesMenu)
+	set("Loop only the bar in focus (Y+A)", []string{"off", "on"}, b2i(a.freeze), func(v int) {
+		if (v == 1) != a.freeze {
+			a.toggleFreeze()
+		}
+	})
 	run("Copy to the next pattern", func() {
 		to := a.pat%160 + 1
 		if err := a.lab.CopyPattern(a.pat, to); err != nil {
@@ -487,9 +494,19 @@ func (a *App) render() (formats.Sample, bool) {
 	}
 	bpm := a.tempo()
 	perTick := 60 / bpm / formats.PPQ * formats.SampleRate
-	n := int(float64(d.Length) * perTick)
+	length := int(d.Length)
+	lo, hi := 0, length
+	if a.freeze { // only the bar in focus
+		lo = min(a.step/16*16*stepTicks, max(length-stepTicks, 0))
+		hi = min(lo+16*stepTicks, length)
+		a.frozenPage = a.step / 16
+	}
+	n := int(float64(hi-lo) * perTick)
 	mix := make([]int32, n*2)
 	for _, nt := range d.Notes {
+		if int(nt.Tick) < lo || int(nt.Tick) >= hi {
+			continue
+		}
 		id, ok := a.padSample(nt.Pad)
 		if over, auditioned := a.aud[nt.Pad]; auditioned { // a file heard in place of the pad's sample
 			id, ok = over, true
@@ -501,7 +518,7 @@ func (a *App) render() (formats.Sample, bool) {
 		if err != nil {
 			continue
 		}
-		at := int(float64(nt.Tick) * perTick)
+		at := int(float64(int(nt.Tick)-lo) * perTick)
 		g := int32(nt.Vel)
 		for f := 0; f < s.Frames() && at+f < n; f++ {
 			l := int32(s.Samples[f*s.Channels])
@@ -578,7 +595,31 @@ func (a *App) playStep() int {
 	}
 	bpm := a.tempo()
 	stepDur := time.Duration(float64(time.Minute) / bpm / 4)
-	return int(a.clock().Sub(a.seqStart)/stepDur) % a.steps()
+	n := int(a.clock().Sub(a.seqStart) / stepDur)
+	if a.freeze {
+		return a.frozenPage*16 + n%min(16, a.steps()-a.frozenPage*16)
+	}
+	return n % a.steps()
+}
+
+// toggleFreeze loops only the bar in focus, or the whole pattern again.
+func (a *App) toggleFreeze() {
+	a.freeze = !a.freeze
+	if a.freeze {
+		a.say(fmt.Sprintf("bar %d is frozen: X loops only this bar, L1/R1 move the loop", a.step/16+1), false)
+	} else {
+		a.say("the whole pattern plays again", false)
+	}
+	if a.seqOn {
+		a.replay()
+	}
+}
+
+// freezeTick moves a playing frozen loop to the bar that came into focus.
+func (a *App) freezeTick() {
+	if a.freeze && a.seqOn && a.step/16 != a.frozenPage {
+		a.replay()
+	}
 }
 
 func lerp(a, b color.RGBA, t float64) color.RGBA {
@@ -702,7 +743,11 @@ func (a *App) drawSeq(c *canvas) {
 		}
 		c.rect(bx+b*22, 36, 18, 6, col)
 	}
-	c.text(bx-8-textW(fmt.Sprintf("bar %d/%d", page+1, bars)), 36, fmt.Sprintf("bar %d/%d", page+1, bars), cText, true)
+	barLbl := fmt.Sprintf("bar %d/%d", page+1, bars)
+	if a.freeze {
+		barLbl += " FROZEN"
+	}
+	c.text(bx-8-textW(barLbl), 36, barLbl, cText, true)
 }
 
 // noteSample is the sample of a pad as a note plays it: as loud as its velocity, and cut where the note ends (its length, at

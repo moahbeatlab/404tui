@@ -2662,3 +2662,31 @@ func TestFileIndexSearchesFromDisk(t *testing.T) {
 		}
 	}
 }
+
+func TestFreezeLoopsOnlyTheBarInFocus(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit+" Y+R") // a kit on A1..A3, then SEQ
+	keys(t, a, "A")        // a note on step 1 of bar 1
+	a.step = 16 + 4
+	keys(t, a, "A") // and one in bar 2
+	full, ok := a.render()
+	if !ok {
+		t.Fatal("nothing rendered")
+	}
+	a.step = 16
+	keys(t, a, "Y+A")
+	if !a.freeze {
+		t.Fatal("Y+A freezes the bar")
+	}
+	one, ok := a.render()
+	if !ok || one.Frames()*2 > full.Frames()+2 || one.Frames() == 0 {
+		t.Fatalf("a frozen bar is half of 2 bars: %d of %d frames", one.Frames(), full.Frames())
+	}
+	if p := a.playStep(); p != -1 {
+		t.Fatalf("not playing: %d", p)
+	}
+	keys(t, a, "Y+A")
+	if a.freeze {
+		t.Fatal("Y+A again releases")
+	}
+}
