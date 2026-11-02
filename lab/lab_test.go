@@ -860,3 +860,46 @@ func TestTempoSelectAndBankTempos(t *testing.T) {
 		t.Fatal("5 BPM is out of range")
 	}
 }
+
+func TestSnapshotAndRestore(t *testing.T) {
+	l := New()
+	l.NewProject("U")
+	s0 := l.Snapshot()
+	if l.Changed(s0) {
+		t.Fatal("nothing changed yet")
+	}
+	ok(t, l.SetTempo(99))
+	if !l.Changed(s0) {
+		t.Fatal("a tempo change is a change")
+	}
+	s1 := l.Snapshot()
+	ok(t, l.NewPattern(1, 2))
+	if !l.Changed(s1) {
+		t.Fatal("a new pattern is a change")
+	}
+	l.Restore(s1)
+	if l.Changed(s1) {
+		t.Fatal("restored")
+	}
+	if _, err := l.Pattern(1); err == nil {
+		t.Fatal("the pattern should be gone after going back")
+	}
+	l.Restore(s0)
+	var in Info
+	b, _ := l.Info()
+	json.Unmarshal(b, &in)
+	if in.Tempo != 120 {
+		t.Fatalf("the tempo is back: %v", in.Tempo)
+	}
+	// a snapshot does not change when the project does (the pad settings are copied)
+	ok(t, l.SetTempo(77))
+	l.Restore(s0)
+	b, _ = l.Info()
+	json.Unmarshal(b, &in)
+	if in.Tempo != 120 {
+		t.Fatalf("the snapshot kept its own settings: %v", in.Tempo)
+	}
+	if s0.HeldBytes(nil) != 0 {
+		t.Fatalf("an empty project holds no file data: %d", s0.HeldBytes(nil))
+	}
+}

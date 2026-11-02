@@ -440,7 +440,8 @@ func (a *App) replay() {
 		return
 	}
 	s, ok := a.render()
-	if !ok {
+	if !ok { // nothing left to play (the last note was taken away): the loop ends
+		a.stop()
 		return
 	}
 	if r, ok := a.Audio.(replacer); ok {

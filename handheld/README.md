@@ -192,3 +192,16 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 - **Favourites and places (Y+X)**: a menu of the places (samples, usb drive, games card, the top) and the favourite folders (go there
   or remove), with *Add this folder*. Y+B toggles the folder as a favourite at once; a favourite shows a `*` in the path.
 - **Memory**: only the last 8 files looked at are kept decoded (browsing a big folder used to keep every file in memory).
+
+## Undo and redo (tenth round)
+
+- **Y+L2 undoes, Y+R2 redoes**, on every screen, for everything that changes the project: assigning, clearing, moving and
+  copying pads, slices to pads, chords and arps, keyboards, notes and pattern tools, templates, arps, tempo and Tempo Select,
+  loading a project or an autosave. The message says what was undone (`undone: hat_closed on A3 (2 more)`) and the help page
+  (tap Y) the depth of both stacks.
+- A snapshot is taken before each key and kept when the key changed the project; no action has to be wired in. The lab replaces
+  a file with a new buffer and never edits one, so a snapshot shares the sample data and costs a copy of the pad settings
+  (0.16 ms a key press on the 98 MB project). A key held down that goes on changing something (the tempo) is one step.
+- 30 steps deep, and cut shorter when the undo steps would keep more than 192 MB of samples alive that the project no longer has.
+- An edit after an undo ends the redo steps. Cursor moves, marks, the screen and what is playing are not part of it.
+- A pattern that loops goes on with the project that undo gives back; if it is left with no notes it stops.

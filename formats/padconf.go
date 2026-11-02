@@ -196,3 +196,29 @@ func (p *Padconf) Bytes() []byte {
 	}
 	return b
 }
+
+// Clone is a copy of the pad configuration that shares nothing with it.
+func (p *Padconf) Clone() *Padconf {
+	q := *p
+	q.raw = bytes.Clone(p.raw)
+	for i := range p.Blocks {
+		q.Blocks[i] = bytes.Clone(p.Blocks[i])
+	}
+	return &q
+}
+
+// Equal says whether two pad configurations hold the same settings, name and pad blocks.
+func (p *Padconf) Equal(o *Padconf) bool {
+	if p == nil || o == nil {
+		return p == o
+	}
+	if p.Settings != o.Settings || p.Name != o.Name {
+		return false
+	}
+	for i := range p.Blocks {
+		if !bytes.Equal(p.Blocks[i], o.Blocks[i]) {
+			return false
+		}
+	}
+	return true
+}

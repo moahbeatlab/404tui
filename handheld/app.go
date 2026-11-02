@@ -115,6 +115,10 @@ type App struct {
 	picker    *picker // the pattern picker, when it is open
 	splash    *splash // the logo and dashboard at the start
 	as        autosave
+	undo      []undoEntry // the project before each change, newest last
+	redo      []undoEntry
+	undoKey   Key
+	undoAt    time.Time
 	set       settings
 	dcur      map[string]int // the cursor in each folder of the file browser, for the next visit
 	searchQ   string         // the search in the file browser, "" for none
@@ -330,9 +334,9 @@ func (a *App) hasWork() bool {
 	return false
 }
 
-// Press handles one key going down. repeat counts the repeats of a held key (0 for the first press), which
+// press handles one key going down. repeat counts the repeats of a held key (0 for the first press), which
 // make a cursor move faster.
-func (a *App) Press(k Key, repeat int) {
+func (a *App) press(k Key, repeat int) {
 	if a.splash != nil {
 		if repeat == 0 {
 			a.splashKey(k)

@@ -1429,3 +1429,170 @@ func chooseMenuContaining(t *testing.T, a *App, text string) {
 	}
 	t.Fatalf("no menu item with %q", text)
 }
+
+func TestUndoRedoOfPadAndPatternEdits(t *testing.T) {
+	a, au := newApp(t)
+	keys(t, a, "Y+{")
+	if !strings.Contains(a.msg, "nothing to undo") {
+		t.Fatalf("an empty stack says so: %q", a.msg)
+	}
+	if a.help {
+		t.Fatal("Y+L2 is a chord: Y must not show the help afterwards")
+	}
+	keys(t, a, kit) // three pads, one change each
+	if padsWithSamples(a) != 3 || len(a.undo) != 3 {
+		t.Fatalf("3 pads and 3 steps: %d pads, %d steps", padsWithSamples(a), len(a.undo))
+	}
+	keys(t, a, "Y+{")
+	if padsWithSamples(a) != 2 || !strings.HasPrefix(a.msg, "undone:") {
+		t.Fatalf("undo takes the last pad away: %d (%s)", padsWithSamples(a), a.msg)
+	}
+	keys(t, a, "Y+{ Y+{")
+	if padsWithSamples(a) != 0 || len(a.undo) != 0 || len(a.redo) != 3 {
+		t.Fatalf("all undone: %d pads, undo %d redo %d", padsWithSamples(a), len(a.undo), len(a.redo))
+	}
+	keys(t, a, "Y+}")
+	if padsWithSamples(a) != 1 || !a.info.Pads[0].File {
+		t.Fatalf("redo puts the first pad back: %d", padsWithSamples(a))
+	}
+	keys(t, a, "Y+} Y+}")
+	if padsWithSamples(a) != 3 {
+		t.Fatalf("redo all: %d", padsWithSamples(a))
+	}
+	// the undo itself is not an edit, and a new edit ends the redo
+	keys(t, a, "Y+{")
+	if len(a.undo) != 2 || len(a.redo) != 1 {
+		t.Fatalf("undo %d redo %d", len(a.undo), len(a.redo))
+	}
+	a.go_(Seq)
+	keys(t, a, "A") // a note: a new edit
+	if len(a.redo) != 0 || len(a.undo) != 3 {
+		t.Fatalf("a new edit empties redo: undo %d redo %d", len(a.undo), len(a.redo))
+	}
+	d, _ := a.doc()
+	if len(d.Notes) != 1 {
+		t.Fatalf("a note: %d", len(d.Notes))
+	}
+	keys(t, a, "Y+{")
+	if d, ok := a.doc(); ok && len(d.Notes) != 0 {
+		t.Fatalf("undo takes the note away: %d", len(d.Notes))
+	}
+	// the tempo (pad settings) comes back too
+	a.seqMenu()
+	chooseMenuContaining(t, a, "Tempo of bank")
+	keys(t, a, "R")
+	if a.tempo() != 121 {
+		t.Fatalf("tempo %v", a.tempo())
+	}
+	a.menu = nil
+	keys(t, a, "Y+{")
+	if a.tempo() != 120 {
+		t.Fatalf("undo gives back the tempo: %v", a.tempo())
+	}
+	// a pattern that plays goes on with what undo gave back
+	keys(t, a, "A R R R R A") // two notes
+	keys(t, a, "X")
+	au.Loops = 0
+	keys(t, a, "Y+{") // the second note goes
+	if au.Loops == 0 || !a.seqOn {
+		t.Fatalf("undo while the pattern plays goes into the loop: loops %d, playing %v", au.Loops, a.seqOn)
+	}
+	keys(t, a, "Y+{") // and the first: nothing is left to play
+	if a.seqOn {
+		t.Fatal("an emptied pattern stops")
+	}
+}
+
+func TestUndoCoalescesAHeldKeyAndIsBounded(t *testing.T) {
+	a, _ := newApp(t)
+	now := time.Now()
+	a.Now = func() time.Time { return now }
+	keys(t, a, kit)
+	base := len(a.undo)
+	a.go_(Seq)
+	a.seqMenu()
+	chooseMenuContaining(t, a, "Tempo of bank")
+	for i := 0; i < 10; i++ { // Right held: the first press, then repeats
+		now = now.Add(80 * time.Millisecond)
+		a.Press(Right, i)
+	}
+	if a.tempo() != 130 {
+		t.Fatalf("10 steps of tempo: %v", a.tempo())
+	}
+	if len(a.undo) != base+1 {
+		t.Fatalf("a held key is one undo step: %d steps, wanted %d", len(a.undo), base+1)
+	}
+	a.menu = nil
+	keys(t, a, "Y+{")
+	if a.tempo() != 120 {
+		t.Fatalf("one undo gives all ten steps back: %v", a.tempo())
+	}
+	// 40 separate edits: the stack stops at 30
+	a.go_(Seq)
+	for i := 0; i < 40; i++ {
+		now = now.Add(2 * time.Second)
+		a.Press(A, 0)
+		a.Release(A)
+	}
+	if len(a.undo) > maxUndo {
+		t.Fatalf("the stack holds %d steps, the limit is %d", len(a.undo), maxUndo)
+	}
+}
+
+func TestUndoCountsTheSamplesItHolds(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	if a.undoHeld() != 0 {
+		t.Fatalf("while every file is still in the project the stack holds nothing extra: %d", a.undoHeld())
+	}
+	// a file put on A1 replaces the kick: the old one is only kept alive by its undo step
+	a.go_(Files)
+	a.cd(filepath.Join(a.Root, "drums"))
+	a.cur, a.bank = 0, 0
+	for i, e := range a.entries {
+		if strings.HasPrefix(e.name, "snare") {
+			a.fcur = i
+		}
+	}
+	keys(t, a, "A")
+	if h := a.undoHeld(); h < 1000 {
+		t.Fatalf("the replaced sample is counted: %d bytes", h)
+	}
+	keys(t, a, "Y+{")
+	if a.info.Pads[0].Name != "kick_808" {
+		t.Fatalf("undo gave the kick back: %q", a.info.Pads[0].Name)
+	}
+}
+
+func TestUndoAProjectLoad(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Save)
+	keys(t, a, "A") // written
+	card := filepath.Join(a.OutDir, cardFolder)
+	b, _ := newApp(t)
+	keys(t, b, "A A D D R A") // one loop sample: a different project
+	if padsWithSamples(b) != 1 {
+		t.Fatalf("setup: %d", padsWithSamples(b))
+	}
+	b.go_(Files)
+	b.cd(card)
+	for i, e := range b.entries {
+		if e.name == "PROJECT_01" {
+			b.fcur = i
+		}
+	}
+	b.saved = true // nothing to lose: the load does not ask
+	keys(t, b, "A")
+	if padsWithSamples(b) != 3 {
+		t.Fatalf("the project is loaded: %d pads (%s)", padsWithSamples(b), b.msg)
+	}
+	keys(t, b, "Y+{")
+	if padsWithSamples(b) != 1 {
+		t.Fatalf("undo brings back the project that was open: %d pads", padsWithSamples(b))
+	}
+	keys(t, b, "Y+}")
+	if padsWithSamples(b) != 3 {
+		t.Fatalf("redo loads it again: %d", padsWithSamples(b))
+	}
+}

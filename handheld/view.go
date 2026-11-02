@@ -73,17 +73,18 @@ func (a *App) footer(c *canvas) {
 		}
 		c.text(margin, panelBot+8, fit(a.msg, (W-2*margin)/CellW), col, true)
 	}
-	c.text(margin, panelBot+28, "Y alone: keys   Select+Start: quit", cDim, false)
-	c.text(margin+textW("Y alone: keys   Select+Start: quit")+24, panelBot+28, a.autosaveAgo(), cDim, false)
+	const hintLine = "Y keys  Y+L2 undo  Y+R2 redo  Sel+Start quit"
+	c.text(margin, panelBot+28, hintLine, cDim, false)
+	c.text(margin+textW(hintLine)+14, panelBot+28, a.autosaveAgo(), cDim, false)
 	if Version != "" {
 		c.text(W-margin-textW(Version), panelBot+28, Version, cDim, false)
 	}
 }
 
 func (a *App) drawHelp(c *canvas) {
-	c.rect(60, 70, 520, 300, cPanel2)
-	c.box(60, 70, 520, 300, 2, cAmber)
-	c.text(80, 82, "KEYS  (only D-pad, A B X Y)", cAmber, true)
+	c.rect(60, 62, 520, 322, cPanel2)
+	c.box(60, 62, 520, 322, 2, cAmber)
+	c.text(80, 74, "KEYS  (D-pad, A B X Y, L1 R1 L2 R2)", cAmber, true)
 	rows := []string{
 		"Y held   shift: the second function of a key",
 		"Y+< >    previous / next screen",
@@ -92,6 +93,7 @@ func (a *App) drawHelp(c *canvas) {
 		"B        back / stop / join / SEQ menu",
 		"X        listen to what is under the cursor",
 		"Y alone  this page",
+		fmt.Sprintf("Y+L2  undo (%d)    Y+R2  redo (%d)", len(a.undo), len(a.redo)),
 		"Select+Start  quit (asks when not saved)",
 		"",
 		"PADS  FILES  SLICE  SEQ  SAVE  UNIT",
@@ -99,7 +101,7 @@ func (a *App) drawHelp(c *canvas) {
 		"the project over USB to an SP-404MKII (OTG port).",
 	}
 	for i, r := range rows {
-		c.text(80, 112+i*18, r, cText, false)
+		c.text(80, 102+i*18, r, cText, false)
 	}
 }
 
