@@ -2907,6 +2907,12 @@ func TestLFOModulatesTheTrack(t *testing.T) {
 	if o := lfoNotes(notes, st, 1); o[0].Vel >= 64 || o[8].Vel <= 64 {
 		t.Fatal("shift moves the wave")
 	}
+	st = lfoState{shape: shape("TRI"), rate: 3, depth: 5, ranged: true, lo: 2, hi: 6} // between 32 and 96
+	for _, n := range lfoNotes(notes, st, 1) {
+		if n.Vel < 32 || n.Vel > 96 {
+			t.Fatalf("the range holds the velocity between 32 and 96: %d", n.Vel)
+		}
+	}
 	st = lfoState{shape: shape("SAW"), rate: 3, depth: 5, target: 1}
 	if o := lfoNotes(notes, st, 1); o[0].Len >= o[15].Len {
 		t.Fatal("length follows the saw")
@@ -2930,6 +2936,55 @@ func TestLFOModulatesTheTrack(t *testing.T) {
 		}
 		if same {
 			t.Fatalf("%s: another seed, another roll", n)
+		}
+	}
+}
+
+func TestEnvelopeAndLFOExtras(t *testing.T) {
+	// two notes close together, then a long gap: the second follows the first closely, the first follows the second late
+	notes := []lab.Note{
+		{Tick: 0, Pad: 0, Vel: 100, Len: stepTicks},
+		{Tick: 2 * stepTicks, Pad: 0, Vel: 100, Len: stepTicks},
+	}
+	st := envState{decay: 4, sustain: 0, release: 4, depth: 3, invert: true} // ducks
+	out := envNotes(notes, 16*stepTicks, st)
+	if out[1].Vel >= out[0].Vel {
+		t.Fatalf("the note just after another is ducked more than the one after the long gap: %d vs %d", out[1].Vel, out[0].Vel)
+	}
+	st.invert = false
+	up := envNotes(notes, 16*stepTicks, st)
+	if up[1].Vel <= notes[1].Vel-1 && up[1].Vel < 127 {
+		t.Fatalf("not inverted it goes up: %d", up[1].Vel)
+	}
+	// LFO: inverted flips the saw, a centre moves it, DRIFT is smooth and seeded
+	var many []lab.Note
+	for s := 0; s < 16; s++ {
+		many = append(many, lab.Note{Tick: uint32(s * stepTicks), Vel: 64, Len: stepTicks})
+	}
+	idx := func(name string) int {
+		for i, n := range lfoShapes {
+			if n == name {
+				return i
+			}
+		}
+		return 0
+	}
+	l := lfoState{shape: idx("SAW"), rate: 3, depth: 5, center: 0}
+	a := lfoNotes(many, l, 1)
+	l.invert = true
+	b := lfoNotes(many, l, 1)
+	if a[15].Vel <= a[0].Vel || b[15].Vel >= b[0].Vel {
+		t.Fatal("inverted turns the saw round")
+	}
+	l.invert, l.center = false, 32
+	if c := lfoNotes(many, l, 1); c[8].Vel != a[8].Vel+32 {
+		t.Fatalf("centre +32: %d vs %d", c[8].Vel, a[8].Vel)
+	}
+	l = lfoState{shape: idx("DRIFT"), rate: 3, depth: 3, center: 0}
+	d1, d2 := lfoNotes(many, l, 5), lfoNotes(many, l, 5)
+	for i := range d1 {
+		if d1[i].Vel != d2[i].Vel {
+			t.Fatal("DRIFT: the same seed, the same wander")
 		}
 	}
 }

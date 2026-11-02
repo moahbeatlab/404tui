@@ -15,7 +15,7 @@ import (
 // The shapes, the rates (note values) and the shift are those of the LFOs in 404jam (PERF > LFO), in the same order.
 var (
 	lfoTargets = []string{"velocity", "length", "timing"}
-	lfoShapes  = []string{"SIN", "TRI", "SQR", "SAW", "RND", "PUMP", "SAW DN", "S&H"}
+	lfoShapes  = []string{"SIN", "TRI", "SQR", "SAW", "RND", "PUMP", "SAW DN", "S&H", "DRIFT"}
 	lfoRates   = []struct {
 		name  string
 		steps int // 16ths for one round
@@ -24,7 +24,21 @@ var (
 	lfoShifts = []string{"0", "1/4", "1/2", "3/4"} // the wave starts that much of a round later
 )
 
-type lfoState struct{ target, shape, rate, depth, shift int }
+// lfoCenters shift the middle of the wave (velocity points; for the length and the timing the same percent of a step).
+var lfoCenters = []int{-32, -16, 0, 16, 32}
+
+// lfoRange is the loudest and quietest a velocity goes in the range mode.
+var lfoRange = []int{1, 16, 32, 48, 64, 80, 96, 112, 127}
+
+// lfoState: lo and hi are places of lfoRange, used when ranged is on (velocity only): the wave then goes between them
+// instead of around each note's own velocity.
+type lfoState struct {
+	target, shape, rate, depth, shift int
+	ranged                            bool
+	lo, hi                            int
+	invert                            bool // a negative depth: the other way up
+	center                            int  // added to every note: velocity points (for the length and timing the same over 64 of a step)
+}
 
 // lfoAnchor is the random value of round k (-1..1), the same for the same seed.
 func lfoAnchor(seed int64, k int) float64 {
@@ -57,6 +71,9 @@ func lfoWave(shape int, pos float64, seed int64) float64 {
 		return -math.Pow(1-ph, 2)
 	case "S&H":
 		return lfoAnchor(seed, k)
+	case "DRIFT": // a slow wander: smooth between the random values, no corners
+		a, b := lfoAnchor(seed, k-1), lfoAnchor(seed, k)
+		return a + (b-a)*(ph*ph*(3-2*ph))
 	}
 	a, b := lfoAnchor(seed, k-1), lfoAnchor(seed, k)
 	return a + (b-a)*ph
@@ -66,6 +83,10 @@ func lfoWave(shape int, pos float64, seed int64) float64 {
 func lfoNotes(notes []lab.Note, st lfoState, seed int64) []lab.Note {
 	out := append([]lab.Note(nil), notes...)
 	depth := float64(lfoDepths[st.depth]) / 100
+	if st.invert {
+		depth = -depth
+	}
+	ctr := float64(st.center)
 	cycle := float64(lfoRates[st.rate].steps * stepTicks)
 	phase := float64(st.shift) / 4
 	for i := range out {
@@ -73,15 +94,25 @@ func lfoNotes(notes []lab.Note, st lfoState, seed int64) []lab.Note {
 		w := lfoWave(st.shape, float64(n.Tick)/cycle+phase, seed)
 		switch st.target {
 		case 0:
+			pump := lfoShapes[st.shape] == "PUMP"
+			if st.ranged {
+				lo, hi := float64(lfoRange[min(st.lo, st.hi)]), float64(lfoRange[max(st.lo, st.hi)])
+				v := (lo+hi)/2 + w*(hi-lo)/2*depth
+				if pump { // only dips: from the top of the range down
+					v = hi + w*(hi-lo)*depth
+				}
+				n.Vel = min(max(int(math.Round(v)), 1), 127)
+				break
+			}
 			amp := 63.5
-			if lfoShapes[st.shape] == "PUMP" {
+			if pump {
 				amp = 127
 			}
-			n.Vel = min(max(n.Vel+int(math.Round(w*depth*amp)), 1), 127)
+			n.Vel = min(max(n.Vel+int(math.Round(ctr+w*depth*amp)), 1), 127)
 		case 1:
-			n.Len = min(max(int(math.Round(float64(n.Len)*(1+w*depth*0.9))), 1), 65535)
+			n.Len = min(max(int(math.Round(float64(n.Len)*(1+ctr/64+w*depth*0.9))), 1), 65535)
 		default:
-			n.Tick = uint32(max(int(n.Tick)+int(math.Round(w*depth*float64(stepTicks)/3)), 0))
+			n.Tick = uint32(max(int(n.Tick)+int(math.Round((ctr/64+w*depth)*float64(stepTicks)/3)), 0))
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Tick < out[j].Tick })
@@ -92,12 +123,17 @@ func (a *App) lfoMenu() {
 	pad := a.rowPad()
 	st := &a.lfo
 	if st.depth == 0 && st.rate == 0 && st.shape == 0 && st.target == 0 {
-		*st = lfoState{rate: 3, depth: 3}
+		*st = lfoState{rate: 3, depth: 3, lo: 2, hi: 8, center: 0}
 	}
 	a.toolMenu(fmt.Sprintf("LFO on %s", a.label(pad)), []menuItem{
 		val("Moves the notes'", lfoTargets, st.target, func(v int) { st.target = v }),
 		val("Wave", lfoShapes, st.shape, func(v int) { st.shape = v }),
 		val("Rate (one round)", lfoRateNames(), st.rate, func(v int) { st.rate = v }),
+		val("Velocity goes", []string{"around the notes", "between min and max"}, b2i(st.ranged), func(v int) { st.ranged = v == 1 }),
+		val("  min velocity", names(lfoRange, func(v int) string { return fmt.Sprint(v) }), st.lo, func(v int) { st.lo = v }),
+		val("  max velocity", names(lfoRange, func(v int) string { return fmt.Sprint(v) }), st.hi, func(v int) { st.hi = v }),
+		val("Direction", []string{"as it is", "inverted"}, b2i(st.invert), func(v int) { st.invert = v == 1 }),
+		val("Center (shifts the middle)", names(lfoCenters, signed), near(lfoCenters, st.center), func(v int) { st.center = lfoCenters[v] }),
 		val("Depth", names(lfoDepths, func(v int) string { return fmt.Sprintf("%d%%", v) }), st.depth, func(v int) { st.depth = v }),
 		val("Shift (starts later by)", lfoShifts, st.shift, func(v int) { st.shift = v }),
 	}, "Modulate them", func() {

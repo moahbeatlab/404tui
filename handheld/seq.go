@@ -461,6 +461,7 @@ func (a *App) seqMenu() {
 	run("Ratchet (sub-steps)...", a.ratchetMenu)
 	run("Accents and ghosts...", a.accentMenu)
 	run("LFO on the notes (velocity, length, timing)...", a.lfoMenu)
+	run("ENV: each note shapes the next (velocity, length, timing)...", a.envMenu)
 	run("Echo...", a.echoMenu)
 	run("Chance...", a.chanceMenu)
 	run("Randomize velocity...", a.randomizeMenu)
