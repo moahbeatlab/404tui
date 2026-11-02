@@ -28,4 +28,4 @@ folder (`/mnt/usbdrive/r36s`). `roms/ports/404h/logs.log` is the log, `roms/404/
 Change what the program gets with `H404_ARGS` (e.g. `-web :8405 -demo -sim`) in `docker-compose.yml`.
 `H404_FB=""` means no framebuffer; leave `H404_FB` unset and the launcher passes `-fb /dev/fb0` as on the device.
 
-Not tried: this was written on a machine without Docker.
+Tried: image built from ubuntu:eoan, launcher + app started, screen and keys answered over HTTP (Docker 29, x86 host with QEMU).

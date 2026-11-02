@@ -5,7 +5,7 @@ ARG BASE=ubuntu:eoan
 FROM --platform=linux/arm64 ${BASE}
 
 # eoan is end of life: its packages live on old-releases. Harmless on a newer BASE (no match, no change).
-RUN sed -i -E 's#https?://(ports|archive|security)\.ubuntu\.com#http://old-releases.ubuntu.com#g' /etc/apt/sources.list 2>/dev/null; \
+RUN sed -i -E 's#https?://(ports|archive|security)\.ubuntu\.com/ubuntu(-ports)?#http://old-releases.ubuntu.com/ubuntu#g' /etc/apt/sources.list 2>/dev/null; \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       sudo util-linux procps file libasound2 alsa-utils kmod ca-certificates \
     && rm -rf /var/lib/apt/lists/*
