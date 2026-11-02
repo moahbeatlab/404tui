@@ -110,3 +110,6 @@ on hardware too. Patterns are always 4 bars (other lengths are a guess).
 - **One slice or the whole order**: X (or L2) plays the slice under the cursor, R2 plays the whole order as the slicer is
   set (order or random mode, grid, swing, length in steps). The same is in the slicer menu (*Play the whole order*).
   L2/R2 are codes 0x138/0x139 on the R36S's pad (not seen to press yet); in the browser: z and c, in scripts `{` and `}`.
+- **SEQ shows one bar at a time**: the 16 steps of a bar fill the whole height, a line at each beat, `bar 2/4` at the top
+  right with a marker for the bar the loop is in while it plays. L1/R1 turn to the next or previous bar (keeping the row);
+  the cursor turns the page by itself when it runs past a bar line.

@@ -440,7 +440,7 @@ func (a *App) drawSeq(c *canvas) {
 	}
 	c.text(margin+textW(title)+16, 36, sub, cDim, false)
 
-	const x0, cw, rh = 52, 51, 16
+	const x0, cw = 52, 51
 	const hy, ry = 52, 88 // the column heads, the first row
 	// the column heads
 	for i, pad := range a.cols {
@@ -455,21 +455,24 @@ func (a *App) drawSeq(c *canvas) {
 		c.text(x+3, hy+1, a.label(pad), fg, true)
 		c.text(x+3, hy+16, short(a.info.Pads[pad].Name, 6), fg, false)
 	}
+	// one bar at a time: 16 steps, the rows as tall as the screen allows, L1/R1 (or the cursor) turn the page
 	steps := a.steps()
-	rows := (panelBot - 8 - ry) / rh
-	top := max(0, min(a.step-rows/2, steps-rows))
+	page := a.step / 16
+	bars := (steps + 15) / 16
+	rh := (panelBot - 6 - ry) / 16
 	ph := a.playStep()
-	for r := 0; r < rows && top+r < steps; r++ {
-		st := top + r
+	for r := 0; r < 16 && page*16+r < steps; r++ {
+		st := page*16 + r
 		y := ry + r*rh
-		if st%16 == 0 && r > 0 {
-			c.rect(margin, y-2, contentW-margin, 1, cAmberD)
+		ty := y + (rh-CellH)/2 // the text, centred in its row
+		if r%4 == 0 && r > 0 {
+			c.rect(margin, y-1, contentW-margin-4, 1, cLine) // a line at each beat
 		}
 		switch {
 		case ph == st:
-			c.rect(margin-2, y-1, contentW-margin, rh-1, cLine)
+			c.rect(margin-2, y, contentW-margin-2, rh-1, cLine)
 		case st == a.step:
-			c.rect(margin-2, y-1, contentW-margin, rh-1, cPanel2)
+			c.rect(margin-2, y, contentW-margin-2, rh-1, cPanel2)
 		}
 		lab, fg := fmt.Sprintf("%02d", st+1), cDim
 		if st%4 == 0 {
@@ -478,7 +481,7 @@ func (a *App) drawSeq(c *canvas) {
 		if ph == st {
 			fg = cGood
 		}
-		c.text(margin, y, lab, fg, st%4 == 0)
+		c.text(margin, ty, lab, fg, st%4 == 0)
 		for i, pad := range a.cols {
 			x := x0 + i*cw + 3
 			if n, ok := noteAt(d, pad, st); ok {
@@ -486,19 +489,26 @@ func (a *App) drawSeq(c *canvas) {
 				if ph == st {
 					col = cGood
 				}
-				c.text(x, y, fmt.Sprintf("%3d", n.Vel), col, true)
+				c.text(x, ty, fmt.Sprintf("%3d", n.Vel), col, true)
 			} else {
-				c.text(x, y, "--", cLine, false)
+				c.text(x, ty, "--", cLine, false)
 			}
 			if i == a.col && st == a.step {
-				c.box(x-3, y-1, cw-2, rh, 2, cWhite)
+				c.box(x-3, y, cw-2, rh-1, 2, cWhite)
 			}
 		}
 	}
-	// where we are in the pattern
-	if steps > rows {
-		c.rect(contentW-5, ry, 3, rows*rh, cPanel2)
-		th := max(rows*rh*rows/steps, 6)
-		c.rect(contentW-5, ry+(rows*rh-th)*top/max(steps-rows, 1), 3, th, cAmber)
+	// which bar this is, and where the loop is when it plays
+	bx := contentW - 4 - bars*22
+	for b := 0; b < bars; b++ {
+		col := cLine
+		if b == page {
+			col = cAmber
+		}
+		if ph >= 0 && ph/16 == b {
+			c.rect(bx+b*22, 44, 18, 4, cGood)
+		}
+		c.rect(bx+b*22, 36, 18, 6, col)
 	}
+	c.text(bx-8-textW(fmt.Sprintf("bar %d/%d", page+1, bars)), 36, fmt.Sprintf("bar %d/%d", page+1, bars), cText, true)
 }
