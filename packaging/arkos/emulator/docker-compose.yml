@@ -1,0 +1,26 @@
+# The R36S launcher and sp404h-arm64 in an ArkOS-like arm64 container, with the screen as a web page.
+#
+#   ./prepare.sh ../../../sp404h-arm64     # lay out ./roms like the device's card, from your local build
+#   docker compose up --build              # then open http://localhost:8405
+#
+# On an x86 machine arm64 needs QEMU user emulation, once:
+#   docker run --privileged --rm tonistiigi/binfmt --install arm64
+#
+# What this shows: the launcher script, the environment report, the log files, startup and shutdown, the app on a
+# web page with its eight keys (arrow keys + A B X Y on the keyboard, or the buttons on the page).
+# What it cannot show: /dev/fb0, the real gamepad, the sound card, USB OTG, the 4.4 kernel.
+services:
+  arkos:
+    build: .
+    image: 404h-arkos
+    platform: linux/arm64
+    ports:
+      - "8405:8405"
+    environment:
+      H404_FB: ""                       # no framebuffer here ...
+      H404_ARGS: "-web :8405 -demo"     # ... a web page, with demo samples written to /roms/404/samples
+    volumes:
+      - ./roms:/roms                    # as the games card: ports/404h.sh, ports/404h/sp404h-arm64, 404/samples, 404/card
+      - ./usbdrive:/mnt/usbdrive        # the log copies land in usbdrive/r36s, as on the device
+    init: true
+    stop_grace_period: 3s

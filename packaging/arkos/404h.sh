@@ -63,7 +63,10 @@ printf '\033c' >/dev/tty1
 setterm -cursor off >/dev/tty1 2>/dev/null
 echo "$(date '+%F %T') launcher: starting $DIR/sp404h-arm64" >>"$DIR/logs.log"
 ( while sleep 5; do copylogs; done ) & COPIER=$!   # also while it runs: a program that hangs never gets to the end
-"$DIR/sp404h-arm64" -samples "$SAMPLES" -out "$CARD" -fb /dev/fb0 >/dev/null 2>"$DIR/stderr.log"
+# H404_FB and H404_ARGS are for the emulator (emulator/README.md): no framebuffer there, a web page instead.
+FBARGS=(-fb /dev/fb0)
+if [ "${H404_FB+set}" = set ]; then FBARGS=(); [ -n "$H404_FB" ] && FBARGS=(-fb "$H404_FB"); fi
+"$DIR/sp404h-arm64" -samples "$SAMPLES" -out "$CARD" "${FBARGS[@]}" $H404_ARGS >/dev/null 2>"$DIR/stderr.log"
 echo "$(date '+%F %T') launcher: program ended with status $?" >>"$DIR/logs.log"
 kill $COPIER 2>/dev/null
 copylogs
