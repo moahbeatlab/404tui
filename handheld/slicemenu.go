@@ -102,6 +102,15 @@ func (a *App) sliceMenu() {
 	parts := []int{2, 4, 8, 16, 32}
 	m.items = append(m.items, menuItem{label: "Cut in equal parts", vals: names(parts, func(v int) string { return fmt.Sprint(v) }), val: 2,
 		run: func(v int) { a.equalParts(parts[v]) }})
+	m.items = append(m.items, menuItem{label: "Cut at random places", vals: names(parts, func(v int) string { return fmt.Sprint(v) }), val: 2,
+		run: func(v int) { a.randomParts(parts[v]) }})
+	grids := []float64{1, 0.5, 0.25, 0.125}
+	m.items = append(m.items, menuItem{label: fit(fmt.Sprintf("Cut on the grid at %.0f BPM", a.tempo()), 40), vals: []string{"1/4", "1/8", "1/16", "1/32"}, val: 1,
+		run: func(v int) { a.gridParts(grids[v]) }})
+	m.items = append(m.items, menuItem{label: "Play order back to 1, 2, 3...", run: func(int) {
+		a.sl.ResetOrder()
+		a.say("order: "+orderText(a.sl.Order), false)
+	}})
 	limits := []int{4, 8, 16, 24, 32}
 	set("Auto-cut (Y+A): up to", names(limits, func(v int) string { return fmt.Sprintf("%d slices", v) }), near(limits, a.autoLimit()),
 		func(v int) { a.autoMax = limits[v] })

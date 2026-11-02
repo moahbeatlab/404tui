@@ -173,6 +173,37 @@ func (a *App) equalParts(n int) {
 	a.say(fmt.Sprintf("%d equal slices", len(a.sl.Slices)), false)
 }
 
+// randomParts cuts the whole sample into about n slices at random places (a new dice every time).
+func (a *App) randomParts(n int) {
+	a.sl.Seed++
+	a.sliceOp("random", lab.SlicerArgs{N: n, Seed: a.sl.Seed, Anchor: -1}, "%d slices at random places")
+}
+
+// gridParts cuts the sample on the tempo grid of the pad's bank: a slice for every step (a beat fraction).
+func (a *App) gridParts(beats float64) {
+	step := 48000 * 60 / a.tempo() * beats
+	a.sliceOp("grid", lab.SlicerArgs{Step: step, Anchor: -1}, "%d slices on the grid")
+}
+
+// sliceOp runs one of the engine's slicing operations on the slicing in the slicer.
+func (a *App) sliceOp(op string, args lab.SlicerArgs, said string) {
+	sb, _ := json.Marshal(a.sl)
+	ab, _ := json.Marshal(args)
+	out, err := a.lab.Slicing(op, sb, ab)
+	if err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	sl := &formats.Slicing{}
+	if json.Unmarshal(out, sl) != nil {
+		return
+	}
+	seed := a.sl.Seed
+	a.sl, a.at = sl, 0
+	a.sl.Seed = seed
+	a.say(fmt.Sprintf(said, len(sl.Slices)), false)
+}
+
 // autoSlice cuts where sounds start.
 func (a *App) autoSlice() {
 	sb, _ := json.Marshal(a.sl)

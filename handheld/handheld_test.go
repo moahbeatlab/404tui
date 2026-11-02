@@ -2776,3 +2776,34 @@ func TestSliceEqualPartsAndAutoLimit(t *testing.T) {
 		t.Fatalf("auto-cut up to 4: %d", len(a.sl.Slices))
 	}
 }
+
+func TestSliceShuffleChangesTheOrderShown(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit+" Y+R Y+R Y+R")
+	if a.Screen() != Slice {
+		t.Skipf("screen %v", a.Screen())
+	}
+	a.equalParts(8)
+	before := append([]int(nil), a.sl.Order...)
+	a.shuffleOrder()
+	if fmt.Sprint(before) == fmt.Sprint(a.sl.Order) {
+		t.Fatalf("shuffle left the order as it was: %v", before)
+	}
+	if len(a.sl.Order) != 8 {
+		t.Fatalf("order %v", a.sl.Order)
+	}
+	a.randomParts(6)
+	if n := len(a.sl.Slices); n < 2 || n > 8 {
+		t.Fatalf("random parts: %d", n)
+	}
+	a.gridParts(0.25)
+	if len(a.sl.Slices) < 2 {
+		t.Fatalf("grid: %d slices, %s", len(a.sl.Slices), a.msg)
+	}
+	a.sl.Order = []int{len(a.sl.Slices) - 1, 0}
+	a.sl.ResetOrder()
+	if len(a.sl.Order) != len(a.sl.Slices) || a.sl.Order[0] != 0 {
+		t.Fatalf("order reset %v", a.sl.Order)
+	}
+	a.Render() // draws the order row without a panic
+}
