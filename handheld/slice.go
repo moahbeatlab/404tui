@@ -3,6 +3,7 @@ package handheld
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -153,7 +154,7 @@ func (a *App) autoSlice() {
 }
 
 // slicesToPads puts each slice on its own pad, starting after the pad that was cut.
-func (a *App) slicesToPads() {
+func (a *App) slicesToPads(shuffled bool) {
 	if len(a.sl.Slices) < 2 {
 		a.say("cut it first (A) or Y+A for auto", true)
 		return
@@ -168,8 +169,16 @@ func (a *App) slicesToPads() {
 		return
 	}
 	done := 0
-	for i := range a.sl.Slices {
-		n := first + i
+	order := make([]int, len(a.sl.Slices))
+	for i := range order {
+		order[i] = i
+	}
+	if shuffled { // the slices on the pads in a random order
+		a.sl.Seed++
+		rand.New(rand.NewSource(a.sl.Seed)).Shuffle(len(order), func(i, j int) { order[i], order[j] = order[j], order[i] })
+	}
+	for pos, i := range order {
+		n := first + pos
 		if n > 159 {
 			break
 		}

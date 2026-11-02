@@ -82,3 +82,21 @@ on hardware too. Patterns are always 4 bars (other lengths are a guess).
   and kernel wait function at 1, 2, 3, 5, 7, 10 and 15 s; the program dumps all goroutines after 4 s without a first frame.
   A copy of the program left running by an earlier start is stopped; the program runs from `/dev/shm` or `/tmp` when
   those allow programs, so its code is not read from the card while it runs.
+
+## Slicer menu, pattern templates, pattern picker (third round)
+
+- **Slicer menu (Y+B in SLICE)**: for the slice under the cursor: pitch, gain, reverse, fade in/out, roll (a stutter of that
+  many hits, getting louder or quieter, rising or falling in pitch) and chance; for the whole slicing: the play order
+  (in order, random, no repeat, shuffle), a grid (1/2 to 1/16 at the project tempo), swing, humanize, and the **length of
+  the result in steps**. Actions: *Play the result*, *Play again, new dice*, *Result to a free pad*, *Shuffle the order*
+  (a random order that stays), *Slices to pads, shuffled*. Changing a slice's value plays that slice. A slice's settings are
+  baked into its audio when it goes to a pad. (The engine is the computer slicer's, `formats.Slicing`.)
+- **Templates (SEQ menu, B)**: the genre grooves of the computer app (house, deep house, techno, hip-hop, drum and bass,
+  jungle, trap, amapiano, disco, footwork...) with a number of bars, written into the next free pattern (the one in front
+  when it is empty), never over a pattern with notes. Which pad plays kick, snare, hat... is guessed from the sample
+  names; a voice with no name match takes a pad of the columns that has a sample, so any kit gets a beat. The message says
+  which pad took which voice. *Blank pattern* makes an empty pattern of 1 to 8 bars. *Tempo* in the same menu sets the BPM.
+- **Pattern picker (Y+B in SEQ, or the menu's first item)**: patterns are in banks A to J of 16, like the pads. L1/R1 change
+  the bank (so does Left/Right past the edge of the grid), the arrows choose the pattern, A opens it. Patterns with notes
+  show their bars and notes. Y+Up/Down still steps one pattern.
+- In every menu L1/R1 page the list (or ten values, on an item with many values such as the tempo); long lists scroll.

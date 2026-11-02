@@ -118,6 +118,8 @@ func (a *App) seqShifted(k Key) {
 		a.setPattern(a.pat + 1)
 	case Down:
 		a.setPattern(a.pat - 1)
+	case B:
+		a.openPicker()
 	case X:
 		// the column's pad: the next pad that has a sample
 		for off := 1; off < 160; off++ {
@@ -237,6 +239,20 @@ func (a *App) seqMenu() {
 	for i, p := range rowPresets {
 		names[i] = p.name
 	}
+	m.items = append(m.items, menuItem{label: "Choose a pattern (bank, then pattern)...", run: func(int) { a.openPicker() }})
+	m.items = append(m.items, menuItem{label: "New pattern from a template...", run: func(int) { a.templatesMenu() }})
+	bpms := make([]string, 0, 181)
+	for v := 60; v <= 240; v++ {
+		bpms = append(bpms, fmt.Sprintf("%d BPM", v))
+	}
+	m.items = append(m.items, menuItem{label: "Tempo", vals: bpms, val: min(max(int(a.tempo()+0.5)-60, 0), len(bpms)-1), keepOpen: true, onChange: func(v int) {
+		if err := a.lab.SetTempo(float64(v + 60)); err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		a.refresh()
+		a.replay()
+	}})
 	m.items = append(m.items, menuItem{label: "Fill the column with", vals: names, run: func(v int) { a.setRow(pad, rowPresets[v].mask) }})
 	hits := make([]string, 16)
 	for i := range hits {

@@ -20,6 +20,7 @@ type menuItem struct {
 	vals     []string // when set, Left and Right choose from them
 	val      int
 	run      func(val int) // what A does
+	onChange func(val int) // what Left and Right do to the value, as it changes
 	keepOpen bool
 }
 
@@ -40,6 +41,24 @@ func (a *App) menuKey(k Key) {
 				d = len(it.vals) - 1
 			}
 			it.val = (it.val + d) % len(it.vals)
+			if it.onChange != nil {
+				it.onChange(it.val)
+			}
+		}
+	case L1, R1:
+		// a page: ten values of an item that has many (a tempo, a pad), else eight rows of the list
+		it := m.item()
+		d := 1
+		if k == L1 {
+			d = -1
+		}
+		if len(it.vals) > 12 {
+			it.val = ((it.val+d*10)%len(it.vals) + len(it.vals)) % len(it.vals)
+			if it.onChange != nil {
+				it.onChange(it.val)
+			}
+		} else {
+			m.cur = max(0, min(m.cur+d*8, len(m.items)-1))
 		}
 	case B:
 		a.menu = nil
@@ -57,20 +76,32 @@ func (a *App) menuKey(k Key) {
 func (a *App) drawMenu(c *canvas) {
 	m := a.menu
 	w := 328
-	h := 40 + len(m.items)*20
-	x, y := (contentW-w)/2, max(40, (H-h)/2-20)
+	rh := 20
+	if len(m.items) > 14 {
+		rh = 18
+	}
+	vis := min(len(m.items), 17)
+	top := max(0, min(m.cur-vis/2, len(m.items)-vis))
+	h := 40 + vis*rh
+	x, y := (contentW-w)/2, max(36, (H-h)/2-20)
 	c.rect(x, y, w, h, cPanel2)
 	c.box(x, y, w, h, 2, cAmber)
-	c.text(x+14, y+10, strings.ToUpper(m.title), cAmber, true)
-	for i, it := range m.items {
-		yy := y + 36 + i*20
+	title := strings.ToUpper(m.title)
+	if len(m.items) > vis {
+		title += fmt.Sprintf("  %d/%d", m.cur+1, len(m.items))
+	}
+	c.text(x+14, y+10, fit(title, (w-28)/CellW), cAmber, true)
+	for r := 0; r < vis; r++ {
+		i := top + r
+		it := m.items[i]
+		yy := y + 36 + r*rh
 		fg := cText
 		if i == m.cur {
-			c.rect(x+6, yy-2, w-12, 20, cAmberD)
-			c.rect(x+6, yy-2, 3, 20, cAmber)
+			c.rect(x+6, yy-2, w-12, rh, cAmberD)
+			c.rect(x+6, yy-2, 3, rh, cAmber)
 			fg = cWhite
 		}
-		c.text(x+18, yy, it.label, fg, i == m.cur)
+		c.text(x+18, yy, fit(it.label, (w-36-textW("< 000 BPM >"))/CellW+8), fg, i == m.cur)
 		if len(it.vals) > 0 {
 			v := it.vals[it.val]
 			if i == m.cur {
@@ -78,6 +109,12 @@ func (a *App) drawMenu(c *canvas) {
 			}
 			c.text(x+w-14-textW(v), yy, v, cAmber, i == m.cur)
 		}
+	}
+	if top > 0 {
+		c.text(x+w-30, y+10, "^", cAmber, true)
+	}
+	if top+vis < len(m.items) {
+		c.text(x+w-30, y+h-18, "v", cAmber, true)
 	}
 }
 

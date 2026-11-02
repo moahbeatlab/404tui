@@ -2,6 +2,7 @@ package handheld
 
 import (
 	"fmt"
+	"github.com/moahbeatlab/404tui/formats"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,7 +124,8 @@ func TestAssignSliceAndSequence(t *testing.T) {
 	if d, _ = a.doc(); len(d.Notes) != 1 {
 		t.Fatalf("A on a note takes it off, notes %d", len(d.Notes))
 	}
-	keys(t, a, "R B A") // the next column, the menu: fill it with "every beat"
+	keys(t, a, "R B") // the next column, the menu: fill it with "every beat"
+	chooseMenu(t, a, "Fill the column")
 	d, _ = a.doc()
 	if len(d.Notes) != 1+16 {
 		t.Fatalf("every beat in 4 bars is 16 notes (and the other one): %d", len(d.Notes))
@@ -586,4 +588,146 @@ func TestShoulderButtonsPage(t *testing.T) {
 	if k, err := parseKey("]"); err != nil || k != R1 || R1.String() != "R1" {
 		t.Fatal("the script token for R1")
 	}
+}
+
+func TestTemplateMakesAPatternFromTheKit(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit) // kick_808, snare_..., hat_closed on A1..A3
+	a.go_(Seq)
+	before := a.pat
+	a.fromTemplate(formats.GrooveTemplates()[0], 2)
+	if a.pat != before {
+		t.Fatalf("with an empty pattern in front the template goes into it, got %d", a.pat)
+	}
+	first := a.pat
+	a.fromTemplate(formats.GrooveTemplates()[1], 2)
+	if a.pat == first {
+		t.Fatal("a template goes into a free pattern, never over one that has notes")
+	}
+	d, ok := a.doc()
+	if !ok || d.Bars != 2 || len(d.Notes) < 8 {
+		t.Fatalf("the groove has %d notes in %d bars", len(d.Notes), d.Bars)
+	}
+	pads := map[int]bool{}
+	for _, n := range d.Notes {
+		pads[n.Pad] = true
+	}
+	if len(pads) < 2 {
+		t.Fatalf("only %d pads play", len(pads))
+	}
+	// the menus: the list scrolls, L1/R1 page it
+	a.seqMenu()
+	keys(t, a, "D A") // New pattern from a template... (the picker is the first item)
+	if a.menu == nil || len(a.menu.items) < 10 {
+		t.Fatal("the template list is not open")
+	}
+	keys(t, a, "]")
+	if a.menu.cur != 8 {
+		t.Fatalf("R1 pages the list: cursor %d", a.menu.cur)
+	}
+	a.Render()
+	a.menu = nil
+	n := a.pat
+	a.blankPattern(3)
+	if d, ok := a.doc(); !ok || d.Bars != 3 || a.pat == n {
+		t.Fatal("blank pattern")
+	}
+}
+
+func TestSlicerMenuShufflesAndRendersASteps(t *testing.T) {
+	a, au := newApp(t)
+	keys(t, a, "A A L D D R A") // a loop on A1, as in the other test
+	_ = au
+	a.go_(Slice)
+	if a.sl == nil {
+		t.Skip("no sample on the pad")
+	}
+	keys(t, a, "Y+A") // auto slices
+	n := len(a.sl.Slices)
+	if n < 3 {
+		t.Skipf("only %d slices", n)
+	}
+	a.sliceMenu()
+	if a.menu == nil || len(a.menu.items) < 12 {
+		t.Fatal("the slicer menu is not open")
+	}
+	a.Render()
+	// the slice's pitch changes live, from the menu
+	keys(t, a, "R")
+	if a.sl.Slices[a.sliceAt(a.at)].Pitch != 1 {
+		t.Fatalf("Right on the pitch is +1: %+v", a.sl.Slices[a.sliceAt(a.at)])
+	}
+	a.menu = nil
+	a.sliceSteps = 16
+	s, id, err := a.renderResult(true)
+	if err != nil || s.Frames() == 0 {
+		t.Fatalf("render: %v", err)
+	}
+	a.lab.Free(id)
+	before := padsWithSamples(a)
+	a.sl.Mode = formats.ModeShuffle
+	a.slicesToPads(true)
+	if got := padsWithSamples(a); got < before+n {
+		t.Fatalf("shuffled slices on pads: %d pads, wanted %d more", got, n)
+	}
+}
+
+func TestPatternPickerBankThenPattern(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	keys(t, a, "A") // a note in pattern A1, so it shows as used
+	keys(t, a, "Y+B")
+	if a.picker == nil || a.picker.bank != 0 || a.picker.cur != 0 {
+		t.Fatalf("the picker opens on the pattern in front: %+v", a.picker)
+	}
+	if !a.picker.info[0].used || a.picker.info[1].used {
+		t.Fatal("A1 has a note, A2 has none")
+	}
+	a.Render()
+	keys(t, a, "]") // bank B
+	if a.picker.bank != 1 {
+		t.Fatalf("R1 is the next bank, got %d", a.picker.bank)
+	}
+	keys(t, a, "D R R A") // row 2, column 3 of bank B: pattern B7 = 16+4+2+1 = 23
+	if a.picker != nil || a.pat != 23 || a.label(a.pat-1) != "B7" {
+		t.Fatalf("opened pattern %d (%s)", a.pat, a.label(a.pat-1))
+	}
+	// Left at the edge of the grid goes to the previous bank
+	keys(t, a, "Y+B")
+	keys(t, a, "L L L") // column 2 -> 1 -> 0, then one more: bank A, column 3
+	if a.picker.bank != 0 || a.picker.cur%4 != 3 {
+		t.Fatalf("Left past the edge: bank %d, cursor %d", a.picker.bank, a.picker.cur)
+	}
+	keys(t, a, "B")
+	if a.picker != nil || a.pat != 23 {
+		t.Fatal("B closes the picker and keeps the pattern")
+	}
+	// the menu has it too, and Y+Up/Down still steps one
+	a.seqMenu()
+	keys(t, a, "A")
+	if a.picker == nil {
+		t.Fatal("the picker is the first item of the sequencer menu")
+	}
+	keys(t, a, "B")
+	keys(t, a, "Y+U")
+	if a.pat != 24 {
+		t.Fatalf("Y+Up is the next pattern: %d", a.pat)
+	}
+}
+
+// chooseMenu moves the cursor of the open menu to the item that starts with label and presses A.
+func chooseMenu(t *testing.T, a *App, label string) {
+	t.Helper()
+	if a.menu == nil {
+		t.Fatalf("no menu is open to choose %q from", label)
+	}
+	for i := 0; i < len(a.menu.items); i++ {
+		if strings.HasPrefix(a.menu.item().label, label) {
+			keys(t, a, "A")
+			return
+		}
+		keys(t, a, "D")
+	}
+	t.Fatalf("no menu item %q", label)
 }

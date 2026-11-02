@@ -21,6 +21,9 @@ type hint struct{ key, what string }
 // hints are the keys of the screen: the plain ones and the ones with Y held.
 func (a *App) hints() (plain, shift []hint) {
 	screen := hint{"Y+<>", "screen"}
+	if a.picker != nil {
+		return []hint{{"^v<>", "choose"}, {"L1 R1", "bank"}, {"A", "open it"}, {"B", "cancel"}}, nil
+	}
 	if a.menu != nil {
 		return []hint{{"^v", "choose"}, {"<>", "change"}, {"A", "run"}, {"B", "close"}}, nil
 	}
@@ -40,14 +43,14 @@ func (a *App) hints() (plain, shift []hint) {
 			[]hint{screen, {"Y+X", "places"}}
 	case Slice:
 		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play"}, {"<>", "move"}, {"^v", "marker"}, {"L1 R1", "zoom"}},
-			[]hint{screen, {"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+^v", "zoom"}}
+			[]hint{screen, {"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+B", "slice menu"}}
 	case Seq:
 		play, stop := hint{"X", "play"}, hint{"B", "menu"}
 		if a.seqOn {
 			play, stop = hint{"X", "stop"}, hint{"B", "stop"}
 		}
 		return []hint{{"A", "note on/off"}, play, stop, {"^v", "step"}, {"<>", "column"}, {"L1 R1", "bar"}},
-			[]hint{screen, {"Y+A", "velocity"}, {"Y+X", "column pad"}, {"Y+^v", "pattern"}}
+			[]hint{screen, {"Y+A", "velocity"}, {"Y+X", "column pad"}, {"Y+B", "pick pattern"}, {"Y+^v", "pattern +-"}}
 	case Unit:
 		return []hint{{"A", "send"}, {"X", "look again"}, {"^v", "choose"}, {"L1 R1", "page"}, {"B", "back"}}, []hint{screen}
 	default:
@@ -181,11 +184,27 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 		if a.sl == nil {
 			return
 		}
-		c.big(x, y0, a.label(a.spad), cAmber, 2)
-		c.text(x, y0+38, fit(a.info.Pads[a.spad].Name, w/CellW), cText, true)
-		c.text(x, y0+58, fmt.Sprintf("%.2f s", float64(a.sl.Frames)/48000), cDim, false)
-		c.text(x, y0+76, fmt.Sprintf("%d slices", len(a.sl.Slices)), cText, false)
-		c.text(x, y0+94, fmt.Sprintf("zoom %dx", 1<<a.zoom), cDim, false)
+		c.text(x, y0, fmt.Sprintf("%s %s", a.label(a.spad), fit(a.info.Pads[a.spad].Name, w/CellW-4)), cAmber, true)
+		c.text(x, y0+18, fmt.Sprintf("%.2f s  %d slices", float64(a.sl.Frames)/48000, len(a.sl.Slices)), cDim, false)
+		c.text(x, y0+36, fmt.Sprintf("%s  zoom %dx", modeNames[a.sl.Mode], 1<<a.zoom), cDim, false)
+		if sel := a.sliceAt(a.at); sel >= 0 {
+			s := a.sl.Slices[sel]
+			c.text(x, y0+58, fmt.Sprintf("slice %d/%d", sel+1, len(a.sl.Slices)), cText, true)
+			c.text(x, y0+76, fmt.Sprintf("pitch %+d  gain %d%%", s.Pitch, s.Gain), cText, false)
+			extra := ""
+			if s.Reverse {
+				extra += "rev "
+			}
+			if s.Attack > 0 || s.Release > 0 {
+				extra += fmt.Sprintf("fade %d/%d ", s.Attack, s.Release)
+			}
+			if s.Roll > 0 {
+				extra += fmt.Sprintf("roll %d", s.Roll)
+			}
+			if extra != "" {
+				c.text(x, y0+94, fit(extra, w/CellW), cAmber, false)
+			}
+		}
 	case Seq:
 		d, ok := a.doc()
 		c.text(x, y0, "PATTERN", cDim, false)
@@ -198,9 +217,12 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 		c.text(x, y0+40, fmt.Sprintf("%d bars  %d steps", d.Bars, a.steps()), cText, false)
 		c.text(x, y0+58, fmt.Sprintf("step %d.%d", a.step/16+1, a.step%16+1), cText, false)
 		pad := a.colPad()
-		c.text(x, y0+76, fmt.Sprintf("%s %s", a.label(pad), short(a.info.Pads[pad].Name, 11)), cDim, false)
+		line := fmt.Sprintf("%s %s", a.label(pad), short(a.info.Pads[pad].Name, 9))
 		if n, ok := noteAt(d, pad, a.step); ok {
-			c.text(x, y0+94, fmt.Sprintf("vel %02X", n.Vel), cAmber, true)
+			line = fmt.Sprintf("%s  %02X", line, n.Vel)
+			c.text(x, y0+76, line, cAmber, true)
+		} else {
+			c.text(x, y0+76, line, cDim, false)
 		}
 	case Save:
 		used, bytesN := 0, 0

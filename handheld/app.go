@@ -100,23 +100,25 @@ type App struct {
 	fcur    int
 	prev    map[string]int // file path -> handle of the decoded file, for the preview
 
-	sid     int // handle of the sample being cut
-	spad    int // its pad
-	sl      *formats.Slicing
-	at      int // the cursor, in frames
-	zoom    int // 0 shows the whole sample, each step doubles
-	sel     int // slice under the cursor
-	playing int // pad lit by X, -1 for none
+	sid        int // handle of the sample being cut
+	spad       int // its pad
+	sl         *formats.Slicing
+	at         int // the cursor, in frames
+	sliceSteps int // the length of the slicer's result in steps, 0 for one round (the slicer menu)
+	zoom       int // 0 shows the whole sample, each step doubles
+	sel        int // slice under the cursor
+	playing    int // pad lit by X, -1 for none
 
 	menu     *menu
-	carry    *carry // a pad being moved or copied
-	pat      int    // pattern in the sequencer, 1..160
-	step     int    // the cursor's step, 16 to a bar
-	col      int    // the cursor's column in the tracker, 0..7
-	cols     [8]int // the pad of each column
-	colsSet  bool   // the columns were chosen (by default or by the user)
-	colsOwn  bool   // the user changed a column: they stay when the pattern changes
-	seqOn    bool   // the pattern is playing
+	picker   *picker // the pattern picker, when it is open
+	carry    *carry  // a pad being moved or copied
+	pat      int     // pattern in the sequencer, 1..160
+	step     int     // the cursor's step, 16 to a bar
+	col      int     // the cursor's column in the tracker, 0..7
+	cols     [8]int  // the pad of each column
+	colsSet  bool    // the columns were chosen (by default or by the user)
+	colsOwn  bool    // the user changed a column: they stay when the pattern changes
+	seqOn    bool    // the pattern is playing
 	seqStart time.Time
 	// Now is the clock; nil is the real one. A test sets it.
 	Now func() time.Time
@@ -301,6 +303,12 @@ func (a *App) Press(k Key, repeat int) {
 		a.help = false
 		return
 	}
+	if a.picker != nil {
+		if k != Y {
+			a.pickerKey(k)
+		}
+		return
+	}
 	if a.menu != nil {
 		a.menuKey(k)
 		return
@@ -375,6 +383,8 @@ func (a *App) shifted(k Key) {
 		}
 	case Slice:
 		switch k {
+		case B:
+			a.sliceMenu()
 		case Up:
 			a.zoom = min(a.zoom+1, 8)
 		case Down:
@@ -382,7 +392,7 @@ func (a *App) shifted(k Key) {
 		case A:
 			a.autoSlice()
 		case X:
-			a.slicesToPads()
+			a.slicesToPads(false)
 		}
 	}
 }

@@ -27,6 +27,9 @@ func (a *App) Render() *image.RGBA {
 	case Unit:
 		a.drawUnit(c)
 	}
+	if a.picker != nil {
+		a.drawPicker(c)
+	}
 	a.drawPanel(c)
 	a.footer(c)
 	if a.menu != nil {
