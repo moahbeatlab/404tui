@@ -356,6 +356,14 @@ func (a *App) seqMenu() {
 			a.toggleFreeze()
 		}
 	})
+	run("New pattern from the audible tracks", a.newFromAudible)
+	run("Bounce the tracks as you hear them to a pad", func() { a.bounce(a.audible, "mix") })
+	run("Bounce only this track to a pad", func() { a.bounce(func(p int) bool { return p == pad }, a.label(pad)) })
+	run("Unmute and unsolo every track", func() {
+		delete(a.trk, a.pat)
+		a.say("every track plays", false)
+		a.replay()
+	})
 	run("Copy to the next pattern", func() {
 		to := a.pat%160 + 1
 		if err := a.lab.CopyPattern(a.pat, to); err != nil {
@@ -487,7 +495,10 @@ func (a *App) opSay(op string, args []byte) {
 }
 
 // render mixes the pattern into one stereo sample: every note starts the sample of its pad at its tick.
-func (a *App) render() (formats.Sample, bool) {
+func (a *App) render() (formats.Sample, bool) { return a.renderOf(a.audible, a.freeze) }
+
+// renderOf is render for the pads the filter lets through; frozen is the bar in focus, else the whole pattern.
+func (a *App) renderOf(play func(pad int) bool, frozen bool) (formats.Sample, bool) {
 	d, ok := a.doc()
 	if !ok {
 		return formats.Sample{}, false
@@ -496,7 +507,7 @@ func (a *App) render() (formats.Sample, bool) {
 	perTick := 60 / bpm / formats.PPQ * formats.SampleRate
 	length := int(d.Length)
 	lo, hi := 0, length
-	if a.freeze { // only the bar in focus
+	if frozen { // only the bar in focus
 		lo = min(a.step/16*16*stepTicks, max(length-stepTicks, 0))
 		hi = min(lo+16*stepTicks, length)
 		a.frozenPage = a.step / 16
@@ -504,7 +515,7 @@ func (a *App) render() (formats.Sample, bool) {
 	n := int(float64(hi-lo) * perTick)
 	mix := make([]int32, n*2)
 	for _, nt := range d.Notes {
-		if int(nt.Tick) < lo || int(nt.Tick) >= hi {
+		if int(nt.Tick) < lo || int(nt.Tick) >= hi || !play(nt.Pad) {
 			continue
 		}
 		id, ok := a.padSample(nt.Pad)
@@ -686,7 +697,16 @@ func (a *App) drawSeq(c *canvas) {
 			c.rect(lx-4, y-1, x0-lx+0, rh-1, cAmberD)
 			fg = cWhite
 		}
+		if a.trackMode(pad) == trackMute {
+			fg = cDim
+		}
 		c.text(lx, y+(rh-CellH)/2, a.label(pad), fg, i == a.row)
+		switch a.trackMode(pad) {
+		case trackMute:
+			c.text(lx+22, y+(rh-CellH)/2, "M", cBad, true)
+		case trackSolo:
+			c.text(lx+22, y+(rh-CellH)/2, "S", cGood, true)
+		}
 		for s := 0; s < 16 && page*16+s < steps; s++ {
 			st := page*16 + s
 			x := stepX(s)
@@ -837,4 +857,129 @@ func (a *App) noteInfo() string {
 	}
 	return fmt.Sprintf("%s %d.%d  vel %d  len %.2f st  %s  beat+%dt  %s", a.label(pad), int(n.Tick)/(16*stepTicks)+1,
 		int(n.Tick)/stepTicks%16+1, n.Vel, float64(n.Len)/stepTicks, a.noteTimingForm(n, pad, true), beat, kind)
+}
+
+// ---- mute and solo (R2 on a row: normal, mute, solo). Kept for the session, per pattern; the project is not touched.
+
+const (
+	trackOn = iota
+	trackMute
+	trackSolo
+)
+
+func (a *App) trackMode(pad int) int { return a.trk[a.pat][pad] }
+
+// audible is whether the pad's notes play: with any solo only the solos do, otherwise all but the muted ones.
+func (a *App) audible(pad int) bool {
+	m := a.trk[a.pat]
+	if len(m) == 0 {
+		return true
+	}
+	for _, v := range m {
+		if v == trackSolo {
+			return m[pad] == trackSolo
+		}
+	}
+	return m[pad] != trackMute
+}
+
+// cycleTrack is R2 in the grid.
+func (a *App) cycleTrack() {
+	if len(a.rows) == 0 {
+		return
+	}
+	pad := a.rowPad()
+	if a.trk == nil {
+		a.trk = map[int]map[int]int{}
+	}
+	if a.trk[a.pat] == nil {
+		a.trk[a.pat] = map[int]int{}
+	}
+	m := (a.trk[a.pat][pad] + 1) % 3
+	if m == trackOn {
+		delete(a.trk[a.pat], pad)
+	} else {
+		a.trk[a.pat][pad] = m
+	}
+	a.say(a.label(pad)+[]string{" plays", " is muted", " is solo"}[m], false)
+	a.replay()
+}
+
+// newFromAudible copies the pattern into the next empty one without the tracks that do not sound now.
+func (a *App) newFromAudible() {
+	d, ok := a.doc()
+	if !ok {
+		a.say("the pattern is empty", true)
+		return
+	}
+	to := 0
+	for off := 1; off < 160; off++ {
+		n := (a.pat-1+off)%160 + 1
+		if _, err := a.lab.Pattern(n); err != nil {
+			to = n
+			break
+		}
+	}
+	if to == 0 {
+		a.say("every pattern is used", true)
+		return
+	}
+	if err := a.lab.CopyPattern(a.pat, to); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	dropped := map[int]bool{}
+	from := a.pat
+	a.pat = to
+	for _, nt := range d.Notes {
+		if !a.audibleIn(from, nt.Pad) && !dropped[nt.Pad] {
+			dropped[nt.Pad] = true
+			args, _ := json.Marshal(lab.PatternArgs{Pad: nt.Pad})
+			a.lab.PatternOp(to, "clearPad", args)
+		}
+	}
+	a.refresh()
+	a.autoRows()
+	a.say(fmt.Sprintf("%s: %d tracks left out", a.label(to-1), len(dropped)), false)
+}
+
+func (a *App) audibleIn(pat, pad int) bool {
+	save := a.pat
+	a.pat = pat
+	ok := a.audible(pad)
+	a.pat = save
+	return ok
+}
+
+// bounce renders the pattern (all of it, the tracks the filter lets through) into one sample on the next empty pad.
+func (a *App) bounce(play func(int) bool, tag string) {
+	to := a.freeRun(1, a.rowPad()+1)
+	if to < 0 {
+		a.say("no empty pad: clear one first", true)
+		return
+	}
+	s, ok := a.renderOf(play, false)
+	if !ok {
+		a.say("nothing to bounce", true)
+		return
+	}
+	mb, err := a.lab.Decode(s.WAV(), "wav")
+	if err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	var meta struct{ ID int }
+	if json.Unmarshal(mb, &meta) != nil {
+		a.say("cannot keep the bounce", true)
+		return
+	}
+	err = a.lab.Assign(to, meta.ID, fit(fmt.Sprintf("bnc_%s_%s", a.label(a.pat-1), tag), 15))
+	a.lab.Free(meta.ID)
+	if err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	delete(a.pcm, to)
+	a.refresh()
+	a.say("bounced to "+a.label(to), false)
 }

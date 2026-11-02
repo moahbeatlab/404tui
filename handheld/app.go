@@ -154,7 +154,8 @@ type App struct {
 	rowFocus   int            // a pad the cursor should go to when the rows are worked out again (-1: none)
 	seqOn      bool           // the pattern is playing
 	seqStart   time.Time
-	freeze     bool // SEQ: loop only the bar in focus
+	trk        map[int]map[int]int // SEQ: pattern -> pad -> mute/solo
+	freeze     bool                // SEQ: loop only the bar in focus
 	frozenPage int
 	// Now is the clock; nil is the real one. A test sets it.
 	Now func() time.Time
@@ -297,6 +298,10 @@ func (a *App) triggerKey(whole bool) {
 	}
 	if a.scr == Seq && !whole { // L2 plays the note under the cursor
 		a.playNote()
+		return
+	}
+	if a.scr == Seq { // R2 turns the row: plays, muted, solo
+		a.cycleTrack()
 		return
 	}
 	if a.scr != Slice || a.sl == nil {

@@ -2690,3 +2690,70 @@ func TestFreezeLoopsOnlyTheBarInFocus(t *testing.T) {
 		t.Fatal("Y+A again releases")
 	}
 }
+
+func TestMuteSoloAndNewPatternFromAudible(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit+" Y+R")
+	for p := 0; p < 3; p++ { // a note on each of A1..A3
+		a.toggle(p, 0)
+	}
+	a.autoRows()
+	a.row = len(a.rows) - 1
+	d, _ := a.doc()
+	if len(d.Notes) != 3 {
+		t.Fatalf("three tracks of one note: %d", len(d.Notes))
+	}
+	full, _ := a.render()
+	keys(t, a, "}") // this row muted
+	if a.trackMode(a.rowPad()) != trackMute || a.audible(a.rowPad()) {
+		t.Fatal("R2 mutes the row")
+	}
+	muted, _ := a.render()
+	if len(muted.Samples) != len(full.Samples) {
+		t.Fatal("the loop keeps its length")
+	}
+	keys(t, a, "}") // solo
+	if !a.audible(a.rowPad()) || a.audible(a.rows[0]) {
+		t.Fatal("solo plays only that row")
+	}
+	keys(t, a, "}")
+	keys(t, a, "}") // muted again
+	from := a.pat
+	a.newFromAudible()
+	if a.pat == from {
+		t.Fatal("the new pattern is another one")
+	}
+	nd, _ := a.doc()
+	if len(nd.Notes) != 2 {
+		t.Fatalf("the muted track is left out: %d notes", len(nd.Notes))
+	}
+	a.pat = from
+	if od, _ := a.doc(); len(od.Notes) != 3 {
+		t.Fatal("the original keeps its notes")
+	}
+}
+
+func TestBounceWhatYouHear(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit+" Y+R")
+	for p := 0; p < 2; p++ {
+		a.toggle(p, 0)
+	}
+	a.autoRows()
+	a.row = 0
+	keys(t, a, "}") // the first row muted
+	before := a.info.Pads[5].File
+	a.bounce(a.audible, "mix")
+	if before {
+		t.Skip("pad 6 used")
+	}
+	found := false
+	for i := 3; i < 160; i++ {
+		if a.info.Pads[i].File && strings.HasPrefix(a.info.Pads[i].Name, "bnc_") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("the bounce is on a pad")
+	}
+}

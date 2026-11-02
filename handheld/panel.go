@@ -71,7 +71,7 @@ func (a *App) hints() (plain, shift []hint) {
 		if a.seqOn {
 			play = hint{"X", "stop"}
 		}
-		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}},
+		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"R2", "mute/solo"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}},
 			[]hint{screen, {"Y+X", "add track"}, {"Y+B", "pick pattern"}, {"Y+^v", "pattern +-"}}
 	case Unit:
 		return []hint{{"A", "send"}, {"X", "look again"}, {"^v", "choose"}, {"L1 R1", "page"}, {"B", "back"}}, []hint{screen}
