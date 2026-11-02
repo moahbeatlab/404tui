@@ -156,3 +156,16 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
   Types: UP, DOWN, U/D, U/D+ (the ends twice), RND, ORD (as the columns stand), CHRD, CONV (outside in), DIV (middle out), PNKY
   (the top key between), THMB (the bottom key between); rate, gate, velocity, and the length when the pattern is new. With a
   keyboard (above) as the columns it is an arp of one sample at different pitches, on the unit itself.
+
+## Marking pads: the live arp (seventh round)
+
+- **Y+A on PADS marks a pad** as a key of the arp (only a pad with a sample; up to 16): a numbered badge shows on its tile, in the
+  order of marking. Y+A again unmarks. **L2 clears the marks.**
+- **R2 starts and stops a loop of the arp over the marked pads**, with the type, rate, gate and velocity of the pattern arp. The panel
+  says ARP while it plays; B stops it, and so does leaving PADS. The pad menu's *Arp the marked pads...* has the settings,
+  which go into the loop as you change them (type, rate, gate, velocity, length), and:
+  - **Play it / stop it**
+  - **Bounce it to a free pad**: the loop as a sample
+  - **Write it into the pattern**: the notes over the marked pads, in the pattern in front (their notes are replaced)
+  - **Clear the marks**
+- The marked pads are the **columns** of SEQ, so the same keys are in front when the pattern is opened.

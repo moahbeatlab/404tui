@@ -150,12 +150,14 @@ func (a *App) openArpPrintMenu() {
 	a.menu = m
 }
 
-// printArp writes the arp into the pattern: the notes of the key pads are replaced.
-func (a *App) printArp() {
+// printArp writes the arp over the pads of the columns into the pattern.
+func (a *App) printArp() { a.printArpKeys(a.arpKeys(a.arpp.typ)) }
+
+// printArpKeys writes the arp into the pattern: the notes of the key pads are replaced.
+func (a *App) printArpKeys(keys []int) {
 	st := a.arpp
-	keys := a.arpKeys(st.typ)
 	if len(keys) < 2 {
-		a.say("the arp needs 2 or more columns with a sample (Y+X changes a column's pad)", true)
+		a.say("the arp needs 2 or more pads with a sample (mark pads with Y+A, or Y+X changes a column's pad)", true)
 		return
 	}
 	d, ok := a.doc()

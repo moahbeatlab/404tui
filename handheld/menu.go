@@ -187,6 +187,9 @@ func (a *App) openPadMenu() {
 			}
 		})
 	}
+	m.head(fmt.Sprintf("MARKED PADS (%d)", len(a.marks)))
+	add("Arp the marked pads...", func(int) { a.openMarkedArpMenu() })
+	add("Clear the marks", func(int) { a.clearMarks() })
 	a.menu = m
 }
 

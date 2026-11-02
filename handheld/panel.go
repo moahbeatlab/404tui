@@ -32,8 +32,8 @@ func (a *App) hints() (plain, shift []hint) {
 		if a.carry != nil {
 			return []hint{{"A", "put it here"}, {"B", "cancel"}, {"^v<>", "move"}}, []hint{screen}
 		}
-		return []hint{{"A", "menu"}, {"X", "play"}, {"B", "stop"}, {"^v<>", "move"}, {"L1 R1", "bank"}},
-			[]hint{screen, {"Y+^v", "bank"}, {"Y+B", "clear pad"}}
+		return []hint{{"A", "menu"}, {"X", "play"}, {"B", "stop"}, {"^v<>", "move"}, {"L1 R1", "bank"}, {"R2", "arp marked"}},
+			[]hint{screen, {"Y+A", "mark pad"}, {"Y+^v", "bank"}, {"Y+B", "clear pad"}}
 	case Files:
 		pick := hint{"A", "to pad " + a.label(a.padN())}
 		if e, ok := a.current(); ok && e.project {
@@ -112,7 +112,9 @@ func (a *App) drawPanel(c *canvas) {
 	y := panelTop + 8 + 2*(ch+gap) + 4
 	c.text(x, y, fmt.Sprintf("BPM %s", bpmText(a.tempo())), cText, true)
 	c.text(x+textW("BPM "+bpmText(a.tempo())+" "), y, a.tempoSource(), cDim, false)
-	if a.seqOn {
+	if a.arpOn {
+		c.text(x+w-textW("ARP"), y, "ARP", cGood, true)
+	} else if a.seqOn {
 		c.text(x+w-textW("PLAY"), y, "PLAY", cGood, true)
 	} else {
 		c.text(x+w-textW("STOP"), y, "STOP", cDim, false)
@@ -174,17 +176,10 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 			ch = "stereo"
 		}
 		c.text(x, y0+56, fmt.Sprintf("%.2fs %s lvl %d", float64(p.Frames)/48000, ch, p.Level), cDim, false)
-		c.rect(x, y0+76, w, 44, cPanel2)
+		c.rect(x, y0+76, w, 32, cPanel2)
 		if id, ok := a.padSample(n); ok {
-			a.waveform(c, id, 0, p.Frames, x+1, y0+76, w-2, 44, cAmber)
+			a.waveform(c, id, 0, p.Frames, x+1, y0+76, w-2, 32, cAmber)
 		}
-		used := 0
-		for _, q := range a.info.Pads {
-			if q.File {
-				used++
-			}
-		}
-		c.text(x, y0+126, fmt.Sprintf("%d of 160 pads", used), cDim, false)
 	case Files:
 		c.text(x, y0, "TARGET", cDim, false)
 		c.big(x+textW("TARGET")+8, y0-4, a.label(a.padN()), cAmber, 2)

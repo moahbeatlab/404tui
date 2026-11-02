@@ -53,6 +53,9 @@ func (a *App) autoCols() {
 	for _, n := range d.Notes {
 		withNotes[n.Pad] = true
 	}
+	for _, p := range a.marks { // the marked pads are the keys: they are the columns
+		add(p)
+	}
 	add(a.padN())
 	for p := 0; p < 160; p++ {
 		if withNotes[p] {

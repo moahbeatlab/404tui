@@ -1155,3 +1155,84 @@ func TestMenuHeadingsAreSkipped(t *testing.T) {
 	}
 	a.Render()
 }
+
+func TestMarkPadsAndLiveArp(t *testing.T) {
+	a, au := newApp(t)
+	keys(t, a, kit) // samples on A1..A3, the cursor on A3
+	a.go_(Pads)
+	a.cur = 0
+	keys(t, a, "Y+A")
+	if len(a.marks) != 1 || a.marks[0] != 0 {
+		t.Fatalf("A1 is marked: %v", a.marks)
+	}
+	keys(t, a, "R")
+	keys(t, a, "Y+A")
+	a.cur = 5
+	keys(t, a, "Y+A") // an empty pad cannot be a key
+	if len(a.marks) != 2 || !a.msgBad {
+		t.Fatalf("an empty pad is not marked: %v (%s)", a.marks, a.msg)
+	}
+	a.Render() // the badges are drawn
+	// one mark is not an arp; two are
+	keys(t, a, "Y+A") // unmark A2 again... (the cursor is on the empty pad: nothing happens)
+	a.cur = 1
+	keys(t, a, "Y+A")
+	if len(a.marks) != 1 {
+		t.Fatalf("Y+A on a marked pad unmarks it: %v", a.marks)
+	}
+	keys(t, a, "}")
+	if a.arpOn || !a.msgBad {
+		t.Fatal("R2 with one marked pad says to mark more")
+	}
+	a.cur = 1
+	keys(t, a, "Y+A")
+	a.cur = 2
+	keys(t, a, "Y+A")
+	au.Loops = 0
+	keys(t, a, "}")
+	if !a.arpOn || au.Loops != 1 {
+		t.Fatalf("R2 loops the arp over the 3 marked pads: on %v, loops %d (%s)", a.arpOn, au.Loops, a.msg)
+	}
+	a.Render() // the panel says ARP
+	// a change of setting while it plays goes into the loop
+	a.openMarkedArpMenu()
+	keys(t, a, "R")
+	if au.Loops != 2 {
+		t.Fatalf("Right on Type goes into the loop without a gap: loops %d", au.Loops)
+	}
+	a.menu = nil
+	keys(t, a, "B")
+	if a.arpOn {
+		t.Fatal("B stops the arp")
+	}
+	keys(t, a, "}")
+	a.go_(Files)
+	if a.arpOn {
+		t.Fatal("leaving PADS stops it")
+	}
+	// the same keys, written into the pattern, and the marked pads lead the columns
+	a.go_(Pads)
+	a.openMarkedArpMenu()
+	chooseMenu(t, a, "Write it into the pattern")
+	if a.scr != Seq {
+		t.Fatalf("writing shows the pattern: %v", a.scr)
+	}
+	d, ok := a.doc()
+	if !ok || len(d.Notes) == 0 {
+		t.Fatalf("no notes written: %s", a.msg)
+	}
+	if a.cols[0] != 0 || a.cols[1] != 1 || a.cols[2] != 2 {
+		t.Fatalf("the marked pads are the columns: %v", a.cols)
+	}
+	// and bounced to a pad
+	before := padsWithSamples(a)
+	a.go_(Pads)
+	a.bounceMarkedArp()
+	if padsWithSamples(a) != before+1 {
+		t.Fatalf("the arp goes on a free pad: %s", a.msg)
+	}
+	keys(t, a, "{") // L2 clears the marks
+	if len(a.marks) != 0 {
+		t.Fatal("L2 clears the marks")
+	}
+}

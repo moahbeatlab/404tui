@@ -125,6 +125,12 @@ func (a *App) drawPads(c *canvas) {
 		}
 		num := fmt.Sprint(i + 1)
 		c.text(x+tw-textW(num)-6, y+4, num, cDim, false)
+		for mi, mp := range a.marks { // a pad that is a key of the arp: its place among the keys
+			if mp == n {
+				c.rect(x+4, y+4, 20, 14, cAmber)
+				c.text(x+7, y+3, fmt.Sprint(mi+1), cBg, true)
+			}
+		}
 		if i == a.cur {
 			c.box(x-2, y-2, tw+4, th+4, 2, cWhite)
 		}

@@ -117,6 +117,8 @@ type App struct {
 	as       autosave
 	arp      arpState // the settings of the sample arp, kept between visits
 	arpp     arpPrint // and of the pattern arp
+	marks    []int    // the pads marked as keys of the arp, in the order they were marked
+	arpOn    bool     // the live arp is looping
 	changed  bool     // something was edited since the last autosave run
 	carry    *carry   // a pad being moved or copied
 	pat      int      // pattern in the sequencer, 1..160
@@ -248,6 +250,14 @@ func (a *App) Slices() int {
 
 // triggerKey is L2 (one slice) and R2 (the whole order): what the slicer plays, from any place on its screen.
 func (a *App) triggerKey(whole bool) {
+	if a.scr == Pads { // R2 starts and stops the arp over the marked pads, L2 clears the marks
+		if whole {
+			a.toggleLiveArp()
+		} else {
+			a.clearMarks()
+		}
+		return
+	}
 	if a.scr != Slice || a.sl == nil {
 		return
 	}
@@ -400,6 +410,8 @@ func (a *App) shifted(k Key) {
 		a.seqShifted(k)
 	case Pads:
 		switch k {
+		case A:
+			a.toggleMark()
 		case Up:
 			a.bank = (a.bank + 9) % 10
 		case Down:
@@ -430,6 +442,9 @@ func (a *App) shifted(k Key) {
 }
 
 func (a *App) go_(s Screen) {
+	if a.arpOn && s != Pads {
+		a.stop()
+	}
 	a.scr = s
 	if s == Slice && (a.sl == nil || a.spad != a.padN()) {
 		a.openSlicer()
@@ -479,6 +494,7 @@ func (a *App) stop() {
 		a.Audio.Stop()
 	}
 	a.playing = -1
+	a.arpOn = false
 }
 
 func (a *App) play(s formats.Sample) {
