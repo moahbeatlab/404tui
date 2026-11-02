@@ -116,7 +116,7 @@ func (a *App) drawHelp(c *canvas) {
 // ---- PADS
 
 func (a *App) drawPads(c *canvas) {
-	const tw, th, gap, x0, y0 = 92, 72, 6, 16, 44
+	const tw, th, gap, x0, y0 = 104, 72, 6, 16, 44
 	for i := 0; i < 16; i++ {
 		n := a.bank*16 + i
 		x, y := x0+(i%4)*(tw+gap), y0+(i/4)*(th+gap)
@@ -171,15 +171,15 @@ func (a *App) drawPads(c *canvas) {
 				used++
 			}
 		}
-		x := margin + b*39
+		x := margin + b*44
 		col, fg := cPanel, cDim
 		if b == a.bank {
 			col, fg = cAmber, cBg
 		}
-		c.rect(x, by, 35, 24, col)
-		c.text(x+13, by+4, string(rune('A'+b)), fg, true)
-		c.rect(x, by+27, 35, 3, cLine)
-		c.rect(x, by+27, used*35/16, 3, cAmber)
+		c.rect(x, by, 40, 24, col)
+		c.text(x+16, by+4, string(rune('A'+b)), fg, true)
+		c.rect(x, by+27, 40, 3, cLine)
+		c.rect(x, by+27, used*40/16, 3, cAmber)
 	}
 }
 
