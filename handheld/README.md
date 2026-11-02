@@ -312,5 +312,5 @@ L2 on the SLICE screen takes the next grid step (off, 1/2, 1/4, 1/8, 1/16) and p
 
 ## Tabs in menus
 
-The slicer menu (STEPS, SLICE, CUT, KEEP), the pattern menu (PATTERN, TEMPO, TIMING, LENGTH, WRITE, EDIT, TRACKS) and the one-sample arp
-menu (NOTES, PLAY, MAKE) are pages like the pad panel: L1 and R1 turn them, the cursor is kept per tab.
+The slicer menu (STEPS, SLICE, CUT, KEEP), the pattern menu (PATTERN, TIMING, NOTES, TRACKS) and the one-sample arp
+menu (NOTES, PLAY, MAKE) are pages like the pad panel, as many as fit the dialog (sub-headings stay inside a tab): L1 and R1 turn them, the cursor is kept per tab.

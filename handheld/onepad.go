@@ -172,7 +172,7 @@ func (a *App) openOnePadMenu(n int) {
 		m.items = append(m.items, menuItem{label: label, vals: vals, val: cur, keepOpen: true, onChange: func(v int) { change(v); redo() }})
 		return len(m.items) - 1
 	}
-	m.head("NOTES")
+	m.tabHead("NOTES")
 	set("Key", formats.PitchNames, o.key, func(v int) { o.key = v })
 	set("Scale", scales, o.scale, func(v int) { o.scale = v })
 	degI = set("On degree (scales)", degrees(), o.degree, func(v int) { o.degree = v })
@@ -184,13 +184,13 @@ func (a *App) openOnePadMenu(n int) {
 		}
 	})
 	set("Octaves", names(onePadOcts, func(v int) string { return fmt.Sprintf("%+d", v) }), o.oct, func(v int) { o.oct = v })
-	m.head("PLAY")
+	m.tabHead("PLAY")
 	set("Type", arpTypes, st.typ, func(v int) { st.typ = v; a.say(arpTypeNotes[v], false) })
 	set("Rate", arpNames(formats.ArpRates, func(r formats.ArpRate) string { return r.Name }), st.rate, func(v int) { st.rate = v })
 	set("Gate", names(printGates, func(v int) string { return fmt.Sprintf("%d%%", v) }), st.gate, func(v int) { st.gate = v })
 	set("Velocity", names(printVels, func(v int) string { return fmt.Sprint(v) }), st.vel, func(v int) { st.vel = v })
 	set("Length", names(printBars, func(v int) string { return fmt.Sprintf("%d bar", v) }), near(printBars, st.bars), func(v int) { st.bars = printBars[v] })
-	m.head("MAKE")
+	m.tabHead("MAKE")
 	m.items = append(m.items,
 		menuItem{label: "Hear it / stop it", keepOpen: true, run: func(int) { a.onePadToggle(n) }},
 		menuItem{label: "Bounce the arp to a new pad", run: func(int) { a.onePadBounce(n, false) }},

@@ -348,7 +348,7 @@ func (a *App) seqMenu() {
 		m.items = append(m.items, menuItem{label: label, vals: vals, val: cur, keepOpen: true, onChange: change})
 	}
 
-	m.head("PATTERN")
+	m.tabHead("PATTERN")
 	run("Choose a pattern (bank, then pattern)...", a.openPicker)
 	run("New pattern from a template...", a.templatesMenu)
 	set("Loop only the bar in focus (Y+A)", []string{"off", "on"}, b2i(a.freeze), func(v int) {
@@ -420,7 +420,7 @@ func (a *App) seqMenu() {
 	if a.scopeRow {
 		scope = 1
 	}
-	m.head("TIMING")
+	m.tabHead("TIMING")
 	set("Applies to", []string{"every pad", "only " + a.label(pad)}, scope, func(v int) { a.scopeRow = v == 1 })
 	target := func() int { // the pad the timing tools act on: -1 for every pad
 		if a.scopeRow {
@@ -453,11 +453,12 @@ func (a *App) seqMenu() {
 	m.items = append(m.items, menuItem{label: "Double", keepOpen: true, run: func(int) { a.opSay("double", []byte(`{"pad":-1}`)); a.step = min(a.step, a.steps()-1) }})
 	m.items = append(m.items, menuItem{label: "Halve", keepOpen: true, run: func(int) { a.opSay("halve", []byte(`{"pad":-1}`)); a.step = min(a.step, a.steps()-1) }})
 
+	m.tabHead("NOTES")
 	m.head("WRITE")
 	run("Fill...", a.fillMenu)
 	run("Euclid...", a.euclidMenu)
 	run("Evolve over the bars...", a.evolveMenu)
-	m.head("EDIT")
+	m.head("CHANGE THE NOTES")
 	run("Ratchet (sub-steps)...", a.ratchetMenu)
 	run("Accents and ghosts...", a.accentMenu)
 	run("LFO on the notes (velocity, length, timing)...", a.lfoMenu)
@@ -469,7 +470,7 @@ func (a *App) seqMenu() {
 	run("Cycle...", a.cycleMenu)
 	run("Nudge (push, pull)...", a.nudgeMenu)
 	run("Invert", a.invert)
-	m.head("TRACKS")
+	m.tabHead("TRACKS")
 	run("Dispatch over the marked pads...", a.dispatchMenu)
 	run("Copy to a pad...", a.copyTrackMenu)
 	run("Clear", func() {

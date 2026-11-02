@@ -3093,7 +3093,7 @@ func TestMenuTabsTurnWithL1R1(t *testing.T) {
 	keys(t, a, kit)
 	a.seqMenu()
 	m := a.menu
-	if len(m.tabs) != 7 || m.tab != 0 || m.tabs[0] != "PATTERN" {
+	if len(m.tabs) != 4 || m.tab != 0 || m.tabs[0] != "PATTERN" {
 		t.Fatalf("the pattern menu has tabs: %v", m.tabs)
 	}
 	first := m.items[0].label
@@ -3102,7 +3102,7 @@ func TestMenuTabsTurnWithL1R1(t *testing.T) {
 		t.Fatalf("R1 shows the next tab: %d", m.tab)
 	}
 	keys(t, a, "[ [")
-	if m.tab != 6 {
+	if m.tab != 3 {
 		t.Fatalf("L1 turns back round the ends: %d", m.tab)
 	}
 	a.Render()

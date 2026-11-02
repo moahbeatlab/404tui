@@ -30,10 +30,10 @@ func (m *menu) tabify() {
 	m.full = m.items
 	m.tabs, m.groups, m.curs = nil, nil, nil
 	for i := 0; i < len(m.full); i++ {
-		if m.full[i].header {
+		if m.full[i].tab {
 			m.tabs = append(m.tabs, m.full[i].label)
 			end := i + 1
-			for end < len(m.full) && !m.full[end].header {
+			for end < len(m.full) && !m.full[end].tab {
 				end++
 			}
 			m.groups = append(m.groups, m.full[i+1:end])
@@ -68,10 +68,16 @@ type menuItem struct {
 	run      func(val int) // what A does
 	onChange func(val int) // what Left and Right do to the value, as it changes
 	header   bool          // a heading for the items below it: not chosen, only read
+	tab      bool          // a heading that is also a tab (the menu has tabs)
 	keepOpen bool
 }
 
 func (m *menu) item() *menuItem { m.settle(); return &m.items[m.cur] }
+
+// tabHead adds a heading that starts a tab: with tabs the menu shows one tab at a time, the headings inside it stay headings.
+func (m *menu) tabHead(label string) {
+	m.items = append(m.items, menuItem{label: label, header: true, tab: true})
+}
 
 // head adds a heading to the menu.
 func (m *menu) head(label string) { m.items = append(m.items, menuItem{label: label, header: true}) }
@@ -161,7 +167,7 @@ func (a *App) drawMenu(c *canvas) {
 	w := 328
 	tabH := 0
 	if m.tabs != nil {
-		w, tabH = 420, 28
+		tabH = 28
 	}
 	rh := 20
 	if len(m.items) > 14 {
