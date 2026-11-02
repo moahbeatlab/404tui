@@ -157,13 +157,13 @@ func (a *App) openOnePadMenu(n int) {
 	redo := func() {
 		m.foot = onePadKeyboard(onePadSemis(*o))
 		if o.scale == 0 { // chromatic: the chord types, else the stacks of the scale
-			m.items[chI].vals, m.items[chI].val = chords, o.chord
+			m.at(chI).vals, m.at(chI).val = chords, o.chord
 		} else {
-			m.items[chI].vals, m.items[chI].val = stacks, o.stack
+			m.at(chI).vals, m.at(chI).val = stacks, o.stack
 		}
-		m.items[degI].vals = degrees()
-		o.degree = min(o.degree, len(m.items[degI].vals)-1)
-		m.items[degI].val = o.degree
+		m.at(degI).vals = degrees()
+		o.degree = min(o.degree, len(m.at(degI).vals)-1)
+		m.at(degI).val = o.degree
 		if a.arpOn {
 			a.onePadReplay(n)
 		}
@@ -172,7 +172,7 @@ func (a *App) openOnePadMenu(n int) {
 		m.items = append(m.items, menuItem{label: label, vals: vals, val: cur, keepOpen: true, onChange: func(v int) { change(v); redo() }})
 		return len(m.items) - 1
 	}
-	m.head("THE NOTES (the sample is a C)")
+	m.head("NOTES")
 	set("Key", formats.PitchNames, o.key, func(v int) { o.key = v })
 	set("Scale", scales, o.scale, func(v int) { o.scale = v })
 	degI = set("On degree (scales)", degrees(), o.degree, func(v int) { o.degree = v })
@@ -184,13 +184,13 @@ func (a *App) openOnePadMenu(n int) {
 		}
 	})
 	set("Octaves", names(onePadOcts, func(v int) string { return fmt.Sprintf("%+d", v) }), o.oct, func(v int) { o.oct = v })
-	m.head("HOW IT PLAYS")
+	m.head("PLAY")
 	set("Type", arpTypes, st.typ, func(v int) { st.typ = v; a.say(arpTypeNotes[v], false) })
 	set("Rate", arpNames(formats.ArpRates, func(r formats.ArpRate) string { return r.Name }), st.rate, func(v int) { st.rate = v })
 	set("Gate", names(printGates, func(v int) string { return fmt.Sprintf("%d%%", v) }), st.gate, func(v int) { st.gate = v })
 	set("Velocity", names(printVels, func(v int) string { return fmt.Sprint(v) }), st.vel, func(v int) { st.vel = v })
 	set("Length", names(printBars, func(v int) string { return fmt.Sprintf("%d bar", v) }), near(printBars, st.bars), func(v int) { st.bars = printBars[v] })
-	m.head("MAKE IT")
+	m.head("MAKE")
 	m.items = append(m.items,
 		menuItem{label: "Hear it / stop it", keepOpen: true, run: func(int) { a.onePadToggle(n) }},
 		menuItem{label: "Bounce the arp to a new pad", run: func(int) { a.onePadBounce(n, false) }},
@@ -203,6 +203,7 @@ func (a *App) openOnePadMenu(n int) {
 		}
 	}
 	redo()
+	m.tabify()
 	a.menu = m
 }
 

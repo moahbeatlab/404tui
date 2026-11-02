@@ -820,12 +820,9 @@ func chooseMenu(t *testing.T, a *App, label string) {
 	if m == nil {
 		t.Fatalf("no menu is open to choose %q from", label)
 	}
-	for i := 0; i < len(m.items); i++ {
-		if !m.item().header && strings.HasPrefix(m.item().label, label) {
-			keys(t, a, "A")
-			return
-		}
-		keys(t, a, "D")
+	if seekMenu(t, a, func(l string) bool { return strings.HasPrefix(l, label) }) {
+		keys(t, a, "A")
+		return
 	}
 	t.Fatalf("no menu item %q", label)
 }
@@ -940,8 +937,8 @@ func TestTempoIsTheBanksOrTheProjects(t *testing.T) {
 	a.pat = 17 // B1
 	a.seqMenu()
 	found := false
-	for _, it := range a.menu.items {
-		found = found || it.label == "Tempo of bank B"
+	for _, l := range menuLabels(a.menu) {
+		found = found || l == "Tempo of bank B"
 	}
 	if !found {
 		t.Fatal("the pattern menu names the tempo it changes: bank B")
@@ -1236,7 +1233,7 @@ func TestSampleToolsArpAndKeyboard(t *testing.T) {
 func TestMenuHeadingsAreSkipped(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit)
-	a.seqMenu()
+	a.menu = a.padToolsMenu(0) // a menu with headings and no tabs
 	if a.menu.items[0].header != true {
 		t.Fatal("the menu starts with a heading")
 	}
@@ -1517,14 +1514,9 @@ func typeOn(t *testing.T, a *App, ch byte) {
 // chooseMenuContaining is chooseMenu for an item with the text somewhere in its label.
 func chooseMenuContaining(t *testing.T, a *App, text string) {
 	t.Helper()
-	m := menuOf(a)
-	for i := 0; i < len(m.items); i++ {
-		it := m.item()
-		if !it.header && strings.Contains(it.label, text) {
-			keys(t, a, "A")
-			return
-		}
-		keys(t, a, "D")
+	if seekMenu(t, a, func(l string) bool { return strings.Contains(l, text) }) {
+		keys(t, a, "A")
+		return
 	}
 	t.Fatalf("no menu item with %q", text)
 }
@@ -3058,5 +3050,65 @@ func TestL2StepsTheGridOnTheSlicer(t *testing.T) {
 	}
 	if a.sl.Division != 0 {
 		t.Fatalf("round to off again: %d", a.sl.Division)
+	}
+}
+
+// seekMenu puts the cursor on the first item that matches, turning the pages of a menu with tabs; false if none does.
+func seekMenu(t *testing.T, a *App, match func(label string) bool) bool {
+	t.Helper()
+	m := menuOf(a)
+	pages := 1
+	if m.groups != nil {
+		pages = len(m.groups)
+	}
+	for p := 0; p < pages; p++ {
+		if m.groups != nil {
+			m.setTab(p)
+		}
+		for i := 0; i < len(m.items); i++ {
+			if !m.item().header && match(m.item().label) {
+				return true
+			}
+			keys(t, a, "D")
+		}
+	}
+	return false
+}
+
+// menuLabels is the labels of every item of a menu, on every page.
+func menuLabels(m *menu) []string {
+	items := m.items
+	if m.full != nil {
+		items = m.full
+	}
+	var out []string
+	for _, it := range items {
+		out = append(out, it.label)
+	}
+	return out
+}
+
+func TestMenuTabsTurnWithL1R1(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.seqMenu()
+	m := a.menu
+	if len(m.tabs) != 7 || m.tab != 0 || m.tabs[0] != "PATTERN" {
+		t.Fatalf("the pattern menu has tabs: %v", m.tabs)
+	}
+	first := m.items[0].label
+	keys(t, a, "]")
+	if m.tab != 1 || m.items[0].label == first {
+		t.Fatalf("R1 shows the next tab: %d", m.tab)
+	}
+	keys(t, a, "[ [")
+	if m.tab != 6 {
+		t.Fatalf("L1 turns back round the ends: %d", m.tab)
+	}
+	a.Render()
+	a.go_(Slice)
+	a.sliceMenu()
+	if len(a.menu.tabs) < 3 || a.menu.tabs[0] != "STEPS" {
+		t.Fatalf("the slicer menu has tabs: %v", a.menu.tabs)
 	}
 }

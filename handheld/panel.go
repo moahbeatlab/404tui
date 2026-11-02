@@ -33,6 +33,9 @@ func (a *App) hints() (plain, shift []hint) {
 		return []hint{{"^v<>", "choose"}, {"L1 R1", "bank"}, {"A", "open it"}, {"B", "cancel"}}, nil
 	}
 	if a.menu != nil {
+		if a.menu.tabs != nil {
+			return []hint{{"^v", "choose"}, {"<>", "change"}, {"A", "run"}, {"L1 R1", "tab"}, {"B", "close"}}, nil
+		}
 		return []hint{{"^v", "choose"}, {"<>", "change"}, {"A", "run"}, {"B", "close"}}, nil
 	}
 	switch a.scr {

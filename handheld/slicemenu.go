@@ -76,7 +76,7 @@ func (a *App) sliceMenu() {
 	set := func(label string, vals []string, cur int, change func(v int)) {
 		m.items = append(m.items, menuItem{label: label, vals: vals, val: cur, keepOpen: true, onChange: change})
 	}
-	m.head("STEPS (L2 on the screen: next grid)")
+	m.head("STEPS")
 	set("Play order", modeNames, int(a.sl.Mode), func(v int) { a.sl.Mode = formats.PlayMode(v) })
 	set("Grid", gridNames, near(formats.Divisions, a.sl.Division), func(v int) { a.sl.Division = formats.Divisions[v] })
 	set("Swing", names(formats.Swings, pct), near(formats.Swings, a.sl.Swing), func(v int) { a.sl.Swing = formats.Swings[v] })
@@ -88,7 +88,7 @@ func (a *App) sliceMenu() {
 		return fmt.Sprintf("%d steps", v)
 	}), near(stepsVals, a.sliceSteps), func(v int) { a.sliceSteps = stepsVals[v] })
 	if sel >= 0 {
-		m.head("THE SLICE IN FRONT")
+		m.head("SLICE")
 		s := &a.sl.Slices[sel]
 		audition := func() { a.playSlice() }
 		pre := fmt.Sprintf("Slice %d: ", sel+1)
@@ -135,7 +135,7 @@ func (a *App) sliceMenu() {
 		}
 	}
 	set("Auto-cut (Y+A): sensitivity", []string{"low", "less", "normal", "more", "high"}, cur, func(v int) { a.autoSens = sens[v] })
-	m.head("PLAY AND KEEP")
+	m.head("KEEP")
 	m.items = append(m.items,
 		menuItem{label: "Mangle the slices (dice)...", run: func(int) { a.mangleMenu() }},
 		menuItem{label: "Play the whole order", keepOpen: true, run: func(int) { a.playResult(false) }},
@@ -144,6 +144,7 @@ func (a *App) sliceMenu() {
 		menuItem{label: "Shuffle the order (X to pads follows it)", run: func(int) { a.shuffleOrder() }},
 		menuItem{label: "Slices to pads, random order", run: func(int) { a.slicesToPads(true) }},
 	)
+	m.tabify()
 	a.menu = m
 }
 

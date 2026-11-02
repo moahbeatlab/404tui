@@ -16,6 +16,49 @@ type menu struct {
 	onClose func()                       // what B does besides closing the menu (a tool throws its trial away)
 	foot    func(c *canvas, x, y, w int) // drawn under the items (a keyboard), footH pixels high
 	footH   int
+	// tabs: the headings split the menu into pages (as the pad panel), L1 and R1 turn them. items is the page in front;
+	// full is every item of the menu, so an index given when the menu was made still finds its item.
+	tabs   []string
+	groups [][]menuItem
+	curs   []int
+	tab    int
+	full   []menuItem
+}
+
+// tabify makes a page of each group of items under a heading; the heading becomes the name of the page.
+func (m *menu) tabify() {
+	m.full = m.items
+	m.tabs, m.groups, m.curs = nil, nil, nil
+	for i := 0; i < len(m.full); i++ {
+		if m.full[i].header {
+			m.tabs = append(m.tabs, m.full[i].label)
+			end := i + 1
+			for end < len(m.full) && !m.full[end].header {
+				end++
+			}
+			m.groups = append(m.groups, m.full[i+1:end])
+			m.curs = append(m.curs, 0)
+		}
+	}
+	m.tab = 0
+	m.items = m.groups[0]
+	m.cur = 0
+}
+
+// setTab shows page i, with the cursor where it was left.
+func (m *menu) setTab(i int) {
+	m.curs[m.tab] = m.cur
+	m.tab = (i + len(m.groups)) % len(m.groups)
+	m.items = m.groups[m.tab]
+	m.cur = m.curs[m.tab]
+}
+
+// at is the item numbered as when the menu was made.
+func (m *menu) at(i int) *menuItem {
+	if m.full != nil {
+		return &m.full[i]
+	}
+	return &m.items[i]
 }
 
 type menuItem struct {
@@ -71,6 +114,14 @@ func (a *App) menuKey(k Key) {
 			}
 		}
 	case L1, R1:
+		if m.tabs != nil {
+			d := 1
+			if k == L1 {
+				d = -1
+			}
+			m.setTab(m.tab + d)
+			return
+		}
 		// a page: ten values of an item that has many (a tempo, a pad), else eight rows of the list
 		it := m.item()
 		d := 1
@@ -108,13 +159,17 @@ func (a *App) drawMenu(c *canvas) {
 	m := a.menu
 	m.settle()
 	w := 328
+	tabH := 0
+	if m.tabs != nil {
+		w, tabH = 420, 28
+	}
 	rh := 20
 	if len(m.items) > 14 {
 		rh = 18
 	}
 	vis := min(len(m.items), 17)
 	top := max(0, min(m.cur-vis/2, len(m.items)-vis))
-	h := 40 + vis*rh + m.footH
+	h := 40 + tabH + vis*rh + m.footH
 	x, y := (contentW-w)/2, max(36, (H-h)/2-20)
 	c.rect(x, y, w, h, cPanel2)
 	c.box(x, y, w, h, 2, cAmber)
@@ -123,10 +178,22 @@ func (a *App) drawMenu(c *canvas) {
 		title += fmt.Sprintf("  %d/%d", m.cur+1, len(m.items))
 	}
 	c.text(x+14, y+10, fit(title, (w-28)/CellW), cAmber, true)
+	if m.tabs != nil {
+		tx := x + 10
+		for i, name := range m.tabs {
+			if i == m.tab {
+				c.rect(tx-5, y+32, textW(name)+10, 20, cAmber)
+				c.text(tx, y+35, name, cBg, true)
+			} else {
+				c.text(tx, y+35, name, cDim, false)
+			}
+			tx += textW(name) + 16
+		}
+	}
 	for r := 0; r < vis; r++ {
 		i := top + r
 		it := m.items[i]
-		yy := y + 36 + r*rh
+		yy := y + 36 + tabH + r*rh
 		if it.header {
 			c.rect(x+6, yy+rh/2-1, w-12, 1, cLine)
 			c.rect(x+14, yy-1, textW(it.label)+10, rh-2, cPanel2)
@@ -149,7 +216,7 @@ func (a *App) drawMenu(c *canvas) {
 		}
 	}
 	if m.foot != nil {
-		m.foot(c, x, y+40+vis*rh, w)
+		m.foot(c, x, y+40+tabH+vis*rh, w)
 	}
 	if top > 0 {
 		c.text(x+w-30, y+10, "^", cAmber, true)
