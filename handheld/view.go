@@ -2,6 +2,7 @@ package handheld
 
 import (
 	"fmt"
+	"github.com/moahbeatlab/404tui/formats"
 	"image"
 	"image/color"
 	"path/filepath"
@@ -246,19 +247,22 @@ func (a *App) drawSlice(c *canvas) {
 		c.text(margin, 340, fmt.Sprintf("SLICE %d/%d   %.3f - %.3f s   %.3f s long", sel+1, len(sl.Slices), sec(sg.Start), sec(sg.End), sec(sg.End-sg.Start)), cText, true)
 	}
 	c.text(margin, 360, fmt.Sprintf("cursor %.3f s", sec(a.at)), cDim, false)
-	// chips
-	for i := range sl.Slices {
-		if i >= 22 {
-			c.text(margin+11*38, 404+20, fmt.Sprintf("+%d", len(sl.Slices)-22), cDim, false)
+	// the play order: the slices as numbers in the order they play, the slice under the cursor lit
+	lbl := "ORDER  " + orderMode(a.sl)
+	c.text(contentW-textW(lbl)-4, 360, lbl, cDim, false)
+	for i, v := range a.sl.Order {
+		if i >= 28 {
+			c.text(margin+14*34, 404+20, fmt.Sprintf("+%d", len(a.sl.Order)-28), cDim, false)
 			break
 		}
-		x, y := margin+(i%11)*38, 384+(i/11)*20
+		x, y := margin+(i%13)*33, 384+(i/13)*20
 		col, fg := cPanel2, cDim
-		if i == sel {
+		if v == sel {
 			col, fg = cAmber, cBg
 		}
-		c.rect(x, y, 34, 17, col)
-		c.text(x+(34-textW(fmt.Sprint(i+1)))/2, y, fmt.Sprint(i+1), fg, true)
+		c.rect(x, y, 30, 17, col)
+		t := fmt.Sprint(v + 1)
+		c.text(x+(30-textW(t))/2, y, t, fg, true)
 	}
 	_ = s
 }
@@ -300,3 +304,11 @@ func (a *App) drawSave(c *canvas) {
 // Clock is for the playing-pad flash: a screen is a function of the state, not of the time, so tests are repeatable.
 var _ = time.Now
 var _ = strings.TrimSpace
+
+// orderMode is how the order is played, for the label above it.
+func orderMode(sl *formats.Slicing) string {
+	if int(sl.Mode) < len(modeNames) {
+		return modeNames[sl.Mode]
+	}
+	return ""
+}

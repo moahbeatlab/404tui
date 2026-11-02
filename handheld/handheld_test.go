@@ -731,3 +731,70 @@ func chooseMenu(t *testing.T, a *App, label string) {
 	}
 	t.Fatalf("no menu item %q", label)
 }
+
+func TestShuffledOrderIsVisibleAndGoesToThePads(t *testing.T) {
+	a, au := newApp(t)
+	keys(t, a, "A A D D R A") // a loop on A1
+	a.go_(Slice)
+	keys(t, a, "Y+A") // auto slices
+	n := len(a.sl.Slices)
+	if n < 4 {
+		t.Skipf("only %d slices", n)
+	}
+	before := append([]int{}, a.sl.Order...)
+	a.sliceMenu()
+	chooseMenu(t, a, "Shuffle the order")
+	if equalInts(before, a.sl.Order) {
+		t.Fatalf("the order did not change: %v", a.sl.Order)
+	}
+	if got := a.padOrder(); len(got) != n || equalInts(got, before) {
+		t.Fatalf("the pads follow the order: %v (order %v)", got, a.sl.Order)
+	}
+	if !strings.Contains(a.msg, " ") || a.msgBad {
+		t.Fatalf("the message says the order: %q", a.msg)
+	}
+	a.Render() // the order lane is drawn
+
+	// one slice with X (and L2), the whole order with R2
+	au.Played = 0
+	keys(t, a, "X")
+	if au.Played != 1 {
+		t.Fatalf("X plays one slice: %d", au.Played)
+	}
+	keys(t, a, "{")
+	if au.Played != 2 {
+		t.Fatalf("L2 plays one slice too: %d", au.Played)
+	}
+	keys(t, a, "}")
+	if au.Played != 3 {
+		t.Fatalf("R2 plays the whole order: %d", au.Played)
+	}
+	if k, _ := parseKey("}"); k != R2 || defaultMap[0x139] != R2 || defaultMap[0x138] != L2 {
+		t.Fatal("R2 is 0x139 and L2 is 0x138")
+	}
+
+	// to pads: the slice at the first place of the order is on the first pad
+	first := a.sl.Order[0]
+	pad0 := a.spad + 1
+	_ = pad0
+	keys(t, a, "Y+X")
+	if a.scr != Pads {
+		t.Fatalf("screen %v", a.scr)
+	}
+	name := a.info.Pads[a.bank*16+a.cur].Name
+	if !strings.HasSuffix(name, fmt.Sprintf("_%02d", first+1)) {
+		t.Fatalf("the first pad has %q, wanted slice %d", name, first+1)
+	}
+}
+
+func equalInts(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

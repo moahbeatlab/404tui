@@ -66,7 +66,7 @@ on hardware too. Patterns are always 4 bars (other lengths are a guess).
   loop's state, what is under the cursor (pad, file preview, slice numbers, pattern and note), and the keys that work
   right now with their letters. Hold Y and the panel lights the shifted set (`SHIFT`). The footer is only the message line.
 - **SEQ is a tracker**: a row for each step (16 to a bar, scrolling, a line at each bar), a column for each of 8 pads,
-  the velocity of a note in hex (`64` is 100), `--` where there is none. Up/Down move the step (held: faster),
+  the velocity of a note as a number (100), `--` where there is none. Up/Down move the step (held: faster),
   Left/Right the column, `A` puts or takes a note, `Y+A` cycles the velocity, `Y+X` gives the column the next pad with a
   sample, `Y+Up/Down` changes the pattern. The columns start as the pad that was in front, then pads with notes, then
   pads with samples, in pad order; the menu's *Pad of this column* picks any pad. The menu's row operations (fill,
@@ -100,3 +100,13 @@ on hardware too. Patterns are always 4 bars (other lengths are a guess).
   the bank (so does Left/Right past the edge of the grid), the arrows choose the pattern, A opens it. Patterns with notes
   show their bars and notes. Y+Up/Down still steps one pattern.
 - In every menu L1/R1 page the list (or ten values, on an item with many values such as the tempo); long lists scroll.
+
+## Fourth round
+
+- **Velocities are decimal** (0-127) in the tracker and the panel.
+- **The play order is on the SLICE screen**: the numbers under the waveform are the slices in the order they play, the slice
+  under the cursor lit. *Shuffle the order* in the slicer menu changes it (and the message lists it); *Slices to pads* (Y+X)
+  puts the slices on the pads in that order, each once.
+- **One slice or the whole order**: X (or L2) plays the slice under the cursor, R2 plays the whole order as the slicer is
+  set (order or random mode, grid, swing, length in steps). The same is in the slicer menu (*Play the whole order*).
+  L2/R2 are codes 0x138/0x139 on the R36S's pad (not seen to press yet); in the browser: z and c, in scripts `{` and `}`.

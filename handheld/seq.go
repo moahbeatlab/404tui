@@ -150,7 +150,7 @@ func (a *App) seqShifted(k Key) {
 				a.say(err.Error(), true)
 				return
 			}
-			a.say(fmt.Sprintf("velocity %02X", next), false)
+			a.say(fmt.Sprintf("velocity %d", next), false)
 			a.replay()
 		}
 	}
@@ -486,7 +486,7 @@ func (a *App) drawSeq(c *canvas) {
 				if ph == st {
 					col = cGood
 				}
-				c.text(x, y, fmt.Sprintf("%02X", n.Vel), col, true)
+				c.text(x, y, fmt.Sprintf("%3d", n.Vel), col, true)
 			} else {
 				c.text(x, y, "--", cLine, false)
 			}

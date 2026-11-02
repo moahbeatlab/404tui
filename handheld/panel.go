@@ -42,7 +42,7 @@ func (a *App) hints() (plain, shift []hint) {
 		return []hint{pick, {"X", "listen"}, {"^v", "browse"}, {">", "open"}, {"<", "up"}, {"L1 R1", "page"}, {"B", "pads"}},
 			[]hint{screen, {"Y+X", "places"}}
 	case Slice:
-		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play"}, {"<>", "move"}, {"^v", "marker"}, {"L1 R1", "zoom"}},
+		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play slice"}, {"R2", "play order"}, {"<>", "move"}, {"^v", "marker"}, {"L1 R1", "zoom"}},
 			[]hint{screen, {"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+B", "slice menu"}}
 	case Seq:
 		play, stop := hint{"X", "play"}, hint{"B", "menu"}
@@ -185,13 +185,12 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 			return
 		}
 		c.text(x, y0, fmt.Sprintf("%s %s", a.label(a.spad), fit(a.info.Pads[a.spad].Name, w/CellW-4)), cAmber, true)
-		c.text(x, y0+18, fmt.Sprintf("%.2f s  %d slices", float64(a.sl.Frames)/48000, len(a.sl.Slices)), cDim, false)
-		c.text(x, y0+36, fmt.Sprintf("%s  zoom %dx", modeNames[a.sl.Mode], 1<<a.zoom), cDim, false)
+		c.text(x, y0+18, fmt.Sprintf("%.2fs  %d slices", float64(a.sl.Frames)/48000, len(a.sl.Slices)), cDim, false)
+		c.text(x, y0+36, fmt.Sprintf("%s  zoom %dx", orderMode(a.sl), 1<<a.zoom), cDim, false)
 		if sel := a.sliceAt(a.at); sel >= 0 {
 			s := a.sl.Slices[sel]
-			c.text(x, y0+58, fmt.Sprintf("slice %d/%d", sel+1, len(a.sl.Slices)), cText, true)
-			c.text(x, y0+76, fmt.Sprintf("pitch %+d  gain %d%%", s.Pitch, s.Gain), cText, false)
-			extra := ""
+			c.text(x, y0+54, fmt.Sprintf("slice %d/%d  pitch %+d", sel+1, len(a.sl.Slices), s.Pitch), cText, true)
+			extra := fmt.Sprintf("gain %d%% ", s.Gain)
 			if s.Reverse {
 				extra += "rev "
 			}
@@ -201,9 +200,7 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 			if s.Roll > 0 {
 				extra += fmt.Sprintf("roll %d", s.Roll)
 			}
-			if extra != "" {
-				c.text(x, y0+94, fit(extra, w/CellW), cAmber, false)
-			}
+			c.text(x, y0+72, fit(extra, w/CellW), cText, false)
 		}
 	case Seq:
 		d, ok := a.doc()
@@ -219,7 +216,7 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 		pad := a.colPad()
 		line := fmt.Sprintf("%s %s", a.label(pad), short(a.info.Pads[pad].Name, 9))
 		if n, ok := noteAt(d, pad, a.step); ok {
-			line = fmt.Sprintf("%s  %02X", line, n.Vel)
+			line = fmt.Sprintf("%s  %d", line, n.Vel)
 			c.text(x, y0+76, line, cAmber, true)
 		} else {
 			c.text(x, y0+76, line, cDim, false)

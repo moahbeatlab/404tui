@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var keyNames = []string{"Up", "Down", "Left", "Right", "A", "B", "X", "Y", "L1", "R1"}
+var keyNames = []string{"Up", "Down", "Left", "Right", "A", "B", "X", "Y", "L1", "R1", "L2", "R2"}
 
 // Event is a key going down or up.
 type Event struct {
@@ -36,7 +36,7 @@ func (a *App) Dispatch(e Event) {
 // asked for with their frames' index. The words, separated by spaces:
 //
 //	U D L R A B X Y   a key pressed and let go
-//	[ ]               the shoulder buttons L1 and R1
+//	[ ]  { }          the shoulder buttons L1, R1 and the triggers L2, R2
 //	Y+R               a chord: Y held, R pressed
 //	R*8               a key held down: pressed, then seven repeats
 //	@name             take a snapshot called name
@@ -100,6 +100,10 @@ func parseKey(s string) (Key, error) {
 			return L1, nil
 		case "]":
 			return R1, nil
+		case "{":
+			return L2, nil
+		case "}":
+			return R2, nil
 		}
 	}
 	return 0, fmt.Errorf("unknown key %q", s)
@@ -120,6 +124,8 @@ var defaultMap = map[uint16]Key{
 	0x134: Y,  // BTN_WEST: the left one
 	0x136: L1, // BTN_TL, the left shoulder button (seen as 0x136 on the R36S)
 	0x137: R1, // BTN_TR
+	0x138: L2, // BTN_TL2, the left trigger (seen as 0x138 on the R36S)
+	0x139: R2, // BTN_TR2
 }
 
 // quitCodes are Select and Start; any two of them held together quit. 0x13a/0x13b are BTN_SELECT and BTN_START;

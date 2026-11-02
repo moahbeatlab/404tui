@@ -37,11 +37,13 @@ const (
 	Y
 	L1 // the shoulder buttons: page up and page down
 	R1
+	L2 // the triggers: play one slice, play the whole order (in the slicer)
+	R2
 )
 
 func (k Key) String() string {
 	if k >= L1 {
-		return []string{"L1", "R1"}[k-L1]
+		return []string{"L1", "R1", "L2", "R2"}[k-L1]
 	}
 	return "UDLRABXY"[k : k+1]
 }
@@ -236,6 +238,18 @@ func (a *App) Slices() int {
 	return len(a.sl.Slices)
 }
 
+// triggerKey is L2 (one slice) and R2 (the whole order): what the slicer plays, from any place on its screen.
+func (a *App) triggerKey(whole bool) {
+	if a.scr != Slice || a.sl == nil {
+		return
+	}
+	if whole {
+		a.playResult(false)
+	} else {
+		a.playSlice()
+	}
+}
+
 // pageKey is L1 (back) and R1 (forward): a page in a list, a bank, a bar, the zoom, ten slots.
 func (a *App) pageKey(fwd bool) {
 	d := -1
@@ -315,6 +329,10 @@ func (a *App) Press(k Key, repeat int) {
 	}
 	if k == L1 || k == R1 {
 		a.pageKey(k == R1)
+		return
+	}
+	if k == L2 || k == R2 {
+		a.triggerKey(k == R2)
 		return
 	}
 	if a.yHeld {

@@ -3,6 +3,7 @@ package handheld
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
@@ -109,11 +110,11 @@ func (a *App) sliceMenu() {
 		return fmt.Sprintf("%d steps", v)
 	}), near(stepsVals, a.sliceSteps), func(v int) { a.sliceSteps = stepsVals[v] })
 	m.items = append(m.items,
-		menuItem{label: "Play the result", keepOpen: true, run: func(int) { a.playResult(false) }},
+		menuItem{label: "Play the whole order", keepOpen: true, run: func(int) { a.playResult(false) }},
 		menuItem{label: "Play again, new dice", keepOpen: true, run: func(int) { a.playResult(true) }},
 		menuItem{label: "Result to a free pad", run: func(int) { a.resultToPad() }},
-		menuItem{label: "Shuffle the order", run: func(int) { a.shuffleOrder() }},
-		menuItem{label: "Slices to pads, shuffled", run: func(int) { a.slicesToPads(true) }},
+		menuItem{label: "Shuffle the order (X to pads follows it)", run: func(int) { a.shuffleOrder() }},
+		menuItem{label: "Slices to pads, random order", run: func(int) { a.slicesToPads(true) }},
 	)
 	a.menu = m
 }
@@ -193,7 +194,7 @@ func (a *App) shuffleOrder() {
 	}
 	a.sl.Order = sl.Order
 	a.sl.Mode = formats.ModeOrder
-	a.say("the order is shuffled", false)
+	a.say("order: "+orderText(a.sl.Order), false)
 }
 
 // steps2 is how many steps the result has: the length set in the menu, else one round.
@@ -202,4 +203,16 @@ func (a *App) steps2() int {
 		return a.sliceSteps
 	}
 	return lab.RoundSteps(a.sl)
+}
+
+// orderText is the order as numbers from 1, "3 1 4 2".
+func orderText(o []int) string {
+	var sb strings.Builder
+	for i, v := range o {
+		if i > 0 {
+			sb.WriteByte(' ')
+		}
+		fmt.Fprint(&sb, v+1)
+	}
+	return sb.String()
 }

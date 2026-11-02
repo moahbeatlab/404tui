@@ -169,10 +169,7 @@ func (a *App) slicesToPads(shuffled bool) {
 		return
 	}
 	done := 0
-	order := make([]int, len(a.sl.Slices))
-	for i := range order {
-		order[i] = i
-	}
+	order := a.padOrder()
 	if shuffled { // the slices on the pads in a random order
 		a.sl.Seed++
 		rand.New(rand.NewSource(a.sl.Seed)).Shuffle(len(order), func(i, j int) { order[i], order[j] = order[j], order[i] })
@@ -200,6 +197,26 @@ func (a *App) slicesToPads(shuffled bool) {
 	a.sl = nil
 	a.scr = Pads
 	a.say(fmt.Sprintf("%d slices on %s...", done, a.label(first)), false)
+}
+
+// padOrder is the slices in the order they go to pads: the play order (each slice once, at its first place), then the
+// slices that are not in it, so a shuffled order is the order on the pads too.
+func (a *App) padOrder() []int {
+	n := len(a.sl.Slices)
+	seen := make([]bool, n)
+	out := make([]int, 0, n)
+	for _, i := range a.sl.Order {
+		if i >= 0 && i < n && !seen[i] {
+			seen[i] = true
+			out = append(out, i)
+		}
+	}
+	for i := 0; i < n; i++ {
+		if !seen[i] {
+			out = append(out, i)
+		}
+	}
+	return out
 }
 
 // freeRun is the first pad at or after from (wrapping round to the start) that begins n empty pads in a row, or -1.
