@@ -6,8 +6,13 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
+
+// FirstFrame is closed when the first frame has been drawn on the framebuffer.
+var FirstFrame = make(chan struct{})
+var firstOnce sync.Once
 
 // Run is the main loop on a device: events from the pad (or the web page), a frame to the framebuffer after each
 // one and every 100 ms.
@@ -52,6 +57,9 @@ func Run(a *App, fbPath, inputPath, webAddr string) error {
 	frames, beat := 0, time.Now()
 	for {
 		select {
+		case au := <-a.AudioLate:
+			a.Audio = au
+			log.Println("audio: in use")
 		case e := <-events:
 			if e.Down && e.Repeat == 0 {
 				log.Printf("key %s down (screen %s)", keyNames[e.Key], screenNames[a.scr])
@@ -73,6 +81,7 @@ func Run(a *App, fbPath, inputPath, webAddr string) error {
 			fb.Show(a.Render())
 			if frames++; frames == 1 {
 				log.Println("first frame drawn")
+				firstOnce.Do(func() { close(FirstFrame) })
 			}
 		}
 		if web != nil {

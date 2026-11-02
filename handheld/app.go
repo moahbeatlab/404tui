@@ -71,6 +71,8 @@ type App struct {
 	Root   string // where the samples are: the file browser cannot go above it
 	OutDir string // where projects are written
 	Audio  Audio
+	// AudioLate delivers an audio output that opened after the start (opening it can take long or block); Run takes it.
+	AudioLate chan Audio
 
 	scr  Screen
 	bank int
@@ -118,7 +120,7 @@ type App struct {
 
 // New starts an app on a folder of samples, with an empty project.
 func New(root, outDir string, a Audio) *App {
-	app := &App{pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, pcm: map[int]int{}, prev: map[string]int{}, playing: -1, slot: 1}
+	app := &App{pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, playing: -1, slot: 1}
 	app.lab.NewProject("PROJECT_01")
 	app.dir = root
 	app.refresh()

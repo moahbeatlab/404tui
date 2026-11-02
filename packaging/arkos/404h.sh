@@ -1,17 +1,18 @@
 #!/bin/bash
-# 404h on an R36S under ArkOS: copy this file to the Ports folder of the games card (roms2/ports/) and the
-# program, sp404h-arm64, to roms2/ports/404h/. Samples go in roms2/404/samples; projects are written to
-# roms2/404/card, the folder to copy to (or to use as) the SP-404MKII's card.
+# 404h on an R36S under ArkOS: copy this file to the Ports folder of the games card (/roms/ports/, or
+# /roms2/ports/ with a second card) and the program, sp404h-arm64, to a folder 404h/ beside it. Samples go in
+# 404/samples on the games card; projects are written to 404/card, the folder to copy to the SP-404MKII's card.
 #
-# NOT TRIED ON A DEVICE YET: the framebuffer, the input device and the permissions below are what ArkOS
-# is expected to have; the program writes logs.log next to itself (roms2/ports/404h/logs.log), and what it prints when it dies
-# without being able to log (a crash of the Go runtime) goes to stderr.log beside it.
+# Only partly tried on a device: see logs.log in the 404h folder (copied to /mnt/usbdrive/r36s when that exists).
+# What the program prints when it dies without being able to log (a crash of the Go runtime) is in stderr.log.
 DIR="$(dirname "$(readlink -f "$0")")/404h"
-SAMPLES=/roms2/404/samples
-CARD=/roms2/404/card
-mkdir -p "$SAMPLES" "$CARD"
+# the games card: /roms2 when a second card is mounted there, else /roms (one card, as on the R36S)
+if mountpoint -q /roms2 2>/dev/null; then GAMES=/roms2; else GAMES=/roms; fi
+SAMPLES=$GAMES/404/samples
+CARD=$GAMES/404/card
 LOG="$DIR/logs.log"
 mkdir -p "$DIR" 2>/dev/null
+mkdir -p "$SAMPLES" "$CARD" || echo "launcher: cannot create $SAMPLES / $CARD" >>"$LOG"
 
 # diag writes what the device looks like to logs.log, to paste back when something does not work.
 diag() {

@@ -10,6 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"runtime/pprof"
+	"strings"
+	"time"
 
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/handheld"
@@ -57,15 +60,33 @@ func main() {
 	if *script != "" {
 		audio = &handheld.NullAudio{}
 	}
-	if !*silent && *script == "" {
-		if p, err := playback.Open(); err == nil {
-			audio = p
-		} else {
-			fmt.Fprintln(os.Stderr, "no audio:", err)
-			log.Println("no audio:", err)
-		}
-	}
 	app := handheld.New(*root, *out, audio)
+	log.Printf("app: ready, samples %s, out %s", *root, *out)
+	if !*silent && *script == "" {
+		// Opening the output can block for good on a badly set-up sound card, so it is done on the side:
+		// the screen and the buttons come first, the sound joins when (and if) it opens.
+		go func() {
+			log.Println("audio: opening")
+			p, err := playback.Open()
+			if err != nil {
+				log.Println("audio: no output:", err)
+				return
+			}
+			log.Println("audio: opened")
+			app.AudioLate <- p
+		}()
+	}
+	if *fbPath != "" && *script == "" {
+		go func() { // a stuck start tells where it is stuck: every goroutine's stack goes to the log
+			select {
+			case <-handheld.FirstFrame:
+			case <-time.After(10 * time.Second):
+				var sb strings.Builder
+				pprof.Lookup("goroutine").WriteTo(&sb, 2)
+				log.Printf("NO FIRST FRAME after 10 s; goroutines:\n%s", sb.String())
+			}
+		}()
+	}
 	app.Connect = func() (handheld.Link, error) {
 		if *simulate {
 			return handheld.DeviceLink{Dev: device.New(sim.Demo(), "sim")}, nil
