@@ -130,18 +130,22 @@ func TestAssignSliceAndSequence(t *testing.T) {
 	}
 	keys(t, a, "Y+X B") // a second track (the next pad with a sample), the menu: fill it with "every beat"
 	chooseMenu(t, a, "Fill...")
-	chooseMenu(t, a, "Fill the track")
-	d, _ = a.doc()
+	d, _ = a.doc() // the trial is already in the pattern: every beat
 	if len(d.Notes) != 1+16 {
 		t.Fatalf("every beat in 4 bars is 16 notes (and the other one): %d", len(d.Notes))
 	}
+	chooseMenuContaining(t, a, "Keep it")
 	keys(t, a, "B") // the tool's menu stays open until it is closed
+	if a.seqOn {
+		t.Fatal("closing the tool stops the loop the trial started")
+	}
+	base := au.Loops
 	keys(t, a, "X")
-	if !a.seqOn || au.Loops != 1 {
-		t.Fatalf("X plays the pattern: on %v, loops %d", a.seqOn, au.Loops)
+	if !a.seqOn || au.Loops != base+1 {
+		t.Fatalf("X plays the pattern: on %v, loops %d (was %d)", a.seqOn, au.Loops, base)
 	}
 	keys(t, a, "A")
-	if au.Loops != 2 {
+	if au.Loops != base+2 {
 		t.Fatal("an edit while it plays goes into the loop")
 	}
 	keys(t, a, "B")
@@ -1940,26 +1944,27 @@ func TestTrackToolsInThePattern(t *testing.T) {
 	if a.menu == nil || !strings.Contains(a.menu.title, "euclid") {
 		t.Fatalf("euclid menu: %+v", a.menu)
 	}
-	chooseMenuContaining(t, a, "Write it")
 	if got := len(a.trackNotes(0)); got != 5*4 {
-		t.Fatalf("5 hits in 16 steps, 4 bars: %d notes", got)
+		t.Fatalf("5 hits in 16 steps, 4 bars, heard at once: %d notes", got)
 	}
+	chooseMenuContaining(t, a, "Keep it")
 	keys(t, a, "B")
 	a.seqMenu()
 	chooseMenu(t, a, "Echo")
-	chooseMenuContaining(t, a, "Add the echoes")
 	if len(a.trackNotes(0)) <= 20 {
-		t.Fatal("echo adds notes")
+		t.Fatal("echo adds notes, already in the trial")
 	}
+	chooseMenuContaining(t, a, "Keep it")
 	keys(t, a, "B")
 	// dispatch over marked pads moves notes onto them
 	a.marks = []int{1, 2}
 	a.seqMenu()
 	chooseMenuContaining(t, a, "Dispatch")
-	chooseMenuContaining(t, a, "Share the notes out")
 	if len(a.trackNotes(0)) != 0 || len(a.trackNotes(1)) == 0 || len(a.trackNotes(2)) == 0 {
 		t.Fatalf("A1 %d, A2 %d, A3 %d notes", len(a.trackNotes(0)), len(a.trackNotes(1)), len(a.trackNotes(2)))
 	}
+	chooseMenuContaining(t, a, "Keep it")
+	keys(t, a, "B")
 	keys(t, a, "Y+{") // one undo: back before the dispatch
 	if len(a.trackNotes(0)) == 0 {
 		t.Fatal("undo gives the track back")
@@ -2366,18 +2371,18 @@ func TestFillGateDecayAndShape(t *testing.T) {
 	a.go_(Seq)
 	a.addTrack(0)
 	a.seqMenu()
-	chooseMenu(t, a, "Fill...")
+	a.trackDefaults()
 	a.tt.fillPat, a.tt.fillDecay = 3, 3 // off-beats, 15% decay
-	chooseMenu(t, a, "Fill the track")
+	chooseMenu(t, a, "Fill...")
 	notes := a.trackNotes(0)
 	if len(notes) != 16 || notes[0].Tick != 240 || notes[1].Vel != 85 {
 		t.Fatalf("off-beats over 4 bars with decay: %d notes, first %+v, second vel %d", len(notes), notes[0], notes[1].Vel)
 	}
+	chooseMenuContaining(t, a, "Keep it")
 	keys(t, a, "B")
 	a.seqMenu()
-	chooseMenu(t, a, "Shape")
 	a.tt.shapeGate, a.tt.shapeDecay = 0, 0 // to the next note
-	chooseMenu(t, a, "Shape them")
+	chooseMenu(t, a, "Shape")
 	notes = a.trackNotes(0)
 	if notes[0].Len != 480 {
 		t.Fatalf("legato to the next note: %d", notes[0].Len)
@@ -2507,7 +2512,6 @@ func TestEvolveMutatesEachBarFromTheOneBefore(t *testing.T) {
 	a.setTrack(0, first)
 	a.seqMenu()
 	chooseMenu(t, a, "Evolve")
-	chooseMenuContaining(t, a, "Evolve the bars")
 	if len(a.trackNotes(0)) < 8 { // the pattern is 4 bars: the first bar was copied into the later ones with mutations
 		t.Fatalf("evolved: %d notes", len(a.trackNotes(0)))
 	}
@@ -2617,5 +2621,44 @@ func TestNudgeAndTheSlicerCursor(t *testing.T) {
 	keys(t, a, "[")
 	if a.at != 0 {
 		t.Fatalf("and L1 back: %d", a.at)
+	}
+}
+
+func TestFileIndexSearchesFromDisk(t *testing.T) {
+	a, _ := newApp(t)
+	a.dir = a.Root
+	a.startIndex(a.Root)
+	for i := 0; i < 200; i++ {
+		a.idx.mu.Lock()
+		running := a.idx.running
+		a.idx.mu.Unlock()
+		if !running {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	a.indexTick()
+	p, root := a.indexFor(a.Root)
+	if p == "" || root != filepath.Clean(a.Root) {
+		t.Fatalf("index not found: %q %q", p, root)
+	}
+	// delete the live files: the answer must come from the index alone
+	var names []string
+	a.searchQ = ""
+	a.list()
+	for _, e := range a.entries {
+		names = append(names, e.name)
+	}
+	os.RemoveAll(a.Root)
+	os.MkdirAll(a.Root, 0o755)
+	a.searchQ = "wav"
+	a.list()
+	if len(a.entries) == 0 && len(names) > 0 {
+		t.Fatal("the indexed search finds nothing")
+	}
+	for _, e := range a.entries {
+		if !strings.Contains(strings.ToLower(e.name), "wav") {
+			t.Fatalf("%q does not match", e.name)
+		}
 	}
 }

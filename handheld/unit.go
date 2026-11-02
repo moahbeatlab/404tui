@@ -64,6 +64,7 @@ func (j *job) state() (done, total int, name string, err error, finished bool) {
 func (a *App) Tick() {
 	a.splashTick()
 	a.autosaveTick()
+	a.indexTick()
 	if a.scr != Unit || a.link != nil || a.Connect == nil || a.clock().Sub(a.connAt) < 2*time.Second {
 		return
 	}

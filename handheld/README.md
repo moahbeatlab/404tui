@@ -274,3 +274,8 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
   under TIMING, with per-track scope; the groove templates of the template list carry swing and nudge per voice.)
 - **Slicer cursor**: a held Left or Right moves 2, then 8 (after half a second), 32 (a second) and 128 pixels at a press (the pad
   sends the press again and again; hold time is counted). **L1/R1 jump a quarter of the view**; zoom is Y+Up/Down.
+
+## Live preview for the pattern tools, and a search index
+
+- **Tool dialogs are a trial.** Opening a tool (Euclid, Chance, Randomize, Echo, Cycle, Dispatch, Fill, Shape, Ratchet, Evolve, Accents, Nudge) applies it at once, and every setting you change applies it again from the untouched pattern; the loop starts by itself if it is not playing. "Another roll of the dice" re-rolls the random tools. **Keep it** commits (one undo step) and the dialog goes on from there; **B** throws the trial away and stops a loop the trial started. Undo/redo are blocked while a tool is open.
+- **Search index.** FILES, X (places): "Index <folder>" walks the folder once in the background and writes a text list to `/roms/404/index/` (about 60 bytes per file, nothing in RAM). Searches inside an indexed folder (or below it) stream that list, so they are instant and not cut off at 1.5 s / 40000 files; without an index the live search works as before.

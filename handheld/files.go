@@ -32,6 +32,9 @@ var audioExts = map[string]bool{".wav": true, ".aif": true, ".aiff": true, ".fla
 // after 1.5 s, 40000 files looked at or 400 found, and says so.
 func (a *App) searchList() {
 	words := strings.Fields(strings.ToLower(a.searchQ))
+	if a.searchIndex(words) {
+		return
+	}
 	root := a.dir
 	deadline := time.Now().Add(1500 * time.Millisecond)
 	looked := 0
@@ -188,5 +191,6 @@ func (a *App) placesMenu() {
 		label = "Take it off the favourites"
 	}
 	m.items = append(m.items, menuItem{label: fit(label, 40), run: func(int) { a.toggleFavourite(a.dir) }})
+	a.indexItems(m)
 	a.menu = m
 }

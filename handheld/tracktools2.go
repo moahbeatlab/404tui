@@ -53,7 +53,6 @@ func (a *App) ratchetMenu() {
 			a.say("this track has no notes", true)
 			return
 		}
-		a.tt.seed++
 		out := ratchetNotes(notes, t.raWhich, ratchetParts[t.raParts], t.raPlays, t.raRamp, a.tt.seed)
 		a.finishTrack(pad, out, fmt.Sprintf("ratchet x%d", ratchetParts[t.raParts]))
 	})
@@ -148,7 +147,6 @@ func (a *App) evolveMenu() {
 			}
 			sort.Ints(pads)
 		}
-		a.tt.seed++
 		total := 0
 		for i, p := range pads {
 			ns := a.trackNotes(p)
@@ -303,7 +301,6 @@ func (a *App) accentMenu() {
 			a.say("this track has no notes", true)
 			return
 		}
-		a.tt.seed++
 		out := accentGhostNotes(notes, pad, int(d.Length), t.acAccent, accentVels[t.acVel], otherVels[t.acOthers], t.acGhosts, ghostVels[t.acGhostVel], ghostPcts[t.acGhostPct], a.tt.seed)
 		a.finishTrack(pad, out, "accents and ghosts")
 	})

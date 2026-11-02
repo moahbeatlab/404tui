@@ -112,18 +112,73 @@ func (a *App) finishTrack(pad int, notes []lab.Note, what string) {
 	a.say(fmt.Sprintf("%s on %s: %d notes", what, a.label(pad), len(notes)), false)
 }
 
-// toolMenu builds a menu of settings with the apply action at the end; the menu stays open, so a setting can be changed and
-// the tool applied again (Y+L2 undoes).
+// randomTools are the tools with a roll of the dice in them: they get an "Another roll" item.
+var randomTools = map[string]bool{"Thin the track out": true, "Change the velocities": true, "Ratchet them": true, "Evolve the bars": true,
+	"Apply them": true, "Share the notes out": true}
+
+// toolMenu is a tool's dialog: the settings, and the tool at work while the dialog is open. Opening it, and every change of a
+// setting, puts the pattern back as it was and applies the tool again, and the loop plays it, so the effect is heard at once.
+// "Keep it" commits what is heard as one undo step (and the dialog goes on from there); B throws the trial away and puts the
+// pattern back (and stops the loop if the dialog started it). The roll of the dice stays the same while the settings change.
 func (a *App) toolMenu(title string, settings []menuItem, applyLabel string, apply func()) {
+	base := a.lab.Snapshot()
+	a.toolBase = base
+	a.tt.seed++ // a new roll for each visit
+	startedLoop := false
+	preview := func() {
+		a.restoreProject(base)
+		apply()
+	}
 	m := &menu{title: title}
 	m.head("SETTINGS")
 	for _, it := range settings {
 		it.keepOpen = true
+		orig := it.onChange
+		it.onChange = func(v int) {
+			if orig != nil {
+				orig(v)
+			}
+			preview()
+		}
 		m.items = append(m.items, it)
 	}
-	m.head("DO IT")
-	m.items = append(m.items, menuItem{label: applyLabel, keepOpen: true, run: func(int) { apply() }})
+	if randomTools[applyLabel] {
+		m.items = append(m.items, menuItem{label: "Another roll of the dice", keepOpen: true, run: func(int) { a.tt.seed++; preview() }})
+	}
+	m.head("TRIAL")
+	m.items = append(m.items, menuItem{label: "Keep it (B throws it away)", keepOpen: true, run: func(int) {
+		if !a.lab.Changed(base) {
+			a.say("nothing to keep: the pattern is as it was", false)
+			return
+		}
+		label := a.msg
+		if label == "" {
+			label = title
+		}
+		a.undo = append(a.undo, undoEntry{base, fit(label, 40)})
+		a.redo = nil
+		a.trimUndo()
+		base = a.lab.Snapshot()
+		a.toolBase = base
+		a.say("kept: "+label, false)
+	}})
+	m.onClose = func() {
+		changed := a.lab.Changed(base)
+		a.restoreProject(base)
+		a.toolBase = nil
+		if startedLoop && a.seqOn {
+			a.stop()
+		}
+		if changed {
+			a.say("the trial is thrown away", false)
+		}
+	}
 	a.menu = m
+	preview() // the tool at work with its settings as they are
+	if !a.seqOn && a.lab.Changed(base) {
+		a.startLoop()
+		startedLoop = a.seqOn
+	}
 }
 
 func val(label string, vals []string, cur int, set func(v int)) menuItem {
@@ -205,7 +260,6 @@ func (a *App) chanceMenu() {
 			a.say("this track has no notes", true)
 			return
 		}
-		t.seed++
 		a.finishTrack(pad, chanceNotes(notes, t.chance, t.chanceLoop, t.seed), fmt.Sprintf("chance %d%%", t.chance))
 	})
 }
@@ -248,7 +302,6 @@ func (a *App) randomizeMenu() {
 			a.say("this track has no notes", true)
 			return
 		}
-		t.seed++
 		a.finishTrack(pad, randomizeNotes(notes, amounts[t.rndAmount], t.rndShape == 1, t.rndBias, t.seed), "randomized")
 	})
 }
@@ -401,7 +454,6 @@ func (a *App) dispatchMenu() {
 			a.say("this track has no notes", true)
 			return
 		}
-		t.seed++
 		rng := rand.New(rand.NewSource(t.seed))
 		byPad := map[int][]lab.Note{}
 		for i, n := range notes {

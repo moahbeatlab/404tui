@@ -26,7 +26,17 @@ type undoEntry struct {
 // Press handles one key going down: a key with Y held and L2 or R2 is undo or redo; any other key is run, and the project
 // before it is kept when it changed.
 func (a *App) Press(k Key, repeat int) {
+	if a.toolBase != nil && a.menu == nil { // the tool's dialog is gone: its trial stands as it is
+		a.toolBase = nil
+	}
 	if a.yHeld && a.splash == nil && (k == L2 || k == R2) {
+		if a.toolBase != nil {
+			if repeat == 0 {
+				a.yUsed = true
+				a.say("a tool is open: Keep it commits, B throws the trial away", true)
+			}
+			return
+		}
 		if repeat == 0 {
 			a.yUsed = true
 			if k == L2 {
@@ -37,8 +47,15 @@ func (a *App) Press(k Key, repeat int) {
 		}
 		return
 	}
+	if a.toolBase != nil { // inside a tool's dialog the changes are trials: the dialog commits them as one step, or throws them away
+		a.press(k, repeat)
+		return
+	}
 	pre := a.lab.Snapshot()
 	a.press(k, repeat)
+	if a.toolBase != nil { // this key opened a tool: what it did so far is a trial
+		return
+	}
 	a.commitUndo(pre, k, repeat)
 }
 
@@ -118,6 +135,14 @@ func (a *App) redoStep() {
 
 // restore puts the project back to a snapshot and brings what depends on it (decoded pads, the slicer, loops) along.
 func (a *App) restore(s *lab.Snap) {
+	a.restoreProject(s)
+	if a.menu != nil || a.picker != nil || a.kb != nil {
+		a.menu, a.picker, a.kb = nil, nil, nil
+	}
+}
+
+// restoreProject puts the project back to a snapshot and brings what depends on it along (decoded pads, the slicer, loops).
+func (a *App) restoreProject(s *lab.Snap) {
 	a.lab.Restore(s)
 	for _, id := range a.pcm {
 		a.lab.Free(id)
@@ -126,9 +151,6 @@ func (a *App) restore(s *lab.Snap) {
 	a.aud = nil
 	a.sl = nil
 	a.refresh()
-	if a.menu != nil || a.picker != nil || a.kb != nil {
-		a.menu, a.picker, a.kb = nil, nil, nil
-	}
 	a.step = min(a.step, a.steps()-1)
 	a.autoRows()
 	a.replay()

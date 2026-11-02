@@ -10,9 +10,10 @@ import (
 // menu is a list of actions over a screen. With four keys a screen cannot have a key for each action, so a
 // screen has a menu: Up and Down choose, Left and Right change the value of an item that has one, A runs it, B closes.
 type menu struct {
-	title string
-	items []menuItem
-	cur   int
+	title   string
+	items   []menuItem
+	cur     int
+	onClose func() // what B does besides closing the menu (a tool throws its trial away)
 }
 
 type menuItem struct {
@@ -86,6 +87,9 @@ func (a *App) menuKey(k Key) {
 			}
 		}
 	case B:
+		if m.onClose != nil {
+			m.onClose()
+		}
 		a.menu = nil
 	case A:
 		it := *m.item()

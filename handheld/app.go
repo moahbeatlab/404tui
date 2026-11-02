@@ -116,12 +116,14 @@ type App struct {
 	picker    *picker   // the pattern picker, when it is open
 	splash    *splash   // the logo and dashboard at the start
 	as        autosave
+	idx       indexJob
 	aHeld     bool // A is down in SEQ: the arrows edit the note under it
 	aDelete   bool // A went down on a note: if nothing is edited, letting go takes it off
 	aPad      int  // the note being edited
 	aTick     uint32
 	aSession  int // counts the holds of A, so that an edit session is one undo step
 	undoSes   int
+	toolBase  *lab.Snap // the project as it was when the open tool dialog began: its changes are trials
 	tt2       trackState2
 	tt        trackState  // the settings of the track tools
 	scopeRow  bool        // the timing tools act on the row under the cursor only, not on every pad
