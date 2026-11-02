@@ -2988,3 +2988,55 @@ func TestEnvelopeAndLFOExtras(t *testing.T) {
 		}
 	}
 }
+
+func TestArpFromOneSample(t *testing.T) {
+	// C major triad over two octaves: C E G, then the same an octave up
+	o := onePad{scale: 1, stack: 3, oct: 4}
+	if got := fmt.Sprint(onePadSemis(o)); got != "[0 4 7 12 16 19]" {
+		t.Fatalf("triad in C major: %s", got)
+	}
+	// the seventh chord on the second degree of C major is D F A C
+	o = onePad{scale: 1, stack: 7, degree: 1, oct: 3}
+	if got := fmt.Sprint(onePadSemis(o)); got != "[2 5 9 12]" {
+		t.Fatalf("Dm7: %s", got)
+	}
+	// fifths only, on the key of E
+	o = onePad{key: 4, scale: 1, stack: 2, oct: 3}
+	if got := fmt.Sprint(onePadSemis(o)); got != "[4 11]" {
+		t.Fatalf("E fifth: %s", got)
+	}
+	// three octaves down: C E G at -36 is out of range for the top, the lowest copies are
+	o = onePad{scale: 1, stack: 3, oct: 1}
+	if got := fmt.Sprint(onePadSemis(o)); got != "[-24 -20 -17 -12 -8 -5 0 4 7]" {
+		t.Fatalf("triad -2 octaves: %s", got)
+	}
+	a, au := newApp(t)
+	keys(t, a, kit)
+	a.go_(Pads)
+	a.cur = 0
+	a.openOnePadMenu(0)
+	a.Render() // the keyboard is drawn
+	au.Loops = 0
+	chooseMenu(t, a, "Hear it / stop it")
+	if !a.arpOn || au.Loops != 1 {
+		t.Fatalf("one sample loops as an arp: on %v loops %d (%s)", a.arpOn, au.Loops, a.msg)
+	}
+	a.stop()
+	before := padsWithSamples(a)
+	a.openOnePadMenu(0)
+	chooseMenu(t, a, "Bounce the arp to a new pad")
+	if padsWithSamples(a) != before+1 {
+		t.Fatalf("bounced to one pad: %s", a.msg)
+	}
+	a.openOnePadMenu(0)
+	chooseMenu(t, a, "Bounce the chord to a new pad")
+	if padsWithSamples(a) != before+2 {
+		t.Fatalf("the chord on a pad of its own: %s", a.msg)
+	}
+	a.go_(Pads)
+	a.openOnePadMenu(0)
+	chooseMenu(t, a, "Print the arp to the pattern")
+	if d, ok := a.doc(); a.scr != Seq || !ok || len(d.Notes) == 0 {
+		t.Fatalf("keys and notes written: %s", a.msg)
+	}
+}

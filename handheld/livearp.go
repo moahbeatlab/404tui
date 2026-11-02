@@ -64,17 +64,6 @@ func (a *App) clearMarks() {
 
 // renderMarkedArp mixes the arp over keys into a stereo loop: a step of the rate each, a note cut by the gate.
 func (a *App) renderMarkedArp(keys []int) (formats.Sample, error) {
-	st := a.arpp
-	per := formats.ArpRates[st.rate].PerBeat
-	stepF := formats.SampleRate * 60 / a.tempoOf(keys[0]/16) / float64(per)
-	steps := printBars[near(printBars, st.bars)] * 4 * per
-	total := int(math.Round(float64(steps) * stepF))
-	if total < 2 {
-		return formats.Sample{}, fmt.Errorf("the arp is too short")
-	}
-	mix := make([]int32, total*2)
-	gate := printGates[st.gate]
-	gain := int32(printVels[st.vel])
 	samples := make([]formats.Sample, len(keys))
 	for i, p := range keys {
 		id, ok := a.padSample(p)
@@ -87,7 +76,23 @@ func (a *App) renderMarkedArp(keys []int) (formats.Sample, error) {
 		}
 		samples[i] = s
 	}
-	for i, hits := range arpSequence(len(keys), st.typ, steps, rand.New(rand.NewSource(7))) {
+	return a.mixArp(samples, a.tempoOf(keys[0]/16))
+}
+
+// mixArp lays the samples (the keys, low to high) out in time as the arp settings say, at a tempo.
+func (a *App) mixArp(samples []formats.Sample, bpm float64) (formats.Sample, error) {
+	st := a.arpp
+	per := formats.ArpRates[st.rate].PerBeat
+	stepF := formats.SampleRate * 60 / bpm / float64(per)
+	steps := printBars[near(printBars, st.bars)] * 4 * per
+	total := int(math.Round(float64(steps) * stepF))
+	if total < 2 {
+		return formats.Sample{}, fmt.Errorf("the arp is too short")
+	}
+	mix := make([]int32, total*2)
+	gate := printGates[st.gate]
+	gain := int32(printVels[st.vel])
+	for i, hits := range arpSequence(len(samples), st.typ, steps, rand.New(rand.NewSource(7))) {
 		start := int(math.Round(float64(i) * stepF))
 		length := max(int(stepF*float64(gate)/100), 32)
 		for _, k := range hits {

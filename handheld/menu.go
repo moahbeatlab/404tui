@@ -13,7 +13,9 @@ type menu struct {
 	title   string
 	items   []menuItem
 	cur     int
-	onClose func() // what B does besides closing the menu (a tool throws its trial away)
+	onClose func()                       // what B does besides closing the menu (a tool throws its trial away)
+	foot    func(c *canvas, x, y, w int) // drawn under the items (a keyboard), footH pixels high
+	footH   int
 }
 
 type menuItem struct {
@@ -112,7 +114,7 @@ func (a *App) drawMenu(c *canvas) {
 	}
 	vis := min(len(m.items), 17)
 	top := max(0, min(m.cur-vis/2, len(m.items)-vis))
-	h := 40 + vis*rh
+	h := 40 + vis*rh + m.footH
 	x, y := (contentW-w)/2, max(36, (H-h)/2-20)
 	c.rect(x, y, w, h, cPanel2)
 	c.box(x, y, w, h, 2, cAmber)
@@ -145,6 +147,9 @@ func (a *App) drawMenu(c *canvas) {
 			}
 			c.text(x+w-14-textW(v), yy, v, cAmber, i == m.cur)
 		}
+	}
+	if m.foot != nil {
+		m.foot(c, x, y+40+vis*rh, w)
 	}
 	if top > 0 {
 		c.text(x+w-30, y+10, "^", cAmber, true)
@@ -179,6 +184,7 @@ func (a *App) padToolsMenu(n int) *menu {
 	if has {
 		add("Slice...", func(int) { a.go_(Slice) })
 		add("Chords & arps...", func(int) { a.openArpMenu(n) })
+		add("Arp from this one sample (scales, chords)...", func(int) { a.openOnePadMenu(n) })
 		add("Keyboard from it...", func(int) { a.openKeyboardMenu(n) })
 		each := func(op string, arg int) {
 			if bulk {

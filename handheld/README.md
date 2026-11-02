@@ -294,3 +294,13 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 - **LFO on a track (SEQ).** Pattern menu → "LFO on the notes...": a wave moves the velocity, the length or the timing of every note of the track by where the note sits in the wave (baked into the pattern, with the live trial, "Keep it" and B like the other tools; on a frozen bar only that bar). The shapes, rates and shift are those of the LFOs in 404jam: SIN, TRI, SQR, SAW, SAW DN, RND (glides between a random value per round), S&H (holds one per round), PUMP (dips on the beat, swells back: sidechain-style); rates 8/1 to 1/16 (one round of the wave in 16ths); shift 0, 1/4, 1/2, 3/4; depth 10-100%. Pitch is not offered: the unit's pitch byte of a note has no known mapping yet (404tui only shows it raw).
 
 - **LFO range, centre, invert, DRIFT; ENV (SEQ).** The LFO tool has a "Velocity goes: around the notes / between min and max" choice (min and max velocity), a Direction (inverted = a negative depth, as the LFO slot of Loop Cartographer), a Center that shifts the middle, and the shape DRIFT (a smooth slow wander). New pattern-menu tool "ENV: each note shapes the next": every note starts an envelope (attack, decay, sustain, release in 16ths, depth, centre, direction) and the following note's velocity, length or timing is moved by how far that envelope has got when it arrives (the first note follows the last): ducking after a close note, a build-up after a gap.
+
+## Arp from one sample
+
+PADS menu, "Arp from this one sample (scales, chords)...": as in DOOM OS, one pad is the sound and the notes are its pitches.
+Key (C..B), Scale (chromatic with chord types, or MAJ, MIN, pentatonics, DOR, MIXO, BLUES), the chord degree, and the Chord:
+stacked on the scale (root, thirds, fifths, triad, sus2/4, sixth, seventh, ninth, whole scale) or a chord type when chromatic.
+Octaves -3..+3 repeat the notes down or up. A piano at the foot of the menu lights the notes. Type, Rate, Gate, Velocity and
+Length are the ones of the marked-pad arp. Make it: hear it (a change is heard at once), bounce the arp to a new pad, bounce the
+chord (all notes at once) to a new pad, or put the pitched copies on free pads and print the arp to the pattern. The sample is
+taken as a C: the pitch of a pattern note cannot be set yet (the pitch byte is unknown), so the keys are pitched copies.

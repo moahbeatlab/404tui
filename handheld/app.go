@@ -117,6 +117,7 @@ type App struct {
 	splash     *splash   // the logo and dashboard at the start
 	as         autosave
 	idx        indexJob
+	onepad     onePad
 	autoSens   float64 // how easily Y+A hears an onset (0: 0.5)
 	lfo        lfoState
 	env        envState
