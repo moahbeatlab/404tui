@@ -53,6 +53,8 @@ func (a *App) draw(g Gfx) {
 		a.drawUnit(g)
 	case Config:
 		a.drawConfig(g)
+	case Perform:
+		a.drawPerform(g)
 	}
 	if a.picker != nil {
 		a.drawPicker(g)

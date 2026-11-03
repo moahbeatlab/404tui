@@ -5,6 +5,7 @@ import (
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
+	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/record"
 	"math/rand"
@@ -45,7 +46,7 @@ func TestOnlyEightKeys(t *testing.T) {
 	a, _ := newApp(t)
 	// Every screen can be reached and left with the eight keys alone.
 	keys(t, a, "Y+L")
-	if a.Screen() != Config {
+	if a.Screen() != Perform {
 		t.Fatalf("Y+Left from PADS is the last screen, got %v", a.Screen())
 	}
 	keys(t, a, "Y+R")
@@ -229,10 +230,7 @@ func TestMovePadAndCopyPad(t *testing.T) {
 func TestSendToTheUnit(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit)
-	keys(t, a, "Y+L Y+L")
-	if a.Screen() != Unit {
-		t.Fatal("UNIT is two left of PADS")
-	}
+	onScreen(t, a, Unit)
 	keys(t, a, "A") // no link yet: looks for it
 	a.Tick()
 	if a.link == nil {
@@ -3400,7 +3398,8 @@ func TestPatternSlotsCopyMoveAndRetarget(t *testing.T) {
 func TestUnitProjectsLoadBackupRestoreRenameErase(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit)
-	keys(t, a, "Y+L Y+L A")
+	onScreen(t, a, Unit)
+	keys(t, a, "A")
 	a.Tick()
 	if a.link == nil {
 		keys(t, a, ".")
@@ -3479,7 +3478,8 @@ func waitJob(t *testing.T, a *App) {
 func TestEditingTheUnitLive(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit)
-	keys(t, a, "Y+L Y+L A")
+	onScreen(t, a, Unit)
+	keys(t, a, "A")
 	a.Tick()
 	if a.link == nil {
 		keys(t, a, ".")
@@ -3604,5 +3604,121 @@ func TestRecordingASetWithTheRecorderOfThePlatform(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(a.recordDir(), "take.wav")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// onScreen goes right through the screens until the one is in front.
+func onScreen(t *testing.T, a *App, s Screen) {
+	t.Helper()
+	for i := 0; i < len(screenNames)+1 && a.Screen() != s; i++ {
+		keys(t, a, "Y+R")
+	}
+	if a.Screen() != s {
+		t.Fatalf("cannot get to screen %d (at %d)", s, a.Screen())
+	}
+}
+
+func padNote(pad int) int { // the MIDI note of a pad (1..16)
+	order := [16]int{12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3}
+	return 36 + order[pad-1]
+}
+
+func TestPerformFollowsTheUnitsMIDI(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	base := time.Now().Add(-10 * time.Second)
+	at := func(i int) time.Time { return base.Add(time.Duration(i) * time.Second / 48) } // 24 ticks to a beat of 0.5 s
+	a.midiEvent(midiin.Event{Kind: midiin.Start, At: at(0)})
+	for i := 1; i <= 24*4+10; i++ {
+		a.midiEvent(midiin.Event{Kind: midiin.Clock, At: at(i)})
+	}
+	if bar, beat := a.clk.Beat(); bar != 1 || beat != 0 {
+		t.Fatalf("the clock is at bar 2 beat 1: %d %d", bar+1, beat+1)
+	}
+	if a.mon.BPM < 115 || a.mon.BPM > 125 {
+		t.Fatalf("the tempo from the clock: %v", a.mon.BPM)
+	}
+	// a pad hit lights the pad (the clock does not run any more, so it is hit by hand)
+	a.clk.Running = false
+	a.midiEvent(midiin.Event{Kind: midiin.NoteOn, Channel: 3, Data1: padNote(5), Data2: 100, At: time.Now()})
+	if g := a.mon.Glow(2, 4, time.Now()); g < 0.5 {
+		t.Fatalf("pad 5 of bank C is lit: %v", g)
+	}
+	// a controller shows up in the list
+	a.midiEvent(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 16, Data2: 90, At: time.Now()})
+	if a.mon.CCValue(1, 16) != 90 {
+		t.Fatal("the knob C1 of BUS 1")
+	}
+	// the pad code 1 3 3 7 is live mode
+	a.go_(Pads)
+	for _, p := range []int{1, 3, 3, 7} {
+		a.midiEvent(midiin.Event{Kind: midiin.NoteOn, Channel: 1, Data1: padNote(p), Data2: 100, At: time.Now()})
+	}
+	if a.Screen() != Perform {
+		t.Fatalf("the code goes to PERF: %v", a.Screen())
+	}
+	for _, p := range []int{1, 3, 3, 7} {
+		a.midiEvent(midiin.Event{Kind: midiin.NoteOn, Channel: 1, Data1: padNote(p), Data2: 100, At: time.Now()})
+	}
+	if a.Screen() != Pads {
+		t.Fatalf("the same code goes back: %v", a.Screen())
+	}
+	// a message of the control channel: note 62 on channel 16 is live mode
+	a.midiEvent(midiin.Event{Kind: midiin.NoteOn, Channel: 16, Data1: 62, Data2: 100, At: time.Now()})
+	if a.Screen() != Perform {
+		t.Fatalf("note 62 on channel 16 is live mode: %v", a.Screen())
+	}
+	// the screen draws, and the patterns are chosen
+	a.Render()
+	a.RenderCells()
+	keys(t, a, "A")
+	if a.picker == nil {
+		t.Fatal("A chooses the pattern that plays")
+	}
+	keys(t, a, "A")
+	if a.perfNow != 1 {
+		t.Fatalf("now: %d", a.perfNow)
+	}
+	keys(t, a, "X A")
+	if a.perfNext != 2 {
+		t.Fatalf("next: %d", a.perfNext)
+	}
+	keys(t, a, "Y+A")
+	if a.perfNow != 2 || a.perfNext != 0 {
+		t.Fatalf("the next became the one that plays: %d %d", a.perfNow, a.perfNext)
+	}
+}
+
+type fakeMIDI struct{ ch chan midiin.Event }
+
+func (f fakeMIDI) Ports() ([]string, error) { return []string{"SP-404MKII"}, nil }
+func (f fakeMIDI) Open(part string, on func(midiin.Event)) (func(), string, error) {
+	go func() {
+		for e := range f.ch {
+			on(e)
+		}
+	}()
+	return func() {}, "SP-404MKII", nil
+}
+
+func TestTheMIDIInputOfThePlatformIsOpenedAndRead(t *testing.T) {
+	a, _ := newApp(t)
+	f := fakeMIDI{ch: make(chan midiin.Event, 8)}
+	a.SetPlatform(Platform{Name: "test", MIDI: f})
+	a.Tick()
+	if a.midi == nil || !strings.Contains(a.midiStatus(), "SP-404MKII") {
+		t.Fatalf("the input is open: %q", a.midiStatus())
+	}
+	f.ch <- midiin.Event{Kind: midiin.CC, Channel: 2, Data1: 17, Data2: 33}
+	for i := 0; i < 100 && a.mon.CCValue(2, 17) != 33; i++ {
+		a.Tick()
+		time.Sleep(10 * time.Millisecond)
+	}
+	if a.mon.CCValue(2, 17) != 33 {
+		t.Fatal("the controller came through")
+	}
+	b, _ := newApp(t)
+	if b.midiStatus() != "no MIDI in this build" {
+		t.Fatalf("without MIDI it says so: %q", b.midiStatus())
 	}
 }

@@ -1104,3 +1104,27 @@ func patternBanks(b []byte) []int {
 	}
 	return out
 }
+
+// patternBars is the length of a pattern file in bars.
+func patternBars(b []byte) int {
+	p, err := formats.ParsePattern(b)
+	if err != nil || p.Length == 0 {
+		return 0
+	}
+	return int((p.Length + 4*formats.PPQ - 1) / (4 * formats.PPQ))
+}
+
+// patternPadsOf are the pads (0..159) a pattern has notes for.
+func patternPadsOf(b []byte) []int {
+	p, err := formats.ParsePattern(b)
+	if err != nil {
+		return nil
+	}
+	var out []int
+	for _, e := range p.Events {
+		if !e.Control {
+			out = append(out, int(e.Pad.Index()))
+		}
+	}
+	return out
+}

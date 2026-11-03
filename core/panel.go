@@ -100,6 +100,8 @@ func (a *App) hints() (plain, shift []hint) {
 		}
 		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"R2", "mute/solo"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}},
 			[]hint{{"Y+X", "add track"}, {"Y+B", "pick pattern"}, {"Sel+B", "tools"}, {"Y+^v", "pattern +-"}, {"Sel+X", "record"}}
+	case Perform:
+		return []hint{{"A", "pattern now"}, {"X", "next pattern"}, {"B", "back"}}, []hint{screen, {"Y+A", "next -> now"}, {"Y+X", "clear next"}, {"Y+B", "note BUS 1"}, {"Sel+B", "note BUS 2"}, {"Sel+X", "record"}}
 	case Config:
 		return []hint{{"^v", "setting"}, {"<>", "change"}, {"A", "edit / switch"}, {"L1 R1", "jump"}, {"B", "pads"}}, []hint{screen, {"Sel+X", "record"}}
 	case Unit:
@@ -384,6 +386,16 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 		g.Text(x, row(3), fmt.Sprintf("%d files", a.info.Files), cText, false)
 	case Unit:
 		a.unitContext(g, x, y0, w)
+	case Perform:
+		g.Text(x, y0, "LIVE", cAmber, true)
+		g.Text(x, y0+1, fit(a.midiStatus(), w), cDim, false)
+		if s := a.mon.Summary(); s != "" {
+			g.Text(x, y0+3, fit(s, w), cText, false)
+		}
+		if a.rec != nil {
+			g.Text(x, y0+5, "RECORDING", cBad, true)
+			g.Text(x, y0+6, fit(short2(a.rec.Path, w), w), cDim, false)
+		}
 	case Config:
 		a.configContext(g, x, y0, w, y1)
 	}

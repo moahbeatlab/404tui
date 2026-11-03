@@ -13,6 +13,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/moahbeatlab/404tui/perform"
 	"github.com/moahbeatlab/404tui/record"
 	"os"
 	"path/filepath"
@@ -61,9 +62,10 @@ const (
 	Save
 	Unit
 	Config
+	Perform
 )
 
-var screenNames = []string{"PADS", "SEQ", "FILES", "SLICE", "SAVE", "UNIT", "CONFIG"}
+var screenNames = []string{"PADS", "SEQ", "FILES", "SLICE", "SAVE", "UNIT", "CONFIG", "PERF"}
 
 // ScreenName is the name of the screen in front.
 func (a *App) ScreenName() string { return screenNames[a.scr] }
@@ -146,14 +148,24 @@ type App struct {
 	undoKey    Key
 	undoAt     time.Time
 	set        settings
-	dcur       map[string]int  // the cursor in each folder of the file browser, for the next visit
-	searchQ    string          // the search in the file browser, "" for none
-	searchCut  bool            // the search gave up before the end
-	kb         *keyboard       // the on-screen keyboard of the search, when open
-	prompt     *textPrompt     // a line of text being typed, when open
-	cfgAt      int             // the row of the CONFIG screen the cursor is on
-	live       *liveState      // the unit whose project is being edited live, when there is one
-	plat       Platform        // what the system offers
+	dcur       map[string]int   // the cursor in each folder of the file browser, for the next visit
+	searchQ    string           // the search in the file browser, "" for none
+	searchCut  bool             // the search gave up before the end
+	kb         *keyboard        // the on-screen keyboard of the search, when open
+	prompt     *textPrompt      // a line of text being typed, when open
+	cfgAt      int              // the row of the CONFIG screen the cursor is on
+	live       *liveState       // the unit whose project is being edited live, when there is one
+	plat       Platform         // what the system offers
+	mon        *perform.Monitor // what the unit's MIDI said lately
+	clk        perform.Clock    // the unit's MIDI clock
+	midi       *midiLink        // the MIDI input that is open
+	midiTry    time.Time        // when it was last tried to open it
+	midiErr    string
+	codes      padCode         // the pads hit in turn
+	liveBack   Screen          // where the live mode came from
+	perfNow    int             // the pattern that plays (slot 1..160), 0 for none
+	perfNext   int             // the one that is next
+	lvl        *levelMeter     // the level of the sound
 	rec        *record.Session // the recording that runs
 	recDone    chan recResult  // a recording that was stopped and is finished
 	jobAfter   func(err error) // what to do on the main loop when the job in the background is finished
@@ -202,7 +214,7 @@ type App struct {
 
 // New starts an app on a folder of samples, with an empty project.
 func New(root, outDir string, a Audio) *App {
-	app := &App{recDone: make(chan recResult, 4), pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, dcur: map[string]int{}, playing: -1, slot: 1, rowFocus: -1}
+	app := &App{mon: perform.New(), recDone: make(chan recResult, 4), pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, dcur: map[string]int{}, playing: -1, slot: 1, rowFocus: -1}
 	app.lab.NewProject("PROJECT_01")
 	app.dir = root
 	app.loadSettings()
@@ -506,6 +518,8 @@ func (a *App) press(k Key, repeat int) {
 		a.unitKey(k)
 	case Config:
 		a.configKey(k)
+	case Perform:
+		a.perfKey(k)
 	}
 }
 

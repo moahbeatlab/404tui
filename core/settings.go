@@ -28,6 +28,7 @@ type settings struct {
 	MidiChan      string       `json:"midi_chan,omitempty"`
 	MidiMap       [4]string    `json:"midi_map,omitempty"`
 	MidiLevelChan string       `json:"midi_level_chan,omitempty"`
+	BusNotes      [2]string    `json:"bus_notes,omitempty"`
 }
 
 // dataDir is where the app keeps its own files (settings, autosaves): beside the card folder.

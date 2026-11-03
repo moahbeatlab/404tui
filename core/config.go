@@ -393,12 +393,7 @@ func (a *App) recorderLine() string {
 }
 
 // midiLine says whether this build can listen to MIDI.
-func (a *App) midiLine() string {
-	if midiin.Default() == nil {
-		return "no MIDI in this program"
-	}
-	return "listening is possible (the input is opened by PERF)"
-}
+func (a *App) midiLine() string { return a.midiStatus() }
 
 // cfgCursor keeps the cursor on a row that is a setting, not a heading.
 func (a *App) cfgMove(by int) {
