@@ -763,7 +763,11 @@ func (a *App) drawSeq(g Gfx) {
 		if st == a.step {
 			col = cAmber
 		}
-		g.Text(stepX(s)+(stepW(s)-len(fmt.Sprint(s%16+1)))/2, 2, fmt.Sprint(s%16+1), col, s%4 == 0)
+		num := s%16 + 1
+		if span > 16 { // several bars side by side: the steps are numbered through, 1 to 32
+			num = st + 1
+		}
+		g.Text(stepX(s)+(stepW(s)-len(fmt.Sprint(num)))/2, 2, fmt.Sprint(num), col, s%4 == 0)
 	}
 	// a band for the step the cursor is on and for the one that plays, over the rows
 	for s := 0; s < span && page*span+s < steps; s++ {
