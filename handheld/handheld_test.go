@@ -239,8 +239,12 @@ func TestSendToTheUnit(t *testing.T) {
 	if a.link == nil {
 		t.Fatal("the unit was not found")
 	}
-	keys(t, a, "D A") // choose project 2, ask: it must ask again
-	if a.job != nil {
+	keys(t, a, "D A") // choose project 2: A opens the menu of what can be done with it
+	if a.menu == nil || a.job != nil {
+		t.Fatal("A opens the menu of the unit's project")
+	}
+	chooseMenuNoPick(t, a, "Send the project of the editor here")
+	if a.job != nil || !a.confirm {
 		t.Fatal("a send needs a second A")
 	}
 	keys(t, a, "A ~")
@@ -3412,4 +3416,84 @@ func TestPatternSlotsCopyMoveAndRetarget(t *testing.T) {
 	if banks := patternBanks(b); len(banks) != 1 || banks[0] != 1 {
 		t.Fatalf("the notes are on the pads of bank B now: %v", banks)
 	}
+}
+
+
+func TestUnitProjectsLoadBackupRestoreRenameErase(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+L Y+L A")
+	a.Tick()
+	if a.link == nil {
+		keys(t, a, ".")
+	}
+	if a.link == nil {
+		t.Fatal("the unit was not found")
+	}
+	// send the kit over project 3, then take it back into a fresh editor
+	keys(t, a, "D D A")
+	chooseMenuNoPick(t, a, "Send the project of the editor here")
+	keys(t, a, "A ~")
+	if _, _, _, err, fin := a.job.state(); !fin || err != nil {
+		t.Fatalf("send: finished %v err %v", fin, err)
+	}
+	a.job = nil
+	// back it up
+	keys(t, a, "A")
+	chooseMenuNoPick(t, a, "Back it up")
+	waitJob(t, a)
+	backups, _ := os.ReadDir(filepath.Join(a.dataDir(), "backups"))
+	if len(backups) != 1 {
+		t.Fatalf("one backup: %v", backups)
+	}
+	// load it into the editor
+	a.lab.ClearPad(0)
+	a.refresh()
+	a.saved = true // the editor has nothing to lose
+	keys(t, a, "A")
+	chooseMenuNoPick(t, a, "Load it into the editor")
+	waitJob(t, a)
+	if padsWithSamples(a) != 3 {
+		t.Fatalf("the unit's project has the 3 pads of the kit: %d", padsWithSamples(a))
+	}
+	// rename it
+	keys(t, a, "Y+R Y+R Y+R Y+R") // somewhere else and back, to be on UNIT with the link
+	keys(t, a, "Y+L Y+L")
+	for a.Screen() != Unit {
+		keys(t, a, "Y+L")
+	}
+	keys(t, a, "A")
+	chooseMenuNoPick(t, a, "Rename")
+	a.prompt.buf = "KIT TWO"
+	a.closePrompt(true)
+	if names, _ := a.link.Projects(); names[a.unitCur] != "KIT TWO" {
+		t.Fatalf("renamed on the unit: %q", names[a.unitCur])
+	}
+	// erase it
+	keys(t, a, "A")
+	chooseMenuNoPick(t, a, "Erase it")
+	chooseMenuNoPick(t, a, "Yes, erase it")
+	if !strings.Contains(a.msg, "erased") {
+		t.Fatalf("erased: %q", a.msg)
+	}
+}
+
+// waitJob lets the job in the background finish and the main loop take what comes of it.
+func waitJob(t *testing.T, a *App) {
+	t.Helper()
+	for i := 0; i < 600; i++ {
+		a.Tick()
+		if a.job != nil {
+			if _, _, _, err, fin := a.job.state(); fin {
+				if err != nil {
+					t.Fatalf("job: %v", err)
+				}
+				a.Tick()
+				a.job = nil
+				return
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("the job did not finish")
 }

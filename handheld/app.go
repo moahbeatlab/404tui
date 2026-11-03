@@ -148,6 +148,8 @@ type App struct {
 	kb         *keyboard      // the on-screen keyboard of the search, when open
 	prompt     *textPrompt    // a line of text being typed, when open
 	cfgAt      int            // the row of the CONFIG screen the cursor is on
+	live       *liveState     // the unit whose project is being edited live, when there is one
+	jobAfter   func(err error) // what to do on the main loop when the job in the background is finished
 	aud        map[int]int    // pads whose sample is being auditioned in the pattern: pad -> handle
 	prevOrder  []string       // the files decoded for the browser, oldest first
 	arp        arpState       // the settings of the sample arp, kept between visits

@@ -66,6 +66,7 @@ func (a *App) Tick() {
 	a.autosaveTick()
 	a.indexTick()
 	a.freezeTick()
+	a.jobTick()
 	if a.scr != Unit || a.link != nil || a.Connect == nil || a.clock().Sub(a.connAt) < 2*time.Second {
 		return
 	}
@@ -101,12 +102,12 @@ func (a *App) unitKey(k Key) {
 			a.Tick()
 			return
 		}
-		if !a.confirm {
-			a.confirm = true
+		if a.confirm {
+			a.confirm = false
+			a.send()
 			return
 		}
-		a.confirm = false
-		a.send()
+		a.unitMenu()
 	case X: // look at the unit again
 		if a.link != nil {
 			a.link.Close()

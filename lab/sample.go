@@ -319,3 +319,12 @@ func absInt(v int) int {
 	}
 	return v
 }
+
+// PadFile is the SMP file of a pad's sample as the project holds it, false for a pad without one.
+func (l *Lab) PadFile(n int) ([]byte, bool) {
+	if n < 0 || n > 159 {
+		return nil, false
+	}
+	f, ok := l.files[padFile(n)]
+	return f, ok
+}
