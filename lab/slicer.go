@@ -143,6 +143,19 @@ func RoundSteps(s *formats.Slicing) int {
 // Render plays a slicing for rounds rounds (0: one round) and keeps the result as a sample. round
 // is added to the seed, so that the random modes give another stretch each time.
 func (l *Lab) Render(id int, slicing []byte, rounds, round int) ([]byte, error) {
+	s := &formats.Slicing{}
+	if err := json.Unmarshal(slicing, s); err != nil {
+		return nil, err
+	}
+	if err := s.Validate(); err != nil {
+		return nil, err
+	}
+	return l.RenderSteps(id, slicing, RoundSteps(s)*max(rounds, 1), round)
+}
+
+// RenderSteps plays a slicing for exactly steps steps (1 to 4096; the order wraps round when it is shorter, the random
+// modes keep picking) and keeps the result as a sample. round is added to the seed.
+func (l *Lab) RenderSteps(id int, slicing []byte, steps, round int) ([]byte, error) {
 	src, err := l.Sample(id)
 	if err != nil {
 		return nil, err
@@ -155,7 +168,9 @@ func (l *Lab) Render(id int, slicing []byte, rounds, round int) ([]byte, error) 
 		return nil, err
 	}
 	s.Seed += int64(round)
-	steps := RoundSteps(s) * max(rounds, 1)
+	if steps < 1 {
+		steps = RoundSteps(s)
+	}
 	if steps > 4096 {
 		return nil, errors.New("too many steps")
 	}

@@ -123,8 +123,11 @@ func (l *Lab) Assign(n, id int, name string) error {
 	if err != nil {
 		return err
 	}
+	wasEmpty := len(l.files[padFile(n)]) == 0
 	blk.AssignSample(uint32(len(smp)), clean(name, 23))
-	if lv, ok := blk.Param(0x69); !ok || lv == 0 {
+	// a pad that gets its first sample plays at full level (127), whatever the empty pad held; a sample that replaces
+	// another keeps the level the pad had
+	if lv, ok := blk.Param(0x69); wasEmpty || !ok || lv == 0 {
 		blk.SetField(0x69-0x66, 127)
 	}
 	l.files[padFile(n)] = smp

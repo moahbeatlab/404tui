@@ -21,6 +21,8 @@ type Player struct {
 	current *oto.Player
 	// loop is the reader of the loop playing, if one is.
 	loop *loopReader
+	// preview is a sound played over whatever else plays (a file auditioned while a pattern loops).
+	preview *oto.Player
 }
 
 // Open opens the default audio output. It fails when there is none, and the tool then
@@ -153,6 +155,28 @@ func (p *Player) Loop(s formats.Sample) error {
 	return nil
 }
 
+// Preview plays the sample over whatever is playing, without stopping it: a loop goes on. A preview in progress is replaced.
+func (p *Player) Preview(s formats.Sample) error {
+	p.StopPreview()
+	player := p.ctx.NewPlayer(bytes.NewReader(pcmOf(s)))
+	p.mu.Lock()
+	p.preview = player
+	p.mu.Unlock()
+	player.Play()
+	return nil
+}
+
+// StopPreview stops the preview, and only that.
+func (p *Player) StopPreview() {
+	p.mu.Lock()
+	player := p.preview
+	p.preview = nil
+	p.mu.Unlock()
+	if player != nil {
+		player.Pause()
+	}
+}
+
 // Playing reports whether a sound is still sounding.
 func (p *Player) Playing() bool {
 	p.mu.Lock()
@@ -163,10 +187,13 @@ func (p *Player) Playing() bool {
 // Stop stops whatever is playing.
 func (p *Player) Stop() {
 	p.mu.Lock()
-	player := p.current
-	p.current, p.loop = nil, nil
+	player, pv := p.current, p.preview
+	p.current, p.loop, p.preview = nil, nil, nil
 	p.mu.Unlock()
 	if player != nil {
 		player.Pause()
+	}
+	if pv != nil {
+		pv.Pause()
 	}
 }

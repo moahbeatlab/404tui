@@ -820,3 +820,174 @@ func TestConstsAreValidJSON(t *testing.T) {
 		}
 	}
 }
+
+func TestTempoSelectAndBankTempos(t *testing.T) {
+	l := New()
+	l.NewProject("T")
+	read := func() Info {
+		var in Info
+		b, _ := l.Info()
+		if err := json.Unmarshal(b, &in); err != nil {
+			t.Fatal(err)
+		}
+		return in
+	}
+	in := read()
+	if in.Tempo != 120 || in.UsesProjectTempo || len(in.BankTempos) != 10 || in.BankTempos[3] != 120 {
+		t.Fatalf("a new project: %+v", in)
+	}
+	ok(t, l.SetBankTempo(2, 98.5)) // bank C
+	ok(t, l.SetUsesProjectTempo(true))
+	ok(t, l.SetTempo(101))
+	in = read()
+	if in.Tempo != 101 || !in.UsesProjectTempo || in.BankTempos[2] != 98.5 || in.BankTempos[1] != 120 {
+		t.Fatalf("set: %+v", in)
+	}
+	// Tempo Select lives in the same word as the project tempo: setting the tempo must not clear it, and the word must
+	// not be read as a tempo (it would be 655 BPM)
+	ok(t, l.SetTempo(140))
+	if in = read(); !in.UsesProjectTempo || in.Tempo != 140 {
+		t.Fatalf("SetTempo kept the flag: %+v", in)
+	}
+	ok(t, l.SetUsesProjectTempo(false))
+	if in = read(); in.UsesProjectTempo || in.Tempo != 140 {
+		t.Fatalf("flag off: %+v", in)
+	}
+	if err := l.SetBankTempo(10, 100); err == nil {
+		t.Fatal("there are 10 banks")
+	}
+	if err := l.SetBankTempo(0, 5); err == nil {
+		t.Fatal("5 BPM is out of range")
+	}
+}
+
+func TestSnapshotAndRestore(t *testing.T) {
+	l := New()
+	l.NewProject("U")
+	s0 := l.Snapshot()
+	if l.Changed(s0) {
+		t.Fatal("nothing changed yet")
+	}
+	ok(t, l.SetTempo(99))
+	if !l.Changed(s0) {
+		t.Fatal("a tempo change is a change")
+	}
+	s1 := l.Snapshot()
+	ok(t, l.NewPattern(1, 2))
+	if !l.Changed(s1) {
+		t.Fatal("a new pattern is a change")
+	}
+	l.Restore(s1)
+	if l.Changed(s1) {
+		t.Fatal("restored")
+	}
+	if _, err := l.Pattern(1); err == nil {
+		t.Fatal("the pattern should be gone after going back")
+	}
+	l.Restore(s0)
+	var in Info
+	b, _ := l.Info()
+	json.Unmarshal(b, &in)
+	if in.Tempo != 120 {
+		t.Fatalf("the tempo is back: %v", in.Tempo)
+	}
+	// a snapshot does not change when the project does (the pad settings are copied)
+	ok(t, l.SetTempo(77))
+	l.Restore(s0)
+	b, _ = l.Info()
+	json.Unmarshal(b, &in)
+	if in.Tempo != 120 {
+		t.Fatalf("the snapshot kept its own settings: %v", in.Tempo)
+	}
+	if s0.HeldBytes(nil) != 0 {
+		t.Fatalf("an empty project holds no file data: %d", s0.HeldBytes(nil))
+	}
+}
+
+func TestPadParams(t *testing.T) {
+	l := New()
+	l.NewProject("P")
+	wav := formats.Sample{Channels: 1, Samples: make([]int16, 4800)}
+	for i := range wav.Samples {
+		wav.Samples[i] = int16(i % 200)
+	}
+	b, err := l.Decode(wav.WAV(), "wav")
+	ok(t, err)
+	var m Meta
+	json.Unmarshal(b, &m)
+	ok(t, l.Assign(5, m.ID, "x"))
+	if v, err := l.PadParam(5, 0x69); err != nil || v != 127 {
+		t.Fatalf("a pad with a sample is at level 127: %d %v", v, err)
+	}
+	ok(t, l.SetPadParam(5, 0x69, 80))
+	ok(t, l.SetPadParam(5, 0x78, 90))  // balance
+	ok(t, l.SetPadParam(5, 0x73, -5))  // pitch, signed
+	ok(t, l.SetPadParam(5, 0x7D, 400)) // attack: beyond its range, held to 127
+	for id, want := range map[byte]int32{0x69: 80, 0x78: 90, 0x73: -5, 0x7D: 127} {
+		if v, _ := l.PadParam(5, id); v != want {
+			t.Errorf("param %#x: %d, want %d", id, v, want)
+		}
+	}
+	// it survives a save and a load of the project
+	z, err := l.ExportZip("P")
+	ok(t, err)
+	l2 := New()
+	_, err = l2.LoadZip(z)
+	ok(t, err)
+	if v, _ := l2.PadParam(5, 0x73); v != -5 {
+		t.Fatalf("the pitch is kept in the file: %d", v)
+	}
+	if err := l.SetPadParam(200, 0x69, 1); err == nil {
+		t.Fatal("there are 160 pads")
+	}
+	if err := l.SetPadParam(5, 0x7C, 1); err == nil {
+		t.Fatal("an unknown parameter")
+	}
+}
+
+func TestSetupPadFixesWhatWasNeverSetUp(t *testing.T) {
+	l := New()
+	l.NewProject("S")
+	w := formats.Sample{Channels: 1, Samples: make([]int16, 4800)}
+	b, err := l.Decode(w.WAV(), "wav")
+	ok(t, err)
+	var m Meta
+	json.Unmarshal(b, &m)
+	ok(t, l.Assign(3, m.ID, "x"))
+	if n, _ := l.SetupPad(3); n != 0 {
+		t.Fatalf("a pad with sensible values is left alone: %d", n)
+	}
+	// what a pad of a project written by another tool can have: zeros
+	ok(t, l.SetPadParamRaw(3, 0x78, 0))
+	ok(t, l.SetPadParamRaw(3, 0x7E, 0))
+	if v, _ := l.PadParam(3, 0x78); v != 0 {
+		t.Fatalf("setup: %d", v)
+	}
+	n, err := l.SetupPad(3)
+	ok(t, err)
+	if n != 2 {
+		t.Fatalf("pan and hold were out of range: %d fixed", n)
+	}
+	for id, want := range map[byte]int32{0x78: 64, 0x7E: 100, 0x76: 10000} {
+		if v, _ := l.PadParam(3, id); v != want {
+			t.Errorf("param %#x: %d, want %d", id, v, want)
+		}
+	}
+}
+
+func TestAssignGivesAFirstSampleFullLevel(t *testing.T) {
+	defer catch(t)
+	l := New()
+	l.NewProject("T")
+	a := put(l, tone(100, 0.2))
+	ok(t, l.SetPadParamRaw(0, 0x69, 64)) // an empty pad that holds some other level
+	ok(t, l.Assign(0, a, "One"))
+	if v := must(l.PadParam(0, 0x69)); v != 127 {
+		t.Errorf("the first sample on a pad plays at 127, got %d", v)
+	}
+	ok(t, l.SetPadParam(0, 0x69, 90))
+	ok(t, l.Assign(0, a, "Two")) // replaced: the level the pad had stays
+	if v := must(l.PadParam(0, 0x69)); v != 90 {
+		t.Errorf("a replaced sample keeps the level, got %d", v)
+	}
+}

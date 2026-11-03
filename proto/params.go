@@ -128,3 +128,6 @@ func blockField(id byte) (int, bool) {
 	}
 	return 0, false
 }
+
+// BlockField is the field of the pad block that holds the parameter with this id, for the ids whose field is known.
+func BlockField(id byte) (int, bool) { return blockField(id) }
