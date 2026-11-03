@@ -300,17 +300,18 @@ func (t *textGfx) Badge(col, row int, letter string, on bool) {
 }
 
 func (t *textGfx) Piano(col, row, cols int, lit map[int]bool) {
-	kw := max((cols-2)/14, 2)
+	kw := max((cols-2)/14, 3)
 	x0 := col + 1
 	white := []int{0, 2, 4, 5, 7, 9, 11}
+	ivory, ebony := xterm(252), xterm(233) // the keys at rest: light and dark, so the amber of a key that sounds stands out
 	for i := 0; i < 14; i++ {
 		s := white[i%7] + 12*(i/7)
-		c := tText
+		c := ivory
 		if lit[s] {
 			c = tAccent
 		}
 		for r := 0; r < 3; r++ {
-			for k := 0; k < kw-1; k++ {
+			for k := 0; k < kw-1; k++ { // a column of the ground between the keys
 				if cell := t.at(x0+i*kw+k, row+r); cell != nil {
 					cell.R, cell.Fg, cell.Bg = ' ', tText, c
 				}
@@ -318,16 +319,22 @@ func (t *textGfx) Piano(col, row, cols int, lit map[int]bool) {
 		}
 	}
 	blackAt := map[int]int{1: 0, 3: 1, 6: 3, 8: 4, 10: 5}
+	bw := 1 // a black key is as wide as the gap and a cell of each key beside it, when the keys are wide enough
+	if kw >= 4 {
+		bw = 3
+	}
 	for o := 0; o < 2; o++ {
 		for s, k := range blackAt {
-			c := tBg
+			c := ebony
 			if lit[s+12*o] {
 				c = tAccentD
 			}
-			bx := x0 + (k+7*o)*kw + kw - 1
+			gap := x0 + (k+7*o+1)*kw - 1
 			for r := 0; r < 2; r++ {
-				if cell := t.at(bx, row+r); cell != nil {
-					cell.R, cell.Fg, cell.Bg = ' ', tText, c
+				for dx := 0; dx < bw; dx++ {
+					if cell := t.at(gap-bw/2+dx, row+r); cell != nil {
+						cell.R, cell.Fg, cell.Bg = ' ', tText, c
+					}
 				}
 			}
 		}

@@ -121,6 +121,9 @@ func (a *App) drawInfoGroups(g Gfx, x, y0, w, y1 int, groups [][]infoLine, left 
 				return y
 			}
 			if l.head {
+				if y+1 >= y1 { // a heading with no line under it is left out
+					return y
+				}
 				g.Text(x, y, l.label, cAmber, true)
 				y++
 				continue

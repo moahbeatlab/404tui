@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
@@ -110,6 +111,11 @@ func (a *App) sliceKey(k Key, repeat int) {
 		}
 		a.say(fmt.Sprintf("%d slices", len(a.sl.Slices)), false)
 	case X:
+		if Terminal && (a.orderOn || time.Now().Before(a.soundUntil)) { // on a computer X stops what sounds
+			a.stop()
+			a.say("stopped", false)
+			return
+		}
 		a.playSlice()
 	}
 }
