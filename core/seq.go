@@ -764,7 +764,7 @@ func (a *App) drawSeq(g Gfx) {
 			col = cAmber
 		}
 		num := s%16 + 1
-		if span > 16 { // several bars side by side: the steps are numbered through, 1 to 32
+		if Terminal { // the steps are numbered through the pattern: bar 2 shows 17 to 32
 			num = st + 1
 		}
 		g.Text(stepX(s)+(stepW(s)-len(fmt.Sprint(num)))/2, 2, fmt.Sprint(num), col, s%4 == 0)
