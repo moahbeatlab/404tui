@@ -761,19 +761,23 @@ func (a *App) drawSeq(g Gfx) {
 		if has {
 			fg = cText
 		}
+		ly, lh := y, rh // the label's row; in the terminal a track is one line, so the lit label is one line too
+		if Terminal {
+			ly, lh = y+(rh-1)/2, 1
+		}
 		if i == a.row {
-			g.Highlight(lx-1, y, x0-lx+1, rh)
+			g.Highlight(lx-1, ly, x0-lx+1, lh)
 			fg = cWhite
 		}
 		if a.trackMode(pad) == trackMute {
 			fg = cDim
 		}
-		g.Text(lx, y, a.label(pad), fg, i == a.row)
+		g.Text(lx, ly, a.label(pad), fg, i == a.row)
 		switch a.trackMode(pad) {
 		case trackMute:
-			g.Text(lx+3, y, "M", cBad, true)
+			g.Text(lx+3, ly, "M", cBad, true)
 		case trackSolo:
-			g.Text(lx+3, y, "S", cGood, true)
+			g.Text(lx+3, ly, "S", cGood, true)
 		}
 		for s := 0; s < 16 && page*16+s < steps; s++ {
 			st := page*16 + s
