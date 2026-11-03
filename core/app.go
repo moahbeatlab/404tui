@@ -150,16 +150,18 @@ type App struct {
 	undoKey           Key
 	undoAt            time.Time
 	set               settings
-	dcur              map[string]int   // the cursor in each folder of the file browser, for the next visit
-	searchQ           string           // the search in the file browser, "" for none
-	tags              *app.TagIndex    // the tags of the unit's samples, read when first needed
-	rParent, rChild   rangerCache      // the side columns of the ranger view
-	usedCache         map[int]string   // the patterns that use each pad, read once per change
-	peakMax           map[peakKey]int  // the loudest value of each sample, for the slicer's scale
-	soundUntil        time.Time        // when the sample that plays ends, for Space (play or stop)
-	seqOneBar         bool             // SEQ on a wide terminal: one bar in view, though the window has the room for more
-	orderOn           bool             // SLICE: the order plays in a loop
-	orderFrames       int              // its length
+	dcur              map[string]int  // the cursor in each folder of the file browser, for the next visit
+	searchQ           string          // the search in the file browser, "" for none
+	tags              *app.TagIndex   // the tags of the unit's samples, read when first needed
+	rParent, rChild   rangerCache     // the side columns of the ranger view
+	usedCache         map[int]string  // the patterns that use each pad, read once per change
+	peakMax           map[peakKey]int // the loudest value of each sample, for the slicer's scale
+	soundUntil        time.Time       // when the sample that plays ends, for Space (play or stop)
+	seqOneBar         bool            // SEQ on a wide terminal: one bar in view, though the window has the room for more
+	orderOn           bool            // SLICE: the order plays in a loop
+	orderFrames       int             // its length
+	slUndo, slRedo    []string        // the slicing before each change, as text, for undo and redo on the slicer's screen
+	slSkip            bool
 	tagSearch         bool             // the search is by tags
 	searchCut         bool             // the search gave up before the end
 	kb                *keyboard        // the on-screen keyboard of the search, when open

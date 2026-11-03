@@ -4105,3 +4105,36 @@ func TestUndoWithAPanelOrAModeOpenStillDraws(t *testing.T) {
 	}
 	Terminal = false
 }
+
+func TestUndoAndRedoInTheSlicerTakeBackCutsAndJoins(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Slice)
+	a.at = a.sl.Frames / 3
+	keys(t, a, "A")
+	a.at = a.sl.Frames * 2 / 3
+	keys(t, a, "A")
+	n := len(a.sl.Slices)
+	if n < 3 {
+		t.Fatalf("two cuts make three slices, got %d", n)
+	}
+	keys(t, a, "B") // the slice under the cursor is removed
+	if len(a.sl.Slices) != n-1 {
+		t.Fatalf("B removes a slice: %d of %d", len(a.sl.Slices), n)
+	}
+	a.undoStep()
+	if len(a.sl.Slices) != n {
+		t.Fatalf("undo brings the slice back: %d", len(a.sl.Slices))
+	}
+	a.undoStep()
+	if len(a.sl.Slices) != n-1 {
+		t.Fatalf("undo takes the last cut back: %d", len(a.sl.Slices))
+	}
+	a.redoStep()
+	if len(a.sl.Slices) != n {
+		t.Fatalf("redo makes the cut again: %d", len(a.sl.Slices))
+	}
+	if a.Screen() != Slice {
+		t.Fatalf("the slicer stays in front, got %v", a.Screen())
+	}
+}

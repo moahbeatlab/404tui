@@ -1,9 +1,11 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
 )
 
@@ -26,6 +28,61 @@ type undoEntry struct {
 // Press handles one key going down: a key with Y held and L2 or R2 is undo or redo; any other key is run, and the project
 // before it is kept when it changed.
 func (a *App) Press(k Key, repeat int) {
+	before, sid, spad := a.slicingNow()
+	a.pressProject(k, repeat)
+	if before != "" && a.scr == Slice && a.sl != nil && a.sid == sid && a.spad == spad && !a.slSkip {
+		if now, _, _ := a.slicingNow(); now != before { // the slicing changed: what it was is kept for undo
+			a.slUndo = append(a.slUndo, before)
+			if len(a.slUndo) > 200 {
+				a.slUndo = a.slUndo[1:]
+			}
+			a.slRedo = nil
+		}
+	}
+	a.slSkip = false
+}
+
+// slicingNow is the slicing in front as text (empty off the slicer's screen), with the sample it belongs to.
+func (a *App) slicingNow() (string, int, int) {
+	if a.scr != Slice || a.sl == nil {
+		return "", 0, 0
+	}
+	b, err := json.Marshal(a.sl)
+	if err != nil {
+		return "", 0, 0
+	}
+	return string(b), a.sid, a.spad
+}
+
+// slicerUndo takes back the last change of the slicing (or, with redo, brings it back); false when there is none.
+func (a *App) slicerUndo(redo bool) bool {
+	from, to := &a.slUndo, &a.slRedo
+	if redo {
+		from, to = to, from
+	}
+	if a.scr != Slice || a.sl == nil || len(*from) == 0 {
+		return false
+	}
+	now, _, _ := a.slicingNow()
+	last := (*from)[len(*from)-1]
+	*from = (*from)[:len(*from)-1]
+	sl := &formats.Slicing{}
+	if json.Unmarshal([]byte(last), sl) != nil {
+		return false
+	}
+	*to = append(*to, now)
+	a.sl = sl
+	a.at = min(a.at, max(sl.Frames-1, 0))
+	a.slSkip = true
+	if redo {
+		a.say("slicer: redone", false)
+	} else {
+		a.say(fmt.Sprintf("slicer: undone (%d more)", len(a.slUndo)), false)
+	}
+	return true
+}
+
+func (a *App) pressProject(k Key, repeat int) {
 	if a.toolBase != nil && a.menu == nil { // the tool's dialog is gone: its trial stands as it is
 		a.toolBase = nil
 	}
@@ -111,6 +168,9 @@ func (a *App) undoHeld() int {
 }
 
 func (a *App) undoStep() {
+	if a.slicerUndo(false) {
+		return
+	}
 	if len(a.undo) == 0 {
 		a.say("nothing to undo", false)
 		return
@@ -124,6 +184,9 @@ func (a *App) undoStep() {
 }
 
 func (a *App) redoStep() {
+	if a.slicerUndo(true) {
+		return
+	}
 	if len(a.redo) == 0 {
 		a.say("nothing to redo", false)
 		return

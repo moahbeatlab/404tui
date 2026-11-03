@@ -31,6 +31,7 @@ func (a *App) openSlicer() {
 	a.sid, a.spad = id, n
 	a.sl = formats.NewSlicing(s.Frames(), 1)
 	a.at, a.zoom = 0, 0
+	a.slUndo, a.slRedo = nil, nil
 }
 
 // view is the window of frames the waveform shows, around the cursor.
