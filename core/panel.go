@@ -39,7 +39,7 @@ type hint struct{ key, what string }
 func (a *App) hints() (plain, shift []hint) {
 	plain, shift = a.rawHints()
 	if Terminal && a.scr == Slice && !a.tap && !a.lane && !a.Modal() { // the keyboard zooms with + and -
-		plain = append(append([]hint{}, plain...), hint{"+ -", "zoom in / out"})
+		plain = append(append([]hint{}, plain...), hint{"n", "new order"}, hint{"+ -", "zoom in / out"})
 		sh := make([]hint, 0, len(shift))
 		for _, h := range shift {
 			if h.what != "zoom" {

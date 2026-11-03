@@ -213,6 +213,13 @@ func (m *Model) key(msg tea.KeyMsg) {
 		m.disarm()
 		m.goTo = true
 		return
+	case "n": // the slicer: a new order of the slices, at once
+		if m.app.ScreenName() == "SLICE" && m.armed == noShift && !m.app.Modal() {
+			m.disarm()
+			m.app.NewOrder()
+			return
+		}
+		return
 	case "+", "=": // the slicer: zoom in
 		m.disarm()
 		m.app.Zoom(1)

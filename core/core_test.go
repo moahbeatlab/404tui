@@ -4038,6 +4038,11 @@ func TestOnAComputerTheSliceOrderLoops(t *testing.T) {
 	if !a.orderOn || au.Loops != base+1 {
 		t.Fatalf("the order plays in a loop: on %v, loops %d (was %d)", a.orderOn, au.Loops, base)
 	}
+	seed := a.sl.Seed
+	a.NewOrder()
+	if !a.orderOn || a.sl.Seed == seed {
+		t.Fatalf("a new order goes on playing: on %v, seed %d (was %d)", a.orderOn, a.sl.Seed, seed)
+	}
 	a.playResult(false)
 	if a.orderOn {
 		t.Fatal("asking again stops the loop")

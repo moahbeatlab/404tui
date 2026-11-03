@@ -103,7 +103,7 @@ func (a *App) mangleMenu() {
 		keep := a.sl.Seed
 		a.sl = mangleSlicing(base, a.mg)
 		a.sl.Seed = keep
-		a.playResult(false)
+		a.hearOrder(false)
 	}
 	m := &menu{title: fmt.Sprintf("mangle  %d slices", n)}
 	set := func(label string, vals []string, cur int, change func(v int)) {

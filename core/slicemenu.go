@@ -243,6 +243,12 @@ func (a *App) playResult(newDice bool) {
 		a.say("the order stopped", false)
 		return
 	}
+	a.hearOrder(newDice)
+}
+
+// hearOrder plays the order: in a loop on a computer (a loop that already plays takes the new order without a gap), once on
+// the handheld.
+func (a *App) hearOrder(newDice bool) {
 	s, id, err := a.renderResult(newDice)
 	if err != nil {
 		a.say(err.Error(), true)
@@ -269,6 +275,16 @@ func (a *App) playResult(newDice bool) {
 		msg += ", in a loop: again stops it"
 	}
 	a.say(msg, false)
+}
+
+// NewOrder is the n key of a keyboard in the slicer: a new order of the slices at once, heard in place of the one that plays
+// (a loop goes on without stopping).
+func (a *App) NewOrder() {
+	if a.scr != Slice || a.sl == nil || a.menu != nil || a.prompt != nil || a.tap || a.lane {
+		return
+	}
+	a.shuffleOrder()
+	a.hearOrder(false)
 }
 
 // resultToPad asks for the pad (bank, then pad) and puts the result of the order there.
