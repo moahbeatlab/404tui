@@ -2,6 +2,7 @@ package handheld
 
 import (
 	"fmt"
+	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
 	"math/rand"
@@ -3294,5 +3295,79 @@ func TestMangleWhichSlicesAndFixedValues(t *testing.T) {
 	sl = mangleSlicing(base, m)
 	if !sl.Slices[7].Reverse || sl.Slices[0].Reverse {
 		t.Fatal("the last ones")
+	}
+}
+
+func TestRenameFindSetupExportRestorePads(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	first := a.info.Pads[0].Name
+	if first == "" {
+		t.Fatal("the kit puts a sample on A1")
+	}
+	// rename
+	a.renamePad(0)
+	if a.prompt == nil || a.prompt.buf != first {
+		t.Fatalf("the prompt starts with the name: %+v", a.prompt)
+	}
+	a.prompt.buf = "thump"
+	a.closePrompt(true)
+	if a.info.Pads[0].Name != "thump" {
+		t.Fatalf("renamed: %q", a.info.Pads[0].Name)
+	}
+	keys(t, a, "Y+{") // undo
+	if a.info.Pads[0].Name != first {
+		t.Fatalf("undo puts the name back: %q", a.info.Pads[0].Name)
+	}
+	// with two pads marked: a prefix
+	a.marks = []int{0, 1}
+	a.renamePad(0)
+	if a.menu == nil || a.menu.title != "rename 2 marked pads" {
+		t.Fatalf("marked pads ask prefix or suffix: %+v", a.menu)
+	}
+	chooseMenuNoPick(t, a, "Add a prefix")
+	a.prompt.buf = "x_"
+	a.closePrompt(true)
+	if !strings.HasPrefix(a.info.Pads[0].Name, "x_") || !strings.HasPrefix(a.info.Pads[1].Name, "x_") {
+		t.Fatalf("both pads got the prefix: %q %q", a.info.Pads[0].Name, a.info.Pads[1].Name)
+	}
+	a.marks = nil
+	// find
+	a.cur, a.bank = 5, 3
+	a.findPad()
+	a.prompt.buf = "x_"
+	a.closePrompt(true)
+	if a.bank != 0 || a.cur != 0 {
+		t.Fatalf("find goes to A1: bank %d pad %d", a.bank, a.cur)
+	}
+	// set up
+	a.lab.SetPadParamRaw(0, 0x78, 0)
+	if v, _ := a.lab.PadParam(0, 0x78); v != 0 {
+		t.Fatal("the test needs a pad that was never set up")
+	}
+	a.setupPads(false)
+	if v, _ := a.lab.PadParam(0, 0x78); v != 64 {
+		t.Fatalf("the pan is back at the centre: %d", v)
+	}
+	// export, clear the pads, restore
+	a.exportBank()
+	dir := filepath.Join(a.exportDir(), app.SanitizeName(a.ProjectName())+"_bank_A")
+	for _, f := range []string{"samples.json", "A01 x_" + app.SanitizeName(strings.TrimPrefix(a.info.Pads[0].Name, "x_")) + ".wav"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			t.Fatalf("export has %s: %v", f, err)
+		}
+	}
+	a.lab.ClearPad(0)
+	a.lab.ClearPad(1)
+	a.refresh()
+	if a.info.Pads[0].File {
+		t.Fatal("A1 is cleared")
+	}
+	a.restorePads(dir)
+	if !a.info.Pads[0].File || !a.info.Pads[1].File || !a.info.Pads[2].File {
+		t.Fatalf("the pads are back: %v %v %v", a.info.Pads[0].File, a.info.Pads[1].File, a.info.Pads[2].File)
+	}
+	if v, _ := a.lab.PadParam(0, 0x78); v != 64 {
+		t.Fatalf("the settings come back too: pan %d", v)
 	}
 }
