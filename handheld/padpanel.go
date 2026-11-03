@@ -271,6 +271,10 @@ func (a *App) drawPadPanel(c *canvas) {
 	pp := a.pp
 	has := a.info.Pads[pp.pad].File
 	wc, hr := contentCols-2, Rows-3 // the dialog in cells; its first and last row are blank, for the frame
+	if pp.page != 2 {               // the settings: as many rows as they need, a blank one between them when there is room
+		n := len(padPages[pp.page])
+		hr = min(hr, 5+n*(1+btoi(n*2 <= hr-5)))
+	}
 	x0, y0, w, h := CellW, CellH, wc*CellW, hr*CellH
 	c.rect(x0, y0, w, h, cPanel2)
 	c.box(x0, y0, w, h, 2, cAmber)
@@ -307,12 +311,7 @@ func (a *App) drawPadPanel(c *canvas) {
 		return
 	}
 	rows := padPages[pp.page]
-	avail := hr - 5 // the rows for the settings
-	rhRows := 1
-	if len(rows)*2 <= avail {
-		rhRows = 2
-	}
-	rh := rhRows * CellH
+	rh := (1 + btoi(len(rows)*2 <= hr-5)) * CellH // a row for a setting, and a blank one between them when there is room
 	bx := x0 + 20*CellW
 	bw := max(min(wc-20-14, 40), 12) * CellW
 	for i, st := range rows {
@@ -322,10 +321,10 @@ func (a *App) drawPadPanel(c *canvas) {
 		for _, t := range targets {
 			mixed = mixed || a.settingValue(t, st) != v
 		}
-		ly := y + (rh-CellH)/2 // the text is in the middle of the row
+		ly := y
 		if i == pp.row[pp.page] {
-			c.rect(x0+6, y, w-12, rh, cAmberD)
-			c.rect(x0+6, y, 3, rh, cAmber)
+			c.rect(x0+6, y, w-12, CellH, cAmberD)
+			c.rect(x0+6, y, 3, CellH, cAmber)
 		}
 		if st.id == 0x6A || st.id == 0x6B { // gate and loop: the letter, lit when on (as on the pads)
 			a.badge(c, x0+2*CellW, ly, st.label[:1], v != 0)
@@ -363,15 +362,15 @@ func (a *App) drawPadPanel(c *canvas) {
 // fader draws a setting as a bar in the row at y (16 px): filled from the left, or from the middle out for a setting that
 // goes both ways, the default marked and the value as a white tick.
 func (a *App) fader(c *canvas, bx, y, bw int, st padSetting, v int32) {
-	c.rect(bx, y+3, bw, 10, cPanel)
+	c.rect(bx, y+8, bw, 8, cPanel) // the bar stands on the lower half of the row
 	frac := float64(v-st.lo) / float64(st.hi-st.lo)
 	dfrac := float64(st.def-st.lo) / float64(st.hi-st.lo)
 	if st.lo < 0 || st.id == 0x78 { // bipolar: from the middle out
 		mid := bx + int(dfrac*float64(bw))
 		end := bx + int(frac*float64(bw))
-		c.rect(min(mid, end), y+3, abs(end-mid)+1, 10, cAmber)
+		c.rect(min(mid, end), y+8, abs(end-mid)+1, 8, cAmber)
 	} else {
-		c.rect(bx, y+3, int(frac*float64(bw)), 10, cAmber)
+		c.rect(bx, y+8, int(frac*float64(bw)), 8, cAmber)
 	}
 	c.rect(bx+int(dfrac*float64(bw)), y, 2, CellH, cDim) // where the default is
 	c.rect(min(bx+int(frac*float64(bw))-1, bx+bw-4), y, 4, CellH, cWhite)
@@ -427,4 +426,11 @@ func (a *App) padValue(n int, id byte, def int32) int32 {
 		return v
 	}
 	return def
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

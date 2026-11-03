@@ -187,10 +187,10 @@ func (a *App) drawNotePanel(c *canvas) {
 	for i, row := range notePanelRows {
 		y := y0 + 2*CellH + i*2*CellH
 		if i == np.row {
-			c.rect(x0+6, y, w-12, 2*CellH, cAmberD)
-			c.rect(x0+6, y, 3, 2*CellH, cAmber)
+			c.rect(x0+6, y, w-12, CellH, cAmberD)
+			c.rect(x0+6, y, 3, CellH, cAmber)
 		}
-		ly := y + CellH/2
+		ly := y
 		c.text(x0+2*CellW, ly, row.label, cText, i == np.row)
 		bx, bw := x0+14*CellW, max(min(wc-14-14, 40), 12)*CellW
 		var frac, dfrac float64
@@ -210,12 +210,12 @@ func (a *App) drawNotePanel(c *canvas) {
 				vt = fmt.Sprintf("%+d ticks", vals[2])
 			}
 		}
-		c.rect(bx, ly+3, bw, 10, cPanel)
-		if i == 2 { // from the middle out
+		c.rect(bx, ly+8, bw, 8, cPanel) // the bar stands on the lower half of the row
+		if i == 2 {                     // from the middle out
 			mid, end := bx+int(dfrac*float64(bw)), bx+int(frac*float64(bw))
-			c.rect(min(mid, end), ly+3, abs(end-mid)+1, 10, cAmber)
+			c.rect(min(mid, end), ly+8, abs(end-mid)+1, 8, cAmber)
 		} else {
-			c.rect(bx, ly+3, int(frac*float64(bw)), 10, cAmber)
+			c.rect(bx, ly+8, int(frac*float64(bw)), 8, cAmber)
 		}
 		c.rect(bx+int(dfrac*float64(bw)), ly, 2, CellH, cDim)
 		c.rect(min(bx+int(frac*float64(bw))-1, bx+bw-4), ly, 4, CellH, cWhite)

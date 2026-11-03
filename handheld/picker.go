@@ -149,7 +149,7 @@ func (a *App) drawPicker(c *canvas) {
 	// the 16 patterns
 	pw := (wc - 4) / 4
 	ph := max((hr-8)/4, 3) // the rows left under the banks, less the line at the foot
-	tw, th := pw*CellW-6, ph*CellH-4
+	tw, th := pw*CellW-CellW, (ph-1)*CellH
 	for i := 0; i < 16; i++ {
 		n := p.bank*16 + i + 1
 		if p.pads {

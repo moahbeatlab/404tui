@@ -358,7 +358,11 @@ func (a *App) pageKey(fwd bool) {
 func (a *App) RequestQuit() {
 	if !a.saved && !a.quitAsk && a.hasWork() {
 		a.quitAsk = true
-		a.say("not saved! Select+Start again to quit, any key to stay", true)
+		again := "Select+Start"
+		if Terminal {
+			again = "q"
+		}
+		a.say("not saved! "+again+" again to quit, any key to stay", true)
 		return
 	}
 	a.Quit = true

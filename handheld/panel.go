@@ -143,16 +143,16 @@ func (a *App) drawPanel(c *canvas) {
 	x := panelX + CellW
 	w := panelW - 2*CellW
 
-	// the map of the screens, the current one lit
-	cw := w / 3
+	// the map of the screens, the current one lit: buttons of whole cells with a cell between them
+	cw := w / 3 / CellW * CellW
 	for i, n := range screenNames {
 		cx, cy := x+(i%3)*cw, panelTop+(i/3)*CellH
 		bg, fg := cPanel2, cDim
 		if Screen(i) == a.scr {
 			bg, fg = cAmber, cBg
 		}
-		c.rect(cx, cy+1, cw-3, CellH-2, bg)
-		c.text(cx+(cw-3-textW(n))/2, cy, n, fg, Screen(i) == a.scr)
+		c.rect(cx, cy, cw-CellW, CellH, bg)
+		c.text(cx+(cw-CellW-textW(n))/2/CellW*CellW, cy, n, fg, Screen(i) == a.scr)
 	}
 
 	// tempo and the state of the loop
@@ -246,17 +246,17 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 		lx, lw := x+4*CellW, w-4*CellW-4*CellW
 		level := get(0x69, 127)
 		c.text(x, row(4), "VOL", cDim, false)
-		c.rect(lx, row(4)+4, lw, 8, cPanel2)
-		c.rect(lx, row(4)+4, int(level)*lw/127, 8, cAmber)
+		c.rect(lx, row(4)+8, lw, 8, cPanel2)
+		c.rect(lx, row(4)+8, int(level)*lw/127, 8, cAmber)
 		c.text(x+w-textW(fmt.Sprint(level)), row(4), fmt.Sprint(level), cText, false)
 		// the pan: a bar from the middle, and L, C or R with its amount
 		bal := get(0x78, 64)
 		c.text(x, row(5), "PAN", cDim, false)
-		c.rect(lx, row(5)+4, lw, 8, cPanel2)
+		c.rect(lx, row(5)+8, lw, 8, cPanel2)
 		mid := lx + lw*(64-13)/102
 		pos := lx + int(bal-13)*lw/102
-		c.rect(min(mid, pos), row(5)+4, abs(pos-mid)+2, 8, cAmber)
-		c.rect(mid, row(5)+2, 1, 12, cDim)
+		c.rect(min(mid, pos), row(5)+8, abs(pos-mid)+2, 8, cAmber)
+		c.rect(mid, row(5), 1, CellH, cDim)
 		c.text(x+w-textW(padPages[0][1].show(bal)), row(5), padPages[0][1].show(bal), cText, false)
 		// the envelope: attack up, hold along, release down, drawn to scale
 		att, hold, rel := get(0x7D, 0), get(0x7E, 100), get(0x7F, 0)
