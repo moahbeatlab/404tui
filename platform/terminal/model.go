@@ -94,6 +94,7 @@ type Model struct {
 
 	armed   shift // Y or Select was pressed and waits for the key it goes with
 	armedAt time.Time
+	goTo    bool // g was pressed: h or l now goes to the screen before or after, as gT and gt do in vim
 	aHeld   bool // A is held by e until e again
 	last    string
 	lastAt  time.Time
@@ -190,8 +191,28 @@ func (m *Model) key(msg tea.KeyMsg) {
 		}
 		return
 	}
+	if m.goTo {
+		m.goTo = false
+		switch s {
+		case "h", "left", "H", "T", "shift+tab":
+			m.app.NextScreen(-1)
+			return
+		case "l", "right", "L", "t", "tab":
+			m.app.NextScreen(1)
+			return
+		case "g": // gg: the first screen, as in vim
+			m.app.GoScreen(0)
+			return
+		case "esc":
+			return
+		}
+	}
 	var k core.Key
 	switch s {
+	case "g":
+		m.disarm()
+		m.goTo = true
+		return
 	case "ctrl+c":
 		m.disarm()
 		m.app.RequestQuit()

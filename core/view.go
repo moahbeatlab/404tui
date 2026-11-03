@@ -128,7 +128,7 @@ func (a *App) footer(g Gfx) {
 	}
 	hintLine := "Y keys  Y+L2 undo  Y+R2 redo  Sel+Start quit"
 	if Terminal {
-		hintLine = "1-9 screens  y shift  s select  u undo  ? keys  q quit"
+		hintLine = "1-9 g h/l screens  y shift  s select  ? keys  q quit"
 	}
 	g.Text(2, top+1, hintLine, cDim, false)
 	room := Cols - 4 - len(hintLine) - 2 // what the autosave note and the version share
@@ -167,7 +167,7 @@ func (a *App) drawHelp(g Gfx) {
 			"arrows or h j k l   D-pad (as in vim)",
 			"a b x              the buttons A, B, X (Enter, Esc, Space too)",
 			"y                  the next key with Y held",
-			"1-9 or Tab         go to a screen (Shift-Tab back)",
+			"1-9, Tab, g h/l    go to a screen (gh before, gl next, gg first)",
 			"s                  the next key with Select held (s b)",
 			"e                  hold A (edit a note); e again lets go",
 			"[ ] or Ctrl-U/D    L1 R1;   , .   L2 R2",

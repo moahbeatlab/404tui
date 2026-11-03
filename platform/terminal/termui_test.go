@@ -237,3 +237,32 @@ func TestThePanelNamesTheKeysOfTheKeyboard(t *testing.T) {
 		t.Error("without a terminal the panel names the buttons")
 	}
 }
+
+func TestScreensByNumberTabAndGHL(t *testing.T) {
+	m := newModel(t)
+	name := func() string { return m.app.ScreenName() }
+	press(m, "3")
+	if name() != "FILES" {
+		t.Fatalf("3 is FILES, got %s", name())
+	}
+	press(m, "g")
+	press(m, "l")
+	if name() != "SLICE" && name() != "PADS" { // SLICE bounces to PADS when the pad is empty
+		t.Fatalf("gl goes to the next screen, got %s", name())
+	}
+	press(m, "g")
+	press(m, "g")
+	if name() != "PADS" {
+		t.Fatalf("gg is the first screen, got %s", name())
+	}
+	press(m, "g")
+	press(m, "h")
+	if name() != "LOOP" {
+		t.Fatalf("gh from the first screen wraps to the last, got %s", name())
+	}
+	press(m, "2")
+	press(m, "tab")
+	if name() != "FILES" {
+		t.Fatalf("Tab goes on, got %s", name())
+	}
+}

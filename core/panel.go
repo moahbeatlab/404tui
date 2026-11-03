@@ -37,6 +37,9 @@ type hint struct{ key, what string }
 // hints are the keys of the screen: the plain ones and the ones with Y held.
 func (a *App) hints() (plain, shift []hint) {
 	screen := hint{"Y+<>", "screen"}
+	if Terminal {
+		screen = hint{"g hl", "screen (1-9)"}
+	}
 	if a.pp != nil {
 		if a.pp.page == 2 {
 			return []hint{{"^v", "choose"}, {"<>", "change"}, {"A", "run"}, {"L1 R1", "page"}, {"B", "close"}}, nil
