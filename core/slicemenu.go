@@ -226,6 +226,9 @@ func (a *App) playingStep() int {
 		return -1
 	}
 	frame := int(time.Since(a.playT0).Seconds() * formats.SampleRate)
+	if a.orderOn && a.orderFrames > 0 { // the order loops
+		frame %= a.orderFrames
+	}
 	for i, p := range a.placed {
 		if frame >= p.At && frame < p.At+p.Frames {
 			return i
@@ -235,15 +238,37 @@ func (a *App) playingStep() int {
 }
 
 func (a *App) playResult(newDice bool) {
+	if Terminal && a.orderOn && !newDice { // on a computer the order loops: asking again stops it
+		a.stop()
+		a.say("the order stopped", false)
+		return
+	}
 	s, id, err := a.renderResult(newDice)
 	if err != nil {
 		a.say(err.Error(), true)
 		return
 	}
 	a.lab.Free(id)
-	a.play(s)
+	if lp, ok := a.Audio.(looper); ok && Terminal && !a.seqOn {
+		if r, isR := a.Audio.(replacer); isR && a.orderOn {
+			err = r.ReplaceLoop(s)
+		} else {
+			err = lp.Loop(s)
+		}
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		a.orderOn, a.orderFrames = true, s.Frames()
+	} else {
+		a.play(s) // no output that loops: once
+	}
 	a.playT0 = time.Now()
-	a.say(fmt.Sprintf("%s, %d steps, %.1f s", modeNames[a.sl.Mode], a.steps2(), float64(s.Frames())/formats.SampleRate), false)
+	msg := fmt.Sprintf("%s, %d steps, %.1f s", modeNames[a.sl.Mode], a.steps2(), float64(s.Frames())/formats.SampleRate)
+	if a.orderOn {
+		msg += ", in a loop: again stops it"
+	}
+	a.say(msg, false)
 }
 
 // resultToPad asks for the pad (bank, then pad) and puts the result of the order there.

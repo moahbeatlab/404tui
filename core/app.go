@@ -158,6 +158,8 @@ type App struct {
 	peakMax           map[peakKey]int  // the loudest value of each sample, for the slicer's scale
 	soundUntil        time.Time        // when the sample that plays ends, for Space (play or stop)
 	seqOneBar         bool             // SEQ on a wide terminal: one bar in view, though the window has the room for more
+	orderOn           bool             // SLICE: the order plays in a loop
+	orderFrames       int              // its length
 	tagSearch         bool             // the search is by tags
 	searchCut         bool             // the search gave up before the end
 	kb                *keyboard        // the on-screen keyboard of the search, when open
@@ -795,6 +797,9 @@ func (a *App) go_(s Screen) {
 	}
 	if s != Slice {
 		a.tap, a.lane = false, false
+		if a.orderOn {
+			a.stop()
+		}
 	}
 	a.scr = s
 	if s == Slice && (a.sl == nil || a.spad != a.padN()) {
@@ -853,6 +858,7 @@ func (a *App) stop() {
 	a.playing = -1
 	a.arpOn = false
 	a.seqOn = false
+	a.orderOn = false
 }
 
 // previewer is an audio output that can play a short sound over a loop without stopping it.
@@ -862,7 +868,7 @@ type previewer interface {
 }
 
 // looping says whether a loop (the pattern or the arp) is playing.
-func (a *App) looping() bool { return a.seqOn || a.arpOn }
+func (a *App) looping() bool { return a.seqOn || a.arpOn || a.orderOn }
 
 // stopPreview stops a sound that was being auditioned: while a loop plays, only that sound.
 func (a *App) stopPreview() {

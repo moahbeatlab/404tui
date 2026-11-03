@@ -4023,3 +4023,23 @@ func TestOnAComputerBGoesBackToTheMenuItCameFrom(t *testing.T) {
 		t.Fatal("on the handheld B closes the child")
 	}
 }
+
+func TestOnAComputerTheSliceOrderLoops(t *testing.T) {
+	a, au := newApp(t)
+	keys(t, a, kit)
+	Terminal = true
+	defer func() { Terminal = false }()
+	a.go_(Slice)
+	if a.sl == nil {
+		t.Fatal("the slicer opens on a pad with a sample")
+	}
+	base := au.Loops
+	a.playResult(false)
+	if !a.orderOn || au.Loops != base+1 {
+		t.Fatalf("the order plays in a loop: on %v, loops %d (was %d)", a.orderOn, au.Loops, base)
+	}
+	a.playResult(false)
+	if a.orderOn {
+		t.Fatal("asking again stops the loop")
+	}
+}
