@@ -115,6 +115,11 @@ func (a *App) drawInfoGroups(g Gfx, x, y0, w, y1 int, groups [][]infoLine, left 
 				continue
 			}
 			lw := 9
+			if l.label == "" { // a remark runs the whole width
+				g.Text(x, y, fit(l.value, w), cDim, false)
+				y++
+				continue
+			}
 			g.Text(x, y, fit(l.label, lw), cDim, false)
 			c := cText
 			switch {

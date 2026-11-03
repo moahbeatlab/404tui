@@ -760,10 +760,11 @@ func (a *App) drawSeq(g Gfx) {
 		if has {
 			fg = cText
 		}
-		ly, lh := y, rh // the label's row; in the terminal a track is one line, so the lit label is one line too
+		bh := rh // the height of a track's boxes: in the terminal one line, with a blank line between tracks when there is room
 		if Terminal {
-			ly, lh = y+(rh-1)/2, 1
+			bh = 1
 		}
+		ly, lh := y, bh
 		if i == a.row {
 			g.Highlight(lx-1, ly, x0-lx+1, lh)
 			fg = cWhite
@@ -789,7 +790,7 @@ func (a *App) drawSeq(g Gfx) {
 				if ph == st {
 					bg = cLine
 				}
-				g.StepCell(x, y, cw, rh, bg)
+				g.StepCell(x, y, cw, bh, bg)
 				for _, n := range notesIn(d, pad, st) { // every note that starts in the step, where it starts: sub-steps and nudges show
 					col := cAmber
 					if ph == st {
@@ -803,7 +804,7 @@ func (a *App) drawSeq(g Gfx) {
 					if n.Len >= stepTicks { // a long note fills the rest of its step
 						length = 1 - start
 					}
-					g.Note(x, y, cw, rh, start, min(length, 1-start), float64(n.Vel)/127, col)
+					g.Note(x, y, cw, bh, start, min(length, 1-start), float64(n.Vel)/127, col)
 					// longer than a step: a tie runs on over the steps it lasts
 					if n.Len > stepTicks && !Terminal { // (the terminal shows the length in the panel)
 						end := int(n.Tick) + n.Len
@@ -812,13 +813,13 @@ func (a *App) drawSeq(g Gfx) {
 							if rest := end - (page*16+t)*stepTicks; rest < stepTicks {
 								frac = float64(rest) / stepTicks
 							}
-							g.Tie(stepX(t), y, cw, rh, frac, col)
+							g.Tie(stepX(t), y, cw, bh, frac, col)
 						}
 					}
 				}
 			}
 			if i == a.row && st == a.step {
-				cursor = [4]int{x, y, cw, rh}
+				cursor = [4]int{x, y, cw, bh}
 			}
 		}
 	}
