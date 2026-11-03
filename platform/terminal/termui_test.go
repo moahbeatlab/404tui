@@ -337,3 +337,21 @@ func TestSpacePlaysAndStopsTheSampleAndThePattern(t *testing.T) {
 		t.Fatal("Space again stops the pattern")
 	}
 }
+
+func TestEscClosesAMenuAndBDoesNot(t *testing.T) {
+	m := newModel(t)
+	press(m, "a") // the pad menu... on an empty pad: the file dialog or a message
+	m.app.Dispatch(core.Event{Key: core.A, Down: true})
+	m.app.Dispatch(core.Event{Key: core.A, Down: false})
+	if !m.app.Modal() {
+		t.Skip("no menu opens on an empty pad here")
+	}
+	press(m, "b")
+	if !m.app.Modal() {
+		t.Fatal("b does not close a menu")
+	}
+	press(m, "esc")
+	if m.app.Modal() {
+		t.Fatal("Esc closes it")
+	}
+}

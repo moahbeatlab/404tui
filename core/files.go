@@ -142,6 +142,23 @@ func (a *App) kbKey(k Key) {
 }
 
 func (a *App) drawKeyboard(g Gfx) {
+	if Terminal { // a computer has a keyboard: the search is one line at the bottom, typed into, as in the classic program
+		y := Rows - 3
+		g.Fill(1, y, contentCols-2, 1, cPanel2)
+		g.Text(2, y, "SEARCH", cAmber, true)
+		n := fmt.Sprintf("%d files", len(a.entries))
+		if len(a.entries) == 1 {
+			n = "1 file"
+		}
+		if a.searchCut {
+			n += "+"
+		}
+		hint := "Enter keeps  Esc clears"
+		g.Text(contentCols-2-len(hint), y, hint, cDim, false)
+		g.Text(contentCols-2-len(hint)-2-len(n), y, n, cDim, false)
+		g.Text(10, y, fit(a.searchQ+"_", contentCols-4-len(hint)-len(n)-12), cText, true)
+		return
+	}
 	wc, hr := contentCols-2, 11
 	x0 := 1
 	y0 := Rows - 2 - hr

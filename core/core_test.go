@@ -137,7 +137,14 @@ func TestAssignSliceAndSequence(t *testing.T) {
 		t.Fatalf("every beat in 4 bars is 16 notes (and the other one): %d", len(d.Notes))
 	}
 	chooseMenuContaining(t, a, "Keep it")
-	keys(t, a, "B") // the tool's menu stays open until it is closed
+	keys(t, a, "B") // the tool's menu stays open until it is closed: B goes back to the menu of the tools
+	if a.menu == nil || a.menu.title == "" {
+		t.Fatal("B goes back to the tools menu it was opened from")
+	}
+	keys(t, a, "B") // and B there closes it
+	if a.menu != nil {
+		t.Fatal("B again closes the menu")
+	}
 	if a.seqOn {
 		t.Fatal("closing the tool stops the loop the trial started")
 	}

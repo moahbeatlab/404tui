@@ -35,7 +35,32 @@ func layoutScreen() {
 type hint struct{ key, what string }
 
 // hints are the keys of the screen: the plain ones and the ones with Y held.
+// hints are the keys the panel lists: on a keyboard the key that closes a page or a menu is Esc.
 func (a *App) hints() (plain, shift []hint) {
+	plain, shift = a.rawHints()
+	if Terminal && a.Modal() {
+		out := make([]hint, len(plain))
+		copy(out, plain)
+		for i, h := range out {
+			if h.key == "B" && (h.what == "close" || h.what == "cancel" || h.what == "back") {
+				out[i].key = "Esc"
+			}
+		}
+		plain = out
+	} else if Terminal {
+		out := make([]hint, len(plain))
+		copy(out, plain)
+		for i, h := range out {
+			if h.key == "B" && (h.what == "pads" || h.what == "back") { // leaving a screen
+				out[i].key = "Esc"
+			}
+		}
+		plain = out
+	}
+	return plain, shift
+}
+
+func (a *App) rawHints() (plain, shift []hint) {
 	screen := hint{"Y+<>", "screen"}
 	if Terminal {
 		screen = hint{"g hl", "screen (1-9)"}

@@ -296,7 +296,12 @@ func (m *Model) key(msg tea.KeyMsg) {
 		k = core.A
 	case "a", "A":
 		k = core.A
-	case "b", "B", "esc", "backspace":
+	case "b", "B": // the button B; it does not close a menu or a page: that is Esc
+		if m.app.Modal() {
+			return
+		}
+		k = core.B
+	case "esc", "backspace":
 		k = core.B
 	case "x", "X":
 		k = core.X

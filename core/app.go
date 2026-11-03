@@ -737,6 +737,9 @@ func (a *App) PlayStop() bool {
 	return false
 }
 
+// Modal says whether a menu, the pad panel or a dialog is in front: a keyboard closes it with Esc only.
+func (a *App) Modal() bool { return a.menu != nil || a.pp != nil || a.picker != nil || a.help }
+
 // GoScreen goes to the screen with that number (0 is PADS), from a keyboard's number keys; a number past the last does nothing.
 func (a *App) GoScreen(n int) {
 	if n >= 0 && n < len(screenNames) && !a.Typing() {

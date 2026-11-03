@@ -14,6 +14,7 @@ type menu struct {
 	items   []menuItem
 	cur     int
 	onClose func()                          // what B does besides closing the menu (a tool throws its trial away)
+	parent  *menu                           // the menu this one was opened from: B goes back to it, and B there closes
 	foot    func(g Gfx, col, row, cols int) // drawn under the items (a keyboard), footH rows high
 	footH   int                             // in rows
 	// tabs: the headings split the menu into pages (as the pad panel), L1 and R1 turn them. items is the page in front;
@@ -149,7 +150,7 @@ func (a *App) menuKey(k Key) {
 		if m.onClose != nil {
 			m.onClose()
 		}
-		a.menu = nil
+		a.menu = m.parent // the menu it was opened from, or none
 	case A:
 		it := *m.item()
 		if !it.keepOpen {
@@ -157,6 +158,9 @@ func (a *App) menuKey(k Key) {
 		}
 		if it.run != nil {
 			it.run(it.val)
+		}
+		if a.menu != nil && a.menu != m && a.menu.parent == nil && a.menu.title != m.title {
+			a.menu.parent = m // a menu that came out of this one: B comes back here
 		}
 	}
 }

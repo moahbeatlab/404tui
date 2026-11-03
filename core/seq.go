@@ -798,6 +798,9 @@ func (a *App) drawSeq(g Gfx) {
 				if ph == st {
 					bg = cLine
 				}
+				if Terminal && i == a.row && st == a.step && !a.aHeld { // the step under the cursor: its box is lit
+					bg = cLine
+				}
 				g.StepCell(x, y, cw, bh, bg)
 				for _, n := range notesIn(d, pad, st) { // every note that starts in the step, where it starts: sub-steps and nudges show
 					col := cAmber
@@ -806,6 +809,8 @@ func (a *App) drawSeq(g Gfx) {
 					}
 					if a.aHeld && pad == a.aPad && n.Tick == a.aTick {
 						col = cWhite // the note being edited
+					} else if Terminal && i == a.row && st == a.step {
+						col = cBlue // the note under the cursor, in its own colour
 					}
 					start := float64(int(n.Tick)-st*stepTicks) / stepTicks // how far into the step it starts
 					length := float64(n.Len) / stepTicks
@@ -832,9 +837,7 @@ func (a *App) drawSeq(g Gfx) {
 		}
 	}
 	if cursor[0] >= 0 {
-		if Terminal { // one dot at the top of the step under the cursor
-			g.Text(cursor[0]+(cursor[2]-1)/2, cursor[1], "●", cWhite, true)
-		} else {
+		if !Terminal { // in the terminal the lit box and the note's colour show the cursor
 			g.Cursor(cursor[0], cursor[1], cursor[2], cursor[3])
 		}
 	}
