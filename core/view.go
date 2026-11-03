@@ -219,8 +219,12 @@ func (a *App) drawPads(g Gfx) {
 		if p.File {
 			g.Fill(x, y, 1, th, cAmber)
 			g.Text(x+2, y, short(p.Name, pw-6), cText, true)
-			if th >= 3 {
-				a.drawTileInfo(g, x+2, y+1, tw-3, th >= 4, n, p.Frames)
+			if Terminal { // a computer's terminal shows the length and the switches (the wave is in the panel)
+				if th >= 3 {
+					a.drawTileInfo(g, x+2, y+1, tw-3, th >= 4, n, p.Frames)
+				}
+			} else if id, ok := a.padSample(n); ok && th >= 3 { // the handheld: the wave, an even number of rows, so the middle line is between two
+				a.wave(g, id, 0, p.Frames, x+1, y+1, tw-2, (ph-2)/2*2, cAmber)
 			}
 			// the switches that are on: G for gate, L for loop
 			cx := x + tw - len(num) - 1
@@ -247,18 +251,31 @@ func (a *App) drawPads(g Gfx) {
 	if cursorAt[0] >= 0 {
 		g.Cursor(cursorAt[0], cursorAt[1], cursorAt[2], cursorAt[3])
 	}
-	// the banks
+	a.drawBanks(g, a.bank)
+}
+
+// drawBanks is the row of the ten banks at the bottom, the one in front lit.
+func (a *App) drawBanks(g Gfx, cur int) {
 	by := Rows - 4
 	bw := (contentCols - 2) / 10
 	bx0 := 1 + (contentCols-2-bw*10)/2
 	for b := 0; b < 10; b++ {
+		used := 0
+		for i := 0; i < 16; i++ {
+			if a.info.Pads[b*16+i].File {
+				used++
+			}
+		}
 		x := bx0 + b*bw
 		col, fg := cPanel, cDim
-		if b == a.bank {
+		if b == cur {
 			col, fg = cAmber, cBg
 		}
 		g.Fill(x, by, bw-1, 1, col)
 		g.Text(x+(bw-1)/2, by, string(rune('A'+b)), fg, true)
+		if !Terminal { // the handheld shows how full each bank is; the terminal has the highlighter only
+			g.Bar(x, by+1, bw-1, float64(used)/16, cAmber, cLine)
+		}
 	}
 }
 

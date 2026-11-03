@@ -320,7 +320,6 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 		g.Fill(lx, row(6), ew, 2, cPanel2)
 		g.Bars(lx, row(6), ew, 2, env, false, cAmber)
 		g.Text(lx+ew+1, row(6), fit(fmt.Sprintf("%d %d %d", att, hold, rel), x+w-lx-ew-1), cDim, false)
-		a.drawPadInfo(g, x, row(9), w, y1, n)
 	case Files:
 		if a.job != nil {
 			if done, total, name, _, fin := a.job.state(); !fin {

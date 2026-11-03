@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/color"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/moahbeatlab/404tui/formats"
@@ -747,7 +748,7 @@ func (a *App) drawSeq(g Gfx) {
 		switch {
 		case ph == st:
 			g.Fill(stepX(s), ry, cw, rh*len(shown), cLine)
-		case st == a.step:
+		case st == a.step && !Terminal:
 			g.Fill(stepX(s), ry, cw, rh*len(shown), cPanel2)
 		}
 	}
@@ -823,6 +824,9 @@ func (a *App) drawSeq(g Gfx) {
 	}
 	if cursor[0] >= 0 {
 		g.Cursor(cursor[0], cursor[1], cursor[2], cursor[3])
+	}
+	if Terminal { // the banks, as on PADS: the one the pattern is in lit
+		a.drawBanks(g, (a.pat-1)/16)
 	}
 	// which bar this is, and where the loop is when it plays
 	bx := contentCols - 2 - bars*3
@@ -1156,7 +1160,7 @@ func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, step
 		if s%4 == 0 {
 			col = cDim
 		}
-		g.Text(x0+s*cw+(cw-1)/2, my, "·", col, false)
+		g.Text(x0+s*cw+(cw-1)/2, my, ".", col, false)
 	}
 	for _, n := range d.Notes {
 		if n.Pad != pad {
@@ -1182,6 +1186,6 @@ func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, step
 		if editing && n.Tick == a.aTick {
 			col = cWhite // the note being edited
 		}
-		g.Fill(cx0, my, w, 1, col)
+		g.Text(cx0, my, strings.Repeat("▄", w), col, false) // half a cell high: slim bars
 	}
 }
