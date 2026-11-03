@@ -59,9 +59,10 @@ const (
 	Slice
 	Save
 	Unit
+	Config
 )
 
-var screenNames = []string{"PADS", "SEQ", "FILES", "SLICE", "SAVE", "UNIT"}
+var screenNames = []string{"PADS", "SEQ", "FILES", "SLICE", "SAVE", "UNIT", "CONFIG"}
 
 // Audio plays a sample for the ear; a nil Audio is silent.
 type Audio interface {
@@ -145,6 +146,8 @@ type App struct {
 	searchQ    string         // the search in the file browser, "" for none
 	searchCut  bool           // the search gave up before the end
 	kb         *keyboard      // the on-screen keyboard of the search, when open
+	prompt     *textPrompt    // a line of text being typed, when open
+	cfgAt      int            // the row of the CONFIG screen the cursor is on
 	aud        map[int]int    // pads whose sample is being auditioned in the pattern: pad -> handle
 	prevOrder  []string       // the files decoded for the browser, oldest first
 	arp        arpState       // the settings of the sample arp, kept between visits
@@ -426,6 +429,12 @@ func (a *App) press(k Key, repeat int) {
 		a.help = false
 		return
 	}
+	if a.prompt != nil {
+		if k != Y {
+			a.promptKey(k, repeat)
+		}
+		return
+	}
 	if a.pp != nil {
 		if k != Y {
 			a.ppKey(k, repeat)
@@ -486,6 +495,8 @@ func (a *App) press(k Key, repeat int) {
 		a.saveKey(k)
 	case Unit:
 		a.unitKey(k)
+	case Config:
+		a.configKey(k)
 	}
 }
 
@@ -622,6 +633,11 @@ func (a *App) go_(s Screen) {
 	}
 	if s == Save {
 		a.wrote = nil
+	}
+	if s == Config {
+		if items := a.cfgItems(); a.cfgAt >= len(items) || items[a.cfgAt].head != "" {
+			a.cfgMove(1)
+		}
 	}
 }
 

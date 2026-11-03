@@ -51,12 +51,17 @@ func (a *App) draw(g Gfx) {
 		a.drawSave(g)
 	case Unit:
 		a.drawUnit(g)
+	case Config:
+		a.drawConfig(g)
 	}
 	if a.picker != nil {
 		a.drawPicker(g)
 	}
 	if a.kb != nil {
 		a.drawKeyboard(g)
+	}
+	if a.prompt != nil {
+		a.drawPrompt(g)
 	}
 	if a.pp != nil {
 		a.drawPadPanel(g)

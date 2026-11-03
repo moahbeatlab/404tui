@@ -177,20 +177,18 @@ func (m *Model) key(msg tea.KeyMsg) {
 		}
 		return
 	}
-	if m.app.Typing() { // the search keyboard is open: the keys type into it
+	if m.app.Typing() { // a search or a prompt is open: the keys type into it
 		switch {
 		case s == "ctrl+c":
 			m.app.RequestQuit()
-		case s == "enter" || s == "esc":
-			m.send(handheld.X, 0)
+		case s == "enter":
+			m.app.TypeEnter()
+		case s == "esc":
+			m.app.TypeEscape()
 		case s == "backspace":
-			m.send(handheld.B, 0)
+			m.app.TypeBackspace()
 		case msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace:
-			m.app.TypeSearch(string(msg.Runes))
-		case s == "up":
-			m.send(handheld.Up, 0)
-		case s == "down":
-			m.send(handheld.Down, 0)
+			m.app.TypeText(string(msg.Runes))
 		}
 		return
 	}

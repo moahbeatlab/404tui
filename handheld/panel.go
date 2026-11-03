@@ -43,6 +43,9 @@ func (a *App) hints() (plain, shift []hint) {
 		}
 		return []hint{{"^v", "setting"}, {"<>", "change"}, {"A", "reset/toggle"}, {"X", "hear pad"}, {"L1 R1", "page"}, {"B", "close"}}, nil
 	}
+	if a.prompt != nil {
+		return []hint{{"^v<>", "choose a key"}, {"A", "type it"}, {"B", "delete"}, {"L1 R1", "keys page"}, {"X", "done"}}, []hint{{"Y+B", "clear all"}, {"Y+X", "cancel"}}
+	}
 	if a.np != nil {
 		return []hint{{"^v", "setting"}, {"<>", "change"}, {"A", "default"}, {"X", "hear note"}, {"R1", "pattern tools"}, {"B", "close"}}, nil
 	}
@@ -97,6 +100,8 @@ func (a *App) hints() (plain, shift []hint) {
 		}
 		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"R2", "mute/solo"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}},
 			[]hint{{"Y+X", "add track"}, {"Y+B", "pick pattern"}, {"Sel+B", "tools"}, {"Y+^v", "pattern +-"}}
+	case Config:
+		return []hint{{"^v", "setting"}, {"<>", "change"}, {"A", "edit / switch"}, {"L1 R1", "jump"}, {"B", "pads"}}, []hint{screen}
 	case Unit:
 		return []hint{{"A", "send"}, {"X", "look again"}, {"^v", "choose"}, {"L1 R1", "page"}, {"B", "back"}}, []hint{screen}
 	default:
@@ -155,7 +160,7 @@ func (a *App) drawPanel(g Gfx) {
 	}
 
 	// tempo and the state of the loop
-	y := 4
+	y := 2 + (len(screenNames)+2)/3
 	g.Text(x, y, fmt.Sprintf("BPM %s", bpmText(a.tempo())), cText, true)
 	g.Text(x+len("BPM "+bpmText(a.tempo())+" "), y, a.tempoSource(), cDim, false)
 	if a.arpOn {
@@ -379,6 +384,8 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 		g.Text(x, row(3), fmt.Sprintf("%d files", a.info.Files), cText, false)
 	case Unit:
 		a.unitContext(g, x, y0, w)
+	case Config:
+		a.configContext(g, x, y0, w, y1)
 	}
 }
 

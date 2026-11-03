@@ -13,22 +13,37 @@ type Cell struct {
 	Bold   bool
 }
 
-// The terminal's colours are those of the terminal program's "Hardware" theme: a dark ground, flat tiles, an amber accent.
+// The terminal's colours are those of the terminal program's themes: a ground, flat tiles, an accent.
 var (
-	tBg      = xterm(233)
-	tPanel   = xterm(234)
-	tTile    = xterm(236)
-	tTileHi  = xterm(238)
-	tLine    = xterm(240)
-	tDim     = xterm(245)
-	tText    = xterm(252)
-	tAccent  = xterm(214)
-	tAccentD = xterm(94) // the selected part of a waveform, a playing pad
-	tDark    = xterm(232) // text on the accent
-	tWhite   = xterm(231)
-	tGood    = xterm(114)
-	tBad     = xterm(203)
+	tBg, tPanel, tTile, tTileHi, tLine, tDim, tText, tAccent, tAccentD, tDark, tWhite, tGood, tBad color.RGBA
 )
+
+type textTheme struct {
+	name                                                                   string
+	bg, panel, tile, tileHi, line, dim, text, accent, accentD, dark, white int
+	good, bad                                                              int
+}
+
+// textThemes are the colour schemes of the terminal (the numbers are colours of the 256-colour palette).
+var textThemes = []textTheme{
+	{"Hardware", 233, 234, 236, 238, 240, 245, 252, 214, 94, 232, 231, 114, 203},
+	{"Ocean", 233, 234, 236, 238, 240, 245, 252, 80, 24, 232, 231, 114, 203},
+	{"Paper", 255, 254, 253, 252, 250, 243, 236, 25, 153, 255, 231, 28, 160},
+}
+
+// SetTextTheme chooses the colour scheme of the terminal's screens.
+func SetTextTheme(i int) {
+	t := textThemes[i%len(textThemes)]
+	tBg, tPanel, tTile, tTileHi, tLine = xterm(t.bg), xterm(t.panel), xterm(t.tile), xterm(t.tileHi), xterm(t.line)
+	tDim, tText, tAccent, tAccentD, tDark = xterm(t.dim), xterm(t.text), xterm(t.accent), xterm(t.accentD), xterm(t.dark)
+	tWhite, tGood, tBad = xterm(t.white), xterm(t.good), xterm(t.bad)
+	terminalColours = map[color.RGBA]color.RGBA{
+		cBg: tBg, cPanel: tPanel, cPanel2: tTile, cLine: tLine, cDim: tDim, cText: tText,
+		cAmber: tAccent, cAmberD: tAccentD, cWhite: tWhite, cGood: tGood, cBad: tBad,
+	}
+}
+
+func init() { SetTextTheme(0) }
 
 // xterm is a colour of the 256-colour palette as red, green, blue.
 func xterm(n int) color.RGBA {
@@ -45,10 +60,7 @@ func xterm(n int) color.RGBA {
 }
 
 // terminalColours says which of the terminal's colours stands for each colour of the palette the screens use.
-var terminalColours = map[color.RGBA]color.RGBA{
-	cBg: tBg, cPanel: tPanel, cPanel2: tTile, cLine: tLine, cDim: tDim, cText: tText,
-	cAmber: tAccent, cAmberD: tAccentD, cWhite: tWhite, cGood: tGood, cBad: tBad,
-}
+var terminalColours map[color.RGBA]color.RGBA
 
 func tcol(c color.RGBA) color.RGBA {
 	if t, ok := terminalColours[c]; ok {

@@ -95,17 +95,6 @@ func (a *App) openSearch() {
 	a.kb = &keyboard{}
 }
 
-// Typing says whether the search keyboard is open, for a keyboard that can type into it directly.
-func (a *App) Typing() bool { return a.kb != nil }
-
-// TypeSearch adds text to the search being typed.
-func (a *App) TypeSearch(s string) {
-	if a.kb != nil && s != "" {
-		a.searchQ += s
-		a.list()
-	}
-}
-
 func (a *App) kbKey(k Key) {
 	kb := a.kb
 	switch k {

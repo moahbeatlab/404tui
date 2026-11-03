@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/moahbeatlab/404tui/app"
 )
 
 // The settings the app keeps between starts: the folder the file browser was in, the favourite folders, the autosave
@@ -13,6 +15,19 @@ type settings struct {
 	LastDir     string   `json:"last_dir,omitempty"`
 	Favourites  []string `json:"favourites,omitempty"`
 	AutosaveMin *int     `json:"autosave_min,omitempty"`
+
+	// The Config screen: the rule that sends a pad to a bus by its name (nil: the default), the recorder, the pad codes
+	// and the MIDI settings, as the terminal program's Config had them.
+	Theme         int          `json:"theme,omitempty"`
+	Buses         *app.BusRule `json:"buses,omitempty"`
+	RecordDir     string       `json:"record_dir,omitempty"`
+	RecordDevice  string       `json:"record_device,omitempty"`
+	LiveCode      string       `json:"live_code,omitempty"`
+	RecCode       string       `json:"rec_code,omitempty"`
+	MidiPort      string       `json:"midi_port,omitempty"`
+	MidiChan      string       `json:"midi_chan,omitempty"`
+	MidiMap       [4]string    `json:"midi_map,omitempty"`
+	MidiLevelChan string       `json:"midi_level_chan,omitempty"`
 }
 
 // dataDir is where the app keeps its own files (settings, autosaves): beside the card folder.

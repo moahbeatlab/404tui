@@ -41,15 +41,13 @@ const kit = "A A D R D D A  R A A D A  R A A U U U A"
 func TestOnlyEightKeys(t *testing.T) {
 	a, _ := newApp(t)
 	// Every screen can be reached and left with the eight keys alone.
-	for i := 0; i < len(screenNames); i++ {
-		keys(t, a, "Y+R")
-	}
-	if a.Screen() != Pads {
-		t.Fatalf("six steps right of PADS is PADS, got %v", a.Screen())
-	}
 	keys(t, a, "Y+L")
-	if a.Screen() != Unit {
+	if a.Screen() != Config {
 		t.Fatalf("Y+Left from PADS is the last screen, got %v", a.Screen())
+	}
+	keys(t, a, "Y+R")
+	if a.Screen() != Pads {
+		t.Fatalf("Y+Right from the last screen is PADS, got %v", a.Screen())
 	}
 	if img := a.Render(); img.Bounds().Dx() != 640 || img.Bounds().Dy() != 480 {
 		t.Fatalf("frame is %v", img.Bounds())
@@ -228,9 +226,9 @@ func TestMovePadAndCopyPad(t *testing.T) {
 func TestSendToTheUnit(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit)
-	keys(t, a, "Y+L")
+	keys(t, a, "Y+L Y+L")
 	if a.Screen() != Unit {
-		t.Fatal("UNIT is left of PADS")
+		t.Fatal("UNIT is two left of PADS")
 	}
 	keys(t, a, "A") // no link yet: looks for it
 	a.Tick()
