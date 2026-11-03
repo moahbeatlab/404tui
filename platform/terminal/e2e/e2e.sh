@@ -133,6 +133,32 @@ check "help page" "arrows or h j k l"
 snap 16-help
 lit '?'
 
+echo "== the other screens: loop, perform, config, unit, recording"
+tm kill-session -t $S 2>/dev/null
+start 120 40 -project $W/proj
+wait_for "SAMPLE LAB" >/dev/null; key Space; wait_for "BPM 124" >/dev/null
+lit y h
+check "looper screen" "LOOPER"
+snap 18-looper
+lit y h
+check "perform screen" "PERFORM"
+check "perform says there is no MIDI in this build" "no MIDI in this build"
+snap 19-perform
+lit y h
+check "config screen" "BUSES BY PAD NAME"
+snap 20-config
+lit a
+check "config edits with a prompt" "WORDS FOR SAMPLES ON BUS 1"
+snap 21-config-prompt
+key Escape
+absent "the prompt closes" "WORDS FOR SAMPLES ON BUS 1"
+lit y h
+check "unit screen without a unit" "NO UNIT"
+snap 22-unit
+key C-r
+check "Ctrl-R says there is no recorder in the container" "no recorder"
+snap 23-record-no-recorder
+
 echo "== save the project unchanged: files identical to the real project"
 tm kill-session -t $S 2>/dev/null
 start 120 40 -project $W/proj

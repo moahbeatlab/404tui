@@ -986,21 +986,13 @@ func (a *App) up() {
 		a.say("search ended", false)
 		return
 	}
-	if parent, ok := parentPath(a.dir); !ok {
+	parent, ok := parentPath(a.dir)
+	if !ok {
 		a.say("this is the top", false)
 		return
-	} else {
-		from := baseName(a.dir)
-		a.cd(parent)
-		for i, e := range a.entries {
-			if e.dir && e.name == from {
-				a.fcur = i
-			}
-		}
-		return
 	}
-	from := filepath.Base(a.dir)
-	a.cd(filepath.Dir(a.dir))
+	from := baseName(a.dir)
+	a.cd(parent)
 	for i, e := range a.entries {
 		if e.dir && e.name == from {
 			a.fcur = i

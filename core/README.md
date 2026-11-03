@@ -1,4 +1,7 @@
-# 404tui handheld: the SP-404MKII on handheld devices (R36S first, proof of concept)
+# 404tui on the handheld (R36S) and the shared app: notes by round
+
+The package `core` is the whole app (see ../docs/architecture.md and ../docs/ui.md); `platform/handheld` is the R36S around it. This file
+keeps the notes of the rounds of work on the handheld, in the order they were made.
 
 The handheld is a variant of 404tui for a device class; the R36S under ArkOS is the first target (its launcher and
 folder layout are in `packaging/arkos`). Another device would get its own folder under `packaging/` and its own
@@ -336,8 +339,8 @@ menu (NOTES, PLAY, MAKE) are pages like the pad panel, as many as fit the dialog
 
 ## The same screens in a terminal (round of 2026-11-03)
 
-The handheld's screens are also what `sp404 lab` shows on a computer (Linux, macOS, Windows): see
-[`docs/lab.md`](../docs/lab.md). To make that possible the screen is no longer fixed at 640x480:
+The handheld's screens are also what `sp404` shows on a computer (Linux, macOS, Windows): see
+[`docs/ui.md`](../docs/ui.md). To make that possible the screen is no longer fixed at 640x480:
 
 - The screen is a grid of 8x16 pixel cells, 80x30 on the R36S. `handheld.SetSize(cols, rows)` sets another size (at
   least 80x30) and every screen is laid out for it, in cells: the panel on the right is 30% of the width (at least 24
@@ -350,3 +353,12 @@ The handheld's screens are also what `sp404 lab` shows on a computer (Linux, mac
   pads have a cell of space between them, the cursor box of a pad is drawn inside the pad, and the pad label in the panel
   is bold text instead of a big drawing.
 - The package builds on Linux, macOS and Windows; only the framebuffer (`out_linux.go`) is Linux-only.
+
+## One program everywhere (round of 2026-11-03, later)
+
+`sp404` is now this program on every system, and the code moved: `core` (the app), `platform/terminal` (computers), `platform/handheld`
+(this device). The screens draw through `Gfx` with a pixel backend (this device) and a text backend (a terminal), so the handheld keeps
+its look while a terminal gets the look of the terminal program. New in `core`: CONFIG, PERF and LOOP screens, a text prompt with an
+on-screen keyboard, the unit's projects and live editing, the unit's SD card in FILES with copy/paste/delete, pad and pattern
+actions (rename, find, export, restore, copy and move patterns), recording a set. A feature that needs something the device lacks
+(a recorder, MIDI) says so; see ../docs/architecture.md.

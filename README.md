@@ -31,17 +31,19 @@ The phone page also runs without any program, over Web MIDI, at <https://moahbea
   again (or in a terminal: `xattr -dr com.apple.quarantine <the folder>`).
 - **Linux:** run `./sp404` in a terminal.
 
-`sp404 lab` is the same program without a unit: it works on projects on the computer and has the same screens, layout and
-keys (with vim keys) as the handheld version; see [`docs/lab.md`](docs/lab.md).
+`sp404` with no command opens the same program on every system (and on the R36S handheld): pads, sequencer, files, slicer, loop,
+perform and more, with the same screens, layout, menus and features, vim keys at a computer's keyboard, working on projects on the
+computer and, with a unit plugged in, loading, sending or live-editing its projects, and recording sets; see
+[`docs/ui.md`](docs/ui.md) and [`docs/architecture.md`](docs/architecture.md). The earlier tabs are `sp404 classic`.
 
 Plug the SP-404MKII in with its USB cable; 404tui finds it by itself and waits if it is not there yet. `?` shows
 the keys, `q` quits. From a terminal, `sp404 -sim` tries it without a unit and `sp404 check` tests the installation.
 
 ## Usage
 
-    go run ./cmd/sp404                 # the terminal UI (same as `menu`)
     go run ./cmd/sp404 -sim            # the terminal UI against the simulated device
-    go run ./cmd/sp404 lab             # the lab: samples, slicer, patterns, projects, offline (docs/lab.md)
+    go run ./cmd/sp404                 # the program: samples, slicer, patterns, projects, the unit (docs/ui.md)
+    go run ./cmd/sp404 classic         # the earlier terminal UI with its tabs
     go run ./cmd/sp404 -version        # print the version (0.1-alpha)
 
 The header says `404tui by moahbeatlab` and the project, then the state of the link and the version. The tabs are in the top right corner (on the row under the header when it is too narrow): **Pads** (`1`), **Files** (`2`), **Projects** (`3`), **Slicer** (`4`) and **Sequencer** (`5`); click one or press its number. A rail down the left lists the banks or file sources of the section you are in. Dialogs open over the
