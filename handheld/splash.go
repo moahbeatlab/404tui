@@ -56,9 +56,11 @@ func countFiles(dir string) int {
 
 func (a *App) drawSplash(c *canvas) {
 	s := a.splash
+	dy := max((Rows-MinRows)/2, 0) * CellH // a taller screen: everything a little lower
+	lx := max((W-520)/2/CellW, 2) * CellW
 	// the logo: the name in big letters beside a 4x4 pad grid with a kick pattern lit
-	c.big(56, 70, "404tui", cAmber, 7)
-	gx, gy := 400, 70
+	c.big(lx, 4*CellH+dy, "404tui", cAmber, 7)
+	gx, gy := lx+344, 4*CellH+dy
 	for i := 0; i < 16; i++ {
 		x, y := gx+(i%4)*36, gy+(i/4)*36
 		col := cPanel2
@@ -70,14 +72,14 @@ func (a *App) drawSplash(c *canvas) {
 		}
 		c.rect(x, y, 30, 30, col)
 	}
-	c.text(58, 192, "SAMPLE LAB FOR THE SP-404MKII", cText, true)
-	c.text(58, 212, "samples, slices, patterns, projects", cDim, false)
-	c.rect(56, 244, 528, 1, cLine)
+	c.text(lx, 14*CellH+dy, "SAMPLE LAB FOR THE SP-404MKII", cText, true)
+	c.text(lx, 15*CellH+dy, "samples, slices, patterns, projects", cDim, false)
+	c.rect(lx, 17*CellH+dy-4, 520, 1, cLine)
 
 	// what is here
-	row := func(y int, what, val string) {
-		c.text(58, y, what, cDim, false)
-		c.text(150, y, fit(val, 54), cText, false)
+	row := func(r int, what, val string) {
+		c.text(lx, r*CellH+dy, what, cDim, false)
+		c.text(lx+12*CellW, r*CellH+dy, fit(val, 50), cText, false)
 	}
 	used := 0
 	for _, p := range a.info.Pads {
@@ -85,23 +87,23 @@ func (a *App) drawSplash(c *canvas) {
 			used++
 		}
 	}
-	row(260, "project", fmt.Sprintf("%s   %d pads with samples", a.ProjectName(), used))
-	row(280, "samples", fmt.Sprintf("%s   %d in the folder", short2(a.Root, 30), countFiles(a.Root)))
-	row(300, "card", short2(filepath.Join(a.OutDir, cardFolder), 54))
-	row(320, "autosave", a.autosaveSetting())
+	row(18, "project", fmt.Sprintf("%s   %d pads with samples", a.ProjectName(), used))
+	row(19, "samples", fmt.Sprintf("%s   %d in the folder", short2(a.Root, 30), countFiles(a.Root)))
+	row(20, "card", short2(filepath.Join(a.OutDir, cardFolder), 50))
+	row(21, "autosave", a.autosaveSetting())
 	if Version != "" {
-		row(340, "version", Version)
+		row(22, "version", Version)
 	}
 	if s.restore != "" {
-		c.rect(56, 372, 528, 44, cAmberD)
-		c.box(56, 372, 528, 44, 2, cAmber)
-		c.text(70, 378, fmt.Sprintf("AUTOSAVE FOUND: %s, saved at %s", filepath.Base(s.restore), s.when.Format("15:04")), cWhite, true)
-		c.text(70, 396, "A restores it     any other key starts empty", cText, false)
+		c.rect(lx, 24*CellH+dy, 520, 3*CellH, cAmberD)
+		c.box(lx, 24*CellH+dy, 520, 3*CellH, 2, cAmber)
+		c.text(lx+CellW, 24*CellH+dy+CellH/2, fit(fmt.Sprintf("AUTOSAVE FOUND: %s, saved at %s", filepath.Base(s.restore), s.when.Format("15:04")), 63), cWhite, true)
+		c.text(lx+CellW, 25*CellH+dy+CellH/2, "A restores it     any other key starts empty", cText, false)
 	} else {
 		lbl := "press any key"
 		if a.clock().Sub(s.started)/(500*time.Millisecond)%2 == 0 {
-			c.text(58, 392, lbl, cDim, false)
+			c.text(lx, 25*CellH+dy, lbl, cDim, false)
 		}
 	}
-	c.text(W-margin-textW("moahbeatlab"), H-24, "moahbeatlab", cLine, false)
+	c.text(W-margin-textW("moahbeatlab"), H-CellH, "moahbeatlab", cLine, false)
 }

@@ -10,15 +10,27 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
-// The screen is 640x480, the R36S's: 80x30 cells of 8x16 pixels.
+// The screen is a grid of cells of 8x16 pixels: 80x30 on the R36S (640x480). In a terminal it is as many cells as the
+// window has, so the same screens are drawn on any size; SetSize says which. Every screen lays itself out in cells.
 const (
-	W, H   = 640, 480
 	CellW  = 8
 	CellH  = 16
-	Cols   = W / CellW
-	Rows   = H / CellH
 	margin = 16
+	// MinCols and MinRows are the smallest screen the layouts are made for: the handheld's.
+	MinCols, MinRows = 80, 30
 )
+
+var (
+	W, H       = MinCols * CellW, MinRows * CellH
+	Cols, Rows = MinCols, MinRows
+)
+
+// SetSize sets the screen to cols x rows cells (at least 80x30) and works the layout out again.
+func SetSize(cols, rows int) {
+	Cols, Rows = max(cols, MinCols), max(rows, MinRows)
+	W, H = Cols*CellW, Rows*CellH
+	layoutScreen()
+}
 
 func rgb(v uint32) color.RGBA { return color.RGBA{uint8(v >> 16), uint8(v >> 8), uint8(v), 255} }
 
@@ -37,10 +49,22 @@ var (
 	cBad    = rgb(0xff6b5e)
 )
 
-type canvas struct{ img *image.RGBA }
+// A canvas is the frame as pixels, and the text on it by cell: a terminal shows the letters as letters and works the
+// rest out from the pixels.
+type canvas struct {
+	img *image.RGBA
+	txt []Glyph // Cols*Rows, the letters drawn
+}
+
+// Glyph is a letter on the screen, at a cell.
+type Glyph struct {
+	R    rune
+	Fg   color.RGBA
+	Bold bool
+}
 
 func newCanvas() *canvas {
-	c := &canvas{img: image.NewRGBA(image.Rect(0, 0, W, H))}
+	c := &canvas{img: image.NewRGBA(image.Rect(0, 0, W, H)), txt: make([]Glyph, Cols*Rows)}
 	c.rect(0, 0, W, H, cBg)
 	return c
 }
@@ -72,6 +96,14 @@ func (c *canvas) text(x, y int, s string, col color.RGBA, bold bool) {
 	}
 	src := image.NewUniform(col)
 	dot := fixed.P(x, y+face.Ascent)
+	if len(c.txt) == Cols*Rows { // the letters by cell, the cell nearest to where they are drawn
+		row := (y + CellH/2) / CellH
+		for i, r := range []rune(s) {
+			if cc := (x + i*CellW + CellW/2) / CellW; r != ' ' && cc >= 0 && cc < Cols && row >= 0 && row < Rows {
+				c.txt[row*Cols+cc] = Glyph{r, col, bold}
+			}
+		}
+	}
 	for _, r := range s {
 		dr, mask, maskp, adv, ok := face.Glyph(dot, r)
 		if ok {

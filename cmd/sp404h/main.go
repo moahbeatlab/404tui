@@ -31,12 +31,20 @@ func main() {
 	fbPath := flag.String("fb", "", "framebuffer to draw on, e.g. /dev/fb0")
 	input := flag.String("input", "", "input device of the pad, e.g. /dev/input/event2")
 	web := flag.String("web", "", "serve the screen and buttons as a web page on this address, e.g. :8405")
+	size := flag.String("size", "", "the screen in cells, COLSxROWS (default 80x30, the handheld's 640x480)")
 	silent := flag.Bool("silent", false, "no audio")
 	simulate := flag.Bool("sim", false, "the UNIT screen finds a simulated unit")
 	showVersion := flag.Bool("version", false, "print the version (the commit it was built from) and exit")
 	logPath := flag.String("log", "", "the log file (default: logs.log next to the program)")
 	flag.Parse()
 	handheld.Version = version()
+	if *size != "" {
+		var c, r int
+		if _, err := fmt.Sscanf(*size, "%dx%d", &c, &r); err != nil {
+			fatal(fmt.Errorf("-size wants COLSxROWS, e.g. 120x40"))
+		}
+		handheld.SetSize(c, r)
+	}
 	if *showVersion {
 		fmt.Println("404tui", version())
 		return

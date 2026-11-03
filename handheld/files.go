@@ -130,12 +130,14 @@ func (a *App) kbKey(k Key) {
 }
 
 func (a *App) drawKeyboard(c *canvas) {
-	x0, y0, w, h := 16, 250, contentW-32, 170
+	wc, hr := contentCols-2, 11
+	x0, w, h := CellW, wc*CellW, hr*CellH
+	y0 := panelBot - h
 	c.rect(x0, y0, w, h, cPanel2)
 	c.box(x0, y0, w, h, 2, cAmber)
 	q := a.searchQ
-	c.text(x0+12, y0+10, "SEARCH", cDim, false)
-	c.text(x0+12+textW("SEARCH "), y0+10, q+"_", cAmber, true)
+	c.text(x0+2*CellW, y0+CellH, "SEARCH", cDim, false)
+	c.text(x0+2*CellW+textW("SEARCH "), y0+CellH, fit(q+"_", wc-30), cAmber, true)
 	n := fmt.Sprintf("%d files", len(a.entries))
 	if len(a.entries) == 1 {
 		n = "1 file"
@@ -143,22 +145,22 @@ func (a *App) drawKeyboard(c *canvas) {
 	if a.searchCut {
 		n += "+"
 	}
-	c.text(x0+w-12-textW(n), y0+10, n, cDim, false)
-	const kw, kh = 34, 26
+	c.text(x0+w-2*CellW-textW(n), y0+CellH, n, cDim, false)
+	const kw = 4 * CellW // a key: 4 cells wide, 2 high
 	gx := x0 + (w-10*kw)/2
 	for r, row := range kbRows {
 		for col := 0; col < len(row); col++ {
-			x, y := gx+col*kw, y0+36+r*(kh+4)
+			x, y := gx+col*kw, y0+2*CellH+r*2*CellH
 			bg, fg := cPanel, cText
 			if r == a.kb.r && col == a.kb.c {
 				bg, fg = cAmber, cBg
 			}
-			c.rect(x, y, kw-3, kh, bg)
+			c.rect(x, y+2, kw-3, 2*CellH-4, bg)
 			ch := string(row[col])
 			if ch == " " {
 				ch = "sp"
 			}
-			c.text(x+(kw-3-textW(ch))/2, y+5, ch, fg, true)
+			c.text(x+(kw-3-textW(ch))/2, y+CellH/2, ch, fg, true)
 		}
 	}
 }

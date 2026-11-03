@@ -6,8 +6,6 @@ import (
 	"image"
 	"image/color"
 	"path/filepath"
-	"strings"
-	"time"
 )
 
 // Render draws the frame for the state of the app.
@@ -56,19 +54,18 @@ func (a *App) Render() *image.RGBA {
 }
 
 func (a *App) titleBar(c *canvas) {
-	c.rect(0, 0, W, 28, cPanel)
-	c.rect(0, 0, 70, 28, cAmber)
-	c.text(10, 6, "404tui", cBg, true)
-	c.big(86, 6, screenNames[a.scr], cAmber, 1)
+	c.rect(0, 0, W, CellH, cPanel)
+	c.rect(0, 0, 8*CellW, CellH, cAmber)
+	c.cells(1, 0, "404tui", cBg, true)
+	c.cells(9, 0, screenNames[a.scr], cAmber, true)
 	right := fmt.Sprintf("%s  bank %c", a.ProjectName(), 'A'+rune(a.bank))
-	c.text(W-margin-textW(right), 6, right, cText, false)
-	c.rect(0, 28, W, 1, cLine)
+	c.text(W-margin-textW(right), 0, fit(right, Cols-20), cText, false)
 }
 
 // Version is the commit the program was built from, shown in the corner so it is always known which one runs.
 var Version string
 
-// footer is the message line; the keys are in the panel.
+// footer is the message line and the hint line; the keys are in the panel.
 func (a *App) footer(c *canvas) {
 	c.rect(0, panelBot, W, 1, cLine)
 	c.rect(0, panelBot+1, W, H-panelBot-1, cPanel)
@@ -77,25 +74,22 @@ func (a *App) footer(c *canvas) {
 		if a.msgBad {
 			col = cBad
 		}
-		c.text(margin, panelBot+8, fit(a.msg, (W-2*margin)/CellW), col, true)
+		c.text(margin, panelBot, fit(a.msg, (W-2*margin)/CellW), col, true)
 	} else if a.scr == Seq && a.menu == nil && a.picker == nil {
 		// no message: what is known of the note under the cursor
 		if info := a.noteInfo(); info != "" {
-			c.text(margin, panelBot+8, fit(info, (W-2*margin)/CellW), cText, false)
+			c.text(margin, panelBot, fit(info, (W-2*margin)/CellW), cText, false)
 		}
 	}
 	const hintLine = "Y keys  Y+L2 undo  Y+R2 redo  Sel+Start quit"
-	c.text(margin, panelBot+28, hintLine, cDim, false)
-	c.text(margin+textW(hintLine)+14, panelBot+28, a.autosaveAgo(), cDim, false)
+	c.text(margin, panelBot+CellH, hintLine, cDim, false)
+	c.text(margin+textW(hintLine)+16, panelBot+CellH, a.autosaveAgo(), cDim, false)
 	if Version != "" {
-		c.text(W-margin-textW(Version), panelBot+28, Version, cDim, false)
+		c.text(W-margin-textW(Version), panelBot+CellH, Version, cDim, false)
 	}
 }
 
 func (a *App) drawHelp(c *canvas) {
-	c.rect(60, 62, 520, 322, cPanel2)
-	c.box(60, 62, 520, 322, 2, cAmber)
-	c.text(80, 74, "KEYS  (D-pad, A B X Y, L1 R1 L2 R2)", cAmber, true)
 	rows := []string{
 		"Y held   shift: the second function of a key",
 		"Y+< >    previous / next screen",
@@ -109,20 +103,30 @@ func (a *App) drawHelp(c *canvas) {
 		"",
 		"PADS  SEQ  FILES  SLICE  SAVE  UNIT",
 		"SAVE writes a folder for the SD card; UNIT sends",
-		"the project over USB to an SP-404MKII (OTG port).",
+		"the project over USB to an SP-404MKII.",
 	}
+	cols, h := min(contentCols-4, 56), len(rows)+4
+	x, y := (contentCols-cols)/2*CellW, max(1, (Rows-h)/2-1)*CellH
+	c.rect(x, y, cols*CellW, h*CellH, cPanel2)
+	c.box(x, y, cols*CellW, h*CellH, 2, cAmber)
+	c.text(x+2*CellW, y+CellH, "KEYS  (D-pad, A B X Y, L1 R1 L2 R2)", cAmber, true)
 	for i, r := range rows {
-		c.text(80, 102+i*18, r, cText, false)
+		c.text(x+2*CellW, y+(i+2)*CellH, fit(r, cols-4), cText, false)
 	}
 }
 
 // ---- PADS
 
+// drawPads is the 4x4 pads of the bank, as big as the room allows, and the banks under them.
 func (a *App) drawPads(c *canvas) {
-	const tw, th, gap, x0, y0 = 104, 72, 6, 16, 44
+	cols := contentCols - 2
+	pw := cols / 4 // a pad's pitch in cells
+	x0 := CellW * (1 + (cols-4*pw)/2)
+	ph := max((Rows-3-1-3)/4, 3) // the rows the pads have: what is left of the body, less the banks (3)
+	tw, th := pw*CellW-6, ph*CellH-4
 	for i := 0; i < 16; i++ {
 		n := a.bank*16 + i
-		x, y := x0+(i%4)*(tw+gap), y0+(i/4)*(th+gap)
+		x, y := x0+(i%4)*pw*CellW, CellH+(i/4)*ph*CellH
 		p := a.info.Pads[n]
 		bg := cPanel
 		if p.File {
@@ -132,16 +136,15 @@ func (a *App) drawPads(c *canvas) {
 			bg = cAmberD
 		}
 		c.rect(x, y, tw, th, bg)
+		num := fmt.Sprint(i + 1)
+		c.text(x+tw-textW(num)-6, y, num, cDim, false)
 		if p.File {
 			c.rect(x, y, 4, th, cAmber)
-			c.text(x+10, y+18, short(p.Name, 9), cText, true)
+			c.text(x+CellW+2, y, short(p.Name, pw-5), cText, true)
 			if id, ok := a.padSample(n); ok {
-				a.waveform(c, id, 0, p.Frames, x+10, y+38, tw-20, 26, cAmber)
+				a.waveform(c, id, 0, p.Frames, x+10, y+CellH+2, tw-20, th-CellH-6, cAmber)
 			}
-		}
-		num := fmt.Sprint(i + 1)
-		c.text(x+tw-textW(num)-6, y+4, num, cDim, false)
-		if p.File { // the switches that are on: G for gate, L for loop
+			// the switches that are on: G for gate, L for loop
 			cx := x + tw - textW(num) - 10
 			for _, sw := range []struct {
 				id byte
@@ -149,14 +152,14 @@ func (a *App) drawPads(c *canvas) {
 			}{{0x6B, "L"}, {0x6A, "G"}} {
 				if v, err := a.lab.PadParam(n, sw.id); err == nil && v != 0 {
 					cx -= 18
-					a.badge(c, cx, y+3, sw.ch, true)
+					a.badge(c, cx, y, sw.ch, true)
 				}
 			}
 		}
 		for mi, mp := range a.marks { // a pad that is a key of the arp: its place among the keys
 			if mp == n {
-				c.rect(x+4, y+4, 20, 14, cAmber)
-				c.text(x+7, y+3, fmt.Sprint(mi+1), cBg, true)
+				c.rect(x+4, y+CellH, 20, 14, cAmber)
+				c.text(x+7, y+CellH-1, fmt.Sprint(mi+1), cBg, true)
 			}
 		}
 		if i == a.cur {
@@ -164,8 +167,10 @@ func (a *App) drawPads(c *canvas) {
 		}
 	}
 	// the banks
-	by := 372
-	c.text(margin, by-18, "BANKS", cDim, false)
+	by := (Rows - 5) * CellH
+	c.text(margin, by-CellH, "BANKS", cDim, false)
+	bw := (contentCols - 2) / 10 * CellW
+	bx0 := CellW * (1 + (contentCols-2-(contentCols-2)/10*10)/2)
 	for b := 0; b < 10; b++ {
 		used := 0
 		for i := 0; i < 16; i++ {
@@ -173,15 +178,15 @@ func (a *App) drawPads(c *canvas) {
 				used++
 			}
 		}
-		x := margin + b*44
+		x := bx0 + b*bw
 		col, fg := cPanel, cDim
 		if b == a.bank {
 			col, fg = cAmber, cBg
 		}
-		c.rect(x, by, 40, 24, col)
-		c.text(x+16, by+4, string(rune('A'+b)), fg, true)
-		c.rect(x, by+27, 40, 3, cLine)
-		c.rect(x, by+27, used*40/16, 3, cAmber)
+		c.rect(x, by, bw-4, CellH, col)
+		c.text(x+(bw-4-CellW)/2, by, string(rune('A'+b)), fg, true)
+		c.rect(x, by+CellH+1, bw-4, 3, cLine)
+		c.rect(x, by+CellH+1, used*(bw-4)/16, 3, cAmber)
 	}
 }
 
@@ -202,50 +207,52 @@ func (a *App) waveform(c *canvas, id, from, to, x, y, w, h int, col color.RGBA) 
 // ---- FILES
 
 func (a *App) drawFiles(c *canvas) {
-	head := short2(a.dir, 48)
+	inner := contentCols - 4
+	head := short2(a.dir, inner)
 	if a.isFavourite(a.dir) {
-		head = "* " + short2(a.dir, 46)
+		head = "* " + short2(a.dir, inner-2)
 	}
 	col := cDim
 	if a.searchQ != "" {
-		head = fmt.Sprintf("search %q in %s", a.searchQ, short2(a.dir, 26))
+		head = fmt.Sprintf("search %q in %s", a.searchQ, short2(a.dir, max(inner-30, 12)))
 		if a.searchCut {
 			head += " (cut short)"
 		}
 		col = cAmber
 	}
-	c.text(margin, 38, fit(head, 56), col, a.searchQ != "")
-	const rows = 21
+	c.cells(2, 1, fit(head, inner), col, a.searchQ != "")
+	rows := a.fileRows()
 	top := max(0, min(a.fcur-rows/2, len(a.entries)-rows))
 	if len(a.entries) == 0 {
-		c.text(margin, 70, "(no folders or audio files here)", cDim, false)
+		c.cells(2, 3, "(no folders or audio files here)", cDim, false)
 		if a.dir == a.Root {
-			c.text(margin, 94, "Put .wav files in this folder:", cText, false)
-			c.text(margin, 112, fit(a.Root, 48), cAmber, false)
+			c.cells(2, 5, "Put .wav files in this folder:", cText, false)
+			c.cells(2, 6, fit(a.Root, inner), cAmber, false)
 		}
-		c.text(margin, 140, "< goes up    Y+X jumps to the usb drive", cDim, false)
+		c.cells(2, 8, "< goes up    Y+X jumps to the usb drive", cDim, false)
 	}
 	for i := 0; i < rows && top+i < len(a.entries); i++ {
 		e := a.entries[top+i]
-		y := 60 + i*17
+		y := (2 + i) * CellH
 		if top+i == a.fcur {
-			c.rect(margin-4, y-1, contentW-margin, 17, cAmberD)
-			c.rect(margin-4, y-1, 3, 17, cAmber)
+			c.rect(margin-4, y, contentW-margin, CellH, cAmberD)
+			c.rect(margin-4, y, 3, CellH, cAmber)
 		}
-		name := fit(e.name, 50)
+		avail := inner - 8
+		name := fit(e.name, avail)
 		if a.searchQ != "" { // a result is a path below the folder: its end says which file
-			name = short2(e.name, 50)
+			name = short2(e.name, avail)
 		}
 		col := cText
 		if e.dir {
-			name = fit(e.name, 49) + "/"
+			name = fit(e.name, avail-1) + "/"
 			col = cAmber
 		}
 		if e.project {
-			name = short(e.name, 24) + "  project"
+			name = short(e.name, min(24, avail-9)) + "  project"
 			col = cGood
 		}
-		c.text(margin+4, y, name, col, e.dir)
+		c.text(margin+CellW/2, y, name, col, e.dir)
 		if !e.dir {
 			sz := fmt.Sprintf("%dK", (e.size+512)/1024)
 			c.text(contentW-textW(sz)-12, y, sz, cDim, false)
@@ -253,16 +260,19 @@ func (a *App) drawFiles(c *canvas) {
 	}
 }
 
+// fileRows is how many files the list shows: the body, less the line of the folder.
+func (a *App) fileRows() int { return Rows - 4 }
+
 // ---- SLICE
 
 func (a *App) drawSlice(c *canvas) {
 	sl := a.sl
-	s, _ := a.lab.Sample(a.sid)
 	sec := func(f int) float64 { return float64(f) / 48000 }
 	name := a.info.Pads[a.spad].Name
-	c.text(margin, 38, fmt.Sprintf("%s  %s", a.label(a.spad), fit(name, 40)), cAmber, true)
+	c.cells(2, 1, fmt.Sprintf("%s  %s", a.label(a.spad), fit(name, 40)), cAmber, true)
 
-	const wx, wy, wh = 20, 64, 220
+	wx, wy := margin, 2*CellH+4
+	wh := (a.sliceWaveRows())*CellH - 8
 	from, to := a.view()
 	c.rect(wx-4, wy-4, waveCols+8, wh+8, cPanel)
 	sel := a.sliceAt(a.at)
@@ -280,27 +290,28 @@ func (a *App) drawSlice(c *canvas) {
 		}
 		x := px(sg.Start)
 		c.vline(x, wy, wy+wh, cAmber)
-		c.text(x+3, wy+2, fmt.Sprint(i+1), cAmber, true)
+		c.text(x+3, wy, fmt.Sprint(i+1), cAmber, true)
 	}
 	cx := px(a.at)
 	c.vline(cx, wy-4, wy+wh+3, cWhite)
 	c.rect(cx-3, wy-4, 7, 3, cWhite)
 
 	// the overview, with the window in it
-	oy := 300
-	c.rect(wx-4, oy, waveCols+8, 28, cPanel)
-	a.waveform(c, a.sid, 0, sl.Frames, wx, oy+2, waveCols, 24, cDim)
+	oy := (2 + a.sliceWaveRows()) * CellH
+	c.rect(wx-4, oy, waveCols+8, 2*CellH, cPanel)
+	a.waveform(c, a.sid, 0, sl.Frames, wx, oy+2, waveCols, 2*CellH-4, cDim)
 	for _, sg := range sl.Slices {
-		c.vline(wx+sg.Start*waveCols/sl.Frames, oy+2, oy+26, cAmber)
+		c.vline(wx+sg.Start*waveCols/sl.Frames, oy+2, oy+2*CellH-4, cAmber)
 	}
-	c.box(wx+from*waveCols/sl.Frames, oy, max((to-from)*waveCols/sl.Frames, 2), 28, 1, cWhite)
+	c.box(wx+from*waveCols/sl.Frames, oy, max((to-from)*waveCols/sl.Frames, 2), 2*CellH, 1, cWhite)
 
 	// the numbers
+	ny := oy + 2*CellH
 	if sel >= 0 {
 		sg := sl.Slices[sel]
-		c.text(margin, 340, fmt.Sprintf("SLICE %d/%d   %.3f - %.3f s   %.3f s long", sel+1, len(sl.Slices), sec(sg.Start), sec(sg.End), sec(sg.End-sg.Start)), cText, true)
+		c.text(margin, ny, fit(fmt.Sprintf("SLICE %d/%d   %.3f - %.3f s   %.3f s long", sel+1, len(sl.Slices), sec(sg.Start), sec(sg.End), sec(sg.End-sg.Start)), contentCols-4), cText, true)
 	}
-	c.text(margin, 360, fmt.Sprintf("cursor %.3f s", sec(a.at)), cDim, false)
+	c.text(margin, ny+CellH, fmt.Sprintf("cursor %.3f s", sec(a.at)), cDim, false)
 	// the order as it plays: one cell per step, the slice's number in it, whatever the mode and the grid make of the order. A
 	// step that stays silent (chance) is dim, the slices under the cursor are lit, the step that sounds is amber.
 	plan := a.slicePlan()
@@ -308,18 +319,16 @@ func (a *App) drawSlice(c *canvas) {
 	if a.sl.Division > 0 {
 		lbl += fmt.Sprintf("  1/%d at %s BPM", a.sl.Division, bpmText(a.tempoOf(a.spad/16)))
 	}
-	c.text(contentW-textW(lbl)-4, 360, fit(lbl, 52), cDim, false)
-	per, cw, pitch := 13, 30, 33
-	if len(plan) > 26 {
-		per, cw, pitch = 16, 24, 27
-	}
+	c.text(contentW-textW(lbl)-8, ny+CellH, fit(lbl, contentCols-24), cDim, false)
+	per := max((contentCols-4)/4, 1) // a step is 3 cells and a gap
 	now := a.playingStep()
+	cellRows := Rows - 3 - (ny/CellH + 2) + 1 // what is left under the numbers
 	for i, st := range plan {
-		if i >= 2*per {
-			c.text(margin+per*pitch, 404+20, fmt.Sprintf("+%d", len(plan)-2*per), cDim, false)
+		if i >= cellRows*per {
+			c.text(margin+(per-1)*4*CellW, ny+2*CellH+(cellRows-1)*CellH, fmt.Sprintf("+%d", len(plan)-cellRows*per+1), cDim, false)
 			break
 		}
-		x, y := margin+(i%per)*pitch, 384+(i/per)*20
+		x, y := margin+(i%per)*4*CellW, ny+2*CellH+(i/per)*CellH
 		col, fg := cPanel2, cText
 		switch {
 		case i == now:
@@ -330,15 +339,18 @@ func (a *App) drawSlice(c *canvas) {
 		if st.Rest && i != now {
 			fg = cLine
 		}
-		c.rect(x, y, cw, 17, col)
+		c.rect(x, y, 3*CellW, CellH, col)
 		t := fmt.Sprint(st.Slice + 1)
 		if st.Rest {
 			t = "-" + t
 		}
-		c.text(x+(cw-textW(t))/2, y, t, fg, true)
+		c.text(x+(3*CellW-textW(t))/2, y, t, fg, true)
 	}
-	_ = s
 }
+
+// sliceWaveRows is the rows of the big waveform: the body less the title, the overview (2 rows) and the numbers and
+// the order under it (4 rows).
+func (a *App) sliceWaveRows() int { return max(Rows-3-1-2-4, 6) }
 
 // ---- SAVE
 
@@ -350,43 +362,45 @@ func (a *App) drawSave(c *canvas) {
 			bytesN += p.Frames * p.Ch * 2
 		}
 	}
-	c.text(margin, 44, "WRITE THE PROJECT", cDim, false)
-	c.big(margin, 66, a.ProjectName(), cAmber, 3)
+	inner := contentCols - 4
+	c.cells(2, 2, "WRITE THE PROJECT", cDim, false)
+	c.big(margin, 3*CellH, fit(a.ProjectName(), inner/3), cAmber, 3)
 	dest := filepath.Join(a.OutDir, cardFolder, a.ProjectName())
-	c.text(margin, 120, short2(dest, 55), cText, false)
-	c.text(margin, 150, fmt.Sprintf("%d pads with samples   %.1f MB   %d files", used, float64(bytesN)/1e6, a.info.Files), cText, false)
-	c.rect(margin, 180, contentW-2*margin, 1, cLine)
+	c.cells(2, 7, short2(dest, inner), cText, false)
+	c.cells(2, 9, fmt.Sprintf("%d pads with samples   %.1f MB   %d files", used, float64(bytesN)/1e6, a.info.Files), cText, false)
+	c.rect(margin, 11*CellH+8, contentW-2*margin, 1, cLine)
 	if a.wrote == nil {
-		c.rect(margin, 200, 260, 44, cAmber)
-		c.text(margin+16, 214, "A  WRITE TO THE CARD", cBg, true)
-		c.text(margin, 262, "Left/Right changes the project number.", cDim, false)
-		c.text(margin, 280, "An existing folder with that number is replaced.", cDim, false)
+		c.rect(margin, 12*CellH+8, 24*CellW, 3*CellH, cAmber)
+		c.cells(4, 13, "A  WRITE TO THE CARD", cBg, true)
+		c.cells(2, 16, "Left/Right changes the project number.", cDim, false)
+		c.cells(2, 17, "An existing folder with that number is replaced.", cDim, false)
 		a.drawAutosave(c)
 		return
 	}
-	c.text(margin, 196, "WRITTEN", cGood, true)
+	c.cells(2, 12, "WRITTEN", cGood, true)
 	show := a.wrote
 	if len(show) > 5 {
 		show = append(append([]string{}, show[:4]...), fmt.Sprintf("... and %d more", len(a.wrote)-4))
 	}
 	for i, n := range show {
-		c.text(margin, 220+i*17, "  "+n, cText, false)
+		c.cells(2, 13+i, fit("  "+n, inner), cText, false)
 	}
-	c.text(margin, 312, "Put the card in the SP-404MKII.", cDim, false)
+	c.cells(2, 19, "Put the card in the SP-404MKII.", cDim, false)
 	a.drawAutosave(c)
 }
 
 // drawAutosave is the interval and the log of the autosave, at the foot of the SAVE screen.
 func (a *App) drawAutosave(c *canvas) {
-	c.rect(margin, 332, contentW-2*margin, 1, cLine)
-	c.text(margin, 340, "AUTOSAVE", cDim, false)
-	c.text(margin+textW("AUTOSAVE")+12, 340, a.autosaveSetting(), cAmber, true)
-	c.text(contentW-margin-textW("^v changes"), 340, "^v changes", cDim, false)
+	y0 := Rows - 9
+	c.rect(margin, y0*CellH-4, contentW-2*margin, 1, cLine)
+	c.cells(2, y0, "AUTOSAVE", cDim, false)
+	c.text(margin+textW("AUTOSAVE")+12, y0*CellH, a.autosaveSetting(), cAmber, true)
+	c.text(contentW-margin-textW("^v changes"), y0*CellH, "^v changes", cDim, false)
 	a.as.mu.Lock()
 	h := append([]string{}, a.as.history...)
 	a.as.mu.Unlock()
 	if len(h) == 0 {
-		c.text(margin, 362, "nothing yet: it saves when the project has changed", cDim, false)
+		c.cells(2, y0+2, "nothing yet: it saves when the project has changed", cDim, false)
 		return
 	}
 	if len(h) > 4 {
@@ -397,13 +411,9 @@ func (a *App) drawAutosave(c *canvas) {
 		if i == len(h)-1 {
 			col = cGood
 		}
-		c.text(margin, 362+i*17, fit(l, (contentW-2*margin)/CellW), col, false)
+		c.text(margin, (y0+2+i)*CellH, fit(l, (contentW-2*margin)/CellW), col, false)
 	}
 }
-
-// Clock is for the playing-pad flash: a screen is a function of the state, not of the time, so tests are repeatable.
-var _ = time.Now
-var _ = strings.TrimSpace
 
 // orderMode is how the order is played, for the label above it.
 func orderMode(sl *formats.Slicing) string {

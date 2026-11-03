@@ -270,7 +270,8 @@ func (a *App) setEach(targets []int, ref int, st padSetting, v int32, absolute b
 func (a *App) drawPadPanel(c *canvas) {
 	pp := a.pp
 	has := a.info.Pads[pp.pad].File
-	x0, y0, w, h := 16, 34, contentW-32, 392
+	wc, hr := contentCols-2, Rows-3 // the dialog in cells; its first and last row are blank, for the frame
+	x0, y0, w, h := CellW, CellH, wc*CellW, hr*CellH
 	c.rect(x0, y0, w, h, cPanel2)
 	c.box(x0, y0, w, h, 2, cAmber)
 	targets := a.padTargets()
@@ -279,122 +280,134 @@ func (a *App) drawPadPanel(c *canvas) {
 	if len(targets) > 1 {
 		title = fmt.Sprintf("%d MARKED PADS", len(targets))
 	}
-	c.text(x0+14, y0+10, title, cAmber, true)
+	ty := y0 + CellH
+	c.text(x0+2*CellW, ty, title, cAmber, true)
 	if len(targets) > 1 {
-		c.text(x0+14+textW(title)+10, y0+10, "all change", cText, false)
+		c.text(x0+2*CellW+textW(title)+10, ty, "all change", cText, false)
 	} else if has {
-		c.text(x0+14+textW(title)+10, y0+10, fit(a.info.Pads[pp.pad].Name, 22), cText, false)
+		c.text(x0+2*CellW+textW(title)+10, ty, fit(a.info.Pads[pp.pad].Name, 22), cText, false)
 	}
-	tx := x0 + w - 14
+	tx := x0 + w - 2*CellW
 	for i := len(padPageNames) - 1; i >= 0; i-- {
 		if !has && i < 2 {
 			continue
 		}
 		name := padPageNames[i]
-		tx -= textW(name) + 14
+		tx -= textW(name) + 2*CellW
 		if i == pp.page {
-			c.rect(tx-6, y0+6, textW(name)+12, 22, cAmber)
-			c.text(tx, y0+10, name, cBg, true)
+			c.rect(tx-4, ty, textW(name)+8, CellH, cAmber)
+			c.text(tx, ty, name, cBg, true)
 		} else {
-			c.text(tx, y0+10, name, cDim, false)
+			c.text(tx, ty, name, cDim, false)
 		}
 	}
-	c.rect(x0+10, y0+34, w-20, 1, cLine)
+	c.rect(x0+10, ty+CellH+3, w-20, 1, cLine)
 	if pp.page == 2 {
-		a.drawToolsList(c, x0+10, y0+44, w-20, h-54, pp.tools)
+		a.drawToolsList(c, x0+CellW, ty+2*CellH, w-2*CellW, h-5*CellH, pp.tools)
 		return
 	}
 	rows := padPages[pp.page]
-	rh := 36
-	if len(rows) > 7 {
-		rh = 25
+	avail := hr - 5 // the rows for the settings
+	rhRows := 1
+	if len(rows)*2 <= avail {
+		rhRows = 2
 	}
+	rh := rhRows * CellH
+	bx := x0 + 20*CellW
+	bw := max(min(wc-20-14, 40), 12) * CellW
 	for i, st := range rows {
-		y := y0 + 46 + i*rh
+		y := ty + 2*CellH + i*rh
 		v := a.settingValue(ref, st)
 		mixed := false
 		for _, t := range targets {
 			mixed = mixed || a.settingValue(t, st) != v
 		}
+		ly := y + (rh-CellH)/2 // the text is in the middle of the row
 		if i == pp.row[pp.page] {
-			c.rect(x0+8, y-4, w-16, rh-2, cAmberD)
-			c.rect(x0+8, y-4, 3, rh-2, cAmber)
+			c.rect(x0+6, y, w-12, rh, cAmberD)
+			c.rect(x0+6, y, 3, rh, cAmber)
 		}
 		if st.id == 0x6A || st.id == 0x6B { // gate and loop: the letter, lit when on (as on the pads)
-			a.badge(c, x0+22, y+1, st.label[:1], v != 0)
-			c.text(x0+44, y+2, st.label, cText, i == pp.row[pp.page])
+			a.badge(c, x0+2*CellW, ly, st.label[:1], v != 0)
+			c.text(x0+4*CellW+4, ly, st.label, cText, i == pp.row[pp.page])
 		} else {
-			c.text(x0+22, y+2, st.label, cText, i == pp.row[pp.page])
+			c.text(x0+2*CellW, ly, st.label, cText, i == pp.row[pp.page])
 		}
-		bx, bw := x0+150, 190
 		vt := settingText(st, v)
 		switch st.kind {
 		case kFader:
-			c.rect(bx, y+4, bw, 10, cPanel)
-			frac := float64(v-st.lo) / float64(st.hi-st.lo)
-			dfrac := float64(st.def-st.lo) / float64(st.hi-st.lo)
-			if st.lo < 0 || st.id == 0x78 { // bipolar: from the middle out
-				mid := bx + int(dfrac*float64(bw))
-				end := bx + int(frac*float64(bw))
-				c.rect(min(mid, end), y+4, abs(end-mid)+1, 10, cAmber)
-			} else {
-				c.rect(bx, y+4, int(frac*float64(bw)), 10, cAmber)
-			}
-			c.rect(bx+int(dfrac*float64(bw)), y+1, 2, 16, cDim) // where the default is
-			c.rect(bx+int(frac*float64(bw))-1, y, 4, 18, cWhite)
+			a.fader(c, bx, ly, bw, st, v)
 		case kSwitch, kFlag:
 			pill, fg := cPanel, cDim
 			if v != 0 {
 				pill, fg = cAmber, cBg
 			}
-			c.rect(bx, y, 56, 18, pill)
-			c.text(bx+(56-textW(vt))/2, y+1, vt, fg, true)
+			c.rect(bx, ly, 7*CellW, CellH, pill)
+			c.text(bx+(7*CellW-textW(vt))/2, ly, vt, fg, true)
 			vt = ""
 		case kChoice:
-			c.text(bx, y+1, "< "+vt+" >", cAmber, i == pp.row[pp.page])
+			c.text(bx, ly, "< "+vt+" >", cAmber, i == pp.row[pp.page])
 			vt = ""
 		}
 		if mixed { // the marked pads differ: the value shown is the first one's
 			vt += " *"
 		}
 		if vt != "" {
-			c.text(bx+bw+14, y+1, vt, cAmber, true)
+			c.text(bx+bw+CellW, ly, vt, cAmber, true)
 		}
 	}
 	hint := "<> change   A reset/toggle   X hear the pad   L1 R1 page   B close"
-	c.text(x0+14, y0+h-22, fit(hint, (w-28)/CellW), cDim, false)
+	c.text(x0+2*CellW, y0+h-2*CellH, fit(hint, wc-4), cDim, false)
+}
+
+// fader draws a setting as a bar in the row at y (16 px): filled from the left, or from the middle out for a setting that
+// goes both ways, the default marked and the value as a white tick.
+func (a *App) fader(c *canvas, bx, y, bw int, st padSetting, v int32) {
+	c.rect(bx, y+3, bw, 10, cPanel)
+	frac := float64(v-st.lo) / float64(st.hi-st.lo)
+	dfrac := float64(st.def-st.lo) / float64(st.hi-st.lo)
+	if st.lo < 0 || st.id == 0x78 { // bipolar: from the middle out
+		mid := bx + int(dfrac*float64(bw))
+		end := bx + int(frac*float64(bw))
+		c.rect(min(mid, end), y+3, abs(end-mid)+1, 10, cAmber)
+	} else {
+		c.rect(bx, y+3, int(frac*float64(bw)), 10, cAmber)
+	}
+	c.rect(bx+int(dfrac*float64(bw)), y, 2, CellH, cDim) // where the default is
+	c.rect(min(bx+int(frac*float64(bw))-1, bx+bw-4), y, 4, CellH, cWhite)
 }
 
 // drawToolsList draws the tools page: the menu's items in the panel's frame.
 func (a *App) drawToolsList(c *canvas, x, y, w, h int, m *menu) {
 	m.settle()
-	rh := 20
-	vis := min(len(m.items), h/rh)
+	vis := min(len(m.items), h/CellH)
 	top := max(0, min(m.cur-vis/2, len(m.items)-vis))
 	for r := 0; r < vis; r++ {
 		i := top + r
 		it := m.items[i]
-		yy := y + r*rh
+		yy := y + r*CellH
 		if it.header {
-			c.rect(x, yy+rh/2-1, w, 1, cLine)
-			c.rect(x+8, yy-1, textW(it.label)+10, rh-2, cPanel2)
-			c.text(x+12, yy, it.label, cDim, true)
+			c.rect(x, yy+CellH/2, w, 1, cLine)
+			c.rect(x+CellW, yy, textW(it.label)+CellW, CellH, cPanel2)
+			c.text(x+CellW+4, yy, it.label, cDim, true)
 			continue
 		}
 		fg := cText
 		if i == m.cur {
-			c.rect(x, yy-2, w, rh, cAmberD)
-			c.rect(x, yy-2, 3, rh, cAmber)
+			c.rect(x, yy, w, CellH, cAmberD)
+			c.rect(x, yy, 3, CellH, cAmber)
 			fg = cWhite
 		}
-		c.text(x+14, yy, it.label, fg, i == m.cur)
+		vw := 0
 		if len(it.vals) > 0 {
 			v := it.vals[it.val]
 			if i == m.cur {
 				v = "< " + v + " >"
 			}
-			c.text(x+w-10-textW(v), yy, v, cAmber, i == m.cur)
+			vw = textW(v) + CellW
+			c.text(x+w-CellW-textW(v), yy, v, cAmber, i == m.cur)
 		}
+		c.text(x+2*CellW, yy, fit(it.label, (w-3*CellW-vw)/CellW), fg, i == m.cur)
 	}
 }
 

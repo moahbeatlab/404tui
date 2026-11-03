@@ -14,8 +14,8 @@ type menu struct {
 	items   []menuItem
 	cur     int
 	onClose func()                       // what B does besides closing the menu (a tool throws its trial away)
-	foot    func(c *canvas, x, y, w int) // drawn under the items (a keyboard), footH pixels high
-	footH   int
+	foot    func(c *canvas, x, y, w int) // drawn under the items (a keyboard), footH rows high
+	footH   int                          // in rows
 	// tabs: the headings split the menu into pages (as the pad panel), L1 and R1 turn them. items is the page in front;
 	// full is every item of the menu, so an index given when the menu was made still finds its item.
 	tabs   []string
@@ -164,71 +164,73 @@ func (a *App) menuKey(k Key) {
 func (a *App) drawMenu(c *canvas) {
 	m := a.menu
 	m.settle()
-	w := 328
-	tabH := 0
+	wc := min(max(contentCols*3/4, 41), 64)
+	wc = min(wc, contentCols-2)
+	w := wc * CellW
+	tabRows := 0
 	if m.tabs != nil {
-		tabH = 28
+		tabRows = 1
 	}
-	rh := 20
-	if len(m.items) > 14 {
-		rh = 18
-	}
-	vis := min(len(m.items), 17)
+	vis := min(len(m.items), max(Rows-3-3-tabRows-m.footH, 3))
 	top := max(0, min(m.cur-vis/2, len(m.items)-vis))
-	h := 40 + tabH + vis*rh + m.footH
-	x, y := (contentW-w)/2, max(36, (H-h)/2-20)
-	c.rect(x, y, w, h, cPanel2)
-	c.box(x, y, w, h, 2, cAmber)
+	hr := 3 + tabRows + vis + m.footH // the rows of the dialog: a blank one at the top and the bottom for the frame
+	x := (contentCols - wc) / 2 * CellW
+	y := (1 + max((Rows-3-hr)/2, 0)) * CellH
+	c.rect(x, y, w, hr*CellH, cPanel2)
+	c.box(x, y, w, hr*CellH, 2, cAmber)
 	title := strings.ToUpper(m.title)
 	if len(m.items) > vis {
 		title += fmt.Sprintf("  %d/%d", m.cur+1, len(m.items))
 	}
-	c.text(x+14, y+10, fit(title, (w-28)/CellW), cAmber, true)
+	c.text(x+2*CellW, y+CellH, fit(title, wc-6), cAmber, true)
 	if m.tabs != nil {
-		tx := x + 10
+		tx := x + 2*CellW
 		for i, name := range m.tabs {
 			if i == m.tab {
-				c.rect(tx-5, y+32, textW(name)+10, 20, cAmber)
-				c.text(tx, y+35, name, cBg, true)
+				c.rect(tx-4, y+2*CellH, textW(name)+8, CellH, cAmber)
+				c.text(tx, y+2*CellH, name, cBg, true)
 			} else {
-				c.text(tx, y+35, name, cDim, false)
+				c.text(tx, y+2*CellH, name, cDim, false)
 			}
-			tx += textW(name) + 16
+			tx += textW(name) + 2*CellW
 		}
 	}
+	iy := y + (2+tabRows)*CellH
 	for r := 0; r < vis; r++ {
 		i := top + r
 		it := m.items[i]
-		yy := y + 36 + tabH + r*rh
+		yy := iy + r*CellH
 		if it.header {
-			c.rect(x+6, yy+rh/2-1, w-12, 1, cLine)
-			c.rect(x+14, yy-1, textW(it.label)+10, rh-2, cPanel2)
-			c.text(x+18, yy, it.label, cDim, true)
+			c.rect(x+6, yy+CellH/2, w-12, 1, cLine)
+			c.rect(x+CellW, yy, textW(it.label)+CellW, CellH, cPanel2)
+			c.text(x+CellW+4, yy, it.label, cDim, true)
 			continue
 		}
 		fg := cText
 		if i == m.cur {
-			c.rect(x+6, yy-2, w-12, rh, cAmberD)
-			c.rect(x+6, yy-2, 3, rh, cAmber)
+			c.rect(x+6, yy, w-12, CellH, cAmberD)
+			c.rect(x+6, yy, 3, CellH, cAmber)
 			fg = cWhite
 		}
-		c.text(x+18, yy, fit(it.label, (w-36-textW("< 000 BPM >"))/CellW+8), fg, i == m.cur)
+		vw := 0
 		if len(it.vals) > 0 {
 			v := it.vals[it.val]
 			if i == m.cur {
 				v = "< " + v + " >"
 			}
-			c.text(x+w-14-textW(v), yy, v, cAmber, i == m.cur)
+			vw = textW(v) + CellW
+			c.text(x+w-2*CellW-textW(v), yy, v, cAmber, i == m.cur)
 		}
+		c.text(x+2*CellW, yy, fit(it.label, (w-4*CellW-vw)/CellW), fg, i == m.cur)
 	}
 	if m.foot != nil {
-		m.foot(c, x, y+40+tabH+vis*rh, w)
+		m.foot(c, x, iy+vis*CellH, w)
 	}
 	if top > 0 {
-		c.text(x+w-30, y+10, "^", cAmber, true)
+		c.text(x+w-4*CellW, y+CellH, "^", cAmber, true)
 	}
 	if top+vis < len(m.items) {
-		c.text(x+w-30, y+h-18, "v", cAmber, true)
+		c.text(x+w-4*CellW, y+(hr-2)*CellH, "v", cAmber, true)
 	}
 }
 

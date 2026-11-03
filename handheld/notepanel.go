@@ -164,33 +164,35 @@ func (a *App) npKey(k Key, repeat int) {
 // drawNotePanel docks the panel at the bottom of the grid, or at the top when the cursor's row is down there.
 func (a *App) drawNotePanel(c *canvas) {
 	np := a.np
-	x0, w, h := 16, contentW-32, 150
-	y0 := panelBot - h - 4
+	wc, hr := contentCols-2, 10
+	x0, w, h := CellW, wc*CellW, hr*CellH
+	y0 := panelBot - h
 	if a.row >= 0 {
-		if rowY := 74 + (a.row-a.rowTop)*max(min((panelBot-6-74)/max(len(a.rows), 6), 36), 1); rowY+36 > y0-4 {
-			y0 = 34 // the cursor's row is low: the panel goes to the top
+		if rowY := 3*CellH + (a.row-a.rowTop)*a.seqRowPx(); rowY+a.seqRowPx() > y0 {
+			y0 = CellH // the cursor's row is low: the panel goes to the top
 		}
 	}
 	c.rect(x0, y0, w, h, cPanel2)
 	c.box(x0, y0, w, h, 2, cAmber)
 	n, ok := a.npNote()
 	title := fmt.Sprintf("NOTE  %s  %d.%d", a.label(np.pad), a.step/16+1, a.step%16+1)
-	c.text(x0+14, y0+8, title, cAmber, true)
+	c.text(x0+2*CellW, y0+CellH, title, cAmber, true)
 	if !ok {
-		c.text(x0+14, y0+52, "no note on this step", cDim, false)
-		c.text(x0+14, y0+74, "A puts one here", cText, false)
-		c.text(x0+14, y0+h-20, "A note   B close   R1 pattern tools", cDim, false)
+		c.text(x0+2*CellW, y0+3*CellH, "no note on this step", cDim, false)
+		c.text(x0+2*CellW, y0+4*CellH, "A puts one here", cText, false)
+		c.text(x0+2*CellW, y0+h-2*CellH, "A note   B close   R1 pattern tools", cDim, false)
 		return
 	}
 	vals := []int{n.Vel, n.Len, gridOff(n.Tick)}
 	for i, row := range notePanelRows {
-		y := y0 + 32 + i*29
+		y := y0 + 2*CellH + i*2*CellH
 		if i == np.row {
-			c.rect(x0+8, y-4, w-16, 28, cAmberD)
-			c.rect(x0+8, y-4, 3, 28, cAmber)
+			c.rect(x0+6, y, w-12, 2*CellH, cAmberD)
+			c.rect(x0+6, y, 3, 2*CellH, cAmber)
 		}
-		c.text(x0+22, y+2, row.label, cText, i == np.row)
-		bx, bw := x0+110, 200
+		ly := y + CellH/2
+		c.text(x0+2*CellW, ly, row.label, cText, i == np.row)
+		bx, bw := x0+14*CellW, max(min(wc-14-14, 40), 12)*CellW
 		var frac, dfrac float64
 		var vt string
 		switch i {
@@ -208,16 +210,16 @@ func (a *App) drawNotePanel(c *canvas) {
 				vt = fmt.Sprintf("%+d ticks", vals[2])
 			}
 		}
-		c.rect(bx, y+4, bw, 10, cPanel)
+		c.rect(bx, ly+3, bw, 10, cPanel)
 		if i == 2 { // from the middle out
 			mid, end := bx+int(dfrac*float64(bw)), bx+int(frac*float64(bw))
-			c.rect(min(mid, end), y+4, abs(end-mid)+1, 10, cAmber)
+			c.rect(min(mid, end), ly+3, abs(end-mid)+1, 10, cAmber)
 		} else {
-			c.rect(bx, y+4, int(frac*float64(bw)), 10, cAmber)
+			c.rect(bx, ly+3, int(frac*float64(bw)), 10, cAmber)
 		}
-		c.rect(bx+int(dfrac*float64(bw)), y+1, 2, 16, cDim)
-		c.rect(bx+int(frac*float64(bw))-1, y, 4, 18, cWhite)
-		c.text(bx+bw+14, y+1, vt, cAmber, true)
+		c.rect(bx+int(dfrac*float64(bw)), ly, 2, CellH, cDim)
+		c.rect(min(bx+int(frac*float64(bw))-1, bx+bw-4), ly, 4, CellH, cWhite)
+		c.text(bx+bw+CellW, ly, vt, cAmber, true)
 	}
-	c.text(x0+14, y0+h-20, fit("<> change  A default  X hear  B close  R1 tools", (w-28)/CellW), cDim, false)
+	c.text(x0+2*CellW, y0+h-2*CellH, fit("<> change  A default  X hear  B close  R1 tools", wc-4), cDim, false)
 }

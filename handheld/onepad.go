@@ -91,7 +91,8 @@ func onePadKeyboard(semis []int) func(c *canvas, x, y, w int) {
 				names += formats.PitchNames[s%12] + " "
 			}
 		}
-		kw, top := 22, y+4
+		kw, top := (w-2*CellW)/14, y+2
+		x += CellW - 7
 		c.rect(x+6, top, 14*kw+2, 40, cLine)
 		white := []int{0, 2, 4, 5, 7, 9, 11}
 		for i := 0; i < 14; i++ {
@@ -116,7 +117,7 @@ func onePadKeyboard(semis []int) func(c *canvas, x, y, w int) {
 				}
 			}
 		}
-		c.text(x+14, top+44, fit(names, (w-28)/CellW), cAmber, true)
+		c.text(x+7, top+44, fit(names, (w-28)/CellW), cAmber, true)
 	}
 }
 
@@ -127,7 +128,7 @@ func (a *App) openOnePadMenu(n int) {
 	if !o.init {
 		*o = onePad{stack: 3, oct: 4, init: true}
 	}
-	m := &menu{title: "arp from " + a.label(n), footH: 70}
+	m := &menu{title: "arp from " + a.label(n), footH: 4}
 	scales := []string{"CHROMATIC (chord types)"}
 	for _, s := range formats.ArpScales {
 		scales = append(scales, s.Name)
