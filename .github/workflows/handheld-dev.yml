@@ -1,0 +1,42 @@
+name: handheld-dev
+
+# Every push to cli-lab builds the handheld program (no cgo, arm64) and puts it in ONE rolling pre-release,
+# dev-cli-lab, replacing the one before. The launcher on the R36S downloads it from there (packaging/arkos/404tui.sh).
+# A stable channel is a normal release (release.yml); this one is only for trying things.
+on:
+  push:
+    branches: [cli-lab]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: handheld-dev
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TAG: dev-cli-lab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./core ./platform/... ./cmd/sp404h ./lab
+      - run: go test ./core ./platform/...
+      - name: Build
+        run: |
+          make handheld
+          cd dist && sha256sum sp404tui-arm64 > sp404tui-arm64.sha256 && cat sp404tui-arm64.sha256
+      - name: Rolling pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete "$TAG" --cleanup-tag --yes || true
+          gh release create "$TAG" --prerelease --target "$GITHUB_SHA" \
+            --title "Handheld dev build (${GITHUB_SHA::7})" \
+            --notes "The latest push to cli-lab, commit ${GITHUB_SHA}. Replaced on every push; the R36S launcher downloads it." \
+            dist/sp404tui-arm64 dist/sp404tui-arm64.sha256

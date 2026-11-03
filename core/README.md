@@ -13,7 +13,7 @@ SP-404MKII away from a computer: pick samples, cut them, play patterns together,
 send it over USB. There is no synth: it is about samples, slicing and sequencing.
 
     go run ./cmd/sp404h -demo -samples /tmp/404/samples -web :8405     # a page with the screen and buttons
-    make arm64 / GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o sp404h-arm64 ./cmd/sp404h
+    make arm64 / GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o sp404tui-arm64 ./cmd/sp404h
 
 ## The keys
 

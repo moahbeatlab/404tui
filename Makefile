@@ -8,7 +8,7 @@
 #   make dist VERSION=0.2 stamp a version (else the one in version/version.go stays)
 #
 # The handheld front end (sp404h, for an R36S with ArkOS; see core/README.md and platform/handheld):
-#   make handheld          dist/sp404h-arm64, for the handheld (no cgo, builds anywhere)
+#   make handheld          dist/sp404tui-arm64, for the handheld (no cgo, builds anywhere)
 #   make handheld-card     dist/handheld/roms/..., laid out like the games card: copy its contents onto the card
 #   make handheld-local    ./sp404h for this computer (try it in a browser: ./sp404h -demo -silent -web :8405)
 #   make handheld-test     the tests of the handheld packages
@@ -71,22 +71,23 @@ dist: linux windows macos
 # ---- the handheld (R36S, ArkOS): a 64-bit ARM Linux program. The commit it was built from shows in its corner
 # and in logs.log; build from a clean, committed tree to know exactly which one runs (a + marks changes).
 HANDHELD     := sp404h
+HANDHELD_BIN := sp404tui-arm64
 HANDHELD_PKG := ./cmd/sp404h
 
 handheld:
 	mkdir -p $(DIST)
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) -o $(DIST)/$(HANDHELD)-arm64 $(HANDHELD_PKG)
-	@echo "built $(DIST)/$(HANDHELD)-arm64, commit $$(go version -m $(DIST)/$(HANDHELD)-arm64 | sed -n 's/.*vcs.revision=\(.......\).*/\1/p')$$(go version -m $(DIST)/$(HANDHELD)-arm64 | grep -q 'vcs.modified=true' && echo ' + changes that are not committed')"
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) -o $(DIST)/$(HANDHELD_BIN) $(HANDHELD_PKG)
+	@echo "built $(DIST)/$(HANDHELD_BIN), commit $$(go version -m $(DIST)/$(HANDHELD_BIN) | sed -n 's/.*vcs.revision=\(.......\).*/\1/p')$$(go version -m $(DIST)/$(HANDHELD_BIN) | grep -q 'vcs.modified=true' && echo ' + changes that are not committed')"
 
 # handheld-card lays out what goes on the games card: dist/handheld/roms/ports/404tui.sh and
-# dist/handheld/roms/ports/404tui/sp404h-arm64. Copy the contents of dist/handheld/roms onto the card's roms
+# dist/handheld/roms/ports/404tui/sp404tui-arm64. Copy the contents of dist/handheld/roms onto the card's roms
 # folder (or a usb drive), then restart EmulationStation.
 handheld-card: handheld
 	rm -rf $(DIST)/handheld
 	mkdir -p $(DIST)/handheld/roms/ports/404tui
 	cp packaging/arkos/404tui.sh $(DIST)/handheld/roms/ports/404tui.sh
-	cp $(DIST)/$(HANDHELD)-arm64 $(DIST)/handheld/roms/ports/404tui/sp404h-arm64
-	chmod 755 $(DIST)/handheld/roms/ports/404tui.sh $(DIST)/handheld/roms/ports/404tui/sp404h-arm64
+	cp $(DIST)/$(HANDHELD_BIN) $(DIST)/handheld/roms/ports/404tui/sp404tui-arm64
+	chmod 755 $(DIST)/handheld/roms/ports/404tui.sh $(DIST)/handheld/roms/ports/404tui/sp404tui-arm64
 	@echo "copy the contents of $(DIST)/handheld/roms onto the card (its /roms folder)"
 
 handheld-local:
@@ -97,7 +98,7 @@ handheld-test:
 	go test -race ./core ./platform/... ./lab ./formats
 
 handheld-emulator: handheld
-	cd packaging/arkos/emulator && ./prepare.sh ../../../$(DIST)/$(HANDHELD)-arm64 && docker compose up --build
+	cd packaging/arkos/emulator && ./prepare.sh ../../../$(DIST)/$(HANDHELD_BIN) && docker compose up --build
 
 linux: $(addprefix $(DIST)/$(BIN)-,$(LINUX))
 

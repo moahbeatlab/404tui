@@ -1,6 +1,6 @@
-# The R36S launcher and sp404h-arm64 in an ArkOS-like arm64 container, with the screen as a web page.
+# The R36S launcher and sp404tui-arm64 in an ArkOS-like arm64 container, with the screen as a web page.
 #
-#   ./prepare.sh ../../../sp404h-arm64     # lay out ./roms like the device's card, from your local build
+#   ./prepare.sh ../../../sp404tui-arm64     # lay out ./roms like the device's card, from your local build
 #   docker compose up --build              # then open http://localhost:8405
 #
 # On an x86 machine arm64 needs QEMU user emulation, once:
@@ -20,7 +20,7 @@ services:
       H404_FB: ""                       # no framebuffer here ...
       H404_ARGS: "-web :8405 -demo"     # ... a web page, with demo samples written to /roms/404/samples
     volumes:
-      - ./roms:/roms                    # as the games card: ports/404tui.sh, ports/404tui/sp404h-arm64, 404/samples, 404/card
+      - ./roms:/roms                    # as the games card: ports/404tui.sh, ports/404tui/sp404tui-arm64, 404/samples, 404/card
       - ./usbdrive:/mnt/usbdrive        # the log copies land in usbdrive/r36s, as on the device
     init: true
     stop_grace_period: 3s
