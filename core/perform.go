@@ -5,7 +5,6 @@ import (
 	"image/color"
 	"strings"
 	"time"
-
 )
 
 // The PERF screen is for the stage: it is looked at from afar while the unit is played. It shows what the unit's MIDI says: the
@@ -17,19 +16,23 @@ func (a *App) perfKey(k Key) {
 	switch {
 	case k == B:
 		a.go_(a.liveBackOr(Pads))
-	case a.yHeld && k == A:
-		a.perfSwap()
-	case a.yHeld && k == X:
-		a.perfNext = 0
-		a.say("no next pattern", false)
-	case a.yHeld && k == B:
-		a.askText("what BUS 1 is used for", "the unit does not tell the effect by itself", a.set.BusNotes[0], func(s string) { a.set.BusNotes[0] = s; a.saveSettings() })
-	case a.selHeld && k == B:
-		a.askText("what BUS 2 is used for", "the unit does not tell the effect by itself", a.set.BusNotes[1], func(s string) { a.set.BusNotes[1] = s; a.saveSettings() })
 	case k == A:
 		a.pickPattern("the pattern that plays now", max(a.perfNow, 1), func(n int) { a.perfNow = n; a.say("now: pattern "+a.label(n-1), false) })
 	case k == X:
 		a.pickPattern("the next pattern", max(a.perfNext, a.perfNow%160+1), func(n int) { a.perfNext = n; a.say("next: pattern "+a.label(n-1), false) })
+	}
+}
+
+// perfShifted is a key with Y held on the PERF screen.
+func (a *App) perfShifted(k Key) {
+	switch k {
+	case A:
+		a.perfSwap()
+	case X:
+		a.perfNext = 0
+		a.say("no next pattern", false)
+	case B:
+		a.askText("what BUS 1 is used for", "the unit does not tell the effect by itself", a.set.BusNotes[0], func(s string) { a.set.BusNotes[0] = s; a.saveSettings() })
 	}
 }
 

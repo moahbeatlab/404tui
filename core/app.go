@@ -585,6 +585,8 @@ func (a *App) shifted(k Key) {
 		}
 	case Seq:
 		a.seqShifted(k)
+	case Perform:
+		a.perfShifted(k)
 	case Pads:
 		switch k {
 		case A:
@@ -625,6 +627,10 @@ func (a *App) selShifted(k Key) {
 		return
 	}
 	switch a.scr {
+	case Perform:
+		if k == B {
+			a.askText("what BUS 2 is used for", "the unit does not tell the effect by itself", a.set.BusNotes[1], func(s string) { a.set.BusNotes[1] = s; a.saveSettings() })
+		}
 	case Slice:
 		if k == B {
 			a.sliceToolsMenu()
