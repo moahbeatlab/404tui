@@ -17,7 +17,6 @@ import (
 	"github.com/moahbeatlab/404tui/core"
 	"github.com/moahbeatlab/404tui/device"
 	hh "github.com/moahbeatlab/404tui/platform/handheld"
-	"github.com/moahbeatlab/404tui/platform/terminal"
 	"github.com/moahbeatlab/404tui/playback"
 	"github.com/moahbeatlab/404tui/serialport"
 	"github.com/moahbeatlab/404tui/sim"
@@ -33,7 +32,7 @@ func main() {
 	fbPath := flag.String("fb", "", "framebuffer to draw on, e.g. /dev/fb0")
 	input := flag.String("input", "", "input device of the pad, e.g. /dev/input/event2")
 	web := flag.String("web", "", "serve the screen and buttons as a web page on this address, e.g. :8405")
-	termShots := flag.Bool("termshots", false, "with -script: also save each @name as the terminal shows it (name.term.png)")
+	termShots := flag.Bool("termshots", false, "with -script: also save each @name as the terminal shows it (name.term.png); needs a build with -tags termshots")
 	size := flag.String("size", "", "the screen in cells, COLSxROWS (default 80x30, the handheld's 640x480)")
 	silent := flag.Bool("silent", false, "no audio")
 	simulate := flag.Bool("sim", false, "the UNIT screen finds a simulated unit")
@@ -127,7 +126,7 @@ func main() {
 				fatal(err)
 			}
 			if *termShots {
-				if err := core.WritePNG(filepath.Join(*shots, name+".term.png"), terminal.Image(terminal.Cells(app.RenderCells(), terminal.FullGlyphs))); err != nil {
+				if err := termShot(app, filepath.Join(*shots, name+".term.png")); err != nil {
 					fatal(err)
 				}
 			}
