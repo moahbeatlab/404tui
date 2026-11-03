@@ -157,6 +157,7 @@ type App struct {
 	usedCache         map[int]string   // the patterns that use each pad, read once per change
 	peakMax           map[peakKey]int  // the loudest value of each sample, for the slicer's scale
 	soundUntil        time.Time        // when the sample that plays ends, for Space (play or stop)
+	seqOneBar         bool             // SEQ on a wide terminal: one bar in view, though the window has the room for more
 	tagSearch         bool             // the search is by tags
 	searchCut         bool             // the search gave up before the end
 	kb                *keyboard        // the on-screen keyboard of the search, when open
@@ -735,6 +736,15 @@ func (a *App) PlayStop() bool {
 		return true
 	}
 	return false
+}
+
+// ToggleBars is the z key of a keyboard on SEQ: one bar in view, or as many as the window holds.
+func (a *App) ToggleBars() {
+	if a.scr != Seq || a.menu != nil || a.prompt != nil {
+		return
+	}
+	a.seqOneBar = !a.seqOneBar
+	a.say(map[bool]string{true: "one bar in view: z shows more again", false: "all the bars the window holds: z shows one"}[a.seqOneBar], false)
 }
 
 // Modal says whether a menu, the pad panel or a dialog is in front: a keyboard closes it with Esc only.

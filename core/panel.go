@@ -38,6 +38,9 @@ type hint struct{ key, what string }
 // hints are the keys the panel lists: on a keyboard the key that closes a page or a menu is Esc.
 func (a *App) hints() (plain, shift []hint) {
 	plain, shift = a.rawHints()
+	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() {
+		plain = append(append([]hint{}, plain...), hint{"z", "1 bar / more"})
+	}
 	if Terminal && a.Modal() {
 		out := make([]hint, len(plain))
 		copy(out, plain)
@@ -132,7 +135,7 @@ func (a *App) rawHints() (plain, shift []hint) {
 		if a.seqOn {
 			play = hint{"X", "stop"}
 		}
-		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"R2", "mute/solo"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}},
+		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"R2", "mute/solo"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}}, // (z: one bar or more, listed below on a keyboard)
 			[]hint{{"Y+X", "add track"}, {"Y+B", "pick pattern"}, {"Sel+B", "tools"}, {"Y+^v", "pattern +-"}, {"Sel+X", "record"}}
 	case Loop:
 		return []hint{{"A", "make the pattern"}, {"X", "delete (twice)"}, {"^v<>", "move"}, {"L1 R1", "bank"}, {"B", "pads"}}, []hint{screen, {"Y+X", "remix"}, {"Y+^v", "slices"}, {"Sel+X", "record"}}

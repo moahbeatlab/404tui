@@ -213,6 +213,10 @@ func (m *Model) key(msg tea.KeyMsg) {
 		m.disarm()
 		m.goTo = true
 		return
+	case "z": // SEQ: one bar or as many as fit
+		m.disarm()
+		m.app.ToggleBars()
+		return
 	case "ctrl+c":
 		m.disarm()
 		m.app.RequestQuit()

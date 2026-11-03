@@ -718,17 +718,22 @@ func (a *App) drawSeq(g Gfx) {
 	lx, x0 := 2, 6 // the pad labels, the first step
 	steps := a.steps()
 	span := 16 // the steps in view: a bar, and on a wide terminal two or four bars side by side while their steps keep a width of 3
-	for Terminal && span < 64 && span < steps && (contentCols-x0-1)/(span*2) >= 3 {
+	for Terminal && !a.seqOneBar && span < 64 && span < steps && (contentCols-x0-1)/(span*2) >= 3 {
 		span *= 2
 	}
-	cw := min(max((contentCols-x0-1)/span, 2), 8) // a step's width in cells
+	avail := min(max(contentCols-x0-1, span*2), span*8) // the cells the steps share: all the width there is (up to 8 a step)
 	page := a.step / span
 	bars := (steps + span - 1) / span
 	ph := a.playStep()
 	const ry = 3
 	shown := a.rows[a.rowTop:min(len(a.rows), a.rowTop+maxRows)]
-	rh := a.seqRowCells() // few tracks: two rows each
+	rh := a.seqRowCells()                         // few tracks: two rows each
+	cw := min(max((contentCols-x0-1)/span, 2), 8) // the handheld: a step is a whole number of cells
 	stepX := func(s int) int { return x0 + s*cw }
+	if Terminal { // a step starts where its share of the width says: no cells are left over
+		stepX = func(s int) int { return x0 + s*avail/span }
+	}
+	stepW := func(s int) int { return stepX(s+1) - stepX(s) }
 
 	// the step numbers
 	for s := 0; s < span && page*span+s < steps; s++ {
@@ -743,16 +748,16 @@ func (a *App) drawSeq(g Gfx) {
 		if st == a.step {
 			col = cAmber
 		}
-		g.Text(stepX(s)+(cw-len(fmt.Sprint(s%16+1)))/2, 2, fmt.Sprint(s%16+1), col, s%4 == 0)
+		g.Text(stepX(s)+(stepW(s)-len(fmt.Sprint(s%16+1)))/2, 2, fmt.Sprint(s%16+1), col, s%4 == 0)
 	}
 	// a band for the step the cursor is on and for the one that plays, over the rows
 	for s := 0; s < span && page*span+s < steps; s++ {
 		st := page*span + s
 		switch {
 		case ph == st:
-			g.Fill(stepX(s), ry, cw, rh*len(shown), cLine)
+			g.Fill(stepX(s), ry, stepW(s), rh*len(shown), cLine)
 		case st == a.step && !Terminal:
-			g.Fill(stepX(s), ry, cw, rh*len(shown), cPanel2)
+			g.Fill(stepX(s), ry, stepW(s), rh*len(shown), cPanel2)
 		}
 	}
 	cursor := [4]int{-1}
@@ -801,7 +806,7 @@ func (a *App) drawSeq(g Gfx) {
 				if Terminal && i == a.row && st == a.step && !a.aHeld { // the step under the cursor: its box is lit
 					bg = cLine
 				}
-				g.StepCell(x, y, cw, bh, bg)
+				g.StepCell(x, y, stepW(s), bh, bg)
 				for _, n := range notesIn(d, pad, st) { // every note that starts in the step, where it starts: sub-steps and nudges show
 					col := cAmber
 					if ph == st {
@@ -817,7 +822,7 @@ func (a *App) drawSeq(g Gfx) {
 					if n.Len >= stepTicks { // a long note fills the rest of its step
 						length = 1 - start
 					}
-					g.Note(x, y, cw, bh, start, min(length, 1-start), float64(n.Vel)/127, col)
+					g.Note(x, y, stepW(s), bh, start, min(length, 1-start), float64(n.Vel)/127, col)
 					// longer than a step: a tie runs on over the steps it lasts
 					if n.Len > stepTicks && !Terminal { // (the terminal shows the length in the panel)
 						end := int(n.Tick) + n.Len
@@ -826,13 +831,13 @@ func (a *App) drawSeq(g Gfx) {
 							if rest := end - (page*span+t)*stepTicks; rest < stepTicks {
 								frac = float64(rest) / stepTicks
 							}
-							g.Tie(stepX(t), y, cw, bh, frac, col)
+							g.Tie(stepX(t), y, stepW(t), bh, frac, col)
 						}
 					}
 				}
 			}
 			if i == a.row && st == a.step {
-				cursor = [4]int{x, y, cw, bh}
+				cursor = [4]int{x, y, stepW(s), bh}
 			}
 		}
 	}
