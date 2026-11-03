@@ -378,3 +378,13 @@ actions (rename, find, export, restore, copy and move patterns), recording a set
 - **`docs/tools.md`** is written by `TestToolsReference` from the menus themselves; **`docs/e2e.md`** describes the use cases of the
   end-to-end test, which runs the real program in a container against the real project (`-audio silent`).
 - **The handheld's program** carries none of the terminal's code or libraries (pictures of the terminal need `-tags termshots`).
+
+## Updating the handheld over WiFi
+
+Every push to `cli-lab` builds `sp404tui-arm64` in GitHub Actions (`.github/workflows/handheld-dev.yml`) and puts it, with
+its `.sha256`, into one rolling pre-release, `dev-cli-lab`, replacing the one before. The launcher (`packaging/arkos/404tui.sh`)
+asks for the checksum at every start; when it differs it downloads the program, checks the checksum, checks that it runs,
+keeps the old one as `sp404tui-arm64.prev` and starts the new one. Offline, or when anything fails, the program that is
+there runs as before (`logs.log`, lines `launcher: update:`). `404tui/update.conf` holds the channel: `dev-cli-lab` (the
+default without the file) or `off`. The launcher itself is not updated this way: copy it again when it changes. The update
+step has been tried against a local web server only, not on the device.
