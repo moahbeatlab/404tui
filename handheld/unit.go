@@ -148,7 +148,7 @@ func (a *App) send() {
 
 func (a *App) drawUnit(c *canvas) {
 	if a.link == nil {
-		c.big(margin, 2*CellH, "NO UNIT", cAmber, 3)
+		c.cells(2, 3, "NO UNIT", cAmber, true)
 		c.cells(2, 6, "Plug the SP-404MKII into a USB port (the OTG port", cText, false)
 		c.cells(2, 7, "of a handheld) with a cable.", cText, false)
 		c.cells(2, 9, "Looking for it...   A looks now", cDim, false)

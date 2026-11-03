@@ -1,9 +1,11 @@
 package handheld
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
+	"strings"
 
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/font/inconsolata"
@@ -52,8 +54,11 @@ var (
 // A canvas is the frame as pixels, and the text on it by cell: a terminal shows the letters as letters and works the
 // rest out from the pixels.
 type canvas struct {
-	img *image.RGBA
-	txt []Glyph // Cols*Rows, the letters drawn
+	img  *image.RGBA // everything
+	base *image.RGBA // everything but the letters: what a terminal works the blocks out from
+	txt  []Glyph     // Cols*Rows, the letters drawn
+	// clash says where a letter was drawn over a different one: two things in the same place (the tests look at it).
+	clash []string
 }
 
 // Glyph is a letter on the screen, at a cell.
@@ -64,13 +69,27 @@ type Glyph struct {
 }
 
 func newCanvas() *canvas {
-	c := &canvas{img: image.NewRGBA(image.Rect(0, 0, W, H)), txt: make([]Glyph, Cols*Rows)}
+	c := &canvas{img: image.NewRGBA(image.Rect(0, 0, W, H)), base: image.NewRGBA(image.Rect(0, 0, W, H)), txt: make([]Glyph, Cols*Rows)}
 	c.rect(0, 0, W, H, cBg)
 	return c
 }
 
 func (c *canvas) rect(x, y, w, h int, col color.RGBA) {
-	draw.Draw(c.img, image.Rect(x, y, x+w, y+h).Intersect(c.img.Bounds()), image.NewUniform(col), image.Point{}, draw.Src)
+	r := image.Rect(x, y, x+w, y+h).Intersect(c.img.Bounds())
+	draw.Draw(c.img, r, image.NewUniform(col), image.Point{}, draw.Src)
+	if c.base != nil {
+		draw.Draw(c.base, r, image.NewUniform(col), image.Point{}, draw.Src)
+	}
+	if len(c.txt) == Cols*Rows && !r.Empty() { // what is painted over a letter takes it away: half a cell or more of it
+		for cy := r.Min.Y / CellH; cy <= (r.Max.Y-1)/CellH && cy < Rows; cy++ {
+			for cx := r.Min.X / CellW; cx <= (r.Max.X-1)/CellW && cx < Cols; cx++ {
+				cell := image.Rect(cx*CellW, cy*CellH, (cx+1)*CellW, (cy+1)*CellH).Intersect(r)
+				if cell.Dx()*cell.Dy() >= CellW*CellH/2 {
+					c.txt[cy*Cols+cx] = Glyph{}
+				}
+			}
+		}
+	}
 }
 
 // box draws an outline t pixels thick.
@@ -100,6 +119,9 @@ func (c *canvas) text(x, y int, s string, col color.RGBA, bold bool) {
 		row := (y + CellH/2) / CellH
 		for i, r := range []rune(s) {
 			if cc := (x + i*CellW + CellW/2) / CellW; r != ' ' && cc >= 0 && cc < Cols && row >= 0 && row < Rows {
+				if old := c.txt[row*Cols+cc]; old.R != 0 && old.R != r {
+					c.clash = append(c.clash, fmt.Sprintf("%q over %q at column %d, row %d (%q...)", r, old.R, cc, row, strings.TrimSpace(s)))
+				}
 				c.txt[row*Cols+cc] = Glyph{r, col, bold}
 			}
 		}
@@ -122,6 +144,29 @@ func (c *canvas) big(x, y int, s string, col color.RGBA, k int) {
 			a := tmp.RGBAAt(px, py).A
 			if a > 100 {
 				c.rect(x+px*k, y+py*k, k, k, col)
+			}
+		}
+	}
+}
+
+// logoFont is the letters of the logo, 3 pixels wide and 5 high.
+var logoFont = map[rune][5]string{
+	'4': {"1.1", "1.1", "111", "..1", "..1"},
+	'0': {"111", "1.1", "1.1", "1.1", "111"},
+	't': {".1.", "111", ".1.", ".1.", ".11"},
+	'u': {"1.1", "1.1", "1.1", "1.1", "111"},
+	'i': {".1.", "...", ".1.", ".1.", ".1."},
+}
+
+// logo draws s in big letters made of whole cells (a pixel of the letter is 2 cells wide and 1 high), at a cell position:
+// the same on the handheld's screen and in a terminal.
+func (c *canvas) logo(col, row int, s string, fg color.RGBA) {
+	for i, r := range s {
+		for y, line := range logoFont[r] {
+			for x, p := range line {
+				if p == '1' {
+					c.rect((col+i*7+x*2)*CellW, (row+y)*CellH, 2*CellW, CellH, fg)
+				}
 			}
 		}
 	}

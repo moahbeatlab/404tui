@@ -510,6 +510,21 @@ func (a *App) Release(k Key) {
 	a.yHeld = false
 }
 
+// CancelShift lets go of a shift (Y or Select) that was armed from a keyboard and not used, without the help page a lone
+// Y shows, and of a held A.
+func (a *App) CancelShift() {
+	a.yHeld, a.selHeld, a.yUsed = false, false, false
+	if a.aHeld {
+		a.Release(A)
+	}
+}
+
+// OnFiles says whether the file browser is the screen in front.
+func (a *App) OnFiles() bool { return a.scr == Files && a.menu == nil && a.picker == nil }
+
+// ToggleHelp opens or closes the help page (a terminal has no Y alone for it).
+func (a *App) ToggleHelp() { a.help = !a.help }
+
 // shifted is a key with Y held.
 func (a *App) shifted(k Key) {
 	switch k {

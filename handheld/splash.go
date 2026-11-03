@@ -59,8 +59,8 @@ func (a *App) drawSplash(c *canvas) {
 	dy := max((Rows-MinRows)/2, 0) * CellH // a taller screen: everything a little lower
 	lx := max((W-520)/2/CellW, 2) * CellW
 	// the logo: the name in big letters beside a 4x4 pad grid with a kick pattern lit
-	c.big(lx, 4*CellH+dy, "404tui", cAmber, 7)
-	gx, gy := lx+344, 4*CellH+dy
+	c.logo(lx/CellW, 4+dy/CellH, "404tui", cAmber)
+	gx, gy := lx+42*CellW+16, 4*CellH+dy
 	for i := 0; i < 16; i++ {
 		x, y := gx+(i%4)*36, gy+(i/4)*36
 		col := cPanel2

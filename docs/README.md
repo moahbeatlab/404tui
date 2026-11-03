@@ -14,6 +14,7 @@ view in front, searchable; these pages explain what they are for.
 | Faderfox EC4 map for Perform | [ec4.md](ec4.md) |
 | `8` Looper | [looper.md](looper.md) |
 | Perform on a phone (`sp404 serve`) | [web.md](web.md) |
+| The lab, offline: samples, slicer, patterns, projects (`sp404 lab`), the same screens as the handheld | [lab.md](lab.md) |
 
 Everywhere: `1`–`7` change tab, `Ctrl-R` records the unit's audio, `Ctrl-F` full screen, `Ctrl-T` next
 theme, `r` refresh, `?` keys, `:` command palette, `q` quit. `sp404 check` checks the installation.

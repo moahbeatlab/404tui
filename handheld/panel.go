@@ -23,7 +23,7 @@ func init() { layoutScreen() }
 
 // layoutScreen works the geometry out from the size of the screen.
 func layoutScreen() {
-	panelCols = min(max(Cols*30/100, 24), 64)
+	panelCols = max(Cols*30/100, 24)
 	panelC0 = Cols - panelCols
 	contentCols = panelC0
 	panelX, panelW = panelC0*CellW, panelCols*CellW
@@ -212,9 +212,9 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 		n := a.padN()
 		p := a.info.Pads[n]
 		if !p.File {
-			c.big(x, row(0), a.label(n), cAmber, 2)
-			c.text(x, row(2), "empty", cDim, false)
-			c.text(x, row(3), "A: pick a sample", cDim, false)
+			c.text(x, row(0), a.label(n), cAmber, true)
+			c.text(x, row(1), "empty", cDim, false)
+			c.text(x, row(2), "A: pick a sample", cDim, false)
 			return
 		}
 		c.text(x, row(0), a.label(n), cAmber, true)
@@ -286,7 +286,7 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 		c.text(ex+ew+8, row(6), fit(fmt.Sprintf("%d %d %d", att, hold, rel), (x+w-ex-ew-8)/CellW), cDim, false)
 	case Files:
 		c.text(x, row(0), "TARGET", cDim, false)
-		c.big(x+textW("TARGET")+8, row(0), a.label(a.padN()), cAmber, 2)
+		c.text(x+textW("TARGET ")+8, row(0), a.label(a.padN()), cAmber, true)
 		e, ok := a.current()
 		if !ok || e.dir {
 			if ok && e.project {

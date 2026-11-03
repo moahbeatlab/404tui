@@ -9,11 +9,28 @@ import (
 )
 
 // Render draws the frame for the state of the app.
-func (a *App) Render() *image.RGBA {
+func (a *App) Render() *image.RGBA { return a.paint().img }
+
+// Frame is a rendered screen: the pixels, and the letters on them by cell (Cols x Rows), so a terminal can show text as
+// text.
+type Frame struct {
+	Img        *image.RGBA // the frame
+	Base       *image.RGBA // the frame without its letters
+	Text       []Glyph
+	Cols, Rows int
+}
+
+// RenderFrame draws the screen as Render does and also gives the letters by cell.
+func (a *App) RenderFrame() Frame {
+	c := a.paint()
+	return Frame{Img: c.img, Base: c.base, Text: c.txt, Cols: Cols, Rows: Rows}
+}
+
+func (a *App) paint() *canvas {
 	c := newCanvas()
 	if a.splash != nil {
 		a.drawSplash(c)
-		return c.img
+		return c
 	}
 	a.titleBar(c)
 	switch a.scr {
@@ -50,7 +67,7 @@ func (a *App) Render() *image.RGBA {
 	if a.help {
 		a.drawHelp(c)
 	}
-	return c.img
+	return c
 }
 
 func (a *App) titleBar(c *canvas) {
@@ -61,6 +78,9 @@ func (a *App) titleBar(c *canvas) {
 	right := fmt.Sprintf("%s  bank %c", a.ProjectName(), 'A'+rune(a.bank))
 	c.text(W-margin-textW(right), 0, fit(right, Cols-20), cText, false)
 }
+
+// Terminal is set when the app is shown in a terminal and played from the keyboard: the hint line and the help say so.
+var Terminal bool
 
 // Version is the commit the program was built from, shown in the corner so it is always known which one runs.
 var Version string
@@ -81,7 +101,10 @@ func (a *App) footer(c *canvas) {
 			c.text(margin, panelBot, fit(info, (W-2*margin)/CellW), cText, false)
 		}
 	}
-	const hintLine = "Y keys  Y+L2 undo  Y+R2 redo  Sel+Start quit"
+	hintLine := "Y keys  Y+L2 undo  Y+R2 redo  Sel+Start quit"
+	if Terminal {
+		hintLine = "y shift  s select  e hold A  u undo  ? keys  q quit"
+	}
 	c.text(margin, panelBot+CellH, hintLine, cDim, false)
 	c.text(margin+textW(hintLine)+16, panelBot+CellH, a.autosaveAgo(), cDim, false)
 	if Version != "" {
@@ -105,7 +128,23 @@ func (a *App) drawHelp(c *canvas) {
 		"SAVE writes a folder for the SD card; UNIT sends",
 		"the project over USB to an SP-404MKII.",
 	}
-	cols, h := min(contentCols-4, 56), len(rows)+4
+	if Terminal {
+		rows = []string{
+			"arrows or h j k l   D-pad (as in vim)",
+			"a b x              the buttons A, B, X (Enter, Esc, Space too)",
+			"y                  the next key with Y held",
+			"s or Tab          the next key with Select held (s b)",
+			"e                  hold A (edit a note); e again lets go",
+			"[ ] or Ctrl-U/D    L1 R1;   , .   L2 R2",
+			"?                  this page;   /  search the files",
+			fmt.Sprintf("u undo (%d)   Ctrl-R redo (%d)", len(a.undo), len(a.redo)),
+			"q or Ctrl-C        quit (twice when not saved)",
+			"",
+			"PADS  SEQ  FILES  SLICE  SAVE  UNIT",
+			"The side panel shows the keys that work now.",
+		}
+	}
+	cols, h := min(contentCols-4, 60), len(rows)+4
 	x, y := (contentCols-cols)/2*CellW, max(1, (Rows-h)/2-1)*CellH
 	c.rect(x, y, cols*CellW, h*CellH, cPanel2)
 	c.box(x, y, cols*CellW, h*CellH, 2, cAmber)
@@ -117,13 +156,14 @@ func (a *App) drawHelp(c *canvas) {
 
 // ---- PADS
 
-// drawPads is the 4x4 pads of the bank, as big as the room allows, and the banks under them.
+// drawPads is the 4x4 pads of the bank, as big as the room allows, and the banks under them. A pad is a block of cells with a
+// cell between it and the next.
 func (a *App) drawPads(c *canvas) {
 	cols := contentCols - 2
 	pw := cols / 4 // a pad's pitch in cells
 	x0 := CellW * (1 + (cols-4*pw)/2)
-	ph := max((Rows-3-1-3)/4, 3) // the rows the pads have: what is left of the body, less the banks (3)
-	tw, th := pw*CellW-6, ph*CellH-4
+	ph := max((Rows-6)/4, 3) // the rows the pads have: what is left of the body, less the banks (2) and a gap
+	tw, th := (pw-1)*CellW, (ph-1)*CellH
 	for i := 0; i < 16; i++ {
 		n := a.bank*16 + i
 		x, y := x0+(i%4)*pw*CellW, CellH+(i/4)*ph*CellH
@@ -137,38 +177,37 @@ func (a *App) drawPads(c *canvas) {
 		}
 		c.rect(x, y, tw, th, bg)
 		num := fmt.Sprint(i + 1)
-		c.text(x+tw-textW(num)-6, y, num, cDim, false)
+		c.text(x+tw-textW(num)-CellW/2, y, num, cDim, false)
 		if p.File {
 			c.rect(x, y, 4, th, cAmber)
-			c.text(x+CellW+2, y, short(p.Name, pw-5), cText, true)
-			if id, ok := a.padSample(n); ok {
-				a.waveform(c, id, 0, p.Frames, x+10, y+CellH+2, tw-20, th-CellH-6, cAmber)
+			c.text(x+CellW, y, short(p.Name, pw-5), cText, true)
+			if id, ok := a.padSample(n); ok && th >= 3*CellH { // an even number of rows, so the middle line is between two
+				a.waveform(c, id, 0, p.Frames, x+CellW, y+CellH, tw-2*CellW, (ph-2)/2*2*CellH, cAmber)
 			}
 			// the switches that are on: G for gate, L for loop
-			cx := x + tw - textW(num) - 10
+			cx := x + tw - textW(num) - CellW
 			for _, sw := range []struct {
 				id byte
 				ch string
 			}{{0x6B, "L"}, {0x6A, "G"}} {
 				if v, err := a.lab.PadParam(n, sw.id); err == nil && v != 0 {
-					cx -= 18
+					cx -= 2 * CellW
 					a.badge(c, cx, y, sw.ch, true)
 				}
 			}
 		}
 		for mi, mp := range a.marks { // a pad that is a key of the arp: its place among the keys
 			if mp == n {
-				c.rect(x+4, y+CellH, 20, 14, cAmber)
-				c.text(x+7, y+CellH-1, fmt.Sprint(mi+1), cBg, true)
+				c.rect(x+CellW/2, y+th-CellH, 2*CellW, CellH, cAmber)
+				c.text(x+CellW/2+4, y+th-CellH, fmt.Sprint(mi+1), cBg, true)
 			}
 		}
 		if i == a.cur {
-			c.box(x-2, y-2, tw+4, th+4, 2, cWhite)
+			c.box(x, y, tw, th, 2, cWhite)
 		}
 	}
 	// the banks
-	by := (Rows - 5) * CellH
-	c.text(margin, by-CellH, "BANKS", cDim, false)
+	by := (Rows - 4) * CellH
 	bw := (contentCols - 2) / 10 * CellW
 	bx0 := CellW * (1 + (contentCols-2-(contentCols-2)/10*10)/2)
 	for b := 0; b < 10; b++ {
@@ -183,16 +222,17 @@ func (a *App) drawPads(c *canvas) {
 		if b == a.bank {
 			col, fg = cAmber, cBg
 		}
-		c.rect(x, by, bw-4, CellH, col)
-		c.text(x+(bw-4-CellW)/2, by, string(rune('A'+b)), fg, true)
-		c.rect(x, by+CellH+1, bw-4, 3, cLine)
-		c.rect(x, by+CellH+1, used*(bw-4)/16, 3, cAmber)
+		c.rect(x, by, bw-CellW, CellH, col)
+		c.text(x+(bw-CellW-CellW)/2, by, string(rune('A'+b)), fg, true)
+		c.rect(x, by+CellH, bw-CellW, 4, cLine)
+		c.rect(x, by+CellH, used*(bw-CellW)/16, 4, cAmber)
 	}
 }
 
-// waveform draws the peaks of frames from..to of a sample in a box, mirrored around its middle.
+// waveform draws the peaks of frames from..to of a sample in a box, mirrored around its middle, in bars 2 pixels wide (a
+// terminal has 8 pixels to a cell, so a bar is a quarter of one and a cell's bars add up to a bar chart).
 func (a *App) waveform(c *canvas, id, from, to, x, y, w, h int, col color.RGBA) {
-	pk, err := a.peaks(id, from, to, w)
+	pk, err := a.peaks(id, from, to, w/2)
 	if err != nil {
 		return
 	}
@@ -200,7 +240,7 @@ func (a *App) waveform(c *canvas, id, from, to, x, y, w, h int, col color.RGBA) 
 	c.rect(x, mid, w, 1, cLine)
 	for i, p := range pk {
 		v := p * (h / 2) / 32768
-		c.vline(x+i, mid-v, mid+v, col)
+		c.rect(x+2*i, mid-v, 2, 2*v+1, col)
 	}
 }
 
@@ -350,7 +390,7 @@ func (a *App) drawSlice(c *canvas) {
 
 // sliceWaveRows is the rows of the big waveform: the body less the title, the overview (2 rows) and the numbers and
 // the order under it (4 rows).
-func (a *App) sliceWaveRows() int { return max(Rows-3-1-2-4, 6) }
+func (a *App) sliceWaveRows() int { return max(Rows-3-1-2-4, 6) &^ 1 }
 
 // ---- SAVE
 
@@ -364,7 +404,7 @@ func (a *App) drawSave(c *canvas) {
 	}
 	inner := contentCols - 4
 	c.cells(2, 2, "WRITE THE PROJECT", cDim, false)
-	c.big(margin, 3*CellH, fit(a.ProjectName(), inner/3), cAmber, 3)
+	c.cells(2, 4, fit(a.ProjectName(), inner), cAmber, true)
 	dest := filepath.Join(a.OutDir, cardFolder, a.ProjectName())
 	c.cells(2, 7, short2(dest, inner), cText, false)
 	c.cells(2, 9, fmt.Sprintf("%d pads with samples   %.1f MB   %d files", used, float64(bytesN)/1e6, a.info.Files), cText, false)

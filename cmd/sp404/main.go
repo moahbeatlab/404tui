@@ -35,6 +35,8 @@ const usage = `usage: sp404 [flags] <command>
 
 commands:
   menu           full-screen terminal UI (the default when no command is given)
+  lab            the lab: samples, slicer, patterns and projects, with the same screens as the handheld version
+                 (sp404 lab -h for its flags; works without a unit, and sends a project to one)
   serve          run without a screen and serve Perform to a browser on this network (phone, tablet)
   midimap        print the map of the Faderfox EC4 for 404tui (one group of 16 pushes)
   check          check this installation: the computer, the program on a simulated unit, a plugged-in unit
@@ -173,7 +175,7 @@ func (l logging) banner(o options) {
 }
 
 func run(args []string, o options) error {
-	forUI := args[0] == "menu"
+	forUI := args[0] == "menu" || args[0] == "lab"
 	l, err := newLogging(o, forUI)
 	if err != nil {
 		return err
@@ -204,6 +206,8 @@ func run(args []string, o options) error {
 		return audioTest(args[1], o.audio)
 	case "menu":
 		return runUI(o, l, false)
+	case "lab":
+		return runLab(args[1:], o)
 	case "serve":
 		return runUI(o, l, true)
 	}

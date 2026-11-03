@@ -333,3 +333,20 @@ menu (NOTES, PLAY, MAKE) are pages like the pad panel, as many as fit the dialog
   bounce the pattern, the result of the slicer, the first pad of the slices, the arp and chord bounces.
 - **SEQ**: B is the settings of the note under the cursor as faders (velocity, length, timing); Select+B (or R1 in the panel) is the pattern tools.
 - A pad that gets its first sample plays at level 127. G and L (gate, loop) are lit letters on the pad, in the panel and in the pad settings.
+
+## The same screens in a terminal (round of 2026-11-03)
+
+The handheld's screens are also what `sp404 lab` shows on a computer (Linux, macOS, Windows): see
+[`docs/lab.md`](../docs/lab.md). To make that possible the screen is no longer fixed at 640x480:
+
+- The screen is a grid of 8x16 pixel cells, 80x30 on the R36S. `handheld.SetSize(cols, rows)` sets another size (at
+  least 80x30) and every screen is laid out for it, in cells: the panel on the right is 30% of the width (at least 24
+  cells), the pads, the step grid, the file list, the waveforms, the menus and the dialogs take the rest. `sp404h -size
+  120x40` shows it (also with `-script` and `-shots`).
+- Everything that is drawn on whole cells (rows of 16 pixels, columns of 8, bars as eighths of a cell) comes out the same
+  in a terminal; a frame also says which letters are on it (`RenderFrame`), so a terminal can show them as text. The big
+  logo is made of cells too, and the waveforms are bars 2 pixels wide.
+- A few things changed on the handheld's own screen: the title bar is one row, a list row is 16 pixels (it was 17), the
+  pads have a cell of space between them, the cursor box of a pad is drawn inside the pad, and the pad label in the panel
+  is bold text instead of a big drawing.
+- The package builds on Linux, macOS and Windows; only the framebuffer (`out_linux.go`) is Linux-only.

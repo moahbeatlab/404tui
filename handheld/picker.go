@@ -175,7 +175,7 @@ func (a *App) drawPicker(c *canvas) {
 				c.text(tx+CellW, ty+CellH, "empty", cLine, false)
 			}
 			if i == p.cur {
-				c.box(tx-2, ty-2, tw+4, th+4, 2, cAmber)
+				c.box(tx, ty, tw, th, 2, cAmber)
 			}
 			continue
 		}
@@ -192,7 +192,7 @@ func (a *App) drawPicker(c *canvas) {
 			c.box(tx+1, ty+1, tw-2, th-2, 1, cWhite)
 		}
 		if i == p.cur {
-			c.box(tx-2, ty-2, tw+4, th+4, 2, cAmber)
+			c.box(tx, ty, tw, th, 2, cAmber)
 		}
 	}
 }

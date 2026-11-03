@@ -19,6 +19,7 @@ import (
 	"github.com/moahbeatlab/404tui/playback"
 	"github.com/moahbeatlab/404tui/serialport"
 	"github.com/moahbeatlab/404tui/sim"
+	"github.com/moahbeatlab/404tui/termui"
 )
 
 func main() {
@@ -31,6 +32,7 @@ func main() {
 	fbPath := flag.String("fb", "", "framebuffer to draw on, e.g. /dev/fb0")
 	input := flag.String("input", "", "input device of the pad, e.g. /dev/input/event2")
 	web := flag.String("web", "", "serve the screen and buttons as a web page on this address, e.g. :8405")
+	termShots := flag.Bool("termshots", false, "with -script: also save each @name as the terminal shows it (name.term.png)")
 	size := flag.String("size", "", "the screen in cells, COLSxROWS (default 80x30, the handheld's 640x480)")
 	silent := flag.Bool("silent", false, "no audio")
 	simulate := flag.Bool("sim", false, "the UNIT screen finds a simulated unit")
@@ -122,6 +124,11 @@ func main() {
 		err := app.Script(*script, func(name string) {
 			if err := handheld.WritePNG(filepath.Join(*shots, name+".png"), app.Render()); err != nil {
 				fatal(err)
+			}
+			if *termShots {
+				if err := handheld.WritePNG(filepath.Join(*shots, name+".term.png"), termui.Image(termui.Cells(app.RenderFrame(), termui.FullGlyphs))); err != nil {
+					fatal(err)
+				}
 			}
 		})
 		if err != nil {
