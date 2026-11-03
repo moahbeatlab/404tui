@@ -221,7 +221,16 @@ func (a *App) drawPads(g Gfx) {
 		}
 		g.Fill(x, y, tw, th, bg)
 		num := fmt.Sprint(i + 1)
-		g.Text(x+tw-len(num)-1, y, num, cDim, false)
+		numCol := cDim
+		if p.File && !Terminal { // the handheld: the pad's number takes the colour of its bus, blue BUS 1, red BUS 2
+			switch a.padValue(n, 0x7A, 0) {
+			case 1:
+				numCol = cBlue
+			case 2:
+				numCol = cBad
+			}
+		}
+		g.Text(x+tw-len(num)-1, y, num, numCol, false)
 		if p.File {
 			if Terminal { // the strip says which bus the pad is on: blue BUS 1, red BUS 2, none off a bus (drawn after the cursor)
 				switch a.padValue(n, 0x7A, 0) {
@@ -230,15 +239,8 @@ func (a *App) drawPads(g Gfx) {
 				case 2:
 					strips = append(strips, [4]int{x, y, th, 2})
 				}
-			} else { // the handheld: the strip is amber, blue on BUS 1, red on BUS 2
-				c := cAmber
-				switch a.padValue(n, 0x7A, 0) {
-				case 1:
-					c = cBlue
-				case 2:
-					c = cBad
-				}
-				g.Fill(x, y, 1, th, c)
+			} else {
+				g.Fill(x, y, 1, th, cAmber)
 			}
 			g.Text(x+2, y, short(p.Name, pw-6), cText, true)
 			if Terminal { // a computer's terminal shows the length and the switches (the wave is in the panel)
