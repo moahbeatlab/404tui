@@ -778,15 +778,15 @@ func (a *App) drawSeq(g Gfx) {
 		for s := 0; s < 16 && page*16+s < steps; s++ {
 			st := page*16 + s
 			x := stepX(s)
-			bg := cPanel
-			if (s/4)%2 == 1 {
-				bg = cPanel2
-			}
-			if ph == st {
-				bg = cLine
-			}
-			g.StepCell(x, y, cw, rh, bg)
 			if !Terminal {
+				bg := cPanel
+				if (s/4)%2 == 1 {
+					bg = cPanel2
+				}
+				if ph == st {
+					bg = cLine
+				}
+				g.StepCell(x, y, cw, rh, bg)
 				for _, n := range notesIn(d, pad, st) { // every note that starts in the step, where it starts: sub-steps and nudges show
 					col := cAmber
 					if ph == st {
@@ -823,9 +823,7 @@ func (a *App) drawSeq(g Gfx) {
 		}
 	}
 	if cursor[0] >= 0 {
-		if Terminal { // the step under the cursor is one dot, on the note or the empty step alike
-			g.Text(cursor[0]+(cursor[2]-1)/2, cursor[1]+cursor[3]-1, "●", cWhite, true)
-		} else {
+		if !Terminal { // in the terminal the row draws its own cursor: a dot, or the note thick
 			g.Cursor(cursor[0], cursor[1], cursor[2], cursor[3])
 		}
 	}
@@ -1142,11 +1140,20 @@ func patternPadsOf(b []byte) []int {
 	return out
 }
 
-// drawSeqRow is a track in the terminal: a dot at every step (stronger on the beats), and each note as a bar as long as it
-// lasts, a gap after it so notes that follow each other stay apart. Louder notes are brighter.
+// drawSeqRow is a track in the terminal, as in the classic program: a dot at every step (stronger on the beats), and each
+// note as a mark where it starts, as tall as it is loud, and a thin line as long as it lasts. The note under the cursor is
+// drawn thick; an empty step under it is one white dot.
 func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, steps, ph int, editing bool, cursorStep int) {
-	my := y + rh - 1 // the dots and the feet of the bars
+	my := y + (rh-1)/2
 	from, to := page*16*stepTicks, min((page+1)*16, steps)*stepTicks
+	starts := func(st int) bool {
+		for _, n := range d.Notes {
+			if n.Pad == pad && int(n.Tick) >= st*stepTicks && int(n.Tick) < (st+1)*stepTicks {
+				return true
+			}
+		}
+		return false
+	}
 	covered := func(st int) bool {
 		for _, n := range d.Notes {
 			if n.Pad == pad && int(n.Tick) < (st+1)*stepTicks && int(n.Tick)+max(n.Len, 1) > st*stepTicks {
@@ -1157,14 +1164,19 @@ func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, step
 	}
 	for s := 0; s < 16 && page*16+s < steps; s++ {
 		st := page*16 + s
-		if covered(st) || st == cursorStep { // the cursor is a dot of its own there
+		x := x0 + s*cw + (cw-1)/2
+		if st == cursorStep && !starts(st) {
+			g.Text(x, my, "●", cWhite, true)
+			continue
+		}
+		if covered(st) {
 			continue
 		}
 		col := cLine
 		if s%4 == 0 {
 			col = cDim
 		}
-		g.Text(x0+s*cw+(cw-1)/2, my, ".", col, false)
+		g.Text(x, my, "·", col, false)
 	}
 	for _, n := range d.Notes {
 		if n.Pad != pad {
@@ -1176,25 +1188,31 @@ func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, step
 		}
 		cx0 := x0 + (max(start, from)-from)*cw/stepTicks
 		cx1 := x0 + (min(end, to)-from)*cw/stepTicks
-		w := max(cx1-cx0, 1)
-		if w > 1 {
-			w--
-		}
-		w = min(w, 2*cw-1) // a long note is not drawn to its end: two steps say where it starts and that it is long
+		selected := start/stepTicks == cursorStep
 		col := cAmber
-		if ph >= 0 && ph*stepTicks >= start && ph*stepTicks < end {
+		switch {
+		case editing && n.Tick == a.aTick && selected:
+			col = cWhite // the note being edited
+		case ph >= 0 && ph*stepTicks >= start && ph*stepTicks < end:
 			col = cGood
 		}
-		if editing && n.Tick == a.aTick {
-			col = cWhite // the note being edited
-		}
-		// as tall as it is loud, in eighths of the track's rows, standing on the foot line
-		total := max(int(float64(n.Vel)/127*float64(rh*8)+0.5), 1)
-		for r := 0; r < rh; r++ {
-			e := min(max(total-r*8, 0), 8)
-			if e > 0 {
-				g.Text(cx0, my-r, strings.Repeat(string([]rune(" ▁▂▃▄▅▆▇█")[e]), w), col, false)
+		if start >= from { // the mark where it starts, as tall as it is loud
+			mark := string([]rune("▁▂▃▄▅▆▇█")[min(max(int(n.Vel)*8/128, 0), 7)])
+			if selected {
+				mark = "█"
 			}
+			g.Text(cx0, my, mark, col, selected)
+			cx0++
+		}
+		if cx1 > cx0 { // the line it lasts
+			line, lc := "─", cAmberD
+			if selected {
+				line, lc = "━", col
+			}
+			if col != cAmber {
+				lc = col
+			}
+			g.Text(cx0, my, strings.Repeat(line, cx1-cx0), lc, selected)
 		}
 	}
 }
