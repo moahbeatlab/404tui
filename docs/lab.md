@@ -15,6 +15,8 @@ Flags of `lab`: `-samples` (the folder the file browser starts in), `-out` (wher
 and autosaves are kept beside it), `-project`, `-basic-glyphs` (see below). The flags before `lab` are the usual ones:
 `-sim`, `-port`, `-audio`, `-v`.
 
+![The lab in a 120x40 terminal](img/lab-pads.png)
+
 ## One layout on every size
 
 The screen is a grid of characters, and every screen is laid out on it, so it looks the same on a
@@ -25,7 +27,12 @@ laptop, a big monitor and the handheld's 80×30 screen:
 - The right **30%** (at least 24 columns) is the panel that is always there: the six screens with the one you are
   on lit, the tempo and whether the loop plays, what is under the cursor, and the keys that work right now. The
   rest of the width is the screen itself: the pads and the banks, the step grid, the file list, the waveform.
-- 80 columns by 30 rows is the smallest window. In a smaller one the program says so and waits.
+- 80 columns by 30 rows is the smallest window (it is the handheld's screen: the picture is the same). In a smaller one
+  the program says so and waits.
+
+![80x30](img/lab-80x30.png)
+
+![200x56](img/lab-200x56.png)
 
 Waveforms, bars and faders are drawn with block characters (eighths of a cell), braille and half blocks, letters are
 real letters. The program uses 24-bit colour when the terminal says it has it (`COLORTERM=truecolor`, Windows
@@ -74,6 +81,10 @@ The same six screens as on the handheld, described with all their keys in [`hand
   slices to pads), `,` steps the grid.
 - **SAVE** — writes the project as a folder for the card (`PROJECT_nn`), with an autosave every few minutes.
 - **UNIT** — sends the project to a plugged-in SP-404MKII.
+
+![The slicer](img/lab-slicer.png)
+
+![The note panel in the sequencer](img/lab-note-panel.png)
 
 Every question "which pad?" is the same dialog: the banks across the top, 16 tiles with the names, `[` `]` for the
 bank, `a` to choose, `b` to cancel.
