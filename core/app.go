@@ -153,6 +153,7 @@ type App struct {
 	dcur              map[string]int   // the cursor in each folder of the file browser, for the next visit
 	searchQ           string           // the search in the file browser, "" for none
 	tags              *app.TagIndex    // the tags of the unit's samples, read when first needed
+	rParent, rChild   rangerCache      // the side columns of the ranger view
 	tagSearch         bool             // the search is by tags
 	searchCut         bool             // the search gave up before the end
 	kb                *keyboard        // the on-screen keyboard of the search, when open
@@ -290,45 +291,60 @@ func (a *App) list() {
 		a.searchList()
 		return
 	}
-	st := a.fileStore()
-	des, err := st.ListDir(a.dir)
+	a.refreshRanger()
+	ents, err := a.readDir(a.dir, true)
 	if err != nil {
 		a.say(err.Error(), true)
 		return
 	}
-	local := app.IsLocal(a.dir)
+	a.entries = ents
+	a.fcur = min(a.dcur[a.dir], max(len(a.entries)-1, 0))
+}
+
+// readDir lists the folders and audio files of a folder, folders first; projects are told apart when asked.
+func (a *App) readDir(dir string, projects bool) ([]entry, error) {
+	st := a.fileStore()
+	des, err := st.ListDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	local := app.IsLocal(dir)
+	var out []entry
 	for _, de := range des {
 		n := de.Name
 		if strings.HasPrefix(n, ".") {
 			continue
 		}
 		if de.IsDir() {
-			_, perr, _ := st.Stat(joinPath(a.dir, n) + "/PADCONF.BIN")
-			if local {
-				_, perr2 := os.Stat(filepath.Join(a.dir, n, "PADCONF.BIN"))
-				perr = perr2 == nil
+			isProj := false
+			if projects {
+				_, isProj, _ = st.Stat(joinPath(dir, n) + "/PADCONF.BIN")
+				if local {
+					_, perr2 := os.Stat(filepath.Join(dir, n, "PADCONF.BIN"))
+					isProj = perr2 == nil
+				}
 			}
-			a.entries = append(a.entries, entry{name: n, dir: true, project: perr})
+			out = append(out, entry{name: n, dir: true, project: isProj})
 			continue
 		}
 		switch strings.ToLower(pathExt(n)) {
 		case ".wav", ".aif", ".aiff", ".flac", ".mp3", ".smp":
 			var size int64
 			if local {
-				if fi, err := os.Stat(filepath.Join(a.dir, n)); err == nil {
+				if fi, err := os.Stat(filepath.Join(dir, n)); err == nil {
 					size = fi.Size()
 				}
 			}
-			a.entries = append(a.entries, entry{name: n, size: size})
+			out = append(out, entry{name: n, size: size})
 		}
 	}
-	sort.SliceStable(a.entries, func(i, j int) bool {
-		if a.entries[i].dir != a.entries[j].dir {
-			return a.entries[i].dir
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].dir != out[j].dir {
+			return out[i].dir
 		}
-		return strings.ToLower(a.entries[i].name) < strings.ToLower(a.entries[j].name)
+		return strings.ToLower(out[i].name) < strings.ToLower(out[j].name)
 	})
-	a.fcur = min(a.dcur[a.dir], max(len(a.entries)-1, 0))
+	return out, nil
 }
 
 func (a *App) padN() int { return a.bank*16 + a.cur }
@@ -686,6 +702,22 @@ func (a *App) selShifted(k Key) {
 		if k == B {
 			a.seqMenu()
 		}
+	}
+}
+
+// GoScreen goes to the screen with that number (0 is PADS), from a keyboard's number keys; a number past the last does nothing.
+func (a *App) GoScreen(n int) {
+	if n >= 0 && n < len(screenNames) && !a.Typing() {
+		a.CancelShift()
+		a.go_(Screen(n))
+	}
+}
+
+// NextScreen goes to the next screen, or the one before when d is negative.
+func (a *App) NextScreen(d int) {
+	if !a.Typing() {
+		a.CancelShift()
+		a.go_(Screen((int(a.scr) + d + len(screenNames)) % len(screenNames)))
 	}
 }
 

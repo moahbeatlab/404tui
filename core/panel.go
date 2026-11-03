@@ -166,6 +166,9 @@ func (a *App) drawPanel(g Gfx) {
 			bg, fg = cAmber, cBg
 		}
 		g.Fill(cx, cy, cw-1, 1, bg)
+		if Terminal && i < 9 && cw-1 >= 8 {
+			n = fmt.Sprintf("%d %s", i+1, n)
+		}
 		g.Text(cx+(cw-1-len(n))/2, cy, n, fg, Screen(i) == a.scr)
 	}
 
@@ -339,8 +342,10 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 			if _, in := a.aud[a.padN()]; in {
 				g.Text(x+9, row(3), "in pattern", cGood, true)
 			}
-			g.Fill(x, row(4), w, 2, cPanel2)
-			a.wave(g, id, 0, s.Frames(), x, row(4), w, 2, cText)
+			if contentCols < rangerMinCols { // the ranger's right pane shows the shape
+				g.Fill(x, row(4), w, 2, cPanel2)
+				a.wave(g, id, 0, s.Frames(), x, row(4), w, 2, cText)
+			}
 		} else {
 			g.Text(x, row(3), fit(err.Error(), w), cBad, false)
 		}

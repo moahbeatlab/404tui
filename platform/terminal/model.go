@@ -229,8 +229,20 @@ func (m *Model) key(msg tea.KeyMsg) {
 	case "y", "Y":
 		m.arm(yShift, core.Y)
 		return
-	case "s", "S", "tab":
+	case "s", "S":
 		m.arm(selShift, core.Sel)
+		return
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9": // the screens, straight to
+		m.disarm()
+		m.app.GoScreen(int(s[0] - '1'))
+		return
+	case "tab", "shift+tab": // the next screen, or the one before
+		m.disarm()
+		if s == "tab" {
+			m.app.NextScreen(1)
+		} else {
+			m.app.NextScreen(-1)
+		}
 		return
 	case "e", "E":
 		if m.aHeld {

@@ -127,7 +127,7 @@ func (a *App) footer(g Gfx) {
 	}
 	hintLine := "Y keys  Y+L2 undo  Y+R2 redo  Sel+Start quit"
 	if Terminal {
-		hintLine = "y shift  s select  e hold A  u undo  ? keys  q quit"
+		hintLine = "1-9 screens  y shift  s select  u undo  ? keys  q quit"
 	}
 	g.Text(2, top+1, hintLine, cDim, false)
 	room := Cols - 4 - len(hintLine) - 2 // what the autosave note and the version share
@@ -166,7 +166,8 @@ func (a *App) drawHelp(g Gfx) {
 			"arrows or h j k l   D-pad (as in vim)",
 			"a b x              the buttons A, B, X (Enter, Esc, Space too)",
 			"y                  the next key with Y held",
-			"s or Tab          the next key with Select held (s b)",
+			"1-9 or Tab         go to a screen (Shift-Tab back)",
+			"s                  the next key with Select held (s b)",
 			"e                  hold A (edit a note); e again lets go",
 			"[ ] or Ctrl-U/D    L1 R1;   , .   L2 R2",
 			"?                  this page;   /  search the files",
@@ -284,6 +285,10 @@ func (a *App) wave(g Gfx, id, from, to, col, row, cols, rows int, c color.RGBA) 
 // ---- FILES
 
 func (a *App) drawFiles(g Gfx) {
+	if contentCols >= rangerMinCols {
+		a.drawRanger(g)
+		return
+	}
 	inner := contentCols - 4
 	head := short2(a.dir, inner)
 	if a.isFavourite(a.dir) {
@@ -298,8 +303,6 @@ func (a *App) drawFiles(g Gfx) {
 		col = cAmber
 	}
 	g.Text(2, 1, fit(head, inner), col, a.searchQ != "")
-	rows := a.fileRows()
-	top := max(0, min(a.fcur-rows/2, len(a.entries)-rows))
 	if len(a.entries) == 0 {
 		g.Text(2, 3, "(no folders or audio files here)", cDim, false)
 		if a.dir == a.Root {
@@ -308,17 +311,28 @@ func (a *App) drawFiles(g Gfx) {
 		}
 		g.Text(2, 8, tk("< goes up    Y+X jumps to the usb drive"), cDim, false)
 	}
-	for i := 0; i < rows && top+i < len(a.entries); i++ {
-		e := a.entries[top+i]
+	a.drawFileList(g, 1, contentCols-2, a.entries, a.fcur, true)
+}
+
+// drawFileList draws a column of entries from x0, w cells wide; the cursor is shown when focus is set.
+func (a *App) drawFileList(g Gfx, x0, w int, ents []entry, cur int, focus bool) {
+	rows := a.fileRows()
+	top := max(0, min(cur-rows/2, len(ents)-rows))
+	for i := 0; i < rows && top+i < len(ents); i++ {
+		e := ents[top+i]
 		y := 2 + i
 		fgSel := cText
-		if top+i == a.fcur {
-			g.Highlight(1, y, contentCols-2, 1)
-			fgSel = cWhite
+		if top+i == cur {
+			if focus {
+				g.Highlight(x0, y, w, 1)
+				fgSel = cWhite
+			} else {
+				g.Fill(x0, y, w, 1, cPanel2)
+			}
 		}
-		avail := inner - 8
+		avail := w - 9
 		name := fit(e.name, avail)
-		if a.searchQ != "" { // a result is a path below the folder: its end says which file
+		if a.searchQ != "" && focus { // a result is a path below the folder: its end says which file
 			name = short2(e.name, avail)
 		}
 		col := fgSel
@@ -330,19 +344,24 @@ func (a *App) drawFiles(g Gfx) {
 			name = short(e.name, min(24, avail-9)) + "  project"
 			col = cGood
 		}
-		if a.fmarks[joinPath(a.dir, e.name)] {
-			g.Text(1, y, "*", cAmber, true)
+		if focus && a.fmarks[joinPath(a.dir, e.name)] {
+			g.Text(x0, y, "*", cAmber, true)
 		}
-		g.Text(2, y, name, col, e.dir)
-		if !e.dir {
+		g.Text(x0+1, y, name, col, e.dir)
+		if !e.dir && w >= 20 {
 			sz := fmt.Sprintf("%dK", (e.size+512)/1024)
-			g.Text(contentCols-2-len(sz), y, sz, cDim, false)
+			g.Text(x0+w-1-len(sz), y, sz, cDim, false)
 		}
 	}
 }
 
 // fileRows is how many files the list shows: the body, less the line of the folder.
-func (a *App) fileRows() int { return Rows - 4 }
+func (a *App) fileRows() int {
+	if contentCols >= rangerMinCols {
+		return Rows - 6 // the panes have a frame
+	}
+	return Rows - 4
+}
 
 // ---- SLICE
 
