@@ -715,11 +715,15 @@ func (a *App) drawSeq(g Gfx) {
 	}
 	g.Text(2+len(title)+2, 1, sub, cDim, false)
 
-	lx, x0 := 2, 6                              // the pad labels, the first step
-	cw := min(max((contentCols-x0-1)/16, 2), 8) // a step's width in cells
+	lx, x0 := 2, 6 // the pad labels, the first step
 	steps := a.steps()
-	page := a.step / 16
-	bars := (steps + 15) / 16
+	span := 16 // the steps in view: a bar, and on a wide terminal two or four bars side by side while their steps keep a width of 3
+	for Terminal && span < 64 && span < steps && (contentCols-x0-1)/(span*2) >= 3 {
+		span *= 2
+	}
+	cw := min(max((contentCols-x0-1)/span, 2), 8) // a step's width in cells
+	page := a.step / span
+	bars := (steps + span - 1) / span
 	ph := a.playStep()
 	const ry = 3
 	shown := a.rows[a.rowTop:min(len(a.rows), a.rowTop+maxRows)]
@@ -727,8 +731,8 @@ func (a *App) drawSeq(g Gfx) {
 	stepX := func(s int) int { return x0 + s*cw }
 
 	// the step numbers
-	for s := 0; s < 16 && page*16+s < steps; s++ {
-		st := page*16 + s
+	for s := 0; s < span && page*span+s < steps; s++ {
+		st := page*span + s
 		col := cDim
 		if s%4 == 0 {
 			col = cText
@@ -739,11 +743,11 @@ func (a *App) drawSeq(g Gfx) {
 		if st == a.step {
 			col = cAmber
 		}
-		g.Text(stepX(s)+(cw-len(fmt.Sprint(s+1)))/2, 2, fmt.Sprint(s+1), col, s%4 == 0)
+		g.Text(stepX(s)+(cw-len(fmt.Sprint(s%16+1)))/2, 2, fmt.Sprint(s%16+1), col, s%4 == 0)
 	}
 	// a band for the step the cursor is on and for the one that plays, over the rows
-	for s := 0; s < 16 && page*16+s < steps; s++ {
-		st := page*16 + s
+	for s := 0; s < span && page*span+s < steps; s++ {
+		st := page*span + s
 		switch {
 		case ph == st:
 			g.Fill(stepX(s), ry, cw, rh*len(shown), cLine)
@@ -783,8 +787,8 @@ func (a *App) drawSeq(g Gfx) {
 		case trackSolo:
 			g.Text(lx+3, ly, "S", cGood, true)
 		}
-		for s := 0; s < 16 && page*16+s < steps; s++ {
-			st := page*16 + s
+		for s := 0; s < span && page*span+s < steps; s++ {
+			st := page*span + s
 			x := stepX(s)
 			{
 				bg := cPanel
@@ -812,9 +816,9 @@ func (a *App) drawSeq(g Gfx) {
 					// longer than a step: a tie runs on over the steps it lasts
 					if n.Len > stepTicks && !Terminal { // (the terminal shows the length in the panel)
 						end := int(n.Tick) + n.Len
-						for t := s + 1; t < 16 && page*16+t < steps && (page*16+t)*stepTicks < end; t++ {
+						for t := s + 1; t < span && page*span+t < steps && (page*span+t)*stepTicks < end; t++ {
 							frac := 1.0
-							if rest := end - (page*16+t)*stepTicks; rest < stepTicks {
+							if rest := end - (page*span+t)*stepTicks; rest < stepTicks {
 								frac = float64(rest) / stepTicks
 							}
 							g.Tie(stepX(t), y, cw, bh, frac, col)
@@ -844,12 +848,15 @@ func (a *App) drawSeq(g Gfx) {
 		if b == page {
 			col = cAmber
 		}
-		if ph >= 0 && ph/16 == b {
+		if ph >= 0 && ph/span == b {
 			col = cGood
 		}
 		g.Fill(bx+b*3, 1, 2, 1, col)
 	}
 	barLbl := fmt.Sprintf("bar %d/%d", page+1, bars)
+	if span > 16 {
+		barLbl = fmt.Sprintf("bars %d-%d/%d", page*span/16+1, min((page+1)*span/16, (steps+15)/16), (steps+15)/16)
+	}
 	if a.freeze {
 		barLbl += " FROZEN"
 	}
