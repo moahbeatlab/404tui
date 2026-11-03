@@ -132,7 +132,7 @@ func (a *App) drawPicker(c *canvas) {
 	c.text(x0+14, y0+10, head, cAmber, true)
 	c.text(x0+w-14-textW("L1 R1 bank"), y0+10, "L1 R1 bank", cDim, false)
 	if p.pads && p.replace {
-		c.text(x0+14, y0+h-24, "a pad that has a sample gets it replaced (Y+L2 undoes)", cDim, false)
+		c.text(x0+14, y0+h-24, "a pad with a sample is replaced (Y+L2 undoes)", cDim, false)
 	}
 	// the banks
 	for b := 0; b < 10; b++ {
