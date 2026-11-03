@@ -153,7 +153,14 @@ func (a *App) restoreProject(s *lab.Snap) {
 	a.pcm = map[int]int{}
 	a.aud = nil
 	a.sl = nil
+	a.tap, a.lane, a.joinPick = false, false, false
 	a.refresh()
+	if a.scr == Slice { // the screen needs a slicing: open the pad's sample again, or go back to the pads
+		a.openSlicer()
+		if a.sl == nil {
+			a.scr = Pads
+		}
+	}
 	a.step = min(a.step, a.steps()-1)
 	a.autoRows()
 	a.replay()

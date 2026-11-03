@@ -4048,3 +4048,60 @@ func TestOnAComputerTheSliceOrderLoops(t *testing.T) {
 		t.Fatal("asking again stops the loop")
 	}
 }
+
+func TestUndoOnEveryScreenLeavesAScreenThatDraws(t *testing.T) {
+	for _, term := range []bool{false, true} {
+		Terminal = term
+		for scr := Screen(0); int(scr) < len(screenNames); scr++ {
+			a, _ := newApp(t)
+			keys(t, a, kit)
+			a.go_(Seq)
+			keys(t, a, "A R R R A") // an edit to undo
+			onScreen(t, a, Pads)
+			a.go_(scr)
+			a.undoStep()
+			a.Render()
+			a.RenderCells()
+			a.redoStep()
+			a.Render()
+			a.RenderCells()
+		}
+	}
+	Terminal = false
+}
+
+func TestUndoWithAPanelOrAModeOpenStillDraws(t *testing.T) {
+	for _, term := range []bool{false, true} {
+		Terminal = term
+		for i, setup := range []string{"A", "S+B", "Y+X", "Y+B"} { // pad panel, tools, add track, pattern picker / settings
+			a, _ := newApp(t)
+			keys(t, a, kit)
+			a.go_(Seq)
+			keys(t, a, "A R R R A")
+			if i == 0 {
+				a.go_(Pads)
+			}
+			keys(t, a, setup)
+			a.undoStep()
+			a.Render()
+			a.RenderCells()
+			keys(t, a, "B")
+			a.Render()
+		}
+		a, _ := newApp(t)
+		keys(t, a, kit)
+		a.go_(Seq)
+		keys(t, a, "A R R R A")
+		a.go_(Slice)
+		a.startTap()
+		a.undoStep()
+		a.Render()
+		a.RenderCells()
+		a.go_(Slice)
+		a.openLane()
+		a.undoStep()
+		a.Render()
+		a.RenderCells()
+	}
+	Terminal = false
+}
