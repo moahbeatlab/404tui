@@ -213,6 +213,12 @@ func (m *Model) key(msg tea.KeyMsg) {
 		m.disarm()
 		m.goTo = true
 		return
+	case "t": // the tools of the screen
+		if m.armed == noShift && !m.aHeld {
+			m.app.ToolsMenu()
+		}
+		m.disarm()
+		return
 	case "n": // the slicer: a new order of the slices, at once
 		if m.app.ScreenName() == "SLICE" && m.armed == noShift && !m.app.Modal() {
 			m.disarm()

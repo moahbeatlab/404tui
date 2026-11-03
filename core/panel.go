@@ -38,6 +38,21 @@ type hint struct{ key, what string }
 // hints are the keys the panel lists: on a keyboard the key that closes a page or a menu is Esc.
 func (a *App) hints() (plain, shift []hint) {
 	plain, shift = a.rawHints()
+	if Terminal && !a.Modal() && a.prompt == nil && a.kb == nil && (a.scr == Pads || a.scr == Files || a.scr == Slice || a.scr == Seq) {
+		sh := make([]hint, 0, len(shift)) // Select+B is the t key
+		tools := false
+		for _, h := range shift {
+			if h.key == "Sel+B" {
+				tools = true
+				continue
+			}
+			sh = append(sh, h)
+		}
+		if a.scr == Pads || tools {
+			plain = append(append([]hint{}, plain...), hint{"t", "tools"})
+		}
+		shift = sh
+	}
 	if Terminal && a.scr == Slice && !a.tap && !a.lane && !a.Modal() { // the keyboard zooms with + and -
 		plain = append(append([]hint{}, plain...), hint{"n", "new order"}, hint{"+ -", "zoom in / out"})
 		sh := make([]hint, 0, len(shift))
@@ -49,7 +64,7 @@ func (a *App) hints() (plain, shift []hint) {
 		shift = sh
 	}
 	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() {
-		plain = append(append([]hint{}, plain...), hint{"f", "freeze the view"}, hint{"z", "1 bar / more"})
+		plain = append(append([]hint{}, plain...), hint{"f", "freeze view"}, hint{"z", "1 bar / more"})
 	}
 	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() { // the keyboard: Space plays the pattern, x the note
 		out := make([]hint, 0, len(plain))
@@ -58,7 +73,7 @@ func (a *App) hints() (plain, shift []hint) {
 			case h.key == "X" && (h.what == "play" || h.what == "stop"):
 				h = hint{"Space", "play / stop"}
 			case h.key == "L2" && h.what == "hear note":
-				h = hint{"x", "hear the note"}
+				h = hint{"x", "hear note"}
 			}
 			out = append(out, h)
 		}
@@ -415,6 +430,11 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 		if a.sl == nil {
 			return
 		}
+		if Terminal {
+			a.sliceHeader(g, x, row(0), w)
+			a.drawInfoGroups(g, x, row(2), w, y1, a.sliceInfoGroups(), 2)
+			return
+		}
 		g.Text(x, row(0), fmt.Sprintf("%s %s", a.label(a.spad), fit(a.info.Pads[a.spad].Name, w-4)), cAmber, true)
 		g.Text(x, row(1), fmt.Sprintf("%.2fs  %d slices", float64(a.sl.Frames)/48000, len(a.sl.Slices)), cDim, false)
 		g.Text(x, row(2), fmt.Sprintf("%s  zoom %dx", orderMode(a.sl), 1<<a.zoom), cDim, false)
@@ -506,11 +526,21 @@ func (a *App) drawKeyboardKeys(g Gfx, x, y, w int) {
 		{hint{"1-9", "screens"}, hint{"g hl", "prev/next"}},
 		{hint{"u", "undo"}, hint{"R", "redo"}},
 		{hint{"^R", "record"}, hint{"?", "all keys"}},
-		{hint{"y", "shift"}, hint{"s", "select"}},
-		{hint{"q", "quit"}, hint{}},
+		{hint{"q", "quit"}, hint{"y s", "shift keys"}},
 	}
-	const room = 6 // rows the middle of the panel keeps
-	viewRows := func() int { return 1 + len(plain) + len(shift) }
+	room := 6 // rows the middle of the panel keeps; the screens that have a lot to say about what is under the cursor keep more
+	_, hasPattern := a.doc()
+	if a.scr == Slice || a.scr == Pads && a.info.Pads[a.padN()].File || a.scr == Seq && hasPattern {
+		room = 11
+	}
+	two := w >= 38 // a wide panel lists the screen's keys in two columns
+	rowsOf := func(n int) int {
+		if two {
+			return (n + 1) / 2
+		}
+		return n
+	}
+	viewRows := func() int { return 1 + rowsOf(len(plain)) + rowsOf(len(shift)) }
 	globalRows := func() int { return 1 + len(global) }
 	total := func() int { return viewRows() + globalRows() + 2 } // two rules
 	limit := Rows - 3 - (y + 2) - room
@@ -536,9 +566,9 @@ func (a *App) drawKeyboardKeys(g Gfx, x, y, w int) {
 	default:
 		g.Text(x, ky, screenNames[a.scr], cAmber, true)
 	}
-	a.keyBlock(g, x, ky+1, w, plain, !a.yHeld || len(shift) == 0)
+	a.keyColumns(g, x, ky+1, w, plain, !a.yHeld || len(shift) == 0, two)
 	if len(shift) > 0 {
-		a.keyBlock(g, x, ky+1+len(plain), w, shift, a.yHeld || a.selHeld)
+		a.keyColumns(g, x, ky+1+rowsOf(len(plain)), w, shift, a.yHeld || a.selHeld, two)
 	}
 	// the global keys, two to a row
 	g.HRule(x, ky-1, w, cLine)
@@ -559,4 +589,15 @@ func (a *App) drawKeyboardKeys(g Gfx, x, y, w int) {
 	}
 	g.HRule(x, gy-1, w, cLine)
 	a.context(g, x, y+2, w, gy-2)
+}
+
+// keyColumns is keyBlock in one column or two (filled down the left one first).
+func (a *App) keyColumns(g Gfx, x, y, w int, hs []hint, active, two bool) {
+	if !two {
+		a.keyBlock(g, x, y, w, hs, active)
+		return
+	}
+	half := (len(hs) + 1) / 2
+	a.keyBlock(g, x, y, w/2, hs[:half], active)
+	a.keyBlock(g, x+w/2, y, w-w/2, hs[half:], active)
 }

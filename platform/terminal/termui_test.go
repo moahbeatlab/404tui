@@ -229,8 +229,8 @@ func TestThePanelNamesTheKeysOfTheKeyboard(t *testing.T) {
 	press(m, "y")
 	press(m, "l") // SEQ
 	txt = m.text()
-	if !strings.Contains(txt, "s b") || !strings.Contains(txt, "y x") || strings.Contains(txt, "Sel+B") {
-		t.Errorf("SEQ names s b and y x:\n%s", txt)
+	if !strings.Contains(txt, "tools") || !strings.Contains(txt, "y x") || strings.Contains(txt, "Sel+B") {
+		t.Errorf("SEQ names t (tools) and y x:\n%s", txt)
 	}
 	core.Terminal = false
 	if txt := screenText(m.app.RenderCells()); !strings.Contains(txt, "L1 R1") {
@@ -389,6 +389,16 @@ func TestOnSeqXHearsTheNoteSpacePlaysAndFFreezes(t *testing.T) {
 	}
 }
 
+// zoomIs says whether the slicer's panel shows the zoom with that value on its line.
+func zoomIs(m *Model, v string) bool {
+	for _, l := range strings.Split(m.text(), "\n") {
+		if strings.Contains(l, "zoom") && strings.Contains(l, v) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestPlusAndMinusZoomTheSlicer(t *testing.T) {
 	dir := t.TempDir()
 	if err := core.WriteDemo(dir + "/samples"); err != nil {
@@ -403,15 +413,15 @@ func TestPlusAndMinusZoomTheSlicer(t *testing.T) {
 	press(m, "a")
 	press(m, "a")
 	press(m, "4")
-	if !strings.Contains(m.text(), "zoom 1x") {
+	if !zoomIs(m, "1x") {
 		t.Fatalf("the slicer starts whole:\n%s", m.text())
 	}
 	press(m, "+")
-	if !strings.Contains(m.text(), "zoom 2x") {
+	if !zoomIs(m, "2x") {
 		t.Fatalf("+ zooms in:\n%s", m.text())
 	}
 	press(m, "-")
-	if !strings.Contains(m.text(), "zoom 1x") {
+	if !zoomIs(m, "1x") {
 		t.Fatal("- zooms out")
 	}
 }

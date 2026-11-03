@@ -712,14 +712,22 @@ func (a *App) selShifted(k Key) {
 	}
 }
 
-// OpenMenu is Enter of a keyboard where a screen has a menu of its own: the slicer's. It says whether it did.
+// OpenMenu is Enter of a keyboard: the settings of the slice or of the note under the cursor (on a pad A does it). It says whether it did.
 func (a *App) OpenMenu() bool {
-	if a.scr != Slice || a.sl == nil || a.menu != nil || a.prompt != nil || a.kb != nil || a.pp != nil || a.tap || a.lane {
+	if a.menu != nil || a.prompt != nil || a.kb != nil || a.pp != nil || a.picker != nil {
 		return false
 	}
-	a.CancelShift()
-	a.sliceMenu()
-	return true
+	switch {
+	case a.scr == Slice && a.sl != nil && !a.tap && !a.lane: // the settings of the slice
+		a.CancelShift()
+		a.sliceMenu()
+		return true
+	case a.scr == Seq && !a.aHeld: // the settings of the note
+		a.CancelShift()
+		a.openNotePanel()
+		return true
+	}
+	return false
 }
 
 // Playing says whether anything sounds: a pad, the arp or the pattern.
@@ -758,6 +766,23 @@ func (a *App) ToggleFreeze() {
 		return
 	}
 	a.toggleFreeze()
+}
+
+// ToolsMenu is the t key of a keyboard: the tools of the screen (on the handheld Select+B; on PADS the TOOLS page of the pad).
+func (a *App) ToolsMenu() {
+	if a.Modal() || a.prompt != nil || a.kb != nil {
+		return
+	}
+	a.CancelShift()
+	switch a.scr {
+	case Pads:
+		a.openPadPanel()
+		if a.pp != nil {
+			a.pp.page = 2
+		}
+	case Files, Slice, Seq:
+		a.selShifted(B)
+	}
 }
 
 // Zoom is + and - of a keyboard in the slicer: in (d > 0) or out.
