@@ -202,6 +202,7 @@ func (a *App) drawPads(g Gfx) {
 	ph := max((Rows-6)/4, 3) // the rows the pads have: what is left of the body, less the banks (2) and a gap
 	tw, th := pw-1, ph-1
 	cursorAt := [4]int{-1}
+	var strips [][4]int // the bus strips of the terminal: x, y, height, bus
 	for i := 0; i < 16; i++ {
 		n := a.bank*16 + i
 		x, y := x0+(i%4)*pw, 1+(i/4)*ph
@@ -217,7 +218,16 @@ func (a *App) drawPads(g Gfx) {
 		num := fmt.Sprint(i + 1)
 		g.Text(x+tw-len(num)-1, y, num, cDim, false)
 		if p.File {
-			g.Fill(x, y, 1, th, cAmber)
+			if Terminal { // the strip says which bus the pad is on: blue BUS 1, red BUS 2, none off a bus (drawn after the cursor)
+				switch a.padValue(n, 0x7A, 0) {
+				case 1:
+					strips = append(strips, [4]int{x, y, th, 1})
+				case 2:
+					strips = append(strips, [4]int{x, y, th, 2})
+				}
+			} else {
+				g.Fill(x, y, 1, th, cAmber)
+			}
 			g.Text(x+2, y, short(p.Name, pw-6), cText, true)
 			if Terminal { // a computer's terminal shows the length and the switches (the wave is in the panel)
 				if th >= 3 {
@@ -250,6 +260,13 @@ func (a *App) drawPads(g Gfx) {
 	}
 	if cursorAt[0] >= 0 {
 		g.Cursor(cursorAt[0], cursorAt[1], cursorAt[2], cursorAt[3])
+	}
+	for _, st := range strips {
+		c := cBlue
+		if st[3] == 2 {
+			c = cBad
+		}
+		g.Fill(st[0], st[1], 1, st[2], c)
 	}
 	a.drawBanks(g, a.bank)
 }

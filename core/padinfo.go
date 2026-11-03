@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 )
 
@@ -11,7 +12,8 @@ import (
 
 type infoLine struct {
 	label, value string
-	on, off      bool // a switch: lit or faint
+	on, off      bool       // a switch: lit or faint
+	col          color.RGBA // a colour of its own for the value (the bus), zero for none
 	head         bool
 }
 
@@ -84,7 +86,16 @@ func (a *App) padInfoGroups(n int) [][]infoLine {
 		out := []infoLine{{label: title, head: true}}
 		for _, l := range labels {
 			v, on, off := a.padSettingText(n, l)
-			out = append(out, infoLine{label: shortInfo[l], value: v, on: on, off: off})
+			il := infoLine{label: shortInfo[l], value: v, on: on, off: off}
+			if l == "Bus" { // the colour the pad's strip has
+				switch v {
+				case "BUS 1":
+					il.col = cBlue
+				case "BUS 2":
+					il.col = cBad
+				}
+			}
+			out = append(out, il)
 		}
 		return out
 	}
@@ -127,6 +138,8 @@ func (a *App) drawInfoGroups(g Gfx, x, y0, w, y1 int, groups [][]infoLine, left 
 				c = cGood
 			case l.off:
 				c = cDim
+			case l.col != (color.RGBA{}):
+				c = l.col
 			}
 			g.Text(x+lw, y, fit(l.value, w-lw), c, l.on)
 			y++

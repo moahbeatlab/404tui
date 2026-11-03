@@ -174,9 +174,7 @@ func (t *textGfx) Cursor(col, row, cols, rows int) {
 		for x := col; x < col+cols; x++ {
 			if cell := t.at(x, y); cell != nil {
 				// a dark amber ground, so a lit strip beside the tile stays apart from it; dim text is brought up to read on it
-				if cell.Bg != tAccent { // the lit strip of a pad stays
-					cell.Bg = tAccentD
-				}
+				cell.Bg = tAccentD
 				if cell.Fg == tDim || cell.Fg == tLine || cell.Fg == tDark {
 					cell.Fg = tText
 				}
