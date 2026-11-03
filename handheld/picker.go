@@ -120,79 +120,81 @@ func (a *App) pickerKey(k Key) {
 	}
 }
 
-func (a *App) drawPicker(c *canvas) {
+func (a *App) drawPicker(g Gfx) {
 	p := a.picker
 	wc, hr := contentCols-2, Rows-3 // the dialog in cells; a blank row at the top and bottom for the frame
-	x0, y0, w, h := CellW, CellH, wc*CellW, hr*CellH
-	c.rect(x0, y0, w, h, cPanel2)
-	c.box(x0, y0, w, h, 2, cAmber)
+	x0, y0 := 1, 1
+	g.Fill(x0, y0, wc, hr, cPanel2)
+	g.Frame(x0, y0, wc, hr, cAmber)
 	head := "CHOOSE A PATTERN"
 	if p.pads {
 		head = strings.ToUpper(p.title)
 	}
-	c.text(x0+2*CellW, y0+CellH, fit(head, wc-16), cAmber, true)
-	c.text(x0+w-2*CellW-textW("L1 R1 bank"), y0+CellH, "L1 R1 bank", cDim, false)
+	g.Text(x0+2, y0+1, fit(head, wc-16), cAmber, true)
+	bk := tk("L1 R1 bank")
+	g.Text(x0+wc-2-len(bk), y0+1, bk, cDim, false)
 	if p.pads && p.replace {
-		c.text(x0+2*CellW, y0+h-2*CellH, fit("a pad with a sample is replaced (Y+L2 undoes)", wc-4), cDim, false)
+		g.Text(x0+2, y0+hr-2, fit("a pad with a sample is replaced (Y+L2 undoes)", wc-4), cDim, false)
 	}
 	// the banks
 	bwc := (wc - 4) / 10
 	for b := 0; b < 10; b++ {
-		bx := x0 + 2*CellW + b*bwc*CellW
+		bx := x0 + 2 + b*bwc
 		col, fg := cPanel, cDim
 		if b == p.bank {
 			col, fg = cAmber, cBg
 		}
-		c.rect(bx, y0+3*CellH, bwc*CellW-4, CellH, col)
-		c.text(bx+(bwc*CellW-4-CellW)/2, y0+3*CellH, string(rune('A'+b)), fg, true)
+		g.Fill(bx, y0+3, bwc-1, 1, col)
+		g.Text(bx+(bwc-1)/2, y0+3, string(rune('A'+b)), fg, true)
 	}
 	// the 16 patterns
 	pw := (wc - 4) / 4
 	ph := max((hr-8)/4, 3) // the rows left under the banks, less the line at the foot
-	tw, th := pw*CellW-CellW, (ph-1)*CellH
+	tw, th := pw-1, ph-1
+	cursor := [4]int{-1}
 	for i := 0; i < 16; i++ {
 		n := p.bank*16 + i + 1
 		if p.pads {
 			n-- // the pads count from 0 in the lists, a pattern from 1
 		}
-		tx, ty := x0+2*CellW+(i%4)*pw*CellW, y0+5*CellH+(i/4)*ph*CellH
-		c.rect(tx, ty, tw, th, cPanel)
+		tx, ty := x0+2+(i%4)*pw, y0+5+(i/4)*ph
+		g.Fill(tx, ty, tw, th, cPanel)
 		if p.info[i].used {
-			c.rect(tx, ty, 4, th, cAmber)
+			g.Fill(tx, ty, 1, th, cAmber)
 		}
 		fg := cDim
 		if p.info[i].used {
 			fg = cText
 		}
 		if p.pads {
-			c.text(tx+CellW, ty, a.label(n), fg, true)
+			g.Text(tx+2, ty, a.label(n), fg, true)
 			if p.info[i].used {
-				c.text(tx+CellW, ty+CellH, short(p.info[i].name, pw-3), cText, false)
-				if th >= 3*CellH {
-					c.text(tx+CellW, ty+2*CellH, fmt.Sprintf("%.2f s", p.info[i].secs), cDim, false)
+				g.Text(tx+2, ty+1, short(p.info[i].name, pw-4), cText, false)
+				if th >= 3 {
+					g.Text(tx+2, ty+2, fmt.Sprintf("%.2f s", p.info[i].secs), cDim, false)
 				}
 			} else {
-				c.text(tx+CellW, ty+CellH, "empty", cLine, false)
-			}
-			if i == p.cur {
-				c.box(tx, ty, tw, th, 2, cAmber)
-			}
-			continue
-		}
-		c.text(tx+CellW, ty, a.label(n-1), fg, true)
-		if p.info[i].used {
-			c.text(tx+CellW, ty+CellH, fmt.Sprintf("%d bars", p.info[i].bars), cDim, false)
-			if th >= 3*CellH {
-				c.text(tx+CellW, ty+2*CellH, fmt.Sprintf("%d notes", p.info[i].notes), cAmber, false)
+				g.Text(tx+2, ty+1, "empty", cLine, false)
 			}
 		} else {
-			c.text(tx+CellW, ty+CellH, "empty", cLine, false)
-		}
-		if n == a.pat {
-			c.box(tx+1, ty+1, tw-2, th-2, 1, cWhite)
+			g.Text(tx+2, ty, a.label(n-1), fg, true)
+			if p.info[i].used {
+				g.Text(tx+2, ty+1, fmt.Sprintf("%d bars", p.info[i].bars), cDim, false)
+				if th >= 3 {
+					g.Text(tx+2, ty+2, fmt.Sprintf("%d notes", p.info[i].notes), cAmber, false)
+				}
+			} else {
+				g.Text(tx+2, ty+1, "empty", cLine, false)
+			}
+			if n == a.pat {
+				g.Text(tx+tw-2, ty, "<", cWhite, true)
+			}
 		}
 		if i == p.cur {
-			c.box(tx, ty, tw, th, 2, cAmber)
+			cursor = [4]int{tx, ty, tw, th}
 		}
+	}
+	if cursor[0] >= 0 {
+		g.Cursor(cursor[0], cursor[1], cursor[2], cursor[3])
 	}
 }

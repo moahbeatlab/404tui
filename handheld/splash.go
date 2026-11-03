@@ -54,15 +54,15 @@ func countFiles(dir string) int {
 	return n
 }
 
-func (a *App) drawSplash(c *canvas) {
+func (a *App) drawSplash(g Gfx) {
 	s := a.splash
-	dy := max((Rows-MinRows)/2, 0) * CellH // a taller screen: everything a little lower
-	lx := max((W-520)/2/CellW, 2) * CellW
+	dy := max((Rows-MinRows)/2, 0) // a taller screen: everything a little lower
+	lx := max((Cols-65)/2, 2)
 	// the logo: the name in big letters beside a 4x4 pad grid with a kick pattern lit
-	c.logo(lx/CellW, 4+dy/CellH, "404tui", cAmber)
-	gx, gy := lx+42*CellW+16, 4*CellH+dy
+	g.Logo(lx, 4+dy, "404tui", cAmber)
+	gx, gy := lx+43, 4+dy
 	for i := 0; i < 16; i++ {
-		x, y := gx+(i%4)*3*CellW, gy+(i/4)*2*CellH
+		x, y := gx+(i%4)*3, gy+(i/4)*2
 		col := cPanel2
 		switch i {
 		case 0, 4, 8, 12:
@@ -70,16 +70,16 @@ func (a *App) drawSplash(c *canvas) {
 		case 2, 10:
 			col = cAmberD
 		}
-		c.rect(x, y, 2*CellW, CellH, col)
+		g.Fill(x, y, 2, 1, col)
 	}
-	c.text(lx, 14*CellH+dy, "SAMPLE LAB FOR THE SP-404MKII", cText, true)
-	c.text(lx, 15*CellH+dy, "samples, slices, patterns, projects", cDim, false)
-	c.rect(lx, 17*CellH+dy-4, 520, 1, cLine)
+	g.Text(lx, 14+dy, "SAMPLE LAB FOR THE SP-404MKII", cText, true)
+	g.Text(lx, 15+dy, "samples, slices, patterns, projects", cDim, false)
+	g.HRule(lx, 17+dy, 65, cLine)
 
 	// what is here
 	row := func(r int, what, val string) {
-		c.text(lx, r*CellH+dy, what, cDim, false)
-		c.text(lx+12*CellW, r*CellH+dy, fit(val, 50), cText, false)
+		g.Text(lx, r+dy, what, cDim, false)
+		g.Text(lx+12, r+dy, fit(val, 50), cText, false)
 	}
 	used := 0
 	for _, p := range a.info.Pads {
@@ -95,15 +95,15 @@ func (a *App) drawSplash(c *canvas) {
 		row(22, "version", Version)
 	}
 	if s.restore != "" {
-		c.rect(lx, 24*CellH+dy, 520, 3*CellH, cAmberD)
-		c.box(lx, 24*CellH+dy, 520, 3*CellH, 2, cAmber)
-		c.text(lx+CellW, 24*CellH+dy+CellH/2, fit(fmt.Sprintf("AUTOSAVE FOUND: %s, saved at %s", filepath.Base(s.restore), s.when.Format("15:04")), 63), cWhite, true)
-		c.text(lx+CellW, 25*CellH+dy+CellH/2, "A restores it     any other key starts empty", cText, false)
+		g.Fill(lx, 23+dy, 65, 4, cAmberD)
+		g.Frame(lx, 23+dy, 65, 4, cAmber)
+		g.Text(lx+2, 24+dy, fit(fmt.Sprintf("AUTOSAVE FOUND: %s, saved at %s", filepath.Base(s.restore), s.when.Format("15:04")), 61), cWhite, true)
+		g.Text(lx+2, 25+dy, "A restores it     any other key starts empty", cText, false)
 	} else {
 		lbl := "press any key"
 		if a.clock().Sub(s.started)/(500*time.Millisecond)%2 == 0 {
-			c.text(lx, 25*CellH+dy, lbl, cDim, false)
+			g.Text(lx, 25+dy, lbl, cDim, false)
 		}
 	}
-	c.text(W-margin-textW("moahbeatlab"), H-CellH, "moahbeatlab", cLine, false)
+	g.Text(Cols-2-len("moahbeatlab"), Rows-1, "moahbeatlab", cLine, false)
 }

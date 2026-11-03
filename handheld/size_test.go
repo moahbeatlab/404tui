@@ -47,12 +47,16 @@ func TestEveryScreenFitsEverySize(t *testing.T) {
 				if st.do != "" {
 					keys(t, a, st.do)
 				}
-				c := a.paint()
-				if c.img.Bounds().Dx() != sz[0]*CellW || c.img.Bounds().Dy() != sz[1]*CellH || len(c.txt) != sz[0]*sz[1] {
-					t.Fatalf("frame is %v for %dx%d cells", c.img.Bounds(), sz[0], sz[1])
+				pix := a.Render()
+				if pix.Bounds().Dx() != sz[0]*CellW || pix.Bounds().Dy() != sz[1]*CellH {
+					t.Fatalf("frame is %v for %dx%d cells", pix.Bounds(), sz[0], sz[1])
 				}
-				if len(c.clash) > 0 {
-					t.Errorf("letters over letters (%d): %s", len(c.clash), strings.Join(c.clash[:min(len(c.clash), 4)], "; "))
+				scr := a.RenderCells()
+				if scr.Cols != sz[0] || scr.Rows != sz[1] || len(scr.Cells) != sz[0]*sz[1] {
+					t.Fatalf("text screen is %dx%d for %dx%d cells", scr.Cols, scr.Rows, sz[0], sz[1])
+				}
+				if len(scr.Clash) > 0 {
+					t.Errorf("letters over letters (%d): %s", len(scr.Clash), strings.Join(scr.Clash[:min(len(scr.Clash), 4)], "; "))
 				}
 				// the panel is on the right, a third of the width at least 24 cells, and nothing of the screen is in it
 				if panelCols < 24 || panelCols*10 < sz[0]*3-9 {

@@ -140,15 +140,15 @@ func (a *App) kbKey(k Key) {
 	}
 }
 
-func (a *App) drawKeyboard(c *canvas) {
+func (a *App) drawKeyboard(g Gfx) {
 	wc, hr := contentCols-2, 11
-	x0, w, h := CellW, wc*CellW, hr*CellH
-	y0 := panelBot - h
-	c.rect(x0, y0, w, h, cPanel2)
-	c.box(x0, y0, w, h, 2, cAmber)
+	x0 := 1
+	y0 := Rows - 2 - hr
+	g.Fill(x0, y0, wc, hr, cPanel2)
+	g.Frame(x0, y0, wc, hr, cAmber)
 	q := a.searchQ
-	c.text(x0+2*CellW, y0+CellH, "SEARCH", cDim, false)
-	c.text(x0+2*CellW+textW("SEARCH "), y0+CellH, fit(q+"_", wc-30), cAmber, true)
+	g.Text(x0+2, y0+1, "SEARCH", cDim, false)
+	g.Text(x0+2+7, y0+1, fit(q+"_", wc-30), cAmber, true)
 	n := fmt.Sprintf("%d files", len(a.entries))
 	if len(a.entries) == 1 {
 		n = "1 file"
@@ -156,22 +156,22 @@ func (a *App) drawKeyboard(c *canvas) {
 	if a.searchCut {
 		n += "+"
 	}
-	c.text(x0+w-2*CellW-textW(n), y0+CellH, n, cDim, false)
-	const kw = 4 * CellW // a key: 4 cells wide, 2 high
-	gx := x0 + (w-10*kw)/2
+	g.Text(x0+wc-2-len(n), y0+1, n, cDim, false)
+	const kw = 4 // a key: 4 cells wide, 2 high
+	gx := x0 + (wc-10*kw)/2
 	for r, row := range kbRows {
 		for col := 0; col < len(row); col++ {
-			x, y := gx+col*kw, y0+2*CellH+r*2*CellH
+			x, y := gx+col*kw, y0+2+r*2
 			bg, fg := cPanel, cText
 			if r == a.kb.r && col == a.kb.c {
 				bg, fg = cAmber, cBg
 			}
-			c.rect(x, y+2, kw-3, 2*CellH-4, bg)
+			g.Fill(x, y, kw-1, 1, bg)
 			ch := string(row[col])
 			if ch == " " {
 				ch = "sp"
 			}
-			c.text(x+(kw-3-textW(ch))/2, y+CellH/2, ch, fg, true)
+			g.Text(x+(kw-1-len(ch))/2, y, ch, fg, true)
 		}
 	}
 }

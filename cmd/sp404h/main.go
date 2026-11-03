@@ -126,7 +126,7 @@ func main() {
 				fatal(err)
 			}
 			if *termShots {
-				if err := handheld.WritePNG(filepath.Join(*shots, name+".term.png"), termui.Image(termui.Cells(app.RenderFrame(), termui.FullGlyphs))); err != nil {
+				if err := handheld.WritePNG(filepath.Join(*shots, name+".term.png"), termui.Image(termui.Cells(app.RenderCells(), termui.FullGlyphs))); err != nil {
 					fatal(err)
 				}
 			}

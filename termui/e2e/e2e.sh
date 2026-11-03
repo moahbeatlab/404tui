@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runs the lab (sp404 lab) in a terminal (tmux) in this container, against a copy of a real project, and checks what is
+# Runs the program (sp404) in a terminal (tmux) in this container, against a copy of a real project, and checks what is
 # on the screen after keys, as a user would see it. Every step is kept in /out as text (.txt) and with colours (.ansi).
 #   sp404 in the PATH (/usr/local/bin/sp404 in the container)   PROJECT (/project) the real project, read only
 #   WORK (/work) where it works   OUT (/out) the results   TMUX_SOCKET a private tmux socket (e2e)
@@ -29,7 +29,7 @@ absent() { if cap | grep -qF -- "$2"; then bad "$1: did not expect '$2'"; else o
 start() { # start cols rows [extra args]
   local c=$1 r=$2; shift 2
   tm kill-session -t $S 2>/dev/null
-  tm new-session -d -s $S -x $c -y $r "sp404 lab -samples $W/samples -out $W/out $* 2>$W/stderr.txt; echo EXIT=\$? >$W/exit.txt; sleep 60"
+  tm new-session -d -s $S -x $c -y $r "sp404 -samples $W/samples -out $W/out $* 2>$W/stderr.txt; echo EXIT=\$? >$W/exit.txt; sleep 60"
   tm set -g status off
   rm -f $W/exit.txt
 }

@@ -59,9 +59,10 @@ The screens are made for D-pad, A B X Y, L1 R1 L2 R2 and a second shift (Select)
 | `?` | the help page for the keyboard |
 | `q`, `Ctrl-C` | quit (twice when the project is not saved) |
 
-The side panel always lists the keys that work now, in the letters of the buttons (`A`, `B`, `X`, `Y+<>`,
-`Sel+B`, `L1 R1`), so with the table above nothing else has to be learnt. The shift that is waiting for its key is
-lit in the panel.
+The side panel always lists the keys that work now. In the lab it names the keys of the keyboard (`hjkl`, `[ ]`,
+`y h` / `y l` for the next / previous screen, `s b` for Select+B), not the handheld's buttons; on the handheld it shows
+the buttons. The shift that is waiting for its key is lit in the panel, and the block of keys that need it is headed
+"y, then".
 
 ## The screens
 

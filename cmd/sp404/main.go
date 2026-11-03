@@ -34,9 +34,9 @@ import (
 const usage = `usage: sp404 [flags] <command>
 
 commands:
-  menu           full-screen terminal UI (the default when no command is given)
-  lab            the lab: samples, slicer, patterns and projects, with the same screens as the handheld version
-                 (sp404 lab -h for its flags; works without a unit, and sends a project to one)
+  menu           the full-screen terminal UI (the default when no command is given): pads, sequencer, files, slicer,
+                 save and unit, with the same screens, layout, menus and features as the handheld version
+  classic        the earlier terminal UI with its tabs (Perform, Looper, Config, ...), until they are in the one above
   serve          run without a screen and serve Perform to a browser on this network (phone, tablet)
   midimap        print the map of the Faderfox EC4 for 404tui (one group of 16 pushes)
   check          check this installation: the computer, the program on a simulated unit, a plugged-in unit
@@ -63,6 +63,11 @@ type options struct {
 	audio string
 	// offline is a folder of projects on this computer to work on without the unit.
 	offline string
+	// project, samples and out are for the full-screen UI: a project folder to open, the folder the file browser starts
+	// in, and where the card folder is written.
+	project, samples, out string
+	// basicGlyphs draws with block characters only.
+	basicGlyphs bool
 	// webAddr is where to serve the web page of Perform ("" for not at all; serve uses :8404), webKey
 	// the key a browser has to give (kept for the user when empty).
 	webAddr, webKey string
@@ -77,6 +82,11 @@ func main() {
 	flag.BoolVar(&o.trace, "trace", false, "also log every message on the wire, as hex (implies -v)")
 	flag.StringVar(&o.logPath, "log", "", "debug log file (default: the user cache folder for the UI, standard error otherwise)")
 	flag.StringVar(&o.audio, "audio", "", "how files are played on this computer: oto (default) or afplay (macOS's own player)")
+	home, _ := os.UserHomeDir()
+	flag.StringVar(&o.project, "project", "", "the full-screen UI: a project folder (with a PADCONF.BIN) to open")
+	flag.StringVar(&o.samples, "samples", filepath.Join(home, "404tui", "samples"), "the full-screen UI: the folder the file browser starts in")
+	flag.StringVar(&o.out, "out", filepath.Join(home, "404tui", "out"), "the full-screen UI: where projects are written (the card folder is made in it; settings and autosaves go beside it)")
+	flag.BoolVar(&o.basicGlyphs, "basic-glyphs", false, "the full-screen UI: draw with block characters only (no braille), for a terminal font that has little")
 	flag.StringVar(&o.webAddr, "web", "", "serve the Perform web page on this address, e.g. :8404 (the serve command does it by itself)")
 	flag.StringVar(&o.webKey, "web-key", "", "key a browser must give to connect (default: one kept for you; \"none\" lets everyone on the network in)")
 	showVersion := flag.Bool("version", false, "print the version and stop")
@@ -175,7 +185,7 @@ func (l logging) banner(o options) {
 }
 
 func run(args []string, o options) error {
-	forUI := args[0] == "menu" || args[0] == "lab"
+	forUI := args[0] == "menu" || args[0] == "classic" || args[0] == "lab"
 	l, err := newLogging(o, forUI)
 	if err != nil {
 		return err
@@ -205,9 +215,11 @@ func run(args []string, o options) error {
 		}
 		return audioTest(args[1], o.audio)
 	case "menu":
+		return runUnified(o)
+	case "lab": // the name it had for a while
+		return runUnified(o)
+	case "classic":
 		return runUI(o, l, false)
-	case "lab":
-		return runLab(args[1:], o)
 	case "serve":
 		return runUI(o, l, true)
 	}

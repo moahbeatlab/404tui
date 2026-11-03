@@ -79,8 +79,8 @@ func onePadSemis(o onePad) []int {
 }
 
 // onePadKeyboard draws two octaves of a piano with the notes of the arp lit.
-func onePadKeyboard(semis []int) func(c *canvas, x, y, w int) {
-	return func(c *canvas, x, y, w int) {
+func onePadKeyboard(semis []int) func(g Gfx, col, row, cols int) {
+	return func(g Gfx, col, row, cols int) {
 		on := map[int]bool{}
 		names := ""
 		seen := map[int]bool{}
@@ -91,33 +91,8 @@ func onePadKeyboard(semis []int) func(c *canvas, x, y, w int) {
 				names += formats.PitchNames[s%12] + " "
 			}
 		}
-		kw, top := (w-2*CellW)/14, y+2
-		x += CellW - 7
-		c.rect(x+6, top, 14*kw+2, 40, cLine)
-		white := []int{0, 2, 4, 5, 7, 9, 11}
-		for i := 0; i < 14; i++ {
-			s := white[i%7] + 12*(i/7)
-			col := cText
-			if on[s] {
-				col = cAmber
-			}
-			c.rect(x+7+i*kw, top+1, kw-2, 38, col)
-		}
-		blackAt := map[int]int{1: 0, 3: 1, 6: 3, 8: 4, 10: 5} // semitone -> white key to its left
-		for o := 0; o < 2; o++ {
-			for s, k := range blackAt {
-				col := cBg
-				if on[s+12*o] {
-					col = cAmberD
-				}
-				bx := x + 7 + (k+7*o)*kw + kw - 6
-				c.rect(bx, top+1, 12, 23, col)
-				if on[s+12*o] {
-					c.box(bx, top+1, 12, 23, 1, cAmber)
-				}
-			}
-		}
-		c.text(x+7, top+44, fit(names, (w-28)/CellW), cAmber, true)
+		g.Piano(col, row, cols, on)
+		g.Text(col+2, row+3, fit(names, cols-4), cAmber, true)
 	}
 }
 

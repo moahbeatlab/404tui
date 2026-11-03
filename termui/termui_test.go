@@ -1,9 +1,7 @@
 package termui
 
 import (
-	"image"
 	"image/color"
-	"image/draw"
 	"regexp"
 	"strings"
 	"testing"
@@ -18,70 +16,14 @@ var (
 	amber  = color.RGBA{255, 176, 0, 255}
 )
 
-// frameOf makes a frame of 1 cell holding the pixels fill paints, and no letters.
-func frameOf(fill func(img *image.RGBA)) handheld.Frame {
-	img := image.NewRGBA(image.Rect(0, 0, cellW, cellH))
-	draw.Draw(img, img.Bounds(), image.NewUniform(ground), image.Point{}, draw.Src)
-	fill(img)
-	return handheld.Frame{Img: img, Base: img, Text: make([]handheld.Glyph, 1), Cols: 1, Rows: 1}
-}
-
-func rect(img *image.RGBA, x0, y0, x1, y1 int, c color.RGBA) {
-	draw.Draw(img, image.Rect(x0, y0, x1, y1), image.NewUniform(c), image.Point{}, draw.Src)
-}
-
-func TestAnEmptyCellIsASpace(t *testing.T) {
-	c := Cells(frameOf(func(*image.RGBA) {}), FullGlyphs)[0][0]
-	if c.R != ' ' || c.Bg != ground {
-		t.Fatalf("got %q on %v", c.R, c.Bg)
+func TestBasicGlyphsHaveNoBrailleOrEighths(t *testing.T) {
+	scr := handheld.TextScreen{Cols: 4, Rows: 1, Cells: []handheld.Cell{{R: '⣿'}, {R: '▂'}, {R: '╭'}, {R: '●'}}}
+	got := string([]rune{Cells(scr, BasicGlyphs)[0][0].R, Cells(scr, BasicGlyphs)[0][1].R, Cells(scr, BasicGlyphs)[0][2].R, Cells(scr, BasicGlyphs)[0][3].R})
+	if got != "█ +o" {
+		t.Fatalf("got %q", got)
 	}
-}
-
-func TestHalfACellIsAHalfBlock(t *testing.T) {
-	c := Cells(frameOf(func(i *image.RGBA) { rect(i, 0, 0, 8, 8, amber) }), FullGlyphs)[0][0]
-	// the top half in amber is ▀ with amber on the ground, or ▄ with the colours the other way round: the same picture
-	okA := c.R == '▀' && c.Fg == amber && c.Bg == ground
-	okB := c.R == '▄' && c.Fg == ground && c.Bg == amber
-	if !okA && !okB {
-		t.Fatalf("got %q fg %v bg %v", c.R, c.Fg, c.Bg)
-	}
-}
-
-func TestABarFromTheBottomIsALowerBlock(t *testing.T) {
-	c := Cells(frameOf(func(i *image.RGBA) { rect(i, 0, 10, 8, 16, amber) }), FullGlyphs)[0][0] // 6 px of 16: 3/8
-	if c.R != '▃' || c.Fg != amber {
-		t.Fatalf("got %q fg %v", c.R, c.Fg)
-	}
-}
-
-func TestAWaveformColumnIsABar(t *testing.T) {
-	c := Cells(frameOf(func(i *image.RGBA) { // 2 px wide bars at four heights, standing on the bottom
-		for k, h := range []int{4, 8, 12, 8} {
-			rect(i, 2*k, 16-h, 2*k+2, 16, amber)
-		}
-	}), FullGlyphs)[0][0]
-	if !strings.ContainsRune("▄▅▆", c.R) || c.Fg != amber {
-		t.Fatalf("got %q fg %v", c.R, c.Fg)
-	}
-}
-
-func TestThinLinesAreBraille(t *testing.T) {
-	c := Cells(frameOf(func(i *image.RGBA) { rect(i, 2, 0, 3, 16, amber); rect(i, 5, 4, 6, 12, amber) }), FullGlyphs)[0][0]
-	if c.R < 0x2800 || c.R > 0x28ff {
-		t.Fatalf("got %q", c.R)
-	}
-	b := Cells(frameOf(func(i *image.RGBA) { rect(i, 2, 0, 3, 16, amber); rect(i, 5, 4, 6, 12, amber) }), BasicGlyphs)[0][0]
-	if b.R >= 0x2800 && b.R <= 0x28ff {
-		t.Fatalf("basic glyphs must not use braille, got %q", b.R)
-	}
-}
-
-func TestALetterStaysALetter(t *testing.T) {
-	f := frameOf(func(*image.RGBA) {})
-	f.Text[0] = handheld.Glyph{R: 'Q', Fg: amber, Bold: true}
-	c := Cells(f, FullGlyphs)[0][0]
-	if c.R != 'Q' || c.Fg != amber || !c.Bold || c.Bg != ground {
-		t.Fatalf("got %+v", c)
+	if Cells(scr, FullGlyphs)[0][0].R != '⣿' {
+		t.Fatal("full glyphs keep the braille")
 	}
 }
 
@@ -110,16 +52,12 @@ func TestDrawGivesTheCharactersAndResetsEachLine(t *testing.T) {
 	}
 }
 
-// screenText is the letters of the frame, a line for each row.
-func screenText(f handheld.Frame) string {
+// screenText is the characters of the screen, a line for each row.
+func screenText(s handheld.TextScreen) string {
 	var sb strings.Builder
-	for r := 0; r < f.Rows; r++ {
-		for c := 0; c < f.Cols; c++ {
-			if g := f.Text[r*f.Cols+c]; g.R != 0 {
-				sb.WriteRune(g.R)
-			} else {
-				sb.WriteByte(' ')
-			}
+	for r := 0; r < s.Rows; r++ {
+		for c := 0; c < s.Cols; c++ {
+			sb.WriteRune(s.Cells[r*s.Cols+c].R)
 		}
 		sb.WriteByte('\n')
 	}
@@ -152,7 +90,7 @@ func press(m *Model, s string) {
 	}
 }
 
-func (m *Model) text() string { return screenText(m.app.RenderFrame()) }
+func (m *Model) text() string { return screenText(m.app.RenderCells()) }
 
 func TestVimKeysAndArrowsMoveTheCursor(t *testing.T) {
 	m := newModel(t)
@@ -231,14 +169,14 @@ func TestEverySizeHasAPanelOfAThirdOfTheWidth(t *testing.T) {
 		m := newModel(t)
 		m.Update(tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
 		press(m, "x")
-		f := m.app.RenderFrame()
-		if f.Cols != sz[0] || f.Rows != sz[1] || f.Img.Bounds().Dx() != sz[0]*cellW {
-			t.Fatalf("%v: frame %dx%d cells", sz, f.Cols, f.Rows)
+		f := m.app.RenderCells()
+		if f.Cols != sz[0] || f.Rows != sz[1] {
+			t.Fatalf("%v: screen %dx%d cells", sz, f.Cols, f.Rows)
 		}
 		col := -1
 		for r := 0; r < f.Rows && col < 0; r++ {
 			for c := 0; c+3 < f.Cols; c++ {
-				if f.Text[r*f.Cols+c].R == 'B' && f.Text[r*f.Cols+c+1].R == 'P' && f.Text[r*f.Cols+c+2].R == 'M' { // the tempo, first in the panel
+				if f.Cells[r*f.Cols+c].R == 'B' && f.Cells[r*f.Cols+c+1].R == 'P' && f.Cells[r*f.Cols+c+2].R == 'M' { // the tempo, first in the panel
 					col = c - 1
 					break
 				}
@@ -248,7 +186,7 @@ func TestEverySizeHasAPanelOfAThirdOfTheWidth(t *testing.T) {
 		if col < want-4 || col > want+4 {
 			t.Errorf("%v: the panel starts at column %d, wanted about %d", sz, col, want)
 		}
-		if txt := m.text(); !strings.Contains(txt, "hold Y") || !strings.Contains(txt, "BPM") || !strings.Contains(txt, "autosave") {
+		if txt := m.text(); !strings.Contains(txt, "y, then") || !strings.Contains(txt, "BPM") || !strings.Contains(txt, "autosave") {
 			t.Errorf("%v: panel or footer missing:\n%s", sz, txt)
 		}
 	}
@@ -271,5 +209,31 @@ func TestSearchTypedOnTheKeyboard(t *testing.T) {
 	press(m, "enter")
 	if strings.Contains(m.text(), "SEARCH") {
 		t.Fatal("Enter closes the keyboard")
+	}
+}
+
+func TestThePanelNamesTheKeysOfTheKeyboard(t *testing.T) {
+	m := newModel(t)
+	press(m, "x")
+	txt := m.text()
+	for _, want := range []string{"hjkl", "[ ]", "y h", "y a"} { // move, bank, screen, mark pad
+		if !strings.Contains(txt, want) {
+			t.Errorf("the panel should name %q:\n%s", want, txt)
+		}
+	}
+	for _, not := range []string{"L1 R1", "Y+", "^v<>"} {
+		if strings.Contains(txt, not) {
+			t.Errorf("the panel still names the handheld's %q:\n%s", not, txt)
+		}
+	}
+	press(m, "y")
+	press(m, "l") // SEQ
+	txt = m.text()
+	if !strings.Contains(txt, "s b") || !strings.Contains(txt, "y x") || strings.Contains(txt, "Sel+B") {
+		t.Errorf("SEQ names s b and y x:\n%s", txt)
+	}
+	handheld.Terminal = false
+	if txt := screenText(m.app.RenderCells()); !strings.Contains(txt, "L1 R1") {
+		t.Error("without a terminal the panel names the buttons")
 	}
 }

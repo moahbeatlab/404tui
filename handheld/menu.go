@@ -14,7 +14,7 @@ type menu struct {
 	items   []menuItem
 	cur     int
 	onClose func()                       // what B does besides closing the menu (a tool throws its trial away)
-	foot    func(c *canvas, x, y, w int) // drawn under the items (a keyboard), footH rows high
+	foot    func(g Gfx, col, row, cols int) // drawn under the items (a keyboard), footH rows high
 	footH   int                          // in rows
 	// tabs: the headings split the menu into pages (as the pad panel), L1 and R1 turn them. items is the page in front;
 	// full is every item of the menu, so an index given when the menu was made still finds its item.
@@ -161,12 +161,11 @@ func (a *App) menuKey(k Key) {
 	}
 }
 
-func (a *App) drawMenu(c *canvas) {
+func (a *App) drawMenu(g Gfx) {
 	m := a.menu
 	m.settle()
 	wc := min(max(contentCols*3/4, 41), 64)
 	wc = min(wc, contentCols-2)
-	w := wc * CellW
 	tabRows := 0
 	if m.tabs != nil {
 		tabRows = 1
@@ -174,42 +173,41 @@ func (a *App) drawMenu(c *canvas) {
 	vis := min(len(m.items), max(Rows-3-3-tabRows-m.footH, 3))
 	top := max(0, min(m.cur-vis/2, len(m.items)-vis))
 	hr := 3 + tabRows + vis + m.footH // the rows of the dialog: a blank one at the top and the bottom for the frame
-	x := (contentCols - wc) / 2 * CellW
-	y := (1 + max((Rows-3-hr)/2, 0)) * CellH
-	c.rect(x, y, w, hr*CellH, cPanel2)
-	c.box(x, y, w, hr*CellH, 2, cAmber)
+	x := (contentCols - wc) / 2
+	y := 1 + max((Rows-3-hr)/2, 0)
+	g.Fill(x, y, wc, hr, cPanel2)
+	g.Frame(x, y, wc, hr, cAmber)
 	title := strings.ToUpper(m.title)
 	if len(m.items) > vis {
 		title += fmt.Sprintf("  %d/%d", m.cur+1, len(m.items))
 	}
-	c.text(x+2*CellW, y+CellH, fit(title, wc-6), cAmber, true)
+	g.Text(x+2, y+1, fit(title, wc-6), cAmber, true)
 	if m.tabs != nil {
-		tx := x + 2*CellW
+		tx := x + 2
 		for i, name := range m.tabs {
 			if i == m.tab {
-				c.rect(tx-4, y+2*CellH, textW(name)+8, CellH, cAmber)
-				c.text(tx, y+2*CellH, name, cBg, true)
+				g.Fill(tx-1, y+2, len(name)+2, 1, cAmber)
+				g.Text(tx, y+2, name, cBg, true)
 			} else {
-				c.text(tx, y+2*CellH, name, cDim, false)
+				g.Text(tx, y+2, name, cDim, false)
 			}
-			tx += textW(name) + 2*CellW
+			tx += len(name) + 3
 		}
 	}
-	iy := y + (2+tabRows)*CellH
+	iy := y + 2 + tabRows
 	for r := 0; r < vis; r++ {
 		i := top + r
 		it := m.items[i]
-		yy := iy + r*CellH
+		yy := iy + r
 		if it.header {
-			c.rect(x+6, yy+CellH/2, w-12, 1, cLine)
-			c.rect(x+CellW, yy, textW(it.label)+CellW, CellH, cPanel2)
-			c.text(x+CellW+4, yy, it.label, cDim, true)
+			g.HRule(x+1, yy, wc-2, cLine)
+			g.Fill(x+1, yy, len(it.label)+2, 1, cPanel2)
+			g.Text(x+2, yy, it.label, cDim, true)
 			continue
 		}
 		fg := cText
 		if i == m.cur {
-			c.rect(x+6, yy, w-12, CellH, cAmberD)
-			c.rect(x+6, yy, 3, CellH, cAmber)
+			g.Highlight(x+1, yy, wc-2, 1)
 			fg = cWhite
 		}
 		vw := 0
@@ -218,19 +216,19 @@ func (a *App) drawMenu(c *canvas) {
 			if i == m.cur {
 				v = "< " + v + " >"
 			}
-			vw = textW(v) + CellW
-			c.text(x+w-2*CellW-textW(v), yy, v, cAmber, i == m.cur)
+			vw = len(v) + 1
+			g.Text(x+wc-2-len(v), yy, v, cAmber, i == m.cur)
 		}
-		c.text(x+2*CellW, yy, fit(it.label, (w-4*CellW-vw)/CellW), fg, i == m.cur)
+		g.Text(x+2, yy, fit(it.label, wc-4-vw), fg, i == m.cur)
 	}
 	if m.foot != nil {
-		m.foot(c, x, iy+vis*CellH, w)
+		m.foot(g, x, iy+vis, wc)
 	}
 	if top > 0 {
-		c.text(x+w-4*CellW, y+CellH, "^", cAmber, true)
+		g.Text(x+wc-4, y+1, "^", cAmber, true)
 	}
 	if top+vis < len(m.items) {
-		c.text(x+w-4*CellW, y+(hr-2)*CellH, "v", cAmber, true)
+		g.Text(x+wc-4, y+hr-2, "v", cAmber, true)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"strings"
 
 	"golang.org/x/image/font/inconsolata"
 	"golang.org/x/image/math/fixed"
@@ -37,6 +38,8 @@ func Image(cells [][]Cell) *image.RGBA {
 						}
 					}
 				}
+			case strings.ContainsRune("│─━╭╮╰╯╎●┆", c.R):
+				drawLine(img, x0, y0, c)
 			default:
 				if m, ok := shapeOf[c.R]; ok {
 					for y := 0; y < cellH; y++ {
@@ -64,3 +67,55 @@ func Image(cells [][]Cell) *image.RGBA {
 }
 
 var _ color.RGBA
+
+// drawLine draws the line and corner characters the screens use: a thin line through the middle of the cell, a heavier one,
+// rounded corners as the two lines that meet, a dot.
+func drawLine(img *image.RGBA, x0, y0 int, c Cell) {
+	px := func(x, y int) { img.SetRGBA(x0+x, y0+y, c.Fg) }
+	vert := func(from, to, w int) {
+		for y := from; y < to; y++ {
+			for d := 0; d < w; d++ {
+				px(4-w/2+d, y)
+			}
+		}
+	}
+	horiz := func(from, to, w int) {
+		for x := from; x < to; x++ {
+			for d := 0; d < w; d++ {
+				px(x, 8-w/2+d)
+			}
+		}
+	}
+	switch c.R {
+	case '│', '┆':
+		vert(0, cellH, 1)
+	case '╎':
+		for y := 2; y < cellH; y += 4 {
+			vert(y, y+2, 1)
+		}
+	case '─':
+		horiz(0, cellW, 1)
+	case '━':
+		horiz(0, cellW, 3)
+	case '╭':
+		horiz(4, cellW, 1)
+		vert(8, cellH, 1)
+	case '╮':
+		horiz(0, 5, 1)
+		vert(8, cellH, 1)
+	case '╰':
+		horiz(4, cellW, 1)
+		vert(0, 9, 1)
+	case '╯':
+		horiz(0, 5, 1)
+		vert(0, 9, 1)
+	case '●':
+		for y := 5; y < 11; y++ {
+			for x := 1; x < 7; x++ {
+				if (x-3)*(x-3)+(y-8)*(y-8) <= 9 {
+					px(x, y)
+				}
+			}
+		}
+	}
+}

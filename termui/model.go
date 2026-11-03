@@ -271,9 +271,7 @@ func (m *Model) key(msg tea.KeyMsg) {
 	if m.aHeld && (k == handheld.A || k == handheld.B) { // a or b with A held: let go
 		m.aHeld = false
 		m.app.Dispatch(handheld.Event{Key: handheld.A, Down: false})
-		if k == handheld.B {
-			return
-		}
+		return
 	}
 	rep := 0 // a direction key or a shoulder held down arrives as the same key again and again (every 30 ms or so): that is
 	// the repeat the app speeds up by. Typing the key twice is slower than that, and any other key never repeats
@@ -309,5 +307,5 @@ func (m *Model) View() string {
 	if m.tooSmall() {
 		return fmt.Sprintf("404tui needs a window of at least %dx%d characters; this one is %dx%d.\nMake it bigger (or the font smaller). Ctrl-C quits.", handheld.MinCols, handheld.MinRows, m.cols, m.rows)
 	}
-	return Render(m.app.RenderFrame(), m.profile, m.glyphs)
+	return Render(m.app.RenderCells(), m.profile, m.glyphs)
 }

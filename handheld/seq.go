@@ -659,34 +659,33 @@ func lerp(a, b color.RGBA, t float64) color.RGBA {
 	return color.RGBA{f(a.R, b.R), f(a.G, b.G), f(a.B, b.B), 255}
 }
 
-// seqRowPx is the height of a track's row in the step grid: a cell (16 px), or two when there are few tracks.
-func (a *App) seqRowPx() int {
+// seqRowCells is the height of a track's row in the step grid: a row of cells, or two when there are few tracks.
+func (a *App) seqRowCells() int {
 	shown := min(len(a.rows)-a.rowTop, maxRows)
-	return CellH * min(max((panelBot-3*CellH)/CellH/max(shown, 1), 1), 2)
+	return min(max((Rows-2-3)/max(shown, 1), 1), 2)
 }
 
 // drawSeq is the step grid, as on the unit: a row for each pad (up to 16), the 16 steps of one bar across, a lit block
 // where a pad plays, as tall as its velocity. L1/R1 (or the cursor) turn the bar.
-func (a *App) drawSeq(c *canvas) {
+func (a *App) drawSeq(g Gfx) {
 	d, ok := a.doc()
 	title := fmt.Sprintf("PATTERN %s", a.label(a.pat-1))
-	c.text(margin, CellH, title, cAmber, true)
+	g.Text(2, 1, title, cAmber, true)
 	sub := fmt.Sprintf("%d bars", d.Bars)
 	if !ok {
 		sub = "empty: A puts the first note"
 	}
-	c.text(margin+textW(title)+16, CellH, sub, cDim, false)
+	g.Text(2+len(title)+2, 1, sub, cDim, false)
 
-	stepCols := min(max((contentCols-7)/16, 2), 8)
-	const lx, x0 = margin, 6 * CellW // the pad labels, the first step
-	cw := stepCols * CellW           // a step's width
+	cw := min(max((contentCols-7)/16, 2), 8) // a step's width in cells
+	const lx, x0 = 2, 6                       // the pad labels, the first step
 	steps := a.steps()
 	page := a.step / 16
 	bars := (steps + 15) / 16
 	ph := a.playStep()
-	const ry = 3 * CellH
+	const ry = 3
 	shown := a.rows[a.rowTop:min(len(a.rows), a.rowTop+maxRows)]
-	rh := a.seqRowPx() // few tracks: two rows each
+	rh := a.seqRowCells() // few tracks: two rows each
 	stepX := func(s int) int { return x0 + s*cw }
 
 	// the step numbers
@@ -702,18 +701,19 @@ func (a *App) drawSeq(c *canvas) {
 		if st == a.step {
 			col = cAmber
 		}
-		c.text(stepX(s)+(cw-textW(fmt.Sprint(s+1)))/2, 2*CellH, fmt.Sprint(s+1), col, s%4 == 0)
+		g.Text(stepX(s)+(cw-len(fmt.Sprint(s+1)))/2, 2, fmt.Sprint(s+1), col, s%4 == 0)
 	}
 	// a band for the step the cursor is on and for the one that plays, over the rows
 	for s := 0; s < 16 && page*16+s < steps; s++ {
 		st := page*16 + s
 		switch {
 		case ph == st:
-			c.rect(stepX(s)-1, ry-2, cw, rh*len(shown)+2, cLine)
+			g.Fill(stepX(s), ry, cw, rh*len(shown), cLine)
 		case st == a.step:
-			c.rect(stepX(s)-1, ry-2, cw, rh*len(shown)+2, cPanel2)
+			g.Fill(stepX(s), ry, cw, rh*len(shown), cPanel2)
 		}
 	}
+	cursor := [4]int{-1}
 	for si, pad := range shown {
 		i := a.rowTop + si // the index in all the rows
 		y := ry + si*rh
@@ -723,18 +723,18 @@ func (a *App) drawSeq(c *canvas) {
 			fg = cText
 		}
 		if i == a.row {
-			c.rect(lx-4, y-1, x0-lx+0, rh-1, cAmberD)
+			g.Highlight(lx-1, y, x0-lx+1, rh)
 			fg = cWhite
 		}
 		if a.trackMode(pad) == trackMute {
 			fg = cDim
 		}
-		c.text(lx, y+(rh-CellH)/2, a.label(pad), fg, i == a.row)
+		g.Text(lx, y, a.label(pad), fg, i == a.row)
 		switch a.trackMode(pad) {
 		case trackMute:
-			c.text(lx+24, y+(rh-CellH)/2, "M", cBad, true)
+			g.Text(lx+3, y, "M", cBad, true)
 		case trackSolo:
-			c.text(lx+24, y+(rh-CellH)/2, "S", cGood, true)
+			g.Text(lx+3, y, "S", cGood, true)
 		}
 		for s := 0; s < 16 && page*16+s < steps; s++ {
 			st := page*16 + s
@@ -746,9 +746,8 @@ func (a *App) drawSeq(c *canvas) {
 			if ph == st {
 				bg = cLine
 			}
-			c.rect(x, y, cw-2, rh-2, bg)
+			g.StepCell(x, y, cw, rh, bg)
 			for _, n := range notesIn(d, pad, st) { // every note that starts in the step, where it starts: sub-steps and nudges show
-				h := max((rh-2)*n.Vel/127, 4) // as tall as it is loud
 				col := cAmber
 				if ph == st {
 					col = cGood
@@ -756,47 +755,49 @@ func (a *App) drawSeq(c *canvas) {
 				if a.aHeld && pad == a.aPad && n.Tick == a.aTick {
 					col = cWhite // the note being edited
 				}
-				off := (int(n.Tick) - st*stepTicks) * (cw - 2) / stepTicks // how far into the step it starts
-				w := cw - 2 - off
-				if n.Len < stepTicks { // shorter than a step: as wide as it lasts
-					w = max((cw-2)*n.Len/stepTicks, 2)
+				start := float64(int(n.Tick)-st*stepTicks) / stepTicks // how far into the step it starts
+				length := float64(n.Len) / stepTicks
+				if n.Len >= stepTicks { // a long note fills the rest of its step
+					length = 1 - start
 				}
-				w = max(min(w, cw-2-off), 2)
-				c.rect(x+off, y+(rh-2)-h, w, h, col)
+				g.Note(x, y, cw, rh, start, min(length, 1-start), float64(n.Vel)/127, col)
 				// longer than a step: a tie runs on over the steps it lasts
 				if n.Len > stepTicks {
 					end := int(n.Tick) + n.Len
 					for t := s + 1; t < 16 && page*16+t < steps && (page*16+t)*stepTicks < end; t++ {
-						tw := cw
+						frac := 1.0
 						if rest := end - (page*16+t)*stepTicks; rest < stepTicks {
-							tw = max((cw-2)*rest/stepTicks, 2)
+							frac = float64(rest) / stepTicks
 						}
-						c.rect(stepX(t), y+(rh-2)-4, tw, 3, lerp(cAmberD, col, 0.7))
+						g.Tie(stepX(t), y, cw, rh, frac, col)
 					}
 				}
 			}
 			if i == a.row && st == a.step {
-				c.box(x-1, y-1, cw, rh, 2, cWhite)
+				cursor = [4]int{x, y, cw, rh}
 			}
 		}
 	}
+	if cursor[0] >= 0 {
+		g.Cursor(cursor[0], cursor[1], cursor[2], cursor[3])
+	}
 	// which bar this is, and where the loop is when it plays
-	bx := contentW - 4 - bars*22
+	bx := contentCols - 2 - bars*3
 	for b := 0; b < bars; b++ {
 		col := cLine
 		if b == page {
 			col = cAmber
 		}
 		if ph >= 0 && ph/16 == b {
-			c.rect(bx+b*22, CellH+10, 18, 4, cGood)
+			col = cGood
 		}
-		c.rect(bx+b*22, CellH+2, 18, 6, col)
+		g.Fill(bx+b*3, 1, 2, 1, col)
 	}
 	barLbl := fmt.Sprintf("bar %d/%d", page+1, bars)
 	if a.freeze {
 		barLbl += " FROZEN"
 	}
-	c.text(bx-8-textW(barLbl), CellH, barLbl, cText, true)
+	g.Text(bx-1-len(barLbl), 1, barLbl, cText, true)
 }
 
 // noteSample is the sample of a pad as a note plays it: as loud as its velocity, and cut where the note ends (its length, at

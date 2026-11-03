@@ -2,7 +2,6 @@ package handheld
 
 import (
 	"fmt"
-	"image/color"
 	"path/filepath"
 	"strings"
 )
@@ -90,7 +89,7 @@ func (a *App) hints() (plain, shift []hint) {
 			[]hint{{"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+B", "settings"}, {"Sel+B", "tools"}, {"Y+^v", "zoom"}}
 	case Seq:
 		if a.aHeld { // A is down: what the arrows do now
-			return []hint{{"^v", "velocity"}, {"<>", "length"}, {"L1 R1", "move note"}, {"A", "let go: done"}}, nil
+			return []hint{{"^v", "velocity"}, {"<>", "length"}, {"L1 R1", "move note"}, {map[bool]string{true: "e", false: "A"}[Terminal], "let go: done"}}, nil
 		}
 		play, stop := hint{"X", "play"}, hint{"B", "note settings"}
 		if a.seqOn {
@@ -137,36 +136,36 @@ func bpmText(t float64) string {
 }
 
 // drawPanel draws the panel over the right of the frame.
-func (a *App) drawPanel(c *canvas) {
-	c.rect(panelX, panelTop, panelW, panelBot-panelTop, cPanel)
-	c.vline(panelX-1, panelTop, panelBot, cLine)
-	x := panelX + CellW
-	w := panelW - 2*CellW
+func (a *App) drawPanel(g Gfx) {
+	g.Fill(panelC0, 1, panelCols, Rows-3, cPanel)
+	g.VRule(panelC0, 1, Rows-3, cLine)
+	x := panelC0 + 1
+	w := panelCols - 2
 
 	// the map of the screens, the current one lit: buttons of whole cells with a cell between them
-	cw := w / 3 / CellW * CellW
+	cw := w / 3
 	for i, n := range screenNames {
-		cx, cy := x+(i%3)*cw, panelTop+(i/3)*CellH
+		cx, cy := x+(i%3)*cw, 1+i/3
 		bg, fg := cPanel2, cDim
 		if Screen(i) == a.scr {
 			bg, fg = cAmber, cBg
 		}
-		c.rect(cx, cy, cw-CellW, CellH, bg)
-		c.text(cx+(cw-CellW-textW(n))/2/CellW*CellW, cy, n, fg, Screen(i) == a.scr)
+		g.Fill(cx, cy, cw-1, 1, bg)
+		g.Text(cx+(cw-1-len(n))/2, cy, n, fg, Screen(i) == a.scr)
 	}
 
 	// tempo and the state of the loop
-	y := panelTop + 3*CellH
-	c.text(x, y, fmt.Sprintf("BPM %s", bpmText(a.tempo())), cText, true)
-	c.text(x+textW("BPM "+bpmText(a.tempo())+" "), y, a.tempoSource(), cDim, false)
+	y := 4
+	g.Text(x, y, fmt.Sprintf("BPM %s", bpmText(a.tempo())), cText, true)
+	g.Text(x+len("BPM "+bpmText(a.tempo())+" "), y, a.tempoSource(), cDim, false)
 	if a.arpOn {
-		c.text(x+w-textW("ARP"), y, "ARP", cGood, true)
+		g.Text(x+w-len("ARP"), y, "ARP", cGood, true)
 	} else if a.seqOn {
-		c.text(x+w-textW("PLAY"), y, "PLAY", cGood, true)
+		g.Text(x+w-len("PLAY"), y, "PLAY", cGood, true)
 	} else {
-		c.text(x+w-textW("STOP"), y, "STOP", cDim, false)
+		g.Text(x+w-len("STOP"), y, "STOP", cDim, false)
 	}
-	c.rect(x, y+CellH+7, w, 1, cLine)
+	g.HRule(x, y+1, w, cLine)
 
 	// the keys, from the bottom up
 	plain, shift := a.hints()
@@ -174,58 +173,76 @@ func (a *App) drawPanel(c *canvas) {
 	if len(shift) > 0 {
 		rows += len(shift) + 1
 	}
-	ky := panelBot - (rows+1)*CellH
-	a.keyBlock(c, x, ky, w, plain, !a.yHeld || len(shift) == 0)
+	ky := Rows - 2 - rows - 1
+	a.keyBlock(g, x, ky, w, plain, !a.yHeld || len(shift) == 0)
 	if len(shift) > 0 {
-		sy := ky + len(plain)*CellH
-		tag, bg, fg := "hold Y", cPanel2, cDim
+		sy := ky + len(plain)
+		tag, bg, fg := tk("hold Y"), cPanel2, cDim
 		if a.yHeld {
 			tag, bg, fg = "SHIFT", cAmber, cBg
 		}
-		c.rect(x, sy, w, CellH, bg)
-		c.text(x+4, sy, tag, fg, a.yHeld)
-		a.keyBlock(c, x, sy+CellH, w, shift, a.yHeld)
+		g.Fill(x, sy, w, 1, bg)
+		g.Text(x+1, sy, tag, fg, a.yHeld)
+		a.keyBlock(g, x, sy+1, w, shift, a.yHeld)
 	}
-	c.rect(x, ky-5, w, 1, cLine)
+	g.HRule(x, ky-1, w, cLine)
 
 	// what is under the cursor, in the room between
-	a.context(c, x, y+2*CellH, w, ky-8)
+	a.context(g, x, y+2, w, ky-1)
 }
 
+// tk writes a button's name as the key of the keyboard when the app is shown in a terminal (D-pad: h j k l, L1 R1: [ ],
+// L2 R2: , . ; Y and Select are keys that hold for the next one): the panel and the hints then name what to press.
+func tk(s string) string {
+	if !Terminal {
+		return s
+	}
+	switch s {
+	case "A", "B", "X":
+		return strings.ToLower(s)
+	}
+	return keyWords.Replace(s)
+}
+
+var keyWords = strings.NewReplacer(
+	"A+^<>", "e hjkl", "Sel+B", "s b", "Sel+A", "s a", "Sel+X", "s x", "Y+A", "y a", "Y+B", "y b", "Y+X", "y x", "Y+", "y ", "L1 R1", "[ ]", "L1", "[", "R1", "]", "L2", ",", "R2", ".",
+	"^v<>", "hjkl", "<>", "hl", "^v", "jk", "hold Y", "y, then", "<", "h", ">", "l")
+
 // keyBlock draws key letters (amber) and what they do; dim when the other set is the one in force.
-func (a *App) keyBlock(c *canvas, x, y, w int, hs []hint, active bool) {
+func (a *App) keyBlock(g Gfx, x, y, w int, hs []hint, active bool) {
 	kc, tc := cAmber, cText
 	if !active {
 		kc, tc = cAmberD, cDim
 	}
+	const kw = 7 // the width of the key column: "e hjkl" is the longest of the keyboard's
 	for i, h := range hs {
-		c.text(x+2, y+i*16, h.key, kc, true)
-		c.text(x+2+textW("L1 R1")+6, y+i*16, fit(h.what, (w-textW("L1 R1")-10)/CellW), tc, false)
+		g.Text(x, y+i, tk(h.key), kc, true)
+		g.Text(x+kw, y+i, fit(h.what, w-kw), tc, false)
 	}
 }
 
-// context is the panel's middle: what the screen is about, from y0 down to y1, a row (16 px) at a time.
-func (a *App) context(c *canvas, x, y0, w, y1 int) {
-	row := func(i int) int { return y0 + i*CellH }
+// context is the panel's middle: what the screen is about, from row y0 down to y1 (cells).
+func (a *App) context(g Gfx, x, y0, w, y1 int) {
+	row := func(i int) int { return y0 + i }
 	switch a.scr {
 	case Pads:
 		n := a.padN()
 		p := a.info.Pads[n]
 		if !p.File {
-			c.text(x, row(0), a.label(n), cAmber, true)
-			c.text(x, row(1), "empty", cDim, false)
-			c.text(x, row(2), "A: pick a sample", cDim, false)
+			g.Text(x, row(0), a.label(n), cAmber, true)
+			g.Text(x, row(1), "empty", cDim, false)
+			g.Text(x, row(2), "A: pick a sample", cDim, false)
 			return
 		}
-		c.text(x, row(0), a.label(n), cAmber, true)
-		c.text(x+textW("A00 "), row(0), fit(p.Name, w/CellW-4), cText, true)
+		g.Text(x, row(0), a.label(n), cAmber, true)
+		g.Text(x+4, row(0), fit(p.Name, w-4), cText, true)
 		ch := "mono"
 		if p.Ch == 2 {
 			ch = "stereo"
 		}
 		info := fmt.Sprintf("%.2fs %s", float64(p.Frames)/48000, ch)
-		c.text(x, row(1), info, cDim, false)
-		bx := x + textW(info) + 10
+		g.Text(x, row(1), info, cDim, false)
+		bx := x + len(info) + 1
 		for _, sw := range []struct {
 			id byte
 			ch string
@@ -234,89 +251,83 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 			if v, err := a.lab.PadParam(n, sw.id); err == nil && v != 0 {
 				on = true
 			}
-			a.badge(c, bx, row(1), sw.ch, on)
-			bx += 18
+			g.Badge(bx, row(1), sw.ch, on)
+			bx += 2
 		}
-		c.rect(x, row(2), w, 2*CellH, cPanel2)
+		g.Fill(x, row(2), w, 2, cPanel2)
 		if id, ok := a.padSample(n); ok {
-			a.waveform(c, id, 0, p.Frames, x+1, row(2), w-2, 2*CellH, cAmber)
+			a.wave(g, id, 0, p.Frames, x, row(2), w, 2, cAmber)
 		}
 		get := func(id byte, def int32) int32 { return a.padValue(n, id, def) }
 		// the level: a bar and its number
-		lx, lw := x+4*CellW, w-4*CellW-4*CellW
+		lx, lw := x+4, w-4-4
 		level := get(0x69, 127)
-		c.text(x, row(4), "VOL", cDim, false)
-		c.rect(lx, row(4)+8, lw, 8, cPanel2)
-		c.rect(lx, row(4)+8, int(level)*lw/127, 8, cAmber)
-		c.text(x+w-textW(fmt.Sprint(level)), row(4), fmt.Sprint(level), cText, false)
+		g.Text(x, row(4), "VOL", cDim, false)
+		g.Bar(lx, row(4), lw, float64(level)/127, cAmber, cPanel2)
+		g.Text(x+w-len(fmt.Sprint(level)), row(4), fmt.Sprint(level), cText, false)
 		// the pan: a bar from the middle, and L, C or R with its amount
 		bal := get(0x78, 64)
-		c.text(x, row(5), "PAN", cDim, false)
-		c.rect(lx, row(5)+8, lw, 8, cPanel2)
-		mid := lx + lw*(64-13)/102
-		pos := lx + int(bal-13)*lw/102
-		c.rect(min(mid, pos), row(5)+8, abs(pos-mid)+2, 8, cAmber)
-		c.rect(mid, row(5), 1, CellH, cDim)
-		c.text(x+w-textW(padPages[0][1].show(bal)), row(5), padPages[0][1].show(bal), cText, false)
+		g.Text(x, row(5), "PAN", cDim, false)
+		g.Fader(lx, row(5), lw, float64(bal-13)/102, float64(64-13)/102, true)
+		pv := padPages[0][1].show(bal)
+		g.Text(x+w-len(pv), row(5), pv, cText, false)
 		// the envelope: attack up, hold along, release down, drawn to scale
 		att, hold, rel := get(0x7D, 0), get(0x7E, 100), get(0x7F, 0)
-		c.text(x, row(6), "ENV", cDim, false)
-		ex, ew, ey, eh := lx, 10*CellW, row(6), 2*CellH-2
-		c.rect(ex, ey, ew, eh, cPanel2)
-		ta := 4 + int(att)*20/127 // widths in the little drawing
-		th := 6 + int(hold)*28/100
-		tr := 4 + int(rel)*20/127
+		g.Text(x, row(6), "ENV", cDim, false)
+		ew := 10
+		ta := 4 + float64(att)*20/127 // widths in the little drawing
+		th := 6 + float64(hold)*28/100
+		tr := 4 + float64(rel)*20/127
 		tot := ta + th + tr
-		x1 := ex + ta*ew/tot
-		x2 := x1 + th*ew/tot
-		for dx := 0; dx < ew; dx++ {
-			px := ex + dx
-			var f float64
+		n2 := ew * g.BarsPerCell()
+		env := make([]float64, n2)
+		for i := range env {
+			p := float64(i) / float64(max(n2-1, 1)) * tot
 			switch {
-			case px < x1:
-				f = float64(px-ex) / float64(max(x1-ex, 1))
-			case px < x2:
-				f = 1
+			case p < ta:
+				env[i] = p / ta
+			case p < ta+th:
+				env[i] = 1
 			default:
-				f = 1 - float64(px-x2)/float64(max(ex+ew-x2, 1))
+				env[i] = 1 - (p-ta-th)/tr
 			}
-			hh := int(f * float64(eh-2))
-			c.rect(px, ey+eh-1-hh, 1, hh+1, cAmber)
 		}
-		c.text(ex+ew+8, row(6), fit(fmt.Sprintf("%d %d %d", att, hold, rel), (x+w-ex-ew-8)/CellW), cDim, false)
+		g.Fill(lx, row(6), ew, 2, cPanel2)
+		g.Bars(lx, row(6), ew, 2, env, false, cAmber)
+		g.Text(lx+ew+1, row(6), fit(fmt.Sprintf("%d %d %d", att, hold, rel), x+w-lx-ew-1), cDim, false)
 	case Files:
-		c.text(x, row(0), "TARGET", cDim, false)
-		c.text(x+textW("TARGET ")+8, row(0), a.label(a.padN()), cAmber, true)
+		g.Text(x, row(0), "TARGET", cDim, false)
+		g.Text(x+7, row(0), a.label(a.padN()), cAmber, true)
 		e, ok := a.current()
 		if !ok || e.dir {
 			if ok && e.project {
-				c.text(x, row(2), "a project folder", cGood, false)
-				c.text(x, row(3), "A loads it", cDim, false)
+				g.Text(x, row(2), "a project folder", cGood, false)
+				g.Text(x, row(3), "A loads it", cDim, false)
 			}
 			return
 		}
-		c.text(x, row(2), fit(filepath.Base(e.name), w/CellW), cText, true)
+		g.Text(x, row(2), fit(filepath.Base(e.name), w), cText, true)
 		if id, err := a.decode(e); err == nil {
 			s, _ := a.lab.Sample(id)
-			c.text(x, row(3), fmt.Sprintf("%.2f s", float64(s.Frames())/48000), cDim, false)
+			g.Text(x, row(3), fmt.Sprintf("%.2f s", float64(s.Frames())/48000), cDim, false)
 			if _, in := a.aud[a.padN()]; in {
-				c.text(x+textW("00.00 s  "), row(3), "in pattern", cGood, true)
+				g.Text(x+9, row(3), "in pattern", cGood, true)
 			}
-			c.rect(x, row(4), w, 2*CellH, cPanel2)
-			a.waveform(c, id, 0, s.Frames(), x+1, row(4), w-2, 2*CellH, cText)
+			g.Fill(x, row(4), w, 2, cPanel2)
+			a.wave(g, id, 0, s.Frames(), x, row(4), w, 2, cText)
 		} else {
-			c.text(x, row(3), fit(err.Error(), w/CellW), cBad, false)
+			g.Text(x, row(3), fit(err.Error(), w), cBad, false)
 		}
 	case Slice:
 		if a.sl == nil {
 			return
 		}
-		c.text(x, row(0), fmt.Sprintf("%s %s", a.label(a.spad), fit(a.info.Pads[a.spad].Name, w/CellW-4)), cAmber, true)
-		c.text(x, row(1), fmt.Sprintf("%.2fs  %d slices", float64(a.sl.Frames)/48000, len(a.sl.Slices)), cDim, false)
-		c.text(x, row(2), fmt.Sprintf("%s  zoom %dx", orderMode(a.sl), 1<<a.zoom), cDim, false)
+		g.Text(x, row(0), fmt.Sprintf("%s %s", a.label(a.spad), fit(a.info.Pads[a.spad].Name, w-4)), cAmber, true)
+		g.Text(x, row(1), fmt.Sprintf("%.2fs  %d slices", float64(a.sl.Frames)/48000, len(a.sl.Slices)), cDim, false)
+		g.Text(x, row(2), fmt.Sprintf("%s  zoom %dx", orderMode(a.sl), 1<<a.zoom), cDim, false)
 		if sel := a.sliceAt(a.at); sel >= 0 {
 			s := a.sl.Slices[sel]
-			c.text(x, row(3), fit(fmt.Sprintf("slice %d/%d  pitch %+d", sel+1, len(a.sl.Slices), s.Pitch), w/CellW), cText, true)
+			g.Text(x, row(3), fit(fmt.Sprintf("slice %d/%d  pitch %+d", sel+1, len(a.sl.Slices), s.Pitch), w), cText, true)
 			extra := fmt.Sprintf("gain %d%% ", s.Gain)
 			if s.Reverse {
 				extra += "rev "
@@ -327,32 +338,32 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 			if s.Roll > 0 {
 				extra += fmt.Sprintf("roll %d", s.Roll)
 			}
-			c.text(x, row(4), fit(extra, w/CellW), cText, false)
+			g.Text(x, row(4), fit(extra, w), cText, false)
 		}
 	case Seq:
 		d, ok := a.doc()
-		c.text(x, row(0), "PATTERN", cDim, false)
-		c.text(x+textW("PATTERN "), row(0), a.label(a.pat-1), cAmber, true)
+		g.Text(x, row(0), "PATTERN", cDim, false)
+		g.Text(x+8, row(0), a.label(a.pat-1), cAmber, true)
 		if !ok {
-			c.text(x, row(1), "empty", cDim, false)
-			c.text(x, row(2), "A: first note", cDim, false)
+			g.Text(x, row(1), "empty", cDim, false)
+			g.Text(x, row(2), "A: first note", cDim, false)
 			return
 		}
 		pad := a.rowPad()
-		c.text(x, row(1), fit(fmt.Sprintf("%d.%d %s %s", a.step/16+1, a.step%16+1, a.label(pad), short(a.info.Pads[pad].Name, 8)), w/CellW), cText, false)
+		g.Text(x, row(1), fit(fmt.Sprintf("%d.%d %s %s", a.step/16+1, a.step%16+1, a.label(pad), short(a.info.Pads[pad].Name, 8)), w), cText, false)
 		if n, ok := noteAt(d, pad, a.step); ok {
 			col := cAmber
 			if a.aHeld {
 				col = cGood
 			}
-			c.text(x, row(2), fmt.Sprintf("vel %d  len %.2f", n.Vel, float64(n.Len)/stepTicks), col, true)
+			g.Text(x, row(2), fmt.Sprintf("vel %d  len %.2f", n.Vel, float64(n.Len)/stepTicks), col, true)
 			off := a.noteTiming(n, pad)
-			c.text(x, row(3), fit(strings.SplitN(off, " (", 2)[0], w/CellW), cText, false)
+			g.Text(x, row(3), fit(strings.SplitN(off, " (", 2)[0], w), cText, false)
 			if n.Pitch != 0 {
-				c.text(x, row(4), fmt.Sprintf("chromatic %d", n.Pitch), cAmber, false)
+				g.Text(x, row(4), fmt.Sprintf("chromatic %d", n.Pitch), cAmber, false)
 			}
 		} else {
-			c.text(x, row(2), "no note", cLine, false)
+			g.Text(x, row(2), "no note", cLine, false)
 		}
 	case Save:
 		used, bytesN := 0, 0
@@ -362,24 +373,12 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 				bytesN += p.Frames * p.Ch * 2
 			}
 		}
-		c.text(x, row(0), fit(a.ProjectName(), w/CellW), cAmber, true)
-		c.text(x, row(1), fmt.Sprintf("%d pads", used), cText, false)
-		c.text(x, row(2), fmt.Sprintf("%.1f MB", float64(bytesN)/1e6), cText, false)
-		c.text(x, row(3), fmt.Sprintf("%d files", a.info.Files), cText, false)
+		g.Text(x, row(0), fit(a.ProjectName(), w), cAmber, true)
+		g.Text(x, row(1), fmt.Sprintf("%d pads", used), cText, false)
+		g.Text(x, row(2), fmt.Sprintf("%.1f MB", float64(bytesN)/1e6), cText, false)
+		g.Text(x, row(3), fmt.Sprintf("%d files", a.info.Files), cText, false)
 	case Unit:
-		a.unitContext(c, x, y0, w)
+		a.unitContext(g, x, y0, w)
 	}
 }
 
-var _ color.RGBA
-
-// badge is a letter in a little box: lit (amber) when the switch is on, dim when it is off.
-func (a *App) badge(c *canvas, x, y int, letter string, on bool) {
-	if on {
-		c.rect(x, y, 14, 16, cAmber)
-		c.text(x+3, y, letter, cBg, true)
-		return
-	}
-	c.box(x, y, 14, 16, 1, cLine)
-	c.text(x+3, y, letter, cLine, false)
-}
