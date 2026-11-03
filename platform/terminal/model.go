@@ -18,10 +18,8 @@ type Options struct {
 	Samples, Out string // the folder the file browser starts in, the folder the card is written to
 	Project      string // a project folder to open (with a PADCONF.BIN)
 	Version      string
-	// Audio opens the sound output; it is called on the side, and its result is used when it comes. nil for no sound.
-	Audio func() (core.Audio, error)
-	// Connect finds a plugged-in unit for the UNIT screen.
-	Connect func() (core.Link, error)
+	// Platform is what this system offers the app: sound, a recorder, MIDI, a way to find the unit.
+	Platform core.Platform
 	// Profile and Glyphs override what the terminal is found to support.
 	Profile *Profile
 	Glyphs  *Glyphs
@@ -32,7 +30,7 @@ func Run(o Options) error {
 	core.Terminal = true
 	core.Version = o.Version
 	app := core.New(o.Samples, o.Out, nil)
-	app.Connect = o.Connect
+	app.SetPlatform(o.Platform)
 	if o.Project != "" {
 		if err := app.OpenProject(o.Project); err != nil {
 			return err
@@ -41,9 +39,9 @@ func Run(o Options) error {
 	app.ShowSplash(2500 * time.Millisecond)
 	m := NewModel(app, o)
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	if o.Audio != nil {
+	if o.Platform.Audio != nil {
 		go func() { // opening the output can take long, or block: the screen and the keys come first
-			if au, err := o.Audio(); err == nil {
+			if au, err := o.Platform.Audio(); err == nil {
 				app.AudioLate <- au
 			}
 		}()
@@ -210,11 +208,15 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.Dispatch(core.Event{Key: core.Y, Down: false})
 		}
 		return
-	case "ctrl+z", "ctrl+y", "u", "ctrl+r": // undo and redo: Y+L2, Y+R2
+	case "ctrl+r": // record the unit's audio, as everywhere in the program
+		m.disarm()
+		m.app.ToggleRecording()
+		return
+	case "ctrl+z", "ctrl+y", "u", "R": // undo and redo: Y+L2, Y+R2
 		m.disarm()
 		m.app.Dispatch(core.Event{Key: core.Y, Down: true})
 		l := core.L2
-		if s == "ctrl+y" || s == "ctrl+r" {
+		if s == "ctrl+y" || s == "R" {
 			l = core.R2
 		}
 		m.send(l, 0)

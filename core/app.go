@@ -13,6 +13,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/moahbeatlab/404tui/record"
 	"os"
 	"path/filepath"
 	"sort"
@@ -152,6 +153,9 @@ type App struct {
 	prompt     *textPrompt     // a line of text being typed, when open
 	cfgAt      int             // the row of the CONFIG screen the cursor is on
 	live       *liveState      // the unit whose project is being edited live, when there is one
+	plat       Platform        // what the system offers
+	rec        *record.Session // the recording that runs
+	recDone    chan recResult  // a recording that was stopped and is finished
 	jobAfter   func(err error) // what to do on the main loop when the job in the background is finished
 	aud        map[int]int     // pads whose sample is being auditioned in the pattern: pad -> handle
 	prevOrder  []string        // the files decoded for the browser, oldest first
@@ -198,7 +202,7 @@ type App struct {
 
 // New starts an app on a folder of samples, with an empty project.
 func New(root, outDir string, a Audio) *App {
-	app := &App{pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, dcur: map[string]int{}, playing: -1, slot: 1, rowFocus: -1}
+	app := &App{recDone: make(chan recResult, 4), pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, dcur: map[string]int{}, playing: -1, slot: 1, rowFocus: -1}
 	app.lab.NewProject("PROJECT_01")
 	app.dir = root
 	app.loadSettings()
@@ -602,6 +606,10 @@ func (a *App) shifted(k Key) {
 
 // selShifted is a key with Select (or Fn) held: the tools of the screen, as a menu of their own.
 func (a *App) selShifted(k Key) {
+	if k == X { // Select+X: record the unit's audio, from any screen
+		a.ToggleRecording()
+		return
+	}
 	switch a.scr {
 	case Slice:
 		if k == B {

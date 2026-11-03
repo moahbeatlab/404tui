@@ -68,6 +68,7 @@ func (a *App) Tick() {
 	a.freezeTick()
 	a.jobTick()
 	a.liveTick()
+	a.recordingTick()
 	if a.scr != Unit || a.link != nil || a.Connect == nil || a.clock().Sub(a.connAt) < 2*time.Second {
 		return
 	}

@@ -1,6 +1,10 @@
 package main
 
 import (
+	"runtime"
+
+	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/record"
 	"os"
 	"path/filepath"
 
@@ -27,22 +31,28 @@ func runUnified(o options) error {
 		g := terminal.BasicGlyphs
 		opt.Glyphs = &g
 	}
-	opt.Audio = func() (core.Audio, error) {
-		p, err := playback.OpenBackend(o.audio)
-		if err != nil {
-			return nil, err
-		}
-		return p, nil
-	}
-	opt.Connect = func() (core.Link, error) {
-		if o.simulate {
-			return core.DeviceLink{Dev: device.New(sim.Demo(), "sim")}, nil
-		}
-		p, name, err := serialport.OpenFirst()
-		if err != nil {
-			return nil, err
-		}
-		return core.DeviceLink{Dev: device.New(p, name)}, nil
+	opt.Platform = core.Platform{
+		Name: runtime.GOOS,
+		Audio: func() (core.Audio, error) {
+			p, err := playback.OpenBackend(o.audio)
+			if err != nil {
+				return nil, err
+			}
+			return p, nil
+		},
+		Recorder: record.Default(),
+		MIDI:     midiin.Default(),
+		Connect: func() (core.Link, error) {
+			if o.simulate {
+				return core.DeviceLink{Dev: device.New(sim.Demo(), "sim")}, nil
+			}
+			p, name, err := serialport.OpenFirst()
+			if err != nil {
+				return nil, err
+			}
+			return core.DeviceLink{Dev: device.New(p, name)}, nil
+		},
+		Keyboard: true,
 	}
 	return terminal.Run(opt)
 }

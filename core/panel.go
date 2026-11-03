@@ -68,7 +68,7 @@ func (a *App) hints() (plain, shift []hint) {
 			return []hint{{"A", "put it here"}, {"B", "cancel"}, {"^v<>", "move"}}, []hint{screen}
 		}
 		return []hint{{"A", "menu"}, {"X", "play"}, {"B", "stop"}, {"^v<>", "move"}, {"L1 R1", "bank"}, {"R2", "arp marked"}},
-			[]hint{screen, {"Y+A", "mark pad"}, {"Y+^v", "bank"}, {"Y+B", "clear pad"}}
+			[]hint{screen, {"Y+A", "mark pad"}, {"Y+^v", "bank"}, {"Y+B", "clear pad"}, {"Sel+X", "record"}}
 	case Files:
 		if a.kb != nil {
 			return []hint{{"^v<>", "move"}, {"A", "type it"}, {"B", "delete"}, {"X", "done"}}, []hint{{"Y+B", "clear all"}}
@@ -86,10 +86,10 @@ func (a *App) hints() (plain, shift []hint) {
 			up = hint{"<", "end search"}
 		}
 		return []hint{pick, listen, {"^v", "browse"}, {">", "open"}, up, {"L1 R1", "page"}, {"B", "pads"}},
-			[]hint{screen, {"Y+X", "places"}, {"Y+A", "search"}, {"Y+B", "favourite"}}
+			[]hint{screen, {"Y+X", "places"}, {"Y+A", "search"}, {"Y+B", "favourite"}, {"Sel+X", "record"}}
 	case Slice:
 		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play slice"}, {"R2", "play order"}, {"L2", "grid step"}, {"<>", "move"}, {"^v", "marker"}},
-			[]hint{{"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+B", "settings"}, {"Sel+B", "tools"}, {"Y+^v", "zoom"}}
+			[]hint{{"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+B", "settings"}, {"Sel+B", "tools"}, {"Y+^v", "zoom"}, {"Sel+X", "record"}}
 	case Seq:
 		if a.aHeld { // A is down: what the arrows do now
 			return []hint{{"^v", "velocity"}, {"<>", "length"}, {"L1 R1", "move note"}, {map[bool]string{true: "e", false: "A"}[Terminal], "let go: done"}}, nil
@@ -99,11 +99,11 @@ func (a *App) hints() (plain, shift []hint) {
 			play = hint{"X", "stop"}
 		}
 		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"R2", "mute/solo"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}},
-			[]hint{{"Y+X", "add track"}, {"Y+B", "pick pattern"}, {"Sel+B", "tools"}, {"Y+^v", "pattern +-"}}
+			[]hint{{"Y+X", "add track"}, {"Y+B", "pick pattern"}, {"Sel+B", "tools"}, {"Y+^v", "pattern +-"}, {"Sel+X", "record"}}
 	case Config:
-		return []hint{{"^v", "setting"}, {"<>", "change"}, {"A", "edit / switch"}, {"L1 R1", "jump"}, {"B", "pads"}}, []hint{screen}
+		return []hint{{"^v", "setting"}, {"<>", "change"}, {"A", "edit / switch"}, {"L1 R1", "jump"}, {"B", "pads"}}, []hint{screen, {"Sel+X", "record"}}
 	case Unit:
-		return []hint{{"A", "send"}, {"X", "look again"}, {"^v", "choose"}, {"L1 R1", "page"}, {"B", "back"}}, []hint{screen}
+		return []hint{{"A", "project menu"}, {"X", "look again"}, {"^v", "choose"}, {"L1 R1", "page"}, {"B", "back"}}, []hint{screen, {"Sel+X", "record"}}
 	default:
 		return []hint{{"A", "write"}, {"<>", "slot"}, {"^v", "autosave"}, {"L1 R1", "slot 10"}, {"X", "quit"}, {"B", "back"}}, []hint{screen}
 	}

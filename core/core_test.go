@@ -6,6 +6,7 @@ import (
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
 	"github.com/moahbeatlab/404tui/proto"
+	"github.com/moahbeatlab/404tui/record"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -3565,5 +3566,43 @@ func TestEditingTheUnitLive(t *testing.T) {
 	a.stopLive()
 	if a.live != nil {
 		t.Fatal("stopped")
+	}
+}
+
+type fakeRecorder struct{ dir string }
+
+func (f fakeRecorder) Start(dir, device string) (*record.Session, error) {
+	path := filepath.Join(dir, "take.wav")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(path, make([]byte, 4096), 0o644)
+	return record.NewSession(path, "fake", func() error { return nil }), nil
+}
+
+func TestRecordingASetWithTheRecorderOfThePlatform(t *testing.T) {
+	a, _ := newApp(t)
+	a.ToggleRecording()
+	if a.rec != nil || !a.msgBad {
+		t.Fatalf("no recorder here says so: %q", a.msg)
+	}
+	a.set.RecordDir = filepath.Join(t.TempDir(), "takes")
+	a.SetPlatform(Platform{Name: "test", Recorder: fakeRecorder{}})
+	keys(t, a, "S+X") // Select+X records from any screen
+	if a.rec == nil {
+		t.Fatalf("recording: %q", a.msg)
+	}
+	if !strings.HasPrefix(a.recText(), "REC ") {
+		t.Fatalf("the title bar shows the time: %q", a.recText())
+	}
+	a.Render()
+	keys(t, a, "S+X")
+	for i := 0; i < 100 && !strings.HasPrefix(a.msg, "recorded"); i++ {
+		a.Tick()
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !strings.HasPrefix(a.msg, "recorded") || a.rec != nil {
+		t.Fatalf("recorded: %q", a.msg)
+	}
+	if _, err := os.Stat(filepath.Join(a.recordDir(), "take.wav")); err != nil {
+		t.Fatal(err)
 	}
 }

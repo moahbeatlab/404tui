@@ -105,7 +105,7 @@ func main() {
 			}
 		}()
 	}
-	app.Connect = func() (core.Link, error) {
+	app.SetPlatform(core.Platform{Name: "handheld", Connect: func() (core.Link, error) {
 		if *simulate {
 			return core.DeviceLink{Dev: device.New(sim.Demo(), "sim")}, nil
 		}
@@ -114,7 +114,7 @@ func main() {
 			return nil, err
 		}
 		return core.DeviceLink{Dev: device.New(p, name)}, nil
-	}
+	}})
 	if *open != "" {
 		if err := app.OpenProject(*open); err != nil {
 			fatal(err)

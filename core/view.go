@@ -86,6 +86,10 @@ func (a *App) titleBar(g Gfx) {
 	g.Text(9, 0, screenNames[a.scr], cAmber, true)
 	right := fit(fmt.Sprintf("%s  bank %c", a.ProjectName(), 'A'+rune(a.bank)), Cols-30)
 	g.Text(Cols-2-len(right), 0, right, cText, false)
+	if a.rec != nil {
+		g.Fill(Cols/2-6, 0, 12, 1, cBad)
+		g.Text(Cols/2-5, 0, a.recText(), cBg, true)
+	}
 	if a.live != nil {
 		tag := fmt.Sprintf("LIVE %d", a.live.project+1)
 		if w, _, err := a.liveStatus(); err != nil || w > 0 {
