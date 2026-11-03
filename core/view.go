@@ -230,8 +230,15 @@ func (a *App) drawPads(g Gfx) {
 				case 2:
 					strips = append(strips, [4]int{x, y, th, 2})
 				}
-			} else {
-				g.Fill(x, y, 1, th, cAmber)
+			} else { // the handheld: the strip is amber, blue on BUS 1, red on BUS 2
+				c := cAmber
+				switch a.padValue(n, 0x7A, 0) {
+				case 1:
+					c = cBlue
+				case 2:
+					c = cBad
+				}
+				g.Fill(x, y, 1, th, c)
 			}
 			g.Text(x+2, y, short(p.Name, pw-6), cText, true)
 			if Terminal { // a computer's terminal shows the length and the switches (the wave is in the panel)
