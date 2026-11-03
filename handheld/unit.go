@@ -120,7 +120,7 @@ func (a *App) unitKey(k Key) {
 func (a *App) send() {
 	// the copy for the transfer goes next to the projects on the card: /tmp may be memory
 	os.MkdirAll(a.OutDir, 0o755)
-	tmp, err := os.MkdirTemp(a.OutDir, ".404h-send")
+	tmp, err := os.MkdirTemp(a.OutDir, ".404tui-send")
 	if err != nil {
 		a.say(err.Error(), true)
 		return

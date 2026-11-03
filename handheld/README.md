@@ -1,4 +1,8 @@
-# 404h: the SP-404MKII on a handheld (proof of concept)
+# 404tui handheld: the SP-404MKII on handheld devices (R36S first, proof of concept)
+
+The handheld is a variant of 404tui for a device class; the R36S under ArkOS is the first target (its launcher and
+folder layout are in `packaging/arkos`). Another device would get its own folder under `packaging/` and its own
+button map.
 
 A front end for 404tui's file engine (`lab`, `formats`) that is driven with a D-pad and the four buttons on the
 right, nothing else: no shoulder buttons, no Start/Select, no sticks, no keyboard. It makes projects for the
@@ -43,7 +47,7 @@ arm64 build (7 MB, no cgo).
 
 Not tried: **anything on an R36S**. That means the framebuffer (`-fb`), the input device and its codes
 (`Evdev`: BTN_EAST/SOUTH/NORTH/WEST and the D-pad as buttons or a hat; firmware images differ, so A/B may
-need swapping), audio output through ALSA, the permissions in `packaging/arkos/404h.sh`, the OTG port as a USB host
+need swapping), audio output through ALSA, the permissions in `packaging/arkos/404tui.sh`, the OTG port as a USB host
 for the SP-404MKII, and the speed of the slicer on the RK3326. Nothing written was loaded into a real SP-404MKII:
 the pad, sample and pattern files come from the same engine as the web Sample Lab, whose output is unverified
 on hardware too. Patterns are always 4 bars (other lengths are a guess).

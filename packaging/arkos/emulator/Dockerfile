@@ -18,4 +18,4 @@ RUN groupadd -g 1002 ark && useradd -m -u 1002 -g 1002 -G sudo,audio,video -s /b
 USER ark
 WORKDIR /roms
 # bash, not a service: the launcher is what the device runs from the Ports menu
-CMD ["/bin/bash", "/roms/ports/404h.sh"]
+CMD ["/bin/bash", "/roms/ports/404tui.sh"]

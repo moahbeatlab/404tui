@@ -138,7 +138,7 @@ type Web struct {
 	App *App
 }
 
-const page = `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><title>404h</title>
+const page = `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><title>404tui</title>
 <style>body{background:#0b0d10;color:#d9dfe6;font:14px monospace;margin:0;display:flex;flex-direction:column;align-items:center}
 img{width:min(100vw,640px);image-rendering:pixelated;margin-top:8px}.pad{display:grid;grid-template-columns:repeat(3,56px);gap:6px;margin:12px}
 .pad button,.abxy button{height:56px;background:#1c222a;color:#d9dfe6;border:1px solid #2c343e;border-radius:10px;font:bold 16px monospace;touch-action:none}

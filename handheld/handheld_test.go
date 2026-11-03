@@ -463,7 +463,7 @@ func TestSaveReplacesTheFolderAndLeavesNothingBehind(t *testing.T) {
 	if len(after) != len(before)-1 {
 		t.Fatalf("a cleared pad left its file behind: %d files before, %d after", len(before), len(after))
 	}
-	left, _ := filepath.Glob(filepath.Join(a.OutDir, cardFolder, ".404h-*"))
+	left, _ := filepath.Glob(filepath.Join(a.OutDir, cardFolder, ".404tui-*"))
 	if len(left) != 0 {
 		t.Fatalf("staging folders left behind: %v", left)
 	}

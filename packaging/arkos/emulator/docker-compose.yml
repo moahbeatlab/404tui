@@ -12,7 +12,7 @@
 services:
   arkos:
     build: .
-    image: 404h-arkos
+    image: 404tui-arkos
     platform: linux/arm64
     ports:
       - "8405:8405"
@@ -20,7 +20,7 @@ services:
       H404_FB: ""                       # no framebuffer here ...
       H404_ARGS: "-web :8405 -demo"     # ... a web page, with demo samples written to /roms/404/samples
     volumes:
-      - ./roms:/roms                    # as the games card: ports/404h.sh, ports/404h/sp404h-arm64, 404/samples, 404/card
+      - ./roms:/roms                    # as the games card: ports/404tui.sh, ports/404tui/sp404h-arm64, 404/samples, 404/card
       - ./usbdrive:/mnt/usbdrive        # the log copies land in usbdrive/r36s, as on the device
     init: true
     stop_grace_period: 3s

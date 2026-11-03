@@ -38,7 +38,7 @@ func main() {
 	flag.Parse()
 	handheld.Version = version()
 	if *showVersion {
-		fmt.Println("404h", version())
+		fmt.Println("404tui", version())
 		return
 	}
 
@@ -154,7 +154,7 @@ func openLog(want string) (closeFn func()) {
 		}
 		log.SetOutput(io.MultiWriter(f, os.Stderr))
 		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-		log.Printf("---- 404h %s, log %s", version(), path)
+		log.Printf("---- 404tui %s, log %s", version(), path)
 		return func() { f.Sync(); f.Close() }
 	}
 	return func() {}

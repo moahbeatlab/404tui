@@ -78,15 +78,15 @@ handheld:
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) -o $(DIST)/$(HANDHELD)-arm64 $(HANDHELD_PKG)
 	@echo "built $(DIST)/$(HANDHELD)-arm64, commit $$(go version -m $(DIST)/$(HANDHELD)-arm64 | sed -n 's/.*vcs.revision=\(.......\).*/\1/p')$$(go version -m $(DIST)/$(HANDHELD)-arm64 | grep -q 'vcs.modified=true' && echo ' + changes that are not committed')"
 
-# handheld-card lays out what goes on the games card: dist/handheld/roms/ports/404h.sh and
-# dist/handheld/roms/ports/404h/sp404h-arm64. Copy the contents of dist/handheld/roms onto the card's roms
+# handheld-card lays out what goes on the games card: dist/handheld/roms/ports/404tui.sh and
+# dist/handheld/roms/ports/404tui/sp404h-arm64. Copy the contents of dist/handheld/roms onto the card's roms
 # folder (or a usb drive), then restart EmulationStation.
 handheld-card: handheld
 	rm -rf $(DIST)/handheld
-	mkdir -p $(DIST)/handheld/roms/ports/404h
-	cp packaging/arkos/404h.sh $(DIST)/handheld/roms/ports/404h.sh
-	cp $(DIST)/$(HANDHELD)-arm64 $(DIST)/handheld/roms/ports/404h/sp404h-arm64
-	chmod 755 $(DIST)/handheld/roms/ports/404h.sh $(DIST)/handheld/roms/ports/404h/sp404h-arm64
+	mkdir -p $(DIST)/handheld/roms/ports/404tui
+	cp packaging/arkos/404tui.sh $(DIST)/handheld/roms/ports/404tui.sh
+	cp $(DIST)/$(HANDHELD)-arm64 $(DIST)/handheld/roms/ports/404tui/sp404h-arm64
+	chmod 755 $(DIST)/handheld/roms/ports/404tui.sh $(DIST)/handheld/roms/ports/404tui/sp404h-arm64
 	@echo "copy the contents of $(DIST)/handheld/roms onto the card (its /roms folder)"
 
 handheld-local:

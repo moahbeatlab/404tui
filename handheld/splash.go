@@ -57,7 +57,7 @@ func countFiles(dir string) int {
 func (a *App) drawSplash(c *canvas) {
 	s := a.splash
 	// the logo: the name in big letters beside a 4x4 pad grid with a kick pattern lit
-	c.big(56, 70, "404h", cAmber, 7)
+	c.big(56, 70, "404tui", cAmber, 7)
 	gx, gy := 400, 70
 	for i := 0; i < 16; i++ {
 		x, y := gx+(i%4)*36, gy+(i/4)*36

@@ -343,7 +343,7 @@ func (a *App) freeRun(n, from int) int {
 func (a *App) exportTo(dir string) ([]string, error) {
 	name := a.ProjectName()
 	final := filepath.Join(dir, name)
-	stage := filepath.Join(dir, ".404h-writing-"+name)
+	stage := filepath.Join(dir, ".404tui-writing-"+name)
 	if err := os.RemoveAll(stage); err != nil {
 		return nil, err
 	}

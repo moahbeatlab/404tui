@@ -1,7 +1,7 @@
-# Trying 404h without the R36S
+# Trying 404tui without the R36S
 
 An arm64 container with the ArkOS userspace (Ubuntu 19.10), running the **same launcher script** as the device
-(`../404h.sh`) and your local `sp404h-arm64`. The screen is the web page of `-web`, with the eight keys.
+(`../404tui.sh`) and your local `sp404h-arm64`. The screen is the web page of `-web`, with the eight keys.
 
 ```sh
 GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o sp404h-arm64 ./cmd/sp404h   # in the repo root
@@ -14,7 +14,7 @@ docker compose up --build
 Open <http://localhost:8405>. Arrow keys and `a b x y` on the keyboard, or the buttons on the page.
 
 Where things go, mirroring the device: `roms/` is the games card (`/roms`), `usbdrive/r36s/` is the log copy
-folder (`/mnt/usbdrive/r36s`). `roms/ports/404h/logs.log` is the log, `roms/404/card/` is where projects are written.
+folder (`/mnt/usbdrive/r36s`). `roms/ports/404tui/logs.log` is the log, `roms/404/card/` is where projects are written.
 
 ## What it can and cannot show
 

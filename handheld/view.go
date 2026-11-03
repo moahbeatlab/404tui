@@ -57,9 +57,9 @@ func (a *App) Render() *image.RGBA {
 
 func (a *App) titleBar(c *canvas) {
 	c.rect(0, 0, W, 28, cPanel)
-	c.rect(0, 0, 56, 28, cAmber)
-	c.text(8, 6, "404h", cBg, true)
-	c.big(72, 6, screenNames[a.scr], cAmber, 1)
+	c.rect(0, 0, 70, 28, cAmber)
+	c.text(10, 6, "404tui", cBg, true)
+	c.big(86, 6, screenNames[a.scr], cAmber, 1)
 	right := fmt.Sprintf("%s  bank %c", a.ProjectName(), 'A'+rune(a.bank))
 	c.text(W-margin-textW(right), 6, right, cText, false)
 	c.rect(0, 28, W, 1, cLine)
