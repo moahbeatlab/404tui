@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/moahbeatlab/404tui/app"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -22,8 +23,10 @@ func (a *App) cd(dir string) {
 	a.searchQ = ""
 	a.dir = dir
 	a.list()
-	a.set.LastDir = dir
-	a.saveSettings()
+	if app.IsLocal(dir) { // the unit's folders are not kept for the next start
+		a.set.LastDir = dir
+		a.saveSettings()
+	}
 }
 
 var audioExts = map[string]bool{".wav": true, ".aif": true, ".aiff": true, ".flac": true, ".mp3": true, ".smp": true}
@@ -176,6 +179,7 @@ func (a *App) placesMenu() {
 			m.items = append(m.items, menuItem{label: fmt.Sprintf("%-10s %s", pl.name, short2(pl.dir, 22)), run: go_(pl.dir)})
 		}
 	}
+	a.unitPlaces(m, go_)
 	m.head(fmt.Sprintf("FAVOURITES (%d)", len(a.set.Favourites)))
 	for _, f := range a.set.Favourites {
 		f := f

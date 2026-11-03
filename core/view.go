@@ -331,6 +331,9 @@ func (a *App) drawFiles(g Gfx) {
 			name = short(e.name, min(24, avail-9)) + "  project"
 			col = cGood
 		}
+		if a.fmarks[joinPath(a.dir, e.name)] {
+			g.Text(1, y, "*", cAmber, true)
+		}
 		g.Text(2, y, name, col, e.dir)
 		if !e.dir {
 			sz := fmt.Sprintf("%dK", (e.size+512)/1024)

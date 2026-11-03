@@ -86,7 +86,7 @@ func (a *App) hints() (plain, shift []hint) {
 			up = hint{"<", "end search"}
 		}
 		return []hint{pick, listen, {"^v", "browse"}, {">", "open"}, up, {"L1 R1", "page"}, {"B", "pads"}},
-			[]hint{screen, {"Y+X", "places"}, {"Y+A", "search"}, {"Y+B", "favourite"}, {"Sel+X", "record"}}
+			[]hint{screen, {"Y+X", "places"}, {"Y+A", "search"}, {"Y+B", "favourite"}, {"Sel+A", "mark"}, {"Sel+B", "files menu"}, {"Sel+X", "record"}}
 	case Slice:
 		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play slice"}, {"R2", "play order"}, {"L2", "grid step"}, {"<>", "move"}, {"^v", "marker"}},
 			[]hint{{"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+B", "settings"}, {"Sel+B", "tools"}, {"Y+^v", "zoom"}, {"Sel+X", "record"}}
@@ -305,6 +305,14 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 		g.Bars(lx, row(6), ew, 2, env, false, cAmber)
 		g.Text(lx+ew+1, row(6), fit(fmt.Sprintf("%d %d %d", att, hold, rel), x+w-lx-ew-1), cDim, false)
 	case Files:
+		if a.job != nil {
+			if done, total, name, _, fin := a.job.state(); !fin {
+				g.Text(x, row(0), "WORKING", cAmber, true)
+				g.Bar(x, row(2), w, float64(done)/float64(max(total, 1)), cAmber, cPanel2)
+				g.Text(x, row(3), fit(fmt.Sprintf("%d of %d  %s", done, total, name), w), cDim, false)
+				return
+			}
+		}
 		g.Text(x, row(0), "TARGET", cDim, false)
 		g.Text(x+7, row(0), a.label(a.padN()), cAmber, true)
 		e, ok := a.current()

@@ -3723,7 +3723,6 @@ func TestTheMIDIInputOfThePlatformIsOpenedAndRead(t *testing.T) {
 	}
 }
 
-
 func TestTheLooperMakesThePatternDeletesAndRemixes(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit)
@@ -3760,4 +3759,92 @@ func TestTheLooperMakesThePatternDeletesAndRemixes(t *testing.T) {
 	}
 	a.Render()
 	a.RenderCells()
+}
+
+func connectUnit(t *testing.T, a *App) {
+	t.Helper()
+	a.go_(Unit)
+	keys(t, a, "A")
+	a.Tick()
+	if a.link == nil {
+		keys(t, a, ".")
+	}
+	if a.link == nil {
+		t.Fatal("the unit was not found")
+	}
+}
+
+func TestTheBrowserReachesTheUnitsCardAndDoesFileOperations(t *testing.T) {
+	a, _ := newApp(t)
+	connectUnit(t, a)
+	a.go_(Files)
+	a.cd(app.CardRoot)
+	if a.dir != app.CardRoot || a.msgBad {
+		t.Fatalf("the card is listed: %q %q", a.dir, a.msg)
+	}
+	// a new folder on the card
+	a.newFolder()
+	a.prompt.buf = "takes"
+	a.closePrompt(true)
+	found := false
+	for _, e := range a.entries {
+		found = found || (e.dir && e.name == "takes")
+	}
+	if !found {
+		t.Fatalf("the folder is there: %v", a.entries)
+	}
+	a.cd(joinPath(app.CardRoot, "takes"))
+	if a.dir != "SD:takes" {
+		t.Fatalf("path of a folder of the card: %q", a.dir)
+	}
+	// copy a file of the computer into it
+	a.fclip = []string{filepath.Join(a.Root, "drums", "kick_808.wav")}
+	a.pasteFiles()
+	waitJob(t, a)
+	if len(a.entries) != 1 || a.entries[0].name != "kick_808.wav" {
+		t.Fatalf("the file came over: %v (%s)", a.entries, a.msg)
+	}
+	// it can be heard and put on a pad from there
+	id, err := a.decode(a.entries[0])
+	if err != nil || id == 0 {
+		t.Fatalf("a file of the card is read: %v", err)
+	}
+	// rename, then up and delete the folder
+	a.renameFile()
+	a.prompt.buf = "kick_two.wav"
+	a.closePrompt(true)
+	if len(a.entries) != 1 || a.entries[0].name != "kick_two.wav" {
+		t.Fatalf("renamed: %v", a.entries)
+	}
+	keys(t, a, "L")
+	if a.dir != app.CardRoot {
+		t.Fatalf("up goes to the card: %q", a.dir)
+	}
+	for i, e := range a.entries {
+		if e.name == "takes" {
+			a.fcur = i
+		}
+	}
+	a.deleteFilesAsk()
+	chooseMenuNoPick(t, a, "Yes, delete")
+	waitJob(t, a)
+	for _, e := range a.entries {
+		if e.name == "takes" {
+			t.Fatalf("the folder is gone: %v", a.entries)
+		}
+	}
+	// the computer's files are not deleted from here
+	a.cd(a.Root)
+	a.deleteFilesAsk()
+	if a.menu != nil || !a.msgBad {
+		t.Fatalf("deleting on the computer is refused: %q", a.msg)
+	}
+	// marks
+	a.cd(filepath.Join(a.Root, "drums"))
+	a.selHeld = true
+	a.selShifted(A)
+	a.selHeld = false
+	if len(a.marked()) != 1 {
+		t.Fatalf("Select+A marks: %v", a.marked())
+	}
 }

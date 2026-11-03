@@ -13,6 +13,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/perform"
 	"github.com/moahbeatlab/404tui/record"
 	"os"
@@ -167,6 +168,9 @@ type App struct {
 	perfNow           int             // the pattern that plays (slot 1..160), 0 for none
 	perfNext          int             // the one that is next
 	lvl               *levelMeter     // the level of the sound
+	fmarks            map[string]bool // files and folders marked in the browser
+	fclip             []string        // what was copied or cut
+	fcut              bool
 	loopBank, loopCur int             // the LOOP screen: the bank of loops and the pad in front
 	loopDelAsk        int             // the pad a delete was asked for
 	loopSlicesAt      int             // how many slices a remix cuts (index of loopSlices)
@@ -278,25 +282,36 @@ func (a *App) list() {
 		a.searchList()
 		return
 	}
-	des, err := os.ReadDir(a.dir)
+	st := a.fileStore()
+	des, err := st.ListDir(a.dir)
 	if err != nil {
 		a.say(err.Error(), true)
 		return
 	}
+	local := app.IsLocal(a.dir)
 	for _, de := range des {
-		n := de.Name()
+		n := de.Name
 		if strings.HasPrefix(n, ".") {
 			continue
 		}
 		if de.IsDir() {
-			_, perr := os.Stat(filepath.Join(a.dir, n, "PADCONF.BIN"))
-			a.entries = append(a.entries, entry{name: n, dir: true, project: perr == nil})
+			_, perr, _ := st.Stat(joinPath(a.dir, n) + "/PADCONF.BIN")
+			if local {
+				_, perr2 := os.Stat(filepath.Join(a.dir, n, "PADCONF.BIN"))
+				perr = perr2 == nil
+			}
+			a.entries = append(a.entries, entry{name: n, dir: true, project: perr})
 			continue
 		}
-		switch strings.ToLower(filepath.Ext(n)) {
+		switch strings.ToLower(pathExt(n)) {
 		case ".wav", ".aif", ".aiff", ".flac", ".mp3", ".smp":
-			fi, _ := de.Info()
-			a.entries = append(a.entries, entry{name: n, size: fi.Size()})
+			var size int64
+			if local {
+				if fi, err := os.Stat(filepath.Join(a.dir, n)); err == nil {
+					size = fi.Size()
+				}
+			}
+			a.entries = append(a.entries, entry{name: n, size: size})
 		}
 	}
 	sort.SliceStable(a.entries, func(i, j int) bool {
@@ -637,6 +652,13 @@ func (a *App) selShifted(k Key) {
 		return
 	}
 	switch a.scr {
+	case Files:
+		switch k {
+		case A:
+			a.toggleFileMark()
+		case B:
+			a.filesMenu()
+		}
 	case Perform:
 		if k == B {
 			a.askText("what BUS 2 is used for", "the unit does not tell the effect by itself", a.set.BusNotes[1], func(s string) { a.set.BusNotes[1] = s; a.saveSettings() })
@@ -825,6 +847,11 @@ func (a *App) filesKey(k Key) {
 	if k != A {
 		a.loadAsk = ""
 	}
+	if a.job != nil {
+		if _, _, _, _, fin := a.job.state(); !fin {
+			return // a copy or a delete is under way
+		}
+	}
 	switch k {
 	case Up:
 		a.fcur = max(a.fcur-1, 0)
@@ -917,6 +944,10 @@ func (a *App) padInPattern(pad int) bool {
 
 // loadProject replaces the project in memory with a project folder. With unsaved work it asks first: A again.
 func (a *App) loadProject(e entry) {
+	if !app.IsLocal(a.dir) {
+		a.say("load a project of the unit from UNIT (A on its project)", true)
+		return
+	}
 	dir := filepath.Join(a.dir, e.name)
 	if a.hasWork() && !a.saved && a.loadAsk != dir {
 		a.loadAsk = dir
@@ -955,8 +986,17 @@ func (a *App) up() {
 		a.say("search ended", false)
 		return
 	}
-	if a.dir == "/" || a.dir == filepath.Dir(a.dir) {
+	if parent, ok := parentPath(a.dir); !ok {
 		a.say("this is the top", false)
+		return
+	} else {
+		from := baseName(a.dir)
+		a.cd(parent)
+		for i, e := range a.entries {
+			if e.dir && e.name == from {
+				a.fcur = i
+			}
+		}
 		return
 	}
 	from := filepath.Base(a.dir)
@@ -977,13 +1017,13 @@ func (a *App) current() (entry, bool) {
 
 func (a *App) openEntry() {
 	if e, ok := a.current(); ok && e.dir {
-		a.cd(filepath.Join(a.dir, e.name))
+		a.cd(joinPath(a.dir, e.name))
 	}
 }
 
 // decode reads a file of the browser into the lab, once.
 func (a *App) decode(e entry) (int, error) {
-	p := filepath.Join(a.dir, e.name)
+	p := joinPath(a.dir, e.name)
 	if id, ok := a.prev[p]; ok {
 		for i, q := range a.prevOrder { // the most recently used goes last
 			if q == p {
@@ -993,11 +1033,11 @@ func (a *App) decode(e entry) (int, error) {
 		}
 		return id, nil
 	}
-	b, err := os.ReadFile(p)
+	b, err := a.fileStore().ReadFile(p)
 	if err != nil {
 		return 0, err
 	}
-	mb, err := a.lab.Decode(b, filepath.Ext(e.name))
+	mb, err := a.lab.Decode(b, pathExt(e.name))
 	if err != nil {
 		return 0, err
 	}
