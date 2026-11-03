@@ -176,9 +176,11 @@ lit a
 check "a backup is made" "backed up to"
 ls "$W"/backups/*/PADCONF.BIN >/dev/null 2>&1 && ok "the backup has the project's files" || bad "no backup folder"
 lit a j; lit a
+check "loading asks first when the editor has unsaved work" "NOT SAVED"
+lit a
 check "live editing starts" "LIVE 1"
 snap 25-live
-lit y l; lit y l; lit y l; lit y l; lit y l; lit y l
+lit y l; lit y l
 check "files screen again" "TARGET"
 lit y x
 check "places include the unit's card" "SD card"
