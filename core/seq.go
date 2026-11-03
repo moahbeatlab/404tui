@@ -775,21 +775,18 @@ func (a *App) drawSeq(g Gfx) {
 		case trackSolo:
 			g.Text(lx+3, y, "S", cGood, true)
 		}
-		if Terminal {
-			a.drawSeqRow(g, d, pad, y, rh, x0, cw, page, steps, ph, a.aHeld && pad == a.aPad)
-		}
 		for s := 0; s < 16 && page*16+s < steps; s++ {
 			st := page*16 + s
 			x := stepX(s)
+			bg := cPanel
+			if (s/4)%2 == 1 {
+				bg = cPanel2
+			}
+			if ph == st {
+				bg = cLine
+			}
+			g.StepCell(x, y, cw, rh, bg)
 			if !Terminal {
-				bg := cPanel
-				if (s/4)%2 == 1 {
-					bg = cPanel2
-				}
-				if ph == st {
-					bg = cLine
-				}
-				g.StepCell(x, y, cw, rh, bg)
 				for _, n := range notesIn(d, pad, st) { // every note that starts in the step, where it starts: sub-steps and nudges show
 					col := cAmber
 					if ph == st {
@@ -820,6 +817,9 @@ func (a *App) drawSeq(g Gfx) {
 			if i == a.row && st == a.step {
 				cursor = [4]int{x, y, cw, rh}
 			}
+		}
+		if Terminal { // the notes over the boxes of the steps
+			a.drawSeqRow(g, d, pad, y, rh, x0, cw, page, steps, ph, a.aHeld && pad == a.aPad)
 		}
 	}
 	if cursor[0] >= 0 {
