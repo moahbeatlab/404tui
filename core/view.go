@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"path/filepath"
 	"strings"
 
@@ -218,8 +219,12 @@ func (a *App) drawPads(g Gfx) {
 		if p.File {
 			g.Fill(x, y, 1, th, cAmber)
 			g.Text(x+2, y, short(p.Name, pw-6), cText, true)
-			if id, ok := a.padSample(n); ok && th >= 3 { // an even number of rows, so the middle line is between two
-				a.wave(g, id, 0, p.Frames, x+1, y+1, tw-2, (ph-2)/2*2, cAmber)
+			if i == a.cur {
+				if id, ok := a.padSample(n); ok && th >= 3 { // an even number of rows, so the middle line is between two
+					a.wave(g, id, 0, p.Frames, x+1, y+1, tw-2, (ph-2)/2*2, cAmber)
+				}
+			} else if th >= 3 {
+				a.drawTileInfo(g, x+2, y+1, tw-3, th >= 4, n, p.Frames)
 			}
 			// the switches that are on: G for gate, L for loop
 			cx := x + tw - len(num) - 1
@@ -251,12 +256,6 @@ func (a *App) drawPads(g Gfx) {
 	bw := (contentCols - 2) / 10
 	bx0 := 1 + (contentCols-2-bw*10)/2
 	for b := 0; b < 10; b++ {
-		used := 0
-		for i := 0; i < 16; i++ {
-			if a.info.Pads[b*16+i].File {
-				used++
-			}
-		}
 		x := bx0 + b*bw
 		col, fg := cPanel, cDim
 		if b == a.bank {
@@ -264,7 +263,36 @@ func (a *App) drawPads(g Gfx) {
 		}
 		g.Fill(x, by, bw-1, 1, col)
 		g.Text(x+(bw-1)/2, by, string(rune('A'+b)), fg, true)
-		g.Bar(x, by+1, bw-1, float64(used)/16, cAmber, cLine)
+	}
+}
+
+// drawTileInfo is what a pad that is not selected shows: how long its sample is and, when there is a row for it, the
+// switches of the pad (G gate, L loop, O one shot, R not forward, S BPM sync, V vinyl), lit when on.
+func (a *App) drawTileInfo(g Gfx, x, y, w int, flags bool, n, frames int) {
+	secs := float64(frames) / 48000
+	txt := fmt.Sprintf("%.2f s", secs)
+	if bpm := a.padValue(n, 0x6F, 12000); bpm > 0 && secs > 0.5 {
+		if bars := secs * float64(bpm) / 100 / 60 / 4; bars >= 0.9 {
+			txt = fmt.Sprintf("%.1f bars", bars)
+		}
+	}
+	g.Text(x, y, fit(txt, w), cDim, false)
+	if !flags {
+		return
+	}
+	v := func(id byte) int32 { r, _ := a.lab.PadParam(n, id); return r }
+	for i, f := range []struct {
+		ch string
+		on bool
+	}{{"G", v(0x6A) != 0}, {"L", v(0x6B) != 0}, {"O", v(0x70)>>5&1 != 0}, {"R", v(0x75) != 0}, {"S", v(0x6E) != 0}, {"V", v(0x77) != 0}} {
+		if 2*i+1 > w {
+			break
+		}
+		col := cLine
+		if f.on {
+			col = cGood
+		}
+		g.Text(x+2*i, y+1, f.ch, col, f.on)
 	}
 }
 
@@ -276,8 +304,19 @@ func (a *App) wave(g Gfx, id, from, to, col, row, cols, rows int, c color.RGBA) 
 		return
 	}
 	h := make([]float64, len(pk))
+	peak := 1
+	if Terminal { // as in the classic program: the peak fills the box and the quiet parts show
+		for _, p := range pk {
+			peak = max(peak, p)
+		}
+	} else {
+		peak = 32768
+	}
 	for i, p := range pk {
-		h[i] = float64(p) / 32768
+		h[i] = float64(p) / float64(peak)
+		if Terminal {
+			h[i] = math.Sqrt(h[i])
+		}
 	}
 	g.Bars(col, row, cols, rows, h, true, c)
 }

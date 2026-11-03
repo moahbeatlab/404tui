@@ -154,6 +154,7 @@ type App struct {
 	searchQ           string           // the search in the file browser, "" for none
 	tags              *app.TagIndex    // the tags of the unit's samples, read when first needed
 	rParent, rChild   rangerCache      // the side columns of the ranger view
+	usedCache         map[int]string   // the patterns that use each pad, read once per change
 	tagSearch         bool             // the search is by tags
 	searchCut         bool             // the search gave up before the end
 	kb                *keyboard        // the on-screen keyboard of the search, when open
@@ -276,6 +277,7 @@ func (a *App) OpenProject(dir string) error {
 }
 
 func (a *App) refresh() {
+	a.usedCache = nil
 	a.saved = false
 	a.changed = true
 	b, err := a.lab.Info()
