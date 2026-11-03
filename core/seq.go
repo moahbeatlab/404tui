@@ -766,8 +766,12 @@ func (a *App) drawSeq(g Gfx) {
 		}
 		ly, lh := y, bh
 		if i == a.row {
-			g.Highlight(lx-1, ly, x0-lx+1, lh)
-			fg = cWhite
+			if Terminal { // the label in the accent colour, no box
+				fg = cAmber
+			} else {
+				g.Highlight(lx-1, ly, x0-lx+1, lh)
+				fg = cWhite
+			}
 		}
 		if a.trackMode(pad) == trackMute {
 			fg = cDim
