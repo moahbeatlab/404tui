@@ -106,9 +106,13 @@ func (a *App) footer(c *canvas) {
 		hintLine = "y shift  s select  e hold A  u undo  ? keys  q quit"
 	}
 	c.text(margin, panelBot+CellH, hintLine, cDim, false)
-	c.text(margin+textW(hintLine)+16, panelBot+CellH, a.autosaveAgo(), cDim, false)
+	room := W - 2*margin - textW(hintLine) - 2*CellW // what the autosave note and the version share
 	if Version != "" {
+		room -= textW(Version) + 2*CellW
 		c.text(W-margin-textW(Version), panelBot+CellH, Version, cDim, false)
+	}
+	if ago := a.autosaveAgo(); textW(ago) <= room {
+		c.text(margin+textW(hintLine)+2*CellW, panelBot+CellH, ago, cDim, false)
 	}
 }
 

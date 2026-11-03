@@ -9,7 +9,9 @@ import (
 // The screens are laid out in cells for the size of the window: on every size every screen and dialog must draw without
 // a letter landing on another one, and the frame is as big as the screen.
 func TestEveryScreenFitsEverySize(t *testing.T) {
-	t.Cleanup(func() { SetSize(MinCols, MinRows) })
+	oldVersion := Version
+	Version = "0.1-alpha"
+	t.Cleanup(func() { SetSize(MinCols, MinRows); Terminal = false; Version = oldVersion })
 	states := []struct {
 		name string
 		do   string // keys, after the kit is on A1..A3
@@ -37,6 +39,7 @@ func TestEveryScreenFitsEverySize(t *testing.T) {
 	for _, sz := range [][2]int{{80, 30}, {81, 31}, {100, 34}, {120, 40}, {132, 43}, {160, 48}, {200, 60}, {240, 70}} {
 		for _, st := range states {
 			t.Run(fmt.Sprintf("%dx%d %s", sz[0], sz[1], st.name), func(t *testing.T) {
+				Terminal = sz[0]%2 == 0 // half of them as in a terminal, with the keyboard's hints
 				SetSize(MinCols, MinRows)
 				a, _ := newApp(t)
 				keys(t, a, kit)

@@ -62,7 +62,7 @@ func (a *App) drawSplash(c *canvas) {
 	c.logo(lx/CellW, 4+dy/CellH, "404tui", cAmber)
 	gx, gy := lx+42*CellW+16, 4*CellH+dy
 	for i := 0; i < 16; i++ {
-		x, y := gx+(i%4)*36, gy+(i/4)*36
+		x, y := gx+(i%4)*3*CellW, gy+(i/4)*2*CellH
 		col := cPanel2
 		switch i {
 		case 0, 4, 8, 12:
@@ -70,7 +70,7 @@ func (a *App) drawSplash(c *canvas) {
 		case 2, 10:
 			col = cAmberD
 		}
-		c.rect(x, y, 30, 30, col)
+		c.rect(x, y, 2*CellW, CellH, col)
 	}
 	c.text(lx, 14*CellH+dy, "SAMPLE LAB FOR THE SP-404MKII", cText, true)
 	c.text(lx, 15*CellH+dy, "samples, slices, patterns, projects", cDim, false)
