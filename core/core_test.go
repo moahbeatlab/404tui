@@ -5,6 +5,7 @@ import (
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
+	"github.com/moahbeatlab/404tui/proto"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -3472,4 +3473,97 @@ func waitJob(t *testing.T, a *App) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("the job did not finish")
+}
+
+func TestEditingTheUnitLive(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+L Y+L A")
+	a.Tick()
+	if a.link == nil {
+		keys(t, a, ".")
+	}
+	dev, ok := a.unitDevice()
+	if !ok {
+		t.Fatal("the unit was not found")
+	}
+	keys(t, a, "D D A")
+	chooseMenuNoPick(t, a, "Send the project of the editor here")
+	keys(t, a, "A ~")
+	a.job = nil
+	// edit project 3 live
+	a.saved = true
+	keys(t, a, "A")
+	chooseMenuNoPick(t, a, "Edit it live")
+	waitJob(t, a)
+	if a.live == nil || a.live.project != 2 {
+		t.Fatalf("live editing of project 3: %+v", a.live)
+	}
+	waitLive := func() {
+		t.Helper()
+		for i := 0; i < 600; i++ {
+			if w, _, err := a.liveStatus(); w == 0 && err == nil {
+				return
+			} else if err != nil {
+				t.Fatalf("live: %v", err)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		t.Fatal("the unit never got what was changed")
+	}
+	// a pad is renamed in the editor
+	a.go_(Pads)
+	a.renameEach([]int{0}, func(string) string { return "live kick" })
+	waitLive()
+	pad0, _ := proto.NewPadIndex(0)
+	blk, err := dev.PadBlock(pad0)
+	if err != nil || blk.Name() != "live kick" {
+		t.Fatalf("the unit has the new name: %q %v", blk.Name(), err)
+	}
+	// a setting
+	pre := a.lab.Snapshot()
+	a.lab.SetPadParam(0, 0x78, 90)
+	a.commitUndo(pre, A, 0)
+	waitLive()
+	blk, _ = dev.PadBlock(pad0)
+	if v, _ := blk.Param(0x78); v != 90 {
+		t.Fatalf("the unit has the pan: %d", v)
+	}
+	// undo goes to the unit too
+	keys(t, a, "Y+{")
+	waitLive()
+	blk, _ = dev.PadBlock(pad0)
+	if v, _ := blk.Param(0x78); v == 90 {
+		t.Fatal("undo reached the unit")
+	}
+	// a pad is cleared
+	pre = a.lab.Snapshot()
+	a.lab.ClearPad(1)
+	a.refresh()
+	a.commitUndo(pre, A, 0)
+	waitLive()
+	pad1, _ := proto.NewPadIndex(1)
+	if blk, _ := dev.PadBlock(pad1); blk.HasSample() {
+		t.Fatal("the unit's pad is cleared")
+	}
+	// a note in a pattern is written to the unit's pattern file
+	keys(t, a, "Y+R A")
+	waitLive()
+	slot, _ := proto.NewPadIndex(uint16(a.pat - 1))
+	if b, err := dev.ReadFile(formats.PatternPath(3, slot)); err != nil || len(b) < 16 {
+		t.Fatalf("the unit has the pattern: %d bytes, %v", len(b), err)
+	}
+	// a changed sample (reversed) is imported again
+	a.go_(Pads)
+	a.transform(0, "reverse", 0)
+	waitLive()
+	if f, ok := a.lab.PadFile(0); !ok {
+		t.Fatal("the editor has the sample")
+	} else if got, err := dev.ReadFile(pad0.SamplePath(3)); err != nil || len(got) != len(f) {
+		t.Fatalf("the unit has the new sample: %d bytes against %d (%v)", len(got), len(f), err)
+	}
+	a.stopLive()
+	if a.live != nil {
+		t.Fatal("stopped")
+	}
 }

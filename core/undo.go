@@ -65,6 +65,7 @@ func (a *App) commitUndo(pre *lab.Snap, k Key, repeat int) {
 	if !a.lab.Changed(pre) {
 		return
 	}
+	defer a.liveSync() // a unit that is edited live gets what changed
 	now := a.clock()
 	merge := len(a.undo) > 0 && ((repeat > 0 && k == a.undoKey && now.Sub(a.undoAt) < coalesceWith) ||
 		(a.aHeld && a.undoSes == a.aSession))
@@ -118,6 +119,7 @@ func (a *App) undoStep() {
 	a.undo = a.undo[:len(a.undo)-1]
 	a.redo = append(a.redo, undoEntry{a.lab.Snapshot(), e.label})
 	a.restore(e.snap)
+	a.liveSync()
 	a.say(fmt.Sprintf("undone: %s  (%d more)", e.label, len(a.undo)), false)
 }
 
@@ -130,6 +132,7 @@ func (a *App) redoStep() {
 	a.redo = a.redo[:len(a.redo)-1]
 	a.undo = append(a.undo, undoEntry{a.lab.Snapshot(), e.label})
 	a.restore(e.snap)
+	a.liveSync()
 	a.say(fmt.Sprintf("redone: %s  (%d more)", e.label, len(a.redo)), false)
 }
 

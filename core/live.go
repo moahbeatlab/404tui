@@ -101,6 +101,7 @@ func (a *App) liveSync() {
 	if l == nil {
 		return
 	}
+	a.refresh() // what the editor holds now
 	now := a.liveBaseNow(l)
 	var ch []liveChange
 	for n := 0; n < 160; n++ {

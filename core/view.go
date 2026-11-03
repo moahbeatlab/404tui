@@ -84,8 +84,15 @@ func (a *App) titleBar(g Gfx) {
 	g.Fill(0, 0, 8, 1, cAmber)
 	g.Text(1, 0, "404tui", cBg, true)
 	g.Text(9, 0, screenNames[a.scr], cAmber, true)
-	right := fit(fmt.Sprintf("%s  bank %c", a.ProjectName(), 'A'+rune(a.bank)), Cols-20)
+	right := fit(fmt.Sprintf("%s  bank %c", a.ProjectName(), 'A'+rune(a.bank)), Cols-30)
 	g.Text(Cols-2-len(right), 0, right, cText, false)
+	if a.live != nil {
+		tag := fmt.Sprintf("LIVE %d", a.live.project+1)
+		if w, _, err := a.liveStatus(); err != nil || w > 0 {
+			tag += fmt.Sprintf(" (%d)", w)
+		}
+		g.Text(Cols-2-len(right)-2-len(tag), 0, tag, cGood, true)
+	}
 }
 
 // Terminal is set when the app is shown in a terminal and played from the keyboard: the hint line and the help say so.

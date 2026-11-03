@@ -70,6 +70,11 @@ func (a *App) unitMenu() {
 	add := func(l string, run func(int)) { m.items = append(m.items, menuItem{label: l, run: run}) }
 	add("Send the project of the editor here...", func(int) { a.confirm = true })
 	if ok {
+		if a.live != nil && a.live.project == n {
+			add("Stop editing it live", func(int) { a.stopLive() })
+		} else {
+			add("Edit it live (changes go to the unit)", func(int) { a.unitLoadThen(dev, n, true) })
+		}
 		add("Load it into the editor", func(int) { a.unitLoad(dev, n) })
 		add("Back it up to this computer", func(int) { a.unitBackup(dev, n) })
 		add("Restore it from a backup...", func(int) { a.unitRestoreMenu(dev, n) })
@@ -92,19 +97,22 @@ func (a *App) unitCache(n int) string {
 }
 
 // unitLoad copies the project from the unit and opens it in the editor.
-func (a *App) unitLoad(dev *device.Device, n int) {
+func (a *App) unitLoad(dev *device.Device, n int) { a.unitLoadThen(dev, n, false) }
+
+// unitLoadThen loads the project and, when live is set, makes it the one that is edited live.
+func (a *App) unitLoadThen(dev *device.Device, n int, live bool) {
 	if a.hasWork() && !a.saved {
 		m := &menu{title: "the editor has work that is not saved"}
 		m.items = append(m.items,
-			menuItem{label: "Replace it with the unit's project " + fmt.Sprint(n+1), run: func(int) { a.unitLoadNow(dev, n) }},
+			menuItem{label: "Replace it with the unit's project " + fmt.Sprint(n+1), run: func(int) { a.unitLoadNow(dev, n, live) }},
 			menuItem{label: "No", run: func(int) {}})
 		a.menu = m
 		return
 	}
-	a.unitLoadNow(dev, n)
+	a.unitLoadNow(dev, n, live)
 }
 
-func (a *App) unitLoadNow(dev *device.Device, n int) {
+func (a *App) unitLoadNow(dev *device.Device, n int, live bool) {
 	dir := a.unitCache(n)
 	os.RemoveAll(dir)
 	st := app.NewRouter(dev)
@@ -121,7 +129,12 @@ func (a *App) unitLoadNow(dev *device.Device, n int) {
 			a.say(err.Error(), true)
 			return
 		}
+		a.live = nil
 		a.go_(Pads)
+		if live {
+			a.goLive(dev, n)
+			return
+		}
 		a.say(fmt.Sprintf("unit project %d is in the editor", n+1), false)
 	})
 }
