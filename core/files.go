@@ -20,7 +20,7 @@ func (a *App) cd(dir string) {
 	if a.searchQ == "" {
 		a.dcur[a.dir] = a.fcur
 	}
-	a.searchQ = ""
+	a.searchQ, a.tagSearch = "", false
 	a.dir = dir
 	a.list()
 	if app.IsLocal(dir) { // the unit's folders are not kept for the next start
@@ -35,6 +35,14 @@ var audioExts = map[string]bool{".wav": true, ".aif": true, ".aiff": true, ".fla
 // after 1.5 s, 40000 files looked at or 400 found, and says so.
 func (a *App) searchList() {
 	words := strings.Fields(strings.ToLower(a.searchQ))
+	if a.tagSearch && a.tags != nil {
+		for _, f := range a.tags.Matches(a.searchQ, a.dir, 400) {
+			a.entries = append(a.entries, entry{name: f.Rel})
+		}
+		a.searchCut = len(a.entries) >= 400
+		a.fcur = 0
+		return
+	}
 	if a.searchIndex(words) {
 		return
 	}
@@ -95,6 +103,7 @@ var kbRows = []string{"abcdefghij", "klmnopqrst", "uvwxyz0123", "456789_-. "}
 type keyboard struct{ r, c int }
 
 func (a *App) openSearch() {
+	a.tagSearch = false
 	a.kb = &keyboard{}
 }
 

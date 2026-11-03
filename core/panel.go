@@ -330,6 +330,9 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 			return
 		}
 		g.Text(x, row(2), fit(filepath.Base(e.name), w), cText, true)
+		if tg := a.tagsOf(joinPath(a.dir, e.name)); tg != "" {
+			g.Text(x, row(7), fit(tg, w), cAmber, false)
+		}
 		if id, err := a.decode(e); err == nil {
 			s, _ := a.lab.Sample(id)
 			g.Text(x, row(3), fmt.Sprintf("%.2f s", float64(s.Frames())/48000), cDim, false)

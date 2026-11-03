@@ -79,6 +79,7 @@ func (a *App) filesMenu() {
 	add("Rename...", func(int) { a.renameFile() })
 	m.head("THIS FOLDER")
 	add("New folder...", func(int) { a.newFolder() })
+	a.tagItems(m)
 	a.menu = m
 }
 

@@ -3934,3 +3934,63 @@ func TestSlicerTapOrderLaneSeveralSamplesAndPatternUnder(t *testing.T) {
 		t.Fatalf("the pattern plays the slices: %v %v", patternPadsOf(b), err)
 	}
 }
+
+func TestTagsAndTheIndexOfTheUnitsFiles(t *testing.T) {
+	a, _ := newApp(t)
+	// without a unit there is nothing to tag
+	a.go_(Files)
+	a.filesMenu()
+	for _, it := range a.menu.items {
+		if strings.Contains(it.label, "Search by tags") {
+			t.Fatal("tags are offered without a unit")
+		}
+	}
+	a.menu = nil
+	connectUnit(t, a)
+	a.cd(app.CardRoot)
+	a.filesMenu()
+	has := false
+	for _, it := range a.menu.items {
+		has = has || strings.Contains(it.label, "Search by tags")
+	}
+	if !has {
+		t.Fatal("tags are offered with a unit")
+	}
+	a.menu = nil
+	a.indexUnitFolder(app.CardRoot)
+	waitJob(t, a)
+	if a.msgBad || !strings.Contains(a.msg, "indexed") {
+		t.Fatalf("indexed: %q", a.msg)
+	}
+	// the index is on the card, and a search by tag finds the file by its name's words
+	if _, ok, _ := a.fileStore().Stat(app.TagIndexPath); !ok {
+		t.Fatal("the index is not on the card")
+	}
+	a.tagSearch, a.searchQ = true, "kick"
+	a.list()
+	if len(a.entries) != 1 || !strings.Contains(a.entries[0].name, "kick 808") {
+		t.Fatalf("tag search: %v", a.entries)
+	}
+	a.tagSearch, a.searchQ = false, ""
+	a.cd(joinPath(app.CardRoot, "IMPORT"))
+	for i, e := range a.entries {
+		if e.name == "kick 808.wav" {
+			a.fcur = i
+		}
+	}
+	a.tagFiles(a.fileTargets(), true)
+	a.prompt.buf = "wobbly"
+	a.closePrompt(true)
+	if !strings.Contains(a.tagsOf(joinPath(a.dir, "kick 808.wav")), "wobbly") {
+		t.Fatalf("the tag is on the file: %q", a.tagsOf(joinPath(a.dir, "kick 808.wav")))
+	}
+	// it is saved: a fresh program reads it back
+	a.tags = nil
+	a.cd(app.CardRoot)
+	a.tagSearch, a.searchQ = true, "wobbly"
+	a.tagIndex()
+	a.list()
+	if len(a.entries) != 1 {
+		t.Fatalf("the tag was saved: %v", a.entries)
+	}
+}

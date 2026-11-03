@@ -152,6 +152,8 @@ type App struct {
 	set               settings
 	dcur              map[string]int   // the cursor in each folder of the file browser, for the next visit
 	searchQ           string           // the search in the file browser, "" for none
+	tags              *app.TagIndex    // the tags of the unit's samples, read when first needed
+	tagSearch         bool             // the search is by tags
 	searchCut         bool             // the search gave up before the end
 	kb                *keyboard        // the on-screen keyboard of the search, when open
 	prompt            *textPrompt      // a line of text being typed, when open
@@ -1008,7 +1010,7 @@ func (a *App) loadProject(e entry) {
 // search it ends the search first.
 func (a *App) up() {
 	if a.searchQ != "" {
-		a.searchQ = ""
+		a.searchQ, a.tagSearch = "", false
 		a.list()
 		a.say("search ended", false)
 		return
