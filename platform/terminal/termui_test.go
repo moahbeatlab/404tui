@@ -186,7 +186,7 @@ func TestEverySizeHasAPanelOfAThirdOfTheWidth(t *testing.T) {
 		if col < want-4 || col > want+4 {
 			t.Errorf("%v: the panel starts at column %d, wanted about %d", sz, col, want)
 		}
-		if txt := m.text(); !strings.Contains(txt, "y, then") || !strings.Contains(txt, "BPM") || !strings.Contains(txt, "autosave") {
+		if txt := m.text(); !strings.Contains(txt, "ALWAYS") || !strings.Contains(txt, "BPM") || !strings.Contains(txt, "autosave") {
 			t.Errorf("%v: panel or footer missing:\n%s", sz, txt)
 		}
 	}

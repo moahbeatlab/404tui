@@ -216,6 +216,10 @@ func (a *App) drawPanel(g Gfx) {
 	}
 	g.HRule(x, y+1, w, cLine)
 
+	if Terminal {
+		a.drawKeyboardKeys(g, x, y, w)
+		return
+	}
 	// the keys, from the bottom up
 	plain, shift := a.hints()
 	rows := len(plain)
@@ -467,4 +471,69 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 	case Config:
 		a.configContext(g, x, y0, w, y1)
 	}
+}
+
+// drawKeyboardKeys is the panel's key area on a computer: the keys that work on every screen first, then the keys of the
+// screen in front (and its Y and Select chords after them). When the panel is short the chords go first, then the global
+// keys, so that the middle of the panel keeps room.
+func (a *App) drawKeyboardKeys(g Gfx, x, y, w int) {
+	plain, shift := a.hints()
+	type pair struct{ a, b hint }
+	global := []pair{
+		{hint{"1-9", "screens"}, hint{"g hl", "prev/next"}},
+		{hint{"u", "undo"}, hint{"R", "redo"}},
+		{hint{"^R", "record"}, hint{"?", "all keys"}},
+		{hint{"y", "shift"}, hint{"s", "select"}},
+		{hint{"q", "quit"}, hint{}},
+	}
+	const room = 6 // rows the middle of the panel keeps
+	viewRows := func() int { return 1 + len(plain) + len(shift) }
+	globalRows := func() int { return 1 + len(global) }
+	total := func() int { return viewRows() + globalRows() + 2 } // two rules
+	limit := Rows - 3 - (y + 2) - room
+	for total() > limit && len(shift) > 0 {
+		shift = nil
+	}
+	for total() > limit && len(global) > 1 {
+		global = global[:len(global)-1]
+	}
+	for total() > limit && len(plain) > 3 {
+		plain = plain[:len(plain)-1]
+	}
+	ky := Rows - 2 - viewRows() // the first row of the screen's keys
+	gy := ky - 1 - globalRows() // the first row of the global keys
+	// the screen's keys
+	switch {
+	case a.yHeld: // a key is armed: the screen's chords light up
+		g.Fill(x, ky, w, 1, cAmber)
+		g.Text(x+1, ky, "SHIFT  (y is down)", cBg, true)
+	case a.selHeld:
+		g.Fill(x, ky, w, 1, cAmber)
+		g.Text(x+1, ky, "SELECT  (s is down)", cBg, true)
+	default:
+		g.Text(x, ky, screenNames[a.scr], cAmber, true)
+	}
+	a.keyBlock(g, x, ky+1, w, plain, !a.yHeld || len(shift) == 0)
+	if len(shift) > 0 {
+		a.keyBlock(g, x, ky+1+len(plain), w, shift, a.yHeld || a.selHeld)
+	}
+	// the global keys, two to a row
+	g.HRule(x, ky-1, w, cLine)
+	g.Text(x, gy, "ALWAYS", cDim, true)
+	col2 := x + w/2
+	for i, p := range global {
+		for j, h := range []hint{p.a, p.b} {
+			if h.key == "" {
+				continue
+			}
+			cx := x
+			if j == 1 {
+				cx = col2
+			}
+			g.Text(cx, gy+1+i, h.key, cAmber, true)
+			g.Text(cx+len(h.key)+1, gy+1+i, fit(h.what, w/2-len(h.key)-2), cText, false)
+		}
+	}
+	g.HRule(x, gy-1, w, cLine)
+	a.context(g, x, y+2, w, gy-2)
 }
