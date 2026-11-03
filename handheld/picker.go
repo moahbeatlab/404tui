@@ -46,6 +46,12 @@ func (a *App) pickFreePad(title string, from int, onPick func(pad int)) {
 	a.pickPad(title, start, false, onPick)
 }
 
+// pickPattern opens the pattern picker to choose a slot (1..160) for something: copy, move.
+func (a *App) pickPattern(title string, start int, onPick func(slot int)) {
+	a.picker = &picker{bank: (start - 1) / 16, cur: (start - 1) % 16, title: title, onPick: onPick}
+	a.pickerLoad()
+}
+
 func (a *App) openPicker() {
 	p := &picker{bank: (a.pat - 1) / 16, cur: (a.pat - 1) % 16}
 	a.picker = p
@@ -115,6 +121,10 @@ func (a *App) pickerKey(k Key) {
 		}
 		n := p.bank*16 + p.cur + 1
 		a.picker = nil
+		if p.onPick != nil {
+			p.onPick(n)
+			return
+		}
 		a.openPattern(n)
 		a.say(fmt.Sprintf("pattern %s", a.label(n-1)), false)
 	}
@@ -127,7 +137,7 @@ func (a *App) drawPicker(g Gfx) {
 	g.Fill(x0, y0, wc, hr, cPanel2)
 	g.Frame(x0, y0, wc, hr, cAmber)
 	head := "CHOOSE A PATTERN"
-	if p.pads {
+	if p.title != "" {
 		head = strings.ToUpper(p.title)
 	}
 	g.Text(x0+2, y0+1, fit(head, wc-16), cAmber, true)

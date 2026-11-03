@@ -3371,3 +3371,45 @@ func TestRenameFindSetupExportRestorePads(t *testing.T) {
 		t.Fatalf("the settings come back too: pan %d", v)
 	}
 }
+
+func TestPatternSlotsCopyMoveAndRetarget(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R A") // SEQ, a note on A1
+	if _, ok := a.doc(); !ok {
+		t.Fatal("a pattern with a note")
+	}
+	from := a.pat
+	a.seqMenu()
+	chooseMenuNoPick(t, a, "Copy to a slot")
+	if a.picker == nil || a.picker.title == "" {
+		t.Fatal("the pattern picker opens to choose the slot")
+	}
+	keys(t, a, "R R A") // two slots on, chosen
+	if a.picker != nil {
+		t.Fatal("A chooses")
+	}
+	to := from + 3 // the picker starts on the slot after this one
+	if b, err := a.lab.Pattern(to); err != nil || len(b) == 0 {
+		t.Fatalf("the copy is in slot %d: %v", to, err)
+	}
+	if _, err := a.lab.Pattern(from); err != nil {
+		t.Fatal("the original stays")
+	}
+	// move it one slot on
+	a.seqMenu()
+	chooseMenuNoPick(t, a, "Move to a slot")
+	keys(t, a, "R A")
+	if a.pat != from+2 {
+		t.Fatalf("the pattern in front is the one that moved: %d, wanted %d", a.pat, from+2)
+	}
+	// retarget the pattern on the move to bank B
+	a.seqMenu()
+	chooseMenuNoPick(t, a, "Use the pads of another bank")
+	chooseMenuNoPick(t, a, "Bank B")
+	a.refresh()
+	b, _ := a.lab.PatternBytes(a.pat)
+	if banks := patternBanks(b); len(banks) != 1 || banks[0] != 1 {
+		t.Fatalf("the notes are on the pads of bank B now: %v", banks)
+	}
+}

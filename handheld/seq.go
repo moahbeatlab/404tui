@@ -396,6 +396,44 @@ func (a *App) seqMenu() {
 		a.autoRows()
 		a.say("copied to "+a.label(to-1), false)
 	})
+	run("Copy to a slot...", func() {
+		from := a.pat
+		a.pickPattern("copy to which pattern?", a.pat%160+1, func(to int) {
+			if to == from {
+				a.say("that is this pattern", true)
+				return
+			}
+			pre := a.lab.Snapshot()
+			if err := a.lab.CopyPattern(from, to); err != nil {
+				a.say(err.Error(), true)
+				return
+			}
+			a.commitUndo(pre, A, 0)
+			a.refresh()
+			a.say(fmt.Sprintf("%s copied to %s", a.label(from-1), a.label(to-1)), false)
+		})
+	})
+	run("Move to a slot...", func() {
+		from := a.pat
+		a.pickPattern("move to which pattern?", a.pat%160+1, func(to int) {
+			if to == from {
+				a.say("that is this pattern", true)
+				return
+			}
+			pre := a.lab.Snapshot()
+			if err := a.lab.CopyPattern(from, to); err != nil {
+				a.say(err.Error(), true)
+				return
+			}
+			a.lab.DeletePattern(from)
+			a.commitUndo(pre, A, 0)
+			a.pat = to
+			a.refresh()
+			a.autoRows()
+			a.say(fmt.Sprintf("%s moved to %s", a.label(from-1), a.label(to-1)), false)
+		})
+	})
+	run("Use the pads of another bank...", a.retargetMenu)
 	run("Delete the pattern", func() {
 		a.lab.DeletePattern(a.pat)
 		a.refresh()
@@ -1009,4 +1047,60 @@ func (a *App) bounce(play func(int) bool, tag string) {
 		a.refresh()
 		a.say("bounced to "+a.label(to), false)
 	})
+}
+
+// retargetMenu asks for a bank and plays the pattern's notes on the pads of that bank instead (the same pad numbers).
+func (a *App) retargetMenu() {
+	slot := a.pat
+	m := &menu{title: "pattern " + a.label(slot-1) + ": use the pads of bank"}
+	for b := 0; b < 10; b++ {
+		b := b
+		m.items = append(m.items, menuItem{label: fmt.Sprintf("Bank %c", 'A'+b), run: func(int) {
+			pb, err := a.lab.PatternBytes(slot)
+			if err != nil {
+				a.say(err.Error(), true)
+				return
+			}
+			from := 0
+			if used := patternBanks(pb); len(used) > 0 {
+				from = used[0]
+			}
+			pre := a.lab.Snapshot()
+			n := formats.RetargetBank(pb, uint16(from), uint16(b))
+			if n == 0 || from == b {
+				a.say("no notes to move", true)
+				return
+			}
+			if err := a.lab.SetPatternBytes(slot, pb); err != nil {
+				a.say(err.Error(), true)
+				return
+			}
+			a.commitUndo(pre, A, 0)
+			a.refresh()
+			a.autoRows()
+			a.say(fmt.Sprintf("%d notes now on the pads of bank %c", n, 'A'+b), false)
+		}})
+	}
+	a.menu = m
+}
+
+// patternBanks are the banks whose pads a pattern plays, the first is where the notes are now.
+func patternBanks(b []byte) []int {
+	p, err := formats.ParsePattern(b)
+	if err != nil {
+		return nil
+	}
+	seen := map[int]bool{}
+	var out []int
+	for _, n := range p.Events {
+		if n.Control {
+			continue
+		}
+		bank := int(n.Pad.Bank())
+		if !seen[bank] {
+			seen[bank] = true
+			out = append(out, bank)
+		}
+	}
+	return out
 }
