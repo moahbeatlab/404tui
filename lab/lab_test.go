@@ -974,3 +974,20 @@ func TestSetupPadFixesWhatWasNeverSetUp(t *testing.T) {
 		}
 	}
 }
+
+func TestAssignGivesAFirstSampleFullLevel(t *testing.T) {
+	defer catch(t)
+	l := New()
+	l.NewProject("T")
+	a := put(l, tone(100, 0.2))
+	ok(t, l.SetPadParamRaw(0, 0x69, 64)) // an empty pad that holds some other level
+	ok(t, l.Assign(0, a, "One"))
+	if v := must(l.PadParam(0, 0x69)); v != 127 {
+		t.Errorf("the first sample on a pad plays at 127, got %d", v)
+	}
+	ok(t, l.SetPadParam(0, 0x69, 90))
+	ok(t, l.Assign(0, a, "Two")) // replaced: the level the pad had stays
+	if v := must(l.PadParam(0, 0x69)); v != 90 {
+		t.Errorf("a replaced sample keeps the level, got %d", v)
+	}
+}

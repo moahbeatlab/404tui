@@ -315,26 +315,23 @@ func (a *App) onePadBounce(n int, chord bool) {
 		a.say(err.Error(), true)
 		return
 	}
-	to := a.freeRun(1, n+1)
-	if to < 0 {
-		a.say("no empty pad: clear one first", true)
-		return
-	}
-	mb, err := a.lab.Decode(s.WAV(), "wav")
-	var meta struct{ ID int }
-	if err != nil || json.Unmarshal(mb, &meta) != nil {
-		a.say("cannot keep the arp", true)
-		return
-	}
-	err = a.lab.Assign(to, meta.ID, fmt.Sprintf("%s_%s", fit(a.info.Pads[n].Name, 9), name))
-	a.lab.Free(meta.ID)
-	if err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	delete(a.pcm, to)
-	a.refresh()
-	a.say(fmt.Sprintf("the %s is on %s", name, a.label(to)), false)
+	a.pickFreePad("Put it on a pad", n+1, func(to int) {
+		mb, err := a.lab.Decode(s.WAV(), "wav")
+		var meta struct{ ID int }
+		if err != nil || json.Unmarshal(mb, &meta) != nil {
+			a.say("cannot keep the arp", true)
+			return
+		}
+		err = a.lab.Assign(to, meta.ID, fmt.Sprintf("%s_%s", fit(a.info.Pads[n].Name, 9), name))
+		a.lab.Free(meta.ID)
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		delete(a.pcm, to)
+		a.refresh()
+		a.say(fmt.Sprintf("the %s is on %s", name, a.label(to)), false)
+	})
 }
 
 // onePadPattern puts the pitched copies on free pads (low to high) and writes the arp over them into the pattern.

@@ -199,36 +199,33 @@ func (a *App) bounceMarkedArp() {
 		a.say("mark 2 or more pads first (Y+A on a pad)", true)
 		return
 	}
-	to := a.freeRun(1, keys[len(keys)-1]+1)
-	if to < 0 {
-		a.say("no empty pad: clear one first", true)
-		return
-	}
-	s, err := a.renderMarkedArp(keys)
-	if err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	b := s.WAV()
-	mb, err := a.lab.Decode(b, "wav")
-	if err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	var meta struct{ ID int }
-	if json.Unmarshal(mb, &meta) != nil {
-		a.say("cannot keep the arp", true)
-		return
-	}
-	err = a.lab.Assign(to, meta.ID, fmt.Sprintf("arp_%s_%d", arpTypes[a.arpp.typ], len(keys)))
-	a.lab.Free(meta.ID)
-	if err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	delete(a.pcm, to)
-	a.refresh()
-	a.say(fmt.Sprintf("the arp is on %s", a.label(to)), false)
+	a.pickFreePad("Put the arp on a pad", keys[len(keys)-1]+1, func(to int) {
+		s, err := a.renderMarkedArp(keys)
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		b := s.WAV()
+		mb, err := a.lab.Decode(b, "wav")
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		var meta struct{ ID int }
+		if json.Unmarshal(mb, &meta) != nil {
+			a.say("cannot keep the arp", true)
+			return
+		}
+		err = a.lab.Assign(to, meta.ID, fmt.Sprintf("arp_%s_%d", arpTypes[a.arpp.typ], len(keys)))
+		a.lab.Free(meta.ID)
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		delete(a.pcm, to)
+		a.refresh()
+		a.say(fmt.Sprintf("the arp is on %s", a.label(to)), false)
+	})
 }
 
 // markBank marks every pad with a sample in the bank in front (the marks are replaced), for bulk editing and the arp.

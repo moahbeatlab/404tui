@@ -119,26 +119,23 @@ func (a *App) playArp(n int) {
 }
 
 func (a *App) arpToPad(n int) {
-	to := a.freeRun(1, n+1)
-	if to < 0 {
-		a.say("no empty pad: clear one first", true)
-		return
-	}
-	_, id, err := a.renderArp(n)
-	if err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	name := fmt.Sprintf("%s_%s%s", fit(a.info.Pads[n].Name, 8), formats.PitchNames[a.arp.Root], formats.ArpChords[a.arp.chord].Name)
-	err = a.lab.Assign(to, id, fit(name, 15))
-	a.lab.Free(id)
-	if err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	delete(a.pcm, to)
-	a.refresh()
-	a.say(fmt.Sprintf("the arp is on %s", a.label(to)), false)
+	a.pickFreePad("Put the arp on a pad", n+1, func(to int) {
+		_, id, err := a.renderArp(n)
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		name := fmt.Sprintf("%s_%s%s", fit(a.info.Pads[n].Name, 8), formats.PitchNames[a.arp.Root], formats.ArpChords[a.arp.chord].Name)
+		err = a.lab.Assign(to, id, fit(name, 15))
+		a.lab.Free(id)
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		delete(a.pcm, to)
+		a.refresh()
+		a.say(fmt.Sprintf("the arp is on %s", a.label(to)), false)
+	})
 }
 
 // ---- the keyboard

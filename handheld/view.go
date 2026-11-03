@@ -41,6 +41,9 @@ func (a *App) Render() *image.RGBA {
 	if a.pp != nil {
 		a.drawPadPanel(c)
 	}
+	if a.np != nil {
+		a.drawNotePanel(c)
+	}
 	a.drawPanel(c)
 	a.footer(c)
 	if a.menu != nil {
@@ -145,9 +148,8 @@ func (a *App) drawPads(c *canvas) {
 				ch string
 			}{{0x6B, "L"}, {0x6A, "G"}} {
 				if v, err := a.lab.PadParam(n, sw.id); err == nil && v != 0 {
-					cx -= 14
-					c.rect(cx, y+4, 12, 14, cAmberD)
-					c.text(cx+2, y+3, sw.ch, cAmber, true)
+					cx -= 18
+					a.badge(c, cx, y+3, sw.ch, true)
 				}
 			}
 		}
@@ -299,22 +301,41 @@ func (a *App) drawSlice(c *canvas) {
 		c.text(margin, 340, fmt.Sprintf("SLICE %d/%d   %.3f - %.3f s   %.3f s long", sel+1, len(sl.Slices), sec(sg.Start), sec(sg.End), sec(sg.End-sg.Start)), cText, true)
 	}
 	c.text(margin, 360, fmt.Sprintf("cursor %.3f s", sec(a.at)), cDim, false)
-	// the play order: the slices as numbers in the order they play, the slice under the cursor lit
-	lbl := "ORDER  " + orderMode(a.sl)
-	c.text(contentW-textW(lbl)-4, 360, lbl, cDim, false)
-	for i, v := range a.sl.Order {
-		if i >= 28 {
-			c.text(margin+14*34, 404+20, fmt.Sprintf("+%d", len(a.sl.Order)-28), cDim, false)
+	// the order as it plays: one cell per step, the slice's number in it, whatever the mode and the grid make of the order. A
+	// step that stays silent (chance) is dim, the slices under the cursor are lit, the step that sounds is amber.
+	plan := a.slicePlan()
+	lbl := fmt.Sprintf("ORDER  %s  %d steps", orderMode(a.sl), len(plan))
+	if a.sl.Division > 0 {
+		lbl += fmt.Sprintf("  1/%d at %s BPM", a.sl.Division, bpmText(a.tempoOf(a.spad/16)))
+	}
+	c.text(contentW-textW(lbl)-4, 360, fit(lbl, 52), cDim, false)
+	per, cw, pitch := 13, 30, 33
+	if len(plan) > 26 {
+		per, cw, pitch = 16, 24, 27
+	}
+	now := a.playingStep()
+	for i, st := range plan {
+		if i >= 2*per {
+			c.text(margin+per*pitch, 404+20, fmt.Sprintf("+%d", len(plan)-2*per), cDim, false)
 			break
 		}
-		x, y := margin+(i%13)*33, 384+(i/13)*20
-		col, fg := cPanel2, cDim
-		if v == sel {
+		x, y := margin+(i%per)*pitch, 384+(i/per)*20
+		col, fg := cPanel2, cText
+		switch {
+		case i == now:
 			col, fg = cAmber, cBg
+		case st.Slice == sel:
+			col, fg = cAmberD, cWhite
 		}
-		c.rect(x, y, 30, 17, col)
-		t := fmt.Sprint(v + 1)
-		c.text(x+(30-textW(t))/2, y, t, fg, true)
+		if st.Rest && i != now {
+			fg = cLine
+		}
+		c.rect(x, y, cw, 17, col)
+		t := fmt.Sprint(st.Slice + 1)
+		if st.Rest {
+			t = "-" + t
+		}
+		c.text(x+(cw-textW(t))/2, y, t, fg, true)
 	}
 	_ = s
 }

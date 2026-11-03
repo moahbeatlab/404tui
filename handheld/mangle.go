@@ -13,12 +13,19 @@ import (
 
 type mangleSet struct {
 	drop, rev, pitchN, roll int
-	pitchRange              int // semitones
+	pitchRange              int // semitones of a random pitch
+	pitchFix                int // an index of manglePitchFix: 0 is random in the range, else that many semitones
+	rollFix                 int // 0: random hits, else that many
+	which                   int // which slices the counts hit: an index of mangleWhich
 	human, fade             int
 	seed                    int64
 }
 
 var (
+	// the slices a count hits: the dice, spread evenly over the slices, the first ones, the last ones
+	mangleWhich      = []string{"at random (the dice)", "spread evenly", "the first ones", "the last ones"}
+	manglePitchFix   = []int{0, -12, -7, -5, -3, -2, -1, 1, 2, 3, 5, 7, 12}
+	mangleRollFix    = []int{0, 2, 3, 4, 6, 8}
 	manglePitchRange = []int{2, 5, 12}
 	mangleHumanVals  = []int{0, 25, 50, 100}
 	mangleFadeVals   = []int{0, 10, 50, 200}
@@ -29,14 +36,31 @@ func mangleSlicing(base *formats.Slicing, m mangleSet) *formats.Slicing {
 	sl := base.Clone()
 	dice := rand.New(rand.NewSource(m.seed ^ 0x2545f4914f6cdd1d))
 	n := len(sl.Slices)
-	chosen := func(k int) []bool {
+	chosen := func(k, effect int) []bool {
 		is := make([]bool, n)
-		for _, i := range dice.Perm(n)[:min(max(k, 0), n)] {
-			is[i] = true
+		perm := dice.Perm(n) // rolled for every effect, so a choice of slices does not change the next roll
+		k = min(max(k, 0), n)
+		switch m.which {
+		case 1: // spread evenly; each effect starts a slice later, so that they do not all fall on the same ones
+			for i := 0; i < k; i++ {
+				is[(i*n/k+effect)%n] = true
+			}
+		case 2:
+			for i := 0; i < k; i++ {
+				is[i] = true
+			}
+		case 3:
+			for i := n - k; i < n; i++ {
+				is[i] = true
+			}
+		default:
+			for _, i := range perm[:k] {
+				is[i] = true
+			}
 		}
 		return is
 	}
-	drop, rev, pitched, roll := chosen(m.drop), chosen(m.rev), chosen(m.pitchN), chosen(m.roll)
+	drop, rev, pitched, roll := chosen(m.drop, 0), chosen(m.rev, 1), chosen(m.pitchN, 2), chosen(m.roll, 3)
 	for i := range sl.Slices {
 		sc := &sl.Slices[i]
 		rollPick, pitchDie := dice.Intn(len(formats.Rolls)-1), dice.Float64()
@@ -49,9 +73,15 @@ func mangleSlicing(base *formats.Slicing, m mangleSet) *formats.Slicing {
 		sc.Roll, sc.Pitch = 0, 0
 		if roll[i] {
 			sc.Roll = formats.Rolls[1+rollPick]
+			if f := mangleRollFix[min(max(m.rollFix, 0), len(mangleRollFix)-1)]; f > 0 {
+				sc.Roll = f
+			}
 		}
 		if pitched[i] {
 			sc.Pitch = int(pitchDie*float64(2*m.pitchRange+1)) - m.pitchRange
+			if f := manglePitchFix[min(max(m.pitchFix, 0), len(manglePitchFix)-1)]; f != 0 {
+				sc.Pitch = f
+			}
 		}
 	}
 	sl.Humanize = m.human
@@ -68,13 +98,7 @@ func (a *App) mangleMenu() {
 	if a.mg.seed == 0 {
 		a.mg = mangleSet{pitchRange: 5, seed: 1}
 	}
-	counts := seq(0, n, 1)
-	if n > 12 { // a long list: steps of a few
-		counts = nil
-		for i := 0; i <= n; i += max(n/8, 1) {
-			counts = append(counts, i)
-		}
-	}
+	counts := seq(0, n, 1) // exact numbers of slices, one by one (L1 R1 jump ten)
 	apply := func() {
 		keep := a.sl.Seed
 		a.sl = mangleSlicing(base, a.mg)
@@ -88,11 +112,24 @@ func (a *App) mangleMenu() {
 	cnt := func(label string, p *int) {
 		set(label, names(counts, func(v int) string { return fmt.Sprint(v) }), near(counts, *p), func(v int) { *p = counts[v] })
 	}
+	set("Which slices", mangleWhich, a.mg.which, func(v int) { a.mg.which = v })
 	cnt("Drop-outs (silent slices)", &a.mg.drop)
 	cnt("Reversed slices", &a.mg.rev)
 	cnt("Pitched slices", &a.mg.pitchN)
-	set("  pitch range (+/- semitones)", names(manglePitchRange, func(v int) string { return fmt.Sprint(v) }), near(manglePitchRange, a.mg.pitchRange), func(v int) { a.mg.pitchRange = manglePitchRange[v] })
+	set("  pitch by", names(manglePitchFix, func(v int) string {
+		if v == 0 {
+			return "random in the range"
+		}
+		return fmt.Sprintf("%+d semitones", v)
+	}), a.mg.pitchFix, func(v int) { a.mg.pitchFix = v })
+	set("  random range (+/-)", names(manglePitchRange, func(v int) string { return fmt.Sprintf("%d semitones", v) }), near(manglePitchRange, a.mg.pitchRange), func(v int) { a.mg.pitchRange = manglePitchRange[v] })
 	cnt("Slices with a roll", &a.mg.roll)
+	set("  roll hits", names(mangleRollFix, func(v int) string {
+		if v == 0 {
+			return "random"
+		}
+		return fmt.Sprintf("%d hits", v)
+	}), a.mg.rollFix, func(v int) { a.mg.rollFix = v })
 	set("Humanize (loudness, timing)", names(mangleHumanVals, pct), near(mangleHumanVals, a.mg.human), func(v int) { a.mg.human = mangleHumanVals[v] })
 	set("Fades at the slice ends", names(mangleFadeVals, ms), near(mangleFadeVals, a.mg.fade), func(v int) { a.mg.fade = mangleFadeVals[v] })
 	m.items = append(m.items,

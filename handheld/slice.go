@@ -228,8 +228,6 @@ func (a *App) slicesToPads(shuffled bool) {
 		a.say("cut it first (A) or Y+A for auto", true)
 		return
 	}
-	sb, _ := json.Marshal(a.sl)
-	base := a.info.Pads[a.spad].Name
 	// on pads that are free: the first run of empty pads after the one that was cut (then from the start), never on
 	// top of a sample the project already has
 	first := a.freeRun(len(a.sl.Slices), a.spad+1)
@@ -237,6 +235,34 @@ func (a *App) slicesToPads(shuffled bool) {
 		a.say(fmt.Sprintf("no room: %d empty pads in a row are needed (clear some with Y+B)", len(a.sl.Slices)), true)
 		return
 	}
+	a.slicesToPadsFrom(first, shuffled)
+}
+
+// slicesToPadsPick asks where the slices go: the first pad of a run of empty ones.
+func (a *App) slicesToPadsPick(shuffled bool) {
+	n := len(a.sl.Slices)
+	if n < 2 {
+		a.say("cut it first (A) or Y+A for auto", true)
+		return
+	}
+	start := a.freeRun(n, a.spad+1)
+	if start < 0 {
+		start = a.spad + 1
+	}
+	a.pickPad(fmt.Sprintf("First pad of the %d slices", n), start, false, func(first int) {
+		for i := 0; i < n; i++ {
+			if first+i > 159 || a.info.Pads[first+i].File {
+				a.say(fmt.Sprintf("%d empty pads in a row are needed from %s", n, a.label(first)), true)
+				return
+			}
+		}
+		a.slicesToPadsFrom(first, shuffled)
+	})
+}
+
+func (a *App) slicesToPadsFrom(first int, shuffled bool) {
+	sb, _ := json.Marshal(a.sl)
+	base := a.info.Pads[a.spad].Name
 	done := 0
 	order := a.padOrder()
 	if shuffled { // the slices on the pads in a random order

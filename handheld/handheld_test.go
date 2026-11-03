@@ -128,7 +128,7 @@ func TestAssignSliceAndSequence(t *testing.T) {
 	if d, _ = a.doc(); len(d.Notes) != 1 {
 		t.Fatalf("A on a note takes it off, notes %d", len(d.Notes))
 	}
-	keys(t, a, "Y+X B") // a second track (the next pad with a sample), the menu: fill it with "every beat"
+	keys(t, a, "Y+X A S+B") // a second track (the next pad with a sample, chosen in the pad dialog), the tools: fill it with "every beat"
 	chooseMenu(t, a, "Fill...")
 	d, _ = a.doc() // the trial is already in the pattern: every beat
 	if len(d.Notes) != 1+16 {
@@ -149,8 +149,12 @@ func TestAssignSliceAndSequence(t *testing.T) {
 		t.Fatal("an edit while it plays goes into the loop")
 	}
 	keys(t, a, "B")
+	if !a.seqOn || a.np == nil {
+		t.Fatal("B opens the note settings and the pattern goes on playing")
+	}
+	keys(t, a, "B S+B")
 	if !a.seqOn || a.menu == nil {
-		t.Fatal("B opens the menu and the pattern goes on playing")
+		t.Fatal("Select+B opens the pattern tools and the pattern goes on playing")
 	}
 	keys(t, a, "B")
 	keys(t, a, "X")
@@ -515,7 +519,7 @@ func TestStepGridPadsDownStepsAcross(t *testing.T) {
 		t.Fatalf("stops at the last step, got %d of %d", a.step, a.steps())
 	}
 	// Y+X adds a track for the next pad with a sample that is not a row; the cursor goes to it
-	keys(t, a, "Y+X")
+	keys(t, a, "Y+X A")
 	if len(a.rows) != 2 || a.rowPad() != 3 && a.rowPad() != 0 && a.rowPad() != 1 {
 		t.Fatalf("a track was added: %v on %d", a.rows, a.rowPad())
 	}
@@ -528,13 +532,26 @@ func TestStepGridPadsDownStepsAcross(t *testing.T) {
 			t.Fatalf("rows are in pad order: %v", a.rows)
 		}
 	}
-	// the added track has no notes: when the cursor leaves it, it drops out
+	// the added track has a note on 1.1 and so stays when the cursor leaves it
+	if d, _ := a.doc(); !hasNote(d, added, 0) {
+		t.Fatalf("the added track has a note on 1.1: %v", d.Notes)
+	}
 	keys(t, a, "U")
 	if a.rowPad() == added {
 		keys(t, a, "D")
 	}
-	if len(a.rows) != 1 || a.rowPad() != 2 {
-		t.Fatalf("the added track dropped out when the cursor left it: %v on %d", a.rows, a.rowPad())
+	if len(a.rows) != 2 {
+		t.Fatalf("the added track stays: %v on %d", a.rows, a.rowPad())
+	}
+	a.toggle(added, 0) // its note off: now it drops out when the cursor is elsewhere
+	for i, p := range a.rows {
+		if p != added {
+			a.row = i
+		}
+	}
+	a.autoRows()
+	if len(a.rows) != 1 {
+		t.Fatalf("a track with no notes drops out: %v", a.rows)
 	}
 	// up and down change the pad (the row)
 	a.addTrack(0)
@@ -822,6 +839,9 @@ func chooseMenu(t *testing.T, a *App, label string) {
 	}
 	if seekMenu(t, a, func(l string) bool { return strings.HasPrefix(l, label) }) {
 		keys(t, a, "A")
+		if a.picker != nil && a.picker.pads { // a pad is asked for: the one the dialog starts on
+			keys(t, a, "A")
+		}
 		return
 	}
 	t.Fatalf("no menu item %q", label)
@@ -848,7 +868,7 @@ func TestShuffledOrderIsVisibleAndGoesToThePads(t *testing.T) {
 		t.Skipf("only %d slices", n)
 	}
 	before := append([]int{}, a.sl.Order...)
-	a.sliceMenu()
+	a.sliceToolsMenu()
 	chooseMenu(t, a, "Shuffle the order")
 	if equalInts(before, a.sl.Order) {
 		t.Fatalf("the order did not change: %v", a.sl.Order)
@@ -1209,6 +1229,7 @@ func TestSampleToolsArpAndKeyboard(t *testing.T) {
 	before := padsWithSamples(a)
 	a.menu = nil
 	a.arpToPad(0)
+	keys(t, a, "A") // the pad dialog: the free pad it starts on
 	if padsWithSamples(a) != before+1 {
 		t.Fatalf("the arp goes on a free pad: %s", a.msg)
 	}
@@ -1329,6 +1350,7 @@ func TestMarkPadsAndLiveArp(t *testing.T) {
 	before := padsWithSamples(a)
 	a.go_(Pads)
 	a.bounceMarkedArp()
+	keys(t, a, "A")
 	if padsWithSamples(a) != before+1 {
 		t.Fatalf("the arp goes on a free pad: %s", a.msg)
 	}
@@ -2736,6 +2758,7 @@ func TestBounceWhatYouHear(t *testing.T) {
 	keys(t, a, "}") // the first row muted
 	before := a.info.Pads[5].File
 	a.bounce(a.audible, "mix")
+	keys(t, a, "A")
 	if before {
 		t.Skip("pad 6 used")
 	}
@@ -3108,7 +3131,168 @@ func TestMenuTabsTurnWithL1R1(t *testing.T) {
 	a.Render()
 	a.go_(Slice)
 	a.sliceMenu()
-	if len(a.menu.tabs) < 3 || a.menu.tabs[0] != "STEPS" {
+	if len(a.menu.tabs) < 2 || !strings.HasPrefix(a.menu.tabs[0], "SLICE") {
 		t.Fatalf("the slicer menu has tabs: %v", a.menu.tabs)
+	}
+}
+
+func TestSelectChordsOpenTheTools(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit+" Y+R") // a kit, then SEQ
+	keys(t, a, "S")
+	if a.menu != nil || a.np != nil {
+		t.Fatal("Select alone does nothing")
+	}
+	keys(t, a, "B")
+	if a.np == nil || a.menu != nil {
+		t.Fatal("B opens the note settings")
+	}
+	keys(t, a, "B S+B")
+	if a.menu == nil || len(a.menu.tabs) != 4 {
+		t.Fatalf("Select+B opens the pattern tools with their tabs: %+v", a.menu)
+	}
+	keys(t, a, "B Y+R Y+R")
+	if a.scr != Slice {
+		t.Skip("no slicer")
+	}
+	keys(t, a, "Y+B")
+	if a.menu == nil || !strings.HasPrefix(a.menu.title, "slice settings") {
+		t.Fatal("Y+B is the slice settings")
+	}
+	keys(t, a, "B S+B")
+	if a.menu == nil || !strings.HasPrefix(a.menu.title, "slice tools") {
+		t.Fatal("Select+B is the slice tools")
+	}
+	keys(t, a, "B")
+	// the first tab of the settings is the slice in front
+	a.sliceMenu()
+	if !strings.HasPrefix(a.menu.tabs[0], "SLICE") || a.menu.items[0].label != "Pitch" {
+		t.Fatalf("the slice in front comes first: %v %q", a.menu.tabs, a.menu.items[0].label)
+	}
+}
+
+func TestNotePanelFaders(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit+" Y+R")
+	keys(t, a, "A") // a note on the first step
+	keys(t, a, "B")
+	if a.np == nil {
+		t.Fatal("B opens the note panel")
+	}
+	n, ok := a.npNote()
+	if !ok {
+		t.Fatal("the panel is about the note under the cursor")
+	}
+	v0 := n.Vel
+	keys(t, a, "L")
+	if n2, _ := a.npNote(); n2.Vel != v0-1 {
+		t.Fatalf("Left lowers the velocity: %d -> %d", v0, n2.Vel)
+	}
+	keys(t, a, "D R R")
+	if n2, _ := a.npNote(); n2.Len != n.Len+30 {
+		t.Fatalf("Right on Length: %d -> %d", n.Len, n2.Len)
+	}
+	keys(t, a, "D R R R")
+	n2, _ := a.npNote()
+	if gridOff(n2.Tick) != 15 {
+		t.Fatalf("Timing moves the note off the grid: %d", gridOff(n2.Tick))
+	}
+	keys(t, a, "A")
+	if n3, _ := a.npNote(); gridOff(n3.Tick) != 0 {
+		t.Fatalf("A puts the timing back: %d", gridOff(n3.Tick))
+	}
+	a.Render()
+	keys(t, a, "]")
+	if a.np != nil || a.menu == nil {
+		t.Fatal("R1 goes to the pattern tools")
+	}
+}
+
+func TestSlicePlanFollowsTheMenus(t *testing.T) {
+	a, au := newApp(t)
+	keys(t, a, "A A D D R A") // a loop on A1
+	a.go_(Slice)
+	keys(t, a, "Y+A")
+	if len(a.sl.Slices) < 4 {
+		t.Skipf("only %d slices", len(a.sl.Slices))
+	}
+	plan := a.slicePlan()
+	if len(plan) != a.steps2() {
+		t.Fatalf("one cell per step: %d of %d", len(plan), a.steps2())
+	}
+	a.sl.Mode = formats.ModeShuffle
+	a.sl.Seed = 5
+	shuffled := a.slicePlan()
+	same := true
+	for i := range plan {
+		same = same && plan[i].Slice == shuffled[i].Slice
+	}
+	if same {
+		t.Fatal("the row below shows the order the mode makes, not only the order set")
+	}
+	a.sl.Division = 8
+	if got := a.slicePlan(); len(got) != a.steps2() {
+		t.Fatalf("a grid keeps the steps: %d", len(got))
+	}
+	a.Render() // the row is drawn
+	au.Played = 0
+	a.playResult(false)
+	if len(a.placed) != a.steps2() || a.playingStep() != 0 {
+		t.Fatalf("the step that sounds is lit: %d placed, step %d", len(a.placed), a.playingStep())
+	}
+	if a.sl.Division > 0 && a.sl.BPM != a.tempoOf(a.spad/16) {
+		t.Fatalf("the grid runs at the bank's tempo: %g", a.sl.BPM)
+	}
+}
+
+func TestResultToAPadAsksForBankAndPad(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, "A A D D R A")
+	a.go_(Slice)
+	keys(t, a, "Y+A")
+	a.sliceToolsMenu()
+	chooseMenuNoPick(t, a, "Result to a pad")
+	if a.picker == nil || !a.picker.pads {
+		t.Fatal("the pad dialog is asked")
+	}
+	keys(t, a, "] D") // bank B, a pad further down
+	want := a.picker.bank*16 + a.picker.cur
+	keys(t, a, "A")
+	if !a.info.Pads[want].File {
+		t.Fatalf("the result is on the chosen pad %d", want)
+	}
+}
+
+func chooseMenuNoPick(t *testing.T, a *App, label string) {
+	t.Helper()
+	if !seekMenu(t, a, func(l string) bool { return strings.HasPrefix(l, label) }) {
+		t.Fatalf("no menu item %q", label)
+	}
+	keys(t, a, "A")
+}
+
+func TestMangleWhichSlicesAndFixedValues(t *testing.T) {
+	base := &formats.Slicing{Frames: 48000}
+	for i := 0; i < 8; i++ {
+		base.Slices = append(base.Slices, formats.Slice{Start: i * 6000, End: (i + 1) * 6000, Gain: 100, Chance: 100})
+		base.Order = append(base.Order, i)
+	}
+	m := mangleSet{rev: 3, pitchN: 2, pitchFix: 11, roll: 1, rollFix: 3, which: 2, seed: 1} // the first ones, a fixed pitch and roll
+	sl := mangleSlicing(base, m)
+	for i := 0; i < 8; i++ {
+		if sl.Slices[i].Reverse != (i < 3) {
+			t.Fatalf("the first three are reversed: slice %d", i)
+		}
+	}
+	if sl.Slices[0].Pitch != manglePitchFix[11] || sl.Slices[1].Pitch != manglePitchFix[11] || sl.Slices[2].Pitch != 0 {
+		t.Fatalf("a fixed pitch on two slices: %d %d %d", sl.Slices[0].Pitch, sl.Slices[1].Pitch, sl.Slices[2].Pitch)
+	}
+	if sl.Slices[0].Roll != mangleRollFix[3] {
+		t.Fatalf("a fixed roll: %d", sl.Slices[0].Roll)
+	}
+	m.which = 3 // the last ones
+	sl = mangleSlicing(base, m)
+	if !sl.Slices[7].Reverse || sl.Slices[0].Reverse {
+		t.Fatal("the last ones")
 	}
 }

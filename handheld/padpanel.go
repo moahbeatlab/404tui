@@ -320,7 +320,12 @@ func (a *App) drawPadPanel(c *canvas) {
 			c.rect(x0+8, y-4, w-16, rh-2, cAmberD)
 			c.rect(x0+8, y-4, 3, rh-2, cAmber)
 		}
-		c.text(x0+22, y+2, st.label, cText, i == pp.row[pp.page])
+		if st.id == 0x6A || st.id == 0x6B { // gate and loop: the letter, lit when on (as on the pads)
+			a.badge(c, x0+22, y+1, st.label[:1], v != 0)
+			c.text(x0+44, y+2, st.label, cText, i == pp.row[pp.page])
+		} else {
+			c.text(x0+22, y+2, st.label, cText, i == pp.row[pp.page])
+		}
 		bx, bw := x0+150, 190
 		vt := settingText(st, v)
 		switch st.kind {

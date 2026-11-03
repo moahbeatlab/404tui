@@ -29,8 +29,15 @@ func (a *App) hints() (plain, shift []hint) {
 		}
 		return []hint{{"^v", "setting"}, {"<>", "change"}, {"A", "reset/toggle"}, {"X", "hear pad"}, {"L1 R1", "page"}, {"B", "close"}}, nil
 	}
+	if a.np != nil {
+		return []hint{{"^v", "setting"}, {"<>", "change"}, {"A", "default"}, {"X", "hear note"}, {"R1", "pattern tools"}, {"B", "close"}}, nil
+	}
 	if a.picker != nil {
-		return []hint{{"^v<>", "choose"}, {"L1 R1", "bank"}, {"A", "open it"}, {"B", "cancel"}}, nil
+		open := "open it"
+		if a.picker.pads {
+			open = "this pad"
+		}
+		return []hint{{"^v<>", "choose"}, {"L1 R1", "bank"}, {"A", open}, {"B", "cancel"}}, nil
 	}
 	if a.menu != nil {
 		if a.menu.tabs != nil {
@@ -64,18 +71,18 @@ func (a *App) hints() (plain, shift []hint) {
 		return []hint{pick, listen, {"^v", "browse"}, {">", "open"}, up, {"L1 R1", "page"}, {"B", "pads"}},
 			[]hint{screen, {"Y+X", "places"}, {"Y+A", "search"}, {"Y+B", "favourite"}}
 	case Slice:
-		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play slice"}, {"R2", "play order"}, {"L2", "step 1/n"}, {"<>", "move"}, {"^v", "marker"}, {"L1 R1", "jump 1/4"}},
-			[]hint{screen, {"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+B", "slice menu"}, {"Y+^v", "zoom"}}
+		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play slice"}, {"R2", "play order"}, {"L2", "grid step"}, {"<>", "move"}, {"^v", "marker"}},
+			[]hint{{"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+B", "settings"}, {"Sel+B", "tools"}, {"Y+^v", "zoom"}}
 	case Seq:
 		if a.aHeld { // A is down: what the arrows do now
 			return []hint{{"^v", "velocity"}, {"<>", "length"}, {"L1 R1", "move note"}, {"A", "let go: done"}}, nil
 		}
-		play, stop := hint{"X", "play"}, hint{"B", "menu"}
+		play, stop := hint{"X", "play"}, hint{"B", "note settings"}
 		if a.seqOn {
 			play = hint{"X", "stop"}
 		}
 		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"R2", "mute/solo"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}},
-			[]hint{screen, {"Y+X", "add track"}, {"Y+B", "pick pattern"}, {"Y+^v", "pattern +-"}}
+			[]hint{{"Y+X", "add track"}, {"Y+B", "pick pattern"}, {"Sel+B", "tools"}, {"Y+^v", "pattern +-"}}
 	case Unit:
 		return []hint{{"A", "send"}, {"X", "look again"}, {"^v", "choose"}, {"L1 R1", "page"}, {"B", "back"}}, []hint{screen}
 	default:
@@ -201,17 +208,20 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 		if p.Ch == 2 {
 			ch = "stereo"
 		}
-		tags := ""
+		info := fmt.Sprintf("%.2fs %s", float64(p.Frames)/48000, ch)
+		c.text(x, y0+18, info, cDim, false)
+		bx := x + textW(info) + 10
 		for _, sw := range []struct {
-			id  byte
-			tag string
-		}{{0x6A, " GATE"}, {0x6B, " LOOP"}} {
+			id byte
+			ch string
+		}{{0x6A, "G"}, {0x6B, "L"}} { // G is gate, L is loop: lit when on
+			on := false
 			if v, err := a.lab.PadParam(n, sw.id); err == nil && v != 0 {
-				tags += sw.tag
+				on = true
 			}
+			a.badge(c, bx, y0+17, sw.ch, on)
+			bx += 18
 		}
-		c.text(x, y0+18, fmt.Sprintf("%.2fs %s", float64(p.Frames)/48000, ch), cDim, false)
-		c.text(x+textW(fmt.Sprintf("%.2fs %s", float64(p.Frames)/48000, ch)), y0+18, tags, cAmber, true)
 		c.rect(x, y0+36, w, 24, cPanel2)
 		if id, ok := a.padSample(n); ok {
 			a.waveform(c, id, 0, p.Frames, x+1, y0+36, w-2, 24, cAmber)
@@ -287,11 +297,11 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 			return
 		}
 		c.text(x, y0, fmt.Sprintf("%s %s", a.label(a.spad), fit(a.info.Pads[a.spad].Name, w/CellW-4)), cAmber, true)
-		c.text(x, y0+18, fmt.Sprintf("%.2fs  %d slices", float64(a.sl.Frames)/48000, len(a.sl.Slices)), cDim, false)
-		c.text(x, y0+36, fmt.Sprintf("%s  zoom %dx", orderMode(a.sl), 1<<a.zoom), cDim, false)
+		c.text(x, y0+16, fmt.Sprintf("%.2fs  %d slices", float64(a.sl.Frames)/48000, len(a.sl.Slices)), cDim, false)
+		c.text(x, y0+32, fmt.Sprintf("%s  zoom %dx", orderMode(a.sl), 1<<a.zoom), cDim, false)
 		if sel := a.sliceAt(a.at); sel >= 0 {
 			s := a.sl.Slices[sel]
-			c.text(x, y0+54, fmt.Sprintf("slice %d/%d  pitch %+d", sel+1, len(a.sl.Slices), s.Pitch), cText, true)
+			c.text(x, y0+48, fmt.Sprintf("slice %d/%d  pitch %+d", sel+1, len(a.sl.Slices), s.Pitch), cText, true)
 			extra := fmt.Sprintf("gain %d%% ", s.Gain)
 			if s.Reverse {
 				extra += "rev "
@@ -302,34 +312,32 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 			if s.Roll > 0 {
 				extra += fmt.Sprintf("roll %d", s.Roll)
 			}
-			c.text(x, y0+72, fit(extra, w/CellW), cText, false)
+			c.text(x, y0+64, fit(extra, w/CellW), cText, false)
 		}
 	case Seq:
 		d, ok := a.doc()
 		c.text(x, y0, "PATTERN", cDim, false)
-		c.big(x+textW("PATTERN")+8, y0-4, a.label(a.pat-1), cAmber, 2)
+		c.text(x+textW("PATTERN "), y0, a.label(a.pat-1), cAmber, true)
 		if !ok {
-			c.text(x, y0+40, "empty", cDim, false)
-			c.text(x, y0+58, "A: first note", cDim, false)
+			c.text(x, y0+16, "empty", cDim, false)
+			c.text(x, y0+32, "A: first note", cDim, false)
 			return
 		}
 		pad := a.rowPad()
-		c.text(x, y0+36, fmt.Sprintf("%d.%d %s %s", a.step/16+1, a.step%16+1, a.label(pad), short(a.info.Pads[pad].Name, 8)), cText, false)
+		c.text(x, y0+16, fit(fmt.Sprintf("%d.%d %s %s", a.step/16+1, a.step%16+1, a.label(pad), short(a.info.Pads[pad].Name, 8)), w/CellW), cText, false)
 		if n, ok := noteAt(d, pad, a.step); ok {
 			col := cAmber
 			if a.aHeld {
 				col = cGood
 			}
-			c.text(x, y0+54, fmt.Sprintf("vel %d  len %.2f", n.Vel, float64(n.Len)/stepTicks), col, true)
+			c.text(x, y0+32, fmt.Sprintf("vel %d  len %.2f", n.Vel, float64(n.Len)/stepTicks), col, true)
 			off := a.noteTiming(n, pad)
-			c.text(x, y0+72, fit(strings.SplitN(off, " (", 2)[0], w/CellW), cText, false)
+			c.text(x, y0+48, fit(strings.SplitN(off, " (", 2)[0], w/CellW), cText, false)
 			if n.Pitch != 0 {
-				c.text(x, y0+90, fmt.Sprintf("chromatic %d", n.Pitch), cAmber, false)
-			} else if a.info.Pads[pad].File {
-				c.text(x, y0+90, "plain note", cDim, false)
+				c.text(x, y0+64, fmt.Sprintf("chromatic %d", n.Pitch), cAmber, false)
 			}
 		} else {
-			c.text(x, y0+54, "no note", cLine, false)
+			c.text(x, y0+32, "no note", cLine, false)
 		}
 	case Save:
 		used, bytesN := 0, 0
@@ -349,3 +357,14 @@ func (a *App) context(c *canvas, x, y0, w, y1 int) {
 }
 
 var _ color.RGBA
+
+// badge is a letter in a little box: lit (amber) when the switch is on, dim when it is off.
+func (a *App) badge(c *canvas, x, y int, letter string, on bool) {
+	if on {
+		c.rect(x, y, 14, 16, cAmber)
+		c.text(x+3, y, letter, cBg, true)
+		return
+	}
+	c.box(x, y, 14, 16, 1, cLine)
+	c.text(x+3, y, letter, cLine, false)
+}

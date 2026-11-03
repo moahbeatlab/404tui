@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
@@ -67,18 +68,43 @@ func pct(v int) string {
 }
 func ms(v int) string { return fmt.Sprintf("%d ms", v) }
 
+// sliceMenu is the settings of the slicer (Y+B): the slice in front first, then how the order plays.
 func (a *App) sliceMenu() {
 	if a.sl == nil {
 		return
 	}
 	sel := a.sliceAt(a.at)
-	m := &menu{title: fmt.Sprintf("slicer  %d slices", len(a.sl.Slices))}
+	m := &menu{title: fmt.Sprintf("slice settings  %d slices", len(a.sl.Slices))}
 	set := func(label string, vals []string, cur int, change func(v int)) {
 		m.items = append(m.items, menuItem{label: label, vals: vals, val: cur, keepOpen: true, onChange: change})
 	}
-	m.tabHead("STEPS")
+	if sel >= 0 {
+		m.tabHead(fmt.Sprintf("SLICE %d", sel+1))
+		s := &a.sl.Slices[sel]
+		audition := func() { a.playSlice() }
+		set("Pitch", names(pitchVals, signed), near(pitchVals, s.Pitch), func(v int) { s.Pitch = pitchVals[v]; audition() })
+		set("Gain", names(gainVals, pct), near(gainVals, s.Gain), func(v int) { s.Gain = gainVals[v]; audition() })
+		set("Reverse", []string{"off", "on"}, b2i(s.Reverse), func(v int) { s.Reverse = v == 1; audition() })
+		set("Fade in", names(formats.EnvSteps, ms), near(formats.EnvSteps, s.Attack), func(v int) { s.Attack = formats.EnvSteps[v]; audition() })
+		set("Fade out", names(formats.EnvSteps, ms), near(formats.EnvSteps, s.Release), func(v int) { s.Release = formats.EnvSteps[v]; audition() })
+		set("Roll", names(formats.Rolls, func(v int) string {
+			if v == 0 {
+				return "off"
+			}
+			return fmt.Sprintf("%d hits", v)
+		}), near(formats.Rolls, s.Roll), func(v int) { s.Roll = formats.Rolls[v]; audition() })
+		set("Roll louder", names(loudVals, signed), near(loudVals, s.RollLoud), func(v int) { s.RollLoud = loudVals[v]; audition() })
+		set("Roll pitch", names(pitchVals, signed), near(pitchVals, s.RollPitch), func(v int) { s.RollPitch = pitchVals[v]; audition() })
+		set("Chance", names(chanceVals, pct), near(chanceVals, s.Chance), func(v int) { s.Chance = chanceVals[v] })
+		m.items = append(m.items, menuItem{label: "Reset this slice", run: func(int) {
+			s.Gain, s.Pitch, s.Reverse, s.Roll, s.RollLoud, s.RollPitch, s.Attack, s.Release, s.Chance = 100, 0, false, 0, 0, 0, 0, 0, 100
+			a.say(fmt.Sprintf("slice %d is as it was cut", sel+1), false)
+		}})
+	}
+	m.tabHead("PLAY")
 	set("Play order", modeNames, int(a.sl.Mode), func(v int) { a.sl.Mode = formats.PlayMode(v) })
-	set("Grid", gridNames, near(formats.Divisions, a.sl.Division), func(v int) { a.sl.Division = formats.Divisions[v] })
+	bpm := a.tempoOf(a.spad / 16)
+	set(fmt.Sprintf("Grid, at %s BPM of bank %c", bpmText(bpm), 'A'+rune(a.spad/16)), gridNames, near(formats.Divisions, a.sl.Division), func(v int) { a.sl.Division = formats.Divisions[v] })
 	set("Swing", names(formats.Swings, pct), near(formats.Swings, a.sl.Swing), func(v int) { a.sl.Swing = formats.Swings[v] })
 	set("Humanize", names(formats.Humanizes, pct), near(formats.Humanizes, a.sl.Humanize), func(v int) { a.sl.Humanize = formats.Humanizes[v] })
 	set("Length", names(stepsVals, func(v int) string {
@@ -87,29 +113,23 @@ func (a *App) sliceMenu() {
 		}
 		return fmt.Sprintf("%d steps", v)
 	}), near(stepsVals, a.sliceSteps), func(v int) { a.sliceSteps = stepsVals[v] })
-	if sel >= 0 {
-		m.tabHead("SLICE")
-		s := &a.sl.Slices[sel]
-		audition := func() { a.playSlice() }
-		pre := fmt.Sprintf("Slice %d: ", sel+1)
-		set(pre+"pitch", names(pitchVals, signed), near(pitchVals, s.Pitch), func(v int) { s.Pitch = pitchVals[v]; audition() })
-		set(pre+"gain", names(gainVals, pct), near(gainVals, s.Gain), func(v int) { s.Gain = gainVals[v]; audition() })
-		set(pre+"reverse", []string{"off", "on"}, b2i(s.Reverse), func(v int) { s.Reverse = v == 1; audition() })
-		set(pre+"fade in", names(formats.EnvSteps, ms), near(formats.EnvSteps, s.Attack), func(v int) { s.Attack = formats.EnvSteps[v]; audition() })
-		set(pre+"fade out", names(formats.EnvSteps, ms), near(formats.EnvSteps, s.Release), func(v int) { s.Release = formats.EnvSteps[v]; audition() })
-		set(pre+"roll", names(formats.Rolls, func(v int) string {
-			if v == 0 {
-				return "off"
-			}
-			return fmt.Sprintf("%d hits", v)
-		}), near(formats.Rolls, s.Roll), func(v int) { s.Roll = formats.Rolls[v]; audition() })
-		set(pre+"roll louder", names(loudVals, signed), near(loudVals, s.RollLoud), func(v int) { s.RollLoud = loudVals[v]; audition() })
-		set(pre+"roll pitch", names(pitchVals, signed), near(pitchVals, s.RollPitch), func(v int) { s.RollPitch = pitchVals[v]; audition() })
-		set(pre+"chance", names(chanceVals, pct), near(chanceVals, s.Chance), func(v int) { s.Chance = chanceVals[v] })
-		m.items = append(m.items, menuItem{label: "Reset this slice", run: func(int) {
-			s.Gain, s.Pitch, s.Reverse, s.Roll, s.RollLoud, s.RollPitch, s.Attack, s.Release, s.Chance = 100, 0, false, 0, 0, 0, 0, 0, 100
-			a.say(fmt.Sprintf("slice %d is as it was cut", sel+1), false)
-		}})
+	m.items = append(m.items,
+		menuItem{label: "Play the whole order", keepOpen: true, run: func(int) { a.playResult(false) }},
+		menuItem{label: "Play again, new dice", keepOpen: true, run: func(int) { a.playResult(true) }},
+		menuItem{label: "Tools (Select+B)...", run: func(int) { a.sliceToolsMenu() }},
+	)
+	m.tabify()
+	a.menu = m
+}
+
+// sliceToolsMenu is what is done with the slices (Select+B): cutting them, changing them, keeping the result.
+func (a *App) sliceToolsMenu() {
+	if a.sl == nil {
+		return
+	}
+	m := &menu{title: fmt.Sprintf("slice tools  %d slices", len(a.sl.Slices))}
+	set := func(label string, vals []string, cur int, change func(v int)) {
+		m.items = append(m.items, menuItem{label: label, vals: vals, val: cur, keepOpen: true, onChange: change})
 	}
 	m.tabHead("CUT")
 	parts := []int{2, 4, 8, 16, 32}
@@ -120,10 +140,6 @@ func (a *App) sliceMenu() {
 	grids := []float64{1, 0.5, 0.25, 0.125}
 	m.items = append(m.items, menuItem{label: fit(fmt.Sprintf("Cut on the grid at %.0f BPM", a.tempo()), 40), vals: []string{"1/4", "1/8", "1/16", "1/32"}, val: 1,
 		run: func(v int) { a.gridParts(grids[v]) }})
-	m.items = append(m.items, menuItem{label: "Play order back to 1, 2, 3...", run: func(int) {
-		a.sl.ResetOrder()
-		a.say("order: "+orderText(a.sl.Order), false)
-	}})
 	limits := []int{4, 8, 16, 24, 32}
 	set("Auto-cut (Y+A): up to", names(limits, func(v int) string { return fmt.Sprintf("%d slices", v) }), near(limits, a.autoLimit()),
 		func(v int) { a.autoMax = limits[v] })
@@ -135,14 +151,21 @@ func (a *App) sliceMenu() {
 		}
 	}
 	set("Auto-cut (Y+A): sensitivity", []string{"low", "less", "normal", "more", "high"}, cur, func(v int) { a.autoSens = sens[v] })
-	m.tabHead("KEEP")
+	m.tabHead("ORDER")
 	m.items = append(m.items,
 		menuItem{label: "Mangle the slices (dice)...", run: func(int) { a.mangleMenu() }},
-		menuItem{label: "Play the whole order", keepOpen: true, run: func(int) { a.playResult(false) }},
-		menuItem{label: "Play again, new dice", keepOpen: true, run: func(int) { a.playResult(true) }},
-		menuItem{label: "Result to a free pad", run: func(int) { a.resultToPad() }},
-		menuItem{label: "Shuffle the order (X to pads follows it)", run: func(int) { a.shuffleOrder() }},
-		menuItem{label: "Slices to pads, random order", run: func(int) { a.slicesToPads(true) }},
+		menuItem{label: "Shuffle the order", run: func(int) { a.shuffleOrder() }},
+		menuItem{label: "Play order back to 1, 2, 3...", run: func(int) {
+			a.sl.ResetOrder()
+			a.say("order: "+orderText(a.sl.Order), false)
+		}},
+	)
+	m.tabHead("KEEP")
+	m.items = append(m.items,
+		menuItem{label: "Result to a pad (choose bank and pad)...", run: func(int) { a.resultToPad() }},
+		menuItem{label: "Slices to pads (choose the first)...", run: func(int) { a.slicesToPadsPick(false) }},
+		menuItem{label: "Slices to pads, random order...", run: func(int) { a.slicesToPadsPick(true) }},
+		menuItem{label: "Settings: slice, order, grid (Y+B)...", run: func(int) { a.sliceMenu() }},
 	)
 	m.tabify()
 	a.menu = m
@@ -168,10 +191,41 @@ func (a *App) renderResult(newDice bool) (formats.Sample, int, error) {
 	if err != nil {
 		return formats.Sample{}, 0, err
 	}
-	var meta lab.Meta
+	var meta lab.Rendered
 	json.Unmarshal(mb, &meta)
+	a.placed = meta.Placed
 	s, err := a.lab.Sample(meta.ID)
 	return s, meta.ID, err
+}
+
+// slicePlan is the steps the order plays as it is set now (the mode, the order, the seed and the length), with no sound made: the
+// row under the waveform shows it whenever something in the menus changes.
+func (a *App) slicePlan() []formats.Step {
+	if a.sl == nil || len(a.sl.Order) == 0 || len(a.sl.Slices) == 0 {
+		return nil
+	}
+	sl := a.sl.Clone()
+	n := min(a.steps2(), 256)
+	q := formats.NewSequencer(sl)
+	out := make([]formats.Step, 0, n)
+	for i := 0; i < n; i++ {
+		out = append(out, q.Next())
+	}
+	return out
+}
+
+// playingStep is the step of the order that sounds now (-1 when none does): the result that was played, by the time since.
+func (a *App) playingStep() int {
+	if len(a.placed) == 0 || a.playT0.IsZero() {
+		return -1
+	}
+	frame := int(time.Since(a.playT0).Seconds() * formats.SampleRate)
+	for i, p := range a.placed {
+		if frame >= p.At && frame < p.At+p.Frames {
+			return i
+		}
+	}
+	return -1
 }
 
 func (a *App) playResult(newDice bool) {
@@ -182,15 +236,16 @@ func (a *App) playResult(newDice bool) {
 	}
 	a.lab.Free(id)
 	a.play(s)
+	a.playT0 = time.Now()
 	a.say(fmt.Sprintf("%s, %d steps, %.1f s", modeNames[a.sl.Mode], a.steps2(), float64(s.Frames())/formats.SampleRate), false)
 }
 
+// resultToPad asks for the pad (bank, then pad) and puts the result of the order there.
 func (a *App) resultToPad() {
-	n := a.freeRun(1, a.spad+1)
-	if n < 0 {
-		a.say("no empty pad: clear one with Y+B on PADS", true)
-		return
-	}
+	a.pickFreePad("Put the result on a pad", a.spad+1, func(n int) { a.resultTo(n) })
+}
+
+func (a *App) resultTo(n int) {
 	_, id, err := a.renderResult(false)
 	if err != nil {
 		a.say(err.Error(), true)

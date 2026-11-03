@@ -314,3 +314,18 @@ L2 on the SLICE screen takes the next grid step (off, 1/2, 1/4, 1/8, 1/16) and p
 
 The slicer menu (STEPS, SLICE, CUT, KEEP), the pattern menu (PATTERN, TIMING, NOTES, TRACKS) and the one-sample arp
 menu (NOTES, PLAY, MAKE) are pages like the pad panel, as many as fit the dialog (sub-headings stay inside a tab): L1 and R1 turn them, the cursor is kept per tab.
+
+## Two menus, Select as a second shift, the note panel (round of 2026-11-03)
+
+- **Select (or Fn) is a second shift key**, held like Y. Evdev codes 0x13a, 0x2c0 and 0x13c are mapped to it (the log names a button that
+  is not mapped); in scripts it is `S` (`S+B`). Select+Start still quits. Select+B opens the tools of the screen.
+- **SLICE**: Y+B is the *settings* (tabs: the slice in front first, then PLAY: order, grid at the bank's BPM, swing, humanize, length,
+  play); Select+B is the *tools* (CUT, ORDER with mangle and shuffle, KEEP). Each menu has a link to the other. L2 steps the grid.
+- **The order row** under the waveform shows the steps as they play (mode, grid, seed and length applied, silent steps dim, the slices
+  under the cursor lit) and follows every change in the menus, also when it is discarded; while the order plays the step that sounds
+  is amber. The grid runs at the tempo of the bank of the pad that is cut.
+- **Mangle** counts slices exactly (L1 R1 jump ten), can hit the random, evenly spread, first or last slices, and has fixed pitch and roll values.
+- **Pad dialog**: one dialog, banks and tiles as the pattern picker, wherever a pad is asked for: add a track (Y+X, with a note on 1.1),
+  bounce the pattern, the result of the slicer, the first pad of the slices, the arp and chord bounces.
+- **SEQ**: B is the settings of the note under the cursor as faders (velocity, length, timing); Select+B (or R1 in the panel) is the pattern tools.
+- A pad that gets its first sample plays at level 127. G and L (gate, loop) are lit letters on the pad, in the panel and in the pad settings.

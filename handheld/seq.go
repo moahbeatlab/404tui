@@ -159,8 +159,8 @@ func (a *App) seqKey(k Key, repeat int) {
 		a.holdNote()
 	case X:
 		a.togglePlay()
-	case B: // the menu, also while the pattern plays: the changes go into the loop. Only X stops it.
-		a.seqMenu()
+	case B: // the settings of the note under the cursor (the tools of the pattern: Select+B); also while the pattern plays
+		a.openNotePanel()
 	}
 }
 
@@ -244,20 +244,41 @@ func (a *App) seqShifted(k Key) {
 	case B:
 		a.openPicker()
 	case X:
-		// a track for the next pad that has a sample and is not a row yet
-		shown := map[int]bool{}
-		for _, p := range a.rows {
-			shown[p] = true
-		}
-		for off := 1; off < 160; off++ {
-			p := (a.rowPad() + off) % 160
-			if a.info.Pads[p].File && !shown[p] {
-				a.addTrack(p)
-				return
-			}
-		}
-		a.say("every pad with a sample is a track already", false)
+		a.addTrackPick()
 	}
+}
+
+// addTrackPick asks for a pad (the dialog the patterns are chosen in), starting on the next pad with a sample that is not a row yet.
+func (a *App) addTrackPick() {
+	shown := map[int]bool{}
+	for _, p := range a.rows {
+		shown[p] = true
+	}
+	start := a.rowPad()
+	for off := 1; off < 160; off++ {
+		p := (a.rowPad() + off) % 160
+		if a.info.Pads[p].File && !shown[p] {
+			start = p
+			break
+		}
+	}
+	a.pickPad("Add a track: choose a pad", start, true, a.addTrackNote)
+}
+
+// addTrackNote makes a track of the pad and puts a note on its first step (1.1), so the track is there to be played and shaped.
+func (a *App) addTrackNote(p int) {
+	a.addTrack(p)
+	if d, ok := a.doc(); !ok || !hasNote(d, p, 0) {
+		a.toggle(p, 0)
+	}
+	a.step = 0
+	a.refresh()
+	a.say(fmt.Sprintf("a track for %s, with a note on 1.1", a.label(p)), false)
+}
+
+func hasNote(d lab.PatternDoc, pad, step int) bool {
+	_, ok := noteAt(d, pad, step)
+	return ok
 }
 
 func (a *App) setPattern(n int) {
@@ -479,11 +500,7 @@ func (a *App) seqMenu() {
 		a.refresh()
 		a.replay()
 	})
-	padNames := make([]string, 160)
-	for i := range padNames {
-		padNames[i] = a.label(i)
-	}
-	m.items = append(m.items, menuItem{label: "Add a track for the pad", vals: padNames, val: (pad + 1) % 160, run: func(v int) { a.addTrack(v) }})
+	m.items = append(m.items, menuItem{label: "Add a track (choose a pad)...", run: func(int) { a.addTrackPick() }})
 	m.tabify()
 	a.menu = m
 }
@@ -957,33 +974,30 @@ func (a *App) audibleIn(pat, pad int) bool {
 
 // bounce renders the pattern (all of it, the tracks the filter lets through) into one sample on the next empty pad.
 func (a *App) bounce(play func(int) bool, tag string) {
-	to := a.freeRun(1, a.rowPad()+1)
-	if to < 0 {
-		a.say("no empty pad: clear one first", true)
-		return
-	}
-	s, ok := a.renderOf(play, false)
-	if !ok {
-		a.say("nothing to bounce", true)
-		return
-	}
-	mb, err := a.lab.Decode(s.WAV(), "wav")
-	if err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	var meta struct{ ID int }
-	if json.Unmarshal(mb, &meta) != nil {
-		a.say("cannot keep the bounce", true)
-		return
-	}
-	err = a.lab.Assign(to, meta.ID, fit(fmt.Sprintf("bnc_%s_%s", a.label(a.pat-1), tag), 15))
-	a.lab.Free(meta.ID)
-	if err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	delete(a.pcm, to)
-	a.refresh()
-	a.say("bounced to "+a.label(to), false)
+	a.pickFreePad("Bounce to a pad", a.rowPad()+1, func(to int) {
+		s, ok := a.renderOf(play, false)
+		if !ok {
+			a.say("nothing to bounce", true)
+			return
+		}
+		mb, err := a.lab.Decode(s.WAV(), "wav")
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		var meta struct{ ID int }
+		if json.Unmarshal(mb, &meta) != nil {
+			a.say("cannot keep the bounce", true)
+			return
+		}
+		err = a.lab.Assign(to, meta.ID, fit(fmt.Sprintf("bnc_%s_%s", a.label(a.pat-1), tag), 15))
+		a.lab.Free(meta.ID)
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		delete(a.pcm, to)
+		a.refresh()
+		a.say("bounced to "+a.label(to), false)
+	})
 }

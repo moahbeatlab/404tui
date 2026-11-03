@@ -39,11 +39,12 @@ const (
 	R1
 	L2 // the triggers: play one slice, play the whole order (in the slicer)
 	R2
+	Sel // Select (or Fn): a second shift key, held, as Y is; its chords open the tools
 )
 
 func (k Key) String() string {
 	if k >= L1 {
-		return []string{"L1", "R1", "L2", "R2"}[k-L1]
+		return []string{"L1", "R1", "L2", "R2", "Sel"}[k-L1]
 	}
 	return "UDLRABXY"[k : k+1]
 }
@@ -179,6 +180,10 @@ type App struct {
 	wrote []string
 
 	yHeld, yUsed, help bool
+	selHeld            bool         // Select (or Fn) is down
+	np                 *notePanel   // the settings of the note under the cursor, in SEQ
+	placed             []lab.Placed // the steps of the order that was played last, and when it started
+	playT0             time.Time
 	msg                string
 	msgBad             bool
 }
@@ -397,6 +402,12 @@ func (a *App) press(k Key, repeat int) {
 	if k != X {
 		a.saveAsk = false
 	}
+	if k == Sel {
+		if repeat == 0 {
+			a.selHeld = true
+		}
+		return
+	}
 	if k == Y {
 		if repeat == 0 {
 			a.yHeld, a.yUsed = true, false
@@ -415,6 +426,10 @@ func (a *App) press(k Key, repeat int) {
 		if k != Y {
 			a.ppKey(k, repeat)
 		}
+		return
+	}
+	if a.np != nil {
+		a.npKey(k, repeat)
 		return
 	}
 	if a.kb != nil {
@@ -443,6 +458,10 @@ func (a *App) press(k Key, repeat int) {
 	}
 	if k == L2 || k == R2 {
 		a.triggerKey(k == R2)
+		return
+	}
+	if a.selHeld && !a.yHeld {
+		a.selShifted(k)
 		return
 	}
 	if a.yHeld {
@@ -476,6 +495,10 @@ func (a *App) Release(k Key) {
 			a.commitUndo(pre, A, 0)
 		}
 		a.aDelete = false
+		return
+	}
+	if k == Sel {
+		a.selHeld = false
 		return
 	}
 	if k != Y {
@@ -542,6 +565,20 @@ func (a *App) shifted(k Key) {
 	}
 }
 
+// selShifted is a key with Select (or Fn) held: the tools of the screen, as a menu of their own.
+func (a *App) selShifted(k Key) {
+	switch a.scr {
+	case Slice:
+		if k == B {
+			a.sliceToolsMenu()
+		}
+	case Seq:
+		if k == B {
+			a.seqMenu()
+		}
+	}
+}
+
 func (a *App) go_(s Screen) {
 	if a.arpOn && s != Pads {
 		a.stop()
@@ -595,6 +632,7 @@ func (a *App) padsKey(k Key) {
 }
 
 func (a *App) stop() {
+	a.placed = nil
 	if a.Audio != nil {
 		a.Audio.Stop()
 	}

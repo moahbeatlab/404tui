@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var keyNames = []string{"Up", "Down", "Left", "Right", "A", "B", "X", "Y", "L1", "R1", "L2", "R2"}
+var keyNames = []string{"Up", "Down", "Left", "Right", "A", "B", "X", "Y", "L1", "R1", "L2", "R2", "Sel"}
 
 // Event is a key going down or up.
 type Event struct {
@@ -37,6 +37,7 @@ func (a *App) Dispatch(e Event) {
 //
 //	U D L R A B X Y   a key pressed and let go
 //	[ ]  { }          the shoulder buttons L1, R1 and the triggers L2, R2
+//	S                 Select (or Fn), a chord as S+B
 //	Y+R               a chord: Y held, R pressed
 //	R*8               a key held down: pressed, then seven repeats
 //	@name             take a snapshot called name
@@ -122,7 +123,7 @@ func (a *App) Script(s string, snap func(name string)) error {
 
 func parseKey(s string) (Key, error) {
 	if len(s) == 1 {
-		if i := strings.Index("UDLRABXY", strings.ToUpper(s)); i >= 0 {
+		if i := strings.Index("UDLRABXY", strings.ToUpper(s)); i >= 0 && s != "S" && s != "s" {
 			return Key(i), nil
 		}
 		switch s { // the shoulder buttons: [ is L1, ] is R1
@@ -134,6 +135,8 @@ func parseKey(s string) (Key, error) {
 			return L2, nil
 		case "}":
 			return R2, nil
+		case "S", "s": // Select (or Fn)
+			return Sel, nil
 		}
 	}
 	return 0, fmt.Errorf("unknown key %q", s)
@@ -148,14 +151,17 @@ const (
 
 var defaultMap = map[uint16]Key{
 	0x220: Up, 0x221: Down, 0x222: Left, 0x223: Right, // BTN_DPAD_*
-	0x131: A,  // BTN_EAST: the right button
-	0x130: B,  // BTN_SOUTH: the bottom one
-	0x133: X,  // BTN_NORTH: the top one
-	0x134: Y,  // BTN_WEST: the left one
-	0x136: L1, // BTN_TL, the left shoulder button (seen as 0x136 on the R36S)
-	0x137: R1, // BTN_TR
-	0x138: L2, // BTN_TL2, the left trigger (seen as 0x138 on the R36S)
-	0x139: R2, // BTN_TR2
+	0x131: A,   // BTN_EAST: the right button
+	0x130: B,   // BTN_SOUTH: the bottom one
+	0x133: X,   // BTN_NORTH: the top one
+	0x134: Y,   // BTN_WEST: the left one
+	0x136: L1,  // BTN_TL, the left shoulder button (seen as 0x136 on the R36S)
+	0x137: R1,  // BTN_TR
+	0x138: L2,  // BTN_TL2, the left trigger (seen as 0x138 on the R36S)
+	0x139: R2,  // BTN_TR2
+	0x13a: Sel, // BTN_SELECT; the R36S's pad reports Select as 0x2c0 and Fn may be BTN_MODE: the log names a code that is not mapped
+	0x2c0: Sel,
+	0x13c: Sel,
 }
 
 // quitCodes are Select and Start; any two of them held together quit. 0x13a/0x13b are BTN_SELECT and BTN_START;
