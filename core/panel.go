@@ -379,6 +379,10 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 			g.Text(x, row(4), fit(extra, w), cText, false)
 		}
 	case Seq:
+		if Terminal {
+			a.drawInfoGroups(g, x, row(0), w, y1, a.seqInfoGroups(), 2)
+			return
+		}
 		d, ok := a.doc()
 		g.Text(x, row(0), "PATTERN", cDim, false)
 		g.Text(x+8, row(0), a.label(a.pat-1), cAmber, true)

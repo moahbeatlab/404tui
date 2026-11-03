@@ -781,7 +781,7 @@ func (a *App) drawSeq(g Gfx) {
 		for s := 0; s < 16 && page*16+s < steps; s++ {
 			st := page*16 + s
 			x := stepX(s)
-			if !Terminal {
+			{
 				bg := cPanel
 				if (s/4)%2 == 1 {
 					bg = cPanel2
@@ -805,7 +805,7 @@ func (a *App) drawSeq(g Gfx) {
 					}
 					g.Note(x, y, cw, rh, start, min(length, 1-start), float64(n.Vel)/127, col)
 					// longer than a step: a tie runs on over the steps it lasts
-					if n.Len > stepTicks {
+					if n.Len > stepTicks && !Terminal { // (the terminal shows the length in the panel)
 						end := int(n.Tick) + n.Len
 						for t := s + 1; t < 16 && page*16+t < steps && (page*16+t)*stepTicks < end; t++ {
 							frac := 1.0
@@ -821,12 +821,11 @@ func (a *App) drawSeq(g Gfx) {
 				cursor = [4]int{x, y, cw, rh}
 			}
 		}
-		if Terminal { // the notes over the boxes of the steps
-			a.drawSeqRow(g, d, pad, y, rh, x0, cw, page, steps, ph, a.aHeld && pad == a.aPad, map[bool]int{true: a.step, false: -1}[i == a.row])
-		}
 	}
 	if cursor[0] >= 0 {
-		if !Terminal { // in the terminal the row draws its own cursor: a dot, or the note thick
+		if Terminal { // one dot at the top of the step under the cursor
+			g.Text(cursor[0]+(cursor[2]-1)/2, cursor[1], "●", cWhite, true)
+		} else {
 			g.Cursor(cursor[0], cursor[1], cursor[2], cursor[3])
 		}
 	}
@@ -1141,58 +1140,4 @@ func patternPadsOf(b []byte) []int {
 		}
 	}
 	return out
-}
-
-// drawSeqRow is a track in the terminal: a dot at every step (stronger on the beats) and a marker where a note starts
-// (dimmer when quiet). The cursor is a white ring on an empty step and the note under it is white.
-func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, steps, ph int, editing bool, cursorStep int) {
-	my := y + (rh-1)/2
-	from, to := page*16*stepTicks, min((page+1)*16, steps)*stepTicks
-	starts := func(st int) bool {
-		for _, n := range d.Notes {
-			if n.Pad == pad && int(n.Tick) >= st*stepTicks && int(n.Tick) < (st+1)*stepTicks {
-				return true
-			}
-		}
-		return false
-	}
-	for s := 0; s < 16 && page*16+s < steps; s++ {
-		st := page*16 + s
-		x := x0 + s*cw + (cw-1)/2
-		switch {
-		case st == cursorStep && !starts(st):
-			g.Text(x, my, "○", cWhite, true)
-		case starts(st):
-		default:
-			col := cLine
-			if s%4 == 0 {
-				col = cDim
-			}
-			g.Text(x, my, "·", col, false)
-		}
-	}
-	for _, n := range d.Notes {
-		if n.Pad != pad {
-			continue
-		}
-		start := int(n.Tick)
-		if start < from || start >= to {
-			continue
-		}
-		st := start / stepTicks
-		x := x0 + (st-page*16)*cw + (cw-1)/2 + (start%stepTicks)*cw/stepTicks
-		col := cAmber
-		switch {
-		case st == cursorStep:
-			col = cWhite
-		case ph == st:
-			col = cGood
-		case n.Vel < 64:
-			col = cAmberD // a quiet note is dimmer
-		}
-		if editing && n.Tick == a.aTick {
-			col = cWhite
-		}
-		g.Text(x, my, "●", col, st == cursorStep)
-	}
 }

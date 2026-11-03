@@ -98,7 +98,12 @@ func (a *App) padInfoGroups(n int) [][]infoLine {
 }
 
 func (a *App) drawPadInfo(g Gfx, x, y0, w, y1, n int) {
-	groups := a.padInfoGroups(n)
+	a.drawInfoGroups(g, x, y0, w, y1, a.padInfoGroups(n), 3)
+}
+
+// drawInfoGroups lays out groups of lines in the room: in two columns when the panel is wide (the first left groups
+// on the left), else one under the other, cut off at the last row.
+func (a *App) drawInfoGroups(g Gfx, x, y0, w, y1 int, groups [][]infoLine, left int) {
 	draw := func(x, y, w int, lines []infoLine) int {
 		for _, l := range lines {
 			if y >= y1 {
@@ -126,11 +131,11 @@ func (a *App) drawPadInfo(g Gfx, x, y0, w, y1, n int) {
 	if w >= 40 {
 		cw := w / 2
 		y := y0
-		for _, grp := range groups[:3] {
+		for _, grp := range groups[:min(left, len(groups))] {
 			y = draw(x, y, cw-1, grp) + 1
 		}
 		y = y0
-		for _, grp := range groups[3:] {
+		for _, grp := range groups[min(left, len(groups)):] {
 			y = draw(x+cw, y, cw, grp) + 1
 		}
 		return
