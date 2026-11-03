@@ -1,43 +1,6 @@
 #!/bin/bash
-# The end-to-end test of the PC program (sp404): it runs in a real terminal (tmux) in this container, against a copy of a real
-# project (Construction Kits House 01) and its real samples, plays keys as a user does and checks what is on the screen.
-# Every step is kept in /out as text (.txt) and with colours (.ansi); the use cases and their results go to /out/usecases.tsv.
-#   sp404 in the PATH (/usr/local/bin/sp404 in the container)   PROJECT (/project) the real project, read only
-#   WORK (/work) where it works   OUT (/out) the results   TMUX_SOCKET a private tmux socket (e2e)
-set -u
-S=t
-W=${WORK:-/work}
-OUT=${OUT:-/out}
-PROJECT=${PROJECT:-/project}
-SOCK=${TMUX_SOCKET:-e2e}
-mkdir -p $W/samples/construction-kit $OUT
-rm -rf $W/proj $W/out; cp -r "$PROJECT" $W/proj; mkdir -p $W/out
-cp "$PROJECT"/SMPL/*.SMP $W/samples/construction-kit/ 2>/dev/null   # the real samples, for the file browser
-fails=0; passes=0
-UC=""; : > $OUT/usecases.tsv
-
-tm() { tmux -L $SOCK "$@"; }
-cap() { tm capture-pane -p -t $S; }
-snap() { cap > $OUT/$1.txt; tm capture-pane -e -p -t $S > $OUT/$1.ansi; LASTSNAP=$1; }
-key() { for k in "$@"; do tm send-keys -t $S "$k"; sleep 0.12; done; }
-lit() { for k in "$@"; do tm send-keys -t $S -l "$k"; sleep 0.12; done; }
-wait_for() { local n=$(( ${2:-10} * 10 )); for ((i=0;i<n;i++)); do cap | grep -qF -- "$1" && return 0; sleep 0.1; done; return 1; }
-uc() { UC="$1"; UCTITLE="$2"; echo; echo "== $1 $2"; }
-rec() { printf '%s\t%s\t%s\t%s\t%s\n' "$UC" "$UCTITLE" "$1" "$2" "${LASTSNAP:-}" >> $OUT/usecases.tsv; }
-ok() { passes=$((passes+1)); echo "ok   $1"; rec pass "$1"; }
-bad() { fails=$((fails+1)); echo "FAIL $1"; rec FAIL "$1"; cap | head -50; }
-check() { if wait_for "$2"; then ok "$1"; else bad "$1: expected '$2'"; fi; }
-checkre() { for ((i=0;i<60;i++)); do cap | grep -qE -- "$2" && { ok "$1"; return; }; sleep 0.1; done; bad "$1: expected /$2/"; }
-absent() { if cap | grep -qF -- "$2"; then bad "$1: did not expect '$2'"; else ok "$1"; fi; }
-start() { # start cols rows [extra args]
-  local c=$1 r=$2; shift 2
-  tm kill-session -t $S 2>/dev/null
-  tm new-session -d -s $S -x $c -y $r "sp404 -audio silent -samples $W/samples -out $W/out $* 2>$W/stderr.txt; echo EXIT=\$? >$W/exit.txt; sleep 60"
-  tm set -g status off
-  rm -f $W/exit.txt
-}
-begin() { start "$@" -project $W/proj; wait_for "SAMPLE LAB" >/dev/null; key Space; wait_for "BPM 124" >/dev/null; }
-screenis() { checkre "$1" "^ *404tui +$2"; }
+# The end-to-end test of the PC program, the use cases UC01-UC13 (see docs/e2e.md); e2e-tools.sh has the advanced tools.
+. "$(dirname "$0")/e2e-lib.sh"
 
 uc UC01 "Start: the splash, then the pads of the real project"
 start 150 44 -project $W/proj
@@ -339,7 +302,4 @@ sleep 1
 if [ -f $W/exit.txt ] && grep -q "EXIT=0" $W/exit.txt; then ok "q quits (the project was saved)"; else bad "did not quit"; fi
 if grep -qi "panic\|goroutine" $W/stderr.txt 2>/dev/null; then bad "a panic in stderr"; head -20 $W/stderr.txt; else ok "no panic"; fi
 
-echo
-echo "passed $passes, failed $fails"
-cp $W/stderr.txt $OUT/ 2>/dev/null
-[ $fails -eq 0 ]
+finish

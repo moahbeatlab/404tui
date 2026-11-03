@@ -173,7 +173,7 @@ func menuLabel(l string) string {
 	return menuKeys.Replace(l)
 }
 
-var menuKeys = strings.NewReplacer("(B throws it away)", "(Esc throws it away)", "(Select+B)", "(t)", "(Y+B)", "(Enter)", "(Y+A)", "(f)")
+var menuKeys = strings.NewReplacer("(B throws it away)", "(Esc throws it away)", "(B puts the slices back)", "(Esc puts the slices back)", "(Select+B)", "(t)", "(Y+B)", "(Enter)", "(Y+A)", "(f)")
 
 func (a *App) drawMenu(g Gfx) {
 	m := a.menu

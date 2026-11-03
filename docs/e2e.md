@@ -1,6 +1,6 @@
 # End-to-end tests of the computer's program
 
-`platform/terminal/e2e/run.sh` builds `sp404` for Linux and starts it **as a user would**: in a real terminal (tmux, 150x44), in an Ubuntu
+`platform/terminal/e2e/run.sh` builds `sp404` for Linux and runs two scripts, `e2e.sh` (UC01-UC13) and `e2e-tools.sh` (the advanced tools, UC14-UC17). It starts the program **as a user would**: in a real terminal (tmux, 150x44), in an Ubuntu
 container, against a copy of the real project *Construction Kits House 01* (71 pads, 98 MB, 124 BPM, two-bar patterns) and its real
 samples. It plays keys, reads what is on the screen and keeps every step as text, as colours and as a picture in
 `platform/terminal/e2e/out/` (the table below names the pictures). The run is `-audio silent`: everything works as if sound were
@@ -9,7 +9,7 @@ played, nothing is. The results of each run, per use case, are in `out/usecases.
     platform/terminal/e2e/run.sh                      # needs docker; the real project is read from ~/test-projects
     platform/terminal/e2e/run.sh /path/to/project     # another project (the checks name pads of the Construction Kits project)
 
-Last run (2026-11-03): **126 checks, 126 passed, 0 failed**, 13 use cases.
+Last run (2026-11-03): **205 checks, 205 passed, 0 failed**, 17 use cases (126 in `e2e.sh`, 79 in `e2e-tools.sh`).
 
 ## The use cases
 
@@ -28,12 +28,16 @@ Last run (2026-11-03): **126 checks, 126 passed, 0 failed**, 13 use cases.
 | UC11 | A unit (the simulator) | the unit and its projects are found; the project menu; a backup is made and has the project's files; loading asks first when there is unsaved work; live editing starts (LIVE 1); the places include the card; the card is listed; the files menu has the tag entries; the card is indexed; a search by tags finds the kick | `29`-`34` |
 | UC12 | Save | the project is written unchanged: PADCONF.BIN, the patterns and every sample file are byte for byte those of the project that was opened | `35-saved` |
 | UC13 | Quit | `q` quits; nothing was written to stderr as a crash | |
+| UC14 | Pattern tools on a track | for the track in front (one note): **Fill** (a trial of 8 notes), **Euclid** (10), **Echo** (4), **Cycle** (3) each open their dialog, show their trial in the panel and **Esc** throws it away (one note again); Ratchet, Evolve, Accents and ghosts, LFO, ENV, Chance, Randomize velocity, Shape and Nudge open their dialogs and `Esc` returns to the tools menu; **Keep it** commits the Euclid notes, `u` undoes the tool as one step, `R` redoes it; **Clear** takes every note off and `u` brings them back; Copy to a pad asks for the pad | `40`-`43` |
+| UC15 | Patterns | **Double** makes the pattern four bars and **Halve** two again; the tempo of the bank goes up and down by one; **New pattern from a template** lists the templates with their tempo, House makes a new pattern in the next free slot with named tracks; Copy to the next pattern; Use the pads of another bank offers the banks; **Delete the pattern** empties the slot and `u` brings it back with its tracks | `44`-`46`, `51` |
+| UC16 | Slicer tools | **Cut in equal parts** (8), at random places, on the grid; auto-cut again (16); **Shuffle the order** and back to 1, 2, 3; **Mangle** opens its dialog and `Esc` puts the slices back; **Edit the order lane** shows the lane and `y b` leaves it; **Slices to pads and a pattern under them** puts the slices on pads (their lengths show on the tiles) and a pattern with them in SEQ | `47`-`50`, `52` |
+| UC17 | Slicer undo | the slice settings dialog opens and closes; `b` removes a slice and `u` brings it back, `R` removes it again; a cut in equal parts is taken back by `u`, and `u` goes on back | |
 
-Together about 120 checks. A failed check prints the screen it saw.
+Together 205 checks. A failed check prints the screen it saw.
 
 ## How it reads the screen
 
-The test sends keys with `tmux send-keys` and reads the screen with `tmux capture-pane`. A check waits up to ten seconds for a text to
+The test sends keys with `tmux send-keys` and reads the screen with `tmux capture-pane`. A menu entry is found on the screen: `hl.py` reads the colours of the screen and says which entry is lit (dark letters on the amber ground), and the script moves the cursor until it is the entry it wants, so the tests do not depend on how far down an entry is. A check waits up to ten seconds for a text to
 appear (`check`), or for a pattern (`checkre`), or says a text must not be there (`absent`). The colours of each step are kept
 (`.ansi`) and turned into a picture by `ansipng`, so a change of look can be looked at after the run.
 
