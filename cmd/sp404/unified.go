@@ -4,12 +4,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/moahbeatlab/404tui/core"
 	"github.com/moahbeatlab/404tui/device"
-	"github.com/moahbeatlab/404tui/handheld"
+	"github.com/moahbeatlab/404tui/platform/terminal"
 	"github.com/moahbeatlab/404tui/playback"
 	"github.com/moahbeatlab/404tui/serialport"
 	"github.com/moahbeatlab/404tui/sim"
-	"github.com/moahbeatlab/404tui/termui"
 	"github.com/moahbeatlab/404tui/version"
 )
 
@@ -22,27 +22,27 @@ func runUnified(o options) error {
 	}
 	os.MkdirAll(base, 0o755)
 	quietStderr(filepath.Join(base, "404tui.log"))
-	opt := termui.Options{Samples: o.samples, Out: o.out, Project: o.project, Version: version.Version}
+	opt := terminal.Options{Samples: o.samples, Out: o.out, Project: o.project, Version: version.Version}
 	if o.basicGlyphs {
-		g := termui.BasicGlyphs
+		g := terminal.BasicGlyphs
 		opt.Glyphs = &g
 	}
-	opt.Audio = func() (handheld.Audio, error) {
+	opt.Audio = func() (core.Audio, error) {
 		p, err := playback.OpenBackend(o.audio)
 		if err != nil {
 			return nil, err
 		}
 		return p, nil
 	}
-	opt.Connect = func() (handheld.Link, error) {
+	opt.Connect = func() (core.Link, error) {
 		if o.simulate {
-			return handheld.DeviceLink{Dev: device.New(sim.Demo(), "sim")}, nil
+			return core.DeviceLink{Dev: device.New(sim.Demo(), "sim")}, nil
 		}
 		p, name, err := serialport.OpenFirst()
 		if err != nil {
 			return nil, err
 		}
-		return handheld.DeviceLink{Dev: device.New(p, name)}, nil
+		return core.DeviceLink{Dev: device.New(p, name)}, nil
 	}
-	return termui.Run(opt)
+	return terminal.Run(opt)
 }

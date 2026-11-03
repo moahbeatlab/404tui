@@ -66,7 +66,7 @@ the buttons. The shift that is waiting for its key is lit in the panel, and the 
 
 ## The screens
 
-The same six screens as on the handheld, described with all their keys in [`handheld/README.md`](../handheld/README.md):
+The same six screens as on the handheld, described with all their keys in [`core/README.md`](../core/README.md):
 
 - **PADS** — the 4×4 pads of the bank with their waveforms, the banks under them. `a` opens the pad panel: faders
   for the pad's settings (SOUND, SHAPE) and its tools: slice it, chords and arps, **arp from one sample** (a key,
@@ -92,9 +92,9 @@ bank, `a` to choose, `b` to cancel.
 
 ## Tests
 
-`termui/e2e/run.sh` builds the program for Linux, starts it in a terminal (tmux) in an Ubuntu container
+`platform/terminal/e2e/run.sh` builds the program for Linux, starts it in a terminal (tmux) in an Ubuntu container
 against a copy of a real project, and plays the keys: the splash, the pads, the panel's width at five sizes, a window
 that is too small, the vim keys, the pad panel, the arp, the slicer and its menus, the sequencer, the note panel, the
 pad dialog, a typed search, saving (the files written are compared byte for byte with the project that was
-opened) and quitting. Every step is kept as text and as a PNG of what the terminal showed (`termui/e2e/out/`).
-`go test ./termui ./handheld` has the same keys and the layout at several sizes without a container.
+opened) and quitting. Every step is kept as text and as a PNG of what the terminal showed (`platform/terminal/e2e/out/`).
+`go test ./core ./platform/...` has the same keys and the layout at several sizes without a container.

@@ -7,7 +7,7 @@
 #   make linux | windows | macos
 #   make dist VERSION=0.2 stamp a version (else the one in version/version.go stays)
 #
-# The handheld front end (sp404h, for an R36S with ArkOS; see handheld/README.md):
+# The handheld front end (sp404h, for an R36S with ArkOS; see core/README.md and platform/handheld):
 #   make handheld          dist/sp404h-arm64, for the handheld (no cgo, builds anywhere)
 #   make handheld-card     dist/handheld/roms/..., laid out like the games card: copy its contents onto the card
 #   make handheld-local    ./sp404h for this computer (try it in a browser: ./sp404h -demo -silent -web :8405)
@@ -93,8 +93,8 @@ handheld-local:
 	go build -ldflags "-s -w" -o $(HANDHELD) $(HANDHELD_PKG)
 
 handheld-test:
-	go vet ./handheld ./cmd/sp404h ./lab
-	go test -race ./handheld ./lab ./formats
+	go vet ./core ./platform/... ./cmd/sp404h ./lab
+	go test -race ./core ./platform/... ./lab ./formats
 
 handheld-emulator: handheld
 	cd packaging/arkos/emulator && ./prepare.sh ../../../$(DIST)/$(HANDHELD)-arm64 && docker compose up --build

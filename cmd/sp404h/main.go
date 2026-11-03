@@ -1,5 +1,5 @@
 // Command sp404h is the handheld front end for the SP-404MKII: samples, slicing, patterns and projects
-// on a console with a D-pad and four buttons (R36S under ArkOS). See package handheld.
+// on a console with a D-pad and four buttons (R36S under ArkOS). See package core.
 package main
 
 import (
@@ -14,12 +14,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moahbeatlab/404tui/core"
 	"github.com/moahbeatlab/404tui/device"
-	"github.com/moahbeatlab/404tui/handheld"
+	hh "github.com/moahbeatlab/404tui/platform/handheld"
+	"github.com/moahbeatlab/404tui/platform/terminal"
 	"github.com/moahbeatlab/404tui/playback"
 	"github.com/moahbeatlab/404tui/serialport"
 	"github.com/moahbeatlab/404tui/sim"
-	"github.com/moahbeatlab/404tui/termui"
 )
 
 func main() {
@@ -39,13 +40,13 @@ func main() {
 	showVersion := flag.Bool("version", false, "print the version (the commit it was built from) and exit")
 	logPath := flag.String("log", "", "the log file (default: logs.log next to the program)")
 	flag.Parse()
-	handheld.Version = version()
+	core.Version = version()
 	if *size != "" {
 		var c, r int
 		if _, err := fmt.Sscanf(*size, "%dx%d", &c, &r); err != nil {
 			fatal(fmt.Errorf("-size wants COLSxROWS, e.g. 120x40"))
 		}
-		handheld.SetSize(c, r)
+		core.SetSize(c, r)
 	}
 	if *showVersion {
 		fmt.Println("404tui", version())
@@ -69,15 +70,15 @@ func main() {
 		*out = filepath.Join(filepath.Dir(*root), "out")
 	}
 	if *demo {
-		if err := handheld.WriteDemo(*root); err != nil {
+		if err := core.WriteDemo(*root); err != nil {
 			fatal(err)
 		}
 	}
-	var audio handheld.Audio
+	var audio core.Audio
 	if *script != "" {
-		audio = &handheld.NullAudio{}
+		audio = &core.NullAudio{}
 	}
-	app := handheld.New(*root, *out, audio)
+	app := core.New(*root, *out, audio)
 	log.Printf("app: ready, samples %s, out %s", *root, *out)
 	if !*silent && *script == "" {
 		// Opening the output can block for good on a badly set-up sound card, so it is done on the side:
@@ -96,7 +97,7 @@ func main() {
 	if *fbPath != "" && *script == "" {
 		go func() { // a stuck start tells where it is stuck: every goroutine's stack goes to the log
 			select {
-			case <-handheld.FirstFrame:
+			case <-hh.FirstFrame:
 			case <-time.After(4 * time.Second):
 				var sb strings.Builder
 				pprof.Lookup("goroutine").WriteTo(&sb, 2)
@@ -104,15 +105,15 @@ func main() {
 			}
 		}()
 	}
-	app.Connect = func() (handheld.Link, error) {
+	app.Connect = func() (core.Link, error) {
 		if *simulate {
-			return handheld.DeviceLink{Dev: device.New(sim.Demo(), "sim")}, nil
+			return core.DeviceLink{Dev: device.New(sim.Demo(), "sim")}, nil
 		}
 		p, name, err := serialport.OpenFirst()
 		if err != nil {
 			return nil, err
 		}
-		return handheld.DeviceLink{Dev: device.New(p, name)}, nil
+		return core.DeviceLink{Dev: device.New(p, name)}, nil
 	}
 	if *open != "" {
 		if err := app.OpenProject(*open); err != nil {
@@ -122,11 +123,11 @@ func main() {
 	if *script != "" {
 		os.MkdirAll(*shots, 0o755)
 		err := app.Script(*script, func(name string) {
-			if err := handheld.WritePNG(filepath.Join(*shots, name+".png"), app.Render()); err != nil {
+			if err := core.WritePNG(filepath.Join(*shots, name+".png"), app.Render()); err != nil {
 				fatal(err)
 			}
 			if *termShots {
-				if err := handheld.WritePNG(filepath.Join(*shots, name+".term.png"), termui.Image(termui.Cells(app.RenderCells(), termui.FullGlyphs))); err != nil {
+				if err := core.WritePNG(filepath.Join(*shots, name+".term.png"), terminal.Image(terminal.Cells(app.RenderCells(), terminal.FullGlyphs))); err != nil {
 					fatal(err)
 				}
 			}
@@ -138,7 +139,7 @@ func main() {
 	}
 	app.ShowSplash(2500 * time.Millisecond)
 	log.Println("main: starting the screen and the keys")
-	if err := handheld.Run(app, *fbPath, *input, *web); err != nil {
+	if err := hh.Run(app, *fbPath, *input, *web); err != nil {
 		fatal(err)
 	}
 	log.Println("exit")
