@@ -216,7 +216,7 @@ func TestThePanelNamesTheKeysOfTheKeyboard(t *testing.T) {
 	m := newModel(t)
 	press(m, "x")
 	txt := m.text()
-	for _, want := range []string{"hjkl", "[ ]", "y h", "y a"} { // move, bank, screen, mark pad
+	for _, want := range []string{"hjkl", "[ ]", "g h", "y a"} { // move, bank, screen, mark pad
 		if !strings.Contains(txt, want) {
 			t.Errorf("the panel should name %q:\n%s", want, txt)
 		}
