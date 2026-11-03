@@ -399,6 +399,12 @@ func (a *App) drawSlice(g Gfx) {
 	per := max((contentCols-4)/4, 1) // a step is 3 cells and a gap
 	now := a.playingStep()
 	cellRows := Rows - 3 - (ny + 2) + 1 // what is left under the numbers
+	if a.lane {
+		g.Fill(1, ny+1, contentCols-2, 1, cPanel)
+		g.Text(2, ny+1, fmt.Sprintf("ORDER LANE  %d steps of %d slices", len(a.sl.Order), len(a.sl.Slices)), cAmber, true)
+		a.drawLane(g, ny+2, cellRows)
+		return
+	}
 	for i, st := range plan {
 		if i >= cellRows*per {
 			g.Text(2+(per-1)*4, ny+2+cellRows-1, fmt.Sprintf("+%d", len(plan)-cellRows*per+1), cDim, false)

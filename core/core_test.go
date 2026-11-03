@@ -3860,3 +3860,77 @@ func TestThePadMenuHasThePadAndBankActions(t *testing.T) {
 		}
 	}
 }
+
+func TestSlicerTapOrderLaneSeveralSamplesAndPatternUnder(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.cur = 0
+	a.go_(Slice)
+	if a.sl == nil {
+		t.Fatal("the slicer is open on the kick")
+	}
+	// tap: the sample plays, A cuts where it is
+	a.startTap()
+	a.tapT0 = time.Now().Add(-time.Duration(float64(a.sl.Frames) / formats.SampleRate * float64(time.Second) / 2))
+	a.tapTick()
+	if a.at < a.sl.Frames/3 {
+		t.Fatalf("the cursor follows the sample: %d of %d", a.at, a.sl.Frames)
+	}
+	keys(t, a, "A")
+	if len(a.sl.Slices) != 2 {
+		t.Fatalf("A cuts while tapping: %d slices", len(a.sl.Slices))
+	}
+	keys(t, a, "B")
+	if a.tap {
+		t.Fatal("B stops the tap")
+	}
+	// the order lane
+	a.openLane()
+	keys(t, a, "R U") // step 2: another slice
+	if a.sl.Order[1] != 1+1-1 && len(a.sl.Order) != 2 {
+		t.Fatalf("order %v", a.sl.Order)
+	}
+	keys(t, a, "A") // repeat
+	if len(a.sl.Order) != 3 {
+		t.Fatalf("a step repeated: %v", a.sl.Order)
+	}
+	keys(t, a, "B") // drop
+	if len(a.sl.Order) != 2 {
+		t.Fatalf("a step dropped: %v", a.sl.Order)
+	}
+	keys(t, a, "[")
+	keys(t, a, "Y+B")
+	if a.lane {
+		t.Fatal("Y+B leaves the lane")
+	}
+	a.Render()
+	a.RenderCells()
+	// several samples: the sample of pad 2 is added
+	frames := a.sl.Frames
+	a.addSampleFromPad()
+	keys(t, a, "R A") // pad A2
+	if a.sl.Frames <= frames || len(a.sl.Slices) != 3 {
+		t.Fatalf("a sample was added: %d frames, %d slices", a.sl.Frames, len(a.sl.Slices))
+	}
+	a.takeLastSampleOut()
+	if a.sl.Frames != frames || len(a.sl.Slices) != 2 {
+		t.Fatalf("taken out again: %d frames, %d slices", a.sl.Frames, len(a.sl.Slices))
+	}
+	// the pattern under the slices
+	a.patternUnder(2)
+	keys(t, a, "A") // the pad dialog: the first free run
+	if a.picker == nil {
+		t.Fatal("the pattern is asked for")
+	}
+	keys(t, a, "R R R A")
+	if a.picker != nil {
+		t.Fatal("chosen")
+	}
+	if padsWithSamples(a) != 5 {
+		t.Fatalf("the 2 slices are on pads: %d pads", padsWithSamples(a))
+	}
+	b, err := a.lab.PatternBytes(4)
+	if err != nil || len(patternPadsOf(b)) < 2 {
+		t.Fatalf("the pattern plays the slices: %v %v", patternPadsOf(b), err)
+	}
+}

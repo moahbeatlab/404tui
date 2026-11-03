@@ -68,6 +68,14 @@ func (a *App) sliceKey(k Key, repeat int) {
 		a.go_(Pads)
 		return
 	}
+	if a.tap {
+		a.tapKey(k)
+		return
+	}
+	if a.lane {
+		a.laneKey(k)
+		return
+	}
 	frames := a.sl.Frames
 	from, to := a.view()
 	col := max((to-from)/waveCols, 1)

@@ -88,6 +88,12 @@ func (a *App) hints() (plain, shift []hint) {
 		return []hint{pick, listen, {"^v", "browse"}, {">", "open"}, up, {"L1 R1", "page"}, {"B", "pads"}},
 			[]hint{screen, {"Y+X", "places"}, {"Y+A", "search"}, {"Y+B", "favourite"}, {"Sel+A", "mark"}, {"Sel+B", "files menu"}, {"Sel+X", "record"}}
 	case Slice:
+		if a.tap {
+			return []hint{{"A", "cut here"}, {"B", "stop tap"}}, nil
+		}
+		if a.lane {
+			return []hint{{"<>", "step"}, {"^v", "other slice"}, {"A", "repeat"}, {"B", "drop"}, {"L1 R1", "carry"}, {"X", "play"}}, []hint{{"Y+B", "leave the lane"}, {"Y+A", "shuffle"}, {"Y+X", "back to 1,2,3"}}
+		}
 		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play slice"}, {"R2", "play order"}, {"L2", "grid step"}, {"<>", "move"}, {"^v", "marker"}},
 			[]hint{{"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+B", "settings"}, {"Sel+B", "tools"}, {"Y+^v", "zoom"}, {"Sel+X", "record"}}
 	case Seq:

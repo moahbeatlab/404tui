@@ -137,6 +137,7 @@ func (a *App) sliceToolsMenu() {
 		run: func(v int) { a.equalParts(parts[v]) }})
 	m.items = append(m.items, menuItem{label: "Cut at random places", vals: names(parts, func(v int) string { return fmt.Sprint(v) }), val: 2,
 		run: func(v int) { a.randomParts(parts[v]) }})
+	m.items = append(m.items, menuItem{label: "Tap: cut while the sample plays", run: func(int) { a.startTap() }})
 	grids := []float64{1, 0.5, 0.25, 0.125}
 	m.items = append(m.items, menuItem{label: fit(fmt.Sprintf("Cut on the grid at %.0f BPM", a.tempo()), 40), vals: []string{"1/4", "1/8", "1/16", "1/32"}, val: 1,
 		run: func(v int) { a.gridParts(grids[v]) }})
@@ -154,6 +155,7 @@ func (a *App) sliceToolsMenu() {
 	m.tabHead("ORDER")
 	m.items = append(m.items,
 		menuItem{label: "Mangle the slices (dice)...", run: func(int) { a.mangleMenu() }},
+		menuItem{label: "Edit the order lane (step by step)", run: func(int) { a.openLane() }},
 		menuItem{label: "Shuffle the order", run: func(int) { a.shuffleOrder() }},
 		menuItem{label: "Play order back to 1, 2, 3...", run: func(int) {
 			a.sl.ResetOrder()
@@ -165,6 +167,10 @@ func (a *App) sliceToolsMenu() {
 		menuItem{label: "Result to a pad (choose bank and pad)...", run: func(int) { a.resultToPad() }},
 		menuItem{label: "Slices to pads (choose the first)...", run: func(int) { a.slicesToPadsPick(false) }},
 		menuItem{label: "Slices to pads, random order...", run: func(int) { a.slicesToPadsPick(true) }},
+		menuItem{label: "Slices to pads and a pattern under them", vals: []string{"1 bar", "2 bars", "4 bars", "8 bars"}, val: 1, run: func(v int) { a.patternUnder([]int{1, 2, 4, 8}[v]) }},
+		menuItem{label: "Add the sample of a pad...", run: func(int) { a.addSampleFromPad() }},
+		menuItem{label: "Add a sample from a file...", run: func(int) { a.addSampleFromFile() }},
+		menuItem{label: "Take the last added sample out", run: func(int) { a.takeLastSampleOut() }},
 		menuItem{label: "Settings: slice, order, grid (Y+B)...", run: func(int) { a.sliceMenu() }},
 	)
 	m.tabify()

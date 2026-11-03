@@ -163,11 +163,17 @@ type App struct {
 	midi              *midiLink        // the MIDI input that is open
 	midiTry           time.Time        // when it was last tried to open it
 	midiErr           string
-	codes             padCode         // the pads hit in turn
-	liveBack          Screen          // where the live mode came from
-	perfNow           int             // the pattern that plays (slot 1..160), 0 for none
-	perfNext          int             // the one that is next
-	lvl               *levelMeter     // the level of the sound
+	codes             padCode     // the pads hit in turn
+	liveBack          Screen      // where the live mode came from
+	perfNow           int         // the pattern that plays (slot 1..160), 0 for none
+	perfNext          int         // the one that is next
+	lvl               *levelMeter // the level of the sound
+	tap               bool        // the slicer's tap: the sample plays, A cuts
+	tapT0             time.Time
+	lane              bool // the slicer's order lane
+	laneAt            int
+	joinStack         []joinState     // the samples the slicer had before the last one was added
+	joinPick          bool            // the file browser is choosing a sample for the slicer
 	fmarks            map[string]bool // files and folders marked in the browser
 	fclip             []string        // what was copied or cut
 	fcut              bool
@@ -630,6 +636,13 @@ func (a *App) shifted(k Key) {
 			a.say(fmt.Sprintf("cleared %s", a.label(a.padN())), false)
 		}
 	case Slice:
+		if a.lane {
+			a.laneShifted(k)
+			return
+		}
+		if a.tap {
+			return
+		}
 		switch k {
 		case B:
 			a.sliceMenu()
@@ -681,6 +694,9 @@ func (a *App) go_(s Screen) {
 	if a.aud != nil && s != Files {
 		a.aud = nil
 		a.replay()
+	}
+	if s != Slice {
+		a.tap, a.lane = false, false
 	}
 	a.scr = s
 	if s == Slice && (a.sl == nil || a.spad != a.padN()) {
@@ -861,6 +877,11 @@ func (a *App) filesKey(k Key) {
 		a.up()
 	case B:
 		a.stopPreview()
+		if a.joinPick {
+			a.joinPick = false
+			a.go_(Slice)
+			return
+		}
 		a.go_(Pads)
 	case Right:
 		a.openEntry()
@@ -891,6 +912,12 @@ func (a *App) filesKey(k Key) {
 		id, err := a.decode(e)
 		if err != nil {
 			a.say(err.Error(), true)
+			return
+		}
+		if a.joinPick { // a sample for the slicer: it is joined, and the slicer is back
+			a.joinPick = false
+			a.go_(Slice)
+			a.joinSample(id)
 			return
 		}
 		name := strings.TrimSuffix(filepath.Base(e.name), filepath.Ext(e.name))

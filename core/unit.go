@@ -67,6 +67,7 @@ func (a *App) Tick() {
 	a.indexTick()
 	a.freezeTick()
 	a.jobTick()
+	a.tapTick()
 	a.liveTick()
 	a.recordingTick()
 	a.midiTick()
