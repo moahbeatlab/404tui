@@ -819,11 +819,15 @@ func (a *App) drawSeq(g Gfx) {
 			}
 		}
 		if Terminal { // the notes over the boxes of the steps
-			a.drawSeqRow(g, d, pad, y, rh, x0, cw, page, steps, ph, a.aHeld && pad == a.aPad)
+			a.drawSeqRow(g, d, pad, y, rh, x0, cw, page, steps, ph, a.aHeld && pad == a.aPad, map[bool]int{true: a.step, false: -1}[i == a.row])
 		}
 	}
 	if cursor[0] >= 0 {
-		g.Cursor(cursor[0], cursor[1], cursor[2], cursor[3])
+		if Terminal { // the step under the cursor is one dot, on the note or the empty step alike
+			g.Text(cursor[0]+(cursor[2]-1)/2, cursor[1]+cursor[3]-1, "●", cWhite, true)
+		} else {
+			g.Cursor(cursor[0], cursor[1], cursor[2], cursor[3])
+		}
 	}
 	if Terminal { // the banks, as on PADS: the one the pattern is in lit
 		a.drawBanks(g, (a.pat-1)/16)
@@ -1140,8 +1144,8 @@ func patternPadsOf(b []byte) []int {
 
 // drawSeqRow is a track in the terminal: a dot at every step (stronger on the beats), and each note as a bar as long as it
 // lasts, a gap after it so notes that follow each other stay apart. Louder notes are brighter.
-func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, steps, ph int, editing bool) {
-	my := y + (rh-1)/2
+func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, steps, ph int, editing bool, cursorStep int) {
+	my := y + rh - 1 // the dots and the feet of the bars
 	from, to := page*16*stepTicks, min((page+1)*16, steps)*stepTicks
 	covered := func(st int) bool {
 		for _, n := range d.Notes {
@@ -1153,7 +1157,7 @@ func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, step
 	}
 	for s := 0; s < 16 && page*16+s < steps; s++ {
 		st := page*16 + s
-		if covered(st) {
+		if covered(st) || st == cursorStep { // the cursor is a dot of its own there
 			continue
 		}
 		col := cLine
@@ -1178,15 +1182,19 @@ func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, step
 		}
 		w = min(w, 2*cw-1) // a long note is not drawn to its end: two steps say where it starts and that it is long
 		col := cAmber
-		switch {
-		case n.Vel < 48:
-			col = cAmberD
-		case ph >= 0 && ph*stepTicks >= start && ph*stepTicks < end:
+		if ph >= 0 && ph*stepTicks >= start && ph*stepTicks < end {
 			col = cGood
 		}
 		if editing && n.Tick == a.aTick {
 			col = cWhite // the note being edited
 		}
-		g.Text(cx0, my, strings.Repeat("▄", w), col, false) // half a cell high: slim bars
+		// as tall as it is loud, in eighths of the track's rows, standing on the foot line
+		total := max(int(float64(n.Vel)/127*float64(rh*8)+0.5), 1)
+		for r := 0; r < rh; r++ {
+			e := min(max(total-r*8, 0), 8)
+			if e > 0 {
+				g.Text(cx0, my-r, strings.Repeat(string([]rune(" ▁▂▃▄▅▆▇█")[e]), w), col, false)
+			}
+		}
 	}
 }
