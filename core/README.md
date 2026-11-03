@@ -362,3 +362,19 @@ its look while a terminal gets the look of the terminal program. New in `core`: 
 on-screen keyboard, the unit's projects and live editing, the unit's SD card in FILES with copy/paste/delete, pad and pattern
 actions (rename, find, export, restore, copy and move patterns), recording a set. A feature that needs something the device lacks
 (a recorder, MIDI) says so; see ../docs/architecture.md.
+
+## The computer's variant, step by step (round of 2026-11-03, last)
+
+- **One look per platform, one program.** `core.Terminal` switches the computers' look on: a pad tile shows the length and switches
+  (a strip in the bus colour), the sequencer is the handheld's step grid with a bar as tall as the velocity and the steps sharing the
+  whole width, the panel tells about the pad, the note and the slice in groups. The handheld draws what it drew before: a test
+  (`TestHandheldScreensStayAsTheyAre`) compares a picture of each of its screens and fails when a change moves a pixel.
+- **Keys.** `Esc` closes (a dialog from a menu goes back to that menu), `Enter` opens the settings of the pad, note or slice, `t` the
+  tools, `Space` plays and stops, `z`/`f` in SEQ, `+`/`-`/`n` in SLICE, `g h`/`g l`/`1-9` for the screens. The panel lists the keys that
+  always work and then the screen's own.
+- **Undo** in the slicer takes back cuts, joins and every other change of the slicing (kept as text, apart from the project's undo);
+  undoing on the slicer's screen used to leave no slicing to draw and crashed.
+- **Slicer.** The order plays in a loop, `n` makes a new order and the loop goes on with it (`ReplaceLoop`).
+- **`docs/tools.md`** is written by `TestToolsReference` from the menus themselves; **`docs/e2e.md`** describes the use cases of the
+  end-to-end test, which runs the real program in a container against the real project (`-audio silent`).
+- **The handheld's program** carries none of the terminal's code or libraries (pictures of the terminal need `-tags termshots`).

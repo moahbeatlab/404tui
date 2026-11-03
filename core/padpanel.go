@@ -357,7 +357,7 @@ func (a *App) drawPadPanel(g Gfx) {
 			g.Text(bx+bw+1, y, vt, cAmber, true)
 		}
 	}
-	hint := tk("<> change   A reset/toggle   X hear the pad   L1 R1 page   B close")
+	hint := tkLine("<> change   A reset/toggle   X hear the pad   L1 R1 page   B close")
 	g.Text(x0+2, y0+hr-2, fit(hint, wc-4), cDim, false)
 }
 

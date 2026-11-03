@@ -96,7 +96,7 @@ func (a *App) tagSearchAsk() {
 		}
 		a.tagSearch, a.searchQ = true, strings.TrimSpace(s)
 		a.list()
-		a.say(fmt.Sprintf("%d samples tagged %q: < ends the search", len(a.entries), a.searchQ), false)
+		a.say(fmt.Sprintf("%d samples tagged %q: %s ends the search", len(a.entries), a.searchQ, map[bool]string{true: "Esc or h", false: "<"}[Terminal]), false)
 	})
 }
 

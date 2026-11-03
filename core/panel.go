@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -292,6 +293,17 @@ func tk(s string) string {
 	case "A", "B", "X":
 		return strings.ToLower(s)
 	}
+	return keyWords.Replace(s)
+}
+
+// tkLine is a line of hints written with the handheld's buttons ("<> change  A default  B close") as a keyboard has them: Esc
+// closes, the letters are the keys of the buttons.
+func tkLine(s string) string {
+	if !Terminal {
+		return s
+	}
+	s = regexp.MustCompile(`\bB (close|closes|back|cancel)`).ReplaceAllString(s, "Esc $1")
+	s = regexp.MustCompile(`\b[ABX]\b`).ReplaceAllStringFunc(s, strings.ToLower)
 	return keyWords.Replace(s)
 }
 

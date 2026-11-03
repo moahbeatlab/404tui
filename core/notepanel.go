@@ -180,7 +180,7 @@ func (a *App) drawNotePanel(g Gfx) {
 	if !ok {
 		g.Text(x0+2, y0+3, "no note on this step", cDim, false)
 		g.Text(x0+2, y0+4, "A puts one here", cText, false)
-		g.Text(x0+2, y0+hr-2, "A note   B close   R1 pattern tools", cDim, false)
+		g.Text(x0+2, y0+hr-2, tkLine("A note   B close   R1 pattern tools"), cDim, false)
 		return
 	}
 	vals := []int{n.Vel, n.Len, gridOff(n.Tick)}
@@ -213,5 +213,5 @@ func (a *App) drawNotePanel(g Gfx) {
 		g.Fader(bx, y, bw, frac, dfrac, i == 2)
 		g.Text(bx+bw+1, y, vt, cAmber, true)
 	}
-	g.Text(x0+2, y0+hr-2, fit(tk("<> change  A default  X hear  B close  R1 tools"), wc-4), cDim, false)
+	g.Text(x0+2, y0+hr-2, fit(tkLine("<> change  A default  X hear  B close  R1 tools"), wc-4), cDim, false)
 }

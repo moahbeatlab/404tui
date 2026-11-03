@@ -165,6 +165,16 @@ func (a *App) menuKey(k Key) {
 	}
 }
 
+// menuLabel is an item's label as a keyboard reads it: the keys it names are the keyboard's.
+func menuLabel(l string) string {
+	if !Terminal {
+		return l
+	}
+	return menuKeys.Replace(l)
+}
+
+var menuKeys = strings.NewReplacer("(B throws it away)", "(Esc throws it away)", "(Select+B)", "(t)", "(Y+B)", "(Enter)", "(Y+A)", "(f)")
+
 func (a *App) drawMenu(g Gfx) {
 	m := a.menu
 	m.settle()
@@ -223,7 +233,7 @@ func (a *App) drawMenu(g Gfx) {
 			vw = len(v) + 1
 			g.Text(x+wc-2-len(v), yy, v, cAmber, i == m.cur)
 		}
-		g.Text(x+2, yy, fit(it.label, wc-4-vw), fg, i == m.cur)
+		g.Text(x+2, yy, fit(menuLabel(it.label), wc-4-vw), fg, i == m.cur)
 	}
 	if m.foot != nil {
 		m.foot(g, x, iy+vis, wc)

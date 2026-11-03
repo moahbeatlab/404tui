@@ -34,7 +34,8 @@ The phone page also runs without any program, over Web MIDI, at <https://moahbea
 `sp404` with no command opens the same program on every system (and on the R36S handheld): pads, sequencer, files, slicer, loop,
 perform and more, with the same screens, layout, menus and features, vim keys at a computer's keyboard, working on projects on the
 computer and, with a unit plugged in, loading, sending or live-editing its projects, and recording sets; see
-[`docs/ui.md`](docs/ui.md) and [`docs/architecture.md`](docs/architecture.md). The earlier tabs are `sp404 classic`.
+[`docs/ui.md`](docs/ui.md), [`docs/tools.md`](docs/tools.md) (every screen with its keys, menus and settings) and
+[`docs/architecture.md`](docs/architecture.md); the end-to-end tests are in [`docs/e2e.md`](docs/e2e.md). The earlier tabs are `sp404 classic`.
 
 Plug the SP-404MKII in with its USB cable; 404tui finds it by itself and waits if it is not there yet. `?` shows
 the keys, `q` quits. From a terminal, `sp404 -sim` tries it without a unit and `sp404 check` tests the installation.

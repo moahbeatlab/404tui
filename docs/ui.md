@@ -1,20 +1,32 @@
 # The program: `sp404`
 
-`sp404` with no command opens the same program on every system: the screens, the layout, the menus and the features are those of the
-handheld version (R36S), drawn for the window of a terminal on Linux, macOS and Windows. The earlier terminal program with its tabs
-(Pads, Files, Projects, Slicer, Sequencer, Config, Perform, Looper) is still there as `sp404 classic`, while the features that only it
-had are being moved into this one.
+`sp404` with no command is the one program on Linux, macOS and Windows: the screens, the layout, the menus and the features of the
+handheld version (R36S), drawn for a terminal window. The handheld version (`sp404h`) is the same program with its own drawing and
+its own buttons. The earlier terminal program with its tabs is still there as `sp404 classic`.
 
     sp404                                  # starts in ~/404tui/samples, writes below ~/404tui/out
     sp404 -project "path/to/PROJECT_01"    # open a project folder (one with a PADCONF.BIN in it)
     sp404 -samples ~/Music/kits -out ~/Desktop/card
     sp404 -sim                             # the UNIT screen finds a simulated unit
+    sp404 -audio silent                    # nothing is played (for tests); the program acts as if it were
     sp404 classic                          # the earlier tabs
 
-Flags: `-samples` (where the file browser starts), `-out` (where the card folder is made; settings, autosaves, backups and exports
-are kept beside it), `-project`, `-basic-glyphs` (see below), and the usual `-sim`, `-port`, `-audio`, `-v`.
+Flags: `-samples` (where the file browser starts), `-out` (where the card folder is made; settings, autosaves, backups and exports are kept
+beside it), `-project`, `-basic-glyphs` (see below), and the usual `-sim`, `-port`, `-audio`, `-v`.
 
-![The pads in a 120x40 terminal](img/lab-pads.png)
+**Every screen, with its keys, menus and settings, is listed in [tools.md](tools.md)**, which the program's own test writes (so it is
+always what the program has). What the keys are, how the layout works and what each screen is for is here.
+
+![The pads in a 150x44 terminal](img/e2e-pads.png)
+
+## How the program is built
+
+- **`core`** is the program: screens, menus, features, the project, the files, the unit, undo, recording. It knows nothing of a screen
+  or a keyboard; it is told which buttons are pressed and it draws through a small drawing layer.
+- **`platform/terminal`** is the computers' variant: a terminal window, the keyboard, the look of the earlier terminal program.
+- **`platform/handheld`** is the R36S's: the framebuffer, the buttons, its pixel look. It has none of the terminal's code.
+- A platform brings what only it has: audio output, a recorder, MIDI, the way to find the unit. What a system does not have is said so
+  on screen ("no MIDI in this build", "this build cannot record") and the rest works.
 
 ## One layout on every size
 
@@ -22,99 +34,117 @@ The screen is a grid of characters, and every screen is laid out on it:
 
 - The window is measured when the program starts and again whenever it changes.
 - The right **30%** (at least 24 columns) is the panel that is always there: the screens with the one you are on lit, the tempo and
-  whether the loop plays, what is under the cursor, and the keys that work right now. The rest is the screen itself.
+  whether the loop plays, what is under the cursor (pad, note, slice, file), and the keys: **ALWAYS** (the keys that work on every
+  screen) and then the keys of the screen you are on.
 - 80 columns by 30 rows is the smallest window (it is the handheld's screen). In a smaller one the program says so and waits.
+- What is drawn in steps (the sequencer's steps, the banks, the pads) shares the whole width, whatever it is.
 
-![80x30](img/lab-80x30.png)
-
-![200x56](img/lab-200x56.png)
-
-The look follows the earlier terminal program: flat tiles, one amber accent, rounded dialogs, waveforms in braille dots, bars in
-eighths of a character. 24-bit colour when the terminal has it (`COLORTERM=truecolor`, Windows Terminal, iTerm2, most current
-terminals), else the 256-colour palette. A terminal font with few glyphs (the old Windows console) gets only blocks: `-basic-glyphs`
-or `SP404_GLYPHS=basic`. The colour theme (Hardware, Ocean, Paper) is set on CONFIG.
-
-On the handheld the same screens are drawn as pixels (640x480, 80x30 cells of 8x16 pixels): the layout is the same, only the drawing
-differs.
+The look: flat tiles, one amber accent, rounded dialogs, waveforms in braille dots. 24-bit colour when the terminal has it, else the
+256-colour palette. A terminal font with few glyphs (the old Windows console) gets only blocks: `-basic-glyphs` or
+`SP404_GLYPHS=basic`. The colour theme (Hardware, Ocean, Paper) is set on CONFIG.
 
 ## The keys
 
-The screens are made for a D-pad, A B X Y, L1 R1 L2 R2 and a second shift (Select). On a keyboard:
+### Always
+
+| Key | What it does |
+| --- | --- |
+| `1`-`9`, `Tab`, `Shift-Tab` | go to a screen (the number is on the screen map in the panel) |
+| `g h`, `g l`, `g g` | the screen before, the next, the first (as `gT`, `gt`, `gg` in vim) |
+| `Esc` | close a menu, a panel or a dialog; in a dialog opened from a menu it goes back to that menu, and `Esc` again closes it. In a search it ends the search; in the screens it goes back |
+| `u`, `R` (or `Ctrl-Y`) | undo, redo: the project's changes; in the slicer the changes of the slicing |
+| `Ctrl-R` | record the unit's audio |
+| `?` | the help page for the keyboard |
+| `q`, `Ctrl-C` | quit (twice when the project is not saved) |
+| `y`, `s` | Y or Select held for the **next** key: `y` then `a` is Y+A. These give the second functions the handheld has; most have a key of their own on a keyboard (see below) |
+
+### The D-pad and the buttons
 
 | Key | Button |
 | --- | --- |
-| `h j k l` or the arrows | D-pad left, down, up, right (as in vim) |
-| `a` or `Enter` | A: do it, open, put a note, cut |
-| `b`, `Esc` or `Backspace` | B: back, stop, join, the note settings in SEQ |
-| `x` or `Space` | X: listen to what is under the cursor, play |
-| `y` | Y is held for the **next** key: `y` then `l` is Y+Right (the next screen). `y` again lets go |
-| `s` or `Tab` | Select is held for the next key: `s` then `b` opens the tools of the slicer or the sequencer |
-| `e` | holds A, for editing a note with the arrows in SEQ (velocity, length, `[` `]` to move it); `e` again lets go |
-| `[` `]`, `PgUp` `PgDn`, `Ctrl-U` `Ctrl-D` | L1, R1: pages, banks, tabs, bars |
+| `h j k l` or the arrows | D-pad (as in vim) |
+| `a` | A: do it, open, put a note, cut |
+| `Enter` | the settings of what is under the cursor: the pad panel on a pad, the note panel on a note, the slice settings on a slice; `a` in a menu |
+| `b`, `Backspace` | B: stop, join, back (not for closing menus: that is `Esc`) |
+| `x` | X: hear what is under the cursor. In SEQ it hears the note; in the slicer it plays the slice, and plays again to stop |
+| `Space` | play and stop: the pad's sample on PADS, the whole pattern on SEQ |
+| `t` | the tools of the screen (the TOOLS page of a pad, the pattern tools, the slice tools, the files menu) |
+| `e` | holds A, for editing a note with the arrows in SEQ; `e` again lets go |
+| `[` `]` , `PgUp` `PgDn`, `Ctrl-U` `Ctrl-D` | L1, R1: pages, banks, tabs, bars |
 | `,` `.` | L2, R2 |
-| `u`, `R`, `Ctrl-Y` | undo, redo (every change to the project, by snapshot) |
-| `Ctrl-R` | record the unit's audio (also `s` then `x`) |
-| `/` | search, in the file browser; typed letters go into the search, `Enter` ends it |
-| `?` | the help page for the keyboard |
-| `q`, `Ctrl-C` | quit (twice when the project is not saved) |
+| `/` | search the files (a line at the bottom, typed into, filters at once; `Enter` keeps the result, `Esc` ends it) |
 
-Text asked for (a name, a folder, a list of words) is typed on the keyboard; on the handheld on an on-screen keyboard with the D-pad.
-The side panel always lists the keys that work now, and in the terminal it names the keys of the keyboard (`hjkl`, `[ ]`, `y h`,
-`s b`), not the buttons.
+### Keys of one screen
+
+| Screen | Keys |
+| --- | --- |
+| SEQ | `z` one bar or as many bars as fit (two or four side by side on a wide window), `f` freeze: only the bars in view loop |
+| SLICE | `+` zoom in, `-` zoom out, `n` a new order of the slices at once (a loop that plays goes on with it), `.` the order plays in a loop (again stops it), `Enter` settings, `t` tools |
+| FILES | `/` search, `t` the files menu |
+
+The side panel always lists the keys that work now, in the keyboard's names; on the handheld it lists the buttons.
 
 ## The screens
 
-Nine screens side by side; `y` `h` / `y` `l` (Y+Left / Y+Right) move between them.
+Nine screens side by side. Their menus and settings are in [tools.md](tools.md).
 
 | Screen | What it is for |
 | --- | --- |
-| PADS | the 4x4 pads of the bank with their waveforms. `a` opens the pad panel: faders for the settings (SOUND, SHAPE) and the TOOLS: slice, chords and arps, **arp from one sample** (key, scale, chord stacks, octaves, a keyboard), reverse, normalize, pitch, rename, move, copy, clear; for the bank: find a pad, set up pads, switches and buses of every pad, export the bank to a folder and restore pads from one |
-| SEQ | the pattern as the unit's step grid. `a` puts a note, `b` the note panel (velocity, length, timing), `s` `b` the pattern tools (euclid, chance, randomize, echo, ratchet, LFO, envelope, fill, timing, copy and move to any slot, use the pads of another bank...), `y` `x` adds a track |
-| FILES | this computer and, with a unit plugged in, its SD card and its storage (places, `y` `x`). `/` searches, favourites, preview, `a` puts a sample on a pad; `s` `a` marks and `s` `b` is the menu: copy, cut, paste (between the computer and the card), new folder, rename, delete |
-| SLICE | cut by hand, at the onsets, equal parts, random places, on the grid at the bank's BPM; settings (`y` `b`) and tools (`s` `b`): mangle, result to a pad, slices to pads |
+| PADS | the 4x4 pads of the bank. A tile shows the name, the length of the loop in bars and the pad's switches (G gate, L loop, O one shot, R not forward, S BPM sync, V vinyl), and a strip in the colour of the pad's bus (blue BUS 1, red BUS 2). The panel tells everything about the pad: its sample, sound, envelope, routing and playback. `Enter` opens the pad panel: the settings, and the TOOLS (slice, chords and arps, arp from one sample, normalize, rename, copy...) |
+| SEQ | the pattern as the unit's step grid, tracks as lines of step boxes, a note as a bar as tall as its velocity. `a` puts a note, `Enter` the note panel, `t` the pattern tools, `y` `x` adds a track. The panel: the note under the cursor (bar and step, velocity, length, timing, pitch), the pattern and the track |
+| FILES | the ranger view on a wide window: the folder above, this one, and a preview of what the cursor is on (the contents of a folder, a sample's shape and length, its tags). Search, favourites, places (this computer, the unit's card and storage), marks, copy, cut and paste between the computer and the card, **tags and the index of the unit's files** |
+| SLICE | cut by hand, tap, at the onsets, equal parts, random places, on the grid; the order lane; several samples; the pattern under the slices. The panel tells about the slice under the cursor: start, end, length, beats, pitch, gain, chance, reverse, envelope, roll, and where it plays in the order |
 | SAVE | writes the project as a folder for the card, with an autosave |
-| UNIT | the unit's 16 projects. `a` is the menu of a project: send the project of the editor, **edit it live**, load it into the editor, back it up, restore a backup, rename, make it the current one, erase |
-| CONFIG | the buses by pad name (words, colours, set the buses of a bank), the recorder, the pad codes of the unit, MIDI, the colour theme |
-| PERF | the stage view from the unit's MIDI: the clock and tempo, the pads that are hit, the knobs of both buses and the other controllers, the level of the sound, the pattern that plays and the next |
-| LOOP | a bank of loops that play together: the pattern of the bank, delete a loop, remix a loop |
+| UNIT | the unit's 16 projects: send, edit live, load, back up, restore, rename, make current, erase |
+| CONFIG | the buses by pad name, the recorder, the pad codes of the unit, MIDI, the colour theme |
+| PERF | the unit's MIDI as it plays: the clock, the pads that are hit, the knobs, the level; the pattern now and next |
+| LOOP | a bank of loops that play together |
 
-![The slicer](img/lab-slicer.png)
+![The slicer](img/e2e-slicer.png)
 
-![The note panel in the sequencer](img/lab-note-panel.png)
+![The sequencer](img/e2e-seq-two-bars.png)
 
-Every question "which pad?" is the same dialog: the banks across the top, 16 tiles with the names, `[` `]` for the bank, `a` to choose.
+## Tags and the index of the unit's files
+
+With a unit plugged in, the files menu (`t` on FILES) can **index** the folder you are in: every sample gets tags worked out from its
+name and the folders it is in (`SD:Synth/House/124_bass_wobble.wav` is synth, house, 124, bass, wobble). The index is one file on the
+card, so any program that reads the card has it. **Search by tags** finds the samples that have them; **Tag** gives files (or the marked
+files) tags of your own, **Favourite** the tag `favourite`. The tags of the file under the cursor are in the panel and in the preview. A
+platform without a unit does not offer this; the computer's folders keep to the search of names.
 
 ## Recording a set
 
-`Ctrl-R` (or Select then X) records the unit's audio, from any screen, to a WAV in the folder CONFIG names, with `ffmpeg` (or `sox`):
-24-bit, 48 kHz, stereo, from the input with `404` in its name (the unit's USB audio). The red `REC` in the title bar shows the time. PERF
-shows the level of what is recorded and a clip light. A system that cannot record says so instead of failing; the handheld has no
-recorder yet.
+`Ctrl-R` records the unit's audio, from any screen, to a WAV in the folder CONFIG names, with `ffmpeg` (or `sox`): 24-bit, 48 kHz,
+stereo, from the input with `404` in its name (the unit's USB audio). The red `REC` in the title bar shows the time. PERF shows the
+level of what is recorded. A system that cannot record says so instead of failing; the handheld has no recorder yet.
 
 ## The unit: whole projects, and live
 
-With a unit plugged in (UNIT finds it by itself) there are two ways to work with it, and the same screens do both:
-
 - **Whole projects.** Load a project of the unit into the editor, change it, send it back; or back one up to the computer and restore it.
 - **Live.** `a` on a project, *Edit it live*: the project is loaded, the unit is switched to it, and from then on what is changed in
-  the editor goes to the unit as it is changed: names, settings, samples (imported again when a pad's sample changes), clears, patterns.
-  Undo goes to the unit too. `LIVE n` in the title bar shows it, with how many changes are still on their way.
+  the editor goes to the unit as it is changed: names, settings, samples, clears, patterns. Undo goes to the unit too. `LIVE n` in the
+  title bar shows it, with how many changes are still on their way.
 
 The unit is tried against its simulator (`sp404 -sim`); it has not been tried against a real SP-404MKII yet.
 
-## What is not in this program yet
+## Loading a project
 
-The earlier tabs (`sp404 classic`) still have: the motion, punch, LFO and morph of PERF, the Faderfox EC4 map, the web page for a phone, the tags
-and the index of the unit's files, the columns view of the file browser, the conditions of the notes in the sequencer, the substep mode
-and the note selection of its editor, a few slicer extras (tap, the order lane, several samples, the pattern under the slices),
-checking and finding the origin of a pad's sample.
+Projects are folders with a `PADCONF.BIN`. **FILES**: go to the folder, the project is listed in green with the word *project*,
+`a` loads it. **UNIT**: `a` on a project of the unit, *Load it into the editor*. From the command line: `sp404 -project <folder>`.
+
+## What the program does not have
+
+The features of the earlier tabs (`sp404 classic`) that were not moved here, on purpose: the Faderfox EC4 map, the motion, punch, LFO and
+morph of PERF, the web page for a phone, the columns view of the file browser, the conditions of the notes, the substep mode and the note
+selection of the editor, and the checking and the origin of a pad's sample. Not tried on a real SP-404MKII, on real audio output, MIDI
+or recording on macOS and Windows, and the handheld with these changes.
 
 ## Tests
 
-`platform/terminal/e2e/run.sh` builds the program for Linux, starts it in a terminal (tmux) in an Ubuntu container against a copy of a
-real project, and plays the keys: the splash, the pads, the panel's width at five sizes, a window that is too small, the vim keys, the pad
-panel, the arp, the slicer and its menus, the sequencer, the note panel, the pad dialog, a typed search, the loop, perform, config and
-unit screens, a recording without a recorder, saving (the files written are compared byte for byte with the project that was opened)
-and quitting. Every step is kept as text and as a PNG of what the terminal showed (`platform/terminal/e2e/out/`).
-`go test ./core ./platform/...` has the same keys, the layout at eight sizes, the unit (against the simulator: load, back up, rename, erase,
-live edits, the card of the unit and file operations), MIDI, recording and the looper without a container.
+- `go test ./core ./platform/...`: the keys, the layout at eight sizes, the unit against the simulator, MIDI, recording, the looper,
+  undo on every screen, and a picture of every handheld screen that must not change when the terminal's look does.
+- `go test ./core -run ToolsReference`: [tools.md](tools.md) is what the program says; the test fails when the file is out of date
+  (`-update-docs` writes it).
+- **End to end, on the computer's variant:** `platform/terminal/e2e/run.sh` starts the real program in a terminal (tmux) in an Ubuntu
+  container against a copy of the Construction Kits House 01 project and its samples, and plays 13 use cases with the keys of
+  this page. They are described in [e2e.md](e2e.md).

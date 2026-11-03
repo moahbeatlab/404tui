@@ -796,7 +796,9 @@ func (a *App) Zoom(d int) {
 }
 
 // Modal says whether a menu, the pad panel or a dialog is in front: a keyboard closes it with Esc only.
-func (a *App) Modal() bool { return a.menu != nil || a.pp != nil || a.picker != nil || a.help }
+func (a *App) Modal() bool {
+	return a.menu != nil || a.pp != nil || a.np != nil || a.picker != nil || a.help
+}
 
 // GoScreen goes to the screen with that number (0 is PADS), from a keyboard's number keys; a number past the last does nothing.
 func (a *App) GoScreen(n int) {
@@ -1009,6 +1011,10 @@ func (a *App) filesKey(k Key) {
 		a.up()
 	case B:
 		a.stopPreview()
+		if Terminal && a.searchQ != "" { // Esc ends a search first, as `h` does
+			a.up()
+			return
+		}
 		if a.joinPick {
 			a.joinPick = false
 			a.go_(Slice)

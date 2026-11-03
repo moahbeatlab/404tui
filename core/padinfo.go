@@ -101,8 +101,8 @@ func (a *App) padInfoGroups(n int) [][]infoLine {
 	}
 	return [][]infoLine{
 		sample,
+		group("ROUTING", "Bus", "Mute group"), // before the playback: it is what a short panel must not cut off
 		group("PLAYBACK", "Play mode", "Gate", "Loop", "One shot", "BPM sync"),
-		group("ROUTING", "Bus", "Mute group"),
 		group("SOUND", "Level", "Pan", "Pitch", "Fine pitch", "Time stretch", "Vinyl"),
 		group("ENVELOPE", "Attack", "Hold", "Release"),
 	}

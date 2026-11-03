@@ -34,6 +34,9 @@ func runUnified(o options) error {
 	opt.Platform = core.Platform{
 		Name: runtime.GOOS,
 		Audio: func() (core.Audio, error) {
+			if o.audio == "silent" { // for tests: everything works, nothing is played
+				return &core.NullAudio{}, nil
+			}
 			p, err := playback.OpenBackend(o.audio)
 			if err != nil {
 				return nil, err

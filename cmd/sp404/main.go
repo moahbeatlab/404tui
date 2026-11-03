@@ -81,7 +81,7 @@ func main() {
 	flag.BoolVar(&o.verbose, "v", false, "write a debug log: every transaction with its timing, port discovery, connects and UI actions")
 	flag.BoolVar(&o.trace, "trace", false, "also log every message on the wire, as hex (implies -v)")
 	flag.StringVar(&o.logPath, "log", "", "debug log file (default: the user cache folder for the UI, standard error otherwise)")
-	flag.StringVar(&o.audio, "audio", "", "how files are played on this computer: oto (default) or afplay (macOS's own player)")
+	flag.StringVar(&o.audio, "audio", "", "how files are played on this computer: oto (default), afplay (macOS's own player) or silent (nothing is played, the program acts as if it were: for tests)")
 	home, _ := os.UserHomeDir()
 	flag.StringVar(&o.project, "project", "", "the full-screen UI: a project folder (with a PADCONF.BIN) to open")
 	flag.StringVar(&o.samples, "samples", filepath.Join(home, "404tui", "samples"), "the full-screen UI: the folder the file browser starts in")

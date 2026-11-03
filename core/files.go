@@ -136,7 +136,7 @@ func (a *App) kbKey(k Key) {
 	case X: // done: the list stays filtered
 		a.kb = nil
 		if a.searchQ != "" {
-			a.say(fmt.Sprintf("%d files for %q: < ends the search", len(a.entries), a.searchQ), false)
+			a.say(fmt.Sprintf("%d files for %q: %s ends the search", len(a.entries), a.searchQ, map[bool]string{true: "Esc or h", false: "<"}[Terminal]), false)
 		}
 	}
 }
