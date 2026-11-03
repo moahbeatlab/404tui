@@ -1,3 +1,5 @@
+//go:build !windows
+
 package handheld
 
 import (
@@ -54,7 +56,7 @@ func (a *App) indexFor(dir string) (path, root string) {
 		if _, err := os.Stat(p); err == nil {
 			return p, d
 		}
-		if d == "/" || d == "." {
+		if d == "/" || d == "." || filepath.Dir(d) == d { // the top: "/" here, a drive root such as C:\ on Windows
 			return "", ""
 		}
 	}

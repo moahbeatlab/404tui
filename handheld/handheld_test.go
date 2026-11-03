@@ -1,3 +1,5 @@
+//go:build !windows
+
 package handheld
 
 import (
@@ -329,15 +331,17 @@ func TestQuitAsksOnlyWhenWorkIsUnsaved(t *testing.T) {
 func TestBrowseTheWholeFilesystem(t *testing.T) {
 	a, _ := newApp(t)
 	a.go_(Files)
-	for i := 0; i < 40 && a.dir != "/"; i++ {
+	atTop := func() bool { return a.dir == filepath.Dir(a.dir) } // "/" here, a drive root such as C:\ on Windows
+	for i := 0; i < 40 && !atTop(); i++ {
 		keys(t, a, "L")
 	}
-	if a.dir != "/" {
-		t.Fatalf("Left must climb to /, stopped at %s", a.dir)
+	if !atTop() {
+		t.Fatalf("Left must climb to the top, stopped at %s", a.dir)
 	}
+	top := a.dir
 	keys(t, a, "L") // at the top: stays
-	if a.dir != "/" {
-		t.Fatal("went above /")
+	if a.dir != top {
+		t.Fatal("went above the top")
 	}
 	if len(a.entries) == 0 {
 		t.Fatal("/ lists nothing")

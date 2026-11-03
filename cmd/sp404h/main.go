@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Command sp404h is the handheld front end for the SP-404MKII: samples, slicing, patterns and projects
 // on a console with a D-pad and four buttons (R36S under ArkOS). See package handheld.
 package main

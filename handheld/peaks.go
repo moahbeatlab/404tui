@@ -1,3 +1,5 @@
+//go:build !windows
+
 package handheld
 
 import "github.com/moahbeatlab/404tui/formats"
