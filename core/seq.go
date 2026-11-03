@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"image/color"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/moahbeatlab/404tui/formats"
@@ -1144,9 +1143,8 @@ func patternPadsOf(b []byte) []int {
 	return out
 }
 
-// drawSeqRow is a track in the terminal, as in the classic program: a dot at every step (stronger on the beats), and each
-// note as a mark where it starts, as tall as it is loud, and a thin line as long as it lasts. The note under the cursor is
-// drawn thick; an empty step under it is one white dot.
+// drawSeqRow is a track in the terminal: a dot at every step (stronger on the beats) and a marker where a note starts
+// (dimmer when quiet). The cursor is a white ring on an empty step and the note under it is white.
 func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, steps, ph int, editing bool, cursorStep int) {
 	my := y + (rh-1)/2
 	from, to := page*16*stepTicks, min((page+1)*16, steps)*stepTicks
@@ -1158,65 +1156,43 @@ func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, step
 		}
 		return false
 	}
-	covered := func(st int) bool {
-		for _, n := range d.Notes {
-			if n.Pad == pad && int(n.Tick) < (st+1)*stepTicks && int(n.Tick)+max(n.Len, 1) > st*stepTicks {
-				return true
-			}
-		}
-		return false
-	}
 	for s := 0; s < 16 && page*16+s < steps; s++ {
 		st := page*16 + s
 		x := x0 + s*cw + (cw-1)/2
-		if st == cursorStep && !starts(st) {
-			g.Text(x, my, "●", cWhite, true)
-			continue
+		switch {
+		case st == cursorStep && !starts(st):
+			g.Text(x, my, "○", cWhite, true)
+		case starts(st):
+		default:
+			col := cLine
+			if s%4 == 0 {
+				col = cDim
+			}
+			g.Text(x, my, "·", col, false)
 		}
-		if covered(st) {
-			continue
-		}
-		col := cLine
-		if s%4 == 0 {
-			col = cDim
-		}
-		g.Text(x, my, "·", col, false)
 	}
 	for _, n := range d.Notes {
 		if n.Pad != pad {
 			continue
 		}
-		start, end := int(n.Tick), int(n.Tick)+max(n.Len, 1)
-		if end <= from || start >= to {
+		start := int(n.Tick)
+		if start < from || start >= to {
 			continue
 		}
-		cx0 := x0 + (max(start, from)-from)*cw/stepTicks
-		cx1 := x0 + (min(end, to)-from)*cw/stepTicks
-		selected := start/stepTicks == cursorStep
+		st := start / stepTicks
+		x := x0 + (st-page*16)*cw + (cw-1)/2 + (start%stepTicks)*cw/stepTicks
 		col := cAmber
 		switch {
-		case editing && n.Tick == a.aTick && selected:
-			col = cWhite // the note being edited
-		case ph >= 0 && ph*stepTicks >= start && ph*stepTicks < end:
+		case st == cursorStep:
+			col = cWhite
+		case ph == st:
 			col = cGood
+		case n.Vel < 64:
+			col = cAmberD // a quiet note is dimmer
 		}
-		if start >= from { // the mark where it starts, as tall as it is loud
-			mark := string([]rune("▁▂▃▄▅▆▇█")[min(max(int(n.Vel)*8/128, 0), 7)])
-			if selected {
-				mark = "█"
-			}
-			g.Text(cx0, my, mark, col, selected)
-			cx0++
+		if editing && n.Tick == a.aTick {
+			col = cWhite
 		}
-		if cx1 > cx0 { // the line it lasts
-			line, lc := "─", cAmberD
-			if selected {
-				line, lc = "━", col
-			}
-			if col != cAmber {
-				lc = col
-			}
-			g.Text(cx0, my, strings.Repeat(line, cx1-cx0), lc, selected)
-		}
+		g.Text(x, my, "●", col, st == cursorStep)
 	}
 }
