@@ -782,40 +782,45 @@ func (a *App) drawSeq(g Gfx) {
 		case trackSolo:
 			g.Text(lx+3, y, "S", cGood, true)
 		}
+		if Terminal {
+			a.drawSeqRow(g, d, pad, y, rh, x0, cw, page, steps, ph, a.aHeld && pad == a.aPad)
+		}
 		for s := 0; s < 16 && page*16+s < steps; s++ {
 			st := page*16 + s
 			x := stepX(s)
-			bg := cPanel
-			if (s/4)%2 == 1 {
-				bg = cPanel2
-			}
-			if ph == st {
-				bg = cLine
-			}
-			g.StepCell(x, y, cw, rh, bg)
-			for _, n := range notesIn(d, pad, st) { // every note that starts in the step, where it starts: sub-steps and nudges show
-				col := cAmber
+			if !Terminal {
+				bg := cPanel
+				if (s/4)%2 == 1 {
+					bg = cPanel2
+				}
 				if ph == st {
-					col = cGood
+					bg = cLine
 				}
-				if a.aHeld && pad == a.aPad && n.Tick == a.aTick {
-					col = cWhite // the note being edited
-				}
-				start := float64(int(n.Tick)-st*stepTicks) / stepTicks // how far into the step it starts
-				length := float64(n.Len) / stepTicks
-				if n.Len >= stepTicks { // a long note fills the rest of its step
-					length = 1 - start
-				}
-				g.Note(x, y, cw, rh, start, min(length, 1-start), float64(n.Vel)/127, col)
-				// longer than a step: a tie runs on over the steps it lasts
-				if n.Len > stepTicks {
-					end := int(n.Tick) + n.Len
-					for t := s + 1; t < 16 && page*16+t < steps && (page*16+t)*stepTicks < end; t++ {
-						frac := 1.0
-						if rest := end - (page*16+t)*stepTicks; rest < stepTicks {
-							frac = float64(rest) / stepTicks
+				g.StepCell(x, y, cw, rh, bg)
+				for _, n := range notesIn(d, pad, st) { // every note that starts in the step, where it starts: sub-steps and nudges show
+					col := cAmber
+					if ph == st {
+						col = cGood
+					}
+					if a.aHeld && pad == a.aPad && n.Tick == a.aTick {
+						col = cWhite // the note being edited
+					}
+					start := float64(int(n.Tick)-st*stepTicks) / stepTicks // how far into the step it starts
+					length := float64(n.Len) / stepTicks
+					if n.Len >= stepTicks { // a long note fills the rest of its step
+						length = 1 - start
+					}
+					g.Note(x, y, cw, rh, start, min(length, 1-start), float64(n.Vel)/127, col)
+					// longer than a step: a tie runs on over the steps it lasts
+					if n.Len > stepTicks {
+						end := int(n.Tick) + n.Len
+						for t := s + 1; t < 16 && page*16+t < steps && (page*16+t)*stepTicks < end; t++ {
+							frac := 1.0
+							if rest := end - (page*16+t)*stepTicks; rest < stepTicks {
+								frac = float64(rest) / stepTicks
+							}
+							g.Tie(stepX(t), y, cw, rh, frac, col)
 						}
-						g.Tie(stepX(t), y, cw, rh, frac, col)
 					}
 				}
 			}
@@ -1135,4 +1140,56 @@ func patternPadsOf(b []byte) []int {
 		}
 	}
 	return out
+}
+
+// drawSeqRow is a track in the terminal: a dot at every step (stronger on the beats), and each note as a bar as long as it
+// lasts, a gap after it so notes that follow each other stay apart. Louder notes are brighter.
+func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, steps, ph int, editing bool) {
+	my := y + (rh-1)/2
+	from, to := page*16*stepTicks, min((page+1)*16, steps)*stepTicks
+	covered := func(st int) bool {
+		for _, n := range d.Notes {
+			if n.Pad == pad && int(n.Tick) < (st+1)*stepTicks && int(n.Tick)+max(n.Len, 1) > st*stepTicks {
+				return true
+			}
+		}
+		return false
+	}
+	for s := 0; s < 16 && page*16+s < steps; s++ {
+		st := page*16 + s
+		if covered(st) {
+			continue
+		}
+		col := cLine
+		if s%4 == 0 {
+			col = cDim
+		}
+		g.Text(x0+s*cw+(cw-1)/2, my, "·", col, false)
+	}
+	for _, n := range d.Notes {
+		if n.Pad != pad {
+			continue
+		}
+		start, end := int(n.Tick), int(n.Tick)+max(n.Len, 1)
+		if end <= from || start >= to {
+			continue
+		}
+		cx0 := x0 + (max(start, from)-from)*cw/stepTicks
+		cx1 := x0 + (min(end, to)-from)*cw/stepTicks
+		w := max(cx1-cx0, 1)
+		if w > 1 {
+			w--
+		}
+		col := cAmber
+		switch {
+		case n.Vel < 48:
+			col = cAmberD
+		case ph >= 0 && ph*stepTicks >= start && ph*stepTicks < end:
+			col = cGood
+		}
+		if editing && n.Tick == a.aTick {
+			col = cWhite // the note being edited
+		}
+		g.Fill(cx0, my, w, 1, col)
+	}
 }

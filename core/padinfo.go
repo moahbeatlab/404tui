@@ -68,7 +68,7 @@ func (a *App) padUsedIn(pad int) string {
 }
 
 var shortInfo = map[string]string{"Play mode": "Mode", "Gate": "Gate", "Loop": "Loop", "One shot": "One shot", "BPM sync": "BPM sync",
-	"Pitch": "Pitch", "Fine pitch": "Fine", "Time stretch": "Stretch", "Vinyl": "Vinyl", "Bus": "Bus", "Mute group": "Mute grp"}
+	"Level": "Level", "Pan": "Pan", "Attack": "Attack", "Hold": "Hold", "Release": "Release", "Pitch": "Pitch", "Fine pitch": "Fine", "Time stretch": "Stretch", "Vinyl": "Vinyl", "Bus": "Bus", "Mute group": "Mute grp"}
 
 func (a *App) padInfoGroups(n int) [][]infoLine {
 	p := a.info.Pads[n]
@@ -76,7 +76,8 @@ func (a *App) padInfoGroups(n int) [][]infoLine {
 	sample = append(sample, infoLine{label: "SAMPLE", head: true})
 	sample = append(sample, infoLine{label: "Size", value: fmt.Sprintf("%.1f KB", float64(p.Frames*2*int(max(p.Ch, 1)))/1024)})
 	if bpm := a.padValue(n, 0x6F, 12000); bpm > 0 && p.Frames > 0 {
-		sample = append(sample, infoLine{label: "Tempo", value: fmt.Sprintf("%d  %.1f bars", bpm/100, float64(p.Frames)/48000*float64(bpm)/100/60/4)})
+		sample = append(sample, infoLine{label: "Tempo", value: fmt.Sprintf("%d BPM", bpm/100)},
+			infoLine{label: "Bars", value: fmt.Sprintf("%.1f", float64(p.Frames)/48000*float64(bpm)/100/60/4)})
 	}
 	sample = append(sample, infoLine{label: "Used in", value: a.padUsedIn(n)})
 	group := func(title string, labels ...string) []infoLine {
@@ -90,8 +91,9 @@ func (a *App) padInfoGroups(n int) [][]infoLine {
 	return [][]infoLine{
 		sample,
 		group("PLAYBACK", "Play mode", "Gate", "Loop", "One shot", "BPM sync"),
-		group("SOUND", "Pitch", "Fine pitch", "Time stretch", "Vinyl"),
 		group("ROUTING", "Bus", "Mute group"),
+		group("SOUND", "Level", "Pan", "Pitch", "Fine pitch", "Time stretch", "Vinyl"),
+		group("ENVELOPE", "Attack", "Hold", "Release"),
 	}
 }
 
@@ -123,10 +125,14 @@ func (a *App) drawPadInfo(g Gfx, x, y0, w, y1, n int) {
 	}
 	if w >= 40 {
 		cw := w / 2
-		ya := draw(x, y0, cw-1, groups[0])
-		draw(x, ya+1, cw-1, groups[1])
-		yb := draw(x+cw, y0, cw, groups[2])
-		draw(x+cw, yb+1, cw, groups[3])
+		y := y0
+		for _, grp := range groups[:3] {
+			y = draw(x, y, cw-1, grp) + 1
+		}
+		y = y0
+		for _, grp := range groups[3:] {
+			y = draw(x+cw, y, cw, grp) + 1
+		}
 		return
 	}
 	y := y0

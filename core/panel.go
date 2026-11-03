@@ -279,6 +279,10 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 		if id, ok := a.padSample(n); ok {
 			a.wave(g, id, 0, p.Frames, x, row(2), w, 2, cAmber)
 		}
+		if Terminal { // values, no faders: the numbers say it
+			a.drawPadInfo(g, x, row(5), w, y1, n)
+			return
+		}
 		get := func(id byte, def int32) int32 { return a.padValue(n, id, def) }
 		// the level: a bar and its number
 		lx, lw := x+4, w-4-4
