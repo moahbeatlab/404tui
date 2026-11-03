@@ -388,3 +388,30 @@ func TestOnSeqXHearsTheNoteSpacePlaysAndFFreezes(t *testing.T) {
 		t.Fatal("Space stops it")
 	}
 }
+
+func TestPlusAndMinusZoomTheSlicer(t *testing.T) {
+	dir := t.TempDir()
+	if err := core.WriteDemo(dir + "/samples"); err != nil {
+		t.Fatal(err)
+	}
+	app := core.New(dir+"/samples", dir+"/out", &core.NullAudio{})
+	t.Cleanup(func() { core.SetSize(core.MinCols, core.MinRows); core.Terminal = false })
+	core.Terminal = true
+	m := NewModel(app, Options{})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	press(m, "3")
+	press(m, "a")
+	press(m, "a")
+	press(m, "4")
+	if !strings.Contains(m.text(), "zoom 1x") {
+		t.Fatalf("the slicer starts whole:\n%s", m.text())
+	}
+	press(m, "+")
+	if !strings.Contains(m.text(), "zoom 2x") {
+		t.Fatalf("+ zooms in:\n%s", m.text())
+	}
+	press(m, "-")
+	if !strings.Contains(m.text(), "zoom 1x") {
+		t.Fatal("- zooms out")
+	}
+}

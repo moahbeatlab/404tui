@@ -213,6 +213,14 @@ func (m *Model) key(msg tea.KeyMsg) {
 		m.disarm()
 		m.goTo = true
 		return
+	case "+", "=": // the slicer: zoom in
+		m.disarm()
+		m.app.Zoom(1)
+		return
+	case "-", "_": // the slicer: zoom out
+		m.disarm()
+		m.app.Zoom(-1)
+		return
 	case "f": // SEQ: freeze, only what is in view plays
 		m.disarm()
 		m.app.ToggleFreeze()

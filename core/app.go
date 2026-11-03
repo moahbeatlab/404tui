@@ -758,6 +758,14 @@ func (a *App) ToggleFreeze() {
 	a.toggleFreeze()
 }
 
+// Zoom is + and - of a keyboard in the slicer: in (d > 0) or out.
+func (a *App) Zoom(d int) {
+	if a.scr != Slice || a.sl == nil || a.menu != nil || a.prompt != nil || a.tap || a.lane {
+		return
+	}
+	a.zoom = max(0, min(a.zoom+d, 8))
+}
+
 // Modal says whether a menu, the pad panel or a dialog is in front: a keyboard closes it with Esc only.
 func (a *App) Modal() bool { return a.menu != nil || a.pp != nil || a.picker != nil || a.help }
 

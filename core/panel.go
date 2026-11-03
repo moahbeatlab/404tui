@@ -38,6 +38,16 @@ type hint struct{ key, what string }
 // hints are the keys the panel lists: on a keyboard the key that closes a page or a menu is Esc.
 func (a *App) hints() (plain, shift []hint) {
 	plain, shift = a.rawHints()
+	if Terminal && a.scr == Slice && !a.tap && !a.lane && !a.Modal() { // the keyboard zooms with + and -
+		plain = append(append([]hint{}, plain...), hint{"+ -", "zoom in / out"})
+		sh := make([]hint, 0, len(shift))
+		for _, h := range shift {
+			if h.what != "zoom" {
+				sh = append(sh, h)
+			}
+		}
+		shift = sh
+	}
 	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() {
 		plain = append(append([]hint{}, plain...), hint{"f", "freeze the view"}, hint{"z", "1 bar / more"})
 	}
