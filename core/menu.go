@@ -159,7 +159,7 @@ func (a *App) menuKey(k Key) {
 		if it.run != nil {
 			it.run(it.val)
 		}
-		if a.menu != nil && a.menu != m && a.menu.parent == nil && a.menu.title != m.title {
+		if Terminal && a.menu != nil && a.menu != m && a.menu.parent == nil && a.menu.title != m.title { // (a computer's Esc; the handheld's B closes)
 			a.menu.parent = m // a menu that came out of this one: B comes back here
 		}
 	}

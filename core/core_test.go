@@ -137,14 +137,7 @@ func TestAssignSliceAndSequence(t *testing.T) {
 		t.Fatalf("every beat in 4 bars is 16 notes (and the other one): %d", len(d.Notes))
 	}
 	chooseMenuContaining(t, a, "Keep it")
-	keys(t, a, "B") // the tool's menu stays open until it is closed: B goes back to the menu of the tools
-	if a.menu == nil || a.menu.title == "" {
-		t.Fatal("B goes back to the tools menu it was opened from")
-	}
-	keys(t, a, "B") // and B there closes it
-	if a.menu != nil {
-		t.Fatal("B again closes the menu")
-	}
+	keys(t, a, "B") // the tool's menu stays open until it is closed
 	if a.seqOn {
 		t.Fatal("closing the tool stops the loop the trial started")
 	}
@@ -3999,5 +3992,34 @@ func TestTagsAndTheIndexOfTheUnitsFiles(t *testing.T) {
 	a.list()
 	if len(a.entries) != 1 {
 		t.Fatalf("the tag was saved: %v", a.entries)
+	}
+}
+
+func TestOnAComputerBGoesBackToTheMenuItCameFrom(t *testing.T) {
+	a, _ := newApp(t)
+	Terminal = true
+	defer func() { Terminal = false }()
+	child := func() { a.menu = &menu{title: "child", items: []menuItem{{label: "x"}}} }
+	a.menu = &menu{title: "parent", items: []menuItem{{label: "open it", run: func(int) { child() }}}}
+	parent := a.menu
+	a.menuKey(A)
+	if a.menu == nil || a.menu.title != "child" {
+		t.Fatalf("A opens the child: %+v", a.menu)
+	}
+	a.menuKey(B)
+	if a.menu != parent {
+		t.Fatal("B goes back to the parent")
+	}
+	a.menuKey(B)
+	if a.menu != nil {
+		t.Fatal("B again closes it")
+	}
+	// the handheld's B closes at once
+	Terminal = false
+	a.menu = &menu{title: "parent", items: []menuItem{{label: "open it", run: func(int) { child() }}}}
+	a.menuKey(A)
+	a.menuKey(B)
+	if a.menu != nil {
+		t.Fatal("on the handheld B closes the child")
 	}
 }
