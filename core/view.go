@@ -113,7 +113,6 @@ var Version string
 func (a *App) footer(g Gfx) {
 	top := Rows - 2
 	g.Fill(0, top, Cols, 2, cPanel)
-	g.HRule(0, top, Cols, cLine)
 	if a.msg != "" {
 		col := cGood
 		if a.msgBad {

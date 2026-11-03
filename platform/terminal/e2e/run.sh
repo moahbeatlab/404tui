@@ -3,7 +3,7 @@
 #   platform/terminal/e2e/run.sh [path/to/a/project/folder]     results (text, colours, PNGs) in platform/terminal/e2e/out
 set -eu
 cd "$(dirname "$0")"
-root=$(cd ../.. && pwd)
+root=$(cd ../../.. && pwd)
 proj=${1:-/home/hermes/test-projects/Construction\ Kits\ House\ 01}
 mkdir -p out build
 (cd "$root" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o platform/terminal/e2e/build/sp404 ./cmd/sp404 && go build -o platform/terminal/e2e/build/ansipng ./platform/terminal/e2e/ansipng)

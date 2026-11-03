@@ -110,7 +110,8 @@ func (t *textGfx) Text(col, row int, s string, c color.RGBA, bold bool) {
 		if cell == nil {
 			continue
 		}
-		if r == ' ' {
+		if r == ' ' { // a space clears what was there (a rule, a bar), and keeps the ground
+			cell.R = ' '
 			continue
 		}
 		if cell.R != ' ' && cell.R != r && cell.R < 0x2500 { // a letter over a letter, not over a rule or a bar

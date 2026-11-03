@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -74,6 +75,10 @@ func (a *App) midiTick() {
 			default: // nobody is reading: a clock is not worth waiting for
 			}
 		})
+		if errors.Is(err, midiin.ErrUnavailable) { // this build has no MIDI: no use to try again
+			a.plat.MIDI = nil
+			return
+		}
 		if err != nil {
 			a.midiErr = err.Error()
 		} else {

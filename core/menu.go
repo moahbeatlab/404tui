@@ -266,6 +266,7 @@ func (a *App) padToolsMenu(n int) *menu {
 			}
 			a.transform(n, op, arg)
 		}
+		add("Rename..."+map[bool]string{true: count, false: ""}[bulk], func(int) { a.renamePad(n) })
 		add("Reverse"+count, func(int) { each("reverse", 0) })
 		add("Normalize"+count, func(int) { each("normalize", 0) })
 		m.items = append(m.items, menuItem{label: "Pitch" + count, vals: []string{"-12", "-5", "-2", "-1", "+1", "+2", "+5", "+12"}, val: 4,
@@ -286,6 +287,13 @@ func (a *App) padToolsMenu(n int) *menu {
 			a.say(fmt.Sprintf("cleared %d pads", cleared), false)
 		})
 	}
+	m.head(fmt.Sprintf("BANK %c", 'A'+a.bank))
+	add("Find a pad by name...", func(int) { a.findPad() })
+	add("Set up the pads that were never set up", func(int) { a.setupPads(false) })
+	add("Switches for every pad of the bank...", func(int) { a.bankSwitchesMenu() })
+	add("Set the buses of the bank by the names...", func(int) { a.busScanMenu() })
+	add("Export the bank to a folder", func(int) { a.exportBank() })
+	add("Restore pads from an export...", func(int) { a.restoreMenu() })
 	m.head(fmt.Sprintf("MARKED PADS (%d)", len(a.marks)))
 	add("Mark every pad of this bank with a sample", func(int) { a.markBank() })
 	add("Arp the marked pads...", func(int) { a.openMarkedArpMenu() })

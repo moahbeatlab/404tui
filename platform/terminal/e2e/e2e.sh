@@ -25,6 +25,8 @@ ok() { passes=$((passes+1)); echo "ok   $1"; }
 bad() { fails=$((fails+1)); echo "FAIL $1"; cap | head -50; }
 check() { # check "name" "text" -- the screen shows the text (within 10 s)
   if wait_for "$2"; then ok "$1"; else bad "$1: expected '$2'"; fi; }
+checkre() { # checkre "name" "regexp" -- the screen shows text matching it (within 6 s)
+  for ((i=0;i<60;i++)); do cap | grep -qE -- "$2" && { ok "$1"; return; }; sleep 0.1; done; bad "$1: expected /$2/"; }
 absent() { if cap | grep -qF -- "$2"; then bad "$1: did not expect '$2'"; else ok "$1"; fi; }
 start() { # start cols rows [extra args]
   local c=$1 r=$2; shift 2
@@ -156,14 +158,44 @@ lit y h
 check "unit screen without a unit" "NO UNIT"
 snap 22-unit
 key C-r
-check "Ctrl-R says there is no recorder in the container" "no recorder"
+checkre "Ctrl-R says why it cannot record" "no recorder|no audio input"
 snap 23-record-no-recorder
+
+echo "== a unit (the simulator): its projects, a backup, live editing, its card in the file browser"
+tm kill-session -t $S 2>/dev/null
+start 120 40 -sim -project $W/proj
+wait_for "SAMPLE LAB" >/dev/null; key Space; wait_for "BPM 124" >/dev/null
+lit y h; lit y h; lit y h; lit y h
+check "the simulated unit is found" "CONNECTED"
+check "its projects are listed" "PROJECT_02"
+lit a
+check "the menu of a unit project" "UNIT PROJECT 1"
+snap 24-unit-menu
+lit j j j
+lit a
+check "a backup is made" "backed up to"
+ls "$W"/backups/*/PADCONF.BIN >/dev/null 2>&1 && ok "the backup has the project's files" || bad "no backup folder"
+lit a j; lit a
+check "live editing starts" "LIVE 1"
+snap 25-live
+lit y l; lit y l; lit y l; lit y l; lit y l; lit y l
+check "files screen again" "TARGET"
+lit y x
+check "places include the unit's card" "SD card"
+snap 26-places
+lit j j; lit a
+check "the card of the unit is listed" "SD:"
+snap 27-unit-card
+lit s b
+check "the files menu" "Paste here"
+snap 28-files-menu
+key Escape
 
 echo "== save the project unchanged: files identical to the real project"
 tm kill-session -t $S 2>/dev/null
 start 120 40 -project $W/proj
 wait_for "SAMPLE LAB" >/dev/null; key Space; wait_for "BPM 124" >/dev/null
-lit y h; lit y h
+lit y h; lit y h; lit y h; lit y h; lit y h
 check "save screen" "WRITE THE PROJECT"
 lit a
 check "written" "WRITTEN"

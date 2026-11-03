@@ -3848,3 +3848,15 @@ func TestTheBrowserReachesTheUnitsCardAndDoesFileOperations(t *testing.T) {
 		t.Fatalf("Select+A marks: %v", a.marked())
 	}
 }
+
+func TestThePadMenuHasThePadAndBankActions(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.openPadMenu()
+	got := strings.Join(menuLabels(a.menu), "|")
+	for _, want := range []string{"Rename...", "Find a pad by name...", "Set up the pads that were never set up", "Switches for every pad of the bank...", "Set the buses of the bank by the names...", "Export the bank to a folder", "Restore pads from an export..."} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the pad menu has %q: %s", want, got)
+		}
+	}
+}

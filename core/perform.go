@@ -104,8 +104,8 @@ func (a *App) drawPerform(g Gfx) {
 	now := time.Now()
 	w := contentCols - 4
 	g.Text(2, 1, "PERFORM", cAmber, true)
-	st := a.midiStatus()
-	g.Text(contentCols-2-len(st), 1, fit(st, contentCols-12), cDim, false)
+	st := fit(a.midiStatus(), contentCols-14)
+	g.Text(contentCols-2-len(st), 1, st, cDim, false)
 
 	// the pads of the bank the unit is on: lit by how hard they were hit
 	gridCols := 4 * 4
