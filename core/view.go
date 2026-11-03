@@ -239,8 +239,6 @@ func (a *App) drawPads(g Gfx) {
 				case 2:
 					strips = append(strips, [4]int{x, y, th, 2})
 				}
-			} else {
-				g.Fill(x, y, 1, th, cAmber)
 			}
 			g.Text(x+2, y, short(p.Name, pw-6), cText, true)
 			if Terminal { // a computer's terminal shows the length and the switches (the wave is in the panel)
