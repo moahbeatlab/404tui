@@ -1,5 +1,3 @@
-//go:build !windows
-
 // Package handheld is a front end for 404tui's file engine (package lab) that needs only a D-pad and
 // the four buttons on the right of a handheld console (an R36S under ArkOS): Up Down Left Right
 // and A B X Y. Nothing else: no shoulder buttons, no Start or Select, no sticks, no keyboard.
