@@ -715,8 +715,13 @@ func (a *App) drawSeq(g Gfx) {
 	}
 	g.Text(2+len(title)+2, 1, sub, cDim, false)
 
-	cw := min(max((contentCols-7)/16, 2), 8) // a step's width in cells
-	const lx, x0 = 2, 6                      // the pad labels, the first step
+	lx, x0 := 2, 6 // the pad labels, the first step
+	nameW := 0     // a wide window (the terminal) has the room to name each pad's sample beside its label
+	if Terminal && contentCols >= 100 {
+		nameW = 13
+		x0 += nameW
+	}
+	cw := min(max((contentCols-x0-1)/16, 2), 8) // a step's width in cells
 	steps := a.steps()
 	page := a.step / 16
 	bars := (steps + 15) / 16
@@ -768,6 +773,9 @@ func (a *App) drawSeq(g Gfx) {
 			fg = cDim
 		}
 		g.Text(lx, y, a.label(pad), fg, i == a.row)
+		if nameW > 0 && has {
+			g.Text(lx+4, y, fit(a.info.Pads[pad].Name, nameW-1), cDim, false)
+		}
 		switch a.trackMode(pad) {
 		case trackMute:
 			g.Text(lx+3, y, "M", cBad, true)
