@@ -708,6 +708,32 @@ func (a *App) selShifted(k Key) {
 	}
 }
 
+// OpenMenu is Enter of a keyboard where a screen has a menu of its own: the slicer's. It says whether it did.
+func (a *App) OpenMenu() bool {
+	if a.scr != Slice || a.sl == nil || a.menu != nil || a.prompt != nil || a.kb != nil || a.pp != nil || a.tap || a.lane {
+		return false
+	}
+	a.CancelShift()
+	a.sliceMenu()
+	return true
+}
+
+// Playing says whether anything sounds: a pad, the arp or the pattern.
+func (a *App) Playing() bool { return a.playing >= 0 || a.arpOn || a.seqOn }
+
+// PlayStop is the space bar on PADS and SEQ: what sounds stops, and when nothing does it plays (the key X). It says whether
+// it stopped something.
+func (a *App) PlayStop() bool {
+	if (a.scr != Pads && a.scr != Seq) || a.menu != nil || a.prompt != nil || a.pp != nil || a.carry != nil {
+		return false
+	}
+	if a.scr == Pads && (a.playing >= 0 || a.arpOn || a.seqOn) {
+		a.stop()
+		return true
+	}
+	return false
+}
+
 // GoScreen goes to the screen with that number (0 is PADS), from a keyboard's number keys; a number past the last does nothing.
 func (a *App) GoScreen(n int) {
 	if n >= 0 && n < len(screenNames) && !a.Typing() {

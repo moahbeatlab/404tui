@@ -282,9 +282,19 @@ func (m *Model) key(msg tea.KeyMsg) {
 		k = core.Left
 	case "right", "l", "L":
 		k = core.Right
-	case " ":
+	case " ": // play and stop
+		if m.app.PlayStop() {
+			m.disarm()
+			return
+		}
 		k = core.X
-	case "a", "A", "enter":
+	case "enter": // the slicer's menu; a button A elsewhere
+		if m.app.OpenMenu() {
+			m.disarm()
+			return
+		}
+		k = core.A
+	case "a", "A":
 		k = core.A
 	case "b", "B", "esc", "backspace":
 		k = core.B

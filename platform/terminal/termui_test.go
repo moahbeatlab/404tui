@@ -266,3 +266,40 @@ func TestScreensByNumberTabAndGHL(t *testing.T) {
 		t.Fatalf("Tab goes on, got %s", name())
 	}
 }
+
+func TestEnterOpensTheSliceMenuAndSpaceStops(t *testing.T) {
+	dir := t.TempDir()
+	if err := core.WriteDemo(dir + "/samples"); err != nil {
+		t.Fatal(err)
+	}
+	app := core.New(dir+"/samples", dir+"/out", &core.NullAudio{})
+	t.Cleanup(func() { core.SetSize(core.MinCols, core.MinRows); core.Terminal = false })
+	core.Terminal = true
+	m := NewModel(app, Options{})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	press(m, "3")
+	press(m, "a") // into the first folder
+	press(m, "a") // its first sample to the pad
+	press(m, "4")
+	if m.app.ScreenName() != "SLICE" {
+		t.Fatalf("a sample on the pad opens the slicer, got %s", m.app.ScreenName())
+	}
+	press(m, "enter")
+	if !strings.Contains(strings.ToLower(m.text()), "slice settings") {
+		t.Fatalf("Enter in the slicer opens its menu:\n%s", m.text())
+	}
+	press(m, "esc")
+	press(m, "1")
+	press(m, "x")
+	if !m.app.Playing() {
+		t.Fatal("x plays the pad")
+	}
+	press(m, " ")
+	if m.app.Playing() {
+		t.Fatal("Space stops what plays")
+	}
+	press(m, " ")
+	if !m.app.Playing() {
+		t.Fatal("Space plays when nothing does")
+	}
+}
