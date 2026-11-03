@@ -55,6 +55,8 @@ func (a *App) draw(g Gfx) {
 		a.drawConfig(g)
 	case Perform:
 		a.drawPerform(g)
+	case Loop:
+		a.drawLoop(g)
 	}
 	if a.picker != nil {
 		a.drawPicker(g)

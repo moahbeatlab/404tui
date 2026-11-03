@@ -46,7 +46,7 @@ func TestOnlyEightKeys(t *testing.T) {
 	a, _ := newApp(t)
 	// Every screen can be reached and left with the eight keys alone.
 	keys(t, a, "Y+L")
-	if a.Screen() != Perform {
+	if a.Screen() != Loop {
 		t.Fatalf("Y+Left from PADS is the last screen, got %v", a.Screen())
 	}
 	keys(t, a, "Y+R")
@@ -3721,4 +3721,43 @@ func TestTheMIDIInputOfThePlatformIsOpenedAndRead(t *testing.T) {
 	if b.midiStatus() != "no MIDI in this build" {
 		t.Fatalf("without MIDI it says so: %q", b.midiStatus())
 	}
+}
+
+
+func TestTheLooperMakesThePatternDeletesAndRemixes(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	onScreen(t, a, Loop)
+	keys(t, a, "A")
+	b, err := a.lab.PatternBytes(1)
+	if err != nil || len(patternPadsOf(b)) != 3 {
+		t.Fatalf("the pattern has the 3 loops: %v %v", patternPadsOf(b), err)
+	}
+	if patternBars(b) != 2 {
+		t.Fatalf("2 bars when nothing says otherwise: %d", patternBars(b))
+	}
+	keys(t, a, "D D D D X") // pad 5 is empty
+	if padsWithSamples(a) != 3 {
+		t.Fatal("nothing to delete on an empty pad")
+	}
+	a.loopCur = 1
+	keys(t, a, "X")
+	if !a.info.Pads[1].File || !a.msgBad {
+		t.Fatalf("the first X asks: %q", a.msg)
+	}
+	keys(t, a, "X")
+	if a.info.Pads[1].File {
+		t.Fatal("the second X deletes")
+	}
+	a.loopCur = 0
+	keys(t, a, "Y+X")
+	n := padsWithSamples(a)
+	if n != 3 {
+		t.Fatalf("the remix is a new pad on a free pad: %d pads", n)
+	}
+	if !a.info.Pads[1].File {
+		t.Fatal("the remix is on the next free pad, pad 2")
+	}
+	a.Render()
+	a.RenderCells()
 }

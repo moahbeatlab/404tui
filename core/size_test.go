@@ -32,11 +32,12 @@ func TestEveryScreenFitsEverySize(t *testing.T) {
 		{"slice cut", "Y+R Y+R Y+R Y+A"},
 		{"slice settings", "Y+R Y+R Y+R Y+A Y+B"},
 		{"slice tools", "Y+R Y+R Y+R Y+A S+B"},
-		{"save", "Y+L Y+L Y+L Y+L"},
-		{"unit", "Y+L Y+L Y+L"},
-		{"config", "Y+L Y+L"},
-		{"config, a prompt", "Y+L Y+L D D D D D D D D D A"},
-		{"perform", "Y+L"},
+		{"save", "Y+L Y+L Y+L Y+L Y+L"},
+		{"unit", "Y+L Y+L Y+L Y+L"},
+		{"config", "Y+L Y+L Y+L"},
+		{"config, a prompt", "Y+L Y+L Y+L D D D D D D D D D A"},
+		{"perform", "Y+L Y+L"},
+		{"loop", "Y+L"},
 		{"help", "Y"},
 	}
 	for _, sz := range [][2]int{{80, 30}, {81, 31}, {100, 34}, {120, 40}, {132, 43}, {160, 48}, {200, 60}, {240, 70}} {

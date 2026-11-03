@@ -63,9 +63,10 @@ const (
 	Unit
 	Config
 	Perform
+	Loop
 )
 
-var screenNames = []string{"PADS", "SEQ", "FILES", "SLICE", "SAVE", "UNIT", "CONFIG", "PERF"}
+var screenNames = []string{"PADS", "SEQ", "FILES", "SLICE", "SAVE", "UNIT", "CONFIG", "PERF", "LOOP"}
 
 // ScreenName is the name of the screen in front.
 func (a *App) ScreenName() string { return screenNames[a.scr] }
@@ -119,77 +120,80 @@ type App struct {
 	sel        int // slice under the cursor
 	playing    int // pad lit by X, -1 for none
 
-	menu       *menu
-	pp         *padPanel // the pad panel, when it is open
-	picker     *picker   // the pattern picker, when it is open
-	splash     *splash   // the logo and dashboard at the start
-	as         autosave
-	idx        indexJob
-	onepad     onePad
-	autoSens   float64 // how easily Y+A hears an onset (0: 0.5)
-	lfo        lfoState
-	env        envState
-	envInit    bool
-	mg         mangleSet // the dice of the slicer
-	autoMax    int       // the most slices Y+A cuts at the onsets (0: 16)
-	peakCache  map[peakKey]*peakBlocks
-	aHeld      bool // A is down in SEQ: the arrows edit the note under it
-	aDelete    bool // A went down on a note: if nothing is edited, letting go takes it off
-	aPad       int  // the note being edited
-	aTick      uint32
-	aSession   int // counts the holds of A, so that an edit session is one undo step
-	undoSes    int
-	toolBase   *lab.Snap // the project as it was when the open tool dialog began: its changes are trials
-	tt2        trackState2
-	tt         trackState  // the settings of the track tools
-	scopeRow   bool        // the timing tools act on the row under the cursor only, not on every pad
-	undo       []undoEntry // the project before each change, newest last
-	redo       []undoEntry
-	undoKey    Key
-	undoAt     time.Time
-	set        settings
-	dcur       map[string]int   // the cursor in each folder of the file browser, for the next visit
-	searchQ    string           // the search in the file browser, "" for none
-	searchCut  bool             // the search gave up before the end
-	kb         *keyboard        // the on-screen keyboard of the search, when open
-	prompt     *textPrompt      // a line of text being typed, when open
-	cfgAt      int              // the row of the CONFIG screen the cursor is on
-	live       *liveState       // the unit whose project is being edited live, when there is one
-	plat       Platform         // what the system offers
-	mon        *perform.Monitor // what the unit's MIDI said lately
-	clk        perform.Clock    // the unit's MIDI clock
-	midi       *midiLink        // the MIDI input that is open
-	midiTry    time.Time        // when it was last tried to open it
-	midiErr    string
-	codes      padCode         // the pads hit in turn
-	liveBack   Screen          // where the live mode came from
-	perfNow    int             // the pattern that plays (slot 1..160), 0 for none
-	perfNext   int             // the one that is next
-	lvl        *levelMeter     // the level of the sound
-	rec        *record.Session // the recording that runs
-	recDone    chan recResult  // a recording that was stopped and is finished
-	jobAfter   func(err error) // what to do on the main loop when the job in the background is finished
-	aud        map[int]int     // pads whose sample is being auditioned in the pattern: pad -> handle
-	prevOrder  []string        // the files decoded for the browser, oldest first
-	arp        arpState        // the settings of the sample arp, kept between visits
-	arpp       arpPrint        // and of the pattern arp
-	marks      []int           // the pads marked as keys of the arp, in the order they were marked
-	arpOn      bool            // the live arp is looping
-	changed    bool            // something was edited since the last autosave run
-	carry      *carry          // a pad being moved or copied
-	pat        int             // pattern in the sequencer, 1..160
-	step       int             // the cursor's step, 16 to a bar
-	row        int             // the cursor's row in the step grid: an index into rows
-	rows       []int           // the pads of the rows of the step grid: the pads with notes, the marked pads, the tracks added
-	rowsSet    bool            // the rows were chosen (by default or by the user)
-	rowTop     int             // the first row shown, when there are more than 16
-	rowExtra   []int           // tracks the user added, which have no notes yet
-	rowFocus   int             // a pad the cursor should go to when the rows are worked out again (-1: none)
-	seqOn      bool            // the pattern is playing
-	seqStart   time.Time
-	trk        map[int]map[int]int // SEQ: pattern -> pad -> mute/solo
-	freeze     bool                // SEQ: loop only the bar in focus
-	frozenPage int
+	menu              *menu
+	pp                *padPanel // the pad panel, when it is open
+	picker            *picker   // the pattern picker, when it is open
+	splash            *splash   // the logo and dashboard at the start
+	as                autosave
+	idx               indexJob
+	onepad            onePad
+	autoSens          float64 // how easily Y+A hears an onset (0: 0.5)
+	lfo               lfoState
+	env               envState
+	envInit           bool
+	mg                mangleSet // the dice of the slicer
+	autoMax           int       // the most slices Y+A cuts at the onsets (0: 16)
+	peakCache         map[peakKey]*peakBlocks
+	aHeld             bool // A is down in SEQ: the arrows edit the note under it
+	aDelete           bool // A went down on a note: if nothing is edited, letting go takes it off
+	aPad              int  // the note being edited
+	aTick             uint32
+	aSession          int // counts the holds of A, so that an edit session is one undo step
+	undoSes           int
+	toolBase          *lab.Snap // the project as it was when the open tool dialog began: its changes are trials
+	tt2               trackState2
+	tt                trackState  // the settings of the track tools
+	scopeRow          bool        // the timing tools act on the row under the cursor only, not on every pad
+	undo              []undoEntry // the project before each change, newest last
+	redo              []undoEntry
+	undoKey           Key
+	undoAt            time.Time
+	set               settings
+	dcur              map[string]int   // the cursor in each folder of the file browser, for the next visit
+	searchQ           string           // the search in the file browser, "" for none
+	searchCut         bool             // the search gave up before the end
+	kb                *keyboard        // the on-screen keyboard of the search, when open
+	prompt            *textPrompt      // a line of text being typed, when open
+	cfgAt             int              // the row of the CONFIG screen the cursor is on
+	live              *liveState       // the unit whose project is being edited live, when there is one
+	plat              Platform         // what the system offers
+	mon               *perform.Monitor // what the unit's MIDI said lately
+	clk               perform.Clock    // the unit's MIDI clock
+	midi              *midiLink        // the MIDI input that is open
+	midiTry           time.Time        // when it was last tried to open it
+	midiErr           string
+	codes             padCode         // the pads hit in turn
+	liveBack          Screen          // where the live mode came from
+	perfNow           int             // the pattern that plays (slot 1..160), 0 for none
+	perfNext          int             // the one that is next
+	lvl               *levelMeter     // the level of the sound
+	loopBank, loopCur int             // the LOOP screen: the bank of loops and the pad in front
+	loopDelAsk        int             // the pad a delete was asked for
+	loopSlicesAt      int             // how many slices a remix cuts (index of loopSlices)
+	rec               *record.Session // the recording that runs
+	recDone           chan recResult  // a recording that was stopped and is finished
+	jobAfter          func(err error) // what to do on the main loop when the job in the background is finished
+	aud               map[int]int     // pads whose sample is being auditioned in the pattern: pad -> handle
+	prevOrder         []string        // the files decoded for the browser, oldest first
+	arp               arpState        // the settings of the sample arp, kept between visits
+	arpp              arpPrint        // and of the pattern arp
+	marks             []int           // the pads marked as keys of the arp, in the order they were marked
+	arpOn             bool            // the live arp is looping
+	changed           bool            // something was edited since the last autosave run
+	carry             *carry          // a pad being moved or copied
+	pat               int             // pattern in the sequencer, 1..160
+	step              int             // the cursor's step, 16 to a bar
+	row               int             // the cursor's row in the step grid: an index into rows
+	rows              []int           // the pads of the rows of the step grid: the pads with notes, the marked pads, the tracks added
+	rowsSet           bool            // the rows were chosen (by default or by the user)
+	rowTop            int             // the first row shown, when there are more than 16
+	rowExtra          []int           // tracks the user added, which have no notes yet
+	rowFocus          int             // a pad the cursor should go to when the rows are worked out again (-1: none)
+	seqOn             bool            // the pattern is playing
+	seqStart          time.Time
+	trk               map[int]map[int]int // SEQ: pattern -> pad -> mute/solo
+	freeze            bool                // SEQ: loop only the bar in focus
+	frozenPage        int
 	// Now is the clock; nil is the real one. A test sets it.
 	Now func() time.Time
 
@@ -218,6 +222,8 @@ func New(root, outDir string, a Audio) *App {
 	app.lab.NewProject("PROJECT_01")
 	app.dir = root
 	app.loadSettings()
+	app.loopBank, app.loopDelAsk, app.loopSlicesAt = app.set.LooperBank, -1, 1
+	SetTextTheme(app.set.Theme)
 	app.loadAutosaveSetting()
 	if d := app.set.LastDir; d != "" { // back in the folder the browser was in
 		if st, err := os.Stat(d); err == nil && st.IsDir() {
@@ -520,6 +526,8 @@ func (a *App) press(k Key, repeat int) {
 		a.configKey(k)
 	case Perform:
 		a.perfKey(k)
+	case Loop:
+		a.loopKey(k, repeat)
 	}
 }
 
@@ -587,6 +595,8 @@ func (a *App) shifted(k Key) {
 		a.seqShifted(k)
 	case Perform:
 		a.perfShifted(k)
+	case Loop:
+		a.loopShifted(k)
 	case Pads:
 		switch k {
 		case A:

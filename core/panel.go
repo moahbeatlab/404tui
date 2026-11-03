@@ -100,6 +100,8 @@ func (a *App) hints() (plain, shift []hint) {
 		}
 		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"R2", "mute/solo"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}},
 			[]hint{{"Y+X", "add track"}, {"Y+B", "pick pattern"}, {"Sel+B", "tools"}, {"Y+^v", "pattern +-"}, {"Sel+X", "record"}}
+	case Loop:
+		return []hint{{"A", "make the pattern"}, {"X", "delete (twice)"}, {"^v<>", "move"}, {"L1 R1", "bank"}, {"B", "pads"}}, []hint{screen, {"Y+X", "remix"}, {"Y+^v", "slices"}, {"Sel+X", "record"}}
 	case Perform:
 		return []hint{{"A", "pattern now"}, {"X", "next pattern"}, {"B", "back"}}, []hint{screen, {"Y+A", "next -> now"}, {"Y+X", "clear next"}, {"Y+B", "note BUS 1"}, {"Sel+B", "note BUS 2"}, {"Sel+X", "record"}}
 	case Config:
@@ -386,6 +388,11 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 		g.Text(x, row(3), fmt.Sprintf("%d files", a.info.Files), cText, false)
 	case Unit:
 		a.unitContext(g, x, y0, w)
+	case Loop:
+		g.Text(x, y0, fmt.Sprintf("BANK %c", 'A'+a.loopBank), cAmber, true)
+		n := a.loopPad()
+		g.Text(x, y0+1, fit(a.label(n)+" "+a.info.Pads[n].Name, w), cText, false)
+		g.Text(x, y0+3, fmt.Sprintf("%d bars", a.loopBars()), cDim, false)
 	case Perform:
 		g.Text(x, y0, "LIVE", cAmber, true)
 		g.Text(x, y0+1, fit(a.midiStatus(), w), cDim, false)
