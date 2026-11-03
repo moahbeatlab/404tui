@@ -47,6 +47,7 @@ var (
 	cWhite  = rgb(0xffffff)
 	cGood   = rgb(0x5fd38d)
 	cBad    = rgb(0xff6b5e)
+	cBlue   = rgb(0x5fafff) // the second colour of the slices
 )
 
 // A canvas is the frame as pixels: what the handheld shows (and what a screenshot is).

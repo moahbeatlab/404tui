@@ -155,6 +155,7 @@ type App struct {
 	tags              *app.TagIndex    // the tags of the unit's samples, read when first needed
 	rParent, rChild   rangerCache      // the side columns of the ranger view
 	usedCache         map[int]string   // the patterns that use each pad, read once per change
+	peakMax           map[peakKey]int  // the loudest value of each sample, for the slicer's scale
 	tagSearch         bool             // the search is by tags
 	searchCut         bool             // the search gave up before the end
 	kb                *keyboard        // the on-screen keyboard of the search, when open

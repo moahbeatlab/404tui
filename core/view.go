@@ -219,11 +219,7 @@ func (a *App) drawPads(g Gfx) {
 		if p.File {
 			g.Fill(x, y, 1, th, cAmber)
 			g.Text(x+2, y, short(p.Name, pw-6), cText, true)
-			if i == a.cur {
-				if id, ok := a.padSample(n); ok && th >= 3 { // an even number of rows, so the middle line is between two
-					a.wave(g, id, 0, p.Frames, x+1, y+1, tw-2, (ph-2)/2*2, cAmber)
-				}
-			} else if th >= 3 {
+			if th >= 3 {
 				a.drawTileInfo(g, x+2, y+1, tw-3, th >= 4, n, p.Frames)
 			}
 			// the switches that are on: G for gate, L for loop
@@ -298,6 +294,35 @@ func (a *App) drawTileInfo(g Gfx, x, y, w int, flags bool, n, frames int) {
 
 // wave draws the peaks of frames from..to of a sample in a box of cells, mirrored around its middle.
 func (a *App) wave(g Gfx, id, from, to, col, row, cols, rows int, c color.RGBA) {
+	a.waveScaled(g, id, from, to, col, row, cols, rows, c, 0)
+}
+
+// samplePeak is the loudest value of a sample, which the slicer's waveform is scaled to (the same size at every zoom).
+func (a *App) samplePeak(id int) int {
+	s, err := a.lab.Sample(id)
+	if err != nil || len(s.Samples) == 0 {
+		return 1
+	}
+	key := peakKey{&s.Samples[0], len(s.Samples)}
+	if v, ok := a.peakMax[key]; ok {
+		return v
+	}
+	if a.peakMax == nil || len(a.peakMax) > 48 {
+		a.peakMax = map[peakKey]int{}
+	}
+	m := 1
+	for _, v := range s.Samples {
+		if v < 0 {
+			v = -v
+		}
+		m = max(m, int(v))
+	}
+	a.peakMax[key] = m
+	return m
+}
+
+// waveScaled is wave with the peak the heights are measured against (0: the loudest of what is drawn).
+func (a *App) waveScaled(g Gfx, id, from, to, col, row, cols, rows int, c color.RGBA, peakOf int) {
 	n := cols * g.BarsPerCell()
 	pk, err := a.peaks(id, from, to, n)
 	if err != nil {
@@ -305,7 +330,9 @@ func (a *App) wave(g Gfx, id, from, to, col, row, cols, rows int, c color.RGBA) 
 	}
 	h := make([]float64, len(pk))
 	peak := 1
-	if Terminal { // as in the classic program: the peak fills the box and the quiet parts show
+	if Terminal && peakOf > 0 {
+		peak = peakOf
+	} else if Terminal { // as in the classic program: the peak fills the box and the quiet parts show
 		for _, p := range pk {
 			peak = max(peak, p)
 		}
@@ -415,10 +442,37 @@ func (a *App) drawSlice(g Gfx) {
 	from, to := a.view()
 	sel := a.sliceAt(a.at)
 	frac := func(f int) float64 { return float64(f-from) / float64(max(to-from, 1)) }
-	if sel >= 0 {
-		g.Region(2, 2, wc, wr, max(frac(sl.Slices[sel].Start), 0), min(frac(sl.Slices[sel].End), 1))
+	if Terminal { // as in the classic program: the slice is a quiet ground, its dots in its own colour, scaled to the whole sample
+		if sel >= 0 {
+			x0, x1 := max(frac(sl.Slices[sel].Start), 0), min(frac(sl.Slices[sel].End), 1)
+			if x1 > x0 {
+				c0, c1 := 2+int(x0*float64(wc)), 2+min(int(x1*float64(wc)+0.999), wc)
+				g.Fill(c0, 2, max(c1-c0, 1), wr, cPanel2)
+			}
+		}
+		pk := a.samplePeak(a.sid)
+		a.waveScaled(g, a.sid, from, to, 2, 2, wc, wr, cLine, pk) // what no slice holds
+		for i, sg := range sl.Slices {
+			lo, hi := max(sg.Start, from), min(sg.End, to)
+			if hi <= lo {
+				continue
+			}
+			c0, c1 := int(frac(lo)*float64(wc)), min(int(frac(hi)*float64(wc)+0.999), wc)
+			col := cAmber
+			if i%2 == 1 {
+				col = cBlue
+			}
+			if sg.Chance == 0 {
+				col = cDim
+			}
+			a.waveScaled(g, a.sid, lo, hi, 2+c0, 2, max(c1-c0, 1), wr, col, pk)
+		}
+	} else {
+		if sel >= 0 {
+			g.Region(2, 2, wc, wr, max(frac(sl.Slices[sel].Start), 0), min(frac(sl.Slices[sel].End), 1))
+		}
+		a.wave(g, a.sid, from, to, 2, 2, wc, wr, cText)
 	}
-	a.wave(g, a.sid, from, to, 2, 2, wc, wr, cText)
 	for i, sg := range sl.Slices {
 		if sg.Start < from || sg.Start >= to {
 			continue
