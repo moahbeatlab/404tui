@@ -715,7 +715,7 @@ func (a *App) drawSeq(g Gfx) {
 	}
 	g.Text(2+len(title)+2, 1, sub, cDim, false)
 
-	lx, x0 := 2, 6 // the pad labels, the first step
+	lx, x0 := 2, 6                              // the pad labels, the first step
 	cw := min(max((contentCols-x0-1)/16, 2), 8) // a step's width in cells
 	steps := a.steps()
 	page := a.step / 16
