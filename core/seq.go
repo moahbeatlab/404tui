@@ -1176,6 +1176,7 @@ func (a *App) drawSeqRow(g Gfx, d lab.PatternDoc, pad, y, rh, x0, cw, page, step
 		if w > 1 {
 			w--
 		}
+		w = min(w, 2*cw-1) // a long note is not drawn to its end: two steps say where it starts and that it is long
 		col := cAmber
 		switch {
 		case n.Vel < 48:
