@@ -355,3 +355,36 @@ func TestEscClosesAMenuAndBDoesNot(t *testing.T) {
 		t.Fatal("Esc closes it")
 	}
 }
+
+func TestOnSeqXHearsTheNoteSpacePlaysAndFFreezes(t *testing.T) {
+	dir := t.TempDir()
+	if err := core.WriteDemo(dir + "/samples"); err != nil {
+		t.Fatal(err)
+	}
+	app := core.New(dir+"/samples", dir+"/out", &core.NullAudio{})
+	t.Cleanup(func() { core.SetSize(core.MinCols, core.MinRows); core.Terminal = false })
+	core.Terminal = true
+	m := NewModel(app, Options{})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	press(m, "3")
+	press(m, "a")
+	press(m, "a")
+	press(m, "2")
+	press(m, "a") // a note
+	press(m, "x")
+	if m.app.Playing() {
+		t.Fatal("x on SEQ hears the note, it does not start the pattern")
+	}
+	press(m, "f")
+	if !strings.Contains(m.text(), "FROZEN") {
+		t.Fatalf("f freezes the view:\n%s", m.text())
+	}
+	press(m, " ")
+	if !m.app.Playing() {
+		t.Fatal("Space plays the pattern")
+	}
+	press(m, " ")
+	if m.app.Playing() {
+		t.Fatal("Space stops it")
+	}
+}

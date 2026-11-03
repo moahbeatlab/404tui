@@ -80,8 +80,9 @@ func (a *App) setTrack(pad int, notes []lab.Note) error {
 		return err
 	}
 	if a.freeze { // a frozen bar: the tool changes that bar, every other bar of the track stays as it is
-		lo := uint32(a.step / 16 * 16 * stepTicks)
-		hi := lo + 16*stepTicks
+		span := a.viewSpan()
+		lo := uint32(a.step / span * span * stepTicks)
+		hi := lo + uint32(span*stepTicks)
 		var out []lab.Note
 		for _, n := range a.trackNotes(pad) {
 			if n.Tick < lo || n.Tick >= hi {

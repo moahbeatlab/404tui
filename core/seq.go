@@ -567,9 +567,10 @@ func (a *App) renderOf(play func(pad int) bool, frozen bool) (formats.Sample, bo
 	length := int(d.Length)
 	lo, hi := 0, length
 	if frozen { // only the bar in focus
-		lo = min(a.step/16*16*stepTicks, max(length-stepTicks, 0))
-		hi = min(lo+16*stepTicks, length)
-		a.frozenPage = a.step / 16
+		span := a.viewSpan() // the bar, or the two bars, in view
+		lo = min(a.step/span*span*stepTicks, max(length-stepTicks, 0))
+		hi = min(lo+span*stepTicks, length)
+		a.frozenPage = a.step / span
 	}
 	n := int(float64(hi-lo) * perTick)
 	mix := make([]int32, n*2)
@@ -667,7 +668,8 @@ func (a *App) playStep() int {
 	stepDur := time.Duration(float64(time.Minute) / bpm / 4)
 	n := int(a.clock().Sub(a.seqStart) / stepDur)
 	if a.freeze {
-		return a.frozenPage*16 + n%min(16, a.steps()-a.frozenPage*16)
+		span := a.viewSpan()
+		return a.frozenPage*span + n%max(min(span, a.steps()-a.frozenPage*span), 1)
 	}
 	return n % a.steps()
 }
@@ -676,7 +678,12 @@ func (a *App) playStep() int {
 func (a *App) toggleFreeze() {
 	a.freeze = !a.freeze
 	if a.freeze {
-		a.say(fmt.Sprintf("bar %d is frozen: X loops only this bar, L1/R1 move the loop", a.step/16+1), false)
+		span := a.viewSpan()
+		if span > 16 {
+			a.say(fmt.Sprintf("bars %d-%d are frozen: X loops only the bars in view", a.step/span*span/16+1, a.step/span*span/16+span/16), false)
+		} else {
+			a.say(fmt.Sprintf("bar %d is frozen: X loops only this bar, L1/R1 move the loop", a.step/16+1), false)
+		}
 	} else {
 		a.say("the whole pattern plays again", false)
 	}
@@ -687,7 +694,7 @@ func (a *App) toggleFreeze() {
 
 // freezeTick moves a playing frozen loop to the bar that came into focus.
 func (a *App) freezeTick() {
-	if a.freeze && a.seqOn && a.step/16 != a.frozenPage {
+	if a.freeze && a.seqOn && a.step/a.viewSpan() != a.frozenPage {
 		a.replay()
 	}
 }
@@ -701,6 +708,17 @@ func lerp(a, b color.RGBA, t float64) color.RGBA {
 func (a *App) seqRowCells() int {
 	shown := min(len(a.rows)-a.rowTop, maxRows)
 	return min(max((Rows-2-3)/max(shown, 1), 1), 2)
+}
+
+// viewSpan is how many steps the grid shows: a bar, and on a wide terminal two or four bars side by side while their
+// steps keep a width of 3 (z turns that off).
+func (a *App) viewSpan() int {
+	span := 16
+	steps := a.steps()
+	for Terminal && !a.seqOneBar && span < 64 && span < steps && (contentCols-6-1)/(span*2) >= 3 {
+		span *= 2
+	}
+	return span
 }
 
 // drawSeq is the step grid, as on the unit: a row for each pad (up to 16), the 16 steps of one bar across, a lit block
@@ -717,10 +735,7 @@ func (a *App) drawSeq(g Gfx) {
 
 	lx, x0 := 2, 6 // the pad labels, the first step
 	steps := a.steps()
-	span := 16 // the steps in view: a bar, and on a wide terminal two or four bars side by side while their steps keep a width of 3
-	for Terminal && !a.seqOneBar && span < 64 && span < steps && (contentCols-x0-1)/(span*2) >= 3 {
-		span *= 2
-	}
+	span := a.viewSpan()
 	avail := min(max(contentCols-x0-1, span*2), span*8) // the cells the steps share: all the width there is (up to 8 a step)
 	page := a.step / span
 	bars := (steps + span - 1) / span

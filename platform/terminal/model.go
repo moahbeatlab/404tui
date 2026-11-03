@@ -213,6 +213,10 @@ func (m *Model) key(msg tea.KeyMsg) {
 		m.disarm()
 		m.goTo = true
 		return
+	case "f": // SEQ: freeze, only what is in view plays
+		m.disarm()
+		m.app.ToggleFreeze()
+		return
 	case "z": // SEQ: one bar or as many as fit
 		m.disarm()
 		m.app.ToggleBars()
@@ -309,6 +313,9 @@ func (m *Model) key(msg tea.KeyMsg) {
 		k = core.B
 	case "x", "X":
 		k = core.X
+		if m.armed == noShift && !m.aHeld && m.app.ScreenName() == "SEQ" && !m.app.Modal() { // SEQ: x hears the note, Space plays the pattern
+			k = core.L2
+		}
 	case "[", "pgup", "ctrl+u":
 		k = core.L1
 	case "]", "pgdown", "ctrl+d":

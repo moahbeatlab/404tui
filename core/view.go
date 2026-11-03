@@ -206,6 +206,11 @@ func (a *App) drawPads(g Gfx) {
 	for i := 0; i < 16; i++ {
 		n := a.bank*16 + i
 		x, y := x0+(i%4)*pw, 1+(i/4)*ph
+		tw := tw
+		if Terminal { // the tiles share the whole width
+			x = 1 + (i%4)*cols/4
+			tw = 1 + (i%4+1)*cols/4 - x - 1
+		}
 		p := a.info.Pads[n]
 		bg := cPanel
 		if p.File {
@@ -283,13 +288,18 @@ func (a *App) drawBanks(g Gfx, cur int) {
 				used++
 			}
 		}
-		x := bx0 + b*bw
+		x, w := bx0+b*bw, bw-1
+		if Terminal { // the banks share the whole width
+			avail := contentCols - 2
+			x = 1 + b*avail/10
+			w = 1 + (b+1)*avail/10 - x - 1
+		}
 		col, fg := cPanel, cDim
 		if b == cur {
 			col, fg = cAmber, cBg
 		}
-		g.Fill(x, by, bw-1, 1, col)
-		g.Text(x+(bw-1)/2, by, string(rune('A'+b)), fg, true)
+		g.Fill(x, by, w, 1, col)
+		g.Text(x+w/2, by, string(rune('A'+b)), fg, true)
 		if !Terminal { // the handheld shows how full each bank is; the terminal has the highlighter only
 			g.Bar(x, by+1, bw-1, float64(used)/16, cAmber, cLine)
 		}

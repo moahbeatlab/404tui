@@ -744,7 +744,18 @@ func (a *App) ToggleBars() {
 		return
 	}
 	a.seqOneBar = !a.seqOneBar
+	if a.freeze && a.seqOn {
+		a.replay()
+	}
 	a.say(map[bool]string{true: "one bar in view: z shows more again", false: "all the bars the window holds: z shows one"}[a.seqOneBar], false)
+}
+
+// ToggleFreeze is the f key of a keyboard on SEQ: only what is in view (a bar, or the bars side by side) loops.
+func (a *App) ToggleFreeze() {
+	if a.scr != Seq || a.menu != nil || a.prompt != nil {
+		return
+	}
+	a.toggleFreeze()
 }
 
 // Modal says whether a menu, the pad panel or a dialog is in front: a keyboard closes it with Esc only.

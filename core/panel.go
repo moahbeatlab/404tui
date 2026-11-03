@@ -39,7 +39,20 @@ type hint struct{ key, what string }
 func (a *App) hints() (plain, shift []hint) {
 	plain, shift = a.rawHints()
 	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() {
-		plain = append(append([]hint{}, plain...), hint{"z", "1 bar / more"})
+		plain = append(append([]hint{}, plain...), hint{"f", "freeze the view"}, hint{"z", "1 bar / more"})
+	}
+	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() { // the keyboard: Space plays the pattern, x the note
+		out := make([]hint, 0, len(plain))
+		for _, h := range plain {
+			switch {
+			case h.key == "X" && (h.what == "play" || h.what == "stop"):
+				h = hint{"Space", "play / stop"}
+			case h.key == "L2" && h.what == "hear note":
+				h = hint{"x", "hear the note"}
+			}
+			out = append(out, h)
+		}
+		plain = out
 	}
 	if Terminal && a.Modal() {
 		out := make([]hint, len(plain))
