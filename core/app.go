@@ -156,6 +156,7 @@ type App struct {
 	rParent, rChild   rangerCache      // the side columns of the ranger view
 	usedCache         map[int]string   // the patterns that use each pad, read once per change
 	peakMax           map[peakKey]int  // the loudest value of each sample, for the slicer's scale
+	soundUntil        time.Time        // when the sample that plays ends, for Space (play or stop)
 	tagSearch         bool             // the search is by tags
 	searchCut         bool             // the search gave up before the end
 	kb                *keyboard        // the on-screen keyboard of the search, when open
@@ -719,7 +720,9 @@ func (a *App) OpenMenu() bool {
 }
 
 // Playing says whether anything sounds: a pad, the arp or the pattern.
-func (a *App) Playing() bool { return a.playing >= 0 || a.arpOn || a.seqOn }
+func (a *App) Playing() bool {
+	return a.arpOn || a.seqOn || a.playing >= 0 && time.Now().Before(a.soundUntil)
+}
 
 // PlayStop is the space bar on PADS and SEQ: what sounds stops, and when nothing does it plays (the key X). It says whether
 // it stopped something.
@@ -727,7 +730,7 @@ func (a *App) PlayStop() bool {
 	if (a.scr != Pads && a.scr != Seq) || a.menu != nil || a.prompt != nil || a.pp != nil || a.carry != nil {
 		return false
 	}
-	if a.scr == Pads && (a.playing >= 0 || a.arpOn || a.seqOn) {
+	if a.scr == Pads && (a.arpOn || a.seqOn || a.playing >= 0 && time.Now().Before(a.soundUntil)) {
 		a.stop()
 		return true
 	}
@@ -851,6 +854,7 @@ func (a *App) play(s formats.Sample) {
 		}
 		return
 	}
+	a.soundUntil = time.Now().Add(time.Duration(float64(s.Frames()) / 48000 * float64(time.Second)))
 	if err := a.Audio.Play(s); err != nil {
 		a.say(err.Error(), true)
 	}

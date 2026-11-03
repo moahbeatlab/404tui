@@ -303,3 +303,37 @@ func TestEnterOpensTheSliceMenuAndSpaceStops(t *testing.T) {
 		t.Fatal("Space plays when nothing does")
 	}
 }
+
+func TestSpacePlaysAndStopsTheSampleAndThePattern(t *testing.T) {
+	dir := t.TempDir()
+	if err := core.WriteDemo(dir + "/samples"); err != nil {
+		t.Fatal(err)
+	}
+	app := core.New(dir+"/samples", dir+"/out", &core.NullAudio{})
+	t.Cleanup(func() { core.SetSize(core.MinCols, core.MinRows); core.Terminal = false })
+	core.Terminal = true
+	m := NewModel(app, Options{})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	press(m, "3")
+	press(m, "a")
+	press(m, "a") // a sample on A1
+	press(m, "1")
+	press(m, " ")
+	if !m.app.Playing() {
+		t.Fatal("Space on PADS plays the sample")
+	}
+	press(m, " ")
+	if m.app.Playing() {
+		t.Fatal("Space again stops it")
+	}
+	press(m, "2")
+	press(m, "a") // a note
+	press(m, " ")
+	if !m.app.Playing() {
+		t.Fatal("Space on SEQ plays the pattern")
+	}
+	press(m, " ")
+	if m.app.Playing() {
+		t.Fatal("Space again stops the pattern")
+	}
+}
