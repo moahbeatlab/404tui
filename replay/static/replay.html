@@ -129,7 +129,7 @@ function prepare(events, analysis, cuesIn) {
   if (want && patByLabel.has(want)) { chosen = want; sel.value = want; }
   sel.onchange = () => {
     if (!sel.value) return;
-    const T = snapLoop(audio.currentTime + OFFSET + NUDGE / 1000);
+    const T = snapLoop(now() + OFFSET + NUDGE / 1000);
     cues = cues.filter(c => Math.abs(c.t - T) > 0.05);
     const p = patByLabel.get(sel.value);
     cues.push({ t: +T.toFixed(3), label: sel.value,
@@ -138,7 +138,21 @@ function prepare(events, analysis, cuesIn) {
     sel.value = ""; rebuildCues(); saveCues();
   };
   document.getElementById("clearcues").onclick = () => { cues = []; rebuildCues(); saveCues(); };
-  if (AN && AN.frames) { peak = new Uint16Array(bytes(AN.peak).buffer); spec = bytes(AN.spec); }
+  if (AN && AN.frames) { peak = new Uint16Array(bytes(AN.peak).buffer); spec = bytes(AN.spec); buildSpectrogram(); }
+  for (const [k, l] of padEv) hitTimes.set(k, l.filter(e => e.on).map(e => ({ t: e.t })));
+  for (const e of beats) if (e.bpm) tempoSeries.push(e);
+}
+const hitTimes = new Map(), tempoSeries = [];
+let specImg = null; // the whole take as a picture: a column for every frame, the bands up the side
+function buildSpectrogram() {
+  const nb = AN.bands, c = document.createElement("canvas"); c.width = AN.frames; c.height = nb;
+  const x = c.getContext("2d"), img = x.createImageData(c.width, c.height), stops = [[22, 22, 24], [122, 90, 0], [255, 176, 0], [255, 243, 192]];
+  for (let f = 0; f < AN.frames; f++) for (let b = 0; b < nb; b++) {
+    const v = Math.pow(spec[f * nb + b] / 255, 0.8) * 3, i = Math.min(Math.floor(v), 2), u = Math.min(v - i, 1), a = stops[i], z = stops[i + 1];
+    const o = ((nb - 1 - b) * c.width + f) * 4;
+    img.data[o] = a[0] + (z[0] - a[0]) * u; img.data[o + 1] = a[1] + (z[1] - a[1]) * u; img.data[o + 2] = a[2] + (z[2] - a[2]) * u; img.data[o + 3] = 255;
+  }
+  x.putImageData(img, 0, 0); specImg = c;
 }
 
 // ---- what the unit was doing at time T (the time of the log)
@@ -167,8 +181,7 @@ function bankInView(T) {
   if (best < 0 || T - best > 3) { // no pad was touched lately: the bank of the pattern that plays
     const r = patternAt(T);
     if (r && r.p.pads.size) {
-      const n = new Map(); for (const pad of r.p.pads) { const b = Math.floor(pad / 16); n.set(b, (n.get(b) || 0) + 1); }
-      bank = String.fromCharCode(65 + [...n].sort((a, b) => b[1] - a[1])[0][0]);
+      bank = patternBank(r.p) || bank;
     }
   }
   return bank;
@@ -177,6 +190,23 @@ function playPosition(T) {
   const i = atIndex(beats, T); if (i < 0) return null;
   const b = beats[i]; if (T - b.t > 2.5) return null; // the clock stopped
   return { q: b.n + clamp((T - b.t) * b.bpm / 60, 0, 1), bpm: b.bpm };
+}
+// the tempo is in the project: the one of the bank of the pattern that plays (or the project's when the banks share it); the clock only
+// shows where in the bar the unit is, and stands in when the project does not say
+function bankTempo(letter) {
+  const bt = PROJ.bank_tempos;
+  if (bt && !PROJ.project_tempo && bt[letter.charCodeAt(0) - 65]) return bt[letter.charCodeAt(0) - 65];
+  return PROJ.tempo || 0;
+}
+function patternBank(p) {
+  const n = new Map(); for (const pad of p.pads) { const b = Math.floor(pad / 16); n.set(b, (n.get(b) || 0) + 1); }
+  return n.size ? String.fromCharCode(65 + [...n].sort((a, b) => b[1] - a[1])[0][0]) : "";
+}
+function tempoAt(T) {
+  const r = patternAt(T), pos = playPosition(T);
+  if (r) { const b = patternBank(r.p), t = b ? bankTempo(b) : 0; if (t) return { bpm: t, src: "bank " + b }; }
+  if (pos) return { bpm: pos.bpm, src: "clock" };
+  return { bpm: PROJ.tempo || 0, src: "project" };
 }
 function running(T) { const e = at(transport, T); return e ? e.k !== "stop" : !!playPosition(T); }
 
@@ -219,8 +249,8 @@ function drawHeader(T, A) {
   text(fit(PROJ.name || "", 24) + "   " + fit(FILE, 40), 300, 42, COL.dim, 22);
   const pos = playPosition(T), run = running(T);
   const bar = pos ? Math.floor(pos.q / 4) + 1 : null, beat = pos ? Math.floor(pos.q % 4) + 1 : null;
-  const bpm = pos ? pos.bpm : (PROJ.tempo || 0);
-  text(bpm ? bpm.toFixed(1) + " BPM" : "", 1000, 44, pos ? COL.amber : COL.dim, 34, true);
+  const tp = tempoAt(T), bpm = tp.bpm;
+  text(bpm ? (Number.isInteger(bpm) ? bpm : bpm.toFixed(1)) + " BPM" : "", 1000, 44, tp.src === "project" ? COL.dim : COL.amber, 34, true);
   text(pos ? "BAR " + bar + "  BEAT " + beat : "no clock: the project's tempo", 1240, 42, pos ? COL.text : COL.dim, 22);
   text(run ? "PLAY" : "STOP", 1560, 42, run ? COL.good : COL.dim, 26, true);
   text(mmss(A) + " / " + mmss(AN ? AN.duration : 0), W - 28, 42, COL.text, 24, false, "right");
@@ -241,6 +271,12 @@ function drawPads(T) {
     if (st) { const age = T - st.hitAt; glow = st.held ? 1 : clamp(1 - age / 0.45, 0, 1); glow *= 0.35 + 0.65 * (st.v || 100) / 127; }
     if (glow > 0) { g.globalAlpha = glow * 0.85; rrect(x, y, tw, th, 10, COL.amber); g.globalAlpha = 1; }
     if (st && st.held) { g.strokeStyle = "#fff"; g.lineWidth = 3; g.beginPath(); g.roundRect(x + 1.5, y + 1.5, tw - 3, th - 3, 9); g.stroke(); }
+    if (st && st.hitAt >= 0) { // how hard the last hit was, fading: a bar at the right edge and a ring
+      const age = T - st.hitAt;
+      if (age >= 0 && age < 1.4) { g.globalAlpha = 1 - age / 1.4; rect(x + tw - 14, y + th - 10 - (th - 20) * (st.v || 100) / 127, 6, (th - 20) * (st.v || 100) / 127, COL.amber); g.strokeStyle = COL.amber; g.lineWidth = 3; g.beginPath(); g.roundRect(x + 1.5, y + 1.5, tw - 3, th - 3, 9); g.stroke(); g.globalAlpha = 1; }
+    }
+    const hl = hitTimes.get(bank + (i + 1)), hc = hl ? atIndex(hl, T) + 1 : 0;
+    if (hc > 0) text("x" + hc, x + tw - 14, y + 28, glow > 0.5 ? "#111" : COL.dim, 18, false, "right");
     if (inPat && inPat.has(n)) { g.strokeStyle = COL.amberD; g.lineWidth = 2; g.beginPath(); g.roundRect(x + 1, y + 1, tw - 2, th - 2, 9); g.stroke(); }
     if (info && info.bus) rect(x + 2, y + 10, 6, th - 20, BUSCOL[info.bus]);
     const dark = glow > 0.5;
@@ -289,7 +325,8 @@ function drawPattern(T) {
   const p = r.p, steps = Math.max(Math.round(p.length / 120), 16);
   text("PATTERN " + p.label + "   " + p.bars + " bars" + (r.how === "guess" ? "   (guessed from the pads)" : r.how === "chosen" ? "   (chosen)" : r.how === "cue" ? "   (set by hand)" : ""), x0 + 16, y0 + 30, COL.amber, 20, true);
   const pads = [...p.pads].sort((a, b) => a - b).slice(0, 10);
-  const rows = Math.max(pads.length, 1), rh = Math.min(32, (h - 70) / rows);
+  drawPatternStrip(x0 + 16, y0 + 44, w - 32, T);
+  const rows = Math.max(pads.length, 1), rh = Math.min(32, (h - 118) / rows);
   const ix = x0 + 12, iw = 330;           // the pads of the pattern: their settings
   const gx = x0 + iw + 20, gw = w - iw - 40;
   const pos = playPosition(T), lenQ = p.length / 480;
@@ -297,7 +334,7 @@ function drawPattern(T) {
   const visible = Math.min(steps, 32), first = phase < 0 ? 0 : clamp(Math.floor(phase * 4 / visible) * visible, 0, steps - visible);
   const cw = gw / visible;
   pads.forEach((n, ri) => {
-    const y = y0 + 48 + ri * rh;
+    const y = y0 + 96 + ri * rh;
     const info = padInfo.get(n), mi = info && info.info ? info.info : {};
     const muted = mutedGuess(n, p, T);
     g.globalAlpha = muted ? 0.4 : 1;
@@ -317,9 +354,31 @@ function drawPattern(T) {
     }
     g.globalAlpha = 1;
   });
-  if (phase >= 0) { const s = phase * 4 - first; if (s >= 0 && s <= visible) rect(gx + s * cw - 1, y0 + 42, 3, rows * rh + 8, COL.good); }
+  if (phase >= 0) { const s = phase * 4 - first; if (s >= 0 && s <= visible) rect(gx + s * cw - 1, y0 + 90, 3, rows * rh + 8, COL.good); }
   if (steps > visible) text("steps " + (first + 1) + "-" + (first + visible) + " of " + steps, x0 + w - 16, y0 + 30, COL.dim, 18, false, "right");
   if (pads.length < p.pads.size) text("+" + (p.pads.size - pads.length) + " more pads", ix, y0 + h - 10, COL.dim, 16);
+}
+
+// the patterns in turn: the ones before, the one that plays, the ones to come (the cues are known) and when the next one starts
+function drawPatternStrip(x, y, w, T) {
+  const list = []; for (const e of patEv) if (e.now && (!list.length || list[list.length - 1].now !== e.now)) list.push(e);
+  let cur = -1; for (let i = 0; i < list.length; i++) if (list[i].t <= T) cur = i;
+  if (!list.length) return;
+  const from = Math.max(cur - 2, 0), shown = list.slice(from, from + 7);
+  let cx = x;
+  shown.forEach((e, k) => {
+    const on = from + k === cur, w2 = 70;
+    rrect(cx, y, w2, 34, 8, on ? COL.amber : COL.tile);
+    text(e.now, cx + w2 / 2, y + 24, on ? "#111" : (from + k < cur ? COL.dim : COL.text), 20, true, "center");
+    cx += w2 + 10;
+    if (k < shown.length - 1) text(">", cx - 8, y + 24, COL.dim, 18, false, "center");
+  });
+  const nx = list[cur + 1];
+  if (nx) {
+    const bpm = tempoAt(T).bpm || 120, beats = (nx.t - T) * bpm / 60;
+    const when = beats >= 8 ? "in " + (beats / 4).toFixed(1) + " bars" : beats > 1 ? "in " + Math.ceil(beats) + " beats" : "now";
+    text("NEXT " + nx.now + " " + when, x + w, y + 24, COL.amber, 22, true, "right");
+  }
 }
 
 function knob(cx, cy, r, v, label, c, hist, T) {
@@ -348,7 +407,7 @@ function knob(cx, cy, r, v, label, c, hist, T) {
 }
 
 function drawFx(T) {
-  const x0 = 960, y0 = 80, w = 920, h = 600;
+  const x0 = 960, y0 = 80, w = 920, h = 560;
   panel(x0, y0, w, h);
   const bw = w / 2, bh = h / 2;
   for (let bus = 1; bus <= 4; bus++) {
@@ -371,7 +430,7 @@ function drawFx(T) {
 
 function levelDb(v) { return v <= 0 ? -Infinity : 20 * Math.log10(v); }
 function drawMeter(T) {
-  const x0 = 960, y0 = 696, w = 920, h = 354;
+  const x0 = 960, y0 = 656, w = 920, h = 394;
   panel(x0, y0, w, h, "LEVEL");
   if (!peak) { text("no analysis of the audio", x0 + 16, y0 + 80, COL.dim, 22); return; }
   const f = clamp(Math.floor(T_audio * AN.fps), 0, AN.frames - 1);
@@ -391,16 +450,58 @@ function drawMeter(T) {
     for (let k = 0; k < 6; k++) if (peak[Math.max(f - k, 0) * 2 + c] > 65535 * 0.966) clip = true;
   }
   if (clip) { rect(x0 + w - 110, y0 + 10, 90, 28, COL.bad); text("CLIP", x0 + w - 65, y0 + 32, "#111", 20, true, "center"); }
-  const sx = x0 + 24, sy = y0 + 140, sw = w - 48, sh = 180, nb = AN.bands;
+  drawSpectrogram(x0 + 24, y0 + 134, w - 48, 158, T);
+  drawTempo(x0 + 24, y0 + 326, w - 48, 54, T);
+}
+
+// the sound of the last 16 seconds and the next 8 (the take is known): loop starts and the patterns that change are marked
+function drawSpectrogram(sx, sy, sw, sh, T) {
   rect(sx, sy, sw, sh, "#161616");
-  const bwid = sw / nb;
-  for (let i = 0; i < nb; i++) {
-    let v = 0;
-    for (let k = 0; k < 5; k++) { const ff = f - k; if (ff < 0) break; v = Math.max(v, spec[ff * nb + i] / 255 - k * 0.04); }
-    const bh = clamp(v, 0, 1) * (sh - 8);
-    rect(sx + i * bwid + 1, sy + sh - 4 - bh, bwid - 2, Math.max(bh, 2), mix("#ffb000", "#ff5f5f", clamp(v - 0.6, 0, 0.4) / 0.4));
+  const before = 16, after = 8, fps = AN.fps, f0 = T_audio * fps, nowX = sx + sw * before / (before + after);
+  const a = f0 - before * fps, bz = f0 + after * fps; // frames at the left and right edge
+  const from = Math.max(a, 0), to = Math.min(bz, AN.frames);
+  if (specImg && to > from) {
+    const dx = sx + (from - a) / (bz - a) * sw, dw = (to - from) / (bz - a) * sw;
+    g.imageSmoothingEnabled = true; g.drawImage(specImg, from, 0, to - from, specImg.height, dx, sy, dw, sh);
   }
-  text("30 Hz", sx + 4, sy + sh + 18, COL.dim, 14); text("18 kHz", sx + sw, sy + sh + 18, COL.dim, 14, false, "right");
+  const X = ta => sx + (ta * fps - a) / (bz - a) * sw; // audio time to x
+  g.fillStyle = "rgba(255,255,255,0.18)";
+  for (const l of loopStarts) { const x = X(l - OFFSET); if (x >= sx && x <= sx + sw) g.fillRect(x, sy, 1, sh); }
+  for (const e of patEv) {
+    const x = X(e.t - OFFSET); if (x < sx || x > sx + sw || !e.now) continue;
+    rect(x, sy, 2, sh, COL.amber); text(e.now, x + 5, sy + 16, COL.amber, 15, true);
+  }
+  rect(nowX - 1, sy, 3, sh, COL.good);
+  text("-16 s", sx + 4, sy + sh + 16, COL.dim, 14); text("+8 s", sx + sw, sy + sh + 16, COL.dim, 14, false, "right"); text("30 Hz - 18 kHz up the side", sx + sw / 2, sy + sh + 16, COL.dim, 14, false, "center");
+}
+
+// the tempo over the whole take: the tempo of the bank of each pattern in turn (the clock where no pattern is known)
+function tempoSteps() {
+  const d = AN.duration, pts = [], list = [];
+  for (const e of patEv) if (e.now && patByLabel.has(e.now)) list.push({ t: e.t - OFFSET, bpm: bankTempo(patternBank(patByLabel.get(e.now))) });
+  if (list.length && list.every(e => e.bpm)) {
+    pts.push({ t: 0, bpm: list[0].bpm });
+    for (const e of list) { pts.push({ t: e.t, bpm: pts[pts.length - 1].bpm }); pts.push({ t: e.t, bpm: e.bpm }); }
+    pts.push({ t: d, bpm: pts[pts.length - 1].bpm });
+    return pts;
+  }
+  return tempoSeries.map(e => ({ t: e.t - OFFSET, bpm: e.bpm }));
+}
+function drawTempo(sx, sy, sw, sh, T) {
+  text("TEMPO", sx, sy + 14, COL.dim, 16, true);
+  const d = AN.duration, pts = tempoSteps();
+  if (!pts.length || !d) { text("no clock in the take", sx + 90, sy + 14, COL.dim, 16); return; }
+  let lo = Infinity, hi = -Infinity; for (const e of pts) { lo = Math.min(lo, e.bpm); hi = Math.max(hi, e.bpm); }
+  const mid = (lo + hi) / 2, half = Math.max((hi - lo) / 2, 2) * 1.2;
+  const gx = sx + 90, gw = sw - 190, gy = sy + 2, gh = sh - 4;
+  rect(gx, gy, gw, gh, "#161616");
+  g.strokeStyle = COL.amber; g.lineWidth = 2; g.beginPath();
+  pts.forEach((e, i) => { const x = gx + clamp(e.t / d, 0, 1) * gw, y = gy + gh / 2 - (e.bpm - mid) / half * gh / 2; i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.stroke();
+  rect(gx + clamp(T_audio / d, 0, 1) * gw - 1, gy, 3, gh, COL.good);
+  const bpm = tempoAt(T).bpm;
+  text(bpm ? (Number.isInteger(bpm) ? bpm : bpm.toFixed(1)) : "", sx + sw, sy + 40, COL.amber, 28, true, "right");
+  text(lo === hi ? "steady" : lo + " - " + hi, sx + sw, sy + 12, COL.dim, 14, false, "right");
 }
 
 let T_audio = 0;
