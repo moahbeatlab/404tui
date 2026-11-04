@@ -219,3 +219,21 @@ func TestCaptionsAreKept(t *testing.T) {
 		t.Fatalf("%v", got)
 	}
 }
+
+func TestPatternsCanBeAdopted(t *testing.T) {
+	r := &Replay{CuesPath: filepath.Join(t.TempDir(), "x.cues.json")}
+	if err := r.SetPatterns([]Cue{{T: 3, Label: "B1"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(r.CuesPath)
+	if !strings.Contains(string(b), "patterns_adopted") {
+		t.Fatalf("not kept: %s", b)
+	}
+	r2 := &Replay{CuesPath: r.CuesPath}
+	var m meta
+	json.Unmarshal(b, &m)
+	r2.title, r2.cues, r2.adopted = m.Title, m.Cues, m.PatternsAdopted
+	if !r2.Adopted() || len(r2.Cues()) != 1 {
+		t.Fatal("reading back")
+	}
+}

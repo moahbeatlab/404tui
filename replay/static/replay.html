@@ -17,6 +17,11 @@
   #seekbox { flex:1; position:relative; display:flex; }
   #seek { flex:1; accent-color:var(--amber); }
   #cues { position:absolute; left:8px; right:8px; top:-12px; height:12px; pointer-events:none; }
+  #cuepop { position:fixed; bottom:56px; display:none; gap:6px; align-items:center; background:#1b1b1e; border:1px solid #34343a; padding:8px 10px; z-index:6; }
+  #cuepop.open { display:flex; }
+  #cuepop input, #cuepop select, #cuepop button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
+  #cues span.auto { background:#6b5320; color:#ffd98a; }
+  #cues span { cursor:ew-resize; touch-action:none; }
   #cues span { position:absolute; transform:translateX(-50%); background:var(--amber); color:#000; font-size:10px; padding:0 3px; cursor:pointer; pointer-events:auto; }
   #time { min-width:150px; text-align:right; color:var(--dim); }
   #nudge { color:var(--dim); min-width:110px; }
@@ -31,7 +36,8 @@
   body.nohud #capbox { display:none !important; }
   #stylebox { position:fixed; right:16px; bottom:60px; background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; max-width:min(440px, 92vw); }
   #stylebox.open { display:flex; }
-  #stylebox label { display:flex; gap:8px; align-items:center; justify-content:space-between; color:var(--dim); }
+  #stylebox .bw { display:flex; gap:6px; align-items:center; }
+  #stylebox label { white-space:nowrap; display:flex; gap:8px; align-items:center; justify-content:space-between; color:var(--dim); }
   #stylebox input[type=color] { width:44px; height:26px; padding:0; border:0; background:none; }
   #stylebox input, #stylebox select, #stylebox button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
   #msg { position:fixed; left:50%; top:45%; transform:translateX(-50%); background:#2b2b2b; padding:16px 24px; display:none; }
@@ -41,6 +47,7 @@
 <div id="stage"><canvas id="c" width="1920" height="1080"></canvas></div>
 <div id="bar">
   <button id="play" title="Space">play</button>
+  <div id="cuepop"></div>
   <div id="seekbox"><div id="cues"></div><input id="seek" type="range" min="0" max="1000" value="0"></div>
   <span id="time">0:00.0</span>
   <input id="title" placeholder="title" size="16" title="the title shown in the video">
@@ -65,10 +72,10 @@
   <label>picture <input id="s_bgimg" type="file" accept="image/*"></label>
   <label>picture dimmed <input id="s_bgdim" type="range" min="0" max="95" value="60"></label>
   <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
-  <label>BUS 1 is <input id="s_bus0" placeholder="e.g. Direct FX 1-5" size="22"></label>
-  <label>BUS 2 is <input id="s_bus1" placeholder="e.g. Direct FX 1-5" size="22"></label>
-  <label>BUS 3 is <input id="s_bus2" placeholder="e.g. reverb send" size="22"></label>
-  <label>BUS 4 is <input id="s_bus3" placeholder="" size="22"></label>
+  <label>BUS 1 is <span class="bw"><select id="s_bussel0"></select> <input id="s_bus0" placeholder="your own text" size="18" hidden></span></label>
+  <label>BUS 2 is <span class="bw"><select id="s_bussel1"></select> <input id="s_bus1" placeholder="your own text" size="18" hidden></span></label>
+  <label>BUS 3 is <span class="bw"><select id="s_bussel2"></select> <input id="s_bus2" placeholder="your own text" size="18" hidden></span></label>
+  <label>BUS 4 is <span class="bw"><select id="s_bussel3"></select> <input id="s_bus3" placeholder="your own text" size="18" hidden></span></label>
   <label>handle <input id="s_handle" placeholder="@yourname" size="18"></label>
   <label>subtitle <input id="s_sub" placeholder="under the title" size="22"></label>
   <button id="s_reset">reset the look</button>
@@ -103,24 +110,85 @@ const otherNotes = [], padEv = new Map(), ccEv = new Map(), fxNum = new Map(), f
 let peak = null, spec = null, lastHit = [];
 const loopStarts = []; // the unit marks every loop of the pattern with a note (channel 13, note 48)
 let cues = [];         // the patterns set by hand: { t (time of the log), label }, kept by the server beside the event log
-const recordedPat = [];
-function rebuildCues() {
-  if (!recordedPat.length) recordedPat.push(...patEv);
+// ---- the patterns on the timeline: the ones the log says (dim tags) and the ones set by hand (amber tags). A tag can be dragged or edited
+// (its pattern, its time, deleted); the first change takes the log's patterns over as cues ("adopted"), so that the list is one and whole.
+// Everything that follows from the pattern (the bank of the pads, the pattern panel, the tempo, the countdown, the flashes) follows the tags.
+let logPat = null, adopted = false;
+const parseTime = v => { const m = String(v).match(/^(\d+):(\d+(?:\.\d+)?)$/); return m ? +m[1] * 60 + +m[2] : parseFloat(v) || 0; };
+function cueFor(label, t) {
+  const p = patByLabel.get(label);
+  return { t: +t.toFixed(3), label,
+    pattern: p ? { slot: p.slot, label: p.label, bars: p.bars, length: p.length, notes: p.notes } : undefined,
+    pads: p ? [...p.pads].map(n => padInfo.get(n)).filter(Boolean) : undefined };
+}
+function patEvents() {
   patEv.length = 0;
-  patEv.push(...recordedPat, ...cues.map(c => ({ t: c.t, now: c.label, next: "", cue: true })));
+  patEv.push(...(adopted ? [] : logPat), ...cues.map(c => ({ t: c.t, now: c.label, next: "", cue: true })));
   patEv.sort((a, b) => a.t - b.t);
+}
+function adoptNow() {
+  if (adopted) return;
+  for (const e of logPat) if (!cues.some(c => Math.abs(c.t - e.t) < 0.05)) cues.push(cueFor(e.now, e.t));
+  cues.sort((a, b) => a.t - b.t); adopted = true;
+}
+function rebuildCues() {
+  if (!logPat) logPat = patEv.slice();
+  patEvents();
   const box = document.getElementById("cues"); if (!box) return;
   box.textContent = "";
-  const d = AN ? AN.duration : 0;
-  for (const c of cues) {
-    if (!d) break;
-    const sp = document.createElement("span"); sp.textContent = c.label; sp.title = "click to remove this cue";
-    sp.style.left = clamp((c.t - OFFSET) / d * 100, 0, 100) + "%";
-    sp.onclick = () => { cues = cues.filter(x => x !== c); rebuildCues(); saveCues(); };
+  const d = AN ? AN.duration : 0; if (!d) return;
+  const items = [...(adopted ? [] : logPat.map(e => ({ auto: true, t: e.t, label: e.now, e }))), ...cues.map(c => ({ t: c.t, label: c.label, c }))];
+  for (const it of items) {
+    const sp = document.createElement("span"); sp.textContent = it.label; sp.className = it.auto ? "auto" : "";
+    sp.title = "click to edit, drag to move";
+    sp.style.left = clamp((it.t - OFFSET) / d * 100, 0, 100) + "%";
+    sp.onpointerdown = ev => startDrag(ev, sp, it);
     box.appendChild(sp);
   }
 }
-function saveCues() { fetch("/cues", { method: "POST", body: JSON.stringify(cues) }).catch(() => {}); }
+function saveCues() { fetch("/cues", { method: "POST", body: JSON.stringify({ cues, adopted }) }).catch(() => {}); }
+function cueOf(it) { if (it.c) return it.c; adoptNow(); return cues.find(c => Math.abs(c.t - it.t) < 0.05 && c.label === it.label) || cues.find(c => Math.abs(c.t - it.t) < 0.05); }
+function startDrag(ev, sp, it) {
+  ev.preventDefault(); sp.setPointerCapture(ev.pointerId);
+  const box = document.getElementById("seekbox"), x0 = ev.clientX; let moved = false, cue = null;
+  sp.onpointermove = e2 => {
+    if (!moved && Math.abs(e2.clientX - x0) < 4) return;
+    if (!moved) { moved = true; cue = cueOf(it); if (!cue) return; }
+    const r = box.getBoundingClientRect(), frac = clamp((e2.clientX - r.left - 8) / (r.width - 16), 0, 1), d = AN ? AN.duration : 0;
+    cue.t = +snapLoop(frac * d + OFFSET).toFixed(3);
+    sp.style.left = clamp((cue.t - OFFSET) / d * 100, 0, 100) + "%";
+    patEvents();
+  };
+  sp.onpointerup = () => {
+    sp.onpointermove = sp.onpointerup = null;
+    if (moved) { cues.sort((a, b) => a.t - b.t); rebuildCues(); saveCues(); } else openCuePop(it, sp);
+  };
+}
+// the small editor of a tag: the pattern, the time, a step to the loop before or after, delete
+function openCuePop(it, sp) {
+  const cue = cueOf(it); if (!cue) return;
+  rebuildCues();
+  const pop = document.getElementById("cuepop"); pop.textContent = ""; pop.classList.add("open");
+  const sel = document.createElement("select"), time = document.createElement("input");
+  const labels = new Set([...patByLabel.keys(), cue.label]);
+  for (const l of [...labels].sort((a, b) => (patByLabel.get(a) ? patByLabel.get(a).slot : 999) - (patByLabel.get(b) ? patByLabel.get(b).slot : 999) || (a < b ? -1 : 1))) { const o = document.createElement("option"); o.value = l; o.textContent = l; sel.appendChild(o); }
+  sel.value = cue.label;
+  time.value = mmss(cue.t - OFFSET); time.size = 7; time.title = "the time (m:ss.s)";
+  const apply = () => { cues.sort((a, b) => a.t - b.t); rebuildCues(); saveCues(); };
+  sel.onchange = () => { const n = cueFor(sel.value, cue.t); cue.label = n.label; cue.pattern = n.pattern; cue.pads = n.pads; apply(); };
+  time.onchange = () => { cue.t = +(parseTime(time.value) + OFFSET).toFixed(3); apply(); };
+  const step = dir => () => {
+    const ls = loopStarts.slice().sort((a, b) => a - b), t = dir < 0 ? [...ls].reverse().find(l => l < cue.t - 0.05) : ls.find(l => l > cue.t + 0.05);
+    cue.t = +(t !== undefined ? t : cue.t + dir * 0.1).toFixed(3); time.value = mmss(cue.t - OFFSET); apply();
+  };
+  const mk = (txt, title, fn) => { const b = document.createElement("button"); b.textContent = txt; b.title = title; b.onclick = fn; return b; };
+  const seek = mk("go", "play from here", () => { audio.currentTime = Math.max(cue.t - OFFSET - 1, 0); });
+  pop.append(sel, time, mk("<", "to the loop start before", step(-1)), mk(">", "to the loop start after", step(1)), seek,
+    mk("delete", "remove this change", () => { cues = cues.filter(c => c !== cue); pop.classList.remove("open"); apply(); }),
+    mk("x", "close", () => pop.classList.remove("open")));
+  const box = document.getElementById("seekbox").getBoundingClientRect(), x = box.left + (cue.t - OFFSET) / (AN ? AN.duration : 1) * box.width;
+  pop.style.left = clamp(x - 150, 8, innerWidth - 340) + "px";
+}
 // the pattern changes at the start of a loop: a cue is put on the loop start nearest to the time
 function snapLoop(T) {
   let best = T, bd = 1.9;
@@ -142,7 +210,7 @@ function atIndex(list, T) {
 }
 const push = (map, key, v) => { if (!map.has(key)) map.set(key, []); map.get(key).push(v); };
 
-function prepare(events, analysis, cuesIn) {
+function prepare(events, analysis, cuesIn, adoptedIn) {
   EV = events; AN = analysis;
   const timed = EV.filter(e => e.t !== undefined);
   const ps = [...timed].reverse().find(e => e.k === "project"); // the last: the unit's own project when it was read
@@ -175,6 +243,7 @@ function prepare(events, analysis, cuesIn) {
     }
   }
   patEv.sort((a, b) => a.t - b.t);
+  adopted = !!adoptedIn;
   cues = (cuesIn || []).map(c => ({ t: c.t, label: c.label, pattern: c.pattern, pads: c.pads }));
   for (const c of cues) { // what the cue kept of the pattern and its pads stands in for a project that has no (or another) one
     if (c.pattern && !patByLabel.has(c.label)) { const p = c.pattern; p.pads = new Set(p.notes.map(n => n[1])); patBySlot.set(p.slot, p); patByLabel.set(p.label, p); }
@@ -192,13 +261,10 @@ function prepare(events, analysis, cuesIn) {
     if (!sel.value) return;
     const T = snapLoop(now() + OFFSET + NUDGE / 1000);
     cues = cues.filter(c => Math.abs(c.t - T) > 0.05);
-    const p = patByLabel.get(sel.value);
-    cues.push({ t: +T.toFixed(3), label: sel.value,
-      pattern: p ? { slot: p.slot, label: p.label, bars: p.bars, length: p.length, notes: p.notes } : undefined,
-      pads: p ? [...p.pads].map(n => padInfo.get(n)).filter(Boolean) : undefined });
+    cues.push(cueFor(sel.value, T)); cues.sort((a, b) => a.t - b.t);
     sel.value = ""; rebuildCues(); saveCues();
   };
-  document.getElementById("clearcues").onclick = () => { cues = []; rebuildCues(); saveCues(); };
+  document.getElementById("clearcues").onclick = () => { cues = []; adopted = false; document.getElementById("cuepop").classList.remove("open"); rebuildCues(); saveCues(); };
   if (AN && AN.frames) { peak = new Uint16Array(bytes(AN.peak).buffer); spec = bytes(AN.spec); }
   for (const [k, l] of padEv) hitTimes.set(k, l.filter(e => e.on).map(e => ({ t: e.t })));
   for (const e of beats) if (e.bpm) tempoSeries.push(e);
@@ -457,6 +523,14 @@ function drawPattern(T) {
   const [x0, y0, w, h] = L.pattern;
   panel(x0, y0, w, h);
   const r = patternAt(T);
+  const ev = at(patEv, T);
+  if (!r && ev && ev.now) { // the log names the pattern but has no project: no notes to show
+    text("PATTERN " + ev.now, x0 + 16, y0 + 30, COL.amber, 20, true);
+    drawPatternStrip(x0 + 16, y0 + 44, w - 32, T);
+    text("the notes of this pattern are not in the log", x0 + 16, y0 + 112, COL.dim, 20);
+    text("(it was recorded without the project)", x0 + 16, y0 + 142, COL.dim, 18);
+    return;
+  }
   if (!r) { text("PATTERN", x0 + 16, y0 + 30, COL.dim, 20, true); text("not known: the unit did not say.", x0 + 16, y0 + 80, COL.dim, 22); text("Pick it in the bar below where it starts.", x0 + 16, y0 + 112, COL.dim, 22); return; }
   const p = r.p, steps = Math.max(Math.round(p.length / 120), 16);
   text("PATTERN " + p.label + "   " + p.bars + " bars" + (r.how === "guess" ? "   (guessed from the pads)" : r.how === "chosen" ? "   (chosen)" : r.how === "cue" ? "   (set by hand)" : ""), x0 + 16, y0 + 30, COL.amber, 20, true);
@@ -556,7 +630,9 @@ function drawFx(T) {
     text("BUS " + bus, x + 26, y0 + 38, c, 22, true);
     const name = fxName(bus, T), on = at(fxOn.get(bus) || [], T);
     const note = ((STYLE.busNotes || [])[bus - 1] || "").trim(); // what the bus is used for, as written in the style panel
-    text(name ? fit(name, 19) : note ? fit(note, 19) : "effect unknown", x + 26, y0 + 62, name || note ? COL.text : COL.dim, 17);
+    // your description says what the bus is where the unit only says "Direct FX n" or nothing; a real effect name stays
+    const shown = note && (!name || /^Direct FX/i.test(name)) ? note : name || note;
+    text(shown ? fit(shown, 19) : "effect unknown", x + 26, y0 + 62, shown ? COL.text : COL.dim, 17);
     if (on) { rect(x + bw - 62, y0 + 16, 50, 26, on.v ? COL.good : "#2b2b2b"); text(on.v ? "ON" : "OFF", x + bw - 37, y0 + 36, on.v ? "#111" : COL.dim, 17, true, "center"); }
     const defs = ((window.SP404_FX || {}).params || {})[name] || [];
     for (let i = 0; i < 3; i++) {
@@ -822,7 +898,10 @@ function initStyle(saved) {
   const show = () => {
     sel.value = STYLE.preset; $("s_accent").value = validHex(STYLE.accent) ? STYLE.accent : (PRESETS[STYLE.preset] || PRESETS["404 dark"]).accent;
     $("s_bgkind").value = STYLE.bg.kind; $("s_bg1").value = validHex(STYLE.bg.color) ? STYLE.bg.color : "#000000"; $("s_bg2").value = validHex(STYLE.bg.color2) ? STYLE.bg.color2 : "#1b1b2e";
-    for (let i = 0; i < 4; i++) $("s_bus" + i).value = (STYLE.busNotes || [])[i] || "";
+    for (let i = 0; i < 4; i++) {
+      const note = (STYLE.busNotes || [])[i] || "", sl = $("s_bussel" + i), inp = $("s_bus" + i), known = [...sl.options].some(o => o.value === note && o.value !== "__custom__");
+      sl.value = !note ? "" : known ? note : "__custom__"; inp.hidden = sl.value !== "__custom__"; inp.value = known ? "" : note;
+    }
     $("s_bgdim").value = Math.round((STYLE.bg.dim === undefined ? 0.6 : STYLE.bg.dim) * 100); $("s_handle").value = STYLE.handle || ""; $("s_sub").value = STYLE.subtitle || "";
   };
   show();
@@ -836,7 +915,23 @@ function initStyle(saved) {
   $("s_bg1").oninput = () => { STYLE.bg.color = $("s_bg1").value; if (STYLE.bg.kind === "preset") STYLE.bg.kind = "solid"; show(); changed(); };
   $("s_bg2").oninput = () => { STYLE.bg.color2 = $("s_bg2").value; STYLE.bg.kind = "gradient"; show(); changed(); };
   $("s_bgdim").oninput = () => { STYLE.bg.dim = $("s_bgdim").value / 100; changed(); };
-  for (let i = 0; i < 4; i++) $("s_bus" + i).oninput = () => { STYLE.busNotes = [0, 1, 2, 3].map(k => $("s_bus" + k).value); changed(); };
+  // what each bus is used for: one of the unit's effects, or your own text
+  const allFx = [...new Set([...((window.SP404_FX || {}).fx12 || []), ...((window.SP404_FX || {}).fx34 || [])])]; // every effect, on any bus
+  const fxLists = [allFx, allFx, allFx, allFx];
+  const setNotes = () => { STYLE.busNotes = [0, 1, 2, 3].map(k => { const v = $("s_bussel" + k).value; return v === "__custom__" ? $("s_bus" + k).value : v; }); changed(); };
+  for (let i = 0; i < 4; i++) {
+    const sl = $("s_bussel" + i);
+    let into = sl;
+    const group = t => { into = document.createElement("optgroup"); into.label = t; sl.appendChild(into); };
+    const add = (v, t) => { const o = document.createElement("option"); o.value = v; o.textContent = t; into.appendChild(o); };
+    add("", "not set");
+    group("kinds"); for (const k of ["Direct FX 1-5", "Reverb", "Delay", "Filter", "Drive / distortion", "Lo-fi", "Modulation", "Looper / scatter", "Resample"]) add(k, k);
+    group("the unit's effects"); for (const n of fxLists[i]) if (n && n !== "(OFF)") add(n, n);
+    group("other"); add("__custom__", "my own text...");
+    sl.onchange = () => { $("s_bus" + i).hidden = sl.value !== "__custom__"; if (!$("s_bus" + i).hidden) $("s_bus" + i).focus(); setNotes(); };
+    $("s_bus" + i).oninput = setNotes;
+  }
+  show();
   $("s_handle").oninput = () => { STYLE.handle = $("s_handle").value; changed(); };
   $("s_sub").oninput = () => { STYLE.subtitle = $("s_sub").value; changed(); };
   // pictures are made small before they are kept (a logo 480 px wide, a background 1920 px), so that the file beside the log stays small
@@ -855,7 +950,7 @@ async function start() {
   const msg = document.getElementById("msg");
   try {
     const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
-    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || "") })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues);
+    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || "") })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
   } catch (e) { msg.textContent = "could not load the replay: " + e; msg.style.display = "block"; return; }
   const t0 = parseFloat(params.get("t") || "0");
   if (t0) audio.currentTime = t0;

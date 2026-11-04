@@ -4,6 +4,7 @@
 package replay
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -34,6 +35,7 @@ type Replay struct {
 	title                 string
 	style                 json.RawMessage
 	captions              []Caption
+	adopted               bool
 	cues                  []Cue
 }
 
@@ -46,10 +48,12 @@ type Caption struct {
 
 // meta is what is kept beside the event log: the title of the video and the cues (an older file is just the list of cues).
 type meta struct {
-	Title    string          `json:"title,omitempty"`
-	Cues     []Cue           `json:"cues"`
-	Captions []Caption       `json:"captions,omitempty"`
-	Style    json.RawMessage `json:"style,omitempty"` // colours, logo, handle, background: the page's own object, kept as it is
+	Title string `json:"title,omitempty"`
+	Cues  []Cue  `json:"cues"`
+	// PatternsAdopted says the patterns of the event log were taken over as cues, to be edited: then the cues are the whole list.
+	PatternsAdopted bool            `json:"patterns_adopted,omitempty"`
+	Captions        []Caption       `json:"captions,omitempty"`
+	Style           json.RawMessage `json:"style,omitempty"` // colours, logo, handle, background: the page's own object, kept as it is
 }
 
 // Cue says which pattern plays from a time of the log on: the unit does not tell when the pattern is changed.
@@ -77,6 +81,21 @@ func (r *Replay) SetCues(c []Cue) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.cues = append([]Cue{}, c...)
+	return r.save()
+}
+
+// Adopted says the cues are the whole list of patterns (the log's own are left out).
+func (r *Replay) Adopted() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.adopted
+}
+
+// SetPatterns replaces the cues and says whether they are the whole list of patterns.
+func (r *Replay) SetPatterns(c []Cue, adopted bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cues, r.adopted = append([]Cue{}, c...), adopted
 	return r.save()
 }
 
@@ -137,13 +156,13 @@ func (r *Replay) SetStyle(b []byte) error {
 }
 
 func (r *Replay) save() error {
-	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 && len(r.captions) == 0 {
+	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 && len(r.captions) == 0 && !r.adopted {
 		if err := os.Remove(r.CuesPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 		return nil
 	}
-	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues, Captions: r.captions, Style: r.style}, "", " ")
+	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues, PatternsAdopted: r.adopted, Captions: r.captions, Style: r.style}, "", " ")
 	return os.WriteFile(r.CuesPath, b, 0o644)
 }
 
@@ -170,7 +189,7 @@ func Load(audioPath, eventsPath string) (*Replay, error) {
 	if b, err := os.ReadFile(r.CuesPath); err == nil {
 		var m meta
 		if json.Unmarshal(b, &m) == nil {
-			r.title, r.cues, r.style, r.captions = m.Title, m.Cues, m.Style, m.Captions
+			r.title, r.cues, r.style, r.captions, r.adopted = m.Title, m.Cues, m.Style, m.Captions, m.PatternsAdopted
 		} else {
 			json.Unmarshal(b, &r.cues) // the first form of the file: the list of cues
 		}
@@ -201,7 +220,7 @@ func (r *Replay) Handler() http.Handler {
 	})
 	mux.HandleFunc("/events.json", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style(), "captions": r.Captions()})
+		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style(), "captions": r.Captions(), "adopted": r.Adopted()})
 	})
 	mux.HandleFunc("/captions", func(w http.ResponseWriter, req *http.Request) {
 		var c []Caption
@@ -246,12 +265,29 @@ func (r *Replay) Handler() http.Handler {
 			http.Error(w, "POST the cues", http.StatusMethodNotAllowed)
 			return
 		}
-		var c []Cue
-		if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20)).Decode(&c); err != nil {
+		// the list of cues, or {"cues": [...], "adopted": true}
+		raw, err := io.ReadAll(http.MaxBytesReader(w, req.Body, 4<<20))
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := r.SetCues(c); err != nil {
+		var c []Cue
+		adopted := r.Adopted()
+		if t := bytes.TrimSpace(raw); len(t) > 0 && t[0] == '{' {
+			var o struct {
+				Cues    []Cue `json:"cues"`
+				Adopted bool  `json:"adopted"`
+			}
+			if err := json.Unmarshal(t, &o); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			c, adopted = o.Cues, o.Adopted
+		} else if err := json.Unmarshal(raw, &c); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := r.SetPatterns(c, adopted); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
