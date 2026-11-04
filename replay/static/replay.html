@@ -10,23 +10,32 @@
   body { display:flex; flex-direction:column; }
   #stage { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
   canvas { width:100%; height:100%; object-fit:contain; background:#121214; }
-  #bar { display:flex; gap:12px; align-items:center; padding:8px 16px; background:#161616; border-top:1px solid #2a2a2a; }
+  #bar { display:flex; flex-direction:column; gap:8px; padding:8px 16px 10px; background:#161616; border-top:1px solid #2a2a2a; }
   #bar input { background:#2b2b2b; color:var(--text); border:0; padding:6px 10px; font:inherit; }
   #bar button, #bar select { background:#2b2b2b; color:var(--text); border:0; padding:6px 12px; font:inherit; cursor:pointer; }
   #bar button:hover { background:#3a3a3a; }
-  #seekbox { flex:1; position:relative; display:flex; }
-  #seek { flex:1; accent-color:var(--amber); }
-  #cues { position:absolute; left:8px; right:8px; top:-12px; height:12px; pointer-events:none; }
-  #cuepop { position:fixed; bottom:56px; display:none; gap:6px; align-items:center; background:#1b1b1e; border:1px solid #34343a; padding:8px 10px; z-index:6; }
+  #tl { display:grid; grid-template-columns:72px minmax(0, 1fr); align-items:center; row-gap:4px; column-gap:10px; }
+  #tl .lbl { color:var(--dim); font-size:11px; text-align:right; }
+  #cues, #capslane { position:relative; height:26px; margin:0 8px; background:#1d1d20; border-radius:4px; }
+  #capslane { height:22px; }
+  #seek { width:100%; min-width:0; box-sizing:border-box; margin:0; accent-color:var(--amber); }
+  html, body { overflow-x:hidden; }
+  #cues .seg { position:absolute; top:0; bottom:0; box-sizing:border-box; border-left:2px solid var(--amber); background:rgba(255,176,0,.2); color:var(--text); font-size:12px; padding:4px 6px 0 11px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; touch-action:none; }
+  #cues .seg.auto { border-left-color:#8a6a2a; background:rgba(255,176,0,.08); color:#c9b27a; }
+  #cues .seg .h { position:absolute; left:-4px; top:0; bottom:0; width:12px; cursor:ew-resize; }
+  #capslane .cap { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(95,175,255,.22); border-left:2px solid #5fafff; border-radius:3px; font-size:11px; padding:2px 6px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:grab; touch-action:none; }
+  #capslane .cap .hd { position:absolute; top:0; bottom:0; width:9px; cursor:ew-resize; }
+  #capslane .cap .hd.l { left:-3px; } #capslane .cap .hd.r { right:-1px; }
+  #ctl { display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; }
+  #ctl .grp { display:flex; gap:8px; align-items:center; }
+  #ctl .grp.right { margin-left:auto; }
+  #cuepop { position:fixed; bottom:calc(var(--barh, 110px) + 8px); display:none; gap:6px; align-items:center; background:#1b1b1e; border:1px solid #34343a; padding:8px 10px; z-index:6; }
   #cuepop.open { display:flex; }
   #cuepop input, #cuepop select, #cuepop button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
-  #cues span.auto { background:#6b5320; color:#ffd98a; }
-  #cues span { cursor:ew-resize; touch-action:none; }
-  #cues span { position:absolute; transform:translateX(-50%); background:var(--amber); color:#000; font-size:10px; padding:0 3px; cursor:pointer; pointer-events:auto; }
   #time { min-width:150px; text-align:right; color:var(--dim); }
   #nudge { color:var(--dim); min-width:110px; }
   body.nohud #bar, body.nohud #stylebox { display:none !important; }
-  #capbox { position:fixed; right:16px; bottom:60px; background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; width:min(520px, 92vw); max-height:70vh; overflow:auto; }
+  #capbox { position:fixed; right:16px; bottom:calc(var(--barh, 110px) + 8px); background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; width:min(520px, 92vw); max-height:70vh; overflow:auto; }
   #capbox.open { display:flex; }
   #capbox label.g { display:flex; gap:8px; align-items:center; color:var(--dim); }
   #capbox .h { color:#666; font-size:11px; }
@@ -34,7 +43,7 @@
   #capbox input, #capbox button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
   #capbox input.t { width:64px; } #capbox input.x { flex:1; min-width:0; }
   body.nohud #capbox { display:none !important; }
-  #stylebox { position:fixed; right:16px; bottom:60px; background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; max-width:min(440px, 92vw); }
+  #stylebox { position:fixed; right:16px; bottom:calc(var(--barh, 110px) + 8px); background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; max-width:min(440px, 92vw); }
   #stylebox.open { display:flex; }
   #stylebox .bw { display:flex; gap:6px; align-items:center; }
   #stylebox label { white-space:nowrap; display:flex; gap:8px; align-items:center; justify-content:space-between; color:var(--dim); }
@@ -46,17 +55,22 @@
 <body>
 <div id="stage"><canvas id="c" width="1920" height="1080"></canvas></div>
 <div id="bar">
-  <button id="play" title="Space">play</button>
+  <div id="tl">
+    <span class="lbl">patterns</span><div id="cues" title="the patterns: click one to edit it, drag its left edge to move it"></div>
+    <span class="lbl">captions</span><div id="capslane" title="the captions: click one to edit it"></div>
+    <span class="lbl"></span><input id="seek" type="range" min="0" max="1000" value="0">
+  </div>
+  <div id="ctl">
+    <span class="grp"><button id="play" title="Space">play</button><span id="time">0:00.0</span></span>
+    <span class="grp"><input id="title" placeholder="title" size="18" title="the title shown in the video">
+      <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button></span>
+    <span class="grp"><select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
+      <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span></span>
+    <span class="grp right"><button id="capbtn" title="text shown at times of the take">captions</button>
+      <button id="stylebtn" title="colours, background, logo, handle">style</button>
+      <button id="full" title="f">full screen</button></span>
+  </div>
   <div id="cuepop"></div>
-  <div id="seekbox"><div id="cues"></div><input id="seek" type="range" min="0" max="1000" value="0"></div>
-  <span id="time">0:00.0</span>
-  <input id="title" placeholder="title" size="16" title="the title shown in the video">
-  <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button>
-  <select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
-  <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span>
-  <button id="capbtn" title="text shown at times of the take">captions</button>
-  <button id="stylebtn" title="colours, background, logo, handle">style</button>
-  <button id="full" title="f">full screen</button>
 </div>
 <div id="capbox">
   <div id="caplist"></div>
@@ -139,31 +153,33 @@ function rebuildCues() {
   const box = document.getElementById("cues"); if (!box) return;
   box.textContent = "";
   const d = AN ? AN.duration : 0; if (!d) return;
-  const items = [...(adopted ? [] : logPat.map(e => ({ auto: true, t: e.t, label: e.now, e }))), ...cues.map(c => ({ t: c.t, label: c.label, c }))];
-  for (const it of items) {
-    const sp = document.createElement("span"); sp.textContent = it.label; sp.className = it.auto ? "auto" : "";
-    sp.title = "click to edit, drag to move";
-    sp.style.left = clamp((it.t - OFFSET) / d * 100, 0, 100) + "%";
-    sp.onpointerdown = ev => startDrag(ev, sp, it);
+  const items = [...(adopted ? [] : logPat.map(e => ({ auto: true, t: e.t, label: e.now, e }))), ...cues.map(c => ({ t: c.t, label: c.label, c }))].sort((a, b) => a.t - b.t);
+  items.forEach((it, i) => { // a block from the change to the next one, named by its pattern; its left edge moves it
+    const end = i + 1 < items.length ? items[i + 1].t : d + OFFSET, x0 = clamp((it.t - OFFSET) / d, 0, 1), x1 = clamp((end - OFFSET) / d, 0, 1);
+    const sp = document.createElement("div"); sp.className = "seg" + (it.auto ? " auto" : ""); sp.textContent = it.label;
+    sp.title = it.label + " from " + mmss(it.t - OFFSET) + ": click to edit, drag the left edge to move";
+    sp.style.left = x0 * 100 + "%"; sp.style.width = Math.max(x1 - x0, 0.002) * 100 + "%";
+    const h = document.createElement("span"); h.className = "h"; h.onpointerdown = ev => startDrag(ev, sp, it); sp.appendChild(h);
+    sp.onclick = ev => { if (ev.target === h) return; openCuePop(it, sp); };
     box.appendChild(sp);
-  }
+  });
 }
 function saveCues() { fetch("/cues", { method: "POST", body: JSON.stringify({ cues, adopted }) }).catch(() => {}); }
 function cueOf(it) { if (it.c) return it.c; adoptNow(); return cues.find(c => Math.abs(c.t - it.t) < 0.05 && c.label === it.label) || cues.find(c => Math.abs(c.t - it.t) < 0.05); }
 function startDrag(ev, sp, it) {
-  ev.preventDefault(); sp.setPointerCapture(ev.pointerId);
-  const box = document.getElementById("seekbox"), x0 = ev.clientX; let moved = false, cue = null;
+  ev.preventDefault(); try { sp.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+  const box = document.getElementById("cues"), x0 = ev.clientX; let moved = false, cue = null;
   sp.onpointermove = e2 => {
     if (!moved && Math.abs(e2.clientX - x0) < 4) return;
     if (!moved) { moved = true; cue = cueOf(it); if (!cue) return; }
-    const r = box.getBoundingClientRect(), frac = clamp((e2.clientX - r.left - 8) / (r.width - 16), 0, 1), d = AN ? AN.duration : 0;
+    const r = box.getBoundingClientRect(), frac = clamp((e2.clientX - r.left) / r.width, 0, 1), d = AN ? AN.duration : 0;
     cue.t = +snapLoop(frac * d + OFFSET).toFixed(3);
     sp.style.left = clamp((cue.t - OFFSET) / d * 100, 0, 100) + "%";
     patEvents();
   };
   sp.onpointerup = () => {
     sp.onpointermove = sp.onpointerup = null;
-    if (moved) { cues.sort((a, b) => a.t - b.t); rebuildCues(); saveCues(); } else openCuePop(it, sp);
+    if (moved) { cues.sort((a, b) => a.t - b.t); rebuildCues(); saveCues(); }
   };
 }
 // the small editor of a tag: the pattern, the time, a step to the loop before or after, delete
@@ -188,7 +204,7 @@ function openCuePop(it, sp) {
   pop.append(sel, time, mk("<", "to the loop start before", step(-1)), mk(">", "to the loop start after", step(1)), seek,
     mk("delete", "remove this change", () => { cues = cues.filter(c => c !== cue); pop.classList.remove("open"); apply(); }),
     mk("x", "close", () => pop.classList.remove("open")));
-  const box = document.getElementById("seekbox").getBoundingClientRect(), x = box.left + (cue.t - OFFSET) / (AN ? AN.duration : 1) * box.width;
+  const box = document.getElementById("cues").getBoundingClientRect(), x = box.left + (cue.t - OFFSET) / (AN ? AN.duration : 1) * box.width;
   pop.style.left = clamp(x - 150, 8, innerWidth - 340) + "px";
 }
 // the pattern changes at the start of a loop: a cue is put on the loop start nearest to the time
@@ -425,7 +441,7 @@ function drawHeader(T, A) {
   if (TITLE) { text(fit(TITLE, 34), 300, 44, COL.text, 30, true); if (STYLE.subtitle) { g.font = FONT(30, true); text(fit(STYLE.subtitle, 30), 300 + g.measureText(fit(TITLE, 34)).width + 24, 42, COL.dim, 22); } }
   else text(fit(PROJ.name || "", 24) + "   " + fit(FILE, 40), 300, 42, COL.dim, 22);
   text(bpmText, 1000, 44, tp.src === "project" ? COL.dim : COL.amber, 34, true);
-  text(pos ? "BAR " + bar + "  BEAT " + beat : "no clock: the project's tempo", 1240, 42, pos ? COL.text : COL.dim, 22);
+  text(pos ? "BAR " + bar + "  BEAT " + beat : "no clock", 1240, 42, pos ? COL.text : COL.dim, 22);
   text(run ? "PLAY" : "STOP", 1560, 42, run ? COL.good : COL.dim, 26, true);
   text(mmss(A) + " / " + mmss(dur), W - 28, 42, COL.text, 24, false, "right");
 }
@@ -850,7 +866,7 @@ addEventListener("keydown", e => {
 function initCaptions() {
   const box = document.getElementById("capbox"), list = document.getElementById("caplist");
   let timer = null;
-  const save = () => { clearTimeout(timer); timer = setTimeout(() => fetch("/captions", { method: "POST", body: JSON.stringify(CAPS) }).catch(() => {}), 400); };
+  const save = () => { clearTimeout(timer); timer = setTimeout(() => fetch("/captions", { method: "POST", body: JSON.stringify(CAPS) }).catch(() => {}), 400); if (window.refreshCapLane) window.refreshCapLane(); };
   const num = v => { const m = String(v).match(/^(\d+):(\d+(?:\.\d+)?)$/); return m ? +m[1] * 60 + +m[2] : parseFloat(v) || 0; };
   const render = () => {
     list.textContent = "";
@@ -883,13 +899,46 @@ function initCaptions() {
     window.styleChanged && window.styleChanged();
   };
   fadeIn.oninput = lenIn.oninput = blurIn.oninput = dimIn.oninput = keepSettings;
+  const lane = () => { // the captions as blocks under the patterns: click one to edit it
+    const el = document.getElementById("capslane"); el.textContent = ""; const d = AN ? AN.duration : 0; if (!d) return;
+    const place = (b, c) => { const x0 = clamp(c.from / d, 0, 1), x1 = clamp(c.to / d, 0, 1); b.style.left = x0 * 100 + "%"; b.style.width = Math.max(x1 - x0, 0.004) * 100 + "%"; };
+    // a block moves by its body and is made longer or shorter by its edges; a time near a loop start snaps to it
+    const drag = (ev, b, mode, c) => {
+      ev.preventDefault(); ev.stopPropagation(); try { b.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+      const w = el.getBoundingClientRect().width, x0 = ev.clientX, f0 = c.from, t0 = c.to; let moved = false;
+      const snap = t => { let best = t, bd = 0.2; for (const l of loopStarts) { const dd = Math.abs(l - OFFSET - t); if (dd < bd) { bd = dd; best = l - OFFSET; } } return +best.toFixed(2); };
+      b.onpointermove = e => {
+        if (!moved && Math.abs(e.clientX - x0) < 3) return;
+        moved = true; b._moved = true;
+        const dt = (e.clientX - x0) / w * d;
+        if (mode === "move") { const len = t0 - f0, nf = clamp(snap(f0 + dt), 0, d - len); c.from = nf; c.to = +(nf + len).toFixed(2); }
+        else if (mode === "l") c.from = clamp(snap(f0 + dt), 0, c.to - 0.3);
+        else c.to = clamp(snap(t0 + dt), c.from + 0.3, d);
+        place(b, c);
+      };
+      b.onpointerup = () => { b.onpointermove = b.onpointerup = null; if (moved) { save(); render(); lane(); } };
+    };
+    CAPS.slice().sort((a, b) => a.from - b.from).forEach((c, i) => {
+      const b = document.createElement("div"), hl = document.createElement("span"), hr = document.createElement("span");
+      b.className = "cap"; b.textContent = c.text || "(empty)"; b.title = mmss(c.from) + " - " + mmss(c.to) + ": " + c.text + " (drag to move, the edges change the length, click to edit)";
+      hl.className = "hd l"; hr.className = "hd r"; b.append(hl, hr);
+      place(b, c);
+      hl.onpointerdown = ev => drag(ev, b, "l", c); hr.onpointerdown = ev => drag(ev, b, "r", c); b.onpointerdown = ev => { if (ev.target === b) drag(ev, b, "move", c); };
+      b.onclick = () => {
+        if (b._moved) { b._moved = false; return; }
+        showSettings(); box.classList.add("open"); render(); const rows = list.querySelectorAll("input.x"); if (rows[i]) { rows[i].focus(); rows[i].scrollIntoView({ block: "nearest" }); } audio.currentTime = c.from;
+      };
+      el.appendChild(b);
+    });
+  };
+  window.refreshCapLane = lane;
   document.getElementById("capbtn").onclick = () => { showSettings(); box.classList.toggle("open"); render(); };
   document.getElementById("capadd").onclick = () => {
     const a = now(), d = AN ? AN.duration : a + 5;
     CAPS.push({ from: +a.toFixed(1), to: +Math.min(a + (+STYLE.capLength || 5), d).toFixed(1), text: "" }); save(); render();
     const inputs = list.querySelectorAll("input.x"); if (inputs.length) inputs[inputs.length - 1].focus();
   };
-  render();
+  render(); lane();
 }
 
 // the controls of the look
@@ -976,6 +1025,10 @@ async function start() {
   window.replayReady = true;
   if (params.get("t") !== null && params.get("play") === null) manual = t0;
   frame();
+}
+{ // the pop-ups sit above the bar, whatever its height
+  const bar = document.getElementById("bar"), set = () => document.documentElement.style.setProperty("--barh", bar.offsetHeight + "px");
+  set(); if (window.ResizeObserver) new ResizeObserver(set).observe(bar); addEventListener("resize", set);
 }
 start();
 </script>
