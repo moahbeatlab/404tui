@@ -221,3 +221,28 @@ func (a *App) indexItems(m *menu) {
 	}
 	m.items = append(m.items, menuItem{label: fit("Index "+short2(a.dir, 30), 40), run: func(int) { a.startIndex(filepath.Clean(a.dir)) }})
 }
+
+// indexStatus is whether an index is being built, for which folder, and how many files it has found so far.
+func (a *App) indexStatus() (running bool, root string, files int64) {
+	j := &a.idx
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return j.running, j.root, atomic.LoadInt64(&j.count)
+}
+
+// drawIndexProgress is the panel's part for an index that is being built (three rows from y): the folder, how many files so far, and a
+// bar that runs along while it works (the end is not known: the folder is walked once).
+func (a *App) drawIndexProgress(g Gfx, x, y, w int) {
+	_, root, n := a.indexStatus()
+	g.Text(x, y, "INDEXING", cAmber, true)
+	cnt := fmt.Sprintf("%d files", n)
+	g.Text(x+w-len(cnt), y, cnt, cText, false)
+	g.Text(x, y+1, fit(short2(root, w), w), cDim, false)
+	g.Fill(x, y+2, w, 1, cPanel2)
+	run := min(8, w/3)
+	pos := int(a.clock().UnixMilli()/80) % max(2*(w-run), 1)
+	if pos > w-run {
+		pos = 2*(w-run) - pos // out and back
+	}
+	g.Fill(x+pos, y+2, run, 1, cAmber)
+}

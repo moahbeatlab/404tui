@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -434,5 +435,26 @@ func TestFilesLeftColumnShowsTheSourceAtTheTopOfOne(t *testing.T) {
 	a.cd(a.Root)
 	if txt := screenStr(a); strings.Contains(txt, "sources") {
 		t.Errorf("below the top the left column is the folder above:\n%s", txt)
+	}
+}
+
+func TestIndexingShowsItsProgressInThePanel(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	a.idx.mu.Lock()
+	a.idx.running, a.idx.root = true, "/Volumes/UNTITLED/IMPORT"
+	a.idx.mu.Unlock()
+	atomic.StoreInt64(&a.idx.count, 1234)
+	txt := screenStr(a)
+	for _, want := range []string{"INDEXING", "1234 files", "IMPORT"} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("the panel shows %q while it indexes:\n%s", want, txt)
+		}
+	}
+	a.idx.mu.Lock()
+	a.idx.running = false
+	a.idx.mu.Unlock()
+	if strings.Contains(screenStr(a), "INDEXING") {
+		t.Error("the progress goes when it is done")
 	}
 }

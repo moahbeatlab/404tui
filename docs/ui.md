@@ -109,7 +109,9 @@ The program looks for the SP-404MKII all the time (a USB cable, nothing to set u
 `u` works online (PROJECTS shows the unit's projects), `o` works offline and opens the project that was open last offline; any other key
 goes on with the project that is open. With no unit it says so and works offline. On PROJECTS, `t` switches between the two, and
 chooses the folder of the offline projects. **While a unit is plugged in the panel has a level meter** (left and right, the highest peak
-held for a moment, and a CLIP light), so the volume can be watched; it listens to the unit's USB audio with `ffmpeg` or `sox`.
+held for a moment, and a CLIP light), so the volume can be watched; it listens to the unit's USB audio with `ffmpeg` or `sox`. Under the bars, in a window of 36 rows or more, is a **spectrum** (64 bands from 30 Hz to 18 kHz, falling slowly).
+
+`u` loads the unit's open project into the editor and edits it **live**: what you change goes to the unit, and what is changed on the unit itself (a pad sampled there, a setting turned) comes into the editor within a few seconds, for the 16 pads of the bank in view. Backups and exports (the unit's project menu, `Ctrl-E` on the pads, CONFIG) open a **folder chooser** (`l` opens a folder, `h` goes up, `Enter` uses the one in front, `x` makes a new folder, `[ ]` jump between home, the samples, the card folder and the drives); the folder is remembered. On FILES the left column of the top of a place lists the **sources** (computer, samples, drives, the unit's card and storage) with this one lit, and an index being built shows its progress in the panel.
 
 ![The slicer](img/e2e-slicer.png)
 

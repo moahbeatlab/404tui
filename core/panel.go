@@ -310,6 +310,12 @@ func (a *App) drawPanel(g Gfx) {
 
 	// tempo and the state of the loop
 	y := 2 + mapRows
+	if Terminal {
+		if running, _, _ := a.indexStatus(); running {
+			a.drawIndexProgress(g, x, y, w)
+			y += 4
+		}
+	}
 	if Terminal && a.link != nil { // with a unit plugged in the level of its sound is always in view
 		y += a.drawMeter(g, x, y, w)
 	}
