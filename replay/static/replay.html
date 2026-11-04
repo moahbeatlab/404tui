@@ -138,22 +138,11 @@ function prepare(events, analysis, cuesIn) {
     sel.value = ""; rebuildCues(); saveCues();
   };
   document.getElementById("clearcues").onclick = () => { cues = []; rebuildCues(); saveCues(); };
-  if (AN && AN.frames) { peak = new Uint16Array(bytes(AN.peak).buffer); spec = bytes(AN.spec); buildSpectrogram(); }
+  if (AN && AN.frames) { peak = new Uint16Array(bytes(AN.peak).buffer); spec = bytes(AN.spec); }
   for (const [k, l] of padEv) hitTimes.set(k, l.filter(e => e.on).map(e => ({ t: e.t })));
   for (const e of beats) if (e.bpm) tempoSeries.push(e);
 }
 const hitTimes = new Map(), tempoSeries = [];
-let specImg = null; // the whole take as a picture: a column for every frame, the bands up the side
-function buildSpectrogram() {
-  const nb = AN.bands, c = document.createElement("canvas"); c.width = AN.frames; c.height = nb;
-  const x = c.getContext("2d"), img = x.createImageData(c.width, c.height), stops = [[22, 22, 24], [122, 90, 0], [255, 176, 0], [255, 243, 192]];
-  for (let f = 0; f < AN.frames; f++) for (let b = 0; b < nb; b++) {
-    const v = Math.pow(spec[f * nb + b] / 255, 0.8) * 3, i = Math.min(Math.floor(v), 2), u = Math.min(v - i, 1), a = stops[i], z = stops[i + 1];
-    const o = ((nb - 1 - b) * c.width + f) * 4;
-    img.data[o] = a[0] + (z[0] - a[0]) * u; img.data[o + 1] = a[1] + (z[1] - a[1]) * u; img.data[o + 2] = a[2] + (z[2] - a[2]) * u; img.data[o + 3] = 255;
-  }
-  x.putImageData(img, 0, 0); specImg = c;
-}
 
 // ---- what the unit was doing at time T (the time of the log)
 function padState(bank, pad, T) {
@@ -321,7 +310,7 @@ function drawPattern(T) {
   const x0 = 40, y0 = 656, w = 880, h = 394;
   panel(x0, y0, w, h);
   const r = patternAt(T);
-  if (!r) { text("PATTERN", x0 + 16, y0 + 30, COL.dim, 20, true); text("not known: the unit did not say and sent no notes. Choose one in the bar below at the time it starts (or ?pattern=A1)", x0 + 16, y0 + 80, COL.dim, 22); return; }
+  if (!r) { text("PATTERN", x0 + 16, y0 + 30, COL.dim, 20, true); text("not known: the unit did not say.", x0 + 16, y0 + 80, COL.dim, 22); text("Pick it in the bar below where it starts.", x0 + 16, y0 + 112, COL.dim, 22); return; }
   const p = r.p, steps = Math.max(Math.round(p.length / 120), 16);
   text("PATTERN " + p.label + "   " + p.bars + " bars" + (r.how === "guess" ? "   (guessed from the pads)" : r.how === "chosen" ? "   (chosen)" : r.how === "cue" ? "   (set by hand)" : ""), x0 + 16, y0 + 30, COL.amber, 20, true);
   const pads = [...p.pads].sort((a, b) => a - b).slice(0, 10);
@@ -382,18 +371,18 @@ function drawPatternStrip(x, y, w, T) {
 }
 
 function knob(cx, cy, r, v, label, c, hist, T) {
-  const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
-  g.lineWidth = 9; g.lineCap = "round";
+  const k = r / 40, a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
+  g.lineWidth = 9 * k; g.lineCap = "round";
   g.strokeStyle = "#2b2b2b"; g.beginPath(); g.arc(cx, cy, r, a0, a1); g.stroke();
   if (v !== null) {
     g.strokeStyle = c; g.beginPath(); g.arc(cx, cy, r, a0, a0 + (a1 - a0) * v / 127); g.stroke();
     const a = a0 + (a1 - a0) * v / 127;
-    g.strokeStyle = "#fff"; g.lineWidth = 4; g.beginPath(); g.moveTo(cx + Math.cos(a) * (r - 22), cy + Math.sin(a) * (r - 22)); g.lineTo(cx + Math.cos(a) * (r + 3), cy + Math.sin(a) * (r + 3)); g.stroke();
+    g.strokeStyle = "#fff"; g.lineWidth = 4 * k; g.beginPath(); g.moveTo(cx + Math.cos(a) * (r - 22 * k), cy + Math.sin(a) * (r - 22 * k)); g.lineTo(cx + Math.cos(a) * (r + 3 * k), cy + Math.sin(a) * (r + 3 * k)); g.stroke();
   }
   g.lineCap = "butt";
-  text(v === null ? "-" : String(v), cx, cy + 9, v === null ? COL.dim : COL.text, 24, true, "center");
-  text(fit(label, 12), cx, cy + r + 28, COL.dim, 16, false, "center");
-  const sx = cx - 52, sy = cy + r + 36, sw = 104, sh = 26;
+  text(v === null ? "-" : String(v), cx, cy + 9 * k, v === null ? COL.dim : COL.text, 24 * k, true, "center");
+  text(fit(label, k < 0.8 ? 9 : 12), cx, cy + r + 28 * k, COL.dim, Math.max(13, 16 * k), false, "center");
+  const sw = 104 * k, sh = 26 * k, sx = cx - sw / 2, sy = cy + r + 36 * k;
   rect(sx, sy, sw, sh, "#222");
   if (hist.length) {
     g.strokeStyle = c; g.lineWidth = 2; g.beginPath();
@@ -406,31 +395,32 @@ function knob(cx, cy, r, v, label, c, hist, T) {
   }
 }
 
+// the four buses side by side, in one row
 function drawFx(T) {
-  const x0 = 960, y0 = 80, w = 920, h = 560;
+  const x0 = 960, y0 = 80, w = 920, h = 236;
   panel(x0, y0, w, h);
-  const bw = w / 2, bh = h / 2;
+  const bw = w / 4;
   for (let bus = 1; bus <= 4; bus++) {
-    const x = x0 + ((bus - 1) % 2) * bw, y = y0 + Math.floor((bus - 1) / 2) * bh;
-    const c = BUSCOL[bus];
-    rect(x + 14, y + 14, 6, 60, c);
-    text("BUS " + bus, x + 32, y + 40, c, 24, true);
+    const x = x0 + (bus - 1) * bw, c = BUSCOL[bus];
+    rect(x + 12, y0 + 14, 5, 50, c);
+    text("BUS " + bus, x + 26, y0 + 38, c, 22, true);
     const name = fxName(bus, T), on = at(fxOn.get(bus) || [], T);
-    text(name ? fit(name, 22) : "effect unknown", x + 32, y + 68, name ? COL.text : COL.dim, 20);
-    if (on) { rect(x + bw - 104, y + 18, 76, 32, on.v ? COL.good : "#2b2b2b"); text(on.v ? "ON" : "OFF", x + bw - 66, y + 41, on.v ? "#111" : COL.dim, 20, true, "center"); }
+    text(name ? fit(name, 19) : "effect unknown", x + 26, y0 + 62, name ? COL.text : COL.dim, 17);
+    if (on) { rect(x + bw - 62, y0 + 16, 50, 26, on.v ? COL.good : "#2b2b2b"); text(on.v ? "ON" : "OFF", x + bw - 37, y0 + 36, on.v ? "#111" : COL.dim, 17, true, "center"); }
     const defs = ((window.SP404_FX || {}).params || {})[name] || [];
     for (let i = 0; i < 3; i++) {
-      const cx = x + bw * (0.2 + 0.3 * i), cy = y + 140;
+      const cx = x + bw * (0.17 + 0.33 * i), cy = y0 + 124;
       const v = ccValue(bus, 16 + i, T);
       const label = defs[i] && defs[i].n ? defs[i].n : "CTRL " + (i + 1);
-      knob(cx, cy, 40, v, label, c, ccHistory(bus, 16 + i, T, 6), T);
+      knob(cx, cy, 27, v, label, c, ccHistory(bus, 16 + i, T, 6), T);
     }
+    if (bus > 1) rect(x, y0 + 14, 1, h - 28, "#2b2b2b");
   }
 }
 
 function levelDb(v) { return v <= 0 ? -Infinity : 20 * Math.log10(v); }
 function drawMeter(T) {
-  const x0 = 960, y0 = 656, w = 920, h = 394;
+  const x0 = 960, y0 = 332, w = 920, h = 718;
   panel(x0, y0, w, h, "LEVEL");
   if (!peak) { text("no analysis of the audio", x0 + 16, y0 + 80, COL.dim, 22); return; }
   const f = clamp(Math.floor(T_audio * AN.fps), 0, AN.frames - 1);
@@ -450,29 +440,17 @@ function drawMeter(T) {
     for (let k = 0; k < 6; k++) if (peak[Math.max(f - k, 0) * 2 + c] > 65535 * 0.966) clip = true;
   }
   if (clip) { rect(x0 + w - 110, y0 + 10, 90, 28, COL.bad); text("CLIP", x0 + w - 65, y0 + 32, "#111", 20, true, "center"); }
-  drawSpectrogram(x0 + 24, y0 + 134, w - 48, 158, T);
-  drawTempo(x0 + 24, y0 + 326, w - 48, 54, T);
-}
-
-// the sound of the last 16 seconds and the next 8 (the take is known): loop starts and the patterns that change are marked
-function drawSpectrogram(sx, sy, sw, sh, T) {
+  const sx = x0 + 24, sy = y0 + 134, sw = w - 48, sh = 436, nb = AN.bands;
   rect(sx, sy, sw, sh, "#161616");
-  const before = 16, after = 8, fps = AN.fps, f0 = T_audio * fps, nowX = sx + sw * before / (before + after);
-  const a = f0 - before * fps, bz = f0 + after * fps; // frames at the left and right edge
-  const from = Math.max(a, 0), to = Math.min(bz, AN.frames);
-  if (specImg && to > from) {
-    const dx = sx + (from - a) / (bz - a) * sw, dw = (to - from) / (bz - a) * sw;
-    g.imageSmoothingEnabled = true; g.drawImage(specImg, from, 0, to - from, specImg.height, dx, sy, dw, sh);
+  const bwid = sw / nb;
+  for (let i = 0; i < nb; i++) {
+    let v = 0;
+    for (let k = 0; k < 5; k++) { const ff = f - k; if (ff < 0) break; v = Math.max(v, spec[ff * nb + i] / 255 - k * 0.04); }
+    const bh = clamp(v, 0, 1) * (sh - 8);
+    rect(sx + i * bwid + 1, sy + sh - 4 - bh, bwid - 2, Math.max(bh, 2), mix("#ffb000", "#ff5f5f", clamp(v - 0.6, 0, 0.4) / 0.4));
   }
-  const X = ta => sx + (ta * fps - a) / (bz - a) * sw; // audio time to x
-  g.fillStyle = "rgba(255,255,255,0.18)";
-  for (const l of loopStarts) { const x = X(l - OFFSET); if (x >= sx && x <= sx + sw) g.fillRect(x, sy, 1, sh); }
-  for (const e of patEv) {
-    const x = X(e.t - OFFSET); if (x < sx || x > sx + sw || !e.now) continue;
-    rect(x, sy, 2, sh, COL.amber); text(e.now, x + 5, sy + 16, COL.amber, 15, true);
-  }
-  rect(nowX - 1, sy, 3, sh, COL.good);
-  text("-16 s", sx + 4, sy + sh + 16, COL.dim, 14); text("+8 s", sx + sw, sy + sh + 16, COL.dim, 14, false, "right"); text("30 Hz - 18 kHz up the side", sx + sw / 2, sy + sh + 16, COL.dim, 14, false, "center");
+  text("30 Hz", sx + 4, sy + sh + 18, COL.dim, 14); text("18 kHz", sx + sw, sy + sh + 18, COL.dim, 14, false, "right");
+  drawTempo(x0 + 24, y0 + 628, w - 48, 54, T);
 }
 
 // the tempo over the whole take: the tempo of the bank of each pattern in turn (the clock where no pattern is known)
