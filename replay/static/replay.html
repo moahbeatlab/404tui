@@ -97,6 +97,7 @@
   body.nohud #capbox { display:none !important; }
   #stylebox { position:fixed; right:16px; bottom:calc(var(--barh, 110px) + 8px); background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; max-width:min(440px, 92vw); }
   #stylebox.open { display:flex; }
+  #stylebox .two { display:flex; gap:6px; flex:1; } #stylebox .two input { flex:1; min-width:0; }
   #stylebox .bw { display:flex; gap:6px; align-items:center; }
   #stylebox label { white-space:nowrap; display:flex; gap:8px; align-items:center; justify-content:space-between; color:var(--dim); }
   #stylebox input[type=color] { width:44px; height:26px; padding:0; border:0; background:none; }
@@ -160,6 +161,11 @@
   <label>colours <input id="s_bg1" type="color" value="#000000"> <input id="s_bg2" type="color" value="#1b1b2e"></label>
   <label>picture <input id="s_bgimg" type="file" accept="image/*"></label>
   <label>picture dimmed <input id="s_bgdim" type="range" min="0" max="95" value="60"></label>
+  <label>picture fills <select id="s_bgfit"><option value="cover">the video (cropped to fit)</option><option value="contain">the video (all of it)</option><option value="stretch">the video (stretched)</option><option value="tile">as tiles</option><option value="center">centred (its own size)</option></select></label>
+  <label>picture position <span class="two"><input id="s_bgpx" type="range" min="0" max="100"><input id="s_bgpy" type="range" min="0" max="100"></span></label>
+  <label>picture zoom <input id="s_bgzoom" type="range" min="50" max="300"></label>
+  <label>picture blur <input id="s_bgblur" type="range" min="0" max="30"></label>
+  <label>panels show the picture <input id="s_bgpanels" type="range" min="20" max="100"></label>
   <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
   <label>BUS 1 at the start <span class="bw"><select id="s_bussel0"></select> <input id="s_bus0" placeholder="your own text" size="18" hidden></span></label>
   <label>BUS 2 at the start <span class="bw"><select id="s_bussel1"></select> <input id="s_bus1" placeholder="your own text" size="18" hidden></span></label>
@@ -872,7 +878,7 @@ const PRESETS = {
   "forest":   { accent: "#7bd88f", bg: "#0d1511", deep: "#101a15", panel: "#14201a", tile: "#203329", tile2: "#182820", text: "#e9f5ec", dim: "#8fb09a" },
   "mono":     { accent: "#f2f2f2", bg: "#0d0d0d", deep: "#111111", panel: "#181818", tile: "#262626", tile2: "#1c1c1c", text: "#f2f2f2", dim: "#8c8c8c" },
 };
-const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6 }, logo: "", handle: "", subtitle: "" };
+const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
 let STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)), logoImg = null, bgImg = null;
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const hexMix = (a, b, t) => "#" + hexRgb(a).map((v, i) => Math.round(v + (hexRgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
@@ -885,21 +891,41 @@ function applyStyle() {
   COL.amberD = hexMix(COL.amber, "#000000", 0.5); COL.amberDD = hexMix(COL.amber, "#000000", 0.65);
   const b = STYLE.bg || {};
   if (b.kind === "solid" && validHex(b.color)) COL.bg = b.color;
-  PANEL_A = b.kind === "gradient" || (b.kind === "image" && b.image) ? 0.9 : 1;
+  PANEL_A = b.kind === "gradient" || (b.kind === "image" && b.image) ? clamp(b.panels === undefined ? 0.9 : +b.panels, 0.2, 1) : 1;
   if (loadedKeys.logo !== STYLE.logo) { loadedKeys.logo = STYLE.logo; logoImg = loadImg(STYLE.logo); }
   if (loadedKeys.bg !== b.image) { loadedKeys.bg = b.image; bgImg = loadImg(b.image); }
   document.documentElement.style.setProperty("--amber", COL.amber);
 }
 const loadedKeys = {};
+let bgLayer = null, bgKey = "";
+// the picture of the background in the way the style says: fill (cropped to the picture), fit (all of it), stretch, tile or centre; with a
+// position, a zoom, a blur and a dimming. It is made once and drawn from the layer, so that a frame costs nothing.
+function bgPicture() {
+  const b = STYLE.bg || {}, im = bgImg;
+  if (!(im && im.complete && im.naturalWidth)) return null;
+  const key = [im.src.length, im.naturalWidth, b.fit, b.px, b.py, b.zoom, b.blur, b.dim, COL.bg, W, H].join("|");
+  if (bgLayer && key === bgKey) return bgLayer;
+  const c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d");
+  const iw = im.naturalWidth, ih = im.naturalHeight, z = clamp(+b.zoom || 1, 0.2, 4), px = clamp(b.px === undefined ? 0.5 : +b.px, 0, 1), py = clamp(b.py === undefined ? 0.5 : +b.py, 0, 1), fit = b.fit || "cover";
+  x.fillStyle = COL.bg; x.fillRect(0, 0, W, H);
+  const blur = clamp(+b.blur || 0, 0, 40); if (blur > 0) x.filter = "blur(" + blur + "px)";
+  const put = (w, h) => x.drawImage(im, (W - w) * px, (H - h) * py, w, h);
+  if (fit === "stretch") { const w = W * z, h = H * z; put(w, h); }
+  else if (fit === "tile") { const pat = x.createPattern(im, "repeat"); x.save(); x.translate(-(W * (px - 0.5)) * (z - 1) , 0); x.scale(z, z); x.fillStyle = pat; x.fillRect(-W, -H, W * 3 / z, H * 3 / z); x.restore(); }
+  else if (fit === "center") put(iw * z, ih * z);
+  else if (fit === "contain") { const k = Math.min(W / iw, H / ih) * z; put(iw * k, ih * k); }
+  else { const k = Math.max(W / iw, H / ih) * z; put(iw * k, ih * k); }
+  x.filter = "none";
+  x.globalAlpha = clamp(b.dim === undefined ? 0.6 : b.dim, 0, 0.95); x.fillStyle = "#000"; x.fillRect(0, 0, W, H);
+  bgLayer = c; bgKey = key; return c;
+}
 function drawBackground() {
   const b = STYLE.bg || {};
   rect(0, 0, W, H, COL.bg);
   if (b.kind === "gradient" && validHex(b.color) && validHex(b.color2)) {
     const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, b.color); gr.addColorStop(1, b.color2); g.fillStyle = gr; g.fillRect(0, 0, W, H);
-  } else if (b.kind === "image" && bgImg && bgImg.complete && bgImg.naturalWidth) {
-    const k = Math.max(W / bgImg.naturalWidth, H / bgImg.naturalHeight), iw = bgImg.naturalWidth * k, ih = bgImg.naturalHeight * k;
-    g.drawImage(bgImg, (W - iw) / 2, (H - ih) / 2, iw, ih);
-    g.globalAlpha = clamp(b.dim === undefined ? 0.6 : b.dim, 0, 0.95); rect(0, 0, W, H, "#000"); g.globalAlpha = 1;
+  } else if (b.kind === "image") {
+    const c = bgPicture(); if (c) g.drawImage(c, 0, 0);
   }
 }
 // the logo and the handle: wide, in the strip under the panels at the right; vertical, centred in the strip under the feed
@@ -1372,7 +1398,8 @@ const PRESETS_LAYOUT = {
 const LAYOUT_ALIAS = { wide: { top: "left", bottom: "right" }, vertical: { left: "top", right: "bottom" } };
 function layoutPreset(id) { const f = camKey(), t = PRESETS_LAYOUT[f]; return id ? t[id] || t[(LAYOUT_ALIAS[f] || {})[id]] || null : null; }
 // the panels of a scene: their places (the preset's over the default ones) and which are left out
-function sceneRects(sc) { const p = sc && sc.layout && CAMFILE ? layoutPreset(sc.layout) : null; // a preset needs a camera const o = {}; for (const id of PANEL_IDS) o[id] = (p && p.rects[id]) || L0[id]; return o; }
+// a preset needs a camera: without one the panels keep their own places
+function sceneRects(sc) { const p = sc && sc.layout && CAMFILE ? layoutPreset(sc.layout) : null; const o = {}; for (const id of PANEL_IDS) o[id] = (p && p.rects[id]) || L0[id]; return o; }
 function sceneOff(sc) { const p = sc && sc.layout && CAMFILE ? layoutPreset(sc.layout) : null; return [...new Set([...(p ? p.off : []), ...((sc && sc.off) || [])])]; }
 // the places of the panels at a time: from the scene before to the one that runs, by the same progress as the box
 function applyLayout(A) {
@@ -1711,6 +1738,8 @@ function initStyle(saved) {
       const note = (STYLE.busNotes || [])[i] || "", sl = $("s_bussel" + i), inp = $("s_bus" + i), known = [...sl.options].some(o => o.value === note && o.value !== "__custom__");
       sl.value = !note ? "" : known ? note : "__custom__"; inp.hidden = sl.value !== "__custom__"; inp.value = known ? "" : note;
     }
+    const bg = STYLE.bg; $("s_bgfit").value = bg.fit || "cover"; $("s_bgpx").value = Math.round((bg.px === undefined ? 0.5 : bg.px) * 100); $("s_bgpy").value = Math.round((bg.py === undefined ? 0.5 : bg.py) * 100);
+    $("s_bgzoom").value = Math.round((bg.zoom || 1) * 100); $("s_bgblur").value = bg.blur || 0; $("s_bgpanels").value = Math.round((bg.panels === undefined ? 0.9 : bg.panels) * 100);
     $("s_bgdim").value = Math.round((STYLE.bg.dim === undefined ? 0.6 : STYLE.bg.dim) * 100); $("s_handle").value = STYLE.handle || ""; $("s_sub").value = STYLE.subtitle || "";
   };
   show();
@@ -1725,6 +1754,10 @@ function initStyle(saved) {
   $("s_bg1").oninput = () => { STYLE.bg.color = $("s_bg1").value; if (STYLE.bg.kind === "preset") STYLE.bg.kind = "solid"; show(); changed(); };
   $("s_bg2").oninput = () => { STYLE.bg.color2 = $("s_bg2").value; STYLE.bg.kind = "gradient"; show(); changed(); };
   $("s_bgdim").oninput = () => { STYLE.bg.dim = $("s_bgdim").value / 100; changed(); };
+  $("s_bgfit").onchange = () => { STYLE.bg.fit = $("s_bgfit").value; changed(); };
+  $("s_bgpx").oninput = () => { STYLE.bg.px = $("s_bgpx").value / 100; changed(); }; $("s_bgpy").oninput = () => { STYLE.bg.py = $("s_bgpy").value / 100; changed(); };
+  $("s_bgzoom").oninput = () => { STYLE.bg.zoom = $("s_bgzoom").value / 100; changed(); }; $("s_bgblur").oninput = () => { STYLE.bg.blur = +$("s_bgblur").value; changed(); };
+  $("s_bgpanels").oninput = () => { STYLE.bg.panels = $("s_bgpanels").value / 100; changed(); };
   // what each bus is used for: one of the unit's effects, or your own text
   const setNotes = () => { STYLE.busNotes = [0, 1, 2, 3].map(k => { const v = $("s_bussel" + k).value; return v === "__custom__" ? $("s_bus" + k).value : v; }); changed(); };
   for (let i = 0; i < 4; i++) {
