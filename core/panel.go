@@ -110,7 +110,7 @@ func (a *App) hints() (plain, shift []hint) {
 		plain = append(append([]hint{}, plain...), hint{"t", "online / offline"})
 	}
 	if Terminal && a.scr == Files && !a.Modal() && a.prompt == nil && a.kb == nil {
-		plain = append(append([]hint{}, plain...), hint{"m", "mark file"})
+		plain = append(append([]hint{}, plain...), hint{"m", "mark file"}, hint{"M", "mark all"})
 	}
 	if Terminal && a.scr == Files && !a.Modal() && a.prompt == nil && a.kb == nil { // t: load files from where
 		out := make([]hint, 0, len(plain)+1)

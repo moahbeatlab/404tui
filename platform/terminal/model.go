@@ -288,13 +288,15 @@ func (m *Model) key(msg tea.KeyMsg) {
 	case "y", "Y":
 		m.arm(yShift, core.Y)
 		return
-	case "m", "M": // SEQ: mute the track; FILES: mark the file (and move on)
+	case "m", "M": // SEQ: mute the track; FILES: mark the file (and move on), M marks every file of the folder
 		if m.armed == noShift && !m.aHeld && !m.app.Modal() {
-			switch m.app.ScreenName() {
-			case "SEQ":
+			switch {
+			case m.app.ScreenName() == "SEQ" && s == "m":
 				m.app.SeqTrack(1)
-			case "FILES":
+			case m.app.ScreenName() == "FILES" && s == "m":
 				m.app.MarkFile()
+			case m.app.ScreenName() == "FILES":
+				m.app.MarkAll()
 			}
 		}
 		return

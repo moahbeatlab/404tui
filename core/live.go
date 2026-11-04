@@ -59,7 +59,13 @@ type liveState struct {
 	watchBank atomic.Int32
 	pulls     chan []pulled
 	stop      chan struct{}
+	// the unit is not looked at until this time: after a change of ours it takes a moment to show it
+	quietUntil time.Time
+	seen       map[int]uint64 // pad -> the unit's block as last seen different from ours (it has to be seen twice to count)
 }
+
+// settleTime is how long the unit is left alone after something was sent to it.
+const settleTime = 8 * time.Second
 
 // pulled is a pad that was changed on the unit: its block and its sample.
 type pulled struct {
@@ -161,14 +167,13 @@ func (a *App) liveSync() {
 	l.base = now
 	l.mu.Lock()
 	l.sig = now
-	l.mu.Unlock()
-	if len(ch) == 0 {
-		return
+	start := false
+	if len(ch) > 0 { // what is on its way and what the unit is expected to have change together: the poll never sees one without the other
+		l.queue = coalesce(l.queue, ch)
+		start = !l.running
+		l.running = true
+		l.quietUntil = time.Now().Add(settleTime)
 	}
-	l.mu.Lock()
-	l.queue = coalesce(l.queue, ch)
-	start := !l.running
-	l.running = true
 	l.mu.Unlock()
 	if start {
 		go l.run()
@@ -189,6 +194,7 @@ func (l *liveState) run() {
 		l.mu.Unlock()
 		err := l.send(c)
 		l.mu.Lock()
+		l.quietUntil = time.Now().Add(settleTime) // the unit may need a moment to show what it was given
 		l.sent++
 		if err != nil {
 			l.err = fmt.Errorf("%s %s: %w", c.kind, padLabelOf(c), err)
@@ -311,10 +317,14 @@ func (l *liveState) pollLoop() {
 // that is there or gone, its name, its settings.
 func (l *liveState) poll() []pulled {
 	l.mu.Lock()
-	sig, busy := l.sig, l.running || len(l.queue) > 0
+	sig, busy := l.sig, l.running || len(l.queue) > 0 || time.Now().Before(l.quietUntil)
 	l.mu.Unlock()
 	if busy {
+		l.seen = nil
 		return nil
+	}
+	if l.seen == nil {
+		l.seen = map[int]uint64{}
 	}
 	bank := int(l.watchBank.Load())
 	var out []pulled
@@ -329,8 +339,15 @@ func (l *liveState) poll() []pulled {
 			return out
 		}
 		if !padDiffers(blk, sig, n) {
+			delete(l.seen, n)
 			continue
 		}
+		// a difference counts when the unit shows the same thing twice: it is not a state on the way to what we sent
+		if h := maphash.Bytes(l.seed, blk.Raw()); l.seen[n] != h {
+			l.seen[n] = h
+			continue
+		}
+		delete(l.seen, n)
 		p := pulled{n: n, block: blk.Raw()}
 		if blk.HasSample() {
 			smp, err := l.dev.ReadFile(pad.SamplePath(uint8(l.project) + 1))

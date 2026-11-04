@@ -837,6 +837,15 @@ func (a *App) MarkFile() {
 	}
 }
 
+// MarkAll is M of a keyboard on FILES: every file of the folder is marked.
+func (a *App) MarkAll() {
+	if a.scr != Files || a.Modal() || a.prompt != nil || a.kb != nil {
+		return
+	}
+	a.CancelShift()
+	a.markAllHere()
+}
+
 // StopSound is x of a keyboard on PADS and FILES: whatever sounds stops (Space plays).
 func (a *App) StopSound() {
 	if a.Modal() || a.prompt != nil || a.kb != nil {

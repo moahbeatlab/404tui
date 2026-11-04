@@ -315,6 +315,7 @@ func TestPadsChangedOnTheUnitComeIntoTheEditor(t *testing.T) {
 	dev := device.New(sim.Demo(), "sim")
 	a.goLive(dev, 0)
 	t.Cleanup(func() { a.stopLive() })
+	a.live.poll() // a difference has to be seen twice
 	ps := a.live.poll()
 	if len(ps) == 0 {
 		t.Skip("the simulated unit has the same pads as the editor")
@@ -336,6 +337,7 @@ func TestPadsChangedOnTheUnitComeIntoTheEditor(t *testing.T) {
 		if err := dev.SetParam(0x69, proto.TargetPad(pad), 50); err != nil {
 			t.Fatal(err)
 		}
+		a.live.poll()
 		next := a.live.poll()
 		if len(next) != 1 || next[0].n != n {
 			t.Fatalf("a setting changed on the unit is noticed: %d", len(next))
@@ -866,5 +868,73 @@ func TestMarkedFilesGoOnConsecutivePadsInTheOrderOfTheirNames(t *testing.T) {
 	}
 	if len(a.fmarks) != 0 || a.ScreenName() != "PADS" {
 		t.Fatal("the marks are gone and the pads are shown")
+	}
+}
+
+func TestWhatWasJustSentIsNotPulledBack(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	dev := device.New(sim.Demo(), "sim")
+	a.goLive(dev, 0)
+	t.Cleanup(func() { a.stopLive() })
+	kitKeys(t, a) // pads put in the editor: the unit does not have them yet, and is being given them
+	a.liveSync()
+	for i := 0; i < 3; i++ {
+		if ps := a.live.poll(); len(ps) != 0 {
+			t.Fatalf("while the unit is being given something, and for a while after, it is not looked at: %d pads", len(ps))
+		}
+	}
+	if !a.info.Pads[0].File {
+		t.Fatal("the pad is still in the editor")
+	}
+	// later, with nothing on its way, what differs counts once it is seen twice
+	a.live.mu.Lock()
+	a.live.queue, a.live.running, a.live.quietUntil = nil, false, time.Time{}
+	a.live.mu.Unlock()
+	a.live.poll()
+	if ps := a.live.poll(); len(ps) == 0 {
+		t.Skip("the simulated unit shows the same pads")
+	}
+}
+
+func TestNumberedKitFilesGoOnThePadOfTheirNumberAndEmptyOnesAreLeftOut(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	src, _ := os.ReadFile(filepath.Join(a.Root, "bass", "bass_C1.wav"))
+	set := filepath.Join(a.Root, "kit")
+	os.MkdirAll(set, 0o755)
+	for _, n := range []string{"00_DrumLoop_01.wav", "01_EMPTY.wav", "03_Loop1_01.wav", "12_Clap_01.wav", "14_Kick_01.wav", "16_EMPTY.wav"} {
+		os.WriteFile(filepath.Join(set, n), src, 0o644)
+	}
+	a.GoScreen(3)
+	a.cd(set)
+	a.MarkAll()
+	if len(a.fmarks) != 6 {
+		t.Fatalf("M marks every file: %d", len(a.fmarks))
+	}
+	press := func(k Key) {
+		a.Dispatch(Event{Key: k, Down: true})
+		a.Dispatch(Event{Key: k, Down: false})
+	}
+	press(A)
+	if a.menu == nil || !strings.Contains(screenStr(a), "By their numbers") {
+		t.Fatalf("numbered files offer to go by their numbers:\\n%s", screenStr(a))
+	}
+	a.menu.items[0].run(0)
+	a.pickerKey(Down) // bank A stays: any pad of it
+	a.pickerKey(Up)
+	a.pickerKey(A)
+	for n, want := range map[int]string{2: "03_Loop1_01", 11: "12_Clap_01", 13: "14_Kick_01"} {
+		if p := a.info.Pads[n]; !p.File || p.Name != want {
+			t.Errorf("pad %d is %q, wanted %q", n+1, p.Name, want)
+		}
+	}
+	for _, n := range []int{0, 1, 15} {
+		if a.info.Pads[n].File {
+			t.Errorf("pad %d is empty: the EMPTY files and number 0 have no pad", n+1)
+		}
+	}
+	if !strings.Contains(a.msg, "no pad for 00_DrumLoop_01.wav") || !strings.Contains(a.msg, "2 empty left out") {
+		t.Errorf("it says what it left out: %q", a.msg)
 	}
 }

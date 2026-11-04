@@ -3,7 +3,9 @@ package core
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/moahbeatlab/404tui/app"
@@ -33,11 +35,114 @@ func (a *App) markedAudio() []string {
 	return out
 }
 
-// assignMarked asks which pad the first marked file goes to (the pad dialog), then puts the files on that pad and the ones after it.
+var leadingNumber = regexp.MustCompile(`^(\d+)[_\- .]`)
+
+// padNumberOf is the number a file name starts with (03_Loop.wav is 3), and whether it has one.
+func padNumberOf(path string) (int, bool) {
+	m := leadingNumber.FindStringSubmatch(baseName(path))
+	if m == nil {
+		return 0, false
+	}
+	n, err := strconv.Atoi(m[1])
+	return n, err == nil
+}
+
+// emptyName says whether a file is named as an empty slot of a kit (01_EMPTY.wav): it is left out.
+func emptyName(path string) bool { return strings.Contains(strings.ToLower(baseName(path)), "empty") }
+
+// silent says whether a decoded sample has no sound in it.
+func (a *App) silent(id int) bool {
+	pcm, err := a.lab.PCM(id)
+	if err != nil {
+		return false
+	}
+	for _, v := range pcm {
+		if v > 8 || v < -8 {
+			return false
+		}
+	}
+	return true
+}
+
+// assignMarked puts the marked files on pads. When every file starts with a number (a kit: 03_Loop.wav, 12_Clap.wav) it offers to
+// put each on the pad of that number in a bank; otherwise, or when asked, they go one after the other from a pad, in the order of their
+// names. Files named EMPTY, and files with no sound in them, are left out either way.
 func (a *App) assignMarked() {
 	files := a.markedAudio()
 	if len(files) == 0 {
 		a.say("none of the marked items is an audio file", true)
+		return
+	}
+	numbered := true
+	for _, p := range files {
+		if _, ok := padNumberOf(p); !ok && !emptyName(p) {
+			numbered = false
+		}
+	}
+	if !numbered {
+		a.assignInOrder(files)
+		return
+	}
+	m := &menu{title: fmt.Sprintf("%d marked files: where do they go?", len(files))}
+	m.items = append(m.items,
+		menuItem{label: "By their numbers: 03_... goes on pad 3 of a bank", run: func(int) { a.assignByNumber(files) }},
+		menuItem{label: "One after the other, from a pad", run: func(int) { a.assignInOrder(files) }})
+	a.menu = m
+}
+
+// assignByNumber asks for a bank (the pad dialog: any pad of it) and puts each file on the pad its number says.
+func (a *App) assignByNumber(files []string) {
+	a.pickPad("the bank for the numbered files (03_ is pad 3)", a.padN(), false, func(p int) {
+		bank := p / 16
+		var skippedEmpty, noPad []string
+		done := 0
+		for _, f := range files {
+			n, ok := padNumberOf(f)
+			if emptyName(f) || !ok {
+				skippedEmpty = append(skippedEmpty, f)
+				continue
+			}
+			if n < 1 || bank*16+n-1 > 159 {
+				noPad = append(noPad, baseName(f))
+				continue
+			}
+			id, err := a.decodePath(f, pathExt(f))
+			if err != nil {
+				a.say(baseName(f)+": "+err.Error(), true)
+				continue
+			}
+			if a.silent(id) {
+				skippedEmpty = append(skippedEmpty, f)
+				continue
+			}
+			pad := bank*16 + n - 1
+			name := strings.TrimSuffix(baseName(f), filepath.Ext(baseName(f)))
+			if err := a.lab.Assign(pad, id, name); err != nil {
+				a.say(err.Error(), true)
+				continue
+			}
+			delete(a.pcm, pad)
+			done++
+		}
+		a.finishAssign(bank*16, done)
+		msg := fmt.Sprintf("%d files on bank %c by their numbers, %d empty left out", done, 'A'+bank, len(skippedEmpty))
+		if len(noPad) > 0 {
+			msg += fmt.Sprintf("; no pad for %s", strings.Join(noPad, ", "))
+		}
+		a.say(msg, false)
+	})
+}
+
+// assignInOrder asks which pad the first file goes to (the pad dialog), then puts the files on that pad and the ones after it.
+func (a *App) assignInOrder(all []string) {
+	var files []string
+	for _, f := range all {
+		if !emptyName(f) {
+			files = append(files, f)
+		}
+	}
+	if len(files) == 0 {
+		a.say("every marked file is an empty one", true)
 		return
 	}
 	start := a.freeRun(len(files), a.padN())
@@ -50,31 +155,53 @@ func (a *App) assignMarked() {
 			a.say(fmt.Sprintf("%d files do not fit from %s: the last pad is J16", len(files), a.label(first)), true)
 			return
 		}
-		done := 0
-		for i, p := range files {
+		done, at := 0, first
+		for _, p := range files {
 			id, err := a.decodePath(p, pathExt(p))
 			if err != nil {
 				a.say(baseName(p)+": "+err.Error(), true)
 				continue
 			}
+			if a.silent(id) { // no sound in it: no pad is used for it
+				continue
+			}
 			name := strings.TrimSuffix(baseName(p), filepath.Ext(baseName(p)))
-			if err := a.lab.Assign(first+i, id, name); err != nil {
+			if err := a.lab.Assign(at, id, name); err != nil {
 				a.say(err.Error(), true)
 				continue
 			}
-			delete(a.pcm, first+i)
+			delete(a.pcm, at)
+			at++
 			done++
 		}
-		a.fmarks = nil
-		a.aud = nil
-		a.sl = nil
-		a.refresh()
-		a.stopPreview()
-		a.replay()
-		a.bank, a.cur = first/16, first%16
-		a.say(fmt.Sprintf("%d files on %s to %s, in the order of their names", done, a.label(first), a.label(first+len(files)-1)), false)
-		a.go_(Pads)
+		a.finishAssign(first, done)
+		a.say(fmt.Sprintf("%d files on %s to %s, in the order of their names", done, a.label(first), a.label(max(at-1, first))), false)
 	})
+}
+
+// finishAssign is what follows putting marked files on pads: the marks go, the pads are shown from the bank of the first.
+func (a *App) finishAssign(first, done int) {
+	a.fmarks = nil
+	a.aud = nil
+	a.sl = nil
+	a.refresh()
+	a.stopPreview()
+	a.replay()
+	a.bank, a.cur = first/16, first%16
+	a.go_(Pads)
+}
+
+// markAllHere marks every audio file of the folder in front.
+func (a *App) markAllHere() {
+	if a.fmarks == nil {
+		a.fmarks = map[string]bool{}
+	}
+	for _, e := range a.entries {
+		if !e.dir {
+			a.fmarks[joinPath(a.dir, e.name)] = true
+		}
+	}
+	a.say(fmt.Sprintf("%d marked", len(a.fmarks)), false)
 }
 
 // toggleFileMark marks the entry under the cursor, or takes the mark off.
