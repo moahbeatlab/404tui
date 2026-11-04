@@ -61,6 +61,8 @@
 <div id="capbox">
   <div id="caplist"></div>
   <label class="g">fade in and out <input id="c_fade" type="number" min="0" max="3" step="0.05" style="width:64px"> s <span class="h">for all captions</span></label>
+  <label class="g">blur behind a caption <input id="c_blur" type="range" min="0" max="12" step="0.5" style="width:130px"> <span id="c_blurv" class="h"></span></label>
+  <label class="g">dim behind a caption <input id="c_dim" type="range" min="0" max="80" step="1" style="width:130px"> <span id="c_dimv" class="h"></span></label>
   <label class="g">a new caption lasts <input id="c_len" type="number" min="1" max="60" step="0.5" style="width:64px"> s <span class="h">for all new captions</span></label>
   <button id="capadd" title="a caption from the time you are at">add a caption here</button>
 </div>
@@ -720,7 +722,7 @@ const PRESETS = {
   "forest":   { accent: "#7bd88f", bg: "#0d1511", deep: "#101a15", panel: "#14201a", tile: "#203329", tile2: "#182820", text: "#e9f5ec", dim: "#8fb09a" },
   "mono":     { accent: "#f2f2f2", bg: "#0d0d0d", deep: "#111111", panel: "#181818", tile: "#262626", tile2: "#1c1c1c", text: "#f2f2f2", dim: "#8c8c8c" },
 };
-const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6 }, logo: "", handle: "", subtitle: "" };
+const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6 }, logo: "", handle: "", subtitle: "" };
 let STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)), logoImg = null, bgImg = null;
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const hexMix = (a, b, t) => "#" + hexRgb(a).map((v, i) => Math.round(v + (hexRgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
@@ -784,10 +786,13 @@ function drawCaption(A) {
   if (!blurLayer || blurLayer.width !== W || blurLayer.height !== H) { blurLayer = document.createElement("canvas"); blurLayer.width = W; blurLayer.height = H; }
   const bx = blurLayer.getContext("2d");
   bx.clearRect(0, 0, W, H); bx.drawImage(cv, 0, 0);
-  g.save(); g.filter = "blur(" + (3 * fade).toFixed(1) + "px)"; g.drawImage(blurLayer, 0, 0); g.restore();
-  g.globalAlpha = 0.28 * fade; rect(0, 0, W, H, "#000"); g.globalAlpha = 1;
-  const px = 34, k = VERT ? 1.22 : 1, bw = Math.min(W - 80, VERT ? 940 : 1260);
-  const lines = wrapText(c.text, bw - 96, px).slice(0, 5), lh = px * k * 1.32, bh = lines.length * lh + 52;
+  g.save(); const blurPx = clamp(STYLE.capBlur === undefined ? 3 : +STYLE.capBlur, 0, 20), dimA = clamp(STYLE.capDim === undefined ? 0.28 : +STYLE.capDim, 0, 0.9);
+  if (blurPx > 0) { g.save(); g.filter = "blur(" + (blurPx * fade).toFixed(1) + "px)"; g.drawImage(blurLayer, 0, 0); g.restore(); }
+  g.globalAlpha = dimA * fade; rect(0, 0, W, H, "#000"); g.globalAlpha = 1;
+  const px = 34, k = VERT ? 1.22 : 1, bwMax = Math.min(W - 80, VERT ? 940 : 1260);
+  const lines = wrapText(c.text, bwMax - 96, px).slice(0, 5), lh = px * k * 1.32, bh = lines.length * lh + 52;
+  g.font = FONT(px * k, false); // the card is as wide as its longest line (a short caption gets a small card)
+  const bw = clamp(Math.max(...lines.map(l => g.measureText(l).width)) + 104, 360, bwMax);
   const x0 = (W - bw) / 2, y0 = (H - bh) / 2;
   g.save(); g.globalAlpha = fade;
   g.translate(W / 2, H / 2 + (1 - fade) * 24); g.scale(0.96 + 0.04 * fade, 0.96 + 0.04 * fade); g.translate(-W / 2, -H / 2); // rises and grows as it comes
@@ -866,9 +871,18 @@ function initCaptions() {
     });
   };
   const fadeIn = document.getElementById("c_fade"), lenIn = document.getElementById("c_len");
-  const showSettings = () => { fadeIn.value = STYLE.capFade; lenIn.value = STYLE.capLength; };
-  const keepSettings = () => { STYLE.capFade = Math.max(0, Math.min(3, parseFloat(fadeIn.value) || 0)); STYLE.capLength = Math.max(1, parseFloat(lenIn.value) || 5); window.styleChanged && window.styleChanged(); };
-  fadeIn.oninput = lenIn.oninput = keepSettings;
+  const blurIn = document.getElementById("c_blur"), dimIn = document.getElementById("c_dim");
+  const showSettings = () => {
+    fadeIn.value = STYLE.capFade; lenIn.value = STYLE.capLength; blurIn.value = STYLE.capBlur; dimIn.value = Math.round(STYLE.capDim * 100);
+    document.getElementById("c_blurv").textContent = (+blurIn.value).toFixed(1) + " px"; document.getElementById("c_dimv").textContent = dimIn.value + " %";
+  };
+  const keepSettings = () => {
+    STYLE.capFade = Math.max(0, Math.min(3, parseFloat(fadeIn.value) || 0)); STYLE.capLength = Math.max(1, parseFloat(lenIn.value) || 5);
+    STYLE.capBlur = parseFloat(blurIn.value) || 0; STYLE.capDim = (parseFloat(dimIn.value) || 0) / 100;
+    document.getElementById("c_blurv").textContent = STYLE.capBlur.toFixed(1) + " px"; document.getElementById("c_dimv").textContent = Math.round(STYLE.capDim * 100) + " %";
+    window.styleChanged && window.styleChanged();
+  };
+  fadeIn.oninput = lenIn.oninput = blurIn.oninput = dimIn.oninput = keepSettings;
   document.getElementById("capbtn").onclick = () => { showSettings(); box.classList.toggle("open"); render(); };
   document.getElementById("capadd").onclick = () => {
     const a = now(), d = AN ? AN.duration : a + 5;
