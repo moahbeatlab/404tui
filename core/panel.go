@@ -657,7 +657,7 @@ func (a *App) drawKeyboardKeys(g Gfx, x, y, w int) {
 	global := []pair{
 		{hint{"1-6", "screens"}, hint{"g hl", "prev/next"}},
 		{hint{"u", "undo"}, hint{"R", "redo"}},
-		{hint{"^R", "record"}, hint{"?", "all keys"}},
+		{hint{"^R F9", "record"}, hint{"?", "all keys"}},
 		{hint{"q", "quit"}, hint{"y s", "shift keys"}},
 	}
 	if a.live != nil { // edited live: the unit can be told to read its files again (patterns written to it show then)

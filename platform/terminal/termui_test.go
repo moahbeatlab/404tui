@@ -85,6 +85,10 @@ func press(m *Model, s string) {
 		m.Update(tea.KeyMsg{Type: tea.KeyUp})
 	case "ctrl+c":
 		m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	case "ctrl+r":
+		m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	case "f9":
+		m.Update(tea.KeyMsg{Type: tea.KeyF9})
 	default:
 		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)})
 	}
@@ -438,5 +442,24 @@ func TestPlusAndMinusZoomTheSlicer(t *testing.T) {
 	press(m, "-")
 	if !zoomIs(m, "1x") {
 		t.Fatal("- zooms out")
+	}
+}
+
+func TestRecordingHasGlobalKeys(t *testing.T) {
+	m := newModel(t)
+	press(m, "x")
+	txt := m.text()
+	if !strings.Contains(txt, "^R F9") || !strings.Contains(txt, "record") {
+		t.Fatalf("the panel lists the recording keys under ALWAYS:\n%s", txt)
+	}
+	for _, key := range []string{"ctrl+r", "f9"} {
+		for _, scr := range []string{"1", "2", "4", "5", "6"} {
+			press(m, scr)
+			m.app.Message() // whatever the screen, the key answers
+			press(m, key)
+			if msg := m.app.Message(); !strings.Contains(strings.ToLower(msg), "record") {
+				t.Errorf("%s on screen %s answers about the recording: %q", key, scr, msg)
+			}
+		}
 	}
 }
