@@ -318,7 +318,18 @@ function drawPads(T) {
   const bank = bankInView(T), b = bank.charCodeAt(0) - 65;
   const gap = 12, tw = (w - 40 - 3 * gap) / 4, th = (h - 18 - 56 - 3 * gap) / 4, gx = x0 + 20, gy = y0 + 18;
   const cur = patternAt(T), inPat = cur ? cur.p.pads : null; // the pads of the pattern that plays are outlined
-  for (let i = 0; i < 16; i++) {
+  const ppos = cur && running(T) ? playPosition(T) : null, plen = cur ? cur.p.length / 480 : 0;
+  // a pad that the pattern plays flashes, very softly, for a moment: 1 right at its note, 0 after 0.35 s
+  const patFlash = n => {
+    if (!ppos || !plen) return 0;
+    let f = 0;
+    for (const nt of cur.p.notes) {
+      if (nt[1] !== n) continue;
+      const d = (((ppos.q % plen) - nt[0] / 480) % plen + plen) % plen, sec = d * 60 / ppos.bpm;
+      f = Math.max(f, clamp(1 - sec / 0.35, 0, 1) * (0.5 + 0.5 * nt[2] / 127));
+    }
+    return f;
+  };  for (let i = 0; i < 16; i++) {
     const n = b * 16 + i, row = Math.floor(i / 4), col = i % 4;
     const x = gx + col * (tw + gap), y = gy + row * (th + gap);
     const info = padInfo.get(n), st = padState(bank, i + 1, T);
@@ -327,6 +338,8 @@ function drawPads(T) {
     if (st) { const age = T - st.hitAt; glow = st.held ? 1 : clamp(1 - age / 0.45, 0, 1); glow *= 0.35 + 0.65 * (st.v || 100) / 127; }
     if (glow > 0) { g.globalAlpha = glow * 0.85; rrect(x, y, tw, th, 10, COL.amber); g.globalAlpha = 1; }
     if (st && st.held) { g.strokeStyle = "#fff"; g.lineWidth = 3; g.beginPath(); g.roundRect(x + 1.5, y + 1.5, tw - 3, th - 3, 9); g.stroke(); }
+    const pf = patFlash(n);
+    if (pf > 0 && !(muteEv.size && (at(muteEv.get(bank + (i + 1)) || [], T) || {}).on)) { g.globalAlpha = 0.16 * pf; rrect(x, y, tw, th, 10, COL.amber); g.globalAlpha = 1; }
     if (st && st.hitAt >= 0) { // how hard the last hit was, fading: a bar at the right edge and a ring
       const age = T - st.hitAt;
       if (age >= 0 && age < 1.4) { g.globalAlpha = 1 - age / 1.4; rect(x + tw - 14, y + th - 10 - (th - 20) * (st.v || 100) / 127, 6, (th - 20) * (st.v || 100) / 127, COL.amber); g.strokeStyle = COL.amber; g.lineWidth = 3; g.beginPath(); g.roundRect(x + 1.5, y + 1.5, tw - 3, th - 3, 9); g.stroke(); g.globalAlpha = 1; }
