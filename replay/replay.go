@@ -37,6 +37,10 @@ type Replay struct {
 type Cue struct {
 	T     float64 `json:"t"`
 	Label string  `json:"label"`
+	// Pattern and Pads keep what the pattern and its pads were, so that the cues stay a whole picture when the project has changed since
+	// (the page fills them in; the server keeps them as they are).
+	Pattern json.RawMessage `json:"pattern,omitempty"`
+	Pads    json.RawMessage `json:"pads,omitempty"`
 }
 
 // CuesPathFor is where the cues of an event log are kept.

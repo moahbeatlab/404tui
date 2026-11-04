@@ -116,7 +116,11 @@ function prepare(events, analysis, cuesIn) {
     }
     if (e.k === "on" && e.ch === 13 && e.n === 48) loopStarts.push(e.t);
   }
-  cues = (cuesIn || []).map(c => ({ t: c.t, label: c.label }));
+  cues = (cuesIn || []).map(c => ({ t: c.t, label: c.label, pattern: c.pattern, pads: c.pads }));
+  for (const c of cues) { // what the cue kept of the pattern and its pads stands in for a project that has no (or another) one
+    if (c.pattern && !patByLabel.has(c.label)) { const p = c.pattern; p.pads = new Set(p.notes.map(n => n[1])); patBySlot.set(p.slot, p); patByLabel.set(p.label, p); }
+    for (const pd of c.pads || []) if (!padInfo.has(pd.n)) padInfo.set(pd.n, pd);
+  }
   rebuildCues();
   const bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
   const sel = document.getElementById("pat");
@@ -127,7 +131,10 @@ function prepare(events, analysis, cuesIn) {
     if (!sel.value) return;
     const T = snapLoop(audio.currentTime + OFFSET + NUDGE / 1000);
     cues = cues.filter(c => Math.abs(c.t - T) > 0.05);
-    cues.push({ t: +T.toFixed(3), label: sel.value });
+    const p = patByLabel.get(sel.value);
+    cues.push({ t: +T.toFixed(3), label: sel.value,
+      pattern: p ? { slot: p.slot, label: p.label, bars: p.bars, length: p.length, notes: p.notes } : undefined,
+      pads: p ? [...p.pads].map(n => padInfo.get(n)).filter(Boolean) : undefined });
     sel.value = ""; rebuildCues(); saveCues();
   };
   document.getElementById("clearcues").onclick = () => { cues = []; rebuildCues(); saveCues(); };
@@ -157,6 +164,13 @@ const fxName = (bus, T) => {
 function bankInView(T) {
   let best = -1, bank = "A";
   for (const [k, l] of padEv) { const e = at(l, T); if (e && e.t > best) { best = e.t; bank = k[0]; } }
+  if (best < 0 || T - best > 3) { // no pad was touched lately: the bank of the pattern that plays
+    const r = patternAt(T);
+    if (r && r.p.pads.size) {
+      const n = new Map(); for (const pad of r.p.pads) { const b = Math.floor(pad / 16); n.set(b, (n.get(b) || 0) + 1); }
+      bank = String.fromCharCode(65 + [...n].sort((a, b) => b[1] - a[1])[0][0]);
+    }
+  }
   return bank;
 }
 function playPosition(T) {
@@ -217,6 +231,7 @@ function drawPads(T) {
   panel(x0, y0, w, h);
   const bank = bankInView(T), b = bank.charCodeAt(0) - 65;
   const tw = 205, th = 108, gap = 12, gx = x0 + 20, gy = y0 + 18;
+  const cur = patternAt(T), inPat = cur ? cur.p.pads : null; // the pads of the pattern that plays are outlined
   for (let i = 0; i < 16; i++) {
     const n = b * 16 + i, row = Math.floor(i / 4), col = i % 4;
     const x = gx + col * (tw + gap), y = gy + row * (th + gap);
@@ -226,6 +241,7 @@ function drawPads(T) {
     if (st) { const age = T - st.hitAt; glow = st.held ? 1 : clamp(1 - age / 0.45, 0, 1); glow *= 0.35 + 0.65 * (st.v || 100) / 127; }
     if (glow > 0) { g.globalAlpha = glow * 0.85; rrect(x, y, tw, th, 10, COL.amber); g.globalAlpha = 1; }
     if (st && st.held) { g.strokeStyle = "#fff"; g.lineWidth = 3; g.beginPath(); g.roundRect(x + 1.5, y + 1.5, tw - 3, th - 3, 9); g.stroke(); }
+    if (inPat && inPat.has(n)) { g.strokeStyle = COL.amberD; g.lineWidth = 2; g.beginPath(); g.roundRect(x + 1, y + 1, tw - 2, th - 2, 9); g.stroke(); }
     if (info && info.bus) rect(x + 2, y + 10, 6, th - 20, BUSCOL[info.bus]);
     const dark = glow > 0.5;
     text(String.fromCharCode(65 + b) + (i + 1), x + 20, y + 28, dark ? "#111" : COL.amber, 24, true);
