@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>404tui replay</title>
 <style>
-  :root { --bg:#111; --panel:#1b1b1b; --amber:#ffb000; --text:#ddd; --dim:#888; }
+  :root { --bg:#121214; --panel:#1b1b1e; --amber:#ffb000; --text:#ddd; --dim:#888; }
   html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:14px ui-monospace, Menlo, Consolas, monospace; }
   body { display:flex; flex-direction:column; }
   #stage { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
-  canvas { width:100%; height:100%; object-fit:contain; background:#111; }
+  canvas { width:100%; height:100%; object-fit:contain; background:#121214; }
   #bar { display:flex; gap:12px; align-items:center; padding:8px 16px; background:#161616; border-top:1px solid #2a2a2a; }
   #bar button, #bar select { background:#2b2b2b; color:var(--text); border:0; padding:6px 12px; font:inherit; cursor:pointer; }
   #bar button:hover { background:#3a3a3a; }
@@ -37,8 +37,10 @@
 "use strict";
 // ---- the page of a replay: everything on the screen is a function of the time, so that it can be watched (the audio drives the time)
 // and rendered frame by frame (a program sets the time: window.replay.setTime(t)).
-const COL = { bg:"#111", panel:"#1b1b1b", tile:"#2b2b2b", tile2:"#232323", amber:"#ffb000", amberD:"#7a5a00", text:"#ddd", dim:"#888", line:"#333",
-              good:"#6c6", bad:"#ff5f5f", blue:"#5fafff", red:"#ff5f5f" };
+// the colours of 404jam (src/styles/main.css), so that the replay looks like the rest of the family
+const COL = { bg:"#121214", panel:"#1b1b1e", tile:"#2c2c30", tile2:"#1d1d20", amber:"#ffb000", amberD:"#7a5a00", text:"#ececf0", dim:"#9a9aa4", line:"#34343a",
+              good:"#87d787", bad:"#ff5f5f", blue:"#5fafff", red:"#ff3b30", green:"#3ddc84", gold:"#ffb300", purple:"#c792ea" };
+const BUSCOL = { 1: COL.blue, 2: COL.red, 3: COL.green, 4: COL.gold };
 const FONT = (px, bold) => (bold ? "bold " : "") + px + "px ui-monospace, Menlo, Consolas, monospace";
 const cv = document.getElementById("c"), g = cv.getContext("2d");
 const W = cv.width, H = cv.height;
@@ -143,10 +145,11 @@ function patternAt(T) {
 
 // ---- drawing
 function rect(x, y, w, h, c) { g.fillStyle = c; g.fillRect(x, y, w, h); }
+function rrect(x, y, w, h, r, c) { g.fillStyle = c; g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); }
 function text(s, x, y, c, px, bold, align) { g.fillStyle = c; g.font = FONT(px || 22, bold); g.textAlign = align || "left"; g.textBaseline = "alphabetic"; g.fillText(s, x, y); }
 function fit(s, n) { return s.length > n ? s.slice(0, n - 1) + "~" : s; }
 const mix = (c1, c2, t) => { const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const a = p(c1), b = p(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; };
-function panel(x, y, w, h, title) { rect(x, y, w, h, COL.panel); if (title) text(title, x + 16, y + 30, COL.dim, 20, true); }
+function panel(x, y, w, h, title) { rrect(x, y, w, h, 12, COL.panel); if (title) text(title, x + 16, y + 30, COL.dim, 20, true); }
 const mmss = t => { t = Math.max(t, 0); return Math.floor(t / 60) + ":" + (t % 60).toFixed(1).padStart(4, "0"); };
 
 function drawHeader(T, A) {
@@ -172,12 +175,12 @@ function drawPads(T) {
     const n = b * 16 + i, row = Math.floor(i / 4), col = i % 4;
     const x = gx + col * (tw + gap), y = gy + row * (th + gap);
     const info = padInfo.get(n), st = padState(bank, i + 1, T);
-    rect(x, y, tw, th, info ? COL.tile : COL.tile2);
+    rrect(x, y, tw, th, 10, info ? COL.tile : COL.tile2);
     let glow = 0;
     if (st) { const age = T - st.hitAt; glow = st.held ? 1 : clamp(1 - age / 0.45, 0, 1); glow *= 0.35 + 0.65 * (st.v || 100) / 127; }
-    if (glow > 0) { g.globalAlpha = glow * 0.85; rect(x, y, tw, th, COL.amber); g.globalAlpha = 1; }
-    if (st && st.held) { g.strokeStyle = "#fff"; g.lineWidth = 3; g.strokeRect(x + 1.5, y + 1.5, tw - 3, th - 3); }
-    if (info && info.bus) rect(x, y, 8, th, info.bus === 1 ? COL.blue : COL.red);
+    if (glow > 0) { g.globalAlpha = glow * 0.85; rrect(x, y, tw, th, 10, COL.amber); g.globalAlpha = 1; }
+    if (st && st.held) { g.strokeStyle = "#fff"; g.lineWidth = 3; g.beginPath(); g.roundRect(x + 1.5, y + 1.5, tw - 3, th - 3, 9); g.stroke(); }
+    if (info && info.bus) rect(x + 2, y + 10, 6, th - 20, BUSCOL[info.bus]);
     const dark = glow > 0.5;
     text(String.fromCharCode(65 + b) + (i + 1), x + 20, y + 28, dark ? "#111" : COL.amber, 24, true);
     if (info) {
@@ -233,12 +236,11 @@ function drawPattern(T) {
     const info = padInfo.get(n), mi = info && info.info ? info.info : {};
     const muted = mutedGuess(n, p, T);
     g.globalAlpha = muted ? 0.4 : 1;
-    rect(ix, y + 2, 6, rh - 5, info && info.bus === 1 ? COL.blue : info && info.bus === 2 ? COL.red : "#444");
+    rect(ix, y + 2, 6, rh - 5, info && info.bus ? BUSCOL[info.bus] : "#444");
     text(String.fromCharCode(65 + Math.floor(n / 16)) + (n % 16 + 1), ix + 14, y + rh * 0.68, COL.text, 17, true);
-    text(fit(info ? info.name : "", 11), ix + 58, y + rh * 0.68, COL.dim, 15);
     const flags = [mi.Gate === "on" ? "G" : "", mi.Loop === "on" ? "L" : "", mi["One shot"] === "on" ? "O" : "", mi.Mode && mi.Mode !== "forward" ? "R" : ""].join("");
-    text((mi.Bus && mi.Bus !== "off" ? mi.Bus.replace("BUS ", "B") : "-") + " L" + (mi.Level || "?") + " " + (mi.Pan || "") + " " + flags, ix + 170, y + rh * 0.68, COL.text, 15);
-    if (muted) text("muted?", ix + 262, y + rh * 0.68, COL.bad, 15, true);
+    text((mi.Bus && mi.Bus !== "off" ? mi.Bus.replace("BUS ", "B") : "-") + " L" + (mi.Level || "?") + " " + (mi.Pan || "") + " " + flags, ix + 76, y + rh * 0.68, COL.text, 16);
+    if (muted) text("muted?", ix + 250, y + rh * 0.68, COL.bad, 15, true);
     for (let s = 0; s < visible; s++) rect(gx + s * cw + 1, y + 1, cw - 2, rh - 3, (first + s) % 4 === 0 ? "#303030" : "#262626");
     for (const nt of p.notes) {
       if (nt[1] !== n) continue;
@@ -286,7 +288,7 @@ function drawFx(T) {
   const bw = w / 2, bh = h / 2;
   for (let bus = 1; bus <= 4; bus++) {
     const x = x0 + ((bus - 1) % 2) * bw, y = y0 + Math.floor((bus - 1) / 2) * bh;
-    const c = bus === 1 ? COL.blue : bus === 2 ? COL.red : bus === 3 ? "#b48ead" : COL.good;
+    const c = BUSCOL[bus];
     rect(x + 14, y + 14, 6, 60, c);
     text("BUS " + bus, x + 32, y + 40, c, 24, true);
     const name = fxName(bus, T), on = at(fxOn.get(bus) || [], T);
