@@ -23,6 +23,15 @@ func termOn(t *testing.T) {
 	SetSize(120, 40)
 }
 
+// kitKeys puts the kit on the pads with the handheld's keys (a computer asks which pad in a dialog, the kit script does not).
+func kitKeys(t *testing.T, a *App) {
+	t.Helper()
+	was := Terminal
+	Terminal = false
+	defer func() { Terminal = was }()
+	keys(t, a, kit)
+}
+
 func screenStr(a *App) string {
 	s := a.RenderCells()
 	var sb strings.Builder
@@ -74,7 +83,7 @@ func TestTerminalScreensAreSixAndInOrder(t *testing.T) {
 func TestOfflineProjectsAreListedAndOpened(t *testing.T) {
 	termOn(t)
 	a, _ := newApp(t)
-	keys(t, a, kit)
+	kitKeys(t, a)
 	a.slot = 3
 	if _, err := a.exportTo(a.offlineDir()); err != nil {
 		t.Fatal(err)
@@ -124,7 +133,7 @@ func TestOnlineWhenTheUnitIsThereOfflineWhenChosen(t *testing.T) {
 func TestSplashOffersOnlineAndOffline(t *testing.T) {
 	termOn(t)
 	a, _ := newApp(t)
-	keys(t, a, kit)
+	kitKeys(t, a)
 	a.slot = 2
 	a.exportTo(a.offlineDir())
 	a.set.LastOffline = 2
@@ -164,7 +173,7 @@ func TestSplashOffersOnlineAndOffline(t *testing.T) {
 func TestSeqMuteAndSolo(t *testing.T) {
 	termOn(t)
 	a, _ := newApp(t)
-	keys(t, a, kit)
+	kitKeys(t, a)
 	a.GoScreen(1)
 	keys(t, a, "A")
 	if len(a.rows) == 0 {
@@ -236,7 +245,7 @@ func TestLevelMeterIsInThePanelWhileAUnitIsThere(t *testing.T) {
 func TestProjectsAreExportedIntoAChosenFolder(t *testing.T) {
 	termOn(t)
 	a, _ := newApp(t)
-	keys(t, a, kit)
+	kitKeys(t, a)
 	dir := t.TempDir()
 	a.exportProjectAsk()
 	if a.dp == nil || !strings.Contains(screenStr(a), "EXPORT PROJECT_01 INTO THE FOLDER") {
@@ -745,5 +754,33 @@ func TestTracksKeepTheirPitchesThroughATool(t *testing.T) {
 		if after[i].Pitch != before[i].Pitch {
 			t.Fatalf("note %d: pitch byte %d became %d", i, before[i].Pitch, after[i].Pitch)
 		}
+	}
+}
+
+func TestAFileGoesToThePadChosenInTheDialog(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	a.GoScreen(3)
+	a.Dispatch(Event{Key: Right, Down: true})
+	a.Dispatch(Event{Key: Right, Down: false})
+	press := func(k Key) {
+		a.Dispatch(Event{Key: k, Down: true})
+		a.Dispatch(Event{Key: k, Down: false})
+	}
+	for a.entries[a.fcur].dir {
+		press(Right)
+	}
+	press(A)
+	if a.picker == nil || !a.picker.pads || !strings.Contains(strings.ToLower(screenStr(a)), "on a pad") {
+		t.Fatalf("A on a file opens the pad dialog:\n%s", screenStr(a))
+	}
+	press(Right)
+	press(Right) // A3
+	press(A)
+	if a.picker != nil || !a.info.Pads[2].File || a.info.Pads[0].File || a.ScreenName() != "PADS" {
+		t.Fatalf("the file is on the pad that was chosen, A3: %v %v %s", a.info.Pads[2].File, a.info.Pads[0].File, a.ScreenName())
+	}
+	if a.bank != 0 || a.cur != 2 {
+		t.Fatalf("the cursor is on that pad: bank %d pad %d", a.bank, a.cur)
 	}
 }

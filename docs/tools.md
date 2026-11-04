@@ -529,7 +529,7 @@ On a computer: the 16 projects of the unit when one is plugged in (online), else
 
 The file browser: this computer, the unit's card and its storage. `t` chooses where the files are loaded from (the computer, the samples folder, the unit's SD card, a USB drive, favourites) and leads to the file tools.
 
-**Keys on a computer:** `a` to pad A3 · `Space` listen · `x` stop · `jk` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where · `g hl` screen (1-6) · `y x` places · `y a` search · `y b` favourite · `s a` mark · `s x` record
+**Keys on a computer:** `a` to a pad... · `Space` listen · `x` stop · `jk` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where · `g hl` screen (1-6) · `y x` places · `y a` search · `y b` favourite · `s a` mark · `s x` record
 
 **Keys on the handheld:** `A` to pad A3 · `X` listen · `^v` browse · `>` open · `<` up · `L1 R1` page · `B` pads · `Y+<>` screen · `Y+X` places · `Y+A` search · `Y+B` favourite · `Sel+A` mark · `Sel+B` files menu · `Sel+X` record
 

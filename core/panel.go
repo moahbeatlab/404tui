@@ -209,6 +209,9 @@ func (a *App) rawHints() (plain, shift []hint) {
 			return []hint{{"^v<>", "move"}, {"A", "type it"}, {"B", "delete"}, {"X", "done"}}, []hint{{"Y+B", "clear all"}}
 		}
 		pick := hint{"A", "to pad " + a.label(a.padN())}
+		if Terminal {
+			pick = hint{"A", "to a pad..."}
+		}
 		if e, ok := a.current(); ok && e.project {
 			pick = hint{"A", "load project"}
 		}

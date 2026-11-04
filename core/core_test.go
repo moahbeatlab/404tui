@@ -4054,7 +4054,9 @@ func TestUndoOnEveryScreenLeavesAScreenThatDraws(t *testing.T) {
 		Terminal = term
 		for scr := Screen(0); int(scr) < len(screenNames); scr++ {
 			a, _ := newApp(t)
+			Terminal = false // the kit goes on with the handheld's keys (a computer asks which pad in a dialog)
 			keys(t, a, kit)
+			Terminal = term
 			a.go_(Seq)
 			keys(t, a, "A R R R A") // an edit to undo
 			onScreen(t, a, Pads)

@@ -286,7 +286,8 @@ func TestEnterOpensTheSliceMenuAndSpaceStops(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	press(m, "4")
 	press(m, "a") // into the first folder
-	press(m, "a") // its first sample to the pad
+	press(m, "a") // its first sample: the pad dialog
+	press(m, "a") // the pad it opens on
 	press(m, "5")
 	if m.app.ScreenName() != "SLICE" {
 		t.Fatalf("a sample on the pad opens the slicer, got %s", m.app.ScreenName())
@@ -327,7 +328,8 @@ func TestSpacePlaysAndStopsTheSampleAndThePattern(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	press(m, "4")
 	press(m, "a")
-	press(m, "a") // a sample on A1
+	press(m, "a") // a sample: the pad dialog
+	press(m, "a") // A1
 	press(m, "1")
 	press(m, " ")
 	if !m.app.Playing() {
@@ -423,6 +425,7 @@ func TestPlusAndMinusZoomTheSlicer(t *testing.T) {
 	press(m, "4")
 	press(m, "a")
 	press(m, "a")
+	press(m, "a") // the pad dialog
 	press(m, "5")
 	if !zoomIs(m, "1x") {
 		t.Fatalf("the slicer starts whole:\n%s", m.text())

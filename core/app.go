@@ -1181,20 +1181,30 @@ func (a *App) filesKey(k Key) {
 			return
 		}
 		name := strings.TrimSuffix(filepath.Base(e.name), filepath.Ext(e.name))
-		n := a.padN()
-		if err := a.lab.Assign(n, id, name); err != nil {
-			a.say(err.Error(), true)
+		if Terminal { // a computer chooses the pad in the pad dialog, as everywhere a pad is chosen
+			a.pickPad("put "+fit(name, 24)+" on a pad", a.padN(), false, func(n int) { a.assignFile(id, name, n) })
 			return
 		}
-		delete(a.pcm, n)
-		a.aud = nil
-		a.refresh()
-		a.stopPreview()
-		a.replay() // a pattern that plays goes on with the new sample
-		a.say(fmt.Sprintf("%s on %s", fit(name, 20), a.label(n)), false)
-		a.sl = nil
-		a.go_(Pads)
+		a.assignFile(id, name, a.padN())
 	}
+}
+
+// assignFile puts the decoded file on pad n and goes to the pads.
+func (a *App) assignFile(id int, name string, n int) {
+	if err := a.lab.Assign(n, id, name); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	a.cur = n % 16
+	a.bank = n / 16
+	delete(a.pcm, n)
+	a.aud = nil
+	a.refresh()
+	a.stopPreview()
+	a.replay() // a pattern that plays goes on with the new sample
+	a.say(fmt.Sprintf("%s on %s", fit(name, 20), a.label(n)), false)
+	a.sl = nil
+	a.go_(Pads)
 }
 
 // listen plays the file. While the pattern loops and the target pad has notes in it, the file is heard in the pattern, in
