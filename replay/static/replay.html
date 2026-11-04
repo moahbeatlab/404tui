@@ -141,7 +141,47 @@ function prepare(events, analysis, cuesIn) {
   if (AN && AN.frames) { peak = new Uint16Array(bytes(AN.peak).buffer); spec = bytes(AN.spec); }
   for (const [k, l] of padEv) hitTimes.set(k, l.filter(e => e.on).map(e => ({ t: e.t })));
   for (const e of beats) if (e.bpm) tempoSeries.push(e);
+  buildFeed(timed);
 }
+// ---- the feed: what happens, for a moment (pads pressed, knobs moved, effects, the clock, the pattern)
+const feedStatic = [];
+function buildFeed(timed) {
+  for (const [k, l] of padEv) for (const e of l) if (e.on) feedStatic.push({ t: e.t, text: k + " pressed", val: "v" + e.v, col: COL.amber });
+  for (const e of timed) {
+    if (e.k === "cc") {
+      const bus = e.ch >= 1 && e.ch <= 4 && ((e.n >= 16 && e.n <= 18) || (e.n >= 80 && e.n <= 82));
+      if (bus) feedStatic.push({ t: e.t, key: "cc" + e.ch + ":" + e.n, text: "BUS " + e.ch + " CTRL " + (e.n < 30 ? e.n - 15 : e.n - 79), val: String(e.v), col: BUSCOL[e.ch] });
+      else if (e.n !== 83 && e.n !== 19) feedStatic.push({ t: e.t, key: "cc" + e.ch + ":" + e.n, text: "CC " + e.n + " ch " + e.ch, val: String(e.v), col: COL.dim });
+    } else if (e.k === "fx") {
+      if (e.fx !== undefined) feedStatic.push({ t: e.t, text: "BUS " + e.bus + " effect", val: ((window.SP404_FX || {})[e.bus >= 3 ? "fx34" : "fx12"] || [])[e.fx] || String(e.fx), col: BUSCOL[e.bus] });
+      else feedStatic.push({ t: e.t, text: "BUS " + e.bus + " FX", val: e.on ? "ON" : "OFF", col: BUSCOL[e.bus] });
+    } else if (e.k === "on" && !e.bank) {
+      feedStatic.push({ t: e.t, text: e.ch === 13 && e.n === 48 ? "loop start" : "MIDI note " + e.n + " ch " + e.ch, val: e.ch === 13 && e.n === 48 ? "" : "v" + e.v, col: COL.dim });
+    } else if (e.k === "start" || e.k === "stop" || e.k === "continue") feedStatic.push({ t: e.t, text: e.k.toUpperCase(), val: "", col: COL.good });
+  }
+  feedStatic.sort((a, b) => a.t - b.t);
+}
+const FEED_SPAN = 4.5, FEED_LINES = 7;
+function drawFeed(T) {
+  const x0 = 960, y0 = 800, w = 920, h = 250;
+  panel(x0, y0, w, h, "EVENTS");
+  const items = [];
+  let i = atIndex(feedStatic, T);
+  for (; i >= 0 && feedStatic[i].t > T - FEED_SPAN; i--) items.push(feedStatic[i]);
+  for (const e of patEv) if (e.now && e.t <= T && e.t > T - FEED_SPAN) items.push({ t: e.t, text: "PATTERN", val: e.now, col: COL.purple });
+  items.sort((a, b) => b.t - a.t);
+  const seen = new Set(), out = []; // a knob that moves is one line: its latest value
+  for (const it of items) { if (it.key) { if (seen.has(it.key)) continue; seen.add(it.key); } out.push(it); if (out.length >= FEED_LINES) break; }
+  out.forEach((it, k) => {
+    const age = T - it.t, y = y0 + 44 + k * 28;
+    g.globalAlpha = clamp(1 - Math.pow(age / FEED_SPAN, 2), 0, 1);
+    rect(x0 + 20, y + 2, 5, 20, it.col);
+    text(it.text, x0 + 36, y + 20, COL.text, 20, true);
+    text(it.val, x0 + w - 24, y + 20, it.col, 20, true, "right");
+    g.globalAlpha = 1;
+  });
+}
+
 const hitTimes = new Map(), tempoSeries = [];
 
 // ---- what the unit was doing at time T (the time of the log)
@@ -279,9 +319,6 @@ function drawPads(T) {
       }
     } else text("empty", x + 20, y + 54, COL.dim, 19);
   }
-  // notes on a channel that is no bank: shown as they came
-  const on = at(otherNotes, T);
-  if (on && T - on.t < 1.2) { g.globalAlpha = 1 - (T - on.t) / 1.2; text("MIDI note " + on.n + "  channel " + on.ch + "  v" + on.v, x0 + w - 24, y0 + h - 60, COL.amber, 20, true, "right"); g.globalAlpha = 1; }
   for (let k = 0; k < 10; k++) {
     const x = gx + k * 86, y = y0 + h - 48;
     const letter = String.fromCharCode(65 + k);
@@ -420,7 +457,7 @@ function drawFx(T) {
 
 function levelDb(v) { return v <= 0 ? -Infinity : 20 * Math.log10(v); }
 function drawMeter(T) {
-  const x0 = 960, y0 = 332, w = 920, h = 718;
+  const x0 = 960, y0 = 332, w = 920, h = 452;
   panel(x0, y0, w, h, "LEVEL");
   if (!peak) { text("no analysis of the audio", x0 + 16, y0 + 80, COL.dim, 22); return; }
   const f = clamp(Math.floor(T_audio * AN.fps), 0, AN.frames - 1);
@@ -440,7 +477,7 @@ function drawMeter(T) {
     for (let k = 0; k < 6; k++) if (peak[Math.max(f - k, 0) * 2 + c] > 65535 * 0.966) clip = true;
   }
   if (clip) { rect(x0 + w - 110, y0 + 10, 90, 28, COL.bad); text("CLIP", x0 + w - 65, y0 + 32, "#111", 20, true, "center"); }
-  const sx = x0 + 24, sy = y0 + 134, sw = w - 48, sh = 436, nb = AN.bands;
+  const sx = x0 + 24, sy = y0 + 134, sw = w - 48, sh = 200, nb = AN.bands;
   rect(sx, sy, sw, sh, "#161616");
   const bwid = sw / nb;
   for (let i = 0; i < nb; i++) {
@@ -450,7 +487,7 @@ function drawMeter(T) {
     rect(sx + i * bwid + 1, sy + sh - 4 - bh, bwid - 2, Math.max(bh, 2), mix("#ffb000", "#ff5f5f", clamp(v - 0.6, 0, 0.4) / 0.4));
   }
   text("30 Hz", sx + 4, sy + sh + 18, COL.dim, 14); text("18 kHz", sx + sw, sy + sh + 18, COL.dim, 14, false, "right");
-  drawTempo(x0 + 24, y0 + 628, w - 48, 54, T);
+  drawTempo(x0 + 24, y0 + 384, w - 48, 54, T);
 }
 
 // the tempo over the whole take: the tempo of the bank of each pattern in turn (the clock where no pattern is known)
@@ -492,6 +529,7 @@ function draw(audioTime) {
   drawPattern(T);
   drawFx(T);
   drawMeter(T);
+  drawFeed(T);
 }
 
 // ---- the page: the audio drives the time
