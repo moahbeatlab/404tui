@@ -137,6 +137,7 @@ func (l *Lab) PullPad(n int, block, smp []byte) error {
 		return err
 	}
 	l.pad.Blocks[n] = append([]byte(nil), block...)
+	delete(l.remote, n)
 	if smp == nil {
 		delete(l.files, padFile(n))
 	} else {

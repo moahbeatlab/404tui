@@ -115,6 +115,12 @@ func (a *App) startAutosave() {
 	as.busy, as.lastRun = true, a.clock()
 	as.mu.Unlock()
 	a.changed = false
+	if a.live != nil && a.lab.RemoteCount() > 0 { // the unit has the project: an autosave would hold only what was fetched
+		as.mu.Lock()
+		as.busy = false
+		as.mu.Unlock()
+		return
+	}
 	if !a.hasWork() && a.info.Files <= 1 {
 		as.mu.Lock()
 		as.busy = false

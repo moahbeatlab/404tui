@@ -249,7 +249,7 @@ func (a *App) drawPads(g Gfx) {
 				if th >= 3 {
 					a.drawTileInfo(g, x+2, y+1, tw-3, th >= 4, n, p.Frames)
 				}
-			} else if id, ok := a.padSample(n); ok && th >= 3 { // the handheld: the wave, an even number of rows, so the middle line is between two
+			} else if id, ok := a.padSampleSoft(n); ok && th >= 3 { // the handheld: the wave, an even number of rows, so the middle line is between two
 				a.wave(g, id, 0, p.Frames, x+1, y+1, tw-2, (ph-2)/2*2, cAmber)
 			}
 			// the switches that are on: G for gate, L for loop

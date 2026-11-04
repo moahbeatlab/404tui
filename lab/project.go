@@ -26,6 +26,11 @@ type Lab struct {
 	staged  map[string][]byte // files added since Begin, before Finish sorts them out
 	samples map[int]formats.Sample
 	next    int
+
+	// A project that is being edited on the unit holds only what it needs: the pads whose sample is still on the unit are remote (their
+	// 512 byte header is kept, for the length), and the sample is fetched when something needs it.
+	remote map[int][]byte
+	fetch  func(n int) ([]byte, error)
 }
 
 // New is an empty lab with no project.
@@ -38,6 +43,7 @@ func New() *Lab {
 // Reset forgets the project and every sample.
 func (l *Lab) Reset() {
 	l.files = map[string][]byte{}
+	l.remote = nil
 	l.pad = nil
 	l.staged = nil
 	l.samples = map[int]formats.Sample{}
@@ -47,6 +53,7 @@ func (l *Lab) Reset() {
 // NewProject starts an empty project called name.
 func (l *Lab) NewProject(name string) {
 	l.files = map[string][]byte{}
+	l.remote = nil
 	l.pad = formats.NewPadconf(nil, clean(name, 31))
 }
 
@@ -107,7 +114,7 @@ func (l *Lab) Finish() (int, error) {
 		return 0, err
 	}
 	delete(files, "PADCONF.BIN")
-	l.files, l.pad = files, pc
+	l.files, l.pad, l.remote = files, pc, nil
 	if pc.Name == "" {
 		pc.Name = clean(path.Base(root), 31)
 	}
@@ -176,6 +183,14 @@ func (l *Lab) ExportZip(folder string) ([]byte, error) {
 // a caller that writes them out never needs a second copy of the project in memory. The data is the lab's own: fn
 // must not keep or change it.
 func (l *Lab) ExportEach(fn func(name string, data []byte) error) error {
+	if err := l.LoadAll(); err != nil {
+		return err
+	}
+	return l.ExportLoaded(fn)
+}
+
+// ExportLoaded is ExportEach for what the lab holds: the samples still on the unit are left out.
+func (l *Lab) ExportLoaded(fn func(name string, data []byte) error) error {
 	if l.pad == nil {
 		return errors.New("there is no project")
 	}
@@ -265,7 +280,7 @@ func patFile(n int) string { return fmt.Sprintf("PTN/PTN%05d.BIN", n) }
 func (l *Lab) Info() ([]byte, error) {
 	in := Info{Pads: []PadInfo{}, Patterns: []PatternInfo{}}
 	if l.pad != nil {
-		in.Open, in.Name, in.Files = true, l.pad.Name, len(l.files)+1
+		in.Open, in.Name, in.Files = true, l.pad.Name, len(l.files)+len(l.remote)+1
 		in.Tempo = float64(l.pad.Settings[0]&tempoMask) / 100 // the high bit of the word is Tempo Select, not tempo
 		in.UsesProjectTempo = l.pad.Settings[0]&tempoSelect != 0
 		for b := 0; b < 10; b++ {
@@ -279,7 +294,11 @@ func (l *Lab) Info() ([]byte, error) {
 					pi.Level = int(v)
 				}
 			}
-			if f, ok := l.files[padFile(n)]; ok {
+			f, ok := l.files[padFile(n)]
+			if !ok {
+				f, ok = l.remote[n] // on the unit: its header says how long it is
+			}
+			if ok {
 				pi.File = true
 				if h, err := formats.ParseHeader(f); err == nil {
 					pi.Ch = h.Channels

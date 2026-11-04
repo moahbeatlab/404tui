@@ -173,7 +173,7 @@ The settings of the pad under the cursor, written into the project at once. With
 
 The step grid of the pattern in front. `Enter` (or `b`) opens the note panel, `t` the pattern's tools and settings.
 
-**Keys on a computer:** `a` note on/off · `e hjkl` edit (hold) · `Space` play / stop · `b` note settings · `x` hear note · `.` mute/solo · `hjkl` pad, step · `[ ]` bar · `t` tools · `m` mute track · `s` solo track · `f` freeze view · `z` 1 bar / more · `y x` add track · `y b` pick pattern · `y jk` pattern +-
+**Keys on a computer:** `a` note on/off · `e hjkl` edit (hold) · `Space` play / stop · `b` note settings · `x` hear note · `.` mute/solo · `hjkl` pad, step · `[ ]` bank · `{ }` bar · `t` tools · `m` mute track · `s` solo track · `f` freeze view · `z` 1 bar / more · `y x` add track · `y b` pick pattern · `y jk` pattern +-
 
 **Keys on the handheld:** `A` note on/off · `A+^<>` edit (hold) · `X` play · `B` note settings · `L2` hear note · `R2` mute/solo · `^v<>` pad, step · `L1 R1` bar · `Y+X` add track · `Y+B` pick pattern · `Sel+B` tools · `Y+^v` pattern +- · `Sel+X` record
 
@@ -478,16 +478,16 @@ On a computer: the 16 projects of the unit when one is plugged in (online), else
 
 ### Project menu of the unit (`a`, online)
 
-- `Send the project of the editor here...`
-- `Edit it live (changes go to the unit)`
-- `Load it into the editor`
-- `Back it up to this computer`
-- `Restore it from a backup...`
+- `Send: replace this project with the editor's (editor -> unit)...`
+- `Edit live: open it here, every change goes to the unit at once`
+- `Open a copy in the editor (the unit is not changed)`
+- `Back up: write a copy to this computer`
+- `Restore: write a backup over this project...`
   - **restore over unit project 1** (a dialog):
     - `A folder somewhere else...`
-- `Rename...`
-- `Make it the unit's project`
-- `Erase it...`
+- `Rename it on the unit...`
+- `Make it the project the unit has open`
+- `Erase it on the unit...`
   - **erase unit project 1: samples, patterns and settings?** (a dialog):
     - `Yes, erase it`
     - `No`

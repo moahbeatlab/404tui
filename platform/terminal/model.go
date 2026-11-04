@@ -359,13 +359,24 @@ func (m *Model) key(msg tea.KeyMsg) {
 		if m.armed == noShift && !m.aHeld && m.app.ScreenName() == "SEQ" && !m.app.Modal() { // SEQ: x hears the note, Space plays the pattern
 			k = core.L2
 		}
-	case "[", "pgup", "ctrl+u":
+	case "[", "]": // SEQ: the bank (the pattern at the same place); elsewhere L1 and R1
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			m.app.SeqBank(map[string]int{"[": -1, "]": 1}[s])
+			return
+		}
+		k = map[string]core.Key{"[": core.L1, "]": core.R1}[s]
+	case "pgup", "ctrl+u":
 		k = core.L1
-	case "]", "pgdown", "ctrl+d":
+	case "pgdown", "ctrl+d":
 		k = core.R1
-	case ",", "{", "<":
+	case "{", "}": // SEQ: the bar before and after (L1 and R1 there); elsewhere the triggers L2, R2
+		k = map[string]core.Key{"{": core.L2, "}": core.R2}[s]
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			k = map[string]core.Key{"{": core.L1, "}": core.R1}[s]
+		}
+	case ",", "<":
 		k = core.L2
-	case ".", "}", ">":
+	case ".", ">":
 		k = core.R2
 	default:
 		return

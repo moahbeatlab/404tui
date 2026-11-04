@@ -81,7 +81,7 @@ The look: flat tiles, one amber accent, rounded dialogs, waveforms in braille do
 
 | Screen | Keys |
 | --- | --- |
-| SEQ | `z` one bar or as many bars as fit (two or four side by side on a wide window), `f` freeze: only the bars in view loop |
+| SEQ | `[` `]` the bank (the pattern at the same place in the bank before or after), `{` `}` the bar before and after, `z` one bar or as many bars as fit (two or four side by side on a wide window), `f` freeze: only the bars in view loop |
 | SLICE | `+` zoom in, `-` zoom out, `n` a new order of the slices at once (a loop that plays goes on with it), `.` the order plays in a loop (again stops it), `Enter` settings, `t` tools |
 | FILES | `/` search, `t` load files from where (and the file tools) |
 | PROJECTS | `a` the project's menu, `t` online or offline and the offline folder |
@@ -133,7 +133,7 @@ stereo, from the input with `404` in its name (the unit's USB audio). The red `R
 ## The unit: whole projects, and live
 
 - **Whole projects.** Load a project of the unit into the editor, change it, send it back; or back one up to the computer and restore it.
-- **Live.** `a` on a project, *Edit it live*: the project is loaded, the unit is switched to it, and from then on what is changed in
+- **Live.** `a` on a project, *Edit live*: the project is loaded, the unit is switched to it, and from then on what is changed in
   the editor goes to the unit as it is changed: names, settings, samples, clears, patterns. Undo goes to the unit too. `LIVE n` in the
   title bar shows it, with how many changes are still on their way.
 
@@ -142,7 +142,7 @@ The unit is tried against its simulator (`sp404 -sim`); it has not been tried ag
 ## Loading a project
 
 Projects are folders with a `PADCONF.BIN`. **FILES**: go to the folder, the project is listed in green with the word *project*,
-`a` loads it. **PROJECTS**: `a` on a project, *Load it into the editor* (online) or *Open it in the editor* (offline). From the command line: `sp404 -project <folder>`.
+`a` loads it. **PROJECTS**: `a` on a project, *Open a copy in the editor* (online) or *Open it in the editor* (offline). From the command line: `sp404 -project <folder>`.
 
 ## What the program does not have
 

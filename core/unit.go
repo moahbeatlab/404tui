@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -80,6 +81,7 @@ func (a *App) Tick() {
 	a.jobTick()
 	a.tapTick()
 	a.liveTick()
+	a.fetchTick()
 	a.recordingTick()
 	a.midiTick()
 	a.levelTick()
@@ -196,6 +198,7 @@ func (a *App) send() {
 		return
 	}
 	j := &job{project: a.unitCur}
+	a.jobWhat = ""
 	a.job = j
 	link, n, dir := a.link, a.unitCur, filepath.Join(tmp, a.ProjectName())
 	go func() {
@@ -269,9 +272,15 @@ func (a *App) unitContext(g Gfx, x, y, w int) {
 		g.Text(x, y, "no unit", cDim, false)
 		return
 	}
-	g.Text(x, y, "SENDING", cDim, false)
-	g.Text(x, y+1, fit(a.ProjectName(), w), cAmber, true)
-	g.Text(x, y+2, fmt.Sprintf("to unit project %d", a.unitCur+1), cText, false)
+	if a.job != nil && a.jobWhat != "" { // a job that is not a send: say what it is
+		g.Text(x, y, strings.ToUpper(a.jobWhat), cDim, false)
+		g.Text(x, y+1, fit(a.unitProjectName(a.job.project), w), cAmber, true)
+		g.Text(x, y+2, fmt.Sprintf("unit project %d", a.job.project+1), cText, false)
+	} else {
+		g.Text(x, y, "SENDING", cDim, false)
+		g.Text(x, y+1, fit(a.ProjectName(), w), cAmber, true)
+		g.Text(x, y+2, fmt.Sprintf("to unit project %d", a.unitCur+1), cText, false)
+	}
 	switch {
 	case a.job != nil:
 		done, total, name, err, fin := a.job.state()

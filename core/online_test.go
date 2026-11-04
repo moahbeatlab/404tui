@@ -252,7 +252,7 @@ func TestProjectsAreExportedIntoAChosenFolder(t *testing.T) {
 	a.GoScreen(2)
 	a.unitCur = 0
 	a.unitMenu()
-	if !strings.Contains(screenStr(a), "Back it up into a folder") {
+	if !strings.Contains(screenStr(a), "Back up: write a copy into a folder") {
 		t.Fatalf("the unit's project menu offers a folder:\n%s", screenStr(a))
 	}
 	a.menu = nil
@@ -580,5 +580,85 @@ func TestChromaticNotesOfTheLivePerformanceProject(t *testing.T) {
 	down, _ := a.noteSample(pad, 100, 0, int(formats.PitchByte(-12)))
 	if !(up.Frames() < plain.Frames() && down.Frames() > plain.Frames()) {
 		t.Fatalf("up is shorter and down longer: %d %d %d", up.Frames(), plain.Frames(), down.Frames())
+	}
+}
+
+func TestSeqBracketsChangeTheBankAndBracesTheBar(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	a.GoScreen(1)
+	a.setPattern(3)
+	a.SeqBank(1)
+	if a.pat != 19 {
+		t.Fatalf("] goes to the pattern at the same place in bank B: %d", a.pat)
+	}
+	a.SeqBank(-1)
+	a.SeqBank(-1)
+	if a.pat != 3+9*16 {
+		t.Fatalf("[ goes round to bank J: %d", a.pat)
+	}
+	if txt := screenStr(a); !strings.Contains(txt, "{ }") {
+		t.Fatalf("the panel names the keys for the bar:\n%s", txt)
+	}
+}
+
+func TestEditingLiveLoadsOnlyWhatIsNeeded(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	waitLink(t, a)
+	dev, _ := a.unitDevice()
+	a.unitLoadNow(dev, 0, true)
+	for i := 0; i < 500 && a.live == nil; i++ {
+		a.Tick()
+		time.Sleep(10 * time.Millisecond)
+	}
+	if a.live == nil {
+		t.Fatal("the project was not loaded")
+	}
+	t.Cleanup(func() { a.stopLive() })
+	remote := a.lab.RemoteCount()
+	if remote == 0 {
+		t.Skip("the simulated project has no samples")
+	}
+	pad := -1
+	for n := 0; n < 160; n++ {
+		if a.lab.IsRemote(n) {
+			pad = n
+			break
+		}
+	}
+	if !a.info.Pads[pad].File || a.info.Pads[pad].Frames == 0 {
+		t.Fatalf("a pad on the unit shows with its length: %+v", a.info.Pads[pad])
+	}
+	// asked for in the background, not waited for
+	if _, ok := a.padSampleSoft(pad); ok {
+		t.Fatal("drawing does not wait for the unit")
+	}
+	for i := 0; i < 500 && a.lab.IsRemote(pad); i++ {
+		a.Tick()
+		time.Sleep(10 * time.Millisecond)
+	}
+	if a.lab.IsRemote(pad) {
+		t.Fatal("the sample came in the background")
+	}
+	if _, ok := a.padSample(pad); !ok {
+		t.Fatal("and it plays")
+	}
+	// a pad that is used at once is fetched at once, and nothing of it goes back to the unit
+	var other int
+	for n := 0; n < 160; n++ {
+		if a.lab.IsRemote(n) {
+			other = n
+			break
+		}
+	}
+	if a.lab.RemoteCount() > 0 {
+		if _, ok := a.padSample(other); !ok || a.lab.IsRemote(other) {
+			t.Fatal("a sample that is needed is fetched on the spot")
+		}
+	}
+	a.liveSync()
+	if w, _, _ := a.liveStatus(); w != 0 {
+		t.Fatalf("a fetched sample is not sent back: %d changes waiting", w)
 	}
 }

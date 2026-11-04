@@ -108,9 +108,9 @@ snap 10-seq-two-bars
 lit z
 check "z: one bar in view" "bar 1/2"
 snap 11-seq-one-bar
-lit ]
-check "] turns to bar 2, numbered 17 to 32" "17"
-lit '['
+lit '}'
+check "} turns to bar 2, numbered 17 to 32" "17"
+lit '{'
 lit z
 check "z: as many bars as fit" "bars 1-2/2"
 lit f

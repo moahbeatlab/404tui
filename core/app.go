@@ -259,6 +259,10 @@ type App struct {
 	unitCur       int
 	dp            *dirPicker     // the folder chooser
 	pitchMade     map[[2]int]int // the samples made for the pitched notes: (sample, semitones) to the new sample
+	jobWhat       string         // what the unit job is, for the panel ("" for a send)
+	fetchCh       chan padFetch  // a sample fetched from the unit in the background arrives here
+	fetchBusy     int            // the pad being fetched, -1 for none
+	fetchWant     []int          // the pads asked for
 	connCh        chan Link      // a computer looks for the unit in the background
 	connBusy      bool
 	linkNames     []string // the unit's project names, kept for a moment
@@ -282,7 +286,7 @@ type App struct {
 
 // New starts an app on a folder of samples, with an empty project.
 func New(root, outDir string, a Audio) *App {
-	app := &App{mon: perform.New(), recDone: make(chan recResult, 4), pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, dcur: map[string]int{}, playing: -1, slot: 1, rowFocus: -1}
+	app := &App{mon: perform.New(), recDone: make(chan recResult, 4), pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, dcur: map[string]int{}, playing: -1, slot: 1, rowFocus: -1, fetchBusy: -1}
 	app.lab.NewProject("PROJECT_01")
 	app.dir = root
 	app.loadSettings()
@@ -446,6 +450,17 @@ func (a *App) triggerKey(whole bool) {
 	} else {
 		a.cycleGrid()
 	}
+}
+
+// SeqBank is [ and ] of a keyboard on SEQ: the pattern at the same place in the bank before or after (the bank row at the bottom).
+func (a *App) SeqBank(d int) {
+	if a.scr != Seq || a.Modal() || a.prompt != nil || a.aHeld {
+		return
+	}
+	a.CancelShift()
+	bank := ((a.pat-1)/16 + 10 + d) % 10
+	a.setPattern(bank*16 + (a.pat-1)%16 + 1)
+	a.say(fmt.Sprintf("bank %c: pattern %s", 'A'+bank, a.label(a.pat-1)), false)
 }
 
 // pageKey is L1 (back) and R1 (forward): a page in a list, a bank, a bar, the zoom, ten slots.

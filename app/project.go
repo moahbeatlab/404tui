@@ -30,6 +30,16 @@ func projectFolder(project uint8) string {
 // ExportProject copies a project (0-based) into dir, which is made if it is not there, and
 // returns a one-line summary. dir can be on the SD card or this computer.
 func ExportProject(s Storage, project uint8, dir string, progress func(done int, name string)) (string, error) {
+	return exportProject(s, project, dir, progress, false)
+}
+
+// ExportProjectLight is ExportProject without the samples (the SMPL folder is made and left empty): what an editor that fetches a sample when it
+// needs it takes from the unit, a few small files in place of the whole project.
+func ExportProjectLight(s Storage, project uint8, dir string, progress func(done int, name string)) (string, error) {
+	return exportProject(s, project, dir, progress, true)
+}
+
+func exportProject(s Storage, project uint8, dir string, progress func(done int, name string), light bool) (string, error) {
 	root := projectFolder(project)
 	dir = strings.TrimRight(dir, "/")
 	if _, exists, err := s.Stat(root + "/PADCONF.BIN"); err != nil {
@@ -52,6 +62,9 @@ func ExportProject(s Storage, project uint8, dir string, progress func(done int,
 			if e.IsDir() {
 				if err := MkdirAll(s, to); err != nil {
 					return fmt.Errorf("creating %s: %w", to, err)
+				}
+				if light && e.Name == "SMPL" && remote == root {
+					continue
 				}
 				if err := walk(from, to); err != nil {
 					return err
@@ -190,6 +203,30 @@ func RestoreProject(u Restorer, plan *RestorePlan, progress func(i int, name str
 // ProjectFileCount is how many files ExportProject will copy, so a caller can show how far
 // it has come. It lists folders only and reads no file.
 func ProjectFileCount(s Storage, project uint8) (int, error) {
+	return projectFileCount(s, project, false)
+}
+
+// ProjectFileCountLight is ProjectFileCount without the samples.
+func ProjectFileCountLight(s Storage, project uint8) (int, error) {
+	return projectFileCount(s, project, true)
+}
+
+// ProjectSampleFiles lists the names of the sample files of a project (BANK1-01.SMP ...).
+func ProjectSampleFiles(s Storage, project uint8) ([]string, error) {
+	entries, err := s.ListDir(projectFolder(project) + "/SMPL")
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(strings.ToUpper(e.Name), ".SMP") && !strings.HasPrefix(e.Name, ".") {
+			out = append(out, e.Name)
+		}
+	}
+	return out, nil
+}
+
+func projectFileCount(s Storage, project uint8, light bool) (int, error) {
 	var walk func(dir string) (int, error)
 	walk = func(dir string) (int, error) {
 		entries, err := s.ListDir(dir)
@@ -200,6 +237,9 @@ func ProjectFileCount(s Storage, project uint8) (int, error) {
 		for _, e := range entries {
 			if !e.IsDir() {
 				n++
+				continue
+			}
+			if light && e.Name == "SMPL" && dir == projectFolder(project) {
 				continue
 			}
 			sub, err := walk(dir + "/" + e.Name)

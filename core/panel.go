@@ -66,6 +66,17 @@ func (a *App) hints() (plain, shift []hint) {
 		}
 		shift = sh
 	}
+	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() { // [ ] are the bank here, { } the bar
+		out := make([]hint, 0, len(plain)+1)
+		for _, h := range plain {
+			if h.key == "L1 R1" && h.what == "bar" {
+				out = append(out, hint{"L1 R1", "bank"}, hint{"{ }", "bar"})
+				continue
+			}
+			out = append(out, h)
+		}
+		plain = out
+	}
 	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() {
 		plain = append(append([]hint{}, plain...), hint{"m", "mute track"}, hint{"s", "solo track"}, hint{"f", "freeze view"}, hint{"z", "1 bar / more"})
 		sh := make([]hint, 0, len(shift)) // s is solo here: the record key is Ctrl-R
@@ -442,8 +453,10 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 			bx += 2
 		}
 		g.Fill(x, row(2), w, 2, cPanel2)
-		if id, ok := a.padSample(n); ok {
+		if id, ok := a.padSampleSoft(n); ok {
 			a.wave(g, id, 0, p.Frames, x, row(2), w, 2, cAmber)
+		} else if a.live != nil && a.lab.IsRemote(n) {
+			g.Text(x+1, row(2), "fetching from the unit...", cDim, false)
 		}
 		if Terminal { // values, no faders: the numbers say it
 			a.drawPadInfo(g, x, row(5), w, y1, n)

@@ -243,7 +243,7 @@ func TestSendToTheUnit(t *testing.T) {
 	if a.menu == nil || a.job != nil {
 		t.Fatal("A opens the menu of the unit's project")
 	}
-	chooseMenuNoPick(t, a, "Send the project of the editor here")
+	chooseMenuNoPick(t, a, "Send: replace this project")
 	if a.job != nil || !a.confirm {
 		t.Fatal("a send needs a second A")
 	}
@@ -3409,7 +3409,7 @@ func TestUnitProjectsLoadBackupRestoreRenameErase(t *testing.T) {
 	}
 	// send the kit over project 3, then take it back into a fresh editor
 	keys(t, a, "D D A")
-	chooseMenuNoPick(t, a, "Send the project of the editor here")
+	chooseMenuNoPick(t, a, "Send: replace this project")
 	keys(t, a, "A ~")
 	if _, _, _, err, fin := a.job.state(); !fin || err != nil {
 		t.Fatalf("send: finished %v err %v", fin, err)
@@ -3417,7 +3417,7 @@ func TestUnitProjectsLoadBackupRestoreRenameErase(t *testing.T) {
 	a.job = nil
 	// back it up
 	keys(t, a, "A")
-	chooseMenuNoPick(t, a, "Back it up")
+	chooseMenuNoPick(t, a, "Back up: write a copy")
 	waitJob(t, a)
 	backups, _ := os.ReadDir(filepath.Join(a.dataDir(), "backups"))
 	if len(backups) != 1 {
@@ -3428,7 +3428,7 @@ func TestUnitProjectsLoadBackupRestoreRenameErase(t *testing.T) {
 	a.refresh()
 	a.saved = true // the editor has nothing to lose
 	keys(t, a, "A")
-	chooseMenuNoPick(t, a, "Load it into the editor")
+	chooseMenuNoPick(t, a, "Open a copy in the editor")
 	waitJob(t, a)
 	if padsWithSamples(a) != 3 {
 		t.Fatalf("the unit's project has the 3 pads of the kit: %d", padsWithSamples(a))
@@ -3489,13 +3489,13 @@ func TestEditingTheUnitLive(t *testing.T) {
 		t.Fatal("the unit was not found")
 	}
 	keys(t, a, "D D A")
-	chooseMenuNoPick(t, a, "Send the project of the editor here")
+	chooseMenuNoPick(t, a, "Send: replace this project")
 	keys(t, a, "A ~")
 	a.job = nil
 	// edit project 3 live
 	a.saved = true
 	keys(t, a, "A")
-	chooseMenuNoPick(t, a, "Edit it live")
+	chooseMenuNoPick(t, a, "Edit live")
 	waitJob(t, a)
 	if a.live == nil || a.live.project != 2 {
 		t.Fatalf("live editing of project 3: %+v", a.live)

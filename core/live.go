@@ -394,3 +394,97 @@ func (a *App) applyPulls(ps []pulled) {
 	l.mu.Unlock()
 	a.say("changed on the unit: "+strings.Join(names, ", "), false)
 }
+
+// liveHave says that the sample file of pad n, just fetched from the unit, is what the unit has: it is not a change to send.
+func (a *App) liveHave(n int, data []byte) {
+	l := a.live
+	if l == nil || len(data) == 0 {
+		return
+	}
+	h := maphash.Bytes(l.seed, data)
+	l.base.fileHash[n], l.base.fileKey[n] = h, fileKey{&data[0], len(data)}
+	l.mu.Lock()
+	l.sig.fileHash[n], l.sig.fileKey[n] = h, l.base.fileKey[n]
+	l.mu.Unlock()
+}
+
+// ---- the samples of a project that was loaded without them come when they are needed
+
+type padFetch struct {
+	n    int
+	data []byte
+	err  error
+}
+
+// padSampleSoft is padSample for drawing: a sample that is still on the unit is asked for in the background and not waited for.
+func (a *App) padSampleSoft(n int) (int, bool) {
+	if a.live != nil && a.lab.IsRemote(n) {
+		if _, ok := a.pcm[n]; !ok {
+			a.wantPad(n)
+			return 0, false
+		}
+	}
+	return a.padSample(n)
+}
+
+// wantPad puts a pad first among those that are fetched in the background.
+func (a *App) wantPad(n int) {
+	if a.live == nil || !a.lab.IsRemote(n) {
+		return
+	}
+	for _, w := range a.fetchWant {
+		if w == n {
+			return
+		}
+	}
+	a.fetchWant = append(a.fetchWant, n)
+}
+
+// fetchTick takes in the sample that arrived, and starts the next one: the pads that are wanted, else the pad under the cursor, else the
+// others of the bank in view, one at a time (the unit is a slow cable).
+func (a *App) fetchTick() {
+	if a.fetchCh == nil {
+		a.fetchCh = make(chan padFetch, 2)
+	}
+	select {
+	case f := <-a.fetchCh:
+		a.fetchBusy = -1
+		if f.err == nil && a.live != nil && a.lab.IsRemote(f.n) {
+			a.lab.PutLoaded(f.n, f.data)
+			a.liveHave(f.n, f.data)
+		}
+	default:
+	}
+	l := a.live
+	if l == nil || a.fetchBusy >= 0 || a.lab.RemoteCount() == 0 {
+		return
+	}
+	next := -1
+	for len(a.fetchWant) > 0 && next < 0 {
+		if n := a.fetchWant[0]; a.lab.IsRemote(n) {
+			next = n
+		}
+		a.fetchWant = a.fetchWant[1:]
+	}
+	if next < 0 && a.scr == Pads && a.lab.IsRemote(a.padN()) {
+		next = a.padN()
+	}
+	for i := 0; next < 0 && i < 16; i++ {
+		if n := a.bank*16 + i; a.lab.IsRemote(n) {
+			next = n
+		}
+	}
+	if next < 0 {
+		return
+	}
+	pi, ok := proto.NewPadIndex(uint16(next))
+	if !ok {
+		return
+	}
+	a.fetchBusy = next
+	dev, project, ch := l.dev, l.project, a.fetchCh
+	go func() {
+		data, err := dev.ReadFile(pi.SamplePath(uint8(project) + 1))
+		ch <- padFetch{next, data, err}
+	}()
+}

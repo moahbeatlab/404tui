@@ -10,6 +10,7 @@ import (
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/device"
+	"github.com/moahbeatlab/404tui/proto"
 )
 
 // What the UNIT screen does with the projects of a plugged-in SP-404MKII besides sending one: load it into the editor, back it
@@ -48,6 +49,7 @@ func (a *App) jobTick() {
 	}
 	if _, _, _, err, fin := a.job.state(); fin {
 		a.linkNames = nil // the names may have changed
+		a.jobWhat = ""
 		f := a.jobAfter
 		a.jobAfter = nil
 		f(err)
@@ -69,29 +71,29 @@ func (a *App) unitMenu() {
 	name := a.unitProjectName(n)
 	m := &menu{title: fmt.Sprintf("unit project %d  %s", n+1, name)}
 	add := func(l string, run func(int)) { m.items = append(m.items, menuItem{label: l, run: run}) }
-	add("Send the project of the editor here...", func(int) { a.confirm = true })
+	add("Send: replace this project with the editor's (editor -> unit)...", func(int) { a.confirm = true })
 	if ok {
 		if a.live != nil && a.live.project == n {
-			add("Stop editing it live", func(int) { a.stopLive() })
+			add("Stop editing live", func(int) { a.stopLive() })
 		} else {
-			add("Edit it live (changes go to the unit)", func(int) { a.unitLoadThen(dev, n, true) })
+			add("Edit live: open it here, every change goes to the unit at once", func(int) { a.unitLoadThen(dev, n, true) })
 		}
-		add("Load it into the editor", func(int) { a.unitLoad(dev, n) })
+		add("Open a copy in the editor (the unit is not changed)", func(int) { a.unitLoad(dev, n) })
 		if Terminal {
-			add("Back it up into a folder...", func(int) { a.unitBackupAsk(dev, n) })
+			add("Back up: write a copy into a folder...", func(int) { a.unitBackupAsk(dev, n) })
 		} else {
-			add("Back it up to this computer", func(int) { a.unitBackup(dev, n) })
+			add("Back up: write a copy to this computer", func(int) { a.unitBackup(dev, n) })
 		}
-		add("Restore it from a backup...", func(int) { a.unitRestoreMenu(dev, n) })
-		add("Rename...", func(int) { a.unitRename(dev, n, name) })
-		add("Make it the unit's project", func(int) {
+		add("Restore: write a backup over this project...", func(int) { a.unitRestoreMenu(dev, n) })
+		add("Rename it on the unit...", func(int) { a.unitRename(dev, n, name) })
+		add("Make it the project the unit has open", func(int) {
 			if err := dev.SelectProject(uint8(n)); err != nil {
 				a.say(err.Error(), true)
 				return
 			}
 			a.say(fmt.Sprintf("project %d is the unit's project now", n+1), false)
 		})
-		add("Erase it...", func(int) { a.unitEraseAsk(dev, n) })
+		add("Erase it on the unit...", func(int) { a.unitEraseAsk(dev, n) })
 	}
 	a.menu = m
 }
@@ -121,10 +123,39 @@ func (a *App) unitLoadNow(dev *device.Device, n int, live bool) {
 	dir := a.unitCache(n)
 	os.RemoveAll(dir)
 	st := app.NewRouter(dev)
+	var headers map[int][]byte // live: the samples stay on the unit, only their headers come
+	a.jobWhat = "loading"
+	if live {
+		a.jobWhat = "opening for live editing"
+	}
 	a.startJob(n, func(progress func(done, total int, name string)) error {
-		total, _ := app.ProjectFileCount(dev, uint8(n))
-		_, err := app.ExportProject(st, uint8(n), dir, func(done int, name string) { progress(done, total, name) })
-		return err
+		if !live {
+			total, _ := app.ProjectFileCount(dev, uint8(n))
+			_, err := app.ExportProject(st, uint8(n), dir, func(done int, name string) { progress(done, total, name) })
+			return err
+		}
+		total, _ := app.ProjectFileCountLight(dev, uint8(n))
+		if _, err := app.ExportProjectLight(st, uint8(n), dir, func(done int, name string) { progress(done, total, name) }); err != nil {
+			return err
+		}
+		names, err := app.ProjectSampleFiles(dev, uint8(n))
+		if err != nil {
+			return err
+		}
+		headers = map[int][]byte{}
+		for i, nm := range names {
+			var bank, pad int
+			if _, err := fmt.Sscanf(strings.ToUpper(nm), "BANK%d-%02d.SMP", &bank, &pad); err != nil {
+				continue
+			}
+			progress(total+i, total+len(names), "header of "+nm)
+			if pi, ok := proto.PadFromBankPad(uint16(bank-1), uint16(pad-1)); ok {
+				if h, ok, err := dev.ReadPrefix(pi.SamplePath(uint8(n)+1), 512); err == nil && ok {
+					headers[int(pi.Index())] = h
+				}
+			}
+		}
+		return nil
 	}, func(err error) {
 		if err != nil {
 			a.say("load failed: "+err.Error(), true)
@@ -137,6 +168,11 @@ func (a *App) unitLoadNow(dev *device.Device, n int, live bool) {
 		a.live = nil
 		a.go_(Pads)
 		if live {
+			for p, h := range headers {
+				a.lab.SetRemote(p, h)
+			}
+			a.lab.SetFetcher(func(p int) ([]byte, error) { return a.fetchPad(dev, n, p) })
+			a.refresh()
 			a.goLive(dev, n)
 			return
 		}
@@ -174,6 +210,7 @@ func (a *App) unitBackupAsk(dev *device.Device, n int) {
 
 func (a *App) unitBackupTo(dev *device.Device, n int, dir string) {
 	st := app.NewRouter(dev)
+	a.jobWhat = "backing up"
 	a.startJob(n, func(progress func(done, total int, name string)) error {
 		total, _ := app.ProjectFileCount(dev, uint8(n))
 		_, err := app.ExportProject(st, uint8(n), dir, func(done int, name string) { progress(done, total, name) })
@@ -218,6 +255,7 @@ func (a *App) unitRestoreAsk(dev *device.Device, n int, dir string) {
 	m := &menu{title: fmt.Sprintf("replace unit project %d with %s?", n+1, short2(dir, 24))}
 	m.items = append(m.items,
 		menuItem{label: fmt.Sprintf("Yes: %d files, %.1f MB", len(plan.Files), float64(plan.Total)/1e6), run: func(int) {
+			a.jobWhat = "restoring"
 			a.startJob(n, func(progress func(done, total int, name string)) error {
 				total := len(plan.Files)
 				return app.RestoreProject(dev, plan, func(i int, name string) { progress(i, total, name) })
@@ -262,3 +300,19 @@ func (a *App) unitEraseAsk(dev *device.Device, n int) {
 
 var _ = strings.TrimSpace
 var _ = time.Second
+
+// fetchPad reads the sample file of pad p of the unit's project n (0-based) from the unit. It is what the editor does when it needs a
+// sample of a project that was loaded without them; the live state is told the file is the unit's own, so that it is not sent back.
+func (a *App) fetchPad(dev *device.Device, n, p int) ([]byte, error) {
+	pi, ok := proto.NewPadIndex(uint16(p))
+	if !ok {
+		return nil, fmt.Errorf("no pad %d", p)
+	}
+	a.say(fmt.Sprintf("fetching %s from the unit...", a.label(p)), false)
+	data, err := dev.ReadFile(pi.SamplePath(uint8(n) + 1))
+	if err != nil {
+		return nil, err
+	}
+	a.liveHave(p, data)
+	return data, nil
+}
