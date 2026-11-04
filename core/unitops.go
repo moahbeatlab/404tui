@@ -76,7 +76,7 @@ func (a *App) unitMenu() {
 	if ok {
 		if a.live != nil && a.live.project == n {
 			add("Stop editing live", func(int) { a.stopLive() })
-			add("Reload on the unit: shows pattern changes (stops the sound)", func(int) { a.reloadLive() })
+			add("Reload on the unit (Ctrl-L): shows pattern changes, stops the sound", func(int) { a.reloadLive() })
 		} else {
 			add("Edit live: open it here, every change goes to the unit at once", func(int) { a.unitLoadThen(dev, n, true) })
 		}

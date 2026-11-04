@@ -848,6 +848,17 @@ func (a *App) MarkFile() {
 	}
 }
 
+// ReloadUnit is Ctrl-L of a keyboard, from any screen: while a project is edited live the unit reads it from its card again, so that
+// the patterns written to it show there (it stops the sound).
+func (a *App) ReloadUnit() {
+	if a.live == nil {
+		a.say("nothing to reload: no project is edited live", true)
+		return
+	}
+	a.CancelShift()
+	a.reloadLive()
+}
+
 // OpenProjectKey is o of a keyboard on PROJECTS: a project is opened from a folder anywhere.
 func (a *App) OpenProjectKey() {
 	if a.scr != Unit || a.Modal() || a.prompt != nil || a.job != nil {

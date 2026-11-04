@@ -660,6 +660,9 @@ func (a *App) drawKeyboardKeys(g Gfx, x, y, w int) {
 		{hint{"^R", "record"}, hint{"?", "all keys"}},
 		{hint{"q", "quit"}, hint{"y s", "shift keys"}},
 	}
+	if a.live != nil { // edited live: the unit can be told to read its files again (patterns written to it show then)
+		global = append(global, pair{hint{"^L", "reload unit"}, hint{}})
+	}
 	room := 6 // rows the middle of the panel keeps; the screens that have a lot to say about what is under the cursor keep more
 	_, hasPattern := a.doc()
 	if a.scr == Slice || a.scr == Pads && a.info.Pads[a.padN()].File || a.scr == Seq && hasPattern {

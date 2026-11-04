@@ -55,6 +55,7 @@ The look: flat tiles, one amber accent, rounded dialogs, waveforms in braille do
 | `Esc` | close a menu, a panel or a dialog; in a dialog opened from a menu it goes back to that menu, and `Esc` again closes it. In a search it ends the search; in the screens it goes back |
 | `u`, `R` (or `Ctrl-Y`) | undo, redo: the project's changes; in the slicer the changes of the slicing |
 | `Ctrl-R` | record the unit's audio |
+| `Ctrl-L` | while a project is edited live: the unit reads it from its card again, so that patterns written to it show there (stops the sound) |
 | `?` | the help page for the keyboard |
 | `q`, `Ctrl-C` | quit (twice when the project is not saved) |
 | `y`, `s` | Y or Select held for the **next** key: `y` then `a` is Y+A. These give the second functions the handheld has; most have a key of their own on a keyboard (see below). On SEQ `s` is solo, not Select |

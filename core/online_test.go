@@ -1325,3 +1325,27 @@ func TestReloadOnTheUnitAndTheHintAfterAPatternIsSent(t *testing.T) {
 	}
 	t.Fatal("the unit reloaded the project")
 }
+
+func TestCtrlLReloadsTheUnitFromAnyScreen(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	a.ReloadUnit()
+	if !a.msgBad || !strings.Contains(a.msg, "no project is edited live") {
+		t.Fatalf("without live editing it says so: %q", a.msg)
+	}
+	if strings.Contains(screenStr(a), "reload unit") {
+		t.Fatal("the key is not listed when it does nothing")
+	}
+	waitLink(t, a)
+	dev, _ := a.unitDevice()
+	a.goLive(dev, 0)
+	t.Cleanup(func() { a.stopLive() })
+	if !strings.Contains(screenStr(a), "reload unit") {
+		t.Fatalf("while editing live the panel lists it under ALWAYS:\n%s", screenStr(a))
+	}
+	a.GoScreen(4) // any screen
+	a.ReloadUnit()
+	if !strings.Contains(a.msg, "reloading") {
+		t.Fatalf("it starts: %q", a.msg)
+	}
+}

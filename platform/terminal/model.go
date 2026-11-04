@@ -274,6 +274,10 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.Dispatch(core.Event{Key: core.Y, Down: false})
 		}
 		return
+	case "ctrl+l": // reload the unit (while a project is edited live), from any screen
+		m.disarm()
+		m.app.ReloadUnit()
+		return
 	case "ctrl+e": // PADS: export the bank
 		m.disarm()
 		m.app.ExportBank()

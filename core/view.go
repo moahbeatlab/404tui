@@ -175,7 +175,7 @@ func (a *App) drawHelp(g Gfx) {
 			"s                  the next key with Select held (s b)",
 			"e                  hold A (edit a note); e again lets go",
 			"[ ] or Ctrl-U/D    L1 R1;   , .   L2 R2",
-			"?                  this page;   /  search the files",
+			"?                  this page;   /  search the files;   Ctrl-L  reload the unit",
 			fmt.Sprintf("u undo (%d)   Ctrl-R redo (%d)", len(a.undo), len(a.redo)),
 			"q or Ctrl-C        quit (twice when not saved)",
 			"",
