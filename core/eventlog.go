@@ -1,9 +1,14 @@
 package core
 
 import (
+	"encoding/binary"
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/dbg"
 	"github.com/moahbeatlab/404tui/lab"
 	"github.com/moahbeatlab/404tui/midiin"
@@ -22,6 +27,7 @@ import (
 // A replay (sp404 replay) shows it with the audio: the pads lighting, the pattern with its playhead, the knobs moving, the level.
 
 type eventLog struct {
+	stopPoll   chan struct{}
 	log        *perflog.Log
 	rec        *record.Session
 	audioDone  bool
@@ -39,7 +45,9 @@ func (a *App) startEventLog(s *record.Session) {
 		return
 	}
 	a.evlog = &eventLog{log: l, rec: s, startedAt: s.Started}
-	l.Add(s.Started, "project", perflog.P("data", a.projectSnapshot()))
+	l.Add(s.Started, "project", perflog.P("data", a.projectSnapshot(false)), perflog.P("source", "editor"))
+	a.snapshotUnitProject()
+	a.logUnitStatus()
 	dbg.Logger.Info("events: log started", "file", l.Path)
 }
 
@@ -50,6 +58,9 @@ func (a *App) stopEventLog() {
 		return
 	}
 	a.evlog = nil
+	if e.stopPoll != nil {
+		close(e.stopPoll)
+	}
 	e.log.Add(time.Now(), "end", perflog.P("events", e.eventCount))
 	e.log.Close()
 	dbg.Logger.Info("events: log finished", "file", e.log.Path, "events", e.eventCount)
@@ -57,6 +68,7 @@ func (a *App) stopEventLog() {
 
 // eventLogTick writes what is not a MIDI message: when the audio began, and the pattern that plays when it changes.
 func (a *App) eventLogTick() {
+	a.applyUnitSnapshot()
 	e := a.evlog
 	if e == nil {
 		return
@@ -150,11 +162,11 @@ type snapPattern struct {
 }
 
 // projectSnapshot is what a replay needs to know of the project.
-func (a *App) projectSnapshot() map[string]any {
+func (a *App) projectSnapshot(fromUnit bool) map[string]any {
 	out := map[string]any{"name": a.ProjectName(), "tempo": a.info.Tempo, "bank_tempos": a.info.BankTempos, "project_tempo": a.info.UsesProjectTempo}
 	var pads []snapPad
 	for n, p := range a.info.Pads {
-		if !p.File {
+		if !p.File && !(fromUnit && p.Has) { // a project read from the unit has no sample files here: a pad with a sample is told by its block
 			continue
 		}
 		sp := snapPad{N: n, Label: a.label(n), Name: p.Name, Frames: p.Frames}
@@ -169,7 +181,7 @@ func (a *App) projectSnapshot() map[string]any {
 				}
 			}
 		}
-		if !a.lab.IsRemote(n) { // a sample that is on the unit is not fetched for this
+		if !fromUnit && !a.lab.IsRemote(n) { // a sample that is on the unit is not fetched for this
 			if id, ok := a.padSample(n); ok && p.Frames > 0 {
 				if pk, err := a.lab.Peaks(id, 0, p.Frames, 32); err == nil {
 					top := 1
@@ -203,4 +215,123 @@ func (a *App) projectSnapshot() map[string]any {
 	}
 	out["patterns"] = pats
 	return out
+}
+
+// unitSnap is the unit's open project, read in the background.
+type unitSnap struct {
+	dir     string
+	project int
+	err     error
+}
+
+// snapshotUnitProject reads the project the unit has open (a few small files, no samples) and writes it to the log as the project, in
+// place of the editor's, when the two are not the same: what is played on the unit is not always what is in the editor.
+func (a *App) snapshotUnitProject() {
+	dev, ok := a.unitDevice()
+	if !ok || a.evlog == nil {
+		return
+	}
+	cur, err := dev.CurrentProject()
+	if err != nil || (a.live != nil && a.live.project == int(cur)) {
+		return
+	}
+	if a.evSnapCh == nil {
+		a.evSnapCh = make(chan unitSnap, 1)
+	}
+	dir := filepath.Join(a.dataDir(), "eventlog-tmp")
+	os.RemoveAll(dir)
+	ch := a.evSnapCh
+	go func() {
+		st := time.Now()
+		_, err := app.ExportProjectLight(app.NewRouter(dev), cur, dir, nil)
+		dbg.Logger.Info("events: the unit's project was read for the log", "project", int(cur)+1, "ms", time.Since(st).Milliseconds(), "err", err)
+		ch <- unitSnap{dir: dir, project: int(cur), err: err}
+	}()
+}
+
+// applyUnitSnapshot writes the unit's project to the log (on the main loop: the lab and the info are swapped for a moment).
+func (a *App) applyUnitSnapshot() {
+	select {
+	case u := <-a.evSnapCh:
+		defer os.RemoveAll(u.dir)
+		e := a.evlog
+		if e == nil || u.err != nil {
+			return
+		}
+		tmp := lab.New()
+		tmp.Begin()
+		filepath.Walk(u.dir, func(p string, fi os.FileInfo, err error) error {
+			if err != nil || fi.IsDir() {
+				return nil
+			}
+			if data, err := os.ReadFile(p); err == nil {
+				rel, _ := filepath.Rel(u.dir, p)
+				tmp.Add(rel, data)
+			}
+			return nil
+		})
+		if _, err := tmp.Finish(); err != nil {
+			return
+		}
+		saveLab, saveInfo, savePcm := a.lab, a.info, a.pcm
+		a.lab, a.pcm = tmp, map[int]int{}
+		if b, err := tmp.Info(); err == nil {
+			a.info = lab.Info{}
+			json.Unmarshal(b, &a.info)
+		}
+		data := a.projectSnapshot(true)
+		a.lab, a.info, a.pcm = saveLab, saveInfo, savePcm
+		data["unit_project"] = u.project + 1
+		e.log.Add(time.Now(), "project", perflog.P("data", data), perflog.P("source", "unit"))
+	default:
+	}
+}
+
+// logUnitStatus polls the unit's status four times a second while it records and writes what changes: the pad that is selected (a pad
+// hit selects it), the pad that sounds, and the raw bytes of the status ("status", with the bytes that count the frames of a sounding
+// pad left out), which may hold more than is understood of it, such as the pattern that plays.
+func (a *App) logUnitStatus() {
+	dev, ok := a.unitDevice()
+	e := a.evlog
+	if !ok || e == nil {
+		return
+	}
+	e.stopPoll = make(chan struct{})
+	stop, l := e.stopPoll, e.log
+	go func() {
+		t := time.NewTicker(250 * time.Millisecond)
+		defer t.Stop()
+		var lastHex string
+		var lastSel, lastPlay = -1, false
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+			}
+			raw, err := dev.RawStatus()
+			if err != nil || len(raw) < 6 {
+				continue
+			}
+			at := time.Now()
+			masked := append([]byte(nil), raw...)
+			for i := 8; i < 12 && i < len(masked); i++ {
+				masked[i] = 0 // the frames played of a sounding pad change all the time
+			}
+			if hex := fmt.Sprintf("% x", masked); hex != lastHex {
+				lastHex = hex
+				l.Add(at, "status", perflog.P("hex", hex))
+			}
+			sel := int(raw[3])*16 + int(raw[5])
+			if sel != lastSel {
+				lastSel = sel
+				l.Add(at, "select", perflog.P("bank", string(rune('A'+raw[3]))), perflog.P("pad", int(raw[5])+1))
+			}
+			playing := len(raw) >= 12 && binary.LittleEndian.Uint32(raw[8:12]) != 0xFFFFFFFF
+			if playing != lastPlay {
+				lastPlay = playing
+				l.Add(at, "sound", perflog.P("on", playing), perflog.P("bank", string(rune('A'+raw[3]))), perflog.P("pad", int(raw[5])+1))
+			}
+		}
+	}()
 }

@@ -249,6 +249,7 @@ type App struct {
 	rowFocus          int             // a pad the cursor should go to when the rows are worked out again (-1: none)
 	seqOn             bool            // the pattern is playing
 	seqStart          time.Time
+	evSnapCh          chan unitSnap       // the unit's project, read for the event log
 	evlog             *eventLog           // the log of events beside the recording that runs
 	playPat           int                 // the pattern that loops (1..160), 0 when none: the view can be on another pattern
 	trk               map[int]map[int]int // SEQ: pattern -> pad -> mute/solo

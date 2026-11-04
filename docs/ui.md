@@ -140,7 +140,7 @@ their own. A system that cannot record says so instead of failing; the handheld 
 **The event log.** While it records, the program also writes what the unit does, beside the WAV, as `take.events.jsonl` (one JSON
 object a line, its time in seconds from the start of the recording): the pads that are hit and let go (`on`, `off` with bank and pad), the
 controllers (`cc`, with the effect of a bus and its switch as `fx` too), the MIDI clock as `beat` with the tempo, `start` and `stop`, and the
-pattern that plays when it is known. The second line, `project`, holds the project as it was at the start: the pads (name, bus, a small
+pattern that plays when it is known. While it records with a unit plugged in, the status of the unit is polled four times a second and written too: `select` and `sound` (the pad that is selected and the pad that sounds) and `status` (the raw bytes, to find what else they hold, such as the pattern). The unit's own open project is read for the log (`project` with `source` unit; the editor's comes first), so a replay shows what was played on the unit, not what was in the editor. The `project` line holds the project as it was at the start: the pads (name, bus, a small
 picture of the sound) and the patterns with their notes, so that a replay needs nothing else. `audio_start` says when the first
 frame of the WAV was heard. The unit has to send its pad notes and clock over MIDI for the pads and the beat to show; its effect state is
 only known once it changes.

@@ -1531,3 +1531,44 @@ func TestTheEventLogBesideARecording(t *testing.T) {
 		t.Errorf("the pattern with its notes: %v", p)
 	}
 }
+
+func TestTheEventLogReadsTheUnitsProjectAndLogsItsStatus(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	waitLink(t, a)
+	dir := t.TempDir()
+	s := &record.Session{Path: filepath.Join(dir, "take.wav"), Started: time.Now(), Tool: "the program itself"}
+	a.startEventLog(s)
+	var proj map[string]any
+	for i := 0; i < 400; i++ {
+		a.eventLogTick()
+		time.Sleep(10 * time.Millisecond)
+		if i > 80 && a.evSnapCh != nil && len(a.evSnapCh) == 0 {
+			break
+		}
+	}
+	time.Sleep(700 * time.Millisecond)
+	a.stopEventLog()
+	es, err := perflog.Read(perflog.PathFor(s.Path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sources []string
+	kinds := map[string]int{}
+	for _, e := range es {
+		kinds[e["k"].(string)]++
+		if e["k"] == "project" {
+			sources = append(sources, e["source"].(string))
+			proj, _ = e["data"].(map[string]any)
+		}
+	}
+	if len(sources) != 2 || sources[0] != "editor" || sources[1] != "unit" {
+		t.Fatalf("the editor's project first, then the unit's own: %v", sources)
+	}
+	if proj["unit_project"] == nil {
+		t.Fatal("the unit's project says which one it is")
+	}
+	if kinds["status"] == 0 || kinds["select"] == 0 {
+		t.Fatalf("the unit's status is in the log: %v", kinds)
+	}
+}

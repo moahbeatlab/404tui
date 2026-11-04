@@ -26,6 +26,7 @@
   <button id="play" title="Space">play</button>
   <input id="seek" type="range" min="0" max="1000" value="0">
   <span id="time">0:00.0</span>
+  <select id="pat" title="the pattern that plays: the unit did not say"><option value="">pattern: auto</option></select>
   <select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
   <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span>
   <button id="full" title="f">full screen</button>
@@ -49,7 +50,7 @@ if (params.get("hud") === "0") document.body.classList.add("nohud");
 
 let EV = [], AN = null, PROJ = { pads: [], patterns: [] }, FILE = "", OFFSET = 0, NUDGE = 0;
 const padInfo = new Map(), patBySlot = new Map(), patByLabel = new Map();
-const padEv = new Map(), ccEv = new Map(), fxNum = new Map(), fxOn = new Map(), beats = [], transport = [], patEv = [];
+const otherNotes = [], padEv = new Map(), ccEv = new Map(), fxNum = new Map(), fxOn = new Map(), beats = [], transport = [], patEv = [];
 let peak = null, spec = null, lastHit = [];
 
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
@@ -69,7 +70,7 @@ const push = (map, key, v) => { if (!map.has(key)) map.set(key, []); map.get(key
 function prepare(events, analysis) {
   EV = events; AN = analysis;
   const timed = EV.filter(e => e.t !== undefined);
-  const ps = timed.find(e => e.k === "project");
+  const ps = [...timed].reverse().find(e => e.k === "project"); // the last: the unit's own project when it was read
   if (ps) PROJ = ps.data;
   for (const p of PROJ.pads || []) padInfo.set(p.n, p);
   for (const p of PROJ.patterns || []) { patBySlot.set(p.slot, p); patByLabel.set(p.label, p); p.pads = new Set(p.notes.map(n => n[1])); }
@@ -77,7 +78,7 @@ function prepare(events, analysis) {
   OFFSET = a ? a.t : 0;
   for (const e of timed) {
     switch (e.k) {
-      case "on": case "off": if (e.bank) push(padEv, e.bank + e.pad, { t: e.t, on: e.k === "on", v: e.v || 0 }); break;
+      case "on": case "off": if (e.bank) push(padEv, e.bank + e.pad, { t: e.t, on: e.k === "on", v: e.v || 0 }); else if (e.k === "on") otherNotes.push({ t: e.t, ch: e.ch, n: e.n, v: e.v }); break;
       case "cc": push(ccEv, e.ch + ":" + e.n, { t: e.t, v: e.v }); break;
       case "fx": if (e.fx !== undefined) push(fxNum, e.bus, { t: e.t, v: e.fx }); else push(fxOn, e.bus, { t: e.t, v: e.on }); break;
       case "beat": beats.push({ t: e.t, n: e.n, bpm: e.bpm }); break;
@@ -86,6 +87,11 @@ function prepare(events, analysis) {
     }
   }
   const bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const sel = document.getElementById("pat");
+  for (const p of [...patBySlot.values()].sort((a, b) => a.slot - b.slot)) { const o = document.createElement("option"); o.value = p.label; o.textContent = "pattern " + p.label + " (" + p.pads.size + " pads)"; sel.appendChild(o); }
+  const want = params.get("pattern");
+  if (want && patByLabel.has(want)) { chosen = want; sel.value = want; }
+  sel.onchange = () => { chosen = sel.value || null; };
   if (AN && AN.frames) { peak = new Uint16Array(bytes(AN.peak).buffer); spec = bytes(AN.spec); }
 }
 
@@ -121,8 +127,9 @@ function playPosition(T) {
 }
 function running(T) { const e = at(transport, T); return e ? e.k !== "stop" : !!playPosition(T); }
 
-let sticky = null;
+let sticky = null, chosen = null;
 function patternAt(T) {
+  if (chosen && patByLabel.has(chosen)) return { p: patByLabel.get(chosen), how: "chosen" };
   const e = at(patEv, T);
   if (e && e.now && patByLabel.has(e.now)) return { p: patByLabel.get(e.now), how: "known" };
   // no word from the unit: the pattern whose pads are the ones just heard
@@ -192,6 +199,9 @@ function drawPads(T) {
       }
     } else text("empty", x + 20, y + 54, COL.dim, 19);
   }
+  // notes on a channel that is no bank: shown as they came
+  const on = at(otherNotes, T);
+  if (on && T - on.t < 1.2) { g.globalAlpha = 1 - (T - on.t) / 1.2; text("MIDI note " + on.n + "  channel " + on.ch + "  v" + on.v, x0 + w - 24, y0 + h - 60, COL.amber, 20, true, "right"); g.globalAlpha = 1; }
   for (let k = 0; k < 10; k++) {
     const x = gx + k * 86, y = y0 + h - 48;
     const letter = String.fromCharCode(65 + k);
@@ -220,9 +230,9 @@ function drawPattern(T) {
   const x0 = 40, y0 = 656, w = 880, h = 394;
   panel(x0, y0, w, h);
   const r = patternAt(T);
-  if (!r) { text("PATTERN", x0 + 16, y0 + 30, COL.dim, 20, true); text("not known: the unit did not say, and no pads were heard", x0 + 16, y0 + 80, COL.dim, 22); return; }
+  if (!r) { text("PATTERN", x0 + 16, y0 + 30, COL.dim, 20, true); text("not known: the unit did not say and sent no notes. Choose one in the bar below (or ?pattern=A1)", x0 + 16, y0 + 80, COL.dim, 22); return; }
   const p = r.p, steps = Math.max(Math.round(p.length / 120), 16);
-  text("PATTERN " + p.label + "   " + p.bars + " bars" + (r.how === "guess" ? "   (guessed from the pads)" : ""), x0 + 16, y0 + 30, COL.amber, 20, true);
+  text("PATTERN " + p.label + "   " + p.bars + " bars" + (r.how === "guess" ? "   (guessed from the pads)" : r.how === "chosen" ? "   (chosen)" : ""), x0 + 16, y0 + 30, COL.amber, 20, true);
   const pads = [...p.pads].sort((a, b) => a - b).slice(0, 10);
   const rows = Math.max(pads.length, 1), rh = Math.min(32, (h - 70) / rows);
   const ix = x0 + 12, iw = 330;           // the pads of the pattern: their settings

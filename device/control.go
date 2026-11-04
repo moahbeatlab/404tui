@@ -106,6 +106,9 @@ func (d *Device) command(payload []byte, expect byte, what string) error {
 	return nil
 }
 
+// RawStatus is the payload of the status poll as the unit sends it, for logging what it holds.
+func (d *Device) RawStatus() ([]byte, error) { return d.statusPoll() }
+
 func (d *Device) statusPoll() ([]byte, error) {
 	return d.controlCall(short(proto.StatusRequest()), "status", startsWith(proto.ReplyStatus, 1))
 }
