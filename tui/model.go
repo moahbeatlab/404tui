@@ -1594,6 +1594,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.log.Info("event log started", "path", l.Path)
 				m.message += " · events to " + display(l.Path)
+				return m, tea.Batch(waitRecording(msg.session), m.projectLogCmd(l, msg.session.Started))
 			}
 		}
 		return m, waitRecording(msg.session)

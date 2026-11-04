@@ -48,8 +48,13 @@ type sceneState struct {
 	out     midiin.Out
 	// pcNext is the pattern that waits for the loop to end to be sent (see patternswitch.go).
 	pcNext *proto.PadIndex
-	outErr string
-	tried  time.Time
+	// pcConfirm is a pattern that was sent and is taken to play from the next loop start; pcAt is when it was asked for, lastMarker
+	// when the unit last sent its loop marker.
+	pcConfirm  *proto.PadIndex
+	pcAt       time.Time
+	lastMarker time.Time
+	outErr     string
+	tried      time.Time
 	// punch is the snapshots that are held (see punch.go).
 	punch punchRun
 	// lfo is what the LFOs are doing (see lfo.go).

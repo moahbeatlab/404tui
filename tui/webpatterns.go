@@ -70,9 +70,8 @@ func (m Model) ptnCommand(act string, i int) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		slot := rows[i].Slot
-		m.perfNext = &slot
+		m = m.patternRequested(slot)
 		lp.ptFallback = m.ptnDue()
-		m.logCue()
 		m.message = fmt.Sprintf("pattern %s is sent: the unit plays it next (the unit needs PC Rx on)", slot)
 		return m, m.wanted()
 	}

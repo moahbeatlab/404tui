@@ -305,6 +305,7 @@ func TestAPatternIsChosenFromTheBrowserForNowAndNext(t *testing.T) {
 	if len(st.Patterns) != 16 || !st.Patterns[1].Exists || !st.Patterns[2].Exists || st.Patterns[0].Exists {
 		t.Fatalf("patterns of bank A: %+v", st.Patterns)
 	}
+	r.feed(midiinMarker())           // the unit sends its loop marker, so a next pattern waits for it
 	r.web(`{"a":"cue","i":0,"n":2}`) // an empty slot: nothing
 	if w.last(t).Next != "—" {
 		t.Error("an empty pattern slot was taken")

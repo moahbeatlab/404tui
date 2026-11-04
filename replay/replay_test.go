@@ -205,3 +205,17 @@ func TestStyleIsKept(t *testing.T) {
 		t.Error("an empty style, no title and no cues should leave no file")
 	}
 }
+
+func TestCaptionsAreKept(t *testing.T) {
+	r := &Replay{CuesPath: filepath.Join(t.TempDir(), "x.cues.json")}
+	if err := r.SetCaptions([]Caption{{From: 1, To: 4.5, Text: "the kick is muted here"}}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(r.CuesPath)
+	if !strings.Contains(string(b), "the kick is muted here") {
+		t.Fatalf("not kept: %s", b)
+	}
+	if got := r.Captions(); len(got) != 1 || got[0].To != 4.5 {
+		t.Fatalf("%v", got)
+	}
+}

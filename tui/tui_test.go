@@ -6326,8 +6326,15 @@ func TestARecordingWritesWhatTheUnitSendsToAnEventLogAndPerformShowsIt(t *testin
 			t.Errorf("no %q in the log: %s", want, kinds)
 		}
 	}
-	if es[1]["k"] != "on" || es[1]["t"] != 1.5 || es[1]["bank"] != "C" || es[1]["pad"] != 1.0 || es[1]["ch"] != 3.0 {
-		t.Errorf("first event %v", es[1])
+	var first Entry // the project line is written in the background, so it is not always the second line
+	for _, e := range es[1:] {
+		if e["k"] != "project" {
+			first = e
+			break
+		}
+	}
+	if first["k"] != "on" || first["t"] != 1.5 || first["bank"] != "C" || first["pad"] != 1.0 || first["ch"] != 3.0 {
+		t.Errorf("first event %v", first)
 	}
 	var beats []Entry
 	for _, e := range es {

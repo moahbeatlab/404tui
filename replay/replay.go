@@ -33,14 +33,23 @@ type Replay struct {
 	mu                    sync.Mutex
 	title                 string
 	style                 json.RawMessage
+	captions              []Caption
 	cues                  []Cue
+}
+
+// Caption is a line of text shown from one time of the audio to another (seconds from the start of the audio).
+type Caption struct {
+	From float64 `json:"from"`
+	To   float64 `json:"to"`
+	Text string  `json:"text"`
 }
 
 // meta is what is kept beside the event log: the title of the video and the cues (an older file is just the list of cues).
 type meta struct {
-	Title string          `json:"title,omitempty"`
-	Cues  []Cue           `json:"cues"`
-	Style json.RawMessage `json:"style,omitempty"` // colours, logo, handle, background: the page's own object, kept as it is
+	Title    string          `json:"title,omitempty"`
+	Cues     []Cue           `json:"cues"`
+	Captions []Caption       `json:"captions,omitempty"`
+	Style    json.RawMessage `json:"style,omitempty"` // colours, logo, handle, background: the page's own object, kept as it is
 }
 
 // Cue says which pattern plays from a time of the log on: the unit does not tell when the pattern is changed.
@@ -86,6 +95,21 @@ func (r *Replay) SetTitle(t string) error {
 	return r.save()
 }
 
+// Captions are the lines of text shown at times.
+func (r *Replay) Captions() []Caption {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]Caption{}, r.captions...)
+}
+
+// SetCaptions replaces the captions and keeps them in the file.
+func (r *Replay) SetCaptions(c []Caption) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.captions = append([]Caption{}, c...)
+	return r.save()
+}
+
 // Style is the look of the video as the page saved it.
 func (r *Replay) Style() json.RawMessage {
 	r.mu.Lock()
@@ -113,13 +137,13 @@ func (r *Replay) SetStyle(b []byte) error {
 }
 
 func (r *Replay) save() error {
-	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 {
+	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 && len(r.captions) == 0 {
 		if err := os.Remove(r.CuesPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 		return nil
 	}
-	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues, Style: r.style}, "", " ")
+	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues, Captions: r.captions, Style: r.style}, "", " ")
 	return os.WriteFile(r.CuesPath, b, 0o644)
 }
 
@@ -146,7 +170,7 @@ func Load(audioPath, eventsPath string) (*Replay, error) {
 	if b, err := os.ReadFile(r.CuesPath); err == nil {
 		var m meta
 		if json.Unmarshal(b, &m) == nil {
-			r.title, r.cues, r.style = m.Title, m.Cues, m.Style
+			r.title, r.cues, r.style, r.captions = m.Title, m.Cues, m.Style, m.Captions
 		} else {
 			json.Unmarshal(b, &r.cues) // the first form of the file: the list of cues
 		}
@@ -177,7 +201,19 @@ func (r *Replay) Handler() http.Handler {
 	})
 	mux.HandleFunc("/events.json", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style()})
+		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style(), "captions": r.Captions()})
+	})
+	mux.HandleFunc("/captions", func(w http.ResponseWriter, req *http.Request) {
+		var c []Caption
+		if req.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20)).Decode(&c) != nil {
+			http.Error(w, "POST the captions", http.StatusBadRequest)
+			return
+		}
+		if err := r.SetCaptions(c); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/style", func(w http.ResponseWriter, req *http.Request) {
 		b, err := io.ReadAll(http.MaxBytesReader(w, req.Body, 8<<20)) // a logo and a background picture are in it

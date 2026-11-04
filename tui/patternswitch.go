@@ -20,36 +20,80 @@ func loopMarker(e midiin.Event) bool {
 	return e.Kind == midiin.NoteOn && e.Channel == 13 && e.Data1 == 48
 }
 
-// patternCue asks for a pattern: at once, or at the next loop start (the unit sends the marker when it starts too, so a pattern asked
-// for while it stands still is sent when it is started).
+// markerFresh says the unit has sent its loop marker lately: not every pattern or setting makes it send one, and then nothing waits for it.
+func (m Model) markerFresh() bool {
+	return m.sc != nil && !m.sc.lastMarker.IsZero() && time.Since(m.sc.lastMarker) < 15*time.Second
+}
+
+// patternCue asks for a pattern: at once, or at the next loop start (at once too when the unit sends no loop marker to wait for).
 func (m Model) patternCue(slot proto.PadIndex, now bool) Model {
 	sc := m.scenes()
 	m.sc = sc
-	if now {
+	if now || !m.markerFresh() {
 		sc.pcNext = nil
 		return m.patternSend(slot)
 	}
-	sc.pcNext = &slot
+	sc.pcNext, sc.pcAt = &slot, time.Now()
 	m.perfNext = &slot
 	m.log.Info("pattern: queued for the loop start", "pattern", slot.String())
 	m.perfLog.Add(time.Now(), "pattern", perflog.P("now", slotText(m.perfNow)), perflog.P("next", slotText(m.perfNext)))
 	return m
 }
 
-// patternLoopStart sends the pattern that waits, now that the loop starts.
+// patternRequested notes a pattern the Patterns page sent to the unit (which plays it from the end of its loop): it is logged with its
+// time, and taken to be the one that plays from the next loop start (or from a few seconds on when the unit sends no marker).
+func (m Model) patternRequested(slot proto.PadIndex) Model {
+	sc := m.scenes()
+	m.sc = sc
+	sc.pcConfirm, sc.pcAt = &slot, time.Now()
+	m.perfNext = &slot
+	m.perfLog.Add(time.Now(), "pattern", perflog.P("now", slotText(m.perfNow)), perflog.P("next", slotText(m.perfNext)), perflog.P("sent", true))
+	return m
+}
+
+// patternLoopStart is the loop starting: a pattern that waits is sent, and one that was sent now plays.
 func (m Model) patternLoopStart() Model {
-	if m.sc == nil || m.sc.pcNext == nil {
+	sc := m.scenes()
+	m.sc = sc
+	sc.lastMarker = time.Now()
+	if sc.pcNext != nil {
+		slot := *sc.pcNext
+		sc.pcNext = nil
+		return m.patternSend(slot)
+	}
+	return m.patternTakeOver()
+}
+
+// patternTakeOver makes the pattern that was sent the one that plays.
+func (m Model) patternTakeOver() Model {
+	if m.sc == nil || m.sc.pcConfirm == nil {
 		return m
 	}
-	slot := *m.sc.pcNext
-	m.sc.pcNext = nil
-	return m.patternSend(slot)
+	slot := *m.sc.pcConfirm
+	m.sc.pcConfirm = nil
+	m.perfNow, m.perfNext, m.perfAuto = &slot, nil, false
+	m.perfLog.Add(time.Now(), "pattern", perflog.P("now", slotText(m.perfNow)), perflog.P("next", slotText(m.perfNext)))
+	return m
+}
+
+// patternWaitTick does not wait for ever for a loop marker that does not come.
+func (m Model) patternWaitTick() Model {
+	if m.sc == nil || time.Since(m.sc.pcAt) < 8*time.Second {
+		return m
+	}
+	if m.sc.pcNext != nil {
+		slot := *m.sc.pcNext
+		m.sc.pcNext = nil
+		return m.patternSend(slot)
+	}
+	return m.patternTakeOver()
 }
 
 func (m Model) patternSend(slot proto.PadIndex) Model {
 	sc := m.scenes()
 	m.sc = sc
 	m.sceneSend(sc, []byte{0xC0 | byte(slot.Bank()), byte(slot.Pad())})
+	sc.pcConfirm = nil
 	m.perfNow, m.perfNext, m.perfAuto = &slot, nil, false
 	m.perfLog.Add(time.Now(), "pattern", perflog.P("now", slotText(m.perfNow)), perflog.P("next", slotText(m.perfNext)), perflog.P("sent", true))
 	return m

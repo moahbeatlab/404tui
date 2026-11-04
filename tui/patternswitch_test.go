@@ -10,6 +10,7 @@ import (
 func TestAPatternIsSentWhenTheLoopStarts(t *testing.T) {
 	r := newPerfRig(t, 100, 40)
 	slot := pad(t, "C5")
+	r.feed(midiinMarker()) // the unit has sent a loop marker: there is something to wait for
 	r.s.model = r.s.m().patternCue(slot, false)
 	if len(r.sent()) != 0 || r.sc().pcNext == nil {
 		t.Fatalf("it should wait for the loop: sent %v, waiting %v", r.sent(), r.sc().pcNext)
@@ -40,5 +41,17 @@ func TestAPatternIsSentWhenTheLoopStarts(t *testing.T) {
 	got = r.sent()
 	if len(got) != 2 || !bytes.Equal(got[1], []byte{0xC0, 1}) {
 		t.Fatalf("now: sent %v", got)
+	}
+}
+
+func midiinMarker() midiin.Event {
+	return midiin.Event{Kind: midiin.NoteOn, Channel: 13, Data1: 48, Data2: 127}
+}
+
+func TestAPatternDoesNotWaitForAMarkerThatDoesNotCome(t *testing.T) {
+	r := newPerfRig(t, 100, 40)
+	r.s.model = r.s.m().patternCue(pad(t, "C5"), false) // no marker was ever seen: sent at once
+	if got := r.sent(); len(got) != 1 {
+		t.Fatalf("sent %v", got)
 	}
 }

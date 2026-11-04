@@ -21,6 +21,14 @@
   #time { min-width:150px; text-align:right; color:var(--dim); }
   #nudge { color:var(--dim); min-width:110px; }
   body.nohud #bar, body.nohud #stylebox { display:none !important; }
+  #capbox { position:fixed; right:16px; bottom:60px; background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; width:min(520px, 92vw); max-height:70vh; overflow:auto; }
+  #capbox.open { display:flex; }
+  #capbox label.g { display:flex; gap:8px; align-items:center; color:var(--dim); }
+  #capbox .h { color:#666; font-size:11px; }
+  #capbox .row { display:flex; gap:6px; align-items:center; }
+  #capbox input, #capbox button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
+  #capbox input.t { width:64px; } #capbox input.x { flex:1; min-width:0; }
+  body.nohud #capbox { display:none !important; }
   #stylebox { position:fixed; right:16px; bottom:60px; background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; max-width:min(440px, 92vw); }
   #stylebox.open { display:flex; }
   #stylebox label { display:flex; gap:8px; align-items:center; justify-content:space-between; color:var(--dim); }
@@ -39,8 +47,15 @@
   <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button>
   <select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
   <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span>
+  <button id="capbtn" title="text shown at times of the take">captions</button>
   <button id="stylebtn" title="colours, background, logo, handle">style</button>
   <button id="full" title="f">full screen</button>
+</div>
+<div id="capbox">
+  <div id="caplist"></div>
+  <label class="g">fade in and out <input id="c_fade" type="number" min="0" max="3" step="0.05" style="width:64px"> s <span class="h">for all captions</span></label>
+  <label class="g">a new caption lasts <input id="c_len" type="number" min="1" max="60" step="0.5" style="width:64px"> s <span class="h">for all new captions</span></label>
+  <button id="capadd" title="a caption from the time you are at">add a caption here</button>
 </div>
 <div id="stylebox">
   <label>look <select id="s_preset"></select></label>
@@ -50,6 +65,10 @@
   <label>picture <input id="s_bgimg" type="file" accept="image/*"></label>
   <label>picture dimmed <input id="s_bgdim" type="range" min="0" max="95" value="60"></label>
   <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
+  <label>BUS 1 is <input id="s_bus0" placeholder="e.g. Direct FX 1-5" size="22"></label>
+  <label>BUS 2 is <input id="s_bus1" placeholder="e.g. Direct FX 1-5" size="22"></label>
+  <label>BUS 3 is <input id="s_bus2" placeholder="e.g. reverb send" size="22"></label>
+  <label>BUS 4 is <input id="s_bus3" placeholder="" size="22"></label>
   <label>handle <input id="s_handle" placeholder="@yourname" size="18"></label>
   <label>subtitle <input id="s_sub" placeholder="under the title" size="22"></label>
   <button id="s_reset">reset the look</button>
@@ -139,12 +158,23 @@ function prepare(events, analysis, cuesIn) {
       case "fx": if (e.fx !== undefined) push(fxNum, e.bus, { t: e.t, v: e.fx }); else push(fxOn, e.bus, { t: e.t, v: e.on }); break;
       case "beat": beats.push({ t: e.t, n: e.n, bpm: e.bpm }); break;
       case "start": case "stop": case "continue": transport.push({ t: e.t, k: e.k }); break;
-      case "pattern": patEv.push({ t: e.t, now: e.now, next: e.next }); break;
+      case "pattern": patRaw.push(e); break;
       case "mute": push(muteEv, e.bank + e.pad, { t: e.t, on: e.on }); break;
       case "isolate": isoEv.push({ t: e.t, keep: new Set(e.keep || []), dry: new Set(e.dry || []), buses: e.buses || [] }); break;
     }
     if (e.k === "on" && e.ch === 13 && e.n === 48) loopStarts.push(e.t);
   }
+  // the pattern events: a pattern that was only asked for ("next", the unit has it from the end of its loop) plays from the next loop start
+  const known = l => l && l !== "—" && l !== "-";
+  for (const e of patRaw) {
+    if (known(e.now)) { if (!patEv.length || patEv[patEv.length - 1].now !== e.now) patEv.push({ t: e.t, now: e.now, next: "" }); }
+    else if (known(e.next) && (e.sent || !known(e.now))) {
+      const ls = loopStarts.find(l => l >= e.t - 0.05 && l < e.t + 12);
+      const t = ls !== undefined ? ls : e.t;
+      if (!patEv.length || patEv[patEv.length - 1].now !== e.next) patEv.push({ t, now: e.next, next: "" });
+    }
+  }
+  patEv.sort((a, b) => a.t - b.t);
   cues = (cuesIn || []).map(c => ({ t: c.t, label: c.label, pattern: c.pattern, pads: c.pads }));
   for (const c of cues) { // what the cue kept of the pattern and its pads stands in for a project that has no (or another) one
     if (c.pattern && !patByLabel.has(c.label)) { const p = c.pattern; p.pads = new Set(p.notes.map(n => n[1])); patBySlot.set(p.slot, p); patByLabel.set(p.label, p); }
@@ -217,7 +247,7 @@ function drawFeed(T) {
   });
 }
 
-const hitTimes = new Map(), tempoSeries = [];
+const hitTimes = new Map(), tempoSeries = [], patRaw = [];
 
 // ---- what the unit was doing at time T (the time of the log)
 function padState(bank, pad, T) {
@@ -369,7 +399,17 @@ function drawPads(T) {
     if (iso && iso.keep.has(lab)) { g.strokeStyle = BUSCOL[info && info.bus] || COL.blue; g.lineWidth = 5; g.beginPath(); g.roundRect(x + 2.5, y + 2.5, tw - 5, th - 5, 8); g.stroke(); text("ISO", x + 80, y + 28, BUSCOL[info && info.bus] || COL.blue, 20, true); }
     else if (iso && iso.dry.has(lab)) { g.globalAlpha = 0.45; rrect(x, y, tw, th, 10, "#000"); g.globalAlpha = 1; text("DRY", x + 80, y + 28, COL.dim, 18, true); }
     const hl = hitTimes.get(bank + (i + 1)), hc = hl ? atIndex(hl, T) + 1 : 0;
-    if (hc > 0) text("x" + hc, x + tw - 14, y + 28, glow > 0.5 ? "#111" : COL.dim, 18, false, "right");
+    // how the pad plays: G gate, L loop, 1 one shot, R reverse or ping-pong; small chips at the top right, with the hit count left of them
+    const mi = info && info.info ? info.info : {};
+    const flags = [mi.Gate === "on" ? "G" : "", mi.Loop === "on" ? "L" : "", mi["One shot"] === "on" ? "1" : "", mi.Mode && mi.Mode !== "forward" ? "R" : ""].filter(Boolean);
+    let rx = x + tw - 12;
+    for (let k = flags.length - 1; k >= 0; k--) {
+      const cw = VERT ? 26 : 22;
+      rrect(rx - cw, y + 10, cw, cw, 5, glow > 0.5 ? "rgba(0,0,0,0.35)" : COL.deep);
+      text(flags[k], rx - cw / 2, y + 10 + cw * 0.76, glow > 0.5 ? "#111" : COL.amber, 15, true, "center");
+      rx -= cw + 4;
+    }
+    if (hc > 0) text("x" + hc, rx - 4, y + 28, glow > 0.5 ? "#111" : COL.dim, 18, false, "right");
     if (inPat && inPat.has(n)) { g.strokeStyle = COL.amberD; g.lineWidth = 2; g.beginPath(); g.roundRect(x + 1, y + 1, tw - 2, th - 2, 9); g.stroke(); }
     if (info && info.bus) rect(x + 2, y + 10, 6, th - 20, BUSCOL[info.bus]);
     const dark = glow > 0.5;
@@ -515,7 +555,8 @@ function drawFx(T) {
     rect(x + 12, y0 + 14, 5, 50, c);
     text("BUS " + bus, x + 26, y0 + 38, c, 22, true);
     const name = fxName(bus, T), on = at(fxOn.get(bus) || [], T);
-    text(name ? fit(name, 19) : "effect unknown", x + 26, y0 + 62, name ? COL.text : COL.dim, 17);
+    const note = ((STYLE.busNotes || [])[bus - 1] || "").trim(); // what the bus is used for, as written in the style panel
+    text(name ? fit(name, 19) : note ? fit(note, 19) : "effect unknown", x + 26, y0 + 62, name || note ? COL.text : COL.dim, 17);
     if (on) { rect(x + bw - 62, y0 + 16, 50, 26, on.v ? COL.good : "#2b2b2b"); text(on.v ? "ON" : "OFF", x + bw - 37, y0 + 36, on.v ? "#111" : COL.dim, 17, true, "center"); }
     const defs = ((window.SP404_FX || {}).params || {})[name] || [];
     for (let i = 0; i < 3; i++) {
@@ -603,7 +644,7 @@ const PRESETS = {
   "forest":   { accent: "#7bd88f", bg: "#0d1511", deep: "#101a15", panel: "#14201a", tile: "#203329", tile2: "#182820", text: "#e9f5ec", dim: "#8fb09a" },
   "mono":     { accent: "#f2f2f2", bg: "#0d0d0d", deep: "#111111", panel: "#181818", tile: "#262626", tile2: "#1c1c1c", text: "#f2f2f2", dim: "#8c8c8c" },
 };
-const STYLE_DEFAULT = { preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6 }, logo: "", handle: "", subtitle: "" };
+const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6 }, logo: "", handle: "", subtitle: "" };
 let STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)), logoImg = null, bgImg = null;
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const hexMix = (a, b, t) => "#" + hexRgb(a).map((v, i) => Math.round(v + (hexRgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
@@ -646,6 +687,41 @@ function drawBrand() {
   if (sub) text(fit(sub, 44), W / 2, y + lh + 34, COL.dim, 24, false, "center");
 }
 
+// ---- captions: a line of text for a stretch of the take (to say why something was done), always in the same place of a format
+let CAPS = [];
+function wrapText(str, maxW, px) {
+  g.font = FONT(px * (VERT ? 1.22 : 1) * 1, false);
+  const words = String(str).split(/\s+/), lines = []; let cur = "";
+  for (const w of words) { const t = cur ? cur + " " + w : w; if (g.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; }
+  if (cur) lines.push(cur);
+  return lines;
+}
+let blurLayer = null;
+const easeOut = u => 1 - Math.pow(1 - u, 3);
+// the caption is in front of the picture, in the middle of it (the same place in both formats), and the picture behind it is blurred and
+// dimmed. It fades in and out (the time is one setting for all captions: "caption fade" in the style panel): the card rises and grows
+// a little as it comes, and the blur and the dimming come and go with it.
+function drawCaption(A) {
+  const c = CAPS.find(c => c.text && A >= c.from && A < c.to); if (!c) return;
+  const fd = clamp(+STYLE.capFade || 0, 0, 3), span = Math.max(Math.min(fd, (c.to - c.from) / 2), 0.0001);
+  const fade = fd === 0 ? 1 : easeOut(clamp(Math.min(A - c.from, c.to - A) / span, 0, 1));
+  if (!blurLayer || blurLayer.width !== W || blurLayer.height !== H) { blurLayer = document.createElement("canvas"); blurLayer.width = W; blurLayer.height = H; }
+  const bx = blurLayer.getContext("2d");
+  bx.clearRect(0, 0, W, H); bx.drawImage(cv, 0, 0);
+  g.save(); g.filter = "blur(" + (3 * fade).toFixed(1) + "px)"; g.drawImage(blurLayer, 0, 0); g.restore();
+  g.globalAlpha = 0.28 * fade; rect(0, 0, W, H, "#000"); g.globalAlpha = 1;
+  const px = 34, k = VERT ? 1.22 : 1, bw = Math.min(W - 80, VERT ? 940 : 1260);
+  const lines = wrapText(c.text, bw - 96, px).slice(0, 5), lh = px * k * 1.32, bh = lines.length * lh + 52;
+  const x0 = (W - bw) / 2, y0 = (H - bh) / 2;
+  g.save(); g.globalAlpha = fade;
+  g.translate(W / 2, H / 2 + (1 - fade) * 24); g.scale(0.96 + 0.04 * fade, 0.96 + 0.04 * fade); g.translate(-W / 2, -H / 2); // rises and grows as it comes
+  g.shadowColor = "rgba(0,0,0,0.5)"; g.shadowBlur = 30; rrect(x0, y0, bw, bh, 18, COL.panel); g.shadowBlur = 0;
+  rect(x0 + 22, y0 + 22, 6, bh - 44, COL.amber);
+  let y = y0 + 26 + px * k * 0.95;
+  for (const l of lines) { text(l, x0 + 52, y, COL.text, px, false); y += lh; }
+  g.restore();
+}
+
 let T_audio = 0;
 function draw(audioTime) {
   T_audio = audioTime;
@@ -657,6 +733,7 @@ function draw(audioTime) {
   drawFx(T);
   drawMeter(T);
   drawFeed(T);
+  drawCaption(audioTime);
   drawBrand();
 }
 
@@ -679,7 +756,7 @@ seek.oninput = () => { const d = AN ? AN.duration : audio.duration; audio.curren
 speed.onchange = () => { audio.playbackRate = parseFloat(speed.value); };
 document.getElementById("full").onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
 addEventListener("keydown", e => {
-  if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT" && e.target.id === "title") return;
+  if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
   if (e.code === "Space") { e.preventDefault(); play.onclick(); }
   else if (e.key === "ArrowLeft") audio.currentTime = Math.max(audio.currentTime - (e.shiftKey ? 30 : 5), 0);
   else if (e.key === "ArrowRight") audio.currentTime += e.shiftKey ? 30 : 5;
@@ -688,9 +765,47 @@ addEventListener("keydown", e => {
   else if (e.key === "f") document.getElementById("full").onclick();
 });
 
+// the controls of the captions: a row for each (from, to, the text); "add" puts one at the time the page is at
+function initCaptions() {
+  const box = document.getElementById("capbox"), list = document.getElementById("caplist");
+  let timer = null;
+  const save = () => { clearTimeout(timer); timer = setTimeout(() => fetch("/captions", { method: "POST", body: JSON.stringify(CAPS) }).catch(() => {}), 400); };
+  const num = v => { const m = String(v).match(/^(\d+):(\d+(?:\.\d+)?)$/); return m ? +m[1] * 60 + +m[2] : parseFloat(v) || 0; };
+  const render = () => {
+    list.textContent = "";
+    CAPS.sort((a, b) => a.from - b.from);
+    if (!CAPS.length) { const d = document.createElement("div"); d.style.color = "var(--dim)"; d.textContent = "no captions: add one where you want the text to appear"; list.appendChild(d); }
+    CAPS.forEach((c, i) => {
+      const row = document.createElement("div"); row.className = "row";
+      const f = document.createElement("input"), t = document.createElement("input"), x = document.createElement("input"), del = document.createElement("button");
+      f.className = t.className = "t"; x.className = "x";
+      f.value = mmss(c.from); t.value = mmss(c.to); x.value = c.text; x.placeholder = "the text"; del.textContent = "x"; del.title = "remove";
+      f.title = "from (m:ss.s)"; t.title = "to (m:ss.s)";
+      f.onchange = () => { c.from = num(f.value); save(); render(); };
+      t.onchange = () => { c.to = num(t.value); save(); };
+      x.oninput = () => { c.text = x.value; save(); };
+      f.onfocus = () => { audio.currentTime = c.from; };
+      del.onclick = () => { CAPS.splice(i, 1); save(); render(); };
+      row.append(f, t, x, del); list.appendChild(row);
+    });
+  };
+  const fadeIn = document.getElementById("c_fade"), lenIn = document.getElementById("c_len");
+  const showSettings = () => { fadeIn.value = STYLE.capFade; lenIn.value = STYLE.capLength; };
+  const keepSettings = () => { STYLE.capFade = Math.max(0, Math.min(3, parseFloat(fadeIn.value) || 0)); STYLE.capLength = Math.max(1, parseFloat(lenIn.value) || 5); window.styleChanged && window.styleChanged(); };
+  fadeIn.oninput = lenIn.oninput = keepSettings;
+  document.getElementById("capbtn").onclick = () => { showSettings(); box.classList.toggle("open"); render(); };
+  document.getElementById("capadd").onclick = () => {
+    const a = now(), d = AN ? AN.duration : a + 5;
+    CAPS.push({ from: +a.toFixed(1), to: +Math.min(a + (+STYLE.capLength || 5), d).toFixed(1), text: "" }); save(); render();
+    const inputs = list.querySelectorAll("input.x"); if (inputs.length) inputs[inputs.length - 1].focus();
+  };
+  render();
+}
+
 // the controls of the look
 function mergeStyle(saved) {
   const st = JSON.parse(JSON.stringify(STYLE_DEFAULT));
+  if (saved && Array.isArray(saved.busNotes)) saved.busNotes = [0, 1, 2, 3].map(i => String(saved.busNotes[i] || ""));
   if (saved && typeof saved === "object") { Object.assign(st, saved); st.bg = Object.assign({}, STYLE_DEFAULT.bg, saved.bg || {}); }
   return st;
 }
@@ -707,11 +822,12 @@ function initStyle(saved) {
   const show = () => {
     sel.value = STYLE.preset; $("s_accent").value = validHex(STYLE.accent) ? STYLE.accent : (PRESETS[STYLE.preset] || PRESETS["404 dark"]).accent;
     $("s_bgkind").value = STYLE.bg.kind; $("s_bg1").value = validHex(STYLE.bg.color) ? STYLE.bg.color : "#000000"; $("s_bg2").value = validHex(STYLE.bg.color2) ? STYLE.bg.color2 : "#1b1b2e";
+    for (let i = 0; i < 4; i++) $("s_bus" + i).value = (STYLE.busNotes || [])[i] || "";
     $("s_bgdim").value = Math.round((STYLE.bg.dim === undefined ? 0.6 : STYLE.bg.dim) * 100); $("s_handle").value = STYLE.handle || ""; $("s_sub").value = STYLE.subtitle || "";
   };
   show();
   let timer = null;
-  const changed = () => { applyStyle(); clearTimeout(timer); timer = setTimeout(() => fetch("/style", { method: "POST", body: JSON.stringify(STYLE) }).catch(() => {}), 500); };
+  const changed = window.styleChanged = () => { applyStyle(); clearTimeout(timer); timer = setTimeout(() => fetch("/style", { method: "POST", body: JSON.stringify(STYLE) }).catch(() => {}), 500); };
   $("stylebtn").onclick = () => box.classList.toggle("open");
   sel.onchange = () => { STYLE.preset = sel.value; STYLE.accent = ""; show(); changed(); };
   $("s_accent").oninput = () => { STYLE.accent = $("s_accent").value; changed(); };
@@ -720,6 +836,7 @@ function initStyle(saved) {
   $("s_bg1").oninput = () => { STYLE.bg.color = $("s_bg1").value; if (STYLE.bg.kind === "preset") STYLE.bg.kind = "solid"; show(); changed(); };
   $("s_bg2").oninput = () => { STYLE.bg.color2 = $("s_bg2").value; STYLE.bg.kind = "gradient"; show(); changed(); };
   $("s_bgdim").oninput = () => { STYLE.bg.dim = $("s_bgdim").value / 100; changed(); };
+  for (let i = 0; i < 4; i++) $("s_bus" + i).oninput = () => { STYLE.busNotes = [0, 1, 2, 3].map(k => $("s_bus" + k).value); changed(); };
   $("s_handle").oninput = () => { STYLE.handle = $("s_handle").value; changed(); };
   $("s_sub").oninput = () => { STYLE.subtitle = $("s_sub").value; changed(); };
   // pictures are made small before they are kept (a logo 480 px wide, a background 1920 px), so that the file beside the log stays small
@@ -738,7 +855,7 @@ async function start() {
   const msg = document.getElementById("msg");
   try {
     const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
-    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; initStyle(ev.style); prepare(ev.events, an, ev.cues);
+    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || "") })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues);
   } catch (e) { msg.textContent = "could not load the replay: " + e; msg.style.display = "block"; return; }
   const t0 = parseFloat(params.get("t") || "0");
   if (t0) audio.currentTime = t0;
