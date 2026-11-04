@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>404tui replay</title>
+<style>
+  :root { --bg:#111; --panel:#1b1b1b; --amber:#ffb000; --text:#ddd; --dim:#888; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:14px ui-monospace, Menlo, Consolas, monospace; }
+  body { display:flex; flex-direction:column; }
+  #stage { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
+  canvas { width:100%; height:100%; object-fit:contain; background:#111; }
+  #bar { display:flex; gap:12px; align-items:center; padding:8px 16px; background:#161616; border-top:1px solid #2a2a2a; }
+  #bar button, #bar select { background:#2b2b2b; color:var(--text); border:0; padding:6px 12px; font:inherit; cursor:pointer; }
+  #bar button:hover { background:#3a3a3a; }
+  #seek { flex:1; accent-color:var(--amber); }
+  #time { min-width:150px; text-align:right; color:var(--dim); }
+  #nudge { color:var(--dim); min-width:110px; }
+  body.nohud #bar { display:none; }
+  #msg { position:fixed; left:50%; top:45%; transform:translateX(-50%); background:#2b2b2b; padding:16px 24px; display:none; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c" width="1920" height="1080"></canvas></div>
+<div id="bar">
+  <button id="play" title="Space">play</button>
+  <input id="seek" type="range" min="0" max="1000" value="0">
+  <span id="time">0:00.0</span>
+  <select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
+  <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span>
+  <button id="full" title="f">full screen</button>
+</div>
+<div id="msg"></div>
+<audio id="audio" preload="auto" src="/audio"></audio>
+<script src="/fxdata.js"></script>
+<script>
+"use strict";
+// ---- the page of a replay: everything on the screen is a function of the time, so that it can be watched (the audio drives the time)
+// and rendered frame by frame (a program sets the time: window.replay.setTime(t)).
+const COL = { bg:"#111", panel:"#1b1b1b", tile:"#2b2b2b", tile2:"#232323", amber:"#ffb000", amberD:"#7a5a00", text:"#ddd", dim:"#888", line:"#333",
+              good:"#6c6", bad:"#ff5f5f", blue:"#5fafff", red:"#ff5f5f" };
+const FONT = (px, bold) => (bold ? "bold " : "") + px + "px ui-monospace, Menlo, Consolas, monospace";
+const cv = document.getElementById("c"), g = cv.getContext("2d");
+const W = cv.width, H = cv.height;
+const params = new URLSearchParams(location.search);
+if (params.get("hud") === "0") document.body.classList.add("nohud");
+
+let EV = [], AN = null, PROJ = { pads: [], patterns: [] }, FILE = "", OFFSET = 0, NUDGE = 0;
+const padInfo = new Map(), patBySlot = new Map(), patByLabel = new Map();
+const padEv = new Map(), ccEv = new Map(), fxNum = new Map(), fxOn = new Map(), beats = [], transport = [], patEv = [];
+let peak = null, spec = null, lastHit = [];
+
+const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+// the last item of a sorted list with t <= T (or null)
+function at(list, T) {
+  let lo = 0, hi = list.length - 1, r = -1;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (list[m].t <= T) { r = m; lo = m + 1; } else hi = m - 1; }
+  return r < 0 ? null : list[r];
+}
+function atIndex(list, T) {
+  let lo = 0, hi = list.length - 1, r = -1;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (list[m].t <= T) { r = m; lo = m + 1; } else hi = m - 1; }
+  return r;
+}
+const push = (map, key, v) => { if (!map.has(key)) map.set(key, []); map.get(key).push(v); };
+
+function prepare(events, analysis) {
+  EV = events; AN = analysis;
+  const timed = EV.filter(e => e.t !== undefined);
+  const ps = timed.find(e => e.k === "project");
+  if (ps) PROJ = ps.data;
+  for (const p of PROJ.pads || []) padInfo.set(p.n, p);
+  for (const p of PROJ.patterns || []) { patBySlot.set(p.slot, p); patByLabel.set(p.label, p); p.pads = new Set(p.notes.map(n => n[1])); }
+  const a = timed.find(e => e.k === "audio_start");
+  OFFSET = a ? a.t : 0;
+  for (const e of timed) {
+    switch (e.k) {
+      case "on": case "off": if (e.bank) push(padEv, e.bank + e.pad, { t: e.t, on: e.k === "on", v: e.v || 0 }); break;
+      case "cc": push(ccEv, e.ch + ":" + e.n, { t: e.t, v: e.v }); break;
+      case "fx": if (e.fx !== undefined) push(fxNum, e.bus, { t: e.t, v: e.fx }); else push(fxOn, e.bus, { t: e.t, v: e.on }); break;
+      case "beat": beats.push({ t: e.t, n: e.n, bpm: e.bpm }); break;
+      case "start": case "stop": case "continue": transport.push({ t: e.t, k: e.k }); break;
+      case "pattern": patEv.push({ t: e.t, now: e.now, next: e.next }); break;
+    }
+  }
+  const bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  if (AN && AN.frames) { peak = new Uint16Array(bytes(AN.peak).buffer); spec = bytes(AN.spec); }
+}
+
+// ---- what the unit was doing at time T (the time of the log)
+function padState(bank, pad, T) {
+  const l = padEv.get(bank + pad); if (!l) return null;
+  const i = atIndex(l, T); if (i < 0) return null;
+  let on = null;
+  for (let j = i; j >= 0 && j > i - 8; j--) { if (l[j].on) { on = l[j]; break; } }
+  return { held: l[i].on, hitAt: on ? on.t : -1, v: on ? on.v : 0 };
+}
+function ccValue(ch, n, T) { const e = at(ccEv.get(ch + ":" + n) || [], T); return e ? e.v : null; }
+function ccHistory(ch, n, T, span) {
+  const l = ccEv.get(ch + ":" + n); if (!l) return [];
+  const i = atIndex(l, T), out = [];
+  for (let j = i; j >= 0 && l[j].t >= T - span; j--) out.unshift(l[j]);
+  return out;
+}
+const fxName = (bus, T) => {
+  const e = at(fxNum.get(bus) || [], T); if (!e) return null;
+  const list = (window.SP404_FX || {})[bus >= 3 ? "fx34" : "fx12"] || [];
+  return list[e.v] || ("effect " + e.v);
+};
+function bankInView(T) {
+  let best = -1, bank = "A";
+  for (const [k, l] of padEv) { const e = at(l, T); if (e && e.t > best) { best = e.t; bank = k[0]; } }
+  return bank;
+}
+function playPosition(T) {
+  const i = atIndex(beats, T); if (i < 0) return null;
+  const b = beats[i]; if (T - b.t > 2.5) return null; // the clock stopped
+  return { q: b.n + clamp((T - b.t) * b.bpm / 60, 0, 1), bpm: b.bpm };
+}
+function running(T) { const e = at(transport, T); return e ? e.k !== "stop" : !!playPosition(T); }
+
+let sticky = null;
+function patternAt(T) {
+  const e = at(patEv, T);
+  if (e && e.now && patByLabel.has(e.now)) return { p: patByLabel.get(e.now), how: "known" };
+  // no word from the unit: the pattern whose pads are the ones just heard
+  const pos = playPosition(T), bpm = pos ? pos.bpm : 120;
+  const hits = new Set();
+  for (const [k, l] of padEv) {
+    const i = atIndex(l, T);
+    for (let j = i; j >= 0 && l[j].t >= T - 8 * 60 / bpm; j--) if (l[j].on) { hits.add((k.charCodeAt(0) - 65) * 16 + parseInt(k.slice(1), 10) - 1); break; }
+  }
+  if (!hits.size) return sticky ? { p: sticky, how: "guess" } : null;
+  let best = null, bs = 0.5;
+  for (const p of patBySlot.values()) {
+    let inter = 0; for (const h of hits) if (p.pads.has(h)) inter++;
+    const score = inter / hits.size - 0.2 * (p.pads.size - inter) / Math.max(p.pads.size, 1);
+    if (score > bs) { bs = score; best = p; }
+  }
+  if (best) sticky = best;
+  return sticky ? { p: sticky, how: "guess" } : null;
+}
+
+// ---- drawing
+function rect(x, y, w, h, c) { g.fillStyle = c; g.fillRect(x, y, w, h); }
+function text(s, x, y, c, px, bold, align) { g.fillStyle = c; g.font = FONT(px || 22, bold); g.textAlign = align || "left"; g.textBaseline = "alphabetic"; g.fillText(s, x, y); }
+function fit(s, n) { return s.length > n ? s.slice(0, n - 1) + "~" : s; }
+const mix = (c1, c2, t) => { const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const a = p(c1), b = p(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; };
+function panel(x, y, w, h, title) { rect(x, y, w, h, COL.panel); if (title) text(title, x + 16, y + 30, COL.dim, 20, true); }
+const mmss = t => { t = Math.max(t, 0); return Math.floor(t / 60) + ":" + (t % 60).toFixed(1).padStart(4, "0"); };
+
+function drawHeader(T, A) {
+  rect(0, 0, W, 64, "#161616");
+  text("404tui", 28, 42, COL.amber, 30, true);
+  text("REPLAY", 150, 42, COL.text, 26, true);
+  text(fit(PROJ.name || "", 24) + "   " + fit(FILE, 40), 300, 42, COL.dim, 22);
+  const pos = playPosition(T), run = running(T);
+  const bar = pos ? Math.floor(pos.q / 4) + 1 : null, beat = pos ? Math.floor(pos.q % 4) + 1 : null;
+  const bpm = pos ? pos.bpm : (PROJ.tempo || 0);
+  text(bpm ? bpm.toFixed(1) + " BPM" : "", 1000, 44, pos ? COL.amber : COL.dim, 34, true);
+  text(pos ? "BAR " + bar + "  BEAT " + beat : "no clock: the project's tempo", 1240, 42, pos ? COL.text : COL.dim, 22);
+  text(run ? "PLAY" : "STOP", 1560, 42, run ? COL.good : COL.dim, 26, true);
+  text(mmss(A) + " / " + mmss(AN ? AN.duration : 0), W - 28, 42, COL.text, 24, false, "right");
+}
+
+function drawPads(T) {
+  const x0 = 40, y0 = 80, w = 880, h = 560;
+  panel(x0, y0, w, h);
+  const bank = bankInView(T), b = bank.charCodeAt(0) - 65;
+  const tw = 205, th = 108, gap = 12, gx = x0 + 20, gy = y0 + 18;
+  for (let i = 0; i < 16; i++) {
+    const n = b * 16 + i, row = Math.floor(i / 4), col = i % 4;
+    const x = gx + col * (tw + gap), y = gy + row * (th + gap);
+    const info = padInfo.get(n), st = padState(bank, i + 1, T);
+    rect(x, y, tw, th, info ? COL.tile : COL.tile2);
+    let glow = 0;
+    if (st) { const age = T - st.hitAt; glow = st.held ? 1 : clamp(1 - age / 0.45, 0, 1); glow *= 0.35 + 0.65 * (st.v || 100) / 127; }
+    if (glow > 0) { g.globalAlpha = glow * 0.85; rect(x, y, tw, th, COL.amber); g.globalAlpha = 1; }
+    if (st && st.held) { g.strokeStyle = "#fff"; g.lineWidth = 3; g.strokeRect(x + 1.5, y + 1.5, tw - 3, th - 3); }
+    if (info && info.bus) rect(x, y, 8, th, info.bus === 1 ? COL.blue : COL.red);
+    const dark = glow > 0.5;
+    text(String.fromCharCode(65 + b) + (i + 1), x + 20, y + 28, dark ? "#111" : COL.amber, 24, true);
+    if (info) {
+      text(fit(info.name, 17), x + 20, y + 54, dark ? "#111" : COL.text, 19);
+      const pk = info.peaks || [];
+      for (let k = 0; k < pk.length; k++) {
+        const bh = Math.max(2, pk[k] / 100 * (th - 78));
+        rect(x + 20 + k * 5.2, y + th - 10 - bh, 3.6, bh, dark ? "#5a4000" : mix("#444444", "#ffb000", 0.35));
+      }
+    } else text("empty", x + 20, y + 54, COL.dim, 19);
+  }
+  for (let k = 0; k < 10; k++) {
+    const x = gx + k * 86, y = y0 + h - 48;
+    const letter = String.fromCharCode(65 + k);
+    let act = 0; for (let i = 1; i <= 16; i++) { const st = padState(letter, i, T); if (st && (st.held || T - st.hitAt < 0.4)) act = 1; }
+    rect(x, y, 78, 32, k === b ? COL.amber : mix("#2b2b2b", "#7a5a00", act));
+    text(letter, x + 39, y + 23, k === b ? "#111" : COL.dim, 20, true, "center");
+  }
+}
+
+// has a pad been heard in the last pass of the pattern, while others were? (the unit does not say that a track is muted: this is a guess)
+function mutedGuess(pad, p, T) {
+  const pos = playPosition(T); if (!pos) return false;
+  const lenS = (p.length / 480) * 60 / pos.bpm;
+  if (T - lenS < 0) return false;
+  let others = 0, mine = 0;
+  for (const [k, l] of padEv) {
+    const n = (k.charCodeAt(0) - 65) * 16 + parseInt(k.slice(1), 10) - 1;
+    if (!p.pads.has(n)) continue;
+    const i = atIndex(l, T);
+    for (let j = i; j >= 0 && l[j].t >= T - lenS; j--) if (l[j].on) { if (n === pad) mine++; else others++; }
+  }
+  return mine === 0 && others > 3;
+}
+
+function drawPattern(T) {
+  const x0 = 40, y0 = 656, w = 880, h = 394;
+  panel(x0, y0, w, h);
+  const r = patternAt(T);
+  if (!r) { text("PATTERN", x0 + 16, y0 + 30, COL.dim, 20, true); text("not known: the unit did not say, and no pads were heard", x0 + 16, y0 + 80, COL.dim, 22); return; }
+  const p = r.p, steps = Math.max(Math.round(p.length / 120), 16);
+  text("PATTERN " + p.label + "   " + p.bars + " bars" + (r.how === "guess" ? "   (guessed from the pads)" : ""), x0 + 16, y0 + 30, COL.amber, 20, true);
+  const pads = [...p.pads].sort((a, b) => a - b).slice(0, 10);
+  const rows = Math.max(pads.length, 1), rh = Math.min(32, (h - 70) / rows);
+  const ix = x0 + 12, iw = 330;           // the pads of the pattern: their settings
+  const gx = x0 + iw + 20, gw = w - iw - 40;
+  const pos = playPosition(T), lenQ = p.length / 480;
+  const phase = pos ? (pos.q % lenQ) : -1;
+  const visible = Math.min(steps, 32), first = phase < 0 ? 0 : clamp(Math.floor(phase * 4 / visible) * visible, 0, steps - visible);
+  const cw = gw / visible;
+  pads.forEach((n, ri) => {
+    const y = y0 + 48 + ri * rh;
+    const info = padInfo.get(n), mi = info && info.info ? info.info : {};
+    const muted = mutedGuess(n, p, T);
+    g.globalAlpha = muted ? 0.4 : 1;
+    rect(ix, y + 2, 6, rh - 5, info && info.bus === 1 ? COL.blue : info && info.bus === 2 ? COL.red : "#444");
+    text(String.fromCharCode(65 + Math.floor(n / 16)) + (n % 16 + 1), ix + 14, y + rh * 0.68, COL.text, 17, true);
+    text(fit(info ? info.name : "", 11), ix + 58, y + rh * 0.68, COL.dim, 15);
+    const flags = [mi.Gate === "on" ? "G" : "", mi.Loop === "on" ? "L" : "", mi["One shot"] === "on" ? "O" : "", mi.Mode && mi.Mode !== "forward" ? "R" : ""].join("");
+    text((mi.Bus && mi.Bus !== "off" ? mi.Bus.replace("BUS ", "B") : "-") + " L" + (mi.Level || "?") + " " + (mi.Pan || "") + " " + flags, ix + 170, y + rh * 0.68, COL.text, 15);
+    if (muted) text("muted?", ix + 262, y + rh * 0.68, COL.bad, 15, true);
+    for (let s = 0; s < visible; s++) rect(gx + s * cw + 1, y + 1, cw - 2, rh - 3, (first + s) % 4 === 0 ? "#303030" : "#262626");
+    for (const nt of p.notes) {
+      if (nt[1] !== n) continue;
+      const s = nt[0] / 120 - first; if (s < -0.01 || s >= visible) continue;
+      const hgt = Math.max(5, (rh - 5) * nt[2] / 127);
+      let c = COL.amber;
+      if (phase >= 0) { const d = (phase * 4 - (nt[0] / 120)); if (d >= 0 && d < 1.5) c = mix("#ffb000", "#ffffff", 1 - d / 1.5); }
+      rect(gx + s * cw + 1, y + rh - 3 - hgt, Math.max(cw * 0.9, 5), hgt, c);
+    }
+    g.globalAlpha = 1;
+  });
+  if (phase >= 0) { const s = phase * 4 - first; if (s >= 0 && s <= visible) rect(gx + s * cw - 1, y0 + 42, 3, rows * rh + 8, COL.good); }
+  if (steps > visible) text("steps " + (first + 1) + "-" + (first + visible) + " of " + steps, x0 + w - 16, y0 + 30, COL.dim, 18, false, "right");
+  if (pads.length < p.pads.size) text("+" + (p.pads.size - pads.length) + " more pads", ix, y0 + h - 10, COL.dim, 16);
+}
+
+function knob(cx, cy, r, v, label, c, hist, T) {
+  const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
+  g.lineWidth = 9; g.lineCap = "round";
+  g.strokeStyle = "#2b2b2b"; g.beginPath(); g.arc(cx, cy, r, a0, a1); g.stroke();
+  if (v !== null) {
+    g.strokeStyle = c; g.beginPath(); g.arc(cx, cy, r, a0, a0 + (a1 - a0) * v / 127); g.stroke();
+    const a = a0 + (a1 - a0) * v / 127;
+    g.strokeStyle = "#fff"; g.lineWidth = 4; g.beginPath(); g.moveTo(cx + Math.cos(a) * (r - 22), cy + Math.sin(a) * (r - 22)); g.lineTo(cx + Math.cos(a) * (r + 3), cy + Math.sin(a) * (r + 3)); g.stroke();
+  }
+  g.lineCap = "butt";
+  text(v === null ? "-" : String(v), cx, cy + 9, v === null ? COL.dim : COL.text, 24, true, "center");
+  text(fit(label, 12), cx, cy + r + 28, COL.dim, 16, false, "center");
+  const sx = cx - 52, sy = cy + r + 36, sw = 104, sh = 26;
+  rect(sx, sy, sw, sh, "#222");
+  if (hist.length) {
+    g.strokeStyle = c; g.lineWidth = 2; g.beginPath();
+    const span = 6;
+    let pv = hist[0].v;
+    const pt = (t, val) => [sx + clamp((t - (T - span)) / span, 0, 1) * sw, sy + sh - 2 - (sh - 4) * val / 127];
+    const [x1, y1] = pt(Math.max(hist[0].t, T - span), pv); g.moveTo(x1, y1);
+    for (const e of hist) { const [x, y] = pt(e.t, pv); g.lineTo(x, y); const [x2, y2] = pt(e.t, e.v); g.lineTo(x2, y2); pv = e.v; }
+    const [xe, ye] = pt(T, pv); g.lineTo(xe, ye); g.stroke();
+  }
+}
+
+function drawFx(T) {
+  const x0 = 960, y0 = 80, w = 920, h = 600;
+  panel(x0, y0, w, h);
+  const bw = w / 2, bh = h / 2;
+  for (let bus = 1; bus <= 4; bus++) {
+    const x = x0 + ((bus - 1) % 2) * bw, y = y0 + Math.floor((bus - 1) / 2) * bh;
+    const c = bus === 1 ? COL.blue : bus === 2 ? COL.red : bus === 3 ? "#b48ead" : COL.good;
+    rect(x + 14, y + 14, 6, 60, c);
+    text("BUS " + bus, x + 32, y + 40, c, 24, true);
+    const name = fxName(bus, T), on = at(fxOn.get(bus) || [], T);
+    text(name ? fit(name, 22) : "effect unknown", x + 32, y + 68, name ? COL.text : COL.dim, 20);
+    if (on) { rect(x + bw - 104, y + 18, 76, 32, on.v ? COL.good : "#2b2b2b"); text(on.v ? "ON" : "OFF", x + bw - 66, y + 41, on.v ? "#111" : COL.dim, 20, true, "center"); }
+    const defs = ((window.SP404_FX || {}).params || {})[name] || [];
+    for (let i = 0; i < 3; i++) {
+      const cx = x + bw * (0.2 + 0.3 * i), cy = y + 140;
+      const v = ccValue(bus, 16 + i, T);
+      const label = defs[i] && defs[i].n ? defs[i].n : "CTRL " + (i + 1);
+      knob(cx, cy, 40, v, label, c, ccHistory(bus, 16 + i, T, 6), T);
+    }
+  }
+}
+
+function levelDb(v) { return v <= 0 ? -Infinity : 20 * Math.log10(v); }
+function drawMeter(T) {
+  const x0 = 960, y0 = 696, w = 920, h = 354;
+  panel(x0, y0, w, h, "LEVEL");
+  if (!peak) { text("no analysis of the audio", x0 + 16, y0 + 80, COL.dim, 22); return; }
+  const f = clamp(Math.floor(T_audio * AN.fps), 0, AN.frames - 1);
+  const bw = w - 190, bx = x0 + 60;
+  let clip = false;
+  for (let c = 0; c < 2; c++) {
+    let lvl = -Infinity;
+    for (let k = 0; k < 8; k++) { const ff = f - k; if (ff < 0) break; const v = peak[ff * 2 + c] / 65535; lvl = Math.max(lvl, levelDb(v) - k * 1.5); }
+    const fr = lvl === -Infinity ? 0 : clamp((lvl + 60) / 60, 0, 1);
+    const y = y0 + 46 + c * 40;
+    text(c ? "R" : "L", x0 + 24, y + 24, COL.dim, 22, true);
+    rect(bx, y, bw, 30, "#2b2b2b");
+    rect(bx, y, bw * clamp(fr, 0, 0.8), 30, COL.good);
+    if (fr > 0.8) rect(bx + bw * 0.8, y, bw * (clamp(fr, 0, 0.95) - 0.8), 30, "#e8d44a");
+    if (fr > 0.95) rect(bx + bw * 0.95, y, bw * (fr - 0.95), 30, COL.bad);
+    text(lvl === -Infinity ? "-inf" : lvl.toFixed(1), x0 + w - 20, y + 24, COL.dim, 20, false, "right");
+    for (let k = 0; k < 6; k++) if (peak[Math.max(f - k, 0) * 2 + c] > 65535 * 0.966) clip = true;
+  }
+  if (clip) { rect(x0 + w - 110, y0 + 10, 90, 28, COL.bad); text("CLIP", x0 + w - 65, y0 + 32, "#111", 20, true, "center"); }
+  const sx = x0 + 24, sy = y0 + 140, sw = w - 48, sh = 180, nb = AN.bands;
+  rect(sx, sy, sw, sh, "#161616");
+  const bwid = sw / nb;
+  for (let i = 0; i < nb; i++) {
+    let v = 0;
+    for (let k = 0; k < 5; k++) { const ff = f - k; if (ff < 0) break; v = Math.max(v, spec[ff * nb + i] / 255 - k * 0.04); }
+    const bh = clamp(v, 0, 1) * (sh - 8);
+    rect(sx + i * bwid + 1, sy + sh - 4 - bh, bwid - 2, Math.max(bh, 2), mix("#ffb000", "#ff5f5f", clamp(v - 0.6, 0, 0.4) / 0.4));
+  }
+  text("30 Hz", sx + 4, sy + sh + 18, COL.dim, 14); text("18 kHz", sx + sw, sy + sh + 18, COL.dim, 14, false, "right");
+}
+
+let T_audio = 0;
+function draw(audioTime) {
+  T_audio = audioTime;
+  const T = audioTime + OFFSET + NUDGE / 1000;
+  rect(0, 0, W, H, COL.bg);
+  drawHeader(T, audioTime);
+  drawPads(T);
+  drawPattern(T);
+  drawFx(T);
+  drawMeter(T);
+}
+
+// ---- the page: the audio drives the time
+const audio = document.getElementById("audio"), play = document.getElementById("play"), seek = document.getElementById("seek");
+const timeEl = document.getElementById("time"), nudgeEl = document.getElementById("nudge"), speed = document.getElementById("speed");
+let manual = null; // a program that sets the time itself (a render)
+function now() { return manual !== null ? manual : audio.currentTime; }
+function frame() {
+  const t = now();
+  draw(t);
+  const d = AN ? AN.duration : audio.duration || 0;
+  if (document.activeElement !== seek && d) seek.value = String(Math.round(t / d * 1000));
+  timeEl.textContent = mmss(t) + " / " + mmss(d);
+  play.textContent = audio.paused ? "play" : "pause";
+  requestAnimationFrame(frame);
+}
+play.onclick = () => (audio.paused ? audio.play() : audio.pause());
+seek.oninput = () => { const d = AN ? AN.duration : audio.duration; audio.currentTime = seek.value / 1000 * d; };
+speed.onchange = () => { audio.playbackRate = parseFloat(speed.value); };
+document.getElementById("full").onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+addEventListener("keydown", e => {
+  if (e.target.tagName === "SELECT") return;
+  if (e.code === "Space") { e.preventDefault(); play.onclick(); }
+  else if (e.key === "ArrowLeft") audio.currentTime = Math.max(audio.currentTime - (e.shiftKey ? 30 : 5), 0);
+  else if (e.key === "ArrowRight") audio.currentTime += e.shiftKey ? 30 : 5;
+  else if (e.key === "[") { NUDGE -= 10; nudgeEl.textContent = "sync " + (NUDGE >= 0 ? "+" : "") + NUDGE + " ms"; }
+  else if (e.key === "]") { NUDGE += 10; nudgeEl.textContent = "sync " + (NUDGE >= 0 ? "+" : "") + NUDGE + " ms"; }
+  else if (e.key === "f") document.getElementById("full").onclick();
+});
+
+async function start() {
+  const msg = document.getElementById("msg");
+  try {
+    const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
+    FILE = ev.file; prepare(ev.events, an);
+  } catch (e) { msg.textContent = "could not load the replay: " + e; msg.style.display = "block"; return; }
+  const t0 = parseFloat(params.get("t") || "0");
+  if (t0) audio.currentTime = t0;
+  // for a render: window.replay.setTime(t) draws the frame of that time and nothing moves by itself
+  window.replay = { duration: AN.duration, fps: AN.fps, offset: OFFSET, setTime(t) { manual = t; draw(t); return true; }, release() { manual = null; }, draw };
+  window.replayReady = true;
+  if (params.get("t") !== null && params.get("play") === null) manual = t0;
+  frame();
+}
+start();
+</script>
+</body>
+</html>

@@ -136,6 +136,8 @@ type snapPad struct {
 	Bus    int    `json:"bus,omitempty"`
 	Frames int    `json:"frames"`
 	Peaks  []int  `json:"peaks,omitempty"`
+	// Info is the pad's settings as the panel names them (Bus, Mute grp, Mode, Gate, Loop, One shot, Level, Pan, Pitch, Attack ...).
+	Info map[string]string `json:"info,omitempty"`
 }
 
 type snapPattern struct {
@@ -158,6 +160,14 @@ func (a *App) projectSnapshot() map[string]any {
 		sp := snapPad{N: n, Label: a.label(n), Name: p.Name, Frames: p.Frames}
 		if v := a.padValue(n, 0x7A, 0); v == 1 || v == 2 {
 			sp.Bus = int(v)
+		}
+		sp.Info = map[string]string{}
+		for _, grp := range a.padInfoGroups(n) {
+			for _, l := range grp {
+				if !l.head && l.label != "" && l.value != "" {
+					sp.Info[l.label] = l.value
+				}
+			}
 		}
 		if !a.lab.IsRemote(n) { // a sample that is on the unit is not fetched for this
 			if id, ok := a.padSample(n); ok && p.Frames > 0 {

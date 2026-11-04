@@ -145,6 +145,11 @@ picture of the sound) and the patterns with their notes, so that a replay needs 
 frame of the WAV was heard. The unit has to send its pad notes and clock over MIDI for the pads and the beat to show; its effect state is
 only known once it changes.
 
+**Replay.** `sp404 replay take.wav` (the event log is the file beside the WAV, or give it as a second argument) opens a page in the browser that plays
+the recording and draws what the unit did: the pads that were hit, the pattern with its playhead and the settings of its pads, the four buses
+with their effect and knobs and the movement of the knobs, the BPM, the level and the spectrum. The two files are enough: the log holds the
+project. The page can be driven frame by frame, so that it can be rendered into a video. A first draft; see `replay/`.
+
 ## The unit: whole projects, and live
 
 - **Whole projects.** Load a project of the unit into the editor, change it, send it back; or back one up to the computer and restore it.

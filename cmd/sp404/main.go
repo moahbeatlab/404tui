@@ -38,6 +38,9 @@ commands:
                  save and unit, with the same screens, layout, menus and features as the handheld version
   classic        the earlier terminal UI with its tabs (Perform, Looper, Config, ...), until they are in the one above
   serve          run without a screen and serve Perform to a browser on this network (phone, tablet)
+  replay <wav> [events.jsonl]
+                 show a recorded performance in the browser: the sound with what the unit did (pads, pattern, effects,
+                 level, spectrum); the event log is the file beside the WAV (name.events.jsonl) unless one is given
   midimap        print the map of the Faderfox EC4 for 404tui (one group of 16 pushes)
   check          check this installation: the computer, the program on a simulated unit, a plugged-in unit
   doctor         read-only checks of this program against the unit; run it first
@@ -222,6 +225,8 @@ func run(args []string, o options) error {
 		return runUI(o, l, false)
 	case "serve":
 		return runUI(o, l, true)
+	case "replay":
+		return runReplay(args[1:], o)
 	}
 
 	dev, err := open(o, l.Logger)

@@ -23,6 +23,9 @@ import (
 //go:embed static
 var assets embed.FS
 
+// Asset is a file of the page (fxdata.js, the names of the effects), for the programs that serve a page of their own.
+func Asset(name string) ([]byte, error) { return assets.ReadFile("static/" + name) }
+
 // Server is the web side of the program.
 type Server struct {
 	// Key is what a browser must give (as ?key=) to connect; empty lets everyone on the network in.
