@@ -17,7 +17,10 @@ import (
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
+	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/perflog"
 	"github.com/moahbeatlab/404tui/proto"
+	"github.com/moahbeatlab/404tui/record"
 	"github.com/moahbeatlab/404tui/sim"
 )
 
@@ -1461,5 +1464,70 @@ func TestSwitchingPatternsWhilePlayingLeavesTheLoopAlone(t *testing.T) {
 	a.toggle(a.rowPad(), 7)
 	if au.Loops <= before {
 		t.Fatalf("an edit of the pattern that plays is heard: %d, was %d", au.Loops, before)
+	}
+}
+
+func TestTheEventLogBesideARecording(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	kitKeys(t, a)
+	a.GoScreen(1)
+	a.pat = 3
+	a.ensurePattern()
+	a.autoRows()
+	a.toggle(a.rowPad(), 4)
+	dir := t.TempDir()
+	started := time.Now()
+	s := &record.Session{Path: filepath.Join(dir, "take.wav"), Started: started, Tool: "the program itself"}
+	a.startEventLog(s)
+	at := func(ms int) time.Time { return started.Add(time.Duration(ms) * time.Millisecond) }
+	a.midiEvent(midiin.Event{Kind: midiin.NoteOn, Channel: 1, Data1: 48, Data2: 100, At: at(500)}) // pad 1 of bank A
+	a.midiEvent(midiin.Event{Kind: midiin.NoteOff, Channel: 1, Data1: 48, At: at(700)})
+	a.midiEvent(midiin.Event{Kind: midiin.CC, Channel: 1, Data1: 16, Data2: 90, At: at(900)}) // CTRL 1 of bus 1
+	a.midiEvent(midiin.Event{Kind: midiin.CC, Channel: 2, Data1: 83, Data2: 12, At: at(1000)})
+	a.midiEvent(midiin.Event{Kind: midiin.CC, Channel: 2, Data1: 19, Data2: 127, At: at(1100)})
+	a.midiEvent(midiin.Event{Kind: midiin.Start, At: at(1200)})
+	a.perfNow = 3
+	a.eventLogTick()
+	a.stopEventLog()
+	if a.evlog != nil {
+		t.Fatal("the log is closed")
+	}
+	es, err := perflog.Read(perflog.PathFor(s.Path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]int{}
+	var proj perflog.Entry
+	for _, e := range es {
+		kinds[e["k"].(string)]++
+		if e["k"] == "project" {
+			proj = e
+		}
+	}
+	for _, k := range []string{"start", "project", "on", "off", "cc", "fx", "start", "pattern", "end"} {
+		if kinds[k] == 0 {
+			t.Errorf("the log has %q lines: %v", k, kinds)
+		}
+	}
+	if kinds["fx"] != 2 || kinds["cc"] != 3 {
+		t.Errorf("an effect and its switch are cc and fx: %v", kinds)
+	}
+	for _, e := range es {
+		if e["k"] == "on" && (e["bank"] != "A" || e["pad"].(float64) != 1 || e["t"].(float64) < 0.49 || e["t"].(float64) > 0.51) {
+			t.Errorf("the pad that was hit: %v", e)
+		}
+	}
+	data, _ := proj["data"].(map[string]any)
+	pads, _ := data["pads"].([]any)
+	pats, _ := data["patterns"].([]any)
+	if len(pads) != 3 || len(pats) == 0 {
+		t.Fatalf("the project line has the pads and the patterns: %d pads, %d patterns", len(pads), len(pats))
+	}
+	if first := pads[0].(map[string]any); first["label"] != "A1" || first["name"] == "" || len(first["peaks"].([]any)) != 32 {
+		t.Errorf("a pad has its name and a small picture: %v", first)
+	}
+	if p := pats[0].(map[string]any); p["label"] != "A3" || len(p["notes"].([]any)) != 1 {
+		t.Errorf("the pattern with its notes: %v", p)
 	}
 }

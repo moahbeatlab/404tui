@@ -122,6 +122,7 @@ func (a *App) midiStatus() string {
 // midiEvent takes in one message.
 func (a *App) midiEvent(e midiin.Event) {
 	a.mon.Feed(&a.clk, e)
+	a.logMIDI(e)
 	switch e.Kind {
 	case midiin.Clock, midiin.Start, midiin.Continue, midiin.Stop:
 		if e.Kind == midiin.Start {

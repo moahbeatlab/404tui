@@ -34,12 +34,20 @@ type Session struct {
 	Path, Tool string
 	Started    time.Time
 
-	stop func() error
-	done chan struct{}
-	once sync.Once
-	mu   sync.Mutex
-	err  error
-	tail bytes.Buffer
+	first time.Time // native capture: when the first frame of the file was heard
+	stop  func() error
+	done  chan struct{}
+	once  sync.Once
+	mu    sync.Mutex
+	err   error
+	tail  bytes.Buffer
+}
+
+// FirstFrame is when the first frame of the file was heard (native capture; with a recorder program it is not known).
+func (s *Session) FirstFrame() (time.Time, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.first, !s.first.IsZero()
 }
 
 // Done is closed when the recording has ended, because it was stopped or because the program

@@ -17,6 +17,7 @@ func (a *App) ToggleRecording() {
 	if a.rec != nil {
 		s := a.rec
 		a.rec = nil
+		a.stopEventLog()
 		a.say("stopping the recording...", false)
 		go func() {
 			err := s.Stop()
@@ -34,6 +35,7 @@ func (a *App) ToggleRecording() {
 		return
 	}
 	a.rec = s
+	a.startEventLog(s)
 	a.say("recording to "+short2(s.Path, 40)+" ("+s.Tool+")", false)
 }
 
@@ -57,6 +59,7 @@ func (a *App) recordingTick() {
 		select {
 		case <-s.Done():
 			a.rec = nil
+			a.stopEventLog()
 			err := s.Err()
 			if err == nil {
 				err = fmt.Errorf("the recorder stopped")

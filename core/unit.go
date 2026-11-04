@@ -84,6 +84,7 @@ func (a *App) Tick() {
 	a.tapTick()
 	a.liveTick()
 	a.fetchTick()
+	a.eventLogTick()
 	a.recordingTick()
 	a.midiTick()
 	a.levelTick()

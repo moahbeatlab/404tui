@@ -212,6 +212,11 @@ func startNativeRecording(dir, device string) (*Session, error) {
 		if closed || werr != nil {
 			return
 		}
+		if data == 0 { // the first frame was heard one buffer ago
+			s.mu.Lock()
+			s.first = time.Now().Add(-time.Duration(len(frames)/2) * time.Second / wavRate)
+			s.mu.Unlock()
+		}
 		buf = buf[:0]
 		for _, v := range frames {
 			n := int32(math.Max(-1, math.Min(1, float64(v))) * 8388607)
