@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,8 @@ type Replay struct {
 	title                 string
 	style                 json.RawMessage
 	captions              []Caption
+	chapters              []Chapter
+	busNotes              []BusNote
 	adopted               bool
 	cues                  []Cue
 }
@@ -44,6 +47,45 @@ type Caption struct {
 	From float64 `json:"from"`
 	To   float64 `json:"to"`
 	Text string  `json:"text"`
+	// Focus is what the picture is turned to while the caption shows ("pads", "pad:A3", "pattern", "bus:2", "buses", "level", "events", "tempo"); the rest is
+	// blurred and dimmed, the target stays sharp. Empty for none.
+	Focus string `json:"focus,omitempty"`
+}
+
+// BusNote says what a bus is used for from a time of the audio on (seconds): the effect assigned to a bus can change in the course of a take.
+type BusNote struct {
+	Bus  int     `json:"bus"` // 1 to 4
+	T    float64 `json:"t"`
+	Text string  `json:"text"`
+}
+
+// Chapter starts a part of the video at a time of the audio (seconds): the chapters of the video on YouTube, and the label on the picture.
+type Chapter struct {
+	T     float64 `json:"t"`
+	Title string  `json:"title"`
+}
+
+// ChaptersText is the list as YouTube wants it in a description: "0:00 Title" a line each. The first chapter has to start at 0:00, so one is put
+// there when the list does not begin with it.
+func ChaptersText(chs []Chapter) string {
+	c := append([]Chapter{}, chs...)
+	sort.Slice(c, func(i, j int) bool { return c[i].T < c[j].T })
+	if len(c) == 0 {
+		return ""
+	}
+	if c[0].T > 0.5 {
+		c = append([]Chapter{{T: 0, Title: "Intro"}}, c...)
+	}
+	var b strings.Builder
+	for _, ch := range c {
+		t := int(ch.T + 0.0001)
+		if t >= 3600 {
+			fmt.Fprintf(&b, "%d:%02d:%02d %s\n", t/3600, t/60%60, t%60, strings.TrimSpace(ch.Title))
+		} else {
+			fmt.Fprintf(&b, "%d:%02d %s\n", t/60, t%60, strings.TrimSpace(ch.Title))
+		}
+	}
+	return b.String()
 }
 
 // meta is what is kept beside the event log: the title of the video and the cues (an older file is just the list of cues).
@@ -53,6 +95,8 @@ type meta struct {
 	// PatternsAdopted says the patterns of the event log were taken over as cues, to be edited: then the cues are the whole list.
 	PatternsAdopted bool            `json:"patterns_adopted,omitempty"`
 	Captions        []Caption       `json:"captions,omitempty"`
+	Chapters        []Chapter       `json:"chapters,omitempty"`
+	BusNotes        []BusNote       `json:"bus_notes,omitempty"`
 	Style           json.RawMessage `json:"style,omitempty"` // colours, logo, handle, background: the page's own object, kept as it is
 }
 
@@ -129,6 +173,36 @@ func (r *Replay) SetCaptions(c []Caption) error {
 	return r.save()
 }
 
+// BusNotes are the changes of what the buses are used for.
+func (r *Replay) BusNotes() []BusNote {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]BusNote{}, r.busNotes...)
+}
+
+// SetBusNotes replaces the bus notes and keeps them in the file.
+func (r *Replay) SetBusNotes(n []BusNote) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.busNotes = append([]BusNote{}, n...)
+	return r.save()
+}
+
+// Chapters are the parts of the video.
+func (r *Replay) Chapters() []Chapter {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]Chapter{}, r.chapters...)
+}
+
+// SetChapters replaces the chapters and keeps them in the file.
+func (r *Replay) SetChapters(c []Chapter) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.chapters = append([]Chapter{}, c...)
+	return r.save()
+}
+
 // Style is the look of the video as the page saved it.
 func (r *Replay) Style() json.RawMessage {
 	r.mu.Lock()
@@ -156,13 +230,13 @@ func (r *Replay) SetStyle(b []byte) error {
 }
 
 func (r *Replay) save() error {
-	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 && len(r.captions) == 0 && !r.adopted {
+	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 && len(r.captions) == 0 && len(r.chapters) == 0 && len(r.busNotes) == 0 && !r.adopted {
 		if err := os.Remove(r.CuesPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 		return nil
 	}
-	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues, PatternsAdopted: r.adopted, Captions: r.captions, Style: r.style}, "", " ")
+	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues, PatternsAdopted: r.adopted, Captions: r.captions, Chapters: r.chapters, BusNotes: r.busNotes, Style: r.style}, "", " ")
 	return os.WriteFile(r.CuesPath, b, 0o644)
 }
 
@@ -189,7 +263,7 @@ func Load(audioPath, eventsPath string) (*Replay, error) {
 	if b, err := os.ReadFile(r.CuesPath); err == nil {
 		var m meta
 		if json.Unmarshal(b, &m) == nil {
-			r.title, r.cues, r.style, r.captions, r.adopted = m.Title, m.Cues, m.Style, m.Captions, m.PatternsAdopted
+			r.title, r.cues, r.style, r.captions, r.chapters, r.busNotes, r.adopted = m.Title, m.Cues, m.Style, m.Captions, m.Chapters, m.BusNotes, m.PatternsAdopted
 		} else {
 			json.Unmarshal(b, &r.cues) // the first form of the file: the list of cues
 		}
@@ -220,7 +294,7 @@ func (r *Replay) Handler() http.Handler {
 	})
 	mux.HandleFunc("/events.json", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style(), "captions": r.Captions(), "adopted": r.Adopted()})
+		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style(), "captions": r.Captions(), "chapters": r.Chapters(), "busnotes": r.BusNotes(), "adopted": r.Adopted()})
 	})
 	mux.HandleFunc("/captions", func(w http.ResponseWriter, req *http.Request) {
 		var c []Caption
@@ -233,6 +307,34 @@ func (r *Replay) Handler() http.Handler {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/chapters", func(w http.ResponseWriter, req *http.Request) {
+		var c []Chapter
+		if req.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20)).Decode(&c) != nil {
+			http.Error(w, "POST the chapters", http.StatusBadRequest)
+			return
+		}
+		if err := r.SetChapters(c); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/busnotes", func(w http.ResponseWriter, req *http.Request) {
+		var n []BusNote
+		if req.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20)).Decode(&n) != nil {
+			http.Error(w, "POST the bus notes", http.StatusBadRequest)
+			return
+		}
+		if err := r.SetBusNotes(n); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/chapters.txt", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		io.WriteString(w, ChaptersText(r.Chapters()))
 	})
 	mux.HandleFunc("/style", func(w http.ResponseWriter, req *http.Request) {
 		b, err := io.ReadAll(http.MaxBytesReader(w, req.Body, 8<<20)) // a logo and a background picture are in it

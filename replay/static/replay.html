@@ -17,8 +17,15 @@
   #ph { position:absolute; width:2px; background:rgba(255,255,255,.8); pointer-events:none; z-index:2; }
   #tl { position:relative; display:grid; grid-template-columns:72px minmax(0, 1fr); align-items:center; row-gap:4px; column-gap:10px; }
   #tl .lbl { color:var(--dim); font-size:11px; text-align:right; }
-  #cues, #capslane { position:relative; height:26px; margin:0 8px; background:#1d1d20; border-radius:4px; }
-  #capslane { height:22px; }
+  #buslane, #chaplane, #cues, #capslane { position:relative; height:26px; margin:0 8px; background:#1d1d20; border-radius:4px; }
+  #capslane, #chaplane, #buslane { height:22px; }
+  #buslane .bn { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(255,255,255,.1); border-left:3px solid var(--bc, #888); border-radius:3px; color:var(--text); font-size:11px; padding:2px 6px 0 10px; white-space:nowrap; cursor:pointer; touch-action:none; max-width:30%; overflow:hidden; text-overflow:ellipsis; }
+  #buslane .bn .hd { position:absolute; left:-5px; top:0; bottom:0; width:12px; cursor:ew-resize; }
+  #bpop { position:fixed; bottom:calc(var(--barh, 110px) + 8px); display:none; gap:6px; align-items:center; background:#1b1b1e; border:1px solid #34343a; padding:8px 10px; z-index:6; }
+  #bpop.open { display:flex; }
+  #bpop button, #bpop input, #bpop select { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; cursor:pointer; }
+  #chaplane .ch { position:absolute; top:0; bottom:0; box-sizing:border-box; border-left:2px solid #5fd0a0; background:rgba(95,208,160,.16); color:var(--text); font-size:11px; padding:3px 6px 0 11px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; touch-action:none; }
+  #chaplane .ch .hd { position:absolute; left:-4px; top:0; bottom:0; width:12px; cursor:ew-resize; }
   #seek { width:100%; min-width:0; box-sizing:border-box; margin:0; accent-color:var(--amber); }
   html, body { overflow-x:hidden; }
   #cues .seg { position:absolute; top:0; bottom:0; box-sizing:border-box; border-left:2px solid var(--amber); background:rgba(255,176,0,.2); color:var(--text); font-size:12px; padding:4px 6px 0 11px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; touch-action:none; }
@@ -27,6 +34,15 @@
   #capslane .cap { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(95,175,255,.22); border-left:2px solid #5fafff; border-radius:3px; font-size:11px; padding:2px 6px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:grab; touch-action:none; }
   #capslane .cap .hd { position:absolute; top:0; bottom:0; width:9px; cursor:ew-resize; }
   #capslane .cap .hd.l { left:-3px; } #capslane .cap .hd.r { right:-1px; }
+  #chbox { position:fixed; right:16px; bottom:calc(var(--barh, 110px) + 8px); background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; width:min(460px, 92vw); }
+  #chbox.open { display:flex; }
+  #chbox textarea { background:#2b2b2b; color:var(--text); border:0; padding:8px; font:inherit; resize:vertical; }
+  #chbox .h2 { color:var(--text); } #chbox .h { color:#777; font-size:11px; } #chbox .row { display:flex; gap:8px; }
+  #chbox button, #chpop button, #chpop input { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; cursor:pointer; }
+  #chpop { position:fixed; bottom:calc(var(--barh, 110px) + 8px); display:none; gap:6px; align-items:center; background:#1b1b1e; border:1px solid #34343a; padding:8px 10px; z-index:6; }
+  #chpop.open { display:flex; }
+  #capbox .crow { display:flex; flex-direction:column; gap:4px; padding-bottom:8px; border-bottom:1px solid #2a2a2e; }
+  #capbox select { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
   #ctl { display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; }
   #ctl .grp { display:flex; gap:8px; align-items:center; }
   #ctl .grp.right { margin-left:auto; }
@@ -35,7 +51,7 @@
   #cuepop input, #cuepop select, #cuepop button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
   #time { min-width:150px; text-align:right; color:var(--dim); }
   #nudge { color:var(--dim); min-width:110px; }
-  body.nohud #bar, body.nohud #stylebox { display:none !important; }
+  body.nohud #bar, body.nohud #stylebox, body.nohud #chbox, body.nohud #chpop, body.nohud #bpop { display:none !important; }
   #capbox { position:fixed; right:16px; bottom:calc(var(--barh, 110px) + 8px); background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; width:min(520px, 92vw); max-height:70vh; overflow:auto; }
   #capbox.open { display:flex; }
   #capbox label.g { display:flex; gap:8px; align-items:center; color:var(--dim); }
@@ -57,23 +73,36 @@
 <div id="stage"><canvas id="c" width="1920" height="1080"></canvas></div>
 <div id="bar">
   <div id="tl">
+    <span class="lbl">chapters</span><div id="chaplane" title="the chapters of the video: click one to edit it, drag its left edge to move it"></div>
     <span class="lbl">patterns</span><div id="cues" title="the patterns: click one to edit it, drag its left edge to move it"></div>
+    <span class="lbl">bus changes</span><div id="buslane" title="what a bus is used for, from a time on: click one to edit it, drag its left edge to move it"></div>
     <span class="lbl">captions</span><div id="capslane" title="the captions: click one to edit it"></div>
     <div id="ph"></div>
     <span class="lbl"></span><input id="seek" type="range" min="0" max="1000" value="0">
   </div>
   <div id="ctl">
-    <span class="grp"><button id="play" title="Space">play</button><span id="time">0:00.0</span></span>
+    <span class="grp"><button id="play" title="Space">play</button><span id="time">0:00.0</span>
+      <button id="undo" title="Ctrl-Z">undo</button><button id="redo" title="Ctrl-Shift-Z">redo</button></span>
     <span class="grp"><input id="title" placeholder="title" size="18" title="the title shown in the video">
       <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button></span>
     <span class="grp"><select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
       <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span></span>
-    <span class="grp right"><button id="capbtn" title="text shown at times of the take">captions</button>
+    <span class="grp right"><button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
+      <button id="chbtn" title="the chapters, and the list for YouTube">chapters</button>
+      <button id="capbtn" title="text shown at times of the take">captions</button>
       <button id="stylebtn" title="colours, background, logo, handle">style</button>
       <button id="full" title="f">full screen</button></span>
   </div>
   <div id="cuepop"></div>
 </div>
+<div id="chbox">
+  <div class="h2">chapters <span class="h">(they show on the picture, and as the list for the description on YouTube)</span></div>
+  <textarea id="chtext" readonly rows="6" placeholder="no chapters yet"></textarea>
+  <div id="chhint" class="h"></div>
+  <div class="row"><button id="chadd" title="a chapter from the time you are at">add a chapter here</button><button id="chcopy">copy the list</button></div>
+</div>
+<div id="chpop"></div>
+<div id="bpop"></div>
 <div id="capbox">
   <div id="caplist"></div>
   <label class="g">fade in and out <input id="c_fade" type="number" min="0" max="3" step="0.05" style="width:64px"> s <span class="h">for all captions</span></label>
@@ -90,10 +119,11 @@
   <label>picture <input id="s_bgimg" type="file" accept="image/*"></label>
   <label>picture dimmed <input id="s_bgdim" type="range" min="0" max="95" value="60"></label>
   <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
-  <label>BUS 1 is <span class="bw"><select id="s_bussel0"></select> <input id="s_bus0" placeholder="your own text" size="18" hidden></span></label>
-  <label>BUS 2 is <span class="bw"><select id="s_bussel1"></select> <input id="s_bus1" placeholder="your own text" size="18" hidden></span></label>
-  <label>BUS 3 is <span class="bw"><select id="s_bussel2"></select> <input id="s_bus2" placeholder="your own text" size="18" hidden></span></label>
-  <label>BUS 4 is <span class="bw"><select id="s_bussel3"></select> <input id="s_bus3" placeholder="your own text" size="18" hidden></span></label>
+  <label>BUS 1 at the start <span class="bw"><select id="s_bussel0"></select> <input id="s_bus0" placeholder="your own text" size="18" hidden></span></label>
+  <label>BUS 2 at the start <span class="bw"><select id="s_bussel1"></select> <input id="s_bus1" placeholder="your own text" size="18" hidden></span></label>
+  <label>BUS 3 at the start <span class="bw"><select id="s_bussel2"></select> <input id="s_bus2" placeholder="your own text" size="18" hidden></span></label>
+  <label>BUS 4 at the start <span class="bw"><select id="s_bussel3"></select> <input id="s_bus3" placeholder="your own text" size="18" hidden></span></label>
+  <div class="h" style="color:#777;font-size:11px">later in the take: the "bus change" button</div>
   <label>handle <input id="s_handle" placeholder="@yourname" size="18"></label>
   <label>subtitle <input id="s_sub" placeholder="under the title" size="22"></label>
   <button id="s_reset">reset the look</button>
@@ -166,7 +196,7 @@ function rebuildCues() {
     box.appendChild(sp);
   });
 }
-function saveCues() { fetch("/cues", { method: "POST", body: JSON.stringify({ cues, adopted }) }).catch(() => {}); }
+function saveCues() { fetch("/cues", { method: "POST", body: JSON.stringify({ cues, adopted }) }).catch(() => {}); histChanged(); }
 function cueOf(it) { if (it.c) return it.c; adoptNow(); return cues.find(c => Math.abs(c.t - it.t) < 0.05 && c.label === it.label) || cues.find(c => Math.abs(c.t - it.t) < 0.05); }
 function startDrag(ev, sp, it) {
   ev.preventDefault(); try { sp.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
@@ -275,7 +305,7 @@ function prepare(events, analysis, cuesIn, adoptedIn) {
   for (const p of [...patBySlot.values()].sort((a, b) => a.slot - b.slot)) { const o = document.createElement("option"); o.value = p.label; o.textContent = "pattern " + p.label + " (" + p.pads.size + " pads)"; sel.appendChild(o); }
   const want = params.get("pattern");
   const ti = document.getElementById("title"); ti.value = TITLE;
-  let tt = null; ti.oninput = () => { TITLE = ti.value; clearTimeout(tt); tt = setTimeout(() => fetch("/title", { method: "POST", body: JSON.stringify({ title: TITLE }) }).catch(() => {}), 400); };
+  let tt = null; ti.oninput = () => { TITLE = ti.value; histChanged("text"); clearTimeout(tt); tt = setTimeout(() => fetch("/title", { method: "POST", body: JSON.stringify({ title: TITLE }) }).catch(() => {}), 400); };
   if (want && patByLabel.has(want)) { chosen = want; sel.value = want; }
   sel.onchange = () => {
     if (!sel.value) return;
@@ -656,7 +686,7 @@ function drawFx(T) {
     rect(x + 12, y0 + 14, 5, 50, c);
     text("BUS " + bus, x + 26, y0 + 38, c, 22, true);
     const name = fxName(bus, T), on = at(fxOn.get(bus) || [], T);
-    const note = ((STYLE.busNotes || [])[bus - 1] || "").trim(); // what the bus is used for, as written in the style panel
+    const note = busNoteAt(bus, T_audio); // what the bus is used for at this time: the latest "bus change", else the one from the start
     // your description says what the bus is where the unit only says "Direct FX n" or nothing; a real effect name stays
     const shown = note && (!name || /^Direct FX/i.test(name)) ? note : name || note;
     text(shown ? fit(shown, 19) : "effect unknown", x + 26, y0 + 62, shown ? COL.text : COL.dim, 17);
@@ -790,6 +820,53 @@ function drawBrand() {
   if (sub) text(fit(sub, 44), W / 2, y + lh + 34, COL.dim, 24, false, "center");
 }
 
+// what a bus is used for at a time of the audio: the latest change before it, else what the look says for the start
+function busNoteAt(bus, A) {
+  let best = null;
+  for (const n of BUSN) if (n.bus === bus && n.t <= A + 0.001 && (!best || n.t >= best.t)) best = n;
+  return String(best ? best.text : ((STYLE.busNotes || [])[bus - 1] || "")).trim();
+}
+// the choices for what a bus is used for: kinds, the unit's effects, or your own text
+function fillBusSelect(sl) {
+  sl.textContent = ""; let into = sl;
+  const allFx = [...new Set([...((window.SP404_FX || {}).fx12 || []), ...((window.SP404_FX || {}).fx34 || [])])];
+  const group = t => { into = document.createElement("optgroup"); into.label = t; sl.appendChild(into); };
+  const add = (v, t) => { const o = document.createElement("option"); o.value = v; o.textContent = t; into.appendChild(o); };
+  add("", "not set");
+  group("kinds"); for (const k of ["Direct FX 1-5", "Reverb", "Delay", "Filter", "Drive / distortion", "Lo-fi", "Modulation", "Looper / scatter", "Resample"]) add(k, k);
+  group("the unit's effects"); for (const n of allFx) if (n && n !== "(OFF)") add(n, n);
+  group("other"); add("__custom__", "my own text...");
+}
+
+// ---- undo and redo: the patterns, the captions, the chapters and the title (not the look). A step is a whole picture of them, taken
+// after every change; typing in one text counts as one step.
+let CHAPS = [], BUSN = [];
+const HIST = { undo: [], redo: [], last: null, kind: "", at: 0 };
+const histState = () => JSON.stringify({ cues, adopted, caps: CAPS, chaps: CHAPS, busn: BUSN, title: TITLE });
+function histButtons() {
+  const u = document.getElementById("undo"), r = document.getElementById("redo");
+  if (u) { u.disabled = !HIST.undo.length; u.style.opacity = HIST.undo.length ? 1 : 0.4; }
+  if (r) { r.disabled = !HIST.redo.length; r.style.opacity = HIST.redo.length ? 1 : 0.4; }
+}
+function histInit() { HIST.last = histState(); histButtons(); }
+function histChanged(kind) {
+  if (HIST.last === null) return;
+  const now = histState(); if (now === HIST.last) return;
+  const t = Date.now();
+  if (!(kind === "text" && HIST.kind === "text" && t - HIST.at < 1000)) { HIST.undo.push(HIST.last); if (HIST.undo.length > 100) HIST.undo.shift(); }
+  HIST.redo = []; HIST.last = now; HIST.kind = kind || ""; HIST.at = t; histButtons();
+}
+function histApply(str) {
+  const st = JSON.parse(str), post = (u, b) => fetch(u, { method: "POST", body: JSON.stringify(b) }).catch(() => {});
+  cues = st.cues; adopted = st.adopted; CAPS = st.caps; CHAPS = st.chaps; BUSN = st.busn || []; TITLE = st.title;
+  document.getElementById("title").value = TITLE;
+  for (const id of ["cuepop", "chpop", "bpop"]) document.getElementById(id).classList.remove("open");
+  rebuildCues(); if (window.refreshCapLane) window.refreshCapLane(); if (window.refreshChapters) window.refreshChapters(); if (window.refreshBusNotes) window.refreshBusNotes(); if (window.refreshCapList) window.refreshCapList();
+  post("/cues", { cues, adopted }); post("/captions", CAPS); post("/chapters", CHAPS); post("/busnotes", BUSN); post("/title", { title: TITLE });
+}
+function undo() { if (!HIST.undo.length) return; HIST.redo.push(HIST.last); HIST.last = HIST.undo.pop(); HIST.kind = ""; histApply(HIST.last); histButtons(); }
+function redo() { if (!HIST.redo.length) return; HIST.undo.push(HIST.last); HIST.last = HIST.redo.pop(); HIST.kind = ""; histApply(HIST.last); histButtons(); }
+
 // ---- captions: a line of text for a stretch of the take (to say why something was done), always in the same place of a format
 let CAPS = [];
 function wrapText(str, maxW, px) {
@@ -799,26 +876,65 @@ function wrapText(str, maxW, px) {
   if (cur) lines.push(cur);
   return lines;
 }
+// the place of a spotlight target on the picture: [x, y, w, h]
+function focusRect(f, T) {
+  if (!f) return null;
+  if (f === "pads") return L.pads;
+  if (f === "pattern") return L.pattern;
+  if (f === "buses") return L.fx;
+  if (f === "events") return L.feed;
+  if (f === "level") return L.meter;
+  if (f === "tempo") return VERT ? L.meter : [L.meter[0] + 24, L.meter[1] + L.meter[3] - 68, L.meter[2] - 48, 54];
+  if (f.startsWith("bus:")) { const n = Math.max(1, Math.min(4, +f.slice(4) || 1)), [x, y, w, h] = L.fx; return [x + (n - 1) * w / 4, y, w / 4, h]; }
+  if (f.startsWith("pad:")) { // a pad of the bank on show (else the pads)
+    const lab = f.slice(4).toUpperCase(), idx = parseInt(lab.slice(1), 10) - 1;
+    if (!(idx >= 0 && idx < 16) || bankInView(T) !== lab[0]) return L.pads;
+    const [x0, y0, w, h] = L.pads, gap = 12, tw = (w - 40 - 3 * gap) / 4, th = (h - 18 - 56 - 3 * gap) / 4;
+    return [x0 + 20 + (idx % 4) * (tw + gap), y0 + 18 + Math.floor(idx / 4) * (th + gap), tw, th];
+  }
+  return null;
+}
+// the chapter that is running, as a small label at the bottom left (a bit brighter in the first seconds)
+function drawChapter(A) {
+  if (!CHAPS.length) return;
+  const cs = CHAPS.slice().sort((a, b) => a.t - b.t); let i = -1;
+  for (let k = 0; k < cs.length; k++) if (cs[k].t <= A + 0.001) i = k;
+  if (i < 0 || !cs[i].title) return;
+  const fresh = A - cs[i].t < 3, x = 44, y = VERT ? 1776 : 1069;
+  rect(x, y - 14, 8, 8, COL.amber);
+  text(cs[i].title, x + 18, y, fresh ? COL.text : COL.dim, 22, fresh);
+  text((i + 1) + " / " + cs.length, x + 18 + (function () { g.font = FONT(22 * (VERT ? 1.22 : 1), fresh); return g.measureText(cs[i].title).width; })() + 16, y, COL.dim, 18);
+}
 let blurLayer = null;
 const easeOut = u => 1 - Math.pow(1 - u, 3);
 // the caption is in front of the picture, in the middle of it (the same place in both formats), and the picture behind it is blurred and
 // dimmed. It fades in and out (the time is one setting for all captions: "caption fade" in the style panel): the card rises and grows
 // a little as it comes, and the blur and the dimming come and go with it.
 function drawCaption(A) {
-  const c = CAPS.find(c => c.text && A >= c.from && A < c.to); if (!c) return;
+  const c = CAPS.find(c => (c.text || c.focus) && A >= c.from && A < c.to); if (!c) return;
   const fd = clamp(+STYLE.capFade || 0, 0, 3), span = Math.max(Math.min(fd, (c.to - c.from) / 2), 0.0001);
   const fade = fd === 0 ? 1 : easeOut(clamp(Math.min(A - c.from, c.to - A) / span, 0, 1));
   if (!blurLayer || blurLayer.width !== W || blurLayer.height !== H) { blurLayer = document.createElement("canvas"); blurLayer.width = W; blurLayer.height = H; }
   const bx = blurLayer.getContext("2d");
   bx.clearRect(0, 0, W, H); bx.drawImage(cv, 0, 0);
   g.save(); const blurPx = clamp(STYLE.capBlur === undefined ? 3 : +STYLE.capBlur, 0, 20), dimA = clamp(STYLE.capDim === undefined ? 0.28 : +STYLE.capDim, 0, 0.9);
+  const fr = focusRect(c.focus, A + OFFSET + NUDGE / 1000);
+  g.save();
+  if (fr) { g.beginPath(); g.rect(0, 0, W, H); g.roundRect(fr[0] - 4, fr[1] - 4, fr[2] + 8, fr[3] + 8, 14); g.clip("evenodd"); } // the target stays sharp
   if (blurPx > 0) { g.save(); g.filter = "blur(" + (blurPx * fade).toFixed(1) + "px)"; g.drawImage(blurLayer, 0, 0); g.restore(); }
-  g.globalAlpha = dimA * fade; rect(0, 0, W, H, "#000"); g.globalAlpha = 1;
+  g.globalAlpha = (fr ? Math.max(dimA, 0.35) : dimA) * fade; rect(0, 0, W, H, "#000"); g.globalAlpha = 1;
+  g.restore();
+  if (fr) { g.save(); g.globalAlpha = fade; g.strokeStyle = COL.amber; g.lineWidth = 4; g.shadowColor = COL.amber; g.shadowBlur = 24; g.beginPath(); g.roundRect(fr[0] - 4, fr[1] - 4, fr[2] + 8, fr[3] + 8, 14); g.stroke(); g.restore(); }
+  if (!c.text) return;
   const px = 34, k = VERT ? 1.22 : 1, bwMax = Math.min(W - 80, VERT ? 940 : 1260);
   const lines = wrapText(c.text, bwMax - 96, px).slice(0, 5), lh = px * k * 1.32, bh = lines.length * lh + 52;
   g.font = FONT(px * k, false); // the card is as wide as its longest line (a short caption gets a small card)
   const bw = clamp(Math.max(...lines.map(l => g.measureText(l).width)) + 104, 360, bwMax);
-  const x0 = (W - bw) / 2, y0 = (H - bh) / 2;
+  const x0 = (W - bw) / 2; let y0 = (H - bh) / 2;
+  if (fr && fr[0] < x0 + bw && fr[0] + fr[2] > x0 && fr[1] < y0 + bh && fr[1] + fr[3] > y0) { // the card does not cover what is spotlighted: above or below it
+    y0 = fr[1] + fr[3] / 2 < H / 2 ? fr[1] + fr[3] + 28 : fr[1] - bh - 28;
+    y0 = clamp(y0, 20, H - bh - 20);
+  }
   g.save(); g.globalAlpha = fade;
   g.translate(W / 2, H / 2 + (1 - fade) * 24); g.scale(0.96 + 0.04 * fade, 0.96 + 0.04 * fade); g.translate(-W / 2, -H / 2); // rises and grows as it comes
   g.shadowColor = "rgba(0,0,0,0.5)"; g.shadowBlur = 30; rrect(x0, y0, bw, bh, 18, COL.panel); g.shadowBlur = 0;
@@ -840,6 +956,7 @@ function draw(audioTime) {
   drawMeter(T);
   drawFeed(T);
   drawCaption(audioTime);
+  drawChapter(audioTime);
   drawBrand();
 }
 
@@ -856,8 +973,8 @@ function frame() {
   const d = AN ? AN.duration : audio.duration || 0;
   if (!seeking && d) seek.value = String(Math.round(t / d * 1000)); // it follows the time, except while it is being dragged
   if (d) { // the playhead through the lanes: the same x as the lanes' times
-    const tl = document.getElementById("tl").getBoundingClientRect(), ln = document.getElementById("cues").getBoundingClientRect(), cp = document.getElementById("capslane").getBoundingClientRect();
-    ph.style.left = (ln.left - tl.left + clamp(t / d, 0, 1) * ln.width - 1) + "px"; ph.style.top = (ln.top - tl.top) + "px"; ph.style.height = (cp.bottom - ln.top) + "px";
+    const tl = document.getElementById("tl").getBoundingClientRect(), ln = document.getElementById("cues").getBoundingClientRect(), top0 = document.getElementById("chaplane").getBoundingClientRect(), cp = document.getElementById("capslane").getBoundingClientRect();
+    ph.style.left = (ln.left - tl.left + clamp(t / d, 0, 1) * ln.width - 1) + "px"; ph.style.top = (top0.top - tl.top) + "px"; ph.style.height = (cp.bottom - top0.top) + "px";
   }
   timeEl.textContent = mmss(t) + " / " + mmss(d);
   play.textContent = audio.paused ? "play" : "pause";
@@ -868,9 +985,13 @@ seek.addEventListener("pointerdown", () => { seeking = true; });
 addEventListener("pointerup", () => { seeking = false; });
 seek.oninput = () => { const d = AN ? AN.duration : audio.duration; audio.currentTime = seek.value / 1000 * d; };
 speed.onchange = () => { audio.playbackRate = parseFloat(speed.value); };
+document.getElementById("undo").onclick = () => undo();
+document.getElementById("redo").onclick = () => redo();
 document.getElementById("full").onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
 addEventListener("keydown", e => {
   if (e.target.tagName === "SELECT" || (e.target.tagName === "INPUT" && e.target.type !== "range")) return; // typing in a field is not a key for the player
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
   if (e.code === "Space") { e.preventDefault(); play.onclick(); }
   else if (e.key === "ArrowLeft") audio.currentTime = Math.max(audio.currentTime - (e.shiftKey ? 30 : 5), 0);
   else if (e.key === "ArrowRight") audio.currentTime += e.shiftKey ? 30 : 5;
@@ -883,26 +1004,37 @@ addEventListener("keydown", e => {
 function initCaptions() {
   const box = document.getElementById("capbox"), list = document.getElementById("caplist");
   let timer = null;
-  const save = () => { clearTimeout(timer); timer = setTimeout(() => fetch("/captions", { method: "POST", body: JSON.stringify(CAPS) }).catch(() => {}), 400); if (window.refreshCapLane) window.refreshCapLane(); };
+  const save = kind => { clearTimeout(timer); timer = setTimeout(() => fetch("/captions", { method: "POST", body: JSON.stringify(CAPS) }).catch(() => {}), 400); if (window.refreshCapLane) window.refreshCapLane(); histChanged(kind); };
+  const FOCUS = [["", "no spotlight"], ["pads", "the pads"], ["pad", "one pad..."], ["pattern", "the pattern"], ["buses", "the four buses"], ["bus:1", "bus 1"], ["bus:2", "bus 2"], ["bus:3", "bus 3"], ["bus:4", "bus 4"], ["level", "level and spectrum"], ["tempo", "the tempo"], ["events", "the events"]];
   const num = v => { const m = String(v).match(/^(\d+):(\d+(?:\.\d+)?)$/); return m ? +m[1] * 60 + +m[2] : parseFloat(v) || 0; };
   const render = () => {
     list.textContent = "";
     CAPS.sort((a, b) => a.from - b.from);
     if (!CAPS.length) { const d = document.createElement("div"); d.style.color = "var(--dim)"; d.textContent = "no captions: add one where you want the text to appear"; list.appendChild(d); }
     CAPS.forEach((c, i) => {
-      const row = document.createElement("div"); row.className = "row";
+      const crow = document.createElement("div"); crow.className = "crow";
+      const r1 = document.createElement("div"), r2 = document.createElement("div"), r3 = document.createElement("div"); r1.className = r2.className = r3.className = "row";
       const f = document.createElement("input"), t = document.createElement("input"), x = document.createElement("input"), del = document.createElement("button");
+      const fs = document.createElement("select"), pi = document.createElement("input"), lab = document.createElement("span");
       f.className = t.className = "t"; x.className = "x";
       f.value = mmss(c.from); t.value = mmss(c.to); x.value = c.text; x.placeholder = "the text"; del.textContent = "x"; del.title = "remove";
       f.title = "from (m:ss.s)"; t.title = "to (m:ss.s)";
       f.onchange = () => { c.from = num(f.value); save(); render(); };
       t.onchange = () => { c.to = num(t.value); save(); };
-      x.oninput = () => { c.text = x.value; save(); };
+      x.oninput = () => { c.text = x.value; save("text"); };
       f.onfocus = () => { audio.currentTime = c.from; };
       del.onclick = () => { CAPS.splice(i, 1); save(); render(); };
-      row.append(f, t, x, del); list.appendChild(row);
+      // the spotlight: what the picture is turned to while the caption shows (the rest is blurred and dimmed)
+      lab.textContent = "look at"; lab.style.color = "var(--dim)";
+      for (const [v, n] of FOCUS) { const o = document.createElement("option"); o.value = v; o.textContent = n; fs.appendChild(o); }
+      const kind = (c.focus || "").startsWith("pad:") ? "pad" : (c.focus || "");
+      fs.value = kind; pi.className = "t"; pi.placeholder = "A3"; pi.size = 4; pi.value = kind === "pad" ? c.focus.slice(4) : ""; pi.hidden = kind !== "pad";
+      fs.onchange = () => { pi.hidden = fs.value !== "pad"; c.focus = fs.value === "pad" ? "pad:" + (pi.value || "A1").toUpperCase() : fs.value; if (fs.value === "pad") { pi.value = pi.value || "A1"; pi.focus(); } save(); };
+      pi.oninput = () => { c.focus = "pad:" + pi.value.trim().toUpperCase(); save("text"); };
+      r1.append(f, t, del); r2.append(x); r3.append(lab, fs, pi); crow.append(r1, r2, r3); list.appendChild(crow);
     });
   };
+  window.refreshCapList = render;
   const fadeIn = document.getElementById("c_fade"), lenIn = document.getElementById("c_len");
   const blurIn = document.getElementById("c_blur"), dimIn = document.getElementById("c_dim");
   const showSettings = () => {
@@ -916,6 +1048,7 @@ function initCaptions() {
     window.styleChanged && window.styleChanged();
   };
   fadeIn.oninput = lenIn.oninput = blurIn.oninput = dimIn.oninput = keepSettings;
+  window.refreshCapList = render;
   const lane = () => { // the captions as blocks under the patterns: click one to edit it
     const el = document.getElementById("capslane"); el.textContent = ""; const d = AN ? AN.duration : 0; if (!d) return;
     const place = (b, c) => { const x0 = clamp(c.from / d, 0, 1), x1 = clamp(c.to / d, 0, 1); b.style.left = x0 * 100 + "%"; b.style.width = Math.max(x1 - x0, 0.004) * 100 + "%"; };
@@ -958,6 +1091,105 @@ function initCaptions() {
   render(); lane();
 }
 
+// the changes of a bus: tags on a lane, a pop-up for the bus, what it is, and the time
+function initBusNotes() {
+  const lane = document.getElementById("buslane"), pop = document.getElementById("bpop");
+  const save = kind => { fetch("/busnotes", { method: "POST", body: JSON.stringify(BUSN) }).catch(() => {}); refresh(); histChanged(kind); };
+  const num = v => { const m = String(v).match(/^(\d+):(\d+(?:\.\d+)?)$/); return m ? +m[1] * 60 + +m[2] : parseFloat(v) || 0; };
+  const snap = t => { let best = t, bd = 0.25; for (const l of loopStarts) { const dd = Math.abs(l - OFFSET - t); if (dd < bd) { bd = dd; best = l - OFFSET; } } return +best.toFixed(2); };
+  function edit(n) {
+    pop.textContent = ""; pop.classList.add("open");
+    const bs = document.createElement("select"), sl = document.createElement("select"), ci = document.createElement("input"), tm = document.createElement("input");
+    for (let b = 1; b <= 4; b++) { const o = document.createElement("option"); o.value = b; o.textContent = "bus " + b; bs.appendChild(o); }
+    bs.value = n.bus; fillBusSelect(sl);
+    const known = [...sl.options].some(o => o.value === n.text && o.value !== "__custom__");
+    sl.value = !n.text ? "" : known ? n.text : "__custom__"; ci.hidden = sl.value !== "__custom__"; ci.value = known ? "" : n.text; ci.placeholder = "your own text"; ci.size = 16;
+    tm.value = mmss(n.t); tm.size = 7;
+    bs.onchange = () => { n.bus = +bs.value; save(); };
+    sl.onchange = () => { ci.hidden = sl.value !== "__custom__"; n.text = sl.value === "__custom__" ? ci.value : sl.value; if (!ci.hidden) ci.focus(); save(); };
+    ci.oninput = () => { n.text = ci.value; save("text"); };
+    tm.onchange = () => { n.t = Math.max(0, +num(tm.value).toFixed(2)); save(); };
+    const mk = (t, title, fn) => { const b = document.createElement("button"); b.textContent = t; b.title = title; b.onclick = fn; return b; };
+    pop.append(bs, sl, ci, tm, mk("go", "play from here", () => { audio.currentTime = n.t; }), mk("delete", "remove this change", () => { BUSN = BUSN.filter(x => x !== n); pop.classList.remove("open"); save(); }), mk("x", "close", () => pop.classList.remove("open")));
+    const r = lane.getBoundingClientRect(), d = AN ? AN.duration : 1; pop.style.left = Math.max(8, Math.min(innerWidth - 560, r.left + n.t / d * r.width - 120)) + "px";
+  }
+  function build() {
+    lane.textContent = ""; const d = AN ? AN.duration : 0; if (!d) return;
+    for (const n of BUSN.slice().sort((a, b) => a.t - b.t)) {
+      const b = document.createElement("div"), h = document.createElement("span");
+      b.className = "bn"; b.style.setProperty("--bc", BUSCOL[n.bus] || "#888"); b.textContent = n.bus + ": " + (n.text || "(not set)");
+      b.title = "bus " + n.bus + " from " + mmss(n.t) + ": " + (n.text || "not set") + " (click to edit, drag the left edge to move)"; b.style.left = clamp(n.t / d, 0, 1) * 100 + "%"; h.className = "hd";
+      h.onpointerdown = ev => {
+        ev.preventDefault(); ev.stopPropagation(); try { h.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+        const r = lane.getBoundingClientRect(); let moved = false;
+        h.onpointermove = e2 => { moved = true; n.t = clamp(snap((e2.clientX - r.left) / r.width * d), 0, d); b.style.left = n.t / d * 100 + "%"; };
+        h.onpointerup = () => { h.onpointermove = h.onpointerup = null; if (moved) save(); };
+      };
+      b.onclick = ev => { if (ev.target !== h) edit(n); };
+      b.appendChild(h); lane.appendChild(b);
+    }
+  }
+  const refresh = () => build();
+  window.refreshBusNotes = refresh;
+  document.getElementById("bnbtn").onclick = () => { const n = { bus: 1, t: +Math.max(now(), 0).toFixed(1), text: "" }; BUSN.push(n); save(); edit(n); };
+  refresh();
+}
+
+// the chapters: blocks on a lane of their own, a pop-up for the title and time, and the list for YouTube
+function initChapters() {
+  const lane = document.getElementById("chaplane"), pop = document.getElementById("chpop"), box = document.getElementById("chbox"), txt = document.getElementById("chtext"), hint = document.getElementById("chhint");
+  const post = () => fetch("/chapters", { method: "POST", body: JSON.stringify(CHAPS) }).catch(() => {});
+  const save = kind => { post(); refresh(); histChanged(kind); };
+  const text = () => { // as YouTube wants it: "0:00 Title" a line each
+    const c = CHAPS.slice().sort((a, b) => a.t - b.t); if (!c.length) return "";
+    return (c[0].t > 0.5 ? [{ t: 0, title: "Intro" }, ...c] : c).map(ch => { const t = Math.floor(ch.t + 0.0001), h = Math.floor(t / 3600);
+      return (h ? h + ":" + String(Math.floor(t / 60) % 60).padStart(2, "0") : String(Math.floor(t / 60))) + ":" + String(t % 60).padStart(2, "0") + " " + (ch.title || "").trim(); }).join("\n") + "\n";
+  };
+  const hints = () => { // what YouTube wants of the list
+    const c = CHAPS.slice().sort((a, b) => a.t - b.t), d = AN ? AN.duration : 0, out = [];
+    if (!c.length) return "YouTube needs a chapter at 0:00, at least three chapters and at least 10 seconds for each.";
+    if (c[0].t > 0.5) out.push("no chapter at 0:00: \"Intro\" is put there in the list");
+    const n = c.length + (c[0].t > 0.5 ? 1 : 0); if (n < 3) out.push("YouTube wants at least 3 chapters (there are " + n + ")");
+    for (let i = 0; i < c.length; i++) { const end = i + 1 < c.length ? c[i + 1].t : d; if (end - c[i].t < 10) out.push("\"" + (c[i].title || "chapter") + "\" is shorter than 10 s"); }
+    return out.length ? out.join("; ") : "the list is fine for YouTube";
+  };
+  const refresh = () => { build(); txt.value = text(); hint.textContent = hints(); };
+  const num = v => { const m = String(v).match(/^(\d+):(\d+(?:\.\d+)?)$/); return m ? +m[1] * 60 + +m[2] : parseFloat(v) || 0; };
+  const snap = t => { let best = t, bd = 0.25; for (const l of loopStarts) { const dd = Math.abs(l - OFFSET - t); if (dd < bd) { bd = dd; best = l - OFFSET; } } return +best.toFixed(2); };
+  function edit(c, at) {
+    pop.textContent = ""; pop.classList.add("open");
+    const ti = document.createElement("input"), tm = document.createElement("input"), mk = (n, t, fn) => { const b = document.createElement("button"); b.textContent = n; b.title = t; b.onclick = fn; return b; };
+    ti.value = c.title; ti.size = 22; ti.placeholder = "the title of the chapter"; tm.value = mmss(c.t); tm.size = 7;
+    ti.oninput = () => { c.title = ti.value; save("text"); };
+    tm.onchange = () => { c.t = Math.max(0, +num(tm.value).toFixed(2)); save(); };
+    pop.append(ti, tm, mk("go", "play from here", () => { audio.currentTime = c.t; }), mk("delete", "remove this chapter", () => { CHAPS = CHAPS.filter(x => x !== c); pop.classList.remove("open"); save(); }), mk("x", "close", () => pop.classList.remove("open")));
+    const r = lane.getBoundingClientRect(), d = AN ? AN.duration : 1; pop.style.left = Math.max(8, Math.min(innerWidth - 480, r.left + c.t / d * r.width - 120)) + "px";
+    if (at) ti.focus();
+  }
+  function build() {
+    lane.textContent = ""; const d = AN ? AN.duration : 0; if (!d) return;
+    const cs = CHAPS.slice().sort((a, b) => a.t - b.t);
+    cs.forEach((c, i) => {
+      const end = i + 1 < cs.length ? cs[i + 1].t : d, x0 = clamp(c.t / d, 0, 1), x1 = clamp(end / d, 0, 1), b = document.createElement("div"), h = document.createElement("span");
+      b.className = "ch"; b.textContent = (i + 1) + ". " + (c.title || "(no title)"); b.title = (c.title || "chapter") + " from " + mmss(c.t) + ": click to edit, drag the left edge to move";
+      b.style.left = x0 * 100 + "%"; b.style.width = Math.max(x1 - x0, 0.003) * 100 + "%"; h.className = "hd";
+      h.onpointerdown = ev => {
+        ev.preventDefault(); ev.stopPropagation(); try { h.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+        const r = lane.getBoundingClientRect(); let moved = false;
+        h.onpointermove = e2 => { moved = true; c.t = clamp(snap((e2.clientX - r.left) / r.width * d), 0, d); b.style.left = c.t / d * 100 + "%"; };
+        h.onpointerup = () => { h.onpointermove = h.onpointerup = null; if (moved) save(); };
+      };
+      b.onclick = ev => { if (ev.target !== h) edit(c, false); };
+      b.appendChild(h); lane.appendChild(b);
+    });
+  }
+  window.refreshChapters = refresh;
+  document.getElementById("chbtn").onclick = () => { refresh(); box.classList.toggle("open"); };
+  document.getElementById("chadd").onclick = () => { const c = { t: +Math.max(now(), 0).toFixed(1), title: CHAPS.length ? "New chapter" : "Intro" }; CHAPS.push(c); save(); edit(c, true); };
+  document.getElementById("chcopy").onclick = () => { const t = text(); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { hint.textContent = "copied"; }, () => { txt.select(); hint.textContent = "select the text and copy it"; }); };
+  refresh();
+}
+
 // the controls of the look
 function mergeStyle(saved) {
   const st = JSON.parse(JSON.stringify(STYLE_DEFAULT));
@@ -996,18 +1228,10 @@ function initStyle(saved) {
   $("s_bg2").oninput = () => { STYLE.bg.color2 = $("s_bg2").value; STYLE.bg.kind = "gradient"; show(); changed(); };
   $("s_bgdim").oninput = () => { STYLE.bg.dim = $("s_bgdim").value / 100; changed(); };
   // what each bus is used for: one of the unit's effects, or your own text
-  const allFx = [...new Set([...((window.SP404_FX || {}).fx12 || []), ...((window.SP404_FX || {}).fx34 || [])])]; // every effect, on any bus
-  const fxLists = [allFx, allFx, allFx, allFx];
   const setNotes = () => { STYLE.busNotes = [0, 1, 2, 3].map(k => { const v = $("s_bussel" + k).value; return v === "__custom__" ? $("s_bus" + k).value : v; }); changed(); };
   for (let i = 0; i < 4; i++) {
     const sl = $("s_bussel" + i);
-    let into = sl;
-    const group = t => { into = document.createElement("optgroup"); into.label = t; sl.appendChild(into); };
-    const add = (v, t) => { const o = document.createElement("option"); o.value = v; o.textContent = t; into.appendChild(o); };
-    add("", "not set");
-    group("kinds"); for (const k of ["Direct FX 1-5", "Reverb", "Delay", "Filter", "Drive / distortion", "Lo-fi", "Modulation", "Looper / scatter", "Resample"]) add(k, k);
-    group("the unit's effects"); for (const n of fxLists[i]) if (n && n !== "(OFF)") add(n, n);
-    group("other"); add("__custom__", "my own text...");
+    fillBusSelect(sl);
     sl.onchange = () => { $("s_bus" + i).hidden = sl.value !== "__custom__"; if (!$("s_bus" + i).hidden) $("s_bus" + i).focus(); setNotes(); };
     $("s_bus" + i).oninput = setNotes;
   }
@@ -1030,8 +1254,10 @@ async function start() {
   const msg = document.getElementById("msg");
   try {
     const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
-    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || "") })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
-    if (window.refreshCapLane) window.refreshCapLane(); // the lane needs the length of the take, which prepare has just read
+    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || ""), focus: String(c.focus || "") })); CHAPS = (ev.chapters || []).map(c => ({ t: +c.t || 0, title: String(c.title || "") })); BUSN = (ev.busnotes || []).map(n => ({ bus: +n.bus || 1, t: +n.t || 0, text: String(n.text || "") })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
+    initChapters(); initBusNotes();
+    if (window.refreshCapLane) window.refreshCapLane(); // the lanes need the length of the take, which prepare has just read
+    histInit();
   } catch (e) { msg.textContent = "could not load the replay: " + e; msg.style.display = "block"; return; }
   const t0 = parseFloat(params.get("t") || "0");
   if (t0) audio.currentTime = t0;

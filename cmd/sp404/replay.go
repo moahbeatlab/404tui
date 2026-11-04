@@ -25,6 +25,11 @@ In the page
     pattern from here the unit does not say which pattern plays: choose it where it starts (it snaps to the loop start);
                       the pads follow the pattern's bank. Click an amber tag on the timeline to remove it; "clear" removes all.
     style             palette, accent colour, background (colour, gradient, picture), logo, handle, subtitle
+    undo, redo        steps back and forth through the patterns, captions, chapters and title (Ctrl-Z, Ctrl-Shift-Z)
+    chapters          the chapters of the video (a lane on the timeline, a label on the picture, and the list for the description on YouTube)
+    bus change        what a bus is used for can change in the take: from this time on bus N is X (a lane on the timeline)
+    captions          text at times (a lane on the timeline: drag to move, the edges change the length). A caption can "look at" a pad,
+                      a bus, the pattern and so on: the rest is blurred and dimmed, the target stays sharp
   What it shows: the pads (hits, counts, velocity, mutes, isolation), the pattern with its playhead and the settings of its
   pads, the four buses with effect and knobs, level and spectrum, the tempo, and a list of what happens (pads pressed, knobs
   moved, effects, start/stop, pattern changes, loop starts). Mutes, isolation and patterns sent from the web app are in the

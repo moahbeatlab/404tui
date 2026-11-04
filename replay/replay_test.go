@@ -237,3 +237,39 @@ func TestPatternsCanBeAdopted(t *testing.T) {
 		t.Fatal("reading back")
 	}
 }
+
+func TestChaptersAreTextForYouTube(t *testing.T) {
+	got := ChaptersText([]Chapter{{T: 75.4, Title: " Drums "}, {T: 0, Title: "Intro"}, {T: 3725, Title: "Outro"}})
+	want := "0:00 Intro\n1:15 Drums\n1:02:05 Outro\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if got := ChaptersText([]Chapter{{T: 30, Title: "A"}}); !strings.HasPrefix(got, "0:00 Intro\n0:30 A") {
+		t.Errorf("YouTube needs a chapter at 0:00: %q", got)
+	}
+	r := &Replay{CuesPath: filepath.Join(t.TempDir(), "x.cues.json")}
+	if err := r.SetChapters([]Chapter{{T: 1, Title: "x"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Chapters()) != 1 {
+		t.Fatal("not kept")
+	}
+	if err := r.SetCaptions([]Caption{{From: 1, To: 2, Text: "t", Focus: "pad:A3"}}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(r.CuesPath)
+	if !strings.Contains(string(b), "pad:A3") || !strings.Contains(string(b), `"chapters"`) {
+		t.Fatalf("file: %s", b)
+	}
+}
+
+func TestBusNotesAreKept(t *testing.T) {
+	r := &Replay{CuesPath: filepath.Join(t.TempDir(), "x.cues.json")}
+	if err := r.SetBusNotes([]BusNote{{Bus: 1, T: 0, Text: "Filter+Drive"}, {Bus: 1, T: 62.5, Text: "Delay"}}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(r.CuesPath)
+	if !strings.Contains(string(b), "bus_notes") || len(r.BusNotes()) != 2 {
+		t.Fatalf("not kept: %s", b)
+	}
+}

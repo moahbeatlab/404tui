@@ -154,7 +154,11 @@ a list. The title of the video is typed in the bar; the title and the patterns a
 gives the 1080x1920 layout for shorts and reels (the bottom is left free for what the platforms put over it); `?title=...` sets a title for one
 viewing. The "style" button in the bar sets the look of the video: a palette (404 dark, midnight, neon, forest, mono), an accent colour, a
 background (the palette's, a colour, a gradient or a picture), a logo, a handle (`@name`) and a subtitle; it is kept in the same file, and
-`?preset=neon&accent=%23ff3b30&handle=@name&subtitle=...` sets it for one viewing. **Video:** `sp404 replay render take.wav -o take.mp4` (add `-format vertical` for shorts and reels, `-fps 60`, `-from 10 -to 40` for a part,
+`?preset=neon&accent=%23ff3b30&handle=@name&subtitle=...` sets it for one viewing. The timeline under the picture has lanes (chapters, patterns, bus changes, captions) with a playhead line; blocks are dragged by
+their left edge (captions by the body, and the edges change their length), clicked to edit, and every change can be undone (Ctrl-Z) and
+redone (Ctrl-Shift-Z). A caption can turn the picture to a pad, a bus, the pattern, the level or the events (spotlight). The "chapters"
+button gives the list for a YouTube description (`0:00 Title`, also at `/chapters.txt`); what a bus is used for can change in the take
+("bus change"). **Video:** `sp404 replay render take.wav -o take.mp4` (add `-format vertical` for shorts and reels, `-fps 60`, `-from 10 -to 40` for a part,
 `-q "preset=neon"` for the page's parameters) draws the page in a headless Chrome, Chromium, Edge or Brave, one picture at a time, and ffmpeg puts the
 pictures and the WAV together (H.264 and AAC); it needs the browser and ffmpeg on the computer (`-chrome`, `-ffmpeg`, `-no-sandbox` for a container),
 and several pages draw side by side (`-workers`, at most 4 by default). The page can be driven frame by frame, so that it can be rendered into a video. A first draft; see `replay/`.
