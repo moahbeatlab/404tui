@@ -20,7 +20,7 @@ func (a *App) cd(dir string) {
 	if a.searchQ == "" {
 		a.dcur[a.dir] = a.fcur
 	}
-	a.searchQ, a.tagSearch = "", false
+	a.searchQ, a.tagSearch, a.searchDirs = "", false, false
 	a.dir = dir
 	a.list()
 	if app.IsLocal(dir) { // the unit's folders are not kept for the next start
@@ -69,6 +69,24 @@ func (a *App) searchList() {
 			a.searchCut = true
 			return filepath.SkipAll
 		}
+		if a.searchDirs { // folders only
+			if !d.IsDir() || p == root {
+				return nil
+			}
+			rel, _ := filepath.Rel(root, p)
+			low := strings.ToLower(rel)
+			for _, w := range words {
+				if !strings.Contains(low, w) {
+					return nil
+				}
+			}
+			a.entries = append(a.entries, entry{name: rel, dir: true})
+			if len(a.entries) >= 400 {
+				a.searchCut = true
+				return filepath.SkipAll
+			}
+			return nil
+		}
 		if d.IsDir() || !audioExts[strings.ToLower(filepath.Ext(d.Name()))] {
 			return nil
 		}
@@ -103,7 +121,7 @@ var kbRows = []string{"abcdefghij", "klmnopqrst", "uvwxyz0123", "456789_-. "}
 type keyboard struct{ r, c int }
 
 func (a *App) openSearch() {
-	a.tagSearch = false
+	a.tagSearch, a.searchDirs = false, false
 	a.kb = &keyboard{}
 }
 
@@ -153,10 +171,18 @@ func (a *App) drawKeyboard(g Gfx) {
 		if a.searchCut {
 			n += "+"
 		}
-		hint := "Enter keeps  Esc clears"
+		hint := "Tab folders  Enter keeps  Esc clears"
+		label := "SEARCH"
+		if a.searchDirs {
+			hint, label = "Tab files  Enter keeps  Esc clears", "FOLDERS"
+		}
+		if contentCols < 64 { // a narrow screen keeps the keys short
+			hint = strings.Fields(hint)[0] + " " + strings.Fields(hint)[1]
+		}
+		g.Text(2, y, label, cAmber, true)
 		g.Text(contentCols-2-len(hint), y, hint, cDim, false)
 		g.Text(contentCols-2-len(hint)-2-len(n), y, n, cDim, false)
-		g.Text(10, y, fit(a.searchQ+"_", contentCols-4-len(hint)-len(n)-12), cText, true)
+		g.Text(11, y, fit(a.searchQ+"_", max(contentCols-4-len(hint)-len(n)-13, 4)), cText, true)
 		return
 	}
 	wc, hr := contentCols-2, 11

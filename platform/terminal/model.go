@@ -186,6 +186,8 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.TypeEscape()
 		case s == "backspace":
 			m.app.TypeBackspace()
+		case s == "tab": // the search: folders or files
+			m.app.TypeTab()
 		case msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace:
 			m.app.TypeText(string(msg.Runes))
 		}

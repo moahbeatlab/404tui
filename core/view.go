@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -452,12 +453,26 @@ func (a *App) drawFileList(g Gfx, x0, w int, ents []entry, cur int, focus bool) 
 		}
 		avail := w - 9
 		name := fit(e.name, avail)
-		if a.searchQ != "" && focus { // a result is a path below the folder: its end says which file
-			name = short2(e.name, avail)
+		parent := ""
+		if a.searchQ != "" && focus { // a result is a path below the folder: its name, and the folder it is in after it
+			rel := filepath.ToSlash(e.name)
+			name = path.Base(rel)
+			parent = path.Dir(rel)
+			if parent == "." {
+				parent = baseName(a.dir)
+			}
+			if Terminal {
+				name = fit(name, max(avail*3/5, 12))
+			} else {
+				name, parent = short2(e.name, avail), ""
+			}
 		}
 		col := fgSel
 		if e.dir {
-			name = fit(e.name, avail-1) + "/"
+			name = fit(name, avail-1) + "/"
+			if parent == "" {
+				name = fit(e.name, avail-1) + "/"
+			}
 			col = cAmber
 		}
 		if e.project {
@@ -468,6 +483,16 @@ func (a *App) drawFileList(g Gfx, x0, w int, ents []entry, cur int, focus bool) 
 			g.Text(x0, y, "*", cAmber, true)
 		}
 		g.Text(x0+1, y, name, col, e.dir)
+		if parent != "" { // the folder of a search result, dim after its name
+			px := x0 + 1 + len(name) + 2
+			room := x0 + w - 1 - px
+			if !e.dir {
+				room -= 7 // the size is at the right
+			}
+			if room > 6 {
+				g.Text(px, y, fit("‹ "+short2(parent, room-2), room), cDim, false)
+			}
+		}
 		if !e.dir && w >= 20 {
 			sz := fmt.Sprintf("%dK", (e.size+512)/1024)
 			g.Text(x0+w-1-len(sz), y, sz, cDim, false)

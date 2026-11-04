@@ -185,3 +185,34 @@ func (a *App) drawDirPicker(g Gfx) {
 	}
 	g.Text(x+2, y+hr-2, fit(fmt.Sprintf("%d folders", len(dp.names)), wc-4), cDim, false)
 }
+
+// freeTarget goes on with root/name when nothing is there; when it is, it asks: overwrite it, use a different name (typed, and asked
+// about again when that one is taken too), or give up. A name that cannot be changed (rename false) offers overwrite or giving up.
+func (a *App) freeTarget(root, name string, rename bool, onDone func(dir string)) {
+	dir := filepath.Join(root, name)
+	if _, err := os.Stat(dir); err != nil {
+		onDone(dir)
+		return
+	}
+	m := &menu{title: short2(dir, 40) + " is there already"}
+	m.items = append(m.items, menuItem{label: "Overwrite it", run: func(int) {
+		if err := os.RemoveAll(dir); err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		onDone(dir)
+	}})
+	if rename {
+		m.items = append(m.items, menuItem{label: "Use a different name...", run: func(int) {
+			a.askText("a different name in "+short2(root, 30), "Enter goes on", name+"_2", func(s string) {
+				s = strings.TrimSpace(s)
+				if s == "" || strings.ContainsAny(s, `/\`) {
+					return
+				}
+				a.freeTarget(root, s, true, onDone)
+			})
+		}})
+	}
+	m.items = append(m.items, menuItem{label: "Cancel", run: func(int) {}})
+	a.menu = m
+}

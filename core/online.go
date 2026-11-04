@@ -129,12 +129,14 @@ func (a *App) exportProjectAsk() {
 	a.pickFolder("export "+a.ProjectName()+" into the folder", a.exportRoot(), func(dir string) {
 		a.set.ExportDir = dir
 		a.saveSettings()
-		names, err := a.exportTo(dir)
-		if err != nil {
-			a.say(err.Error(), true)
-			return
-		}
-		a.say(fmt.Sprintf("wrote %d files to %s", len(names), filepath.Join(dir, a.ProjectName())), false)
+		a.freeTarget(dir, a.ProjectName(), false, func(string) {
+			names, err := a.exportTo(dir)
+			if err != nil {
+				a.say(err.Error(), true)
+				return
+			}
+			a.say(fmt.Sprintf("wrote %d files to %s", len(names), filepath.Join(dir, a.ProjectName())), false)
+		})
 	})
 }
 

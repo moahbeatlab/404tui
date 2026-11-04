@@ -167,6 +167,7 @@ func (a *App) searchIndex(words []string) bool {
 		prefix = strings.ToLower(rel) + string(filepath.Separator)
 	}
 	a.searchCut = false
+	seenDirs := map[string]bool{}
 	s := bufio.NewScanner(f)
 	s.Scan() // the #root line
 	for s.Scan() {
@@ -177,6 +178,35 @@ func (a *App) searchIndex(words []string) bool {
 		}
 		low := strings.ToLower(line[:tab])
 		if prefix != "" && !strings.HasPrefix(low, prefix) {
+			continue
+		}
+		if a.searchDirs { // folders only: the folders above the indexed files that have all the words in their path
+			rel := line[len(prefix):tab]
+			for i := 0; i < len(rel); i++ {
+				if rel[i] != '/' && rel[i] != filepath.Separator {
+					continue
+				}
+				d := rel[:i]
+				lowd := strings.ToLower(d)
+				if seenDirs[lowd] {
+					continue
+				}
+				seenDirs[lowd] = true
+				all := true
+				for _, w := range words {
+					if !strings.Contains(lowd, w) {
+						all = false
+						break
+					}
+				}
+				if all {
+					a.entries = append(a.entries, entry{name: d, dir: true})
+				}
+			}
+			if len(a.entries) >= 400 {
+				a.searchCut = true
+				break
+			}
 			continue
 		}
 		ok := true

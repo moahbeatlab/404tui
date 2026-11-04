@@ -187,6 +187,7 @@ type App struct {
 	set               settings
 	dcur              map[string]int  // the cursor in each folder of the file browser, for the next visit
 	searchQ           string          // the search in the file browser, "" for none
+	searchDirs        bool            // the search looks for folders, not files
 	tags              *app.TagIndex   // the tags of the unit's samples, read when first needed
 	rParent, rChild   rangerCache     // the side columns of the ranger view
 	usedCache         map[int]string  // the patterns that use each pad, read once per change
@@ -1251,7 +1252,7 @@ func (a *App) loadProject(e entry) {
 // search it ends the search first.
 func (a *App) up() {
 	if a.searchQ != "" {
-		a.searchQ, a.tagSearch = "", false
+		a.searchQ, a.tagSearch, a.searchDirs = "", false, false
 		a.list()
 		a.say("search ended", false)
 		return

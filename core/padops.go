@@ -185,7 +185,7 @@ func (a *App) exportBank() {
 		a.pickFolder(fmt.Sprintf("export bank %c into the folder", 'A'+a.bank), a.exportRoot(), func(root string) {
 			a.set.ExportDir = root
 			a.saveSettings()
-			a.exportPadsTo(pads, filepath.Join(root, filepath.Base(dir)))
+			a.freeTarget(root, filepath.Base(dir), true, func(d string) { a.exportPadsTo(pads, d) })
 		})
 		return
 	}

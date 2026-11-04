@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -60,7 +61,29 @@ func (a *App) drawRanger(g Gfx) {
 	if !hasParent && a.searchQ == "" {
 		ptitle = "sources"
 	}
+	var resDir, resName string // a search: the folder the result in front is in, and its listing
+	if a.searchQ != "" {
+		if e, ok := a.current(); ok {
+			rel := filepath.ToSlash(e.name)
+			resDir, resName = joinPath(a.dir, path.Dir(rel)), path.Base(rel)
+			if path.Dir(rel) == "." {
+				resDir = a.dir
+			}
+			ptitle = baseName(resDir)
+		}
+	}
 	pane(1, pw, ptitle, false)
+	if resDir != "" {
+		if ents, err := a.cachedDir(&a.rParent, resDir); err == nil {
+			at := -1
+			for i, e := range ents {
+				if e.name == resName {
+					at = i
+				}
+			}
+			a.drawFileList(g, 2, pw-2, ents, at, false)
+		}
+	}
 	if !hasParent && a.searchQ == "" { // the top of a source: the left column says which source this is, and what else there is
 		a.drawSources(g, 2, pw-2)
 	}

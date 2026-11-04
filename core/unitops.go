@@ -159,13 +159,16 @@ func (a *App) unitBackup(dev *device.Device, n int) {
 }
 
 // unitBackupAsk opens the folder chooser: which folder a project of the unit is backed up into (on this computer, or any drive); the backup is a folder
-// of its own in it, 07_NAME_date, with PADCONF.BIN, PTN and SMPL as on the unit's card. The folder is kept for next time.
+// of its own in it, named like the project, with PADCONF.BIN, PTN and SMPL as on the unit's card. The folder is kept for next time.
 func (a *App) unitBackupAsk(dev *device.Device, n int) {
 	a.pickFolder(fmt.Sprintf("back up unit project %d into the folder", n+1), a.backupRoot(), func(root string) {
 		a.set.BackupDir = root
 		a.saveSettings()
 		name := app.SanitizeName(a.unitProjectName(n))
-		a.unitBackupTo(dev, n, filepath.Join(root, fmt.Sprintf("%02d_%s_%s", n+1, name, a.clock().Format("20060102_150405"))))
+		if name == "" {
+			name = fmt.Sprintf("PROJECT_%02d", n+1)
+		}
+		a.freeTarget(root, name, true, func(dir string) { a.unitBackupTo(dev, n, dir) })
 	})
 }
 

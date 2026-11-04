@@ -171,3 +171,12 @@ func (a *App) drawPrompt(g Gfx) {
 	}
 	g.Text(x0+2, y0+hr-2, fit(hint, wc-4), cDim, false)
 }
+
+// TypeTab is Tab while a search is typed: the search looks for folders, or for files again.
+func (a *App) TypeTab() {
+	if a.kb == nil {
+		return
+	}
+	a.searchDirs = !a.searchDirs
+	a.list()
+}

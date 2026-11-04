@@ -273,7 +273,7 @@ func TestProjectsAreExportedIntoAChosenFolder(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	made, _ := filepath.Glob(filepath.Join(root, "01_*", "PADCONF.BIN"))
+	made, _ := filepath.Glob(filepath.Join(root, "*", "PADCONF.BIN"))
 	if len(made) != 1 {
 		t.Fatalf("the backup is a folder of its own in the folder that was typed: %v", made)
 	}
@@ -456,5 +456,76 @@ func TestIndexingShowsItsProgressInThePanel(t *testing.T) {
 	a.idx.mu.Unlock()
 	if strings.Contains(screenStr(a), "INDEXING") {
 		t.Error("the progress goes when it is done")
+	}
+}
+
+func TestSearchShowsTheFolderAndCanLookForFoldersOnly(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	SetSize(160, 48)
+	a.GoScreen(3)
+	a.openSearch()
+	a.TypeText("c1")
+	if len(a.entries) == 0 || a.entries[0].dir {
+		t.Fatalf("a search finds files: %+v", a.entries)
+	}
+	txt := screenStr(a)
+	if !strings.Contains(txt, "bass_C1.wav") || !strings.Contains(txt, "‹ bass") {
+		t.Fatalf("a result shows its file and the folder it is in:\n%s", txt)
+	}
+	a.TypeText("") // keep the query
+	a.searchQ = "bass"
+	a.TypeTab()
+	if !a.searchDirs || len(a.entries) != 1 || !a.entries[0].dir || a.entries[0].name != "bass" {
+		t.Fatalf("Tab: folders only: %+v", a.entries)
+	}
+	if txt := screenStr(a); !strings.Contains(txt, "FOLDERS") || !strings.Contains(txt, "Tab files") {
+		t.Fatalf("the search line says it looks for folders:\n%s", txt)
+	}
+	a.TypeTab()
+	if a.searchDirs || a.entries[0].dir {
+		t.Fatalf("Tab again: files: %+v", a.entries)
+	}
+}
+
+func TestBackupFolderIsNamedLikeTheProjectAndAsksWhenItIsThere(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	root := t.TempDir()
+	var got string
+	a.freeTarget(root, "House", true, func(d string) { got = d })
+	if got != filepath.Join(root, "House") || a.menu != nil {
+		t.Fatalf("a free name goes on at once: %q", got)
+	}
+	os.MkdirAll(filepath.Join(root, "House", "old"), 0o755)
+	got = ""
+	a.freeTarget(root, "House", true, func(d string) { got = d })
+	if got != "" || a.menu == nil || !strings.Contains(strings.ToLower(screenStr(a)), "is there already") {
+		t.Fatalf("a taken name asks:\n%s", screenStr(a))
+	}
+	txt := screenStr(a)
+	for _, want := range []string{"Overwrite it", "Use a different name", "Cancel"} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("the question offers %q:\n%s", want, txt)
+		}
+	}
+	// a different name
+	a.menu.cur = 1
+	a.menu.items[1].run(0)
+	if a.prompt == nil || a.prompt.buf != "House_2" {
+		t.Fatal("it asks for a different name, House_2 to start with")
+	}
+	a.TypeEnter()
+	if got != filepath.Join(root, "House_2") {
+		t.Fatalf("the new name is used: %q", got)
+	}
+	// overwrite
+	a.freeTarget(root, "House", true, func(d string) { got = d })
+	a.menu.items[0].run(0)
+	if _, err := os.Stat(filepath.Join(root, "House", "old")); err == nil {
+		t.Fatal("overwriting empties the folder first")
+	}
+	if got != filepath.Join(root, "House") {
+		t.Fatalf("overwrite goes on with the same folder: %q", got)
 	}
 }

@@ -185,6 +185,13 @@ func (a *App) rawHints() (plain, shift []hint) {
 		return []hint{{"A", "menu"}, {"X", "play"}, {"B", "stop"}, {"^v<>", "move"}, {"L1 R1", "bank"}, {"R2", "arp marked"}},
 			[]hint{screen, {"Y+A", "mark pad"}, {"Y+^v", "bank"}, {"Y+B", "clear pad"}, {"Sel+X", "record"}}
 	case Files:
+		if a.kb != nil && Terminal {
+			mode := "folders only"
+			if a.searchDirs {
+				mode = "files again"
+			}
+			return []hint{{"type", "the words"}, {"Tab", mode}, {"Enter", "keep the result"}, {"Esc", "end the search"}, {"Bksp", "delete"}}, nil
+		}
 		if a.kb != nil {
 			return []hint{{"^v<>", "move"}, {"A", "type it"}, {"B", "delete"}, {"X", "done"}}, []hint{{"Y+B", "clear all"}}
 		}
