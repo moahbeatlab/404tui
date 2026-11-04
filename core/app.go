@@ -848,6 +848,27 @@ func (a *App) MarkFile() {
 	}
 }
 
+// RenamePadKey is r of a keyboard on PADS and SEQ: the name of the pad under the cursor (of the track on SEQ) is typed; with pads marked
+// it asks for a prefix or a suffix for all of them.
+func (a *App) RenamePadKey() {
+	if (a.scr != Pads && a.scr != Seq) || a.Modal() || a.prompt != nil || a.carry != nil || a.aHeld {
+		return
+	}
+	a.CancelShift()
+	pad := a.padN()
+	if a.scr == Seq {
+		if len(a.rows) == 0 {
+			return
+		}
+		pad = a.rowPad()
+	}
+	if !a.info.Pads[pad].File {
+		a.say(a.label(pad)+" has no sample to name", true)
+		return
+	}
+	a.renamePad(pad)
+}
+
 // MarkPad is m of a keyboard on PADS: the pad under the cursor is marked, or not any more (Y+A on the handheld).
 func (a *App) MarkPad() {
 	if a.scr != Pads || a.Modal() || a.prompt != nil || a.carry != nil {

@@ -78,7 +78,7 @@ func (a *App) hints() (plain, shift []hint) {
 		plain = out
 	}
 	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() {
-		plain = append(append([]hint{}, plain...), hint{"m", "mute track"}, hint{"s", "solo track"}, hint{"f", "freeze view"}, hint{"z", "1 bar / more"})
+		plain = append(append([]hint{}, plain...), hint{"m", "mute track"}, hint{"s", "solo track"}, hint{"r", "rename pad"}, hint{"f", "freeze view"}, hint{"z", "1 bar / more"})
 		sh := make([]hint, 0, len(shift)) // s is solo here: the record key is Ctrl-R
 		for _, h := range shift {
 			if h.key != "Sel+X" {
@@ -88,7 +88,7 @@ func (a *App) hints() (plain, shift []hint) {
 		shift = sh
 	}
 	if Terminal && a.scr == Pads && !a.Modal() && a.prompt == nil && a.carry == nil {
-		plain = append(append([]hint{}, plain...), hint{"m", "mark pad"}, hint{"M", "mark all / none"}, hint{"^E", "export bank"})
+		plain = append(append([]hint{}, plain...), hint{"m", "mark pad"}, hint{"M", "mark all / none"}, hint{"r", "rename pad"}, hint{"^E", "export bank"})
 		sh := make([]hint, 0, len(shift)) // y a is m here
 		for _, h := range shift {
 			if h.what != "mark pad" {

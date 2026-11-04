@@ -1066,3 +1066,33 @@ func TestMOnPadsMarksAndMUnmarksAll(t *testing.T) {
 		t.Fatalf("the panel names the keys:\n%s", txt)
 	}
 }
+
+func TestRKeyRenamesThePad(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	kitKeys(t, a)
+	a.GoScreen(0)
+	a.bank, a.cur = 0, 1
+	old := a.info.Pads[1].Name
+	a.RenamePadKey()
+	if a.prompt == nil || a.prompt.buf != old || !strings.Contains(strings.ToLower(screenStr(a)), "rename "+strings.ToLower(a.label(1))) {
+		t.Fatalf("r asks for the name, with the old one in it:\n%s", screenStr(a))
+	}
+	a.prompt.buf = "my snare"
+	a.TypeEnter()
+	if a.info.Pads[1].Name != "my snare" {
+		t.Fatalf("the pad has the new name: %q", a.info.Pads[1].Name)
+	}
+	a.GoScreen(1)
+	a.RenamePadKey() // the track in front on SEQ
+	if a.scr != Seq {
+		t.Fatal("still SEQ")
+	}
+	a.prompt = nil
+	a.cur = 5 // an empty pad
+	a.GoScreen(0)
+	a.RenamePadKey()
+	if a.prompt != nil {
+		t.Fatal("a pad with no sample has no name to change")
+	}
+}

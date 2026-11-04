@@ -6,7 +6,7 @@
 
 The 16 pads of a bank. `a` opens the pad panel: SOUND and SHAPE pages with the pad's settings, and the TOOLS page.
 
-**Keys on a computer:** `a` menu · `Space` play · `x` stop · `hjkl` move · `[ ]` bank · `.` arp marked · `t` tools · `m` mark pad · `M` mark all / none · `^E` export bank · `g hl` screen (1-6) · `y jk` bank · `y b` clear pad · `s x` record
+**Keys on a computer:** `a` menu · `Space` play · `x` stop · `hjkl` move · `[ ]` bank · `.` arp marked · `t` tools · `m` mark pad · `M` mark all / none · `r` rename pad · `^E` export bank · `g hl` screen (1-6) · `y jk` bank · `y b` clear pad · `s x` record
 
 **Keys on the handheld:** `A` menu · `X` play · `B` stop · `^v<>` move · `L1 R1` bank · `R2` arp marked · `Y+<>` screen · `Y+A` mark pad · `Y+^v` bank · `Y+B` clear pad · `Sel+X` record
 
@@ -173,7 +173,7 @@ The settings of the pad under the cursor, written into the project at once. With
 
 The step grid of the pattern in front. `Enter` (or `b`) opens the note panel, `t` the pattern's tools and settings.
 
-**Keys on a computer:** `a` note on/off · `e hjkl` edit (hold) · `Space` play / stop · `b` note settings · `x` hear note · `.` mute/solo · `hjkl` pad, step · `[ ]` bank · `{ }` bar · `t` tools · `m` mute track · `s` solo track · `f` freeze view · `z` 1 bar / more · `y x` add track · `y b` pick pattern · `y jk` pattern +-
+**Keys on a computer:** `a` note on/off · `e hjkl` edit (hold) · `Space` play / stop · `b` note settings · `x` hear note · `.` mute/solo · `hjkl` pad, step · `[ ]` bank · `{ }` bar · `t` tools · `m` mute track · `s` solo track · `r` rename pad · `f` freeze view · `z` 1 bar / more · `y x` add track · `y b` pick pattern · `y jk` pattern +-
 
 **Keys on the handheld:** `A` note on/off · `A+^<>` edit (hold) · `X` play · `B` note settings · `L2` hear note · `R2` mute/solo · `^v<>` pad, step · `L1 R1` bar · `Y+X` add track · `Y+B` pick pattern · `Sel+B` tools · `Y+^v` pattern +- · `Sel+X` record
 

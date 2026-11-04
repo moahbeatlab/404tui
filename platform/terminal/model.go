@@ -331,6 +331,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.NextScreen(-1)
 		}
 		return
+	case "r": // PADS and SEQ: rename the pad
+		if m.armed == noShift && !m.aHeld && !m.app.Modal() && (m.app.ScreenName() == "PADS" || m.app.ScreenName() == "SEQ") {
+			m.app.RenamePadKey()
+		}
+		return
 	case "e", "E":
 		if m.aHeld {
 			m.aHeld = false
