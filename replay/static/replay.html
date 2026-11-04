@@ -14,7 +14,8 @@
   #bar input { background:#2b2b2b; color:var(--text); border:0; padding:6px 10px; font:inherit; }
   #bar button, #bar select { background:#2b2b2b; color:var(--text); border:0; padding:6px 12px; font:inherit; cursor:pointer; }
   #bar button:hover { background:#3a3a3a; }
-  #tl { display:grid; grid-template-columns:72px minmax(0, 1fr); align-items:center; row-gap:4px; column-gap:10px; }
+  #ph { position:absolute; width:2px; background:rgba(255,255,255,.8); pointer-events:none; z-index:2; }
+  #tl { position:relative; display:grid; grid-template-columns:72px minmax(0, 1fr); align-items:center; row-gap:4px; column-gap:10px; }
   #tl .lbl { color:var(--dim); font-size:11px; text-align:right; }
   #cues, #capslane { position:relative; height:26px; margin:0 8px; background:#1d1d20; border-radius:4px; }
   #capslane { height:22px; }
@@ -58,6 +59,7 @@
   <div id="tl">
     <span class="lbl">patterns</span><div id="cues" title="the patterns: click one to edit it, drag its left edge to move it"></div>
     <span class="lbl">captions</span><div id="capslane" title="the captions: click one to edit it"></div>
+    <div id="ph"></div>
     <span class="lbl"></span><input id="seek" type="range" min="0" max="1000" value="0">
   </div>
   <div id="ctl">
@@ -843,6 +845,8 @@ function draw(audioTime) {
 
 // ---- the page: the audio drives the time
 const audio = document.getElementById("audio"), play = document.getElementById("play"), seek = document.getElementById("seek");
+let seeking = false;
+const ph = document.getElementById("ph");
 const timeEl = document.getElementById("time"), nudgeEl = document.getElementById("nudge"), speed = document.getElementById("speed");
 let manual = null; // a program that sets the time itself (a render)
 function now() { return manual !== null ? manual : audio.currentTime; }
@@ -850,17 +854,23 @@ function frame() {
   const t = now();
   draw(t);
   const d = AN ? AN.duration : audio.duration || 0;
-  if (document.activeElement !== seek && d) seek.value = String(Math.round(t / d * 1000));
+  if (!seeking && d) seek.value = String(Math.round(t / d * 1000)); // it follows the time, except while it is being dragged
+  if (d) { // the playhead through the lanes: the same x as the lanes' times
+    const tl = document.getElementById("tl").getBoundingClientRect(), ln = document.getElementById("cues").getBoundingClientRect(), cp = document.getElementById("capslane").getBoundingClientRect();
+    ph.style.left = (ln.left - tl.left + clamp(t / d, 0, 1) * ln.width - 1) + "px"; ph.style.top = (ln.top - tl.top) + "px"; ph.style.height = (cp.bottom - ln.top) + "px";
+  }
   timeEl.textContent = mmss(t) + " / " + mmss(d);
   play.textContent = audio.paused ? "play" : "pause";
   requestAnimationFrame(frame);
 }
 play.onclick = () => (audio.paused ? audio.play() : audio.pause());
+seek.addEventListener("pointerdown", () => { seeking = true; });
+addEventListener("pointerup", () => { seeking = false; });
 seek.oninput = () => { const d = AN ? AN.duration : audio.duration; audio.currentTime = seek.value / 1000 * d; };
 speed.onchange = () => { audio.playbackRate = parseFloat(speed.value); };
 document.getElementById("full").onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
 addEventListener("keydown", e => {
-  if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
+  if (e.target.tagName === "SELECT" || (e.target.tagName === "INPUT" && e.target.type !== "range")) return; // typing in a field is not a key for the player
   if (e.code === "Space") { e.preventDefault(); play.onclick(); }
   else if (e.key === "ArrowLeft") audio.currentTime = Math.max(audio.currentTime - (e.shiftKey ? 30 : 5), 0);
   else if (e.key === "ArrowRight") audio.currentTime += e.shiftKey ? 30 : 5;
