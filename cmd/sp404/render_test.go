@@ -28,3 +28,19 @@ func TestTheBrowserIsFoundOrSaid(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 }
+
+func TestReplayHelpSaysEverything(t *testing.T) {
+	for _, a := range []string{"-h", "--help", "help"} {
+		if err := runReplay([]string{a}, options{}); err != nil {
+			t.Errorf("replay %s: %v", a, err)
+		}
+		if err := runReplay([]string{"render", a}, options{}); err != nil {
+			t.Errorf("replay render %s: %v", a, err)
+		}
+	}
+	for _, want := range []string{"pattern from here", "render", "-format", "preset=", "cues.json", "-workers"} {
+		if !strings.Contains(replayUsage, want) {
+			t.Errorf("the help does not mention %q", want)
+		}
+	}
+}

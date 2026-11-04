@@ -10,9 +10,41 @@ import (
 	"github.com/moahbeatlab/404tui/replay"
 )
 
+const replayUsage = `sp404 replay: show a recorded performance, and render it as a video
+
+  sp404 [-web addr] replay <take.wav> [take.events.jsonl]
+        opens the replay in the browser (the events file is the one beside the WAV, name.events.jsonl, unless given;
+        -web sets the address, 127.0.0.1 and any free port by default). Ctrl-C ends it.
+  sp404 replay render <take.wav> [events.jsonl] [options]
+        draws the replay frame by frame and writes a video (MP4: H.264 and AAC); see sp404 replay render -h
+
+In the page
+  Space play/pause, arrows 5 s (Shift 30 s), [ and ] move the events against the sound by 10 ms, f full screen.
+  The bar at the bottom has:
+    title             the title of the video (shown in the header)
+    pattern from here the unit does not say which pattern plays: choose it where it starts (it snaps to the loop start);
+                      the pads follow the pattern's bank. Click an amber tag on the timeline to remove it; "clear" removes all.
+    style             palette, accent colour, background (colour, gradient, picture), logo, handle, subtitle
+  What it shows: the pads (hits, counts, velocity, mutes, isolation), the pattern with its playhead and the settings of its
+  pads, the four buses with effect and knobs, level and spectrum, the tempo, and a list of what happens (pads pressed, knobs
+  moved, effects, start/stop, pattern changes, loop starts). Mutes, isolation and patterns sent from the web app are in the
+  log, so they are shown as they were; for patterns changed on the unit itself the unit says nothing, so they are set by hand.
+  What is set (title, cues, look) is kept beside the log in name.events.cues.json.
+
+Page parameters (for one viewing; also usable with render -q "...")
+  format=vertical   1080x1920 for shorts and reels      title=...       the title
+  preset=midnight   neon, forest, mono, 404 dark         accent=%23ff3b30  the accent colour
+  handle=@name  subtitle=...  bgcolor=%23101020  hud=0 (no bar)  t=12 (start at 12 s)  pattern=A1 (one pattern throughout)
+
+` + renderUsage
+
 // runReplay shows a recorded performance: sp404 replay take.wav [take.events.jsonl].
 func runReplay(args []string, o options) error {
-	if len(args) > 0 && args[0] == "render" {
+	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "-help" || args[0] == "help" {
+		fmt.Println(replayUsage)
+		return nil
+	}
+	if args[0] == "render" {
 		return runRender(args[1:], o)
 	}
 	if len(args) < 1 || len(args) > 2 {

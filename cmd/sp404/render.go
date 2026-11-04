@@ -36,6 +36,12 @@ puts the pictures and the sound together.`
 
 // runRender renders a take into a video: sp404 replay render take.wav -o take.mp4.
 func runRender(args []string, o options) error {
+	for _, a := range args {
+		if a == "-h" || a == "--help" || a == "-help" || a == "help" {
+			fmt.Println(renderUsage)
+			return nil
+		}
+	}
 	fs := flag.NewFlagSet("render", flag.ContinueOnError)
 	fs.Usage = func() { fmt.Fprintln(os.Stderr, renderUsage) }
 	out := fs.String("o", "", "")

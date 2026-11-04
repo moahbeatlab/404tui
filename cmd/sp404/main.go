@@ -41,6 +41,8 @@ commands:
   replay <wav> [events.jsonl]
                  show a recorded performance in the browser: the sound with what the unit did (pads, pattern, effects,
                  level, spectrum); the event log is the file beside the WAV (name.events.jsonl) unless one is given
+  replay render <wav> [events.jsonl] -o video.mp4
+                 render the replay as a video (wide or -format vertical for shorts and reels); sp404 replay -h lists everything
   probe pad|pc   try what the unit does when it is told: press a pad over USB (probe pad A1), or send a Program Change at once
                  or at the next loop start and print what comes back (probe pc A 2 loop); see sp404 probe
   midimap        print the map of the Faderfox EC4 for 404tui (one group of 16 pushes)
