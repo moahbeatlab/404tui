@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -193,8 +194,8 @@ func (a *App) searchIndex(words []string) bool {
 				}
 				seenDirs[lowd] = true
 				all := true
-				for _, w := range words {
-					if !strings.Contains(lowd, w) {
+				for _, w := range words { // the name of the folder itself holds the words, not the folders above it
+					if !strings.Contains(path.Base(filepath.ToSlash(lowd)), w) {
 						all = false
 						break
 					}

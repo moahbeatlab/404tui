@@ -784,3 +784,31 @@ func TestAFileGoesToThePadChosenInTheDialog(t *testing.T) {
 		t.Fatalf("the cursor is on that pad: bank %d pad %d", a.bank, a.cur)
 	}
 }
+
+func TestFolderSearchMatchesTheNameOfTheFolderOnly(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	for _, d := range []string{"deep_house/bass_loops/A", "deep_house/drums", "house/deep_house_session/alone", "other/stuff"} {
+		os.MkdirAll(filepath.Join(a.Root, d), 0o755)
+	}
+	a.GoScreen(3)
+	a.openSearch()
+	a.TypeText("deep house")
+	a.TypeTab()
+	var got []string
+	for _, e := range a.entries {
+		if !e.dir {
+			t.Fatalf("folders only: %+v", e)
+		}
+		got = append(got, filepath.ToSlash(e.name))
+	}
+	want := map[string]bool{"deep_house": true, "house/deep_house_session": true}
+	if len(got) != len(want) {
+		t.Fatalf("only the folders whose own name has the words: %v", got)
+	}
+	for _, g := range got {
+		if !want[g] {
+			t.Fatalf("%q does not have the words in its own name: %v", g, got)
+		}
+	}
+}

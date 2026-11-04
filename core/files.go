@@ -74,7 +74,7 @@ func (a *App) searchList() {
 				return nil
 			}
 			rel, _ := filepath.Rel(root, p)
-			low := strings.ToLower(rel)
+			low := strings.ToLower(d.Name()) // the name of the folder itself holds the words, not the folders above it
 			for _, w := range words {
 				if !strings.Contains(low, w) {
 					return nil
