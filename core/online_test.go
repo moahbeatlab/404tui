@@ -260,3 +260,19 @@ func TestProjectsAreExportedIntoAChosenFolder(t *testing.T) {
 		t.Fatalf("the unit's project is in the folder: %v", err)
 	}
 }
+
+func TestLiveChangesAreCoalesced(t *testing.T) {
+	q := []liveChange{{kind: "param", pad: 2, id: 0x69, value: 100}, {kind: "param", pad: 2, id: 0x78, value: 5}, {kind: "pattern", pad: 3}, {kind: "sample", pad: 4}, {kind: "param", pad: 4, id: 0x69}}
+	q = coalesce(q, []liveChange{{kind: "param", pad: 2, id: 0x69, value: 101}, {kind: "pattern", pad: 3}, {kind: "clear", pad: 4}})
+	if len(q) != 4 {
+		t.Fatalf("a setting and a pattern that are overtaken are not sent, a cleared pad takes its waiting changes: %+v", q)
+	}
+	for _, c := range q {
+		if c.kind == "param" && c.pad == 2 && c.id == 0x69 && c.value != 101 {
+			t.Fatalf("the last value is the one that is sent: %+v", c)
+		}
+		if c.pad == 4 && c.kind != "clear" {
+			t.Fatalf("nothing else waits for a cleared pad: %+v", c)
+		}
+	}
+}

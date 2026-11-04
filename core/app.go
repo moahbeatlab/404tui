@@ -258,6 +258,8 @@ type App struct {
 	unitCur       int
 	connCh        chan Link // a computer looks for the unit in the background
 	connBusy      bool
+	linkNames     []string // the unit's project names, kept for a moment
+	linkNamesAt   time.Time
 	offlineChosen bool // PROJECTS shows the folder of projects on this computer, though a unit is plugged in
 	confirm       bool
 	job           *job

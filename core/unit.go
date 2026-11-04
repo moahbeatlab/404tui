@@ -227,7 +227,7 @@ func (a *App) drawUnit(g Gfx) {
 	}
 	g.Text(2, 1, "CONNECTED", cGood, true)
 	g.Text(2+len("CONNECTED")+2, 1, fit(a.link.Name(), contentCols-20), cDim, false)
-	names, err := a.link.Projects()
+	names, err := a.unitNames()
 	if err != nil {
 		g.Text(2, 3, fit(err.Error(), contentCols-4), cBad, false)
 		return
@@ -308,7 +308,7 @@ func (a *App) drawProjects(g Gfx) {
 		g.Text(2, 1, "ONLINE", cGood, true)
 		g.Text(2+len("ONLINE")+2, 1, fit(a.link.Name(), contentCols-20), cDim, false)
 		var err error
-		if names, err = a.link.Projects(); err != nil {
+		if names, err = a.unitNames(); err != nil {
 			g.Text(2, 3, fit(err.Error(), contentCols-4), cBad, false)
 			return
 		}
@@ -362,4 +362,18 @@ func (a *App) drawProjectTiles(g Gfx, names []string) {
 			g.Cursor(x, y, tw, th)
 		}
 	}
+}
+
+// unitNames is the names of the unit's projects, asked of the unit at most every two seconds: a screen is drawn many times a second,
+// and each question is a round trip over USB that the live changes have to share.
+func (a *App) unitNames() ([]string, error) {
+	if a.linkNames != nil && a.clock().Sub(a.linkNamesAt) < 2*time.Second {
+		return a.linkNames, nil
+	}
+	names, err := a.link.Projects()
+	if err != nil {
+		return nil, err
+	}
+	a.linkNames, a.linkNamesAt = names, a.clock()
+	return names, nil
 }

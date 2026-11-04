@@ -105,3 +105,24 @@ func (l *Lab) SetPadParamRaw(n int, id byte, v int32) error {
 	l.pad.Blocks[n] = blk.Raw()
 	return nil
 }
+
+// PadParams is every setting of a pad that the project file has, read with one parse of the pad's block.
+func (l *Lab) PadParams(n int) map[byte]int32 {
+	out := map[byte]int32{}
+	if l.pad == nil || n < 0 || n > 159 {
+		return out
+	}
+	blk, err := proto.ParsePadBlock(l.pad.Blocks[n])
+	if err != nil {
+		return out
+	}
+	for _, pi := range proto.Params {
+		if pi.Scope != proto.ScopePad {
+			continue
+		}
+		if v, ok := blk.Param(pi.ID); ok {
+			out[pi.ID] = v
+		}
+	}
+	return out
+}

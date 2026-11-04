@@ -21,7 +21,13 @@ type liveBase struct {
 	names    [160]string
 	hasFile  [160]bool
 	fileHash [160]uint64
+	fileKey  [160]fileKey // what the hash was worked out from: the same bytes in the same place need no new hash
 	patterns map[int][]byte
+}
+
+type fileKey struct {
+	p *byte
+	n int
 }
 
 type liveChange struct {
@@ -68,23 +74,21 @@ func (a *App) stopLive() {
 // liveBaseNow reads what the editor holds, to compare with later.
 func (a *App) liveBaseNow(l *liveState) liveBase {
 	b := liveBase{patterns: map[int][]byte{}}
+	old := l.base
 	for n := 0; n < 160; n++ {
 		p := a.info.Pads[n]
 		b.names[n], b.hasFile[n] = p.Name, p.File
 		if !p.File {
 			continue
 		}
-		b.params[n] = map[byte]int32{}
-		for _, pi := range proto.Params {
-			if pi.Scope != proto.ScopePad {
-				continue
+		b.params[n] = a.lab.PadParams(n)
+		if f, ok := a.lab.PadFile(n); ok && len(f) > 0 {
+			k := fileKey{&f[0], len(f)}
+			if old.fileKey[n] == k && old.hasFile[n] {
+				b.fileKey[n], b.fileHash[n] = k, old.fileHash[n] // the sample is where it was
+			} else {
+				b.fileKey[n], b.fileHash[n] = k, maphash.Bytes(l.seed, f)
 			}
-			if v, err := a.lab.PadParam(n, pi.ID); err == nil {
-				b.params[n][pi.ID] = v
-			}
-		}
-		if f, ok := a.lab.PadFile(n); ok {
-			b.fileHash[n] = maphash.Bytes(l.seed, f)
 		}
 	}
 	for s := 1; s <= 160; s++ {
@@ -140,7 +144,7 @@ func (a *App) liveSync() {
 		return
 	}
 	l.mu.Lock()
-	l.queue = append(l.queue, ch...)
+	l.queue = coalesce(l.queue, ch)
 	start := !l.running
 	l.running = true
 	l.mu.Unlock()
@@ -230,4 +234,25 @@ func (a *App) liveTick() {
 	if err != nil {
 		a.say("live: "+err.Error(), true)
 	}
+}
+
+// coalesce adds the new changes to the queue: a change that is overtaken by a newer one while it waits (a setting held down goes through
+// every value, a pattern is edited again) is not sent, only the last one is. A pad that is cleared takes its waiting changes with it.
+func coalesce(queue, add []liveChange) []liveChange {
+	for _, c := range add {
+		keep := queue[:0:0]
+		for _, q := range queue {
+			switch {
+			case c.kind == "param" && q.kind == "param" && q.pad == c.pad && q.id == c.id,
+				c.kind == "name" && q.kind == "name" && q.pad == c.pad,
+				(c.kind == "pattern" || c.kind == "unpattern") && (q.kind == "pattern" || q.kind == "unpattern") && q.pad == c.pad,
+				c.kind == "sample" && q.kind == "sample" && q.pad == c.pad,
+				c.kind == "clear" && q.pad == c.pad && q.kind != "pattern" && q.kind != "unpattern":
+				continue
+			}
+			keep = append(keep, q)
+		}
+		queue = append(keep, c)
+	}
+	return queue
 }

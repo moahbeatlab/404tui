@@ -47,6 +47,7 @@ func (a *App) jobTick() {
 		return
 	}
 	if _, _, _, err, fin := a.job.state(); fin {
+		a.linkNames = nil // the names may have changed
 		f := a.jobAfter
 		a.jobAfter = nil
 		f(err)
@@ -54,7 +55,7 @@ func (a *App) jobTick() {
 }
 
 func (a *App) unitProjectName(n int) string {
-	names, err := a.link.Projects()
+	names, err := a.unitNames()
 	if err != nil || n >= len(names) {
 		return ""
 	}
