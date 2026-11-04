@@ -165,6 +165,9 @@
   <label>picture position <span class="two"><input id="s_bgpx" type="range" min="0" max="100"><input id="s_bgpy" type="range" min="0" max="100"></span></label>
   <label>picture zoom <input id="s_bgzoom" type="range" min="50" max="300"></label>
   <label>picture blur <input id="s_bgblur" type="range" min="0" max="30"></label>
+  <label>picture drifts <input id="s_bgdrift" type="range" min="0" max="100" title="moves slowly from side to side"> <span id="s_bgdriftv" class="h"></span></label>
+  <label>picture breathes <input id="s_bgbreath" type="range" min="0" max="100" title="zooms in and out a little"> <span id="s_bgbreathv" class="h"></span></label>
+  <label>a new direction every <input id="s_bgper" type="range" min="4" max="60"> <span id="s_bgperv" class="h"></span></label>
   <label>panel opacity <input id="s_bgpanels" type="range" min="0" max="100"> <span id="s_bgpanelsv" class="h"></span></label>
   <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
   <label>BUS 1 at the start <span class="bw"><select id="s_bussel0"></select> <input id="s_bus0" placeholder="your own text" size="18" hidden></span></label>
@@ -903,9 +906,10 @@ let bgLayer = null, bgKey = "";
 function bgPicture() {
   const b = STYLE.bg || {}, im = bgImg;
   if (!(im && im.complete && im.naturalWidth)) return null;
-  const key = [im.src.length, im.naturalWidth, b.fit, b.px, b.py, b.zoom, b.blur, b.dim, COL.bg, W, H].join("|");
+  const M = bgMoves() ? BG_OVER : 1, LW = Math.round(W * M), LH = Math.round(H * M); // with movement the layer is larger than the video, so that there is room to move
+  const key = [im.src.length, im.naturalWidth, b.fit, b.px, b.py, b.zoom, b.blur, b.dim, COL.bg, LW, LH].join("|");
   if (bgLayer && key === bgKey) return bgLayer;
-  const c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d");
+  const c = document.createElement("canvas"); c.width = LW; c.height = LH; const x = c.getContext("2d"), W = LW, H = LH;
   const iw = im.naturalWidth, ih = im.naturalHeight, z = clamp(+b.zoom || 1, 0.2, 4), px = clamp(b.px === undefined ? 0.5 : +b.px, 0, 1), py = clamp(b.py === undefined ? 0.5 : +b.py, 0, 1), fit = b.fit || "cover";
   x.fillStyle = COL.bg; x.fillRect(0, 0, W, H);
   const blur = clamp(+b.blur || 0, 0, 40); if (blur > 0) x.filter = "blur(" + blur + "px)";
@@ -925,9 +929,20 @@ function drawBackground() {
   if (b.kind === "gradient" && validHex(b.color) && validHex(b.color2)) {
     const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, b.color); gr.addColorStop(1, b.color2); g.fillStyle = gr; g.fillRect(0, 0, W, H);
   } else if (b.kind === "image") {
-    const c = bgPicture(); if (c) g.drawImage(c, 0, 0);
+    const c = bgPicture(); if (!c) return;
+    if (c.width === W) { g.drawImage(c, 0, 0); return; }
+    // slowly moving: a window of the larger layer, drifting from side to side and breathing in and out; a pure function of the time
+    const P = clamp(+b.mvPeriod || 12, 8, 300), d = clamp(+b.mvDrift || 0, 0, 1), z = clamp(+b.mvZoom || 0, 0, 1), u = T_audio / P;
+    // random but repeatable: smooth noise (a new random target every P seconds, eased between), one stream for each of x, y and zoom
+    const zm = 1 + BG_ZOOM * z * (0.5 + 0.5 * bgNoise(u, 3)), vw = W / zm, vh = H / zm;
+    const ox = d * (c.width - vw) / 2 * bgNoise(u, 1), oy = d * (c.height - vh) / 2 * bgNoise(u, 2);
+    g.drawImage(c, (c.width - vw) / 2 + ox, (c.height - vh) / 2 + oy, vw, vh, 0, 0, W, H);
   }
 }
+const BG_OVER = 1.3, BG_ZOOM = 0.25;
+const bgHash = (i, k) => { let h = Math.imul(i * 374761393 + k * 668265263, 1274126177); h ^= h >>> 13; h = Math.imul(h, 1103515245); return ((h ^ (h >>> 16)) >>> 0) / 4294967295 * 2 - 1; };
+function bgNoise(u, k) { const i = Math.floor(u), f = u - i, s = f * f * (3 - 2 * f); return bgHash(i, k) * (1 - s) + bgHash(i + 1, k) * s; }
+const bgMoves = () => { const b = STYLE.bg || {}; return b.kind === "image" && (b.mvDrift === undefined ? 0 : +b.mvDrift) + (b.mvZoom === undefined ? 0 : +b.mvZoom) > 0; };
 // the logo and the handle: wide, in the strip under the panels at the right; vertical, centred in the strip under the feed
 function drawBrand() {
   const has = logoImg && logoImg.complete && logoImg.naturalWidth, handle = STYLE.handle || "", sub = VERT ? (STYLE.subtitle || "") : "";
@@ -1740,6 +1755,7 @@ function initStyle(saved) {
     }
     const bg = STYLE.bg; $("s_bgfit").value = bg.fit || "cover"; $("s_bgpx").value = Math.round((bg.px === undefined ? 0.5 : bg.px) * 100); $("s_bgpy").value = Math.round((bg.py === undefined ? 0.5 : bg.py) * 100);
     $("s_bgzoom").value = Math.round((bg.zoom || 1) * 100); $("s_bgblur").value = bg.blur || 0; $("s_bgpanels").value = Math.round((bg.panels !== undefined ? bg.panels : (bg.kind === "gradient" || (bg.kind === "image" && bg.image) ? 0.9 : 1)) * 100); $("s_bgpanelsv").textContent = $("s_bgpanels").value + " %";
+    $("s_bgdrift").value = Math.round((bg.mvDrift || 0) * 100); $("s_bgdriftv").textContent = $("s_bgdrift").value + " %"; $("s_bgbreath").value = Math.round((bg.mvZoom || 0) * 100); $("s_bgbreathv").textContent = $("s_bgbreath").value + " %"; $("s_bgper").value = bg.mvPeriod || 12; $("s_bgperv").textContent = $("s_bgper").value + " s";
     $("s_bgdim").value = Math.round((STYLE.bg.dim === undefined ? 0.6 : STYLE.bg.dim) * 100); $("s_handle").value = STYLE.handle || ""; $("s_sub").value = STYLE.subtitle || "";
   };
   show();
@@ -1757,6 +1773,9 @@ function initStyle(saved) {
   $("s_bgfit").onchange = () => { STYLE.bg.fit = $("s_bgfit").value; changed(); };
   $("s_bgpx").oninput = () => { STYLE.bg.px = $("s_bgpx").value / 100; changed(); }; $("s_bgpy").oninput = () => { STYLE.bg.py = $("s_bgpy").value / 100; changed(); };
   $("s_bgzoom").oninput = () => { STYLE.bg.zoom = $("s_bgzoom").value / 100; changed(); }; $("s_bgblur").oninput = () => { STYLE.bg.blur = +$("s_bgblur").value; changed(); };
+  $("s_bgdrift").oninput = () => { STYLE.bg.mvDrift = $("s_bgdrift").value / 100; $("s_bgdriftv").textContent = $("s_bgdrift").value + " %"; changed(); };
+  $("s_bgbreath").oninput = () => { STYLE.bg.mvZoom = $("s_bgbreath").value / 100; $("s_bgbreathv").textContent = $("s_bgbreath").value + " %"; changed(); };
+  $("s_bgper").oninput = () => { STYLE.bg.mvPeriod = +$("s_bgper").value; $("s_bgperv").textContent = $("s_bgper").value + " s"; changed(); };
   $("s_bgpanels").oninput = () => { STYLE.bg.panels = $("s_bgpanels").value / 100; $("s_bgpanelsv").textContent = $("s_bgpanels").value + " %"; changed(); };
   // what each bus is used for: one of the unit's effects, or your own text
   const setNotes = () => { STYLE.busNotes = [0, 1, 2, 3].map(k => { const v = $("s_bussel" + k).value; return v === "__custom__" ? $("s_bus" + k).value : v; }); changed(); };
