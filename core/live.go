@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/moahbeatlab/404tui/dbg"
 	"hash/maphash"
+	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -60,6 +61,10 @@ type liveState struct {
 	watchBank atomic.Int32
 	pulls     chan []pulled
 	stop      chan struct{}
+	events    chan liveEvent // what the unit did by itself: another project open, names changed, a pattern changed
+	names     []string       // the project names as last seen
+	patSeen   map[int]uint32 // pattern slot -> the size the unit showed when it differed (it has to show it twice)
+	ticks     int
 	// the unit is not looked at until this time: after a change of ours it takes a moment to show it
 	quietUntil   time.Time
 	reloaded     bool           // the unit finished a reload
@@ -69,6 +74,15 @@ type liveState struct {
 
 // settleTime is how long the unit is left alone after something was sent to it.
 const settleTime = 8 * time.Second
+
+// liveEvent is something that happened on the unit and not through the editor.
+type liveEvent struct {
+	kind    string // "project", "names", "pattern"
+	project int    // project: the one the unit has open now (0-based)
+	names   []string
+	slot    int // pattern: 1..160
+	data    []byte
+}
 
 // pulled is a pad that was changed on the unit: its block and its sample.
 type pulled struct {
@@ -84,7 +98,7 @@ func (a *App) goLive(dev *device.Device, n int) {
 		return
 	}
 	dbg.Logger.Info("live: start", "project", n+1)
-	l := &liveState{dev: dev, project: n, seed: maphash.MakeSeed(), pulls: make(chan []pulled, 4), stop: make(chan struct{})}
+	l := &liveState{dev: dev, project: n, seed: maphash.MakeSeed(), pulls: make(chan []pulled, 4), stop: make(chan struct{}), events: make(chan liveEvent, 8)}
 	l.base = a.liveBaseNow(l)
 	l.sig = l.base
 	a.live = l
@@ -197,6 +211,15 @@ func (a *App) liveSync() {
 
 // run sends the queue, one thing after the other, until it is empty.
 func (l *liveState) run() {
+	if cur, err := l.dev.CurrentProject(); err == nil && int(cur) != l.project { // the unit has another project open: nothing is sent to it
+		l.mu.Lock()
+		dropped := len(l.queue)
+		l.queue, l.running = nil, false
+		l.mu.Unlock()
+		dbg.Logger.Warn("live: the unit has another project open, changes dropped", "ours", l.project+1, "unit's", int(cur)+1, "dropped", dropped)
+		l.post(liveEvent{kind: "project", project: int(cur)})
+		return
+	}
 	for {
 		l.mu.Lock()
 		if len(l.queue) == 0 {
@@ -297,6 +320,11 @@ func (a *App) liveTick() {
 		a.applyPulls(ps)
 	default:
 	}
+	select {
+	case e := <-l.events:
+		a.applyLiveEvent(e)
+	default:
+	}
 	l.mu.Lock()
 	err := l.err
 	l.err = nil
@@ -339,12 +367,118 @@ func (l *liveState) pollLoop() {
 			return
 		case <-t.C:
 		}
+		l.ticks++
+		l.watchUnit()
 		if ps := l.poll(); len(ps) > 0 {
 			select {
 			case l.pulls <- ps:
 			case <-l.stop:
 				return
 			}
+		}
+	}
+}
+
+// post hands an event to the screen (a full queue drops it: it is looked at again at the next round).
+func (l *liveState) post(e liveEvent) {
+	select {
+	case l.events <- e:
+	default:
+	}
+}
+
+// watchUnit looks at what the unit did by itself: which project it has open (every round), the names of the projects (every third
+// round), the patterns of the project (every second round, while nothing is on its way).
+func (l *liveState) watchUnit() {
+	if cur, err := l.dev.CurrentProject(); err == nil && int(cur) != l.project {
+		l.post(liveEvent{kind: "project", project: int(cur)})
+		return
+	}
+	if l.ticks%3 == 0 {
+		if names, err := l.dev.ProjectNames(); err == nil {
+			if l.names != nil && !sameNames(l.names, names) {
+				dbg.Logger.Info("live: the project names changed on the unit")
+				l.post(liveEvent{kind: "names", names: names})
+			}
+			l.names = names
+		}
+	}
+	if l.ticks%2 == 0 {
+		l.watchPatterns()
+	}
+}
+
+func sameNames(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// watchPatterns compares the pattern files of the unit with what the unit was last given: a pattern that is new, gone or of another size
+// (seen twice) is read and handed to the screen.
+func (l *liveState) watchPatterns() {
+	l.mu.Lock()
+	sig, busy := l.sig, l.running || len(l.queue) > 0 || time.Now().Before(l.quietUntil)
+	l.mu.Unlock()
+	if busy {
+		l.patSeen = nil
+		return
+	}
+	if l.patSeen == nil {
+		l.patSeen = map[int]uint32{}
+	}
+	entries, err := l.dev.ListDir(path.Dir(formats.PatternPath(uint8(l.project)+1, proto.PadIndex{})))
+	if err != nil {
+		return
+	}
+	onUnit := map[int]bool{}
+	for _, e := range entries {
+		var n int
+		if _, err := fmt.Sscanf(e.Name, "PTN%05d.BIN", &n); err == nil && n >= 1 && n <= 160 {
+			onUnit[n] = true
+		}
+	}
+	for n := 1; n <= 160; n++ {
+		mine, had := sig.patterns[n]
+		switch {
+		case onUnit[n] && had:
+			pi, _ := proto.NewPadIndex(uint16(n - 1))
+			st, exists, err := l.dev.Stat(formats.PatternPath(uint8(l.project)+1, pi))
+			if err != nil || !exists || int(st.Size) == len(mine) {
+				delete(l.patSeen, n)
+				continue
+			}
+			if l.patSeen[n] != st.Size {
+				l.patSeen[n] = st.Size
+				continue
+			}
+			delete(l.patSeen, n)
+			if data, err := l.dev.ReadFile(formats.PatternPath(uint8(l.project)+1, pi)); err == nil && !bytes.Equal(data, mine) {
+				l.post(liveEvent{kind: "pattern", slot: n, data: data})
+			}
+		case onUnit[n] && !had:
+			if l.patSeen[n] == 0 {
+				l.patSeen[n] = 1
+				continue
+			}
+			delete(l.patSeen, n)
+			pi, _ := proto.NewPadIndex(uint16(n - 1))
+			if data, err := l.dev.ReadFile(formats.PatternPath(uint8(l.project)+1, pi)); err == nil && len(data) > 0 {
+				l.post(liveEvent{kind: "pattern", slot: n, data: data})
+			}
+		case !onUnit[n] && had:
+			if l.patSeen[n] == 0 {
+				l.patSeen[n] = 1
+				continue
+			}
+			delete(l.patSeen, n)
+			l.post(liveEvent{kind: "pattern", slot: n}) // gone from the unit
 		}
 	}
 }
@@ -569,4 +703,40 @@ func (a *App) reloadLive() {
 		l.reloaded = err == nil
 		l.mu.Unlock()
 	}()
+}
+
+// applyLiveEvent shows what the unit did by itself.
+func (a *App) applyLiveEvent(e liveEvent) {
+	l := a.live
+	if l == nil {
+		return
+	}
+	switch e.kind {
+	case "project":
+		mine := l.project + 1
+		dbg.Logger.Info("live: the unit has another project open", "ours", mine, "unit's", e.project+1)
+		a.stopLive()
+		a.say(fmt.Sprintf("the unit has project %d open now: live editing of project %d is stopped (PROJECTS, Edit live, to follow it)", e.project+1, mine), true)
+	case "names":
+		a.linkNames, a.linkNamesAt = e.names, a.clock()
+		a.say("the projects on the unit changed (a name, a new or an erased project)", false)
+	case "pattern":
+		if e.data == nil {
+			a.lab.SetPatternBytes(e.slot, nil)
+		} else if err := a.lab.SetPatternBytes(e.slot, e.data); err != nil {
+			a.say(fmt.Sprintf("pattern %s on the unit: %v", a.label(e.slot-1), err), true)
+			return
+		}
+		a.refresh()
+		l.base = a.liveBaseNow(l)
+		l.mu.Lock()
+		l.sig = l.base
+		l.mu.Unlock()
+		if a.scr == Seq {
+			a.autoRows()
+		}
+		a.replay()
+		dbg.Logger.Info("live: a pattern changed on the unit", "slot", e.slot, "bytes", len(e.data))
+		a.say(fmt.Sprintf("pattern %s changed on the unit", a.label(e.slot-1)), false)
+	}
 }

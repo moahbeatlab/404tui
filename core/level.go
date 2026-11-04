@@ -85,7 +85,7 @@ func (a *App) levelTick() {
 		a.lvl = newLevelMeter()
 	}
 	l := a.lvl
-	if a.rec == nil && l.src == nil && l.err == "" {
+	if l.src == nil && l.err == "" { // also while recording: a second listener on the input shows the level at once (the end of the recording file is late)
 		if m, ok := a.plat.Recorder.(record.Metering); ok {
 			src, err := m.StartMeter(a.recordDevice())
 			if err != nil {
@@ -110,12 +110,6 @@ func (a *App) levelTick() {
 	l.read = now
 	var peaks []float64
 	switch {
-	case a.rec != nil:
-		lv, err := record.ReadLevel(a.rec.Path, 100*time.Millisecond)
-		if err != nil || len(lv.Peak) == 0 {
-			return
-		}
-		peaks = lv.Peak
 	case l.src != nil:
 		p, ok := l.src.Level()
 		if !ok {
@@ -123,6 +117,12 @@ func (a *App) levelTick() {
 		}
 		peaks = p[:]
 		l.spec, _ = l.src.Spectrum()
+	case a.rec != nil: // no listener (the input did not allow a second one): the end of the file that is written, which is late by what ffmpeg holds back
+		lv, err := record.ReadLevel(a.rec.Path, 100*time.Millisecond)
+		if err != nil || len(lv.Peak) == 0 {
+			return
+		}
+		peaks = lv.Peak
 	default:
 		return
 	}

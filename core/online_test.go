@@ -1349,3 +1349,66 @@ func TestCtrlLReloadsTheUnitFromAnyScreen(t *testing.T) {
 		t.Fatalf("it starts: %q", a.msg)
 	}
 }
+
+func TestTheAppNoticesWhatTheUnitDoesByItself(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	waitLink(t, a)
+	dev, _ := a.unitDevice()
+	a.goLive(dev, 0)
+	t.Cleanup(func() { a.stopLive() })
+	l := a.live
+	l.dev = dev
+
+	// a pattern written on the unit comes into the editor (it has to be seen twice)
+	a.GoScreen(1)
+	a.pat = 9
+	a.ensurePattern()
+	a.autoRows()
+	a.toggle(a.rowPad(), 2)
+	a.liveSync()
+	for i := 0; i < 500; i++ {
+		if w, _, _ := a.liveStatus(); w == 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	l.mu.Lock()
+	l.quietUntil = time.Time{}
+	l.mu.Unlock()
+	mine, _ := a.lab.PatternBytes(9)
+	other := append([]byte(nil), mine...)
+	// a second note makes it another file: the unit's pattern 9 is not the editor's
+	a.toggle(a.rowPad(), 9)
+	other, _ = a.lab.PatternBytes(9)
+	a.lab.SetPatternBytes(9, mine) // the editor has its own
+	a.refresh()
+	slot, _ := proto.NewPadIndex(8)
+	if err := dev.WriteFile(formats.PatternPath(1, slot), other); err != nil {
+		t.Fatal(err)
+	}
+	l.watchPatterns()
+	l.watchPatterns()
+	for i := 0; i < 20; i++ { // one event is taken in each round of the program
+		a.liveTick()
+	}
+	got, _ := a.lab.PatternBytes(9)
+	if !bytes.Equal(got, other) {
+		t.Fatalf("the pattern the unit has is in the editor: %d bytes (unit's %d), %q", len(got), len(other), a.msg)
+	}
+	if w, _, _ := a.liveStatus(); w != 0 {
+		t.Fatalf("and it is not sent back: %d waiting", w)
+	}
+
+	// another project opened on the unit: live editing of this one stops, and nothing more is sent to it
+	if err := dev.SelectProject(2); err != nil {
+		t.Fatal(err)
+	}
+	l.watchUnit()
+	for i := 0; i < 5; i++ {
+		a.liveTick()
+	}
+	if a.live != nil || !a.msgBad || !strings.Contains(a.msg, "has project 3 open now") {
+		t.Fatalf("live editing stops when the unit opens another project: live %v %q", a.live != nil, a.msg)
+	}
+}

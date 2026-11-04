@@ -87,7 +87,13 @@ func (b execBackend) StartMeter(device string) (*Meter, error) {
 			return nil, err
 		}
 		bin = b.ffmpeg
-		args = append(append([]string{"-hide_banner", "-loglevel", "error", "-fflags", "nobuffer", "-flags", "low_delay"}, in...), "-ac", "2", "-ar", "48000", "-f", "s16le", "pipe:1")
+		for i, v := range in { // a small buffer on the input, for a meter that follows the sound (avfoundation: milliseconds)
+			if v == "avfoundation" && i > 0 && in[i-1] == "-f" {
+				in = append(append(append([]string{}, in[:i+1]...), "-audio_buffer_size", "20"), in[i+1:]...)
+				break
+			}
+		}
+		args = append(append([]string{"-hide_banner", "-loglevel", "error", "-fflags", "nobuffer", "-flags", "low_delay", "-probesize", "32", "-analyzeduration", "0"}, in...), "-ac", "2", "-ar", "48000", "-f", "s16le", "pipe:1")
 	case b.sox != "":
 		driver := map[string]string{"darwin": "coreaudio", "windows": ""}[runtime.GOOS]
 		if runtime.GOOS == "windows" {
