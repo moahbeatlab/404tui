@@ -386,7 +386,7 @@ func TestFolderChooserWalksTheFolders(t *testing.T) {
 		t.Fatal("the chooser is a dialog")
 	}
 	txt := screenStr(a)
-	for _, want := range []string{"WHERE TO", "use this folder", "backups/", "music/"} {
+	for _, want := range []string{"WHERE TO", "use this folder", "../", "backups/", "music/", "type a path"} {
 		if !strings.Contains(txt, want) {
 			t.Errorf("the chooser shows %q:\n%s", want, txt)
 		}
@@ -394,22 +394,52 @@ func TestFolderChooserWalksTheFolders(t *testing.T) {
 	if strings.Contains(txt, ".hidden") {
 		t.Error("hidden folders are not listed")
 	}
-	a.dpKey(Down)
+	a.dpKey(Down) // ..
+	a.dpKey(Down) // backups
 	a.dpKey(Down) // music
 	a.dpKey(Right)
-	if filepath.Base(a.dp.dir) != "music" || len(a.dp.names) != 1 {
-		t.Fatalf("l opens the folder in front: %s", a.dp.dir)
+	if filepath.Base(a.dp.dir) != "music" || len(a.dp.names) != 2 { // .. and kits
+		t.Fatalf("l opens the folder in front: %s %v", a.dp.dir, a.dp.names)
 	}
 	a.dpKey(Left)
 	if a.dp.dir != top || a.dp.names[a.dp.cur-1] != "music" {
 		t.Fatalf("h goes up and stands on the folder it came from: %s %d", a.dp.dir, a.dp.cur)
 	}
 	a.dpKey(Right)
-	a.dpKey(Down)
+	a.dpKey(Down) // ..
+	a.dpKey(Down) // kits
 	a.dpKey(A)
 	if got != filepath.Join(top, "music", "kits") || a.dp != nil {
 		t.Fatalf("Enter uses the folder in front: %q", got)
 	}
+	// the row ".." goes up, and Enter on it uses the folder above
+	a.pickFolder("up", filepath.Join(top, "music"), func(d string) { got = d })
+	a.dpKey(Down)
+	a.dpKey(Right)
+	if a.dp.dir != top {
+		t.Fatalf("l on .. goes up: %s", a.dp.dir)
+	}
+	a.dpKey(Left)
+	a.dpKey(Left) // up and up: the way to / is always there
+	if a.dp.dir != filepath.Dir(filepath.Dir(top)) {
+		t.Fatalf("h goes up: %s", a.dp.dir)
+	}
+	// a path is typed to go anywhere
+	if !a.DirPickerType() || a.prompt == nil {
+		t.Fatal("/ asks for a path")
+	}
+	a.prompt.buf = top
+	a.TypeEnter()
+	if a.dp.dir != top {
+		t.Fatalf("the typed folder is where the chooser goes: %s", a.dp.dir)
+	}
+	a.DirPickerType()
+	a.prompt.buf = filepath.Join(top, "nothing")
+	a.TypeEnter()
+	if a.dp.dir != top || !a.msgBad {
+		t.Fatal("a path that is not a folder is refused")
+	}
+	a.dpKey(B)
 	a.pickFolder("again", top, func(d string) { got = d })
 	a.dpKey(X)
 	if a.prompt == nil {

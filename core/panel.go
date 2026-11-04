@@ -185,7 +185,7 @@ func (a *App) rawHints() (plain, shift []hint) {
 		return []hint{{"^v", "setting"}, {"<>", "change"}, {"A", "default"}, {"X", "hear note"}, {"R1", "pattern tools"}, {"B", "close"}}, nil
 	}
 	if a.dp != nil {
-		return []hint{{"^v", "choose"}, {"l", "open the folder"}, {"h", "up"}, {"Enter", "use the folder in front"}, {"X", "new folder"}, {"L1 R1", "places"}, {"B", "cancel"}}, nil
+		return []hint{{"^v", "choose"}, {"l", "open the folder"}, {"h", "up"}, {"Enter", "use the folder in front"}, {"X", "new folder"}, {"/", "type a path"}, {"L1 R1", "places"}, {"B", "cancel"}}, nil
 	}
 	if a.picker != nil {
 		open := "open it"

@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -62,6 +61,9 @@ func (a *App) pickFolder(title, start string, onDone func(dir string)) {
 func (a *App) dpList(on string) {
 	dp := a.dp
 	dp.names, dp.cur = nil, 0
+	if up := filepath.Dir(dp.dir); up != dp.dir {
+		dp.names = append(dp.names, "..") // the folder above, a row of its own: always a way to a different place
+	}
 	des, err := os.ReadDir(dp.dir)
 	if err != nil {
 		a.say(err.Error(), true)
@@ -78,7 +80,12 @@ func (a *App) dpList(on string) {
 			dp.names = append(dp.names, de.Name())
 		}
 	}
-	sort.Slice(dp.names, func(i, j int) bool { return strings.ToLower(dp.names[i]) < strings.ToLower(dp.names[j]) })
+	start := 0
+	if len(dp.names) > 0 && dp.names[0] == ".." {
+		start = 1
+	}
+	rest := dp.names[start:]
+	sort.Slice(rest, func(i, j int) bool { return strings.ToLower(rest[i]) < strings.ToLower(rest[j]) })
 	for i, n := range dp.names {
 		if n == on {
 			dp.cur = i + 1
@@ -114,6 +121,10 @@ func (a *App) dpKey(k Key) {
 		}
 	case Right:
 		if dp.cur > 0 {
+			if dp.names[dp.cur-1] == ".." {
+				a.dpKey(Left)
+				return
+			}
 			dp.dir = filepath.Join(dp.dir, dp.names[dp.cur-1])
 			a.dpList("")
 		}
@@ -126,7 +137,7 @@ func (a *App) dpKey(k Key) {
 	case A:
 		dir := dp.dir
 		if dp.cur > 0 {
-			dir = filepath.Join(dp.dir, dp.names[dp.cur-1])
+			dir = filepath.Join(dp.dir, dp.names[dp.cur-1]) // ".." is the folder above
 		}
 		a.dp = nil
 		if dp.onDone != nil {
@@ -183,7 +194,7 @@ func (a *App) drawDirPicker(g Gfx) {
 	if len(dp.names) == 0 {
 		g.Text(x+2, y+5, "no folders in it", cDim, false)
 	}
-	g.Text(x+2, y+hr-2, fit(fmt.Sprintf("%d folders", len(dp.names)), wc-4), cDim, false)
+	g.Text(x+2, y+hr-2, fit("l open  h up  Enter use  x new folder  / type a path  [ ] places  Esc cancel", wc-4), cDim, false)
 }
 
 // freeTarget goes on with root/name when nothing is there; when it is, it asks: overwrite it, use a different name (typed, and asked
@@ -215,4 +226,32 @@ func (a *App) freeTarget(root, name string, rename bool, onDone func(dir string)
 	}
 	m.items = append(m.items, menuItem{label: "Cancel", run: func(int) {}})
 	a.menu = m
+}
+
+// dpType is / of a keyboard in the folder chooser: a path is typed, and the chooser goes there (~ is the home folder).
+func (a *App) dpType() {
+	dp := a.dp
+	if dp == nil {
+		return
+	}
+	a.askText("go to the folder", "any path, from / ; ~ is your home folder", dp.dir, func(s string) {
+		s = expandHome(strings.TrimSpace(s))
+		if st, err := os.Stat(s); err != nil || !st.IsDir() {
+			a.say(s+" is not a folder", true)
+			return
+		}
+		if a.dp == dp {
+			dp.dir = filepath.Clean(s)
+			a.dpList("")
+		}
+	})
+}
+
+// DirPickerType is / of a keyboard while the folder chooser is open; it says whether it was.
+func (a *App) DirPickerType() bool {
+	if a.dp == nil || a.prompt != nil {
+		return false
+	}
+	a.dpType()
+	return true
 }

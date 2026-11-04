@@ -263,8 +263,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 		m.disarm()
 		m.app.RequestQuit()
 		return
-	case "/": // as in vim: search, in the file browser (Y+A)
+	case "/": // as in vim: search, in the file browser (Y+A); in the folder chooser a path is typed
 		m.disarm()
+		if m.app.DirPickerType() {
+			return
+		}
 		if m.app.OnFiles() {
 			m.app.Dispatch(core.Event{Key: core.Y, Down: true})
 			m.send(core.A, 0)
