@@ -12,6 +12,9 @@ import (
 
 // runReplay shows a recorded performance: sp404 replay take.wav [take.events.jsonl].
 func runReplay(args []string, o options) error {
+	if len(args) > 0 && args[0] == "render" {
+		return runRender(args[1:], o)
+	}
 	if len(args) < 1 || len(args) > 2 {
 		return fmt.Errorf("usage: sp404 replay <audio.wav> [events.jsonl]   (without the second the file beside the WAV is used)")
 	}

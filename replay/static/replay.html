@@ -743,7 +743,10 @@ async function start() {
   const t0 = parseFloat(params.get("t") || "0");
   if (t0) audio.currentTime = t0;
   // for a render: window.replay.setTime(t) draws the frame of that time and nothing moves by itself
-  window.replay = { duration: AN.duration, fps: AN.fps, offset: OFFSET, setTime(t) { manual = t; draw(t); return true; }, release() { manual = null; }, draw };
+  window.replay = { duration: AN.duration, fps: AN.fps, offset: OFFSET, setTime(t) { manual = t; draw(t); return true; }, release() { manual = null; }, draw,
+    // for a render: the pictures of the look have loaded, and the picture of a time (a PNG as a data URL)
+    ready() { return (!logoImg || logoImg.complete) && (!bgImg || bgImg.complete); },
+    frame(t) { manual = t; draw(t); return cv.toDataURL("image/png"); } };
   window.replayReady = true;
   if (params.get("t") !== null && params.get("play") === null) manual = t0;
   frame();
