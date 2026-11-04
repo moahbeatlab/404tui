@@ -165,7 +165,7 @@
   <label>picture position <span class="two"><input id="s_bgpx" type="range" min="0" max="100"><input id="s_bgpy" type="range" min="0" max="100"></span></label>
   <label>picture zoom <input id="s_bgzoom" type="range" min="50" max="300"></label>
   <label>picture blur <input id="s_bgblur" type="range" min="0" max="30"></label>
-  <label>panels show the picture <input id="s_bgpanels" type="range" min="20" max="100"></label>
+  <label>panel opacity <input id="s_bgpanels" type="range" min="0" max="100"> <span id="s_bgpanelsv" class="h"></span></label>
   <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
   <label>BUS 1 at the start <span class="bw"><select id="s_bussel0"></select> <input id="s_bus0" placeholder="your own text" size="18" hidden></span></label>
   <label>BUS 2 at the start <span class="bw"><select id="s_bussel1"></select> <input id="s_bus1" placeholder="your own text" size="18" hidden></span></label>
@@ -599,7 +599,7 @@ function drawPads(T) {
     const n = b * 16 + i, row = Math.floor(i / 4), col = i % 4;
     const x = gx + col * (tw + gap), y = gy + row * (th + gap);
     const info = padInfo.get(n), st = padState(bank, i + 1, T);
-    rrect(x, y, tw, th, 10, info ? COL.tile : COL.tile2);
+    g.globalAlpha = PANEL_A; rrect(x, y, tw, th, 10, info ? COL.tile : COL.tile2); g.globalAlpha = 1;
     let glow = 0;
     if (st) { const age = T - st.hitAt; glow = st.held ? 1 : clamp(1 - age / 0.45, 0, 1); glow *= 0.35 + 0.65 * (st.v || 100) / 127; }
     if (glow > 0) { g.globalAlpha = glow * 0.85; rrect(x, y, tw, th, 10, COL.amber); g.globalAlpha = 1; }
@@ -828,7 +828,7 @@ function drawMeter(T) {
   }
   if (clip) { rect(x0 + w - 110, y0 + 10, 90, 28, COL.bad); text("CLIP", x0 + w - 65, y0 + 32, "#111", 20, true, "center"); }
   const sx = x0 + 24, sy = y0 + 134, sw = w - 48, sh = Math.max(h - 134 - 34 - (VERT ? 12 : 66), 40), nb = AN.bands;
-  rect(sx, sy, sw, sh, COL.deep);
+  g.globalAlpha = PANEL_A; rect(sx, sy, sw, sh, COL.deep); g.globalAlpha = 1;
   const bwid = sw / nb;
   for (let i = 0; i < nb; i++) {
     let v = 0;
@@ -859,7 +859,7 @@ function drawTempo(sx, sy, sw, sh, T) {
   let lo = Infinity, hi = -Infinity; for (const e of pts) { lo = Math.min(lo, e.bpm); hi = Math.max(hi, e.bpm); }
   const mid = (lo + hi) / 2, half = Math.max((hi - lo) / 2, 2) * 1.2;
   const gx = sx + 90, gw = sw - 190, gy = sy + 2, gh = sh - 4;
-  rect(gx, gy, gw, gh, COL.deep);
+  g.globalAlpha = PANEL_A; rect(gx, gy, gw, gh, COL.deep); g.globalAlpha = 1;
   g.strokeStyle = COL.amber; g.lineWidth = 2; g.beginPath();
   pts.forEach((e, i) => { const x = gx + clamp(e.t / d, 0, 1) * gw, y = gy + gh / 2 - (e.bpm - mid) / half * gh / 2; i ? g.lineTo(x, y) : g.moveTo(x, y); });
   g.stroke();
@@ -891,7 +891,7 @@ function applyStyle() {
   COL.amberD = hexMix(COL.amber, "#000000", 0.5); COL.amberDD = hexMix(COL.amber, "#000000", 0.65);
   const b = STYLE.bg || {};
   if (b.kind === "solid" && validHex(b.color)) COL.bg = b.color;
-  PANEL_A = b.kind === "gradient" || (b.kind === "image" && b.image) ? clamp(b.panels === undefined ? 0.9 : +b.panels, 0.2, 1) : 1;
+  PANEL_A = clamp(b.panels !== undefined ? +b.panels : (b.kind === "gradient" || (b.kind === "image" && b.image) ? 0.9 : 1), 0, 1); // how solid the panels are, over any background
   if (loadedKeys.logo !== STYLE.logo) { loadedKeys.logo = STYLE.logo; logoImg = loadImg(STYLE.logo); }
   if (loadedKeys.bg !== b.image) { loadedKeys.bg = b.image; bgImg = loadImg(b.image); }
   document.documentElement.style.setProperty("--amber", COL.amber);
@@ -1739,7 +1739,7 @@ function initStyle(saved) {
       sl.value = !note ? "" : known ? note : "__custom__"; inp.hidden = sl.value !== "__custom__"; inp.value = known ? "" : note;
     }
     const bg = STYLE.bg; $("s_bgfit").value = bg.fit || "cover"; $("s_bgpx").value = Math.round((bg.px === undefined ? 0.5 : bg.px) * 100); $("s_bgpy").value = Math.round((bg.py === undefined ? 0.5 : bg.py) * 100);
-    $("s_bgzoom").value = Math.round((bg.zoom || 1) * 100); $("s_bgblur").value = bg.blur || 0; $("s_bgpanels").value = Math.round((bg.panels === undefined ? 0.9 : bg.panels) * 100);
+    $("s_bgzoom").value = Math.round((bg.zoom || 1) * 100); $("s_bgblur").value = bg.blur || 0; $("s_bgpanels").value = Math.round((bg.panels !== undefined ? bg.panels : (bg.kind === "gradient" || (bg.kind === "image" && bg.image) ? 0.9 : 1)) * 100); $("s_bgpanelsv").textContent = $("s_bgpanels").value + " %";
     $("s_bgdim").value = Math.round((STYLE.bg.dim === undefined ? 0.6 : STYLE.bg.dim) * 100); $("s_handle").value = STYLE.handle || ""; $("s_sub").value = STYLE.subtitle || "";
   };
   show();
@@ -1757,7 +1757,7 @@ function initStyle(saved) {
   $("s_bgfit").onchange = () => { STYLE.bg.fit = $("s_bgfit").value; changed(); };
   $("s_bgpx").oninput = () => { STYLE.bg.px = $("s_bgpx").value / 100; changed(); }; $("s_bgpy").oninput = () => { STYLE.bg.py = $("s_bgpy").value / 100; changed(); };
   $("s_bgzoom").oninput = () => { STYLE.bg.zoom = $("s_bgzoom").value / 100; changed(); }; $("s_bgblur").oninput = () => { STYLE.bg.blur = +$("s_bgblur").value; changed(); };
-  $("s_bgpanels").oninput = () => { STYLE.bg.panels = $("s_bgpanels").value / 100; changed(); };
+  $("s_bgpanels").oninput = () => { STYLE.bg.panels = $("s_bgpanels").value / 100; $("s_bgpanelsv").textContent = $("s_bgpanels").value + " %"; changed(); };
   // what each bus is used for: one of the unit's effects, or your own text
   const setNotes = () => { STYLE.busNotes = [0, 1, 2, 3].map(k => { const v = $("s_bussel" + k).value; return v === "__custom__" ? $("s_bus" + k).value : v; }); changed(); };
   for (let i = 0; i < 4; i++) {
