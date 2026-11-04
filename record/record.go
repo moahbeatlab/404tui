@@ -1,6 +1,6 @@
 // Package record records audio from the unit, which shows up on the computer as a USB audio
-// interface, to a WAV file. It does not capture sound itself: it runs ffmpeg (or, where that is
-// missing, sox), which both know how to read an input device on every system.
+// interface, to a WAV file. On a Mac and on Linux it listens to the input itself (native.go); elsewhere, or when that is turned
+// off or fails, it runs ffmpeg (or, where that is missing, sox), which both know how to read an input device on every system.
 package record
 
 import (
@@ -78,7 +78,13 @@ func (s *Session) Size() int64 {
 func FileName(t time.Time) string { return t.Format("2006-01-02_15-04-05") + ".wav" }
 
 // Default is the recorder this computer can run: ffmpeg when it is installed, else sox, else none.
-func Default() Backend { return execBackend{ffmpeg: lookPath("ffmpeg"), sox: lookPath("sox")} }
+func Default() Backend {
+	e := execBackend{ffmpeg: lookPath("ffmpeg"), sox: lookPath("sox")}
+	if nativeOpener != nil { // listens itself where the system lets it, and starts ffmpeg or sox where not
+		return nativeFirst{exec: e}
+	}
+	return e
+}
 
 func lookPath(name string) string {
 	p, _ := exec.LookPath(name)
@@ -301,6 +307,12 @@ func NewSession(path, tool string, stop func() error) *Session {
 
 // Tool names the program a backend would record with, "" when it has none.
 func Tool(b Backend) string {
+	if n, ok := b.(nativeFirst); ok {
+		if n.useNative() {
+			return "the program itself"
+		}
+		b = n.exec
+	}
 	if e, ok := b.(execBackend); ok {
 		switch {
 		case e.ffmpeg != "":

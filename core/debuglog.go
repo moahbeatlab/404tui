@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/moahbeatlab/404tui/dbg"
+	"github.com/moahbeatlab/404tui/record"
 )
 
 // The debug log (package dbg): turned on with -v, or in CONFIG; what the program does and how long it takes goes to a file.
@@ -23,6 +24,7 @@ func (a *App) assignPad(n, id int, name string) error {
 
 // applyDebug turns the log on at the start when the settings say so.
 func (a *App) applyDebug() {
+	record.UseNative = !a.set.NoNative
 	if a.set.Debug != dbg.Off && !dbg.Enabled() {
 		dbg.Set(a.set.Debug, "")
 	}

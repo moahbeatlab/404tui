@@ -23,8 +23,10 @@ const meterWindow = 25 * time.Millisecond
 // Meter listens to an audio input and keeps how loud it is, per channel, over the latest 100 ms. It
 // writes nothing to disk: the program that reads the input hands the samples over a pipe.
 type Meter struct {
-	cmd  *exec.Cmd
-	done chan struct{}
+	cmd    *exec.Cmd // the program that listens, or nil when the program listens itself (native capture)
+	stopFn func()    // native capture: leaves the input
+	pend   []float32 // native capture: frames of the window that is being filled
+	done   chan struct{}
 
 	mu   sync.Mutex
 	peak [2]float64
@@ -67,6 +69,10 @@ func (m *Meter) Err() error {
 
 // Stop ends the program.
 func (m *Meter) Stop() {
+	if m.stopFn != nil {
+		m.stopFn()
+		return
+	}
 	if m.cmd.Process != nil {
 		_ = m.cmd.Process.Kill()
 	}
@@ -182,22 +188,46 @@ func (m *Meter) read(r io.Reader) {
 			}
 			mono = append(mono, sum/2)
 		}
-		m.hist = append(m.hist, mono...)
-		if len(m.hist) > fftSize {
-			m.hist = m.hist[len(m.hist)-fftSize:]
+		m.window(peak, mono)
+	}
+}
+
+// window takes in one window of sound: its peak per channel and its mono samples. It keeps the highest peak since the last reading, the
+// latest samples for the spectrum, and the spectrum, which rises at once and falls slowly.
+func (m *Meter) window(peak [2]float64, mono []float64) {
+	m.hist = append(m.hist, mono...)
+	if len(m.hist) > fftSize {
+		m.hist = m.hist[len(m.hist)-fftSize:]
+	}
+	bands := Bands(m.hist, 48000)
+	m.mu.Lock()
+	m.peak, m.at = peak, time.Now()
+	for c := range peak {
+		m.acc[c] = max(m.acc[c], peak[c])
+	}
+	if m.spec == nil {
+		m.spec = make([]float64, len(bands))
+	}
+	for i, v := range bands { // up at once, down slowly
+		m.spec[i] = max(v, m.spec[i]*0.82)
+	}
+	m.mu.Unlock()
+}
+
+// feed is what native capture calls with interleaved stereo frames (-1..1): they are cut into windows of the meter.
+func (m *Meter) feed(frames []float32) {
+	win := int(48000*meterWindow/time.Second) * 2
+	m.pend = append(m.pend, frames...)
+	for len(m.pend) >= win {
+		var peak [2]float64
+		mono := make([]float64, 0, win/2)
+		for i := 0; i+1 < win; i += 2 {
+			l, r := float64(m.pend[i]), float64(m.pend[i+1])
+			peak[0] = max(peak[0], math.Abs(l))
+			peak[1] = max(peak[1], math.Abs(r))
+			mono = append(mono, (l+r)/2)
 		}
-		bands := Bands(m.hist, 48000)
-		m.mu.Lock()
-		m.peak, m.at = peak, time.Now()
-		for c := range peak {
-			m.acc[c] = max(m.acc[c], peak[c])
-		}
-		if m.spec == nil {
-			m.spec = make([]float64, len(bands))
-		}
-		for i, v := range bands { // up at once, down slowly
-			m.spec[i] = max(v, m.spec[i]*0.82)
-		}
-		m.mu.Unlock()
+		m.pend = append(m.pend[:0], m.pend[win:]...)
+		m.window(peak, mono)
 	}
 }

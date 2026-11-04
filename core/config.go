@@ -338,6 +338,28 @@ func (a *App) cfgItems() []cfgItem {
 			edit: promptSetting("record into folder", "", func(a *App) string { return a.set.RecordDir }, func(a *App, s string) { a.set.RecordDir = s })},
 		{label: "Input with this in its name", value: func(a *App) string { return a.recordDevice() }, hint: "A edits",
 			edit: promptSetting("input with this in its name", "", func(a *App) string { return a.recordDevice() }, func(a *App, s string) { a.set.RecordDevice = s })},
+		{label: "Record and meter with", value: func(a *App) string {
+			switch {
+			case !record.Native():
+				return "ffmpeg or sox (no native capture here)"
+			case a.set.NoNative:
+				return "ffmpeg or sox"
+			}
+			return "the program itself"
+		}, hint: "< > change", change: func(a *App, by int) {
+			if !record.Native() {
+				a.say("this system has no native capture: ffmpeg or sox is used", false)
+				return
+			}
+			a.set.NoNative = !a.set.NoNative
+			record.UseNative = !a.set.NoNative
+			a.saveSettings()
+			if a.lvl != nil && a.lvl.src != nil { // the meter listens the new way from now on
+				a.lvl.src.Stop()
+				a.lvl.src, a.lvl.err = nil, ""
+			}
+			a.say("recording and the level meter use "+map[bool]string{true: "ffmpeg or sox", false: "the program's own capture"}[a.set.NoNative], false)
+		}},
 		{label: "Recorder", value: func(a *App) string { return a.recorderLine() }, hint: ""},
 		{head: "PAD CODES ON THE UNIT"},
 		{label: "Live mode (the PERF screen)", value: func(a *App) string { return codeText(a.liveCode()) }, hint: "A edits",
@@ -382,6 +404,9 @@ func (a *App) cfgItems() []cfgItem {
 				return "(it is off)"
 			}},
 		)
+	}
+	if !Terminal { // the handheld does not record or meter: only a computer has this choice
+		items = slices.DeleteFunc(items, func(it cfgItem) bool { return it.label == "Record and meter with" })
 	}
 	_ = rule
 	if Terminal { // there is no PERF screen on a computer: its pad code has nothing to start

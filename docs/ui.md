@@ -110,7 +110,7 @@ The program looks for the SP-404MKII all the time (a USB cable, nothing to set u
 `u` works online (PROJECTS shows the unit's projects), `o` works offline and opens the project that was open last offline; any other key
 goes on with the project that is open. With no unit it says so and works offline. On PROJECTS, `t` switches between the two, and
 chooses the folder of the offline projects. **While a unit is plugged in the panel has a level meter** (left and right, the highest peak
-held for a moment, and a CLIP light), so the volume can be watched; it listens to the unit's USB audio with `ffmpeg` or `sox`. Under the bars, in a window of 36 rows or more, is a **spectrum** (64 bands from 30 Hz to 18 kHz, falling slowly).
+held for a moment, and a CLIP light), so the volume can be watched; it listens to the unit's USB audio itself (a Mac, Linux), else with `ffmpeg` or `sox`. Under the bars, in a window of 36 rows or more, is a **spectrum** (64 bands from 30 Hz to 18 kHz, falling slowly).
 
 `u` loads the unit's open project into the editor and edits it **live**: what you change goes to the unit, and what is changed on the unit itself comes into the editor within a few seconds: pads of the bank in view (a sample, a name, a setting), patterns (written or deleted there), and the program says when the unit has opened another project (live editing of the first one stops, so nothing goes to the wrong project) or when the project names changed. Backups and exports (the unit's project menu, `Ctrl-E` on the pads, CONFIG) open a **folder chooser** (`l` opens a folder, `h` goes up, `Enter` uses the one in front, `x` makes a new folder, `/` types a path to go anywhere, the row `..` goes up, `[ ]` jump between home, the samples, the card folder and the drives); the folder is remembered. On FILES the left column of the top of a place lists the **sources** (computer, samples, drives, the unit's card and storage) with this one lit, and an index being built shows its progress in the panel.
 
@@ -128,8 +128,14 @@ platform without a unit does not offer this; the computer's folders keep to the 
 
 ## Recording a set
 
-`Ctrl-R` records the unit's audio, from any screen, to a WAV in the folder CONFIG names, with `ffmpeg` (or `sox`): 24-bit, 48 kHz,
-stereo, from the input with `404` in its name (the unit's USB audio). The red `REC` in the title bar shows the time. The panel's level meter shows the level of what is recorded. A system that cannot record says so instead of failing; the handheld has no recorder yet.
+`Ctrl-R` records the unit's audio, from any screen, to a WAV in the folder CONFIG names: 24-bit, 48 kHz, stereo, from the input with `404` in
+its name (the unit's USB audio). The red `REC` in the title bar shows the time.
+
+On a **Mac and on Linux the program listens to the input itself** (CoreAudio; PulseAudio or PipeWire), so ffmpeg is not needed. One capture feeds
+both the recording and the level meter, so the meter follows the sound a few milliseconds behind it, also while recording, and the file and
+the meter hear the same thing. On a Mac the program may have to be allowed to use the microphone (System Settings, Privacy). Where there is no
+native capture (Windows), or when CONFIG's "Record and meter with" is set to ffmpeg or sox, those programs record instead; they add delay of
+their own. A system that cannot record says so instead of failing; the handheld has no recorder yet.
 
 ## The unit: whole projects, and live
 
