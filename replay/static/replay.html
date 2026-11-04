@@ -122,6 +122,7 @@ function prepare(events, analysis, cuesIn) {
       case "beat": beats.push({ t: e.t, n: e.n, bpm: e.bpm }); break;
       case "start": case "stop": case "continue": transport.push({ t: e.t, k: e.k }); break;
       case "pattern": patEv.push({ t: e.t, now: e.now, next: e.next }); break;
+      case "mute": push(muteEv, e.bank + e.pad, { t: e.t, on: e.on }); break;
     }
     if (e.k === "on" && e.ch === 13 && e.n === 48) loopStarts.push(e.t);
   }
@@ -166,6 +167,8 @@ function buildFeed(timed) {
     } else if (e.k === "fx") {
       if (e.fx !== undefined) feedStatic.push({ t: e.t, text: "BUS " + e.bus + " effect", val: ((window.SP404_FX || {})[e.bus >= 3 ? "fx34" : "fx12"] || [])[e.fx] || String(e.fx), col: BUSCOL[e.bus] });
       else feedStatic.push({ t: e.t, text: "BUS " + e.bus + " FX", val: e.on ? "ON" : "OFF", col: BUSCOL[e.bus] });
+    } else if (e.k === "mute") {
+      feedStatic.push({ t: e.t, text: e.bank + e.pad + (e.on ? " muted" : " back in"), val: "", col: COL.bad });
     } else if (e.k === "on" && !e.bank) {
       feedStatic.push({ t: e.t, text: e.ch === 13 && e.n === 48 ? "loop start" : "MIDI note " + e.n + " ch " + e.ch, val: e.ch === 13 && e.n === 48 ? "" : "v" + e.v, col: COL.dim });
     } else if (e.k === "start" || e.k === "stop" || e.k === "continue") feedStatic.push({ t: e.t, text: e.k.toUpperCase(), val: "", col: COL.good });
@@ -325,6 +328,8 @@ function drawPads(T) {
       const age = T - st.hitAt;
       if (age >= 0 && age < 1.4) { g.globalAlpha = 1 - age / 1.4; rect(x + tw - 14, y + th - 10 - (th - 20) * (st.v || 100) / 127, 6, (th - 20) * (st.v || 100) / 127, COL.amber); g.strokeStyle = COL.amber; g.lineWidth = 3; g.beginPath(); g.roundRect(x + 1.5, y + 1.5, tw - 3, th - 3, 9); g.stroke(); g.globalAlpha = 1; }
     }
+    const me = muteEv.size ? at(muteEv.get(bank + (i + 1)) || [], T) : null;
+    if (me && me.on) { g.globalAlpha = 0.55; rrect(x, y, tw, th, 10, "#000"); g.globalAlpha = 1; text("MUTE", x + tw - 14, y + th - 12, COL.bad, 18, true, "right"); }
     const hl = hitTimes.get(bank + (i + 1)), hc = hl ? atIndex(hl, T) + 1 : 0;
     if (hc > 0) text("x" + hc, x + tw - 14, y + 28, glow > 0.5 ? "#111" : COL.dim, 18, false, "right");
     if (inPat && inPat.has(n)) { g.strokeStyle = COL.amberD; g.lineWidth = 2; g.beginPath(); g.roundRect(x + 1, y + 1, tw - 2, th - 2, 9); g.stroke(); }
@@ -350,7 +355,11 @@ function drawPads(T) {
 }
 
 // has a pad been heard in the last pass of the pattern, while others were? (the unit does not say that a track is muted: this is a guess)
+// a mute that was made from the program (the level of the pad set to 0) is in the log: then it is known, not guessed
+const muteEv = new Map();
+const padLabel = n => String.fromCharCode(65 + Math.floor(n / 16)) + (n % 16 + 1);
 function mutedGuess(pad, p, T) {
+  if (muteEv.size) { const e = at(muteEv.get(padLabel(pad)) || [], T); return !!(e && e.on); }
   const pos = playPosition(T); if (!pos) return false;
   const lenS = (p.length / 480) * 60 / pos.bpm;
   if (T - lenS < 0) return false;
@@ -389,7 +398,7 @@ function drawPattern(T) {
     text(String.fromCharCode(65 + Math.floor(n / 16)) + (n % 16 + 1), ix + 14, y + rh * 0.68, COL.text, 17, true);
     const flags = [mi.Gate === "on" ? "G" : "", mi.Loop === "on" ? "L" : "", mi["One shot"] === "on" ? "O" : "", mi.Mode && mi.Mode !== "forward" ? "R" : ""].join("");
     text((mi.Bus && mi.Bus !== "off" ? mi.Bus.replace("BUS ", "B") : "-") + " L" + (mi.Level || "?") + " " + (mi.Pan || "") + " " + flags, ix + 76, y + rh * 0.68, COL.text, 16);
-    if (muted) text("muted?", ix + 250, y + rh * 0.68, COL.bad, 15, true);
+    if (muted) text(muteEv.size ? "muted" : "muted?", ix + 250, y + rh * 0.68, COL.bad, 15, true);
     for (let s = 0; s < visible; s++) rect(gx + s * cw + 1, y + 1, cw - 2, rh - 3, (first + s) % 4 === 0 ? "#303030" : "#262626");
     for (const nt of p.notes) {
       if (nt[1] !== n) continue;

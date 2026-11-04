@@ -264,6 +264,9 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		return m, next
 	}
 	m.logMIDI(e)
+	if loopMarker(e) {
+		m = m.patternLoopStart()
+	}
 	m.motionIn(e)
 	m = m.fxEvent(e)
 	ctl := m.midiChan()

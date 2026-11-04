@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/proto"
 )
 
 // Scenes (Perform): the effect of each bus is saved as scene A and as scene B (on or off, which effect and
@@ -45,8 +46,10 @@ type sceneState struct {
 	// overdub: a knob moved while a motion plays is written into it.
 	overdub bool
 	out     midiin.Out
-	outErr  string
-	tried   time.Time
+	// pcNext is the pattern that waits for the loop to end to be sent (see patternswitch.go).
+	pcNext *proto.PadIndex
+	outErr string
+	tried  time.Time
 	// punch is the snapshots that are held (see punch.go).
 	punch punchRun
 	// lfo is what the LFOs are doing (see lfo.go).

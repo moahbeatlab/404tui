@@ -479,22 +479,24 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		cmd := m.switchBank(c.I - m.bank)
 		return m, cmd
 	case "cue":
-		// A pattern of the bank on show is the one that plays (n 1) or the next (n 2).
+		// A pattern of the bank on show: n 1 plays it at once, n 2 makes it the next one (it is sent when the unit's loop ends).
 		rows := m.patterns[m.perfBank()]
 		if c.I < 0 || c.I >= len(rows) || !rows[c.I].Exists || (c.N != 1 && c.N != 2) {
 			return m, nil
 		}
-		slot := rows[c.I].Slot
-		if c.N == 1 {
-			m.perfNow, m.perfAuto = &slot, false
-		} else {
-			m.perfNext = &slot
-		}
-		m.logCue()
+		m = m.patternCue(rows[c.I].Slot, c.N == 1)
 		return m, m.wanted()
 	case "nextnow":
+		if m.sc != nil && m.sc.pcNext != nil { // the pattern that waits for the loop to end is sent now
+			slot := *m.sc.pcNext
+			m.sc.pcNext = nil
+			return m.patternSend(slot), m.wanted()
+		}
 		return m.perfKey(" ")
 	case "clearnext":
+		if m.sc != nil {
+			m.sc.pcNext = nil
+		}
 		return m.perfKey("x")
 	}
 	return m, nil
