@@ -109,6 +109,9 @@ func (a *App) hints() (plain, shift []hint) {
 	if Terminal && a.scr == Unit && !a.Modal() && a.prompt == nil {
 		plain = append(append([]hint{}, plain...), hint{"t", "online / offline"})
 	}
+	if Terminal && a.scr == Files && !a.Modal() && a.prompt == nil && a.kb == nil {
+		plain = append(append([]hint{}, plain...), hint{"m", "mark file"})
+	}
 	if Terminal && a.scr == Files && !a.Modal() && a.prompt == nil && a.kb == nil { // t: load files from where
 		out := make([]hint, 0, len(plain)+1)
 		for _, h := range plain {
@@ -211,6 +214,9 @@ func (a *App) rawHints() (plain, shift []hint) {
 		pick := hint{"A", "to pad " + a.label(a.padN())}
 		if Terminal {
 			pick = hint{"A", "to a pad..."}
+			if n := len(a.fmarks); n > 0 {
+				pick = hint{"A", fmt.Sprintf("%d marked to pads...", n)}
+			}
 		}
 		if e, ok := a.current(); ok && e.project {
 			pick = hint{"A", "load project"}

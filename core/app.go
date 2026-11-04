@@ -398,7 +398,7 @@ func (a *App) readDir(dir string, projects bool) ([]entry, error) {
 		if out[i].dir != out[j].dir {
 			return out[i].dir
 		}
-		return strings.ToLower(out[i].name) < strings.ToLower(out[j].name)
+		return app.NaturalLess(strings.ToLower(out[i].name), strings.ToLower(out[j].name)) // the way people count: clap_2 before clap_10
 	})
 	return out, nil
 }
@@ -823,6 +823,20 @@ func (a *App) ExportBank() {
 	a.exportBank()
 }
 
+// MarkFile is m of a keyboard on FILES: the file under the cursor is marked (or not any more), and the cursor goes on.
+func (a *App) MarkFile() {
+	if a.scr != Files || a.Modal() || a.prompt != nil || a.kb != nil {
+		return
+	}
+	a.CancelShift()
+	a.toggleFileMark()
+	if n := len(a.fmarks); n > 0 {
+		a.say(fmt.Sprintf("%d marked: A puts them on the pads in the order of their names", n), false)
+	} else {
+		a.say("no file is marked", false)
+	}
+}
+
 // StopSound is x of a keyboard on PADS and FILES: whatever sounds stops (Space plays).
 func (a *App) StopSound() {
 	if a.Modal() || a.prompt != nil || a.kb != nil {
@@ -1180,6 +1194,10 @@ func (a *App) filesKey(k Key) {
 			a.joinSample(id)
 			return
 		}
+		if Terminal && len(a.fmarks) > 0 { // marked files: all of them, in the order of their names, on the pads from the one chosen
+			a.assignMarked()
+			return
+		}
 		name := strings.TrimSuffix(filepath.Base(e.name), filepath.Ext(e.name))
 		if Terminal { // a computer chooses the pad in the pad dialog, as everywhere a pad is chosen
 			a.pickPad("put "+fit(name, 24)+" on a pad", a.padN(), false, func(n int) { a.assignFile(id, name, n) })
@@ -1312,7 +1330,11 @@ func (a *App) openEntry() {
 
 // decode reads a file of the browser into the lab, once.
 func (a *App) decode(e entry) (int, error) {
-	p := joinPath(a.dir, e.name)
+	return a.decodePath(joinPath(a.dir, e.name), pathExt(e.name))
+}
+
+// decodePath is decode for a file by its path (a marked file may be in another folder).
+func (a *App) decodePath(p, ext string) (int, error) {
 	if id, ok := a.prev[p]; ok {
 		for i, q := range a.prevOrder { // the most recently used goes last
 			if q == p {
@@ -1326,7 +1348,7 @@ func (a *App) decode(e entry) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	mb, err := a.lab.Decode(b, pathExt(e.name))
+	mb, err := a.lab.Decode(b, ext)
 	if err != nil {
 		return 0, err
 	}

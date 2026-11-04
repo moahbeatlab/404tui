@@ -812,3 +812,59 @@ func TestFolderSearchMatchesTheNameOfTheFolderOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestMarkedFilesGoOnConsecutivePadsInTheOrderOfTheirNames(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	src, err := os.ReadFile(filepath.Join(a.Root, "bass", "bass_C1.wav"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := filepath.Join(a.Root, "set")
+	os.MkdirAll(set, 0o755)
+	for _, n := range []string{"kick_10.wav", "kick_2.wav", "kick_1.wav", "snare_1.wav"} {
+		os.WriteFile(filepath.Join(set, n), src, 0o644)
+	}
+	a.GoScreen(3)
+	a.cd(set)
+	var order []string
+	for _, e := range a.entries {
+		order = append(order, e.name)
+	}
+	if strings.Join(order, " ") != "kick_1.wav kick_2.wav kick_10.wav snare_1.wav" {
+		t.Fatalf("the list counts the way people do: %v", order)
+	}
+	a.fcur = 0
+	a.MarkFile() // kick_1
+	a.MarkFile() // kick_2
+	a.MarkFile() // kick_10
+	if len(a.fmarks) != 3 || a.fcur != 3 {
+		t.Fatalf("m marks and moves on: %d marked, cursor %d", len(a.fmarks), a.fcur)
+	}
+	a.fcur = 0
+	press := func(k Key) {
+		a.Dispatch(Event{Key: k, Down: true})
+		a.Dispatch(Event{Key: k, Down: false})
+	}
+	press(A)
+	if a.picker == nil || !strings.Contains(strings.ToLower(screenStr(a)), "3 marked files") {
+		t.Fatalf("A with marks opens the pad dialog:\n%s", screenStr(a))
+	}
+	press(A) // the pad it opens on
+	var got []string
+	start := -1
+	for n, p := range a.info.Pads {
+		if p.File {
+			if start < 0 {
+				start = n
+			}
+			got = append(got, p.Name)
+		}
+	}
+	if strings.Join(got, " ") != "kick_1 kick_2 kick_10" || start != a.bank*16+a.cur {
+		t.Fatalf("the files are on consecutive pads in order: %v from %d", got, start)
+	}
+	if len(a.fmarks) != 0 || a.ScreenName() != "PADS" {
+		t.Fatal("the marks are gone and the pads are shown")
+	}
+}

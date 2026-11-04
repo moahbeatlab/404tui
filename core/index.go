@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/moahbeatlab/404tui/app"
 )
 
 // The file index: one text file per indexed folder in <data>/index, a "#root" line and then "relative path<TAB>size"
@@ -228,7 +230,7 @@ func (a *App) searchIndex(words []string) bool {
 		}
 	}
 	sort.SliceStable(a.entries, func(i, j int) bool {
-		return strings.ToLower(a.entries[i].name) < strings.ToLower(a.entries[j].name)
+		return app.NaturalLess(strings.ToLower(a.entries[i].name), strings.ToLower(a.entries[j].name))
 	})
 	a.fcur = 0
 	return true

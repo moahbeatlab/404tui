@@ -109,7 +109,7 @@ func (a *App) searchList() {
 		return nil
 	})
 	sort.SliceStable(a.entries, func(i, j int) bool {
-		return strings.ToLower(a.entries[i].name) < strings.ToLower(a.entries[j].name)
+		return app.NaturalLess(strings.ToLower(a.entries[i].name), strings.ToLower(a.entries[j].name))
 	})
 	a.fcur = 0
 }

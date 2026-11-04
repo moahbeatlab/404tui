@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -18,6 +19,62 @@ func (a *App) marked() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// markedAudio are the marked audio files, in the order of their names as people count them (a folder at a time, clap_2 before clap_10).
+func (a *App) markedAudio() []string {
+	var out []string
+	for _, p := range a.marked() {
+		if audioExts[strings.ToLower(pathExt(p))] {
+			out = append(out, p)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return app.NaturalLess(strings.ToLower(out[i]), strings.ToLower(out[j])) })
+	return out
+}
+
+// assignMarked asks which pad the first marked file goes to (the pad dialog), then puts the files on that pad and the ones after it.
+func (a *App) assignMarked() {
+	files := a.markedAudio()
+	if len(files) == 0 {
+		a.say("none of the marked items is an audio file", true)
+		return
+	}
+	start := a.freeRun(len(files), a.padN())
+	if start < 0 {
+		start = a.padN()
+	}
+	title := fmt.Sprintf("put %d marked files on the pads from", len(files))
+	a.pickPad(title, start, false, func(first int) {
+		if first+len(files) > 160 {
+			a.say(fmt.Sprintf("%d files do not fit from %s: the last pad is J16", len(files), a.label(first)), true)
+			return
+		}
+		done := 0
+		for i, p := range files {
+			id, err := a.decodePath(p, pathExt(p))
+			if err != nil {
+				a.say(baseName(p)+": "+err.Error(), true)
+				continue
+			}
+			name := strings.TrimSuffix(baseName(p), filepath.Ext(baseName(p)))
+			if err := a.lab.Assign(first+i, id, name); err != nil {
+				a.say(err.Error(), true)
+				continue
+			}
+			delete(a.pcm, first+i)
+			done++
+		}
+		a.fmarks = nil
+		a.aud = nil
+		a.sl = nil
+		a.refresh()
+		a.stopPreview()
+		a.replay()
+		a.bank, a.cur = first/16, first%16
+		a.say(fmt.Sprintf("%d files on %s to %s, in the order of their names", done, a.label(first), a.label(first+len(files)-1)), false)
+		a.go_(Pads)
+	})
 }
 
 // toggleFileMark marks the entry under the cursor, or takes the mark off.
