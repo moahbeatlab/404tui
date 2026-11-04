@@ -573,6 +573,22 @@ var fillPresets = []struct {
 	{"second half of the bar", []int{8, 9, 10, 11, 12, 13, 14, 15}},
 	{"last beat stutter", []int{12, 13, 14, 15}},
 	{"pickup before the next bar", []int{0, 8, 14, 15}},
+	// the same family, more of it: the other clave directions, the bell and dance patterns of the Caribbean, and what a hat or a kick does
+	{"son clave 2-3", []int{2, 4, 8, 11, 14}},
+	{"rumba clave 2-3", []int{2, 4, 8, 11, 15}},
+	{"cinquillo", []int{0, 4, 6, 10, 12}},
+	{"habanera / dembow", []int{0, 3, 4, 6, 8, 11, 12, 14}},
+	{"charleston", []int{0, 6}},
+	{"3-3-3-3-4", []int{0, 3, 6, 9, 12}},
+	{"2-step kick", []int{0, 10}},
+	{"breakbeat kick", []int{0, 2, 10}},
+	{"one drop (beat 3)", []int{8}},
+	{"the e of each beat", []int{1, 5, 9, 13}},
+	{"the a of each beat", []int{3, 7, 11, 15}},
+	{"trap hat roll", []int{0, 2, 4, 6, 8, 10, 12, 13, 14, 15}},
+	{"jazz ride (straight)", []int{0, 4, 6, 8, 12, 14}},
+	{"last two steps", []int{14, 15}},
+	{"last three steps", []int{13, 14, 15}},
 }
 
 func (a *App) fillMenu() {

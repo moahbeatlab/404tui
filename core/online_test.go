@@ -3,8 +3,10 @@ package core
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1234,4 +1236,92 @@ func TestWhatATrackToolKeepsReachesTheUnitWhenEditingLive(t *testing.T) {
 		t.Fatalf("the unit has the pattern that was kept: %v (%d bytes, wanted %d) pad %d", err, len(got), len(want), pad)
 	}
 	a.menu = nil
+}
+
+func TestEveryFillPatternIsAValidBarOfSixteenthSteps(t *testing.T) {
+	seen := map[string]bool{}
+	for _, f := range fillPresets {
+		if f.name == "" || seen[f.name] {
+			t.Errorf("a name that is empty or used twice: %q", f.name)
+		}
+		seen[f.name] = true
+		last := -1
+		for _, s := range f.mask {
+			if s < 0 || s > 15 || s <= last {
+				t.Errorf("%s: the steps go 0 to 15 in order: %v", f.name, f.mask)
+			}
+			last = s
+		}
+		if len(f.mask) == 0 {
+			t.Errorf("%s has no step", f.name)
+		}
+	}
+	for _, want := range []string{"son clave 3-2", "son clave 2-3", "rumba clave 2-3", "cinquillo", "habanera / dembow"} {
+		if !seen[want] {
+			t.Errorf("the pattern %q is there", want)
+		}
+	}
+	// the other direction of a clave is the first one half a bar later
+	rot := func(mask []int) []int {
+		var out []int
+		for _, s := range mask {
+			out = append(out, (s+8)%16)
+		}
+		sort.Ints(out)
+		return out
+	}
+	byName := map[string][]int{}
+	for _, f := range fillPresets {
+		byName[f.name] = f.mask
+	}
+	for a, b := range map[string]string{"son clave 3-2": "son clave 2-3", "rumba clave 3-2": "rumba clave 2-3"} {
+		if fmt.Sprint(rot(byName[a])) != fmt.Sprint(byName[b]) {
+			t.Errorf("%s is %s half a bar later: %v", b, a, rot(byName[a]))
+		}
+	}
+}
+
+func TestReloadOnTheUnitAndTheHintAfterAPatternIsSent(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	waitLink(t, a)
+	dev, _ := a.unitDevice()
+	a.goLive(dev, 0)
+	t.Cleanup(func() { a.stopLive() })
+	// a pattern is written to the unit: the status says that it shows after a reload
+	a.GoScreen(1)
+	a.pat = 7
+	a.ensurePattern()
+	a.autoRows()
+	a.toggle(a.rowPad(), 3)
+	a.liveSync()
+	for i := 0; i < 500; i++ {
+		a.liveTick()
+		if strings.Contains(a.msg, "shows there after a reload") {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !strings.Contains(a.msg, "shows there after a reload") {
+		t.Fatalf("it says the pattern is written and where the reload is: %q", a.msg)
+	}
+	// the menu of the project has the reload, and it works
+	a.GoScreen(2)
+	a.unitCur = 0
+	a.unitMenu()
+	if !strings.Contains(screenStr(a), "Reload on the unit") {
+		t.Fatalf("the project's menu offers the reload while it is edited live:\n%s", screenStr(a))
+	}
+	a.menu = nil
+	a.reloadLive()
+	for i := 0; i < 500; i++ {
+		a.live.mu.Lock()
+		done := a.live.reloaded
+		a.live.mu.Unlock()
+		if done {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the unit reloaded the project")
 }

@@ -61,8 +61,10 @@ type liveState struct {
 	pulls     chan []pulled
 	stop      chan struct{}
 	// the unit is not looked at until this time: after a change of ours it takes a moment to show it
-	quietUntil time.Time
-	seen       map[int]uint64 // pad -> the unit's block as last seen different from ours (it has to be seen twice to count)
+	quietUntil   time.Time
+	reloaded     bool           // the unit finished a reload
+	patternsSent bool           // a pattern was written to the unit's card and the unit was not told to reload (see App.reloadLive)
+	seen         map[int]uint64 // pad -> the unit's block as last seen different from ours (it has to be seen twice to count)
 }
 
 // settleTime is how long the unit is left alone after something was sent to it.
@@ -216,6 +218,9 @@ func (l *liveState) run() {
 			}
 		}
 		l.mu.Lock()
+		if err == nil && (c.kind == "pattern" || c.kind == "unpattern") {
+			l.patternsSent = true
+		}
 		l.quietUntil = time.Now().Add(settleTime) // the unit may need a moment to show what it was given
 		l.sent++
 		if err != nil {
@@ -276,6 +281,15 @@ func (a *App) liveTick() {
 	l := a.live
 	if l == nil {
 		return
+	}
+	l.mu.Lock()
+	tell := l.patternsSent && !l.running && len(l.queue) == 0
+	if tell {
+		l.patternsSent = false
+	}
+	l.mu.Unlock()
+	if tell { // the pattern is in the unit's files: the unit shows it when it loads them
+		a.say("the pattern is written to the unit: it shows there after a reload (PROJECTS, this project, Reload on the unit)", false)
 	}
 	l.watchBank.Store(int32(a.bank))
 	select {
@@ -532,5 +546,27 @@ func (a *App) fetchTick() {
 		data, err := dev.ReadFile(pi.SamplePath(uint8(project) + 1))
 		dbg.Logger.Debug("live: sample fetched in the background", "pad", next+1, "bytes", len(data), "ms", time.Since(st).Milliseconds(), "err", err)
 		ch <- padFetch{next, data, err}
+	}()
+}
+
+// reloadLive makes the unit read the project that is edited live from its card again, so that the patterns written to it show on the unit.
+// It stops the sound there; settings the unit holds in memory only are replaced by what is on its card.
+func (a *App) reloadLive() {
+	l := a.live
+	if l == nil {
+		return
+	}
+	a.say("reloading the project on the unit...", false)
+	dev, project := l.dev, l.project
+	st := time.Now()
+	go func() {
+		err := dev.ReloadProject(uint8(project))
+		dbg.Logger.Info("live: the unit reloaded the project", "project", project+1, "ms", time.Since(st).Milliseconds(), "err", err)
+		l.mu.Lock()
+		if err != nil {
+			l.err = fmt.Errorf("reload: %w", err)
+		}
+		l.reloaded = err == nil
+		l.mu.Unlock()
 	}()
 }

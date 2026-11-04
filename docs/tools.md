@@ -262,7 +262,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
     *Settings*
 
-    - `Pattern` — every beat, beats 1 and 3, ... pickup before the next bar (19 values); now every beat
+    - `Pattern` — every beat, beats 1 and 3, ... last three steps (34 values); now every beat
     - `Velocity` — 127 / 100 / 80 / 60; now 100
     - `Gate` — 25% / 50% / 75% / 100% / 150% / 200%; now 75%
     - `Decay per hit` — off / 5% / 10% / 15% / 20% / 30% / 40%; now off

@@ -595,6 +595,27 @@ func (d *Device) restore(project uint8, files []File, progress func(i int, name 
 	return err
 }
 
+// ReloadProject makes the unit read project (0-based) from its card again, as the official app does at the end of "Import to MKII":
+// what is in the files (patterns written to them) shows on the unit, the sound stops, and whatever the unit holds in memory only is
+// replaced. It returns when the unit says it has reloaded.
+func (d *Device) ReloadProject(project uint8) error {
+	m, err := d.transact(short(proto.RestoreReload(project)), "reload project", 15*time.Second, func(m *proto.Message) bool {
+		return isControl(m) && startsWith(proto.RestoreReloadReply, 1)(m.Payload())
+	})
+	if err != nil {
+		return err
+	}
+	if p := m.Payload(); len(p) > 1 && p[1] != 0 {
+		return refused("reload project", p[1])
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	_, err = d.wait("project reload", 15*time.Second, func(m *proto.Message) bool {
+		return isControl(m) && startsWith(proto.RestoreReloaded, 1)(m.Payload())
+	})
+	return err
+}
+
 // ImportSMP writes a complete SMP file to a pad and points the pad at it, following the
 // official app's import sequence. project is 1-based (the PROJECT_NN folder) and must be
 // the current project: the pad block is written to the current project, so importing into
