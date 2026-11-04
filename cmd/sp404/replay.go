@@ -26,6 +26,10 @@ In the page
                       the pads follow the pattern's bank. Click an amber tag on the timeline to remove it; "clear" removes all.
     style             palette, accent colour, background (colour, gradient, picture), logo, handle, subtitle
     - / + / fit, Ctrl+wheel   zoom the timeline (the lanes get wider and scroll; the slider stays the whole take, with a mark for the part shown)
+    templates         save a setup (the look, the style of the captions, the camera, the scenes and layouts, the chapters, what the buses are used
+                      for) as a template and lay it over other takes, part by part (undo takes it back). One template can be the default: a take
+                      that has nothing saved yet starts with it. The times of scenes and chapters are kept as a part of the length of the take.
+                      The templates are files in the configuration folder (404tui/replay-templates, or $SP404_TEMPLATES).
     sidebar           captions, chapters, camera and style are tabs of a sidebar on the right (their buttons open and close it)
     undo, redo        steps back and forth through the patterns, captions, chapters and title (Ctrl-Z, Ctrl-Shift-Z)
     camera            a video of you playing (no sound needed): type its path, match one pad hit with the frame by eye (sync), then drag the box on

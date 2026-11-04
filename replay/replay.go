@@ -31,6 +31,8 @@ type Replay struct {
 	AudioPath, EventsPath string
 	Events                []perflog.Entry
 	Analysis              *Analysis
+	TemplatesDir          string // where the templates are (default: the configuration folder of the user)
+	fresh                 bool   // the take has nothing saved yet: a template can be laid over it
 	CuesPath              string // the title and the patterns that were set by hand, beside the event log
 	mu                    sync.Mutex
 	title                 string
@@ -179,6 +181,25 @@ func (r *Replay) SetCaptions(c []Caption) error {
 	return r.save()
 }
 
+// freshTemplate is the default template, for a take that has nothing saved yet (nil otherwise).
+func (r *Replay) freshTemplate() json.RawMessage {
+	r.mu.Lock()
+	fresh := r.fresh
+	r.mu.Unlock()
+	if !fresh {
+		return nil
+	}
+	return r.DefaultTemplate()
+}
+
+// CameraName is the name of the camera video ("" when there is none).
+func (r *Replay) CameraName() string {
+	if p := r.CameraPath(); p != "" {
+		return filepath.Base(p)
+	}
+	return ""
+}
+
 // CameraPath is the camera video as a path that can be opened ("" when there is none).
 func (r *Replay) CameraPath() string {
 	r.mu.Lock()
@@ -310,6 +331,7 @@ func (r *Replay) SetStyle(b []byte) error {
 }
 
 func (r *Replay) save() error {
+	r.fresh = false
 	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 && len(r.captions) == 0 && len(r.chapters) == 0 && len(r.busNotes) == 0 && r.cameraFile == "" && len(r.camera) == 0 && !r.adopted {
 		if err := os.Remove(r.CuesPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
@@ -348,6 +370,8 @@ func Load(audioPath, eventsPath string) (*Replay, error) {
 		} else {
 			json.Unmarshal(b, &r.cues) // the first form of the file: the list of cues
 		}
+	} else {
+		r.fresh = true // nothing is kept for this take yet: the template new takes start with can be laid over it
 	}
 	return r, nil
 }
@@ -375,7 +399,7 @@ func (r *Replay) Handler() http.Handler {
 	})
 	mux.HandleFunc("/events.json", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style(), "captions": r.Captions(), "chapters": r.Chapters(), "busnotes": r.BusNotes(), "adopted": r.Adopted(), "camera": r.Camera(), "camera_file": filepath.Base(r.CameraPath())})
+		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style(), "captions": r.Captions(), "chapters": r.Chapters(), "busnotes": r.BusNotes(), "adopted": r.Adopted(), "camera": r.Camera(), "camera_file": r.CameraName(), "default_template": r.freshTemplate()})
 	})
 	mux.HandleFunc("/captions", func(w http.ResponseWriter, req *http.Request) {
 		var c []Caption
@@ -401,6 +425,8 @@ func (r *Replay) Handler() http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("/templates", r.templateHandler)
+	mux.HandleFunc("/templates/", r.templateHandler)
 	mux.HandleFunc("/camera/file", func(w http.ResponseWriter, req *http.Request) {
 		var f struct {
 			Path string `json:"path"`
@@ -413,7 +439,7 @@ func (r *Replay) Handler() http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"camera_file": filepath.Base(r.CameraPath())})
+		json.NewEncoder(w).Encode(map[string]string{"camera_file": r.CameraName()})
 	})
 	mux.HandleFunc("/camera", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost { // the state of the camera (sync, crop, scenes)

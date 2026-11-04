@@ -19,13 +19,19 @@
   #main #stage { flex:1; min-width:0; }
   #side { display:none; width:min(400px, 42vw); flex-direction:column; background:#1b1b1e; border-left:1px solid #2a2a2e; min-height:0; }
   #side.on { display:flex; }
-  #sidetabs { display:flex; gap:4px; padding:8px 10px; border-bottom:1px solid #2a2a2e; }
+  #sidetabs { display:flex; flex-wrap:wrap; gap:4px; padding:8px 10px; border-bottom:1px solid #2a2a2e; }
   #sidetabs button { background:#2b2b2b; color:var(--text); border:0; padding:6px 10px; font:inherit; cursor:pointer; }
   #sidetabs button.act { background:var(--amber); color:#111; }
   #sidetabs #sideclose { margin-left:auto; }
   #sidebody { flex:1; min-height:0; overflow:auto; padding:12px 14px; }
   #side .pane { display:none; position:static; width:auto; max-width:none; max-height:none; border:0; padding:0; background:transparent; flex-direction:column; gap:8px; }
   #side .pane.open { display:flex; }
+  #tplbox input, #tplbox button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; cursor:pointer; }
+  #tplbox .h2 { color:var(--text); } #tplbox .h2.sub { margin-top:6px; } #tplbox .h { color:#777; font-size:11px; } #tplbox .row { display:flex; gap:6px; align-items:center; }
+  #tplbox .parts { display:flex; flex-direction:column; gap:3px; color:var(--dim); } #tplbox .parts label { display:flex; gap:6px; align-items:center; }
+  #tplbox .trow { display:flex; gap:6px; align-items:center; padding:6px 0; border-bottom:1px solid #2a2a2e; flex-wrap:wrap; }
+  #tplbox .trow .nm { flex:1; min-width:120px; color:var(--text); } #tplbox .trow .pt { color:#777; font-size:11px; width:100%; }
+  #tplbox .star { background:transparent; font-size:16px; padding:2px 6px; }
   body.nohud #side { display:none !important; }
   #tl { position:relative; display:grid; grid-template-columns:72px minmax(0, 1fr); align-items:start; row-gap:4px; column-gap:10px; }
   #lbls { display:flex; flex-direction:column; gap:4px; }
@@ -102,8 +108,19 @@
 <div id="main">
 <div id="stage"><canvas id="c" width="1920" height="1080"></canvas></div>
 <div id="side">
-  <div id="sidetabs"><button data-p="capbox">captions</button><button data-p="chbox">chapters</button><button data-p="cambox">camera</button><button data-p="stylebox">style</button><button id="sideclose" title="close the sidebar">x</button></div>
+  <div id="sidetabs"><button data-p="tplbox">templates</button><button data-p="capbox">captions</button><button data-p="chbox">chapters</button><button data-p="cambox">camera</button><button data-p="stylebox">style</button><button id="sideclose" title="close the sidebar">x</button></div>
   <div id="sidebody">
+<div id="tplbox" class="pane">
+  <div class="h2">templates <span class="h">(a setup to use for other takes)</span></div>
+  <div class="h2 sub">save the current setup</div>
+  <div class="row"><input id="tpl_name" placeholder="a name, e.g. Reel look" style="flex:1"><button id="tpl_save">save</button></div>
+  <div id="tpl_parts" class="parts"></div>
+  <div class="h2 sub">saved templates</div>
+  <div id="tpl_list"></div>
+  <div class="h2 sub">apply these parts</div>
+  <div id="tpl_apply_parts" class="parts"></div>
+  <div id="tpl_msg" class="h"></div>
+</div>
 <div id="capbox" class="pane">
   <div id="caplist"></div>
   <label class="g">fade in and out <input id="c_fade" type="number" min="0" max="3" step="0.05" style="width:64px"> s <span class="h">for all captions</span></label>
@@ -179,7 +196,8 @@
       <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button></span>
     <span class="grp"><select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
       <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span></span>
-    <span class="grp right"><button id="cambtn" title="the video of you playing">camera</button>
+    <span class="grp right"><button id="tplbtn" title="save a setup as a template, use one on this take">templates</button>
+      <button id="cambtn" title="the video of you playing">camera</button>
       <button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
       <button id="chbtn" title="the chapters, and the list for YouTube">chapters</button>
       <button id="capbtn" title="text shown at times of the take">captions</button>
@@ -1354,8 +1372,8 @@ const PRESETS_LAYOUT = {
 const LAYOUT_ALIAS = { wide: { top: "left", bottom: "right" }, vertical: { left: "top", right: "bottom" } };
 function layoutPreset(id) { const f = camKey(), t = PRESETS_LAYOUT[f]; return id ? t[id] || t[(LAYOUT_ALIAS[f] || {})[id]] || null : null; }
 // the panels of a scene: their places (the preset's over the default ones) and which are left out
-function sceneRects(sc) { const p = sc && sc.layout ? layoutPreset(sc.layout) : null; const o = {}; for (const id of PANEL_IDS) o[id] = (p && p.rects[id]) || L0[id]; return o; }
-function sceneOff(sc) { const p = sc && sc.layout ? layoutPreset(sc.layout) : null; return [...new Set([...(p ? p.off : []), ...((sc && sc.off) || [])])]; }
+function sceneRects(sc) { const p = sc && sc.layout && CAMFILE ? layoutPreset(sc.layout) : null; // a preset needs a camera const o = {}; for (const id of PANEL_IDS) o[id] = (p && p.rects[id]) || L0[id]; return o; }
+function sceneOff(sc) { const p = sc && sc.layout && CAMFILE ? layoutPreset(sc.layout) : null; return [...new Set([...(p ? p.off : []), ...((sc && sc.off) || [])])]; }
 // the places of the panels at a time: from the scene before to the one that runs, by the same progress as the box
 function applyLayout(A) {
   const p = camProgress(A);
@@ -1598,6 +1616,77 @@ function initCamera(saved, file) {
   ensureScene(); loadVideo(); showAll(); buildLane();
 }
 
+// ---- templates: a setup (the look, the style of the captions, the camera, the scenes, the chapters, the bus descriptions) that is kept in a
+// folder of the user and can be laid over any take. The times of the scenes and chapters are kept as a part of the length of the take.
+const TPL_PARTS = [["look", "the look (colours, background, logo, handle, subtitle)"], ["captions", "the style of the captions (fade, blur, dim, length)"], ["camera", "the camera (box style, crop, layer)"],
+  ["scenes", "the scenes and layouts"], ["chapters", "the chapters"], ["bus", "what the buses are used for"]];
+function tplBuild(parts) {
+  const d = Math.max(AN ? AN.duration : 1, 1), rel = t => +(t / d).toFixed(4), out = { version: 1, created: new Date().toISOString(), parts: {} };
+  if (parts.look) { const o = JSON.parse(JSON.stringify(STYLE)); for (const k of ["busNotes", "capFade", "capLength", "capBlur", "capDim"]) delete o[k]; out.parts.look = o; }
+  if (parts.captions) out.parts.captions = { capFade: STYLE.capFade, capLength: STYLE.capLength, capBlur: STYLE.capBlur, capDim: STYLE.capDim };
+  if (parts.camera) out.parts.camera = { layer: CAM.layer, round: CAM.round, mirror: CAM.mirror, zoom: CAM.zoom, cx: CAM.cx, cy: CAM.cy };
+  if (parts.scenes && CAM.scenes.length) out.parts.scenes = camScenes().map(sc => ({ rel: rel(sc.t), wide: sc.wide, vertical: sc.vertical, move: sc.move, off: sc.off, fx: sc.fx, ease: sc.ease, layout: sc.layout }));
+  if (parts.chapters && CHAPS.length) out.parts.chapters = CHAPS.map(c => ({ rel: rel(c.t), title: c.title }));
+  if (parts.bus) out.parts.bus = { notes: (STYLE.busNotes || []).slice(), changes: BUSN.map(n => ({ rel: rel(n.t), bus: n.bus, text: n.text })) };
+  return JSON.parse(JSON.stringify(out));
+}
+// a template laid over this take (the parts that are asked for and that it has)
+function tplApply(t, parts) {
+  const p = (t && t.parts) || {}, d = Math.max(AN ? AN.duration : 1, 1), at = r => +(Math.min(Math.max(+r || 0, 0), 1) * d).toFixed(1), done = [];
+  const keep = { busNotes: STYLE.busNotes, capFade: STYLE.capFade, capLength: STYLE.capLength, capBlur: STYLE.capBlur, capDim: STYLE.capDim };
+  if (parts.look && p.look) { STYLE = Object.assign(mergeStyle(p.look), keep); done.push("look"); }
+  if (parts.captions && p.captions) { Object.assign(STYLE, p.captions); done.push("captions"); }
+  if (parts.bus && p.bus) { STYLE.busNotes = [0, 1, 2, 3].map(i => String((p.bus.notes || [])[i] || "")); BUSN = (p.bus.changes || []).map(n => ({ bus: +n.bus || 1, t: at(n.rel), text: String(n.text || "") })); done.push("bus"); }
+  if (parts.camera && p.camera) { Object.assign(CAM, p.camera); done.push("camera"); }
+  if (parts.scenes && p.scenes) {
+    CAM.scenes = p.scenes.map(sc => ({ t: at(sc.rel), wide: sc.wide || null, vertical: sc.vertical || null, move: +sc.move || 0, off: sc.off || [], fx: sc.fx || "move", ease: sc.ease || "out", layout: sc.layout || "" })); done.push("scenes");
+  }
+  if (parts.chapters && p.chapters) { CHAPS = p.chapters.map(c => ({ t: at(c.rel), title: String(c.title || "") })); done.push("chapters"); }
+  applyStyle();
+  const post = (u, b) => fetch(u, { method: "POST", body: JSON.stringify(b) }).catch(() => {});
+  post("/style", STYLE); post("/camera", CAM); post("/chapters", CHAPS); post("/busnotes", BUSN);
+  for (const f of ["refreshStyle", "refreshCamera", "refreshChapters", "refreshBusNotes", "refreshCapLane"]) if (window[f]) window[f]();
+  return done;
+}
+function initTemplates() {
+  const $ = id => document.getElementById(id), list = $("tpl_list"), msg = $("tpl_msg");
+  const checks = (el, avail) => {
+    el.textContent = "";
+    for (const [k, n] of TPL_PARTS) { const lab = document.createElement("label"), c = document.createElement("input"); c.type = "checkbox"; c.dataset.k = k; c.checked = !avail || avail.includes(k); c.disabled = !!avail && !avail.includes(k); lab.append(c, n); el.appendChild(lab); }
+  };
+  const picked = el => { const o = {}; for (const c of el.querySelectorAll("input[type=checkbox]")) o[c.dataset.k] = c.checked && !c.disabled; return o; };
+  checks($("tpl_parts")); checks($("tpl_apply_parts"));
+  const say = t => { msg.textContent = t; };
+  async function refresh() {
+    let l = []; try { l = await (await fetch("/templates")).json(); } catch (e) { say("could not reach the server"); return; }
+    list.textContent = "";
+    if (!l.length) { const d = document.createElement("div"); d.className = "h"; d.textContent = "none yet: set the take up the way you like it and save it"; list.appendChild(d); return; }
+    for (const t of l) {
+      const row = document.createElement("div"); row.className = "trow";
+      const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = t.name;
+      const mk = (txt, title, fn) => { const b = document.createElement("button"); b.textContent = txt; b.title = title; b.onclick = fn; return b; };
+      const star = mk(t.default ? "\u2605" : "\u2606", t.default ? "new takes start with this one (click to stop)" : "make it the template that new takes start with", async () => {
+        await fetch("/templates/default", { method: "POST", body: JSON.stringify({ name: t.default ? "" : t.name }) }); refresh(); });
+      star.className = "star";
+      const apply = mk("apply", "lay it over this take (the parts below)", async () => {
+        const tpl = await (await fetch("/templates/" + encodeURIComponent(t.name))).json(), parts = picked($("tpl_apply_parts"));
+        const done = tplApply(tpl, parts); histChanged(); say(done.length ? "applied: " + done.join(", ") + " (undo takes it back)" : "nothing to apply with these parts");
+      });
+      const del = mk("delete", "remove this template", async () => { await fetch("/templates/" + encodeURIComponent(t.name), { method: "DELETE" }); refresh(); });
+      const pt = document.createElement("div"); pt.className = "pt"; pt.textContent = (t.parts || []).join(", ") || "(empty)";
+      row.append(nm, star, apply, del, pt); list.appendChild(row);
+    }
+  }
+  $("tpl_save").onclick = async () => {
+    const name = $("tpl_name").value.trim(); if (!name) { say("give it a name"); return; }
+    const t = tplBuild(picked($("tpl_parts"))); t.name = name;
+    const r = await fetch("/templates/" + encodeURIComponent(name), { method: "POST", body: JSON.stringify(t) });
+    if (!r.ok) { say((await r.text()).trim()); return; }
+    say("saved: " + Object.keys(t.parts).join(", ")); refresh();
+  };
+  window.refreshTemplates = refresh; refresh();
+}
+
 // the controls of the look
 function mergeStyle(saved) {
   const st = JSON.parse(JSON.stringify(STYLE_DEFAULT));
@@ -1615,7 +1704,7 @@ function initStyle(saved) {
   applyStyle();
   const $ = id => document.getElementById(id), box = $("stylebox"), sel = $("s_preset");
   for (const k of Object.keys(PRESETS)) { const o = document.createElement("option"); o.value = k; o.textContent = k; sel.appendChild(o); }
-  const show = () => {
+  const show = window.refreshStyle = () => {
     sel.value = STYLE.preset; $("s_accent").value = validHex(STYLE.accent) ? STYLE.accent : (PRESETS[STYLE.preset] || PRESETS["404 dark"]).accent;
     $("s_bgkind").value = STYLE.bg.kind; $("s_bg1").value = validHex(STYLE.bg.color) ? STYLE.bg.color : "#000000"; $("s_bg2").value = validHex(STYLE.bg.color2) ? STYLE.bg.color2 : "#1b1b2e";
     for (let i = 0; i < 4; i++) {
@@ -1628,6 +1717,7 @@ function initStyle(saved) {
   let timer = null;
   const changed = window.styleChanged = () => { applyStyle(); clearTimeout(timer); timer = setTimeout(() => fetch("/style", { method: "POST", body: JSON.stringify(STYLE) }).catch(() => {}), 500); };
   $("stylebtn").onclick = () => togglePane(box);
+  document.getElementById("tplbtn").onclick = () => togglePane(document.getElementById("tplbox"));
   sel.onchange = () => { STYLE.preset = sel.value; STYLE.accent = ""; show(); changed(); };
   $("s_accent").oninput = () => { STYLE.accent = $("s_accent").value; changed(); };
   $("s_accent_auto").onclick = () => { STYLE.accent = ""; show(); changed(); };
@@ -1663,7 +1753,8 @@ async function start() {
   try {
     const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
     FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || ""), focus: String(c.focus || "") })); CHAPS = (ev.chapters || []).map(c => ({ t: +c.t || 0, title: String(c.title || "") })); BUSN = (ev.busnotes || []).map(n => ({ bus: +n.bus || 1, t: +n.t || 0, text: String(n.text || "") })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
-    initChapters(); initBusNotes(); initCamera(ev.camera, ev.camera_file);
+    initChapters(); initBusNotes(); initCamera(ev.camera, ev.camera_file); initTemplates();
+    if (ev.default_template) { const all = {}; for (const [k] of TPL_PARTS) all[k] = true; tplApply(ev.default_template, all); } // a new take starts with the default template
     if (window.refreshCapLane) window.refreshCapLane(); // the lanes need the length of the take, which prepare has just read
     histInit();
   } catch (e) { msg.textContent = "could not load the replay: " + e; msg.style.display = "block"; return; }

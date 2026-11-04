@@ -310,3 +310,56 @@ func TestTheCameraVideoIsServedAndKept(t *testing.T) {
 		t.Fatalf("file: %s", data)
 	}
 }
+
+func TestTemplatesAreSavedListedAndUsedForNewTakes(t *testing.T) {
+	r := &Replay{CuesPath: filepath.Join(t.TempDir(), "x.cues.json"), TemplatesDir: t.TempDir(), fresh: true}
+	if err := r.WriteTemplate("../evil", []byte(`{}`)); err == nil {
+		t.Fatal("a path was taken as a name")
+	}
+	body := `{"name":"Reel look","parts":{"look":{"accent":"#ff3b30"},"scenes":[{"rel":0,"layout":"top"}],"chapters":[]}}`
+	if err := r.WriteTemplate("Reel look", []byte(body)); err != nil {
+		t.Fatal(err)
+	}
+	l, err := r.ListTemplates()
+	if err != nil || len(l) != 1 || l[0].Name != "Reel look" || len(l[0].Parts) != 2 || l[0].Default {
+		t.Fatalf("list: %+v %v (empty parts are not counted)", l, err)
+	}
+	if err := r.SetDefaultTemplate("nope"); err == nil {
+		t.Fatal("a template that is not there was made the default")
+	}
+	if err := r.SetDefaultTemplate("Reel look"); err != nil {
+		t.Fatal(err)
+	}
+	if l, _ := r.ListTemplates(); !l[0].Default {
+		t.Fatal("not the default")
+	}
+	if got := r.freshTemplate(); !strings.Contains(string(got), "ff3b30") {
+		t.Fatalf("a fresh take should get the default: %s", got)
+	}
+	r.SetTitle("x") // something is kept now: the take is not fresh any more
+	if r.freshTemplate() != nil {
+		t.Fatal("a take with saved things must not get the template again")
+	}
+	srv := httptest.NewServer(r.Handler())
+	defer srv.Close()
+	resp, _ := http.Get(srv.URL + "/templates")
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(b), "Reel look") {
+		t.Fatalf("/templates: %s", b)
+	}
+	req, _ := http.NewRequest("DELETE", srv.URL+"/templates/Reel%20look", nil)
+	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != 204 {
+		t.Fatalf("delete: %v %v", resp, err)
+	}
+	if l, _ := r.ListTemplates(); len(l) != 0 || r.DefaultTemplate() != nil {
+		t.Fatal("a deleted template (and its default mark) is gone")
+	}
+}
+
+func TestNoCameraIsNoName(t *testing.T) {
+	r := &Replay{CuesPath: filepath.Join(t.TempDir(), "x.cues.json")}
+	if r.CameraName() != "" {
+		t.Fatalf("a take without a camera has the name %q", r.CameraName())
+	}
+}
