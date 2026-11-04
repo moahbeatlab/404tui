@@ -540,7 +540,14 @@ function drawHeader(T, A) {
   rect(0, 0, W, 64, COL.deep);
   text("404tui", 28, 42, COL.amber, 30, true);
   text("REPLAY", 150, 42, COL.text, 26, true);
-  if (TITLE) { text(fit(TITLE, 34), 300, 44, COL.text, 30, true); if (STYLE.subtitle) { g.font = FONT(30, true); text(fit(STYLE.subtitle, 30), 300 + g.measureText(fit(TITLE, 34)).width + 24, 42, COL.dim, 22); } }
+  if (TITLE) {
+    text(fit(TITLE, 34), 300, 44, COL.text, 30, true);
+    if (STYLE.subtitle) { // the subtitle only where there is room before the tempo (x 980)
+      g.font = FONT(30, true); const x = 300 + g.measureText(fit(TITLE, 34)).width + 24; g.font = FONT(22, false);
+      let sub = STYLE.subtitle; while (sub.length > 3 && x + g.measureText(sub).width > 960) sub = sub.slice(0, -2);
+      if (x + g.measureText(sub).width <= 960 && sub.length > 2) text(sub === STYLE.subtitle ? sub : sub + "~", x, 42, COL.dim, 22);
+    }
+  }
   else text(fit(PROJ.name || "", 24) + "   " + fit(FILE, 40), 300, 42, COL.dim, 22);
   text(bpmText, 1000, 44, tp.src === "project" ? COL.dim : COL.amber, 34, true);
   text(pos ? "BAR " + bar + "  BEAT " + beat : "no clock", 1240, 42, pos ? COL.text : COL.dim, 22);
