@@ -848,6 +848,40 @@ func (a *App) MarkFile() {
 	}
 }
 
+// MarkPad is m of a keyboard on PADS: the pad under the cursor is marked, or not any more (Y+A on the handheld).
+func (a *App) MarkPad() {
+	if a.scr != Pads || a.Modal() || a.prompt != nil || a.carry != nil {
+		return
+	}
+	a.CancelShift()
+	a.toggleMark()
+}
+
+// MarkAllPads is M of a keyboard on PADS: every pad of the bank that has a sample is marked; when they all are, every mark goes.
+func (a *App) MarkAllPads() {
+	if a.scr != Pads || a.Modal() || a.prompt != nil || a.carry != nil {
+		return
+	}
+	a.CancelShift()
+	want := 0
+	for i := 0; i < 16; i++ {
+		if a.info.Pads[a.bank*16+i].File {
+			want++
+		}
+	}
+	inBank := 0
+	for _, p := range a.marks {
+		if p/16 == a.bank {
+			inBank++
+		}
+	}
+	if want > 0 && inBank == want && len(a.marks) == want {
+		a.clearMarks()
+		return
+	}
+	a.markBank()
+}
+
 // MarkAll is M of a keyboard on FILES: every file of the folder is marked.
 func (a *App) MarkAll() {
 	if a.scr != Files || a.Modal() || a.prompt != nil || a.kb != nil {

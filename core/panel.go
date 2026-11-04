@@ -88,7 +88,14 @@ func (a *App) hints() (plain, shift []hint) {
 		shift = sh
 	}
 	if Terminal && a.scr == Pads && !a.Modal() && a.prompt == nil && a.carry == nil {
-		plain = append(append([]hint{}, plain...), hint{"^E", "export bank"})
+		plain = append(append([]hint{}, plain...), hint{"m", "mark pad"}, hint{"M", "mark all / none"}, hint{"^E", "export bank"})
+		sh := make([]hint, 0, len(shift)) // y a is m here
+		for _, h := range shift {
+			if h.what != "mark pad" {
+				sh = append(sh, h)
+			}
+		}
+		shift = sh
 	}
 	if Terminal && (a.scr == Pads || a.scr == Files) && !a.Modal() && a.prompt == nil && a.kb == nil && a.carry == nil { // Space plays, x stops
 		out := make([]hint, 0, len(plain)+1)
@@ -529,7 +536,11 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 		}
 		g.Text(x, row(2), fit(filepath.Base(e.name), w), cText, true)
 		if tg := a.tagsOf(joinPath(a.dir, e.name)); tg != "" {
-			g.Text(x, row(7), fit(tg, w), cAmber, false)
+			tagRow := 7
+			if Terminal {
+				tagRow = 13 // under the waveform
+			}
+			g.Text(x, row(tagRow), fit(tg, w), cAmber, false)
 		}
 		if id, err := a.decode(e); err == nil {
 			s, _ := a.lab.Sample(id)
@@ -537,7 +548,10 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 			if _, in := a.aud[a.padN()]; in {
 				g.Text(x+9, row(3), "in pattern", cGood, true)
 			}
-			if contentCols < rangerMinCols { // the ranger's right pane shows the shape
+			if Terminal { // a computer: the shape of the sample is in the panel, and the ranger's third column keeps to folders
+				g.Fill(x, row(5), w, 7, cPanel2)
+				a.wave(g, id, 0, s.Frames(), x, row(5), w, 7, cAmber)
+			} else if contentCols < rangerMinCols { // the ranger's right pane shows the shape
 				g.Fill(x, row(4), w, 2, cPanel2)
 				a.wave(g, id, 0, s.Frames(), x, row(4), w, 2, cText)
 			}

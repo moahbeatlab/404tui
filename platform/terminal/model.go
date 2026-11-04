@@ -120,7 +120,7 @@ func NewModel(app *core.App, o Options) *Model {
 func (m *Model) Init() tea.Cmd { return tick() }
 
 func tick() tea.Cmd {
-	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg { return tickMsg(t) })
+	return tea.Tick(40*time.Millisecond, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
 func (m *Model) tooSmall() bool { return m.cols < core.MinCols || m.rows < core.MinRows }
@@ -296,7 +296,7 @@ func (m *Model) key(msg tea.KeyMsg) {
 	case "y", "Y":
 		m.arm(yShift, core.Y)
 		return
-	case "m", "M": // SEQ: mute the track; FILES: mark the file (and move on), M marks every file of the folder
+	case "m", "M": // SEQ: mute the track; FILES and PADS: mark the file or the pad, M marks them all (and unmarks them all again)
 		if m.armed == noShift && !m.aHeld && !m.app.Modal() {
 			switch {
 			case m.app.ScreenName() == "SEQ" && s == "m":
@@ -305,6 +305,10 @@ func (m *Model) key(msg tea.KeyMsg) {
 				m.app.MarkFile()
 			case m.app.ScreenName() == "FILES":
 				m.app.MarkAll()
+			case m.app.ScreenName() == "PADS" && s == "m":
+				m.app.MarkPad()
+			case m.app.ScreenName() == "PADS":
+				m.app.MarkAllPads()
 			}
 		}
 		return

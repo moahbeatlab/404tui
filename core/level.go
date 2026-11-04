@@ -28,6 +28,8 @@ type levelMeter struct {
 	read    time.Time
 	peak    [2]float64
 	hold    [2]float64
+	shown   [2]float64 // what the bar shows: up at once, down at a steady speed (the held peak is the number)
+	shownAt time.Time
 	holdAt  [2]time.Time
 	clipped time.Time
 	top     float64
@@ -38,7 +40,7 @@ type levelMeter struct {
 }
 
 func newLevelMeter() *levelMeter {
-	return &levelMeter{hold: [2]float64{math.Inf(-1), math.Inf(-1)}, peak: [2]float64{math.Inf(-1), math.Inf(-1)}, top: math.Inf(-1)}
+	return &levelMeter{hold: [2]float64{math.Inf(-1), math.Inf(-1)}, shown: [2]float64{math.Inf(-1), math.Inf(-1)}, peak: [2]float64{math.Inf(-1), math.Inf(-1)}, top: math.Inf(-1)}
 }
 
 func (l *levelMeter) clipping(now time.Time) bool {
@@ -102,7 +104,7 @@ func (a *App) levelTick() {
 		}
 	}
 	now := time.Now()
-	if now.Sub(l.read) < 90*time.Millisecond {
+	if now.Sub(l.read) < 25*time.Millisecond {
 		return
 	}
 	l.read = now
@@ -128,6 +130,11 @@ func (a *App) levelTick() {
 	for c := 0; c < 2; c++ {
 		db := record.DB(peaks[min(c, len(peaks)-1)])
 		l.peak[c] = db
+		fall := 0.0
+		if !l.shownAt.IsZero() {
+			fall = 45 * now.Sub(l.shownAt).Seconds() // the bar falls 45 dB a second
+		}
+		l.shown[c] = max(db, l.shown[c]-fall)
 		if db >= l.hold[c] || now.Sub(l.holdAt[c]) > meterHold {
 			l.hold[c], l.holdAt[c] = db, now
 		}
@@ -138,6 +145,7 @@ func (a *App) levelTick() {
 			l.top = db
 		}
 	}
+	l.shownAt = now
 }
 
 // drawMeter is the level of the unit's sound in the panel of a computer: two bars (left and right, the highest peak held for a
@@ -156,7 +164,7 @@ func (a *App) drawMeter(g Gfx, x, y, w int) int {
 	bw := max(w-2-10, 6)
 	for c, name := range []string{"L", "R"} {
 		g.Text(x, y+c, name, cDim, true)
-		g.Bar(x+2, y+c, bw, levelFrac(l.hold[c]), levelColour(l.hold[c]), cPanel2)
+		g.Bar(x+2, y+c, bw, levelFrac(l.shown[c]), levelColour(l.shown[c]), cPanel2)
 		db := strings.TrimSpace(dbText(l.hold[c]))
 		g.Text(x+w-len(db), y+c, db, cDim, false)
 	}

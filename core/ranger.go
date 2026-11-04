@@ -122,7 +122,7 @@ func (a *App) drawRanger(g Gfx) {
 	a.drawFileList(g, 2+pw, cw-2, a.entries, a.fcur, true)
 	e, ok := a.current()
 	pt := ""
-	if ok {
+	if ok && (e.dir || !Terminal) { // a computer's third column is for folders (the shape of a sample is in the panel)
 		pt = e.name
 	}
 	pane(1+pw+cw, pvw, pt, false)
@@ -156,6 +156,9 @@ func (a *App) drawPreview(g Gfx, x, w int) {
 		}
 		a.drawFileList(g, x-1, w+2, ents, -1, false)
 	default:
+		if Terminal {
+			return
+		}
 		g.Text(x, 2, fit(filepath.Base(e.name), w), cText, true)
 		if id, err := a.decode(e); err == nil {
 			s, _ := a.lab.Sample(id)

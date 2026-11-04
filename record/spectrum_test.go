@@ -1,6 +1,7 @@
 package record
 
 import (
+	"bytes"
 	"math"
 	"testing"
 )
@@ -39,5 +40,28 @@ func TestSpectrumOfSilenceIsFlat(t *testing.T) {
 		if v != 0 {
 			t.Fatalf("silence is %v", v)
 		}
+	}
+}
+
+func TestMeterKeepsTheHighestPeakBetweenTwoReadings(t *testing.T) {
+	win := int(48000 * meterWindow.Seconds())
+	var pcm []byte
+	for _, amp := range []float64{0.2, 0.9, 0.1} { // three short windows: the middle one is the loud one
+		for i := 0; i < win; i++ {
+			v := int16(amp * 32767)
+			pcm = append(pcm, byte(v), byte(v>>8), byte(v), byte(v>>8))
+		}
+	}
+	m := &Meter{}
+	m.read(bytes.NewReader(pcm))
+	p, ok := m.Level()
+	if !ok || p[0] < 0.89 || p[0] > 0.91 {
+		t.Fatalf("the reading has the loudest of the windows since the last one: %v %v", p, ok)
+	}
+	if p2, _ := m.Level(); p2[0] != 0 {
+		t.Fatalf("and starts again after it: %v", p2)
+	}
+	if spec, ok := m.Spectrum(); !ok || len(spec) != SpectrumBands {
+		t.Fatalf("a spectrum from the latest windows: %d", len(spec))
 	}
 }

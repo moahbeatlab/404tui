@@ -1039,3 +1039,30 @@ func TestASampleAssignedWhileEditingLiveReachesTheUnit(t *testing.T) {
 		t.Fatalf("the unit has the sample on pad %d: %v", pad+1, err)
 	}
 }
+
+func TestMOnPadsMarksAndMUnmarksAll(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	kitKeys(t, a) // A1..A3 have samples
+	a.GoScreen(0)
+	a.bank, a.cur = 0, 0
+	a.MarkPad()
+	if len(a.marks) != 1 || a.marks[0] != 0 {
+		t.Fatalf("m marks the pad: %v", a.marks)
+	}
+	a.MarkPad()
+	if len(a.marks) != 0 {
+		t.Fatalf("m again unmarks it: %v", a.marks)
+	}
+	a.MarkAllPads()
+	if len(a.marks) != 3 {
+		t.Fatalf("M marks every pad of the bank with a sample: %v", a.marks)
+	}
+	a.MarkAllPads()
+	if len(a.marks) != 0 {
+		t.Fatalf("M again unmarks them all: %v", a.marks)
+	}
+	if txt := screenStr(a); !strings.Contains(txt, "mark all / none") {
+		t.Fatalf("the panel names the keys:\n%s", txt)
+	}
+}

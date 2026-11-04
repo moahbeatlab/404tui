@@ -18,7 +18,7 @@ type Metering interface {
 }
 
 // meterWindow is how much sound one reading covers.
-const meterWindow = 100 * time.Millisecond
+const meterWindow = 25 * time.Millisecond
 
 // Meter listens to an audio input and keeps how loud it is, per channel, over the latest 100 ms. It
 // writes nothing to disk: the program that reads the input hands the samples over a pipe.
@@ -28,7 +28,9 @@ type Meter struct {
 
 	mu   sync.Mutex
 	peak [2]float64
-	spec []float64 // the spectrum of the latest window, falling slowly
+	acc  [2]float64 // the highest peak since Level was asked last: a reading never misses a short peak
+	hist []float64  // the latest mono samples, the spectrum's window (4096, a window of the meter at a time)
+	spec []float64  // the spectrum of the latest window, falling slowly
 	at   time.Time
 	err  error
 	tail string
@@ -48,7 +50,9 @@ func (m *Meter) Spectrum() ([]float64, bool) {
 func (m *Meter) Level() (peak [2]float64, ok bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.peak, !m.at.IsZero() && time.Since(m.at) < time.Second
+	peak = m.acc
+	m.acc = [2]float64{}
+	return peak, !m.at.IsZero() && time.Since(m.at) < time.Second
 }
 
 // Done is closed when the program ends.
@@ -83,7 +87,7 @@ func (b execBackend) StartMeter(device string) (*Meter, error) {
 			return nil, err
 		}
 		bin = b.ffmpeg
-		args = append(append([]string{"-hide_banner", "-loglevel", "error"}, in...), "-ac", "2", "-ar", "48000", "-f", "s16le", "pipe:1")
+		args = append(append([]string{"-hide_banner", "-loglevel", "error", "-fflags", "nobuffer", "-flags", "low_delay"}, in...), "-ac", "2", "-ar", "48000", "-f", "s16le", "pipe:1")
 	case b.sox != "":
 		driver := map[string]string{"darwin": "coreaudio", "windows": ""}[runtime.GOOS]
 		if runtime.GOOS == "windows" {
@@ -172,9 +176,16 @@ func (m *Meter) read(r io.Reader) {
 			}
 			mono = append(mono, sum/2)
 		}
-		bands := Bands(mono, 48000)
+		m.hist = append(m.hist, mono...)
+		if len(m.hist) > fftSize {
+			m.hist = m.hist[len(m.hist)-fftSize:]
+		}
+		bands := Bands(m.hist, 48000)
 		m.mu.Lock()
 		m.peak, m.at = peak, time.Now()
+		for c := range peak {
+			m.acc[c] = max(m.acc[c], peak[c])
+		}
 		if m.spec == nil {
 			m.spec = make([]float64, len(bands))
 		}

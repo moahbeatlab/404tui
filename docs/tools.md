@@ -6,7 +6,7 @@
 
 The 16 pads of a bank. `a` opens the pad panel: SOUND and SHAPE pages with the pad's settings, and the TOOLS page.
 
-**Keys on a computer:** `a` menu · `Space` play · `x` stop · `hjkl` move · `[ ]` bank · `.` arp marked · `t` tools · `^E` export bank · `g hl` screen (1-6) · `y a` mark pad · `y jk` bank · `y b` clear pad · `s x` record
+**Keys on a computer:** `a` menu · `Space` play · `x` stop · `hjkl` move · `[ ]` bank · `.` arp marked · `t` tools · `m` mark pad · `M` mark all / none · `^E` export bank · `g hl` screen (1-6) · `y jk` bank · `y b` clear pad · `s x` record
 
 **Keys on the handheld:** `A` menu · `X` play · `B` stop · `^v<>` move · `L1 R1` bank · `R2` arp marked · `Y+<>` screen · `Y+A` mark pad · `Y+^v` bank · `Y+B` clear pad · `Sel+X` record
 
