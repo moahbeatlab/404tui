@@ -252,13 +252,13 @@ func (a *App) drawPads(g Gfx) {
 			} else if id, ok := a.padSampleSoft(n); ok && th >= 3 { // the handheld: the wave, an even number of rows, so the middle line is between two
 				a.wave(g, id, 0, p.Frames, x+1, y+1, tw-2, (ph-2)/2*2, cAmber)
 			}
-			// the switches that are on: G for gate, L for loop
+			// the switches that are on: G for gate, L for loop (a computer's tile has the row G L O R S V: no second sign for them)
 			cx := x + tw - len(num) - 1
 			for _, sw := range []struct {
 				id byte
 				ch string
 			}{{0x6B, "L"}, {0x6A, "G"}} {
-				if v, err := a.lab.PadParam(n, sw.id); err == nil && v != 0 {
+				if v, err := a.lab.PadParam(n, sw.id); err == nil && v != 0 && !Terminal {
 					cx -= 2
 					g.Badge(cx, y, sw.ch, true)
 				}
