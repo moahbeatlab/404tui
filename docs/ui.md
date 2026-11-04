@@ -156,7 +156,11 @@ viewing. The "style" button in the bar sets the look of the video: a palette (40
 background (the palette's, a colour, a gradient or a picture), a logo, a handle (`@name`) and a subtitle; it is kept in the same file, and
 `?preset=neon&accent=%23ff3b30&handle=@name&subtitle=...` sets it for one viewing. The timeline under the picture has lanes (chapters, patterns, bus changes, captions) with a playhead line; blocks are dragged by
 their left edge (captions by the body, and the edges change their length), clicked to edit, and every change can be undone (Ctrl-Z) and
-redone (Ctrl-Shift-Z). A caption can turn the picture to a pad, a bus, the pattern, the level or the events (spotlight). The "chapters"
+redone (Ctrl-Shift-Z). A caption can turn the picture to a pad, a bus, the pattern, the level or the events (spotlight). The "camera" button
+takes a video of you playing: the path is typed, one pad hit of the log is matched with its frame by eye (the camera has no sound), and the box
+is dragged on the picture (the corners change its size; the zoom and the position of the cut-out are sliders). A scene is a point of the timeline
+from which the box has a place and size for each format, and the panels that are shown; the box moves to the next scene's place over the time
+set. `sp404 replay render` cuts the camera video into pictures with ffmpeg and puts them into the video (`-no-camera` leaves them out). The "chapters"
 button gives the list for a YouTube description (`0:00 Title`, also at `/chapters.txt`); what a bus is used for can change in the take
 ("bus change"). **Video:** `sp404 replay render take.wav -o take.mp4` (add `-format vertical` for shorts and reels, `-fps 60`, `-from 10 -to 40` for a part,
 `-q "preset=neon"` for the page's parameters) draws the page in a headless Chrome, Chromium, Edge or Brave, one picture at a time, and ffmpeg puts the

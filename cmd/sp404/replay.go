@@ -26,6 +26,9 @@ In the page
                       the pads follow the pattern's bank. Click an amber tag on the timeline to remove it; "clear" removes all.
     style             palette, accent colour, background (colour, gradient, picture), logo, handle, subtitle
     undo, redo        steps back and forth through the patterns, captions, chapters and title (Ctrl-Z, Ctrl-Shift-Z)
+    camera            a video of you playing (no sound needed): type its path, match one pad hit with the frame by eye (sync), then drag the box on
+                      the picture. Scenes (a lane on the timeline) give the box a place and the panels shown, from a time on, for each format.
+                      replay render puts the camera pictures into the video (-no-camera leaves them out for a quick draft)
     chapters          the chapters of the video (a lane on the timeline, a label on the picture, and the list for the description on YouTube)
     bus change        what a bus is used for can change in the take: from this time on bus N is X (a lane on the timeline)
     captions          text at times (a lane on the timeline: drag to move, the edges change the length). A caption can "look at" a pad,

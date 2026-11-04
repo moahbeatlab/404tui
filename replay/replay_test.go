@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"math"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -271,5 +272,41 @@ func TestBusNotesAreKept(t *testing.T) {
 	b, _ := os.ReadFile(r.CuesPath)
 	if !strings.Contains(string(b), "bus_notes") || len(r.BusNotes()) != 2 {
 		t.Fatalf("not kept: %s", b)
+	}
+}
+
+func TestTheCameraVideoIsServedAndKept(t *testing.T) {
+	dir := t.TempDir()
+	vid := filepath.Join(dir, "cam.mp4")
+	os.WriteFile(vid, []byte("not really a video, but bytes"), 0o644)
+	r := &Replay{CuesPath: filepath.Join(dir, "x.cues.json")}
+	if err := r.SetCameraFile("/no/such/file.mp4"); err == nil {
+		t.Fatal("a missing file was taken")
+	}
+	if err := r.SetCameraFile(vid); err != nil {
+		t.Fatal(err)
+	}
+	if r.cameraFile != "cam.mp4" || r.CameraPath() != vid {
+		t.Fatalf("kept as %q, path %q", r.cameraFile, r.CameraPath())
+	}
+	if err := r.SetCamera([]byte(`{"sync":1.5,"layer":"front"}`)); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(r.Handler())
+	defer srv.Close()
+	req, _ := http.NewRequest("GET", srv.URL+"/camera", nil)
+	req.Header.Set("Range", "bytes=4-8")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 206 || string(b) != "reall" {
+		t.Fatalf("range: %d %q", resp.StatusCode, b)
+	}
+	data, _ := os.ReadFile(r.CuesPath)
+	if !strings.Contains(string(data), `"camera_file": "cam.mp4"`) || !strings.Contains(string(data), "sync") {
+		t.Fatalf("file: %s", data)
 	}
 }

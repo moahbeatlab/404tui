@@ -38,6 +38,8 @@ type Replay struct {
 	captions              []Caption
 	chapters              []Chapter
 	busNotes              []BusNote
+	cameraFile            string
+	camera                json.RawMessage
 	adopted               bool
 	cues                  []Cue
 }
@@ -93,11 +95,15 @@ type meta struct {
 	Title string `json:"title,omitempty"`
 	Cues  []Cue  `json:"cues"`
 	// PatternsAdopted says the patterns of the event log were taken over as cues, to be edited: then the cues are the whole list.
-	PatternsAdopted bool            `json:"patterns_adopted,omitempty"`
-	Captions        []Caption       `json:"captions,omitempty"`
-	Chapters        []Chapter       `json:"chapters,omitempty"`
-	BusNotes        []BusNote       `json:"bus_notes,omitempty"`
-	Style           json.RawMessage `json:"style,omitempty"` // colours, logo, handle, background: the page's own object, kept as it is
+	PatternsAdopted bool      `json:"patterns_adopted,omitempty"`
+	Captions        []Caption `json:"captions,omitempty"`
+	Chapters        []Chapter `json:"chapters,omitempty"`
+	BusNotes        []BusNote `json:"bus_notes,omitempty"`
+	// CameraFile is the video of the player (a path, relative to this file when it is beside it); Camera is the page's own object about it
+	// (the sync, the crop, the scenes, the box on the picture), kept as it is.
+	CameraFile string          `json:"camera_file,omitempty"`
+	Camera     json.RawMessage `json:"camera,omitempty"`
+	Style      json.RawMessage `json:"style,omitempty"` // colours, logo, handle, background: the page's own object, kept as it is
 }
 
 // Cue says which pattern plays from a time of the log on: the unit does not tell when the pattern is changed.
@@ -173,6 +179,80 @@ func (r *Replay) SetCaptions(c []Caption) error {
 	return r.save()
 }
 
+// CameraPath is the camera video as a path that can be opened ("" when there is none).
+func (r *Replay) CameraPath() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.resolveCamera()
+}
+
+func (r *Replay) resolveCamera() string {
+	if r.cameraFile == "" {
+		return ""
+	}
+	if filepath.IsAbs(r.cameraFile) {
+		return r.cameraFile
+	}
+	return filepath.Join(filepath.Dir(r.CuesPath), r.cameraFile)
+}
+
+// SetCameraFile chooses the camera video; it has to be a file that exists. A path under the folder of the take is kept relative to it.
+func (r *Replay) SetCameraFile(path string) error {
+	path = strings.TrimSpace(path)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if path == "" {
+		r.cameraFile = ""
+		return r.save()
+	}
+	if strings.HasPrefix(path, "~/") {
+		if h, err := os.UserHomeDir(); err == nil {
+			path = filepath.Join(h, path[2:])
+		}
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(filepath.Dir(r.CuesPath), path)
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("no such file: %s", path)
+	}
+	if !st.Mode().IsRegular() {
+		return fmt.Errorf("not a file: %s", path)
+	}
+	if rel, err := filepath.Rel(filepath.Dir(r.CuesPath), path); err == nil && !strings.HasPrefix(rel, "..") {
+		path = rel
+	}
+	r.cameraFile = path
+	return r.save()
+}
+
+// Camera is the page's own object about the camera video.
+func (r *Replay) Camera() json.RawMessage {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.camera) == 0 {
+		return nil
+	}
+	return append(json.RawMessage{}, r.camera...)
+}
+
+// SetCamera keeps the page's object about the camera video (any JSON object; "{}" clears it).
+func (r *Replay) SetCamera(b []byte) error {
+	var probe map[string]any
+	if len(b) > 0 && json.Unmarshal(b, &probe) != nil {
+		return errors.New("the camera state is not a JSON object")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(probe) == 0 {
+		r.camera = nil
+	} else {
+		r.camera = append(json.RawMessage{}, b...)
+	}
+	return r.save()
+}
+
 // BusNotes are the changes of what the buses are used for.
 func (r *Replay) BusNotes() []BusNote {
 	r.mu.Lock()
@@ -230,13 +310,13 @@ func (r *Replay) SetStyle(b []byte) error {
 }
 
 func (r *Replay) save() error {
-	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 && len(r.captions) == 0 && len(r.chapters) == 0 && len(r.busNotes) == 0 && !r.adopted {
+	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 && len(r.captions) == 0 && len(r.chapters) == 0 && len(r.busNotes) == 0 && r.cameraFile == "" && len(r.camera) == 0 && !r.adopted {
 		if err := os.Remove(r.CuesPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 		return nil
 	}
-	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues, PatternsAdopted: r.adopted, Captions: r.captions, Chapters: r.chapters, BusNotes: r.busNotes, Style: r.style}, "", " ")
+	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues, PatternsAdopted: r.adopted, Captions: r.captions, Chapters: r.chapters, BusNotes: r.busNotes, CameraFile: r.cameraFile, Camera: r.camera, Style: r.style}, "", " ")
 	return os.WriteFile(r.CuesPath, b, 0o644)
 }
 
@@ -264,6 +344,7 @@ func Load(audioPath, eventsPath string) (*Replay, error) {
 		var m meta
 		if json.Unmarshal(b, &m) == nil {
 			r.title, r.cues, r.style, r.captions, r.chapters, r.busNotes, r.adopted = m.Title, m.Cues, m.Style, m.Captions, m.Chapters, m.BusNotes, m.PatternsAdopted
+			r.cameraFile, r.camera = m.CameraFile, m.Camera
 		} else {
 			json.Unmarshal(b, &r.cues) // the first form of the file: the list of cues
 		}
@@ -294,7 +375,7 @@ func (r *Replay) Handler() http.Handler {
 	})
 	mux.HandleFunc("/events.json", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style(), "captions": r.Captions(), "chapters": r.Chapters(), "busnotes": r.BusNotes(), "adopted": r.Adopted()})
+		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style(), "captions": r.Captions(), "chapters": r.Chapters(), "busnotes": r.BusNotes(), "adopted": r.Adopted(), "camera": r.Camera(), "camera_file": filepath.Base(r.CameraPath())})
 	})
 	mux.HandleFunc("/captions", func(w http.ResponseWriter, req *http.Request) {
 		var c []Caption
@@ -319,6 +400,43 @@ func (r *Replay) Handler() http.Handler {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/camera/file", func(w http.ResponseWriter, req *http.Request) {
+		var f struct {
+			Path string `json:"path"`
+		}
+		if req.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<16)).Decode(&f) != nil {
+			http.Error(w, "POST {\"path\": ...}", http.StatusBadRequest)
+			return
+		}
+		if err := r.SetCameraFile(f.Path); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"camera_file": filepath.Base(r.CameraPath())})
+	})
+	mux.HandleFunc("/camera", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost { // the state of the camera (sync, crop, scenes)
+			b, err := io.ReadAll(http.MaxBytesReader(w, req.Body, 1<<20))
+			if err == nil {
+				err = r.SetCamera(b)
+			}
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		path := r.CameraPath() // the video itself, with Range requests so that the page can seek
+		f, err := os.Open(path)
+		if path == "" || err != nil {
+			http.NotFound(w, req)
+			return
+		}
+		defer f.Close()
+		st, _ := f.Stat()
+		http.ServeContent(w, req, filepath.Base(path), st.ModTime(), f)
 	})
 	mux.HandleFunc("/busnotes", func(w http.ResponseWriter, req *http.Request) {
 		var n []BusNote

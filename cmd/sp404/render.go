@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"os/exec"
@@ -30,6 +31,7 @@ const renderUsage = `usage: sp404 replay render <audio.wav> [events.jsonl] [opti
   -chrome path      the browser (Chrome, Chromium, Edge or Brave; found by itself, or in $CHROME)
   -ffmpeg path      ffmpeg (default: the one in the path)
   -workers 4        pages drawing frames side by side (default: half the processors, at most 4)
+  -no-camera        leave the camera video out (a quicker draft)
   -no-sandbox       for a browser that cannot start its sandbox (a container, a root account)
 The page is drawn in a headless browser, one picture at a time (so it does not matter how fast the computer is), and ffmpeg
 puts the pictures and the sound together.`
@@ -53,6 +55,7 @@ func runRender(args []string, o options) error {
 	chrome := fs.String("chrome", os.Getenv("CHROME"), "")
 	ffmpeg := fs.String("ffmpeg", "ffmpeg", "")
 	noSandbox := fs.Bool("no-sandbox", false, "")
+	noCamera := fs.Bool("no-camera", false, "")
 	workers := fs.Int("workers", min(4, max(runtime.NumCPU()/2, 1)), "")
 	// the files come first, the options after (the flag package stops at the first file)
 	var files []string
@@ -123,6 +126,25 @@ func runRender(args []string, o options) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	// the video of the player: its pictures for these frames are cut out with ffmpeg (a picture for every frame of the render, from the
+	// time of the camera that matches the start, by the sync of the take) and given to the page one by one
+	var camDir string
+	var camLead int
+	if cp := r.CameraPath(); cp != "" && !*noCamera {
+		if _, err := os.Stat(cp); err != nil {
+			fmt.Printf("the camera video %s is not there: rendering without it\n", cp)
+		} else {
+			camDir, err = os.MkdirTemp("", "sp404-cam-")
+			if err != nil {
+				return err
+			}
+			defer os.RemoveAll(camDir)
+			camLead, err = extractCameraFrames(ctx, ff, cp, camDir, cameraSync(r.Camera()), start, *fps, frames)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	br, err := startBrowser(ctx, browser, *noSandbox)
 	if err != nil {
 		return err
@@ -189,7 +211,17 @@ func runRender(args []string, o options) error {
 				i := nextJob
 				nextJob++
 				mu.Unlock()
-				b, err := br.frame(sess, start+float64(i)/float64(*fps))
+				var cam []byte
+				if camDir != "" && i >= camLead {
+					cam, _ = os.ReadFile(filepath.Join(camDir, fmt.Sprintf("c%06d.jpg", i-camLead+1))) // none after the end of the video
+				}
+				var b []byte
+				var err error
+				if camDir != "" {
+					b, err = br.frameWithCamera(sess, start+float64(i)/float64(*fps), cam)
+				} else {
+					b, err = br.frame(sess, start+float64(i)/float64(*fps))
+				}
 				mu.Lock()
 				if err != nil && failed == nil {
 					failed = err
@@ -441,6 +473,51 @@ func (b *browser) eval(session, expr string) (json.RawMessage, error) {
 	return r.Result.Value, nil
 }
 
+// evalAsync runs an expression that gives a promise and waits for what it gives.
+func (b *browser) evalAsync(session, expr string) (json.RawMessage, error) {
+	res, err := b.call(session, "Runtime.evaluate", map[string]any{"expression": expr, "returnByValue": true, "awaitPromise": true})
+	if err != nil {
+		return nil, err
+	}
+	var r struct {
+		Result    struct{ Value json.RawMessage } `json:"result"`
+		Exception *struct {
+			Text      string `json:"text"`
+			Exception struct {
+				Description string `json:"description"`
+			} `json:"exception"`
+		} `json:"exceptionDetails"`
+	}
+	if err := json.Unmarshal(res, &r); err != nil {
+		return nil, err
+	}
+	if r.Exception != nil {
+		return nil, fmt.Errorf("in the page: %s %s", r.Exception.Text, r.Exception.Exception.Description)
+	}
+	return r.Result.Value, nil
+}
+
+// frameWithCamera draws the picture of a time with the picture of the camera for it (a JPEG, or none) and gives it as PNG bytes.
+func (b *browser) frameWithCamera(session string, t float64, cam []byte) ([]byte, error) {
+	arg := "null"
+	if len(cam) > 0 {
+		arg = `"data:image/jpeg;base64,` + base64.StdEncoding.EncodeToString(cam) + `"`
+	}
+	v, err := b.evalAsync(session, fmt.Sprintf("window.replay.frameWithCamera(%.4f, %s)", t, arg))
+	if err != nil {
+		return nil, err
+	}
+	var s string
+	if err := json.Unmarshal(v, &s); err != nil {
+		return nil, err
+	}
+	const prefix = "data:image/png;base64,"
+	if !strings.HasPrefix(s, prefix) {
+		return nil, errors.New("the page gave no picture")
+	}
+	return base64.StdEncoding.DecodeString(s[len(prefix):])
+}
+
 func (b *browser) waitReady(session string, limit time.Duration) error {
 	deadline := time.Now().Add(limit)
 	for time.Now().Before(deadline) {
@@ -486,4 +563,36 @@ func (b *browser) close() {
 		<-done
 	}
 	os.RemoveAll(b.dir)
+}
+
+// cameraSync is the sync of the camera video in the page's object about it: the time of the video that matches the time 0 of the audio.
+func cameraSync(raw json.RawMessage) float64 {
+	var c struct {
+		Sync float64 `json:"sync"`
+	}
+	json.Unmarshal(raw, &c)
+	return c.Sync
+}
+
+// extractCameraFrames cuts the video into pictures, one for every frame of the render: file i (from 1) is the picture for the frame i-1+lead.
+// Frames before the video begins are left out (lead says how many); a video that ends early just gives fewer files.
+func extractCameraFrames(ctx context.Context, ffmpeg, video, dir string, sync, start float64, fps, frames int) (lead int, err error) {
+	camStart := start + sync
+	if camStart < 0 {
+		lead = int(math.Ceil(-camStart*float64(fps) - 1e-9))
+		camStart += float64(lead) / float64(fps)
+	}
+	args := []string{"-y", "-loglevel", "error"}
+	if camStart > 0.0001 {
+		args = append(args, "-ss", fmt.Sprintf("%.4f", camStart))
+	}
+	args = append(args, "-i", video, "-vf", fmt.Sprintf("fps=%d,scale='min(1920,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease:flags=lanczos", fps),
+		"-frames:v", fmt.Sprint(max(frames-lead, 1)), "-q:v", "3", filepath.Join(dir, "c%06d.jpg"))
+	fmt.Printf("cutting the camera video into pictures (sync %+.3f s)...\n", sync)
+	cmd := exec.CommandContext(ctx, ffmpeg, args...)
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return 0, fmt.Errorf("the camera video: %w", err)
+	}
+	return lead, nil
 }
