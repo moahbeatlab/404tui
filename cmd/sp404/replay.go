@@ -30,6 +30,8 @@ In the page
     undo, redo        steps back and forth through the patterns, captions, chapters and title (Ctrl-Z, Ctrl-Shift-Z)
     camera            a video of you playing (no sound needed): type its path, match one pad hit with the frame by eye (sync), then drag the box on
                       the picture. Scenes (a lane on the timeline) give the box a place and the panels shown, from a time on, for each format.
+                      A scene can also take a layout preset (camera left, right, in a corner, top,
+                      bottom, the whole picture, or panels only): the panels move and resize around the camera.
                       A scene's change can glide, cross-fade, pop in, slide in or cut (smooth, slow start and end, or springy);
                       panels that a scene turns on or off fade.
                       replay render puts the camera pictures into the video (-no-camera leaves them out for a quick draft)

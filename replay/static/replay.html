@@ -218,6 +218,8 @@ const W = cv.width, H = cv.height;
 const L = VERT
   ? { pads: [20, 108, 1040, 540], pattern: [20, 660, 1040, 350], fx: [20, 1022, 1040, 220], meter: [20, 1254, 1040, 270], feed: [20, 1536, 1040, 168] }
   : { pads: [40, 80, 880, 560], pattern: [40, 656, 880, 394], fx: [960, 80, 920, 236], meter: [960, 332, 920, 452], feed: [960, 800, 920, 250] };
+const L0 = JSON.parse(JSON.stringify(L)); // the layout without a camera: what a preset of a scene is laid over
+const PANEL_IDS = ["pads", "pattern", "fx", "meter", "feed"];
 if (params.get("hud") === "0") document.body.classList.add("nohud");
 
 let TITLE = "", EV = [], AN = null, PROJ = { pads: [], patterns: [] }, FILE = "", OFFSET = 0, NUDGE = 0;
@@ -1008,7 +1010,7 @@ function drawChapter(A) {
   const cs = CHAPS.slice().sort((a, b) => a.t - b.t); let i = -1;
   for (let k = 0; k < cs.length; k++) if (cs[k].t <= A + 0.001) i = k;
   if (i < 0 || !cs[i].title) return;
-  const fresh = A - cs[i].t < 3, x = 44, y = VERT ? 1776 : 1069;
+  const fresh = A - cs[i].t < 3, x = 44, y = VERT ? 1727 : 1069; // vertical: just above the handle and the logo
   rect(x, y - 14, 8, 8, COL.amber);
   text(cs[i].title, x + 18, y, fresh ? COL.text : COL.dim, 22, fresh);
   text((i + 1) + " / " + cs.length, x + 18 + (function () { g.font = FONT(22 * (VERT ? 1.22 : 1), fresh); return g.measureText(cs[i].title).width; })() + 16, y, COL.dim, 18);
@@ -1058,6 +1060,7 @@ function draw(audioTime) {
   const T = audioTime + OFFSET + NUDGE / 1000;
   drawBackground();
   camVideoKeep(audioTime);
+  applyLayout(audioTime);
   if (CAM.layer === "behind") drawCamera(audioTime);
   drawHeader(T, audioTime);
   for (const [id, fn] of [["pads", drawPads], ["pattern", drawPattern], ["fx", drawFx], ["meter", drawMeter], ["feed", drawFeed]]) {
@@ -1321,10 +1324,42 @@ const CAM_DEFAULT = { sync: 0, zoom: 1, cx: 0.5, cy: 0.5, round: 18, mirror: fal
 let CAM = JSON.parse(JSON.stringify(CAM_DEFAULT)), CAMFILE = "";
 const PANELS = [["pads", "pads"], ["pattern", "pattern"], ["fx", "buses"], ["meter", "level"], ["feed", "events"]];
 const camKey = () => (VERT ? "vertical" : "wide");
+// ---- layout presets: where the camera and the panels are in a scene. A preset moves and resizes the panels around the camera (the panels
+// glide with the scene's transition, like the box). cam: the box, rects: the panels that are not where the default layout has them, off: panels left out.
+const LAYOUT_NAMES = [["", "custom (place the box, choose the panels)"], ["panels", "panels only"], ["left", "camera left"], ["right", "camera right"], ["corner", "camera in a corner"], ["top", "camera top"], ["bottom", "camera bottom"], ["full", "camera, the whole picture"]];
+const PRESETS_LAYOUT = {
+  wide: {
+    panels: { cam: null, rects: {}, off: [] },
+    left: { cam: [40, 74, 540, 976], rects: { pads: [596, 80, 560, 500], pattern: [596, 596, 560, 454], fx: [1172, 80, 708, 236], meter: [1172, 332, 708, 380], feed: [1172, 728, 708, 322] }, off: [] },
+    right: { cam: [1340, 74, 540, 976], rects: { pads: [40, 80, 560, 500], pattern: [40, 596, 560, 454], fx: [616, 80, 708, 236], meter: [616, 332, 708, 380], feed: [616, 728, 708, 322] }, off: [] },
+    corner: { cam: [1320, 640, 560, 400], rects: {}, off: ["feed"] },
+    full: { cam: [0, 0, 1920, 1080], rects: {}, off: PANEL_IDS },
+  },
+  vertical: {
+    panels: { cam: null, rects: {}, off: [] },
+    top: { cam: [20, 108, 1040, 720], rects: { pads: [20, 840, 1040, 420], pattern: [20, 1272, 1040, 290], fx: [20, 1574, 1040, 210] }, off: ["meter", "feed"] },
+    bottom: { cam: [20, 1180, 1040, 520], rects: { pads: [20, 108, 1040, 540], pattern: [20, 660, 1040, 250], fx: [20, 922, 1040, 246] }, off: ["meter", "feed"] },
+    corner: { cam: [560, 1254, 500, 450], rects: {}, off: ["feed"] },
+    full: { cam: [0, 100, 1080, 1720], rects: {}, off: PANEL_IDS },
+  },
+};
+// a preset that the format has no version of falls back to a close one
+const LAYOUT_ALIAS = { wide: { top: "left", bottom: "right" }, vertical: { left: "top", right: "bottom" } };
+function layoutPreset(id) { const f = camKey(), t = PRESETS_LAYOUT[f]; return id ? t[id] || t[(LAYOUT_ALIAS[f] || {})[id]] || null : null; }
+// the panels of a scene: their places (the preset's over the default ones) and which are left out
+function sceneRects(sc) { const p = sc && sc.layout ? layoutPreset(sc.layout) : null; const o = {}; for (const id of PANEL_IDS) o[id] = (p && p.rects[id]) || L0[id]; return o; }
+function sceneOff(sc) { const p = sc && sc.layout ? layoutPreset(sc.layout) : null; return [...new Set([...(p ? p.off : []), ...((sc && sc.off) || [])])]; }
+// the places of the panels at a time: from the scene before to the one that runs, by the same progress as the box
+function applyLayout(A) {
+  const p = camProgress(A);
+  if (!p) { for (const id of PANEL_IDS) L[id] = L0[id].slice(); return; }
+  const cur = sceneRects(p.c.s), prev = p.c.i > 0 ? sceneRects(p.c.sc[p.c.i - 1]) : cur, k = p.raw >= 1 || p.tr === "cut" ? 1 : p.e;
+  for (const id of PANEL_IDS) L[id] = cur[id].map((v, i) => prev[id][i] + (v - prev[id][i]) * k);
+}
 const camDefaultRect = () => (VERT ? [20, 108, 1040, 640] : [40, 74, 560, 976]);
 const camScenes = () => CAM.scenes.slice().sort((a, b) => a.t - b.t);
 function camSceneAt(A) { let i = -1; const sc = camScenes(); for (let k = 0; k < sc.length; k++) if (sc[k].t <= A + 0.001) i = k; return i < 0 ? null : { sc, i, s: sc[i] }; }
-const panelOn = (id, A) => { const c = camSceneAt(A); return !(c && (c.s.off || []).includes(id)); };
+const panelOn = (id, A) => { const c = camSceneAt(A); return !(c && sceneOff(c.s).includes(id)); };
 const easeBy = (name, u) => {
   if (name === "inout") return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
   if (name === "spring") { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2); }
@@ -1361,7 +1396,7 @@ function camLayers(A) {
 // how much of a panel shows: a panel that the scene turns on or off fades over the scene's time (1 = all, 0 = none)
 function panelAlpha(id, A) {
   const p = camProgress(A); if (!p) return 1;
-  const { c, raw, e, tr } = p, off = (c.s.off || []).includes(id), was = c.i > 0 ? (c.sc[c.i - 1].off || []).includes(id) : off;
+  const { c, raw, e, tr } = p, off = sceneOff(c.s).includes(id), was = c.i > 0 ? sceneOff(c.sc[c.i - 1]).includes(id) : off;
   if (off === was || raw >= 1 || tr === "cut") return off ? 0 : 1;
   const u = tr === "move" || tr === "slide" || tr === "pop" ? e : raw;
   return off ? 1 - u : u;
@@ -1421,7 +1456,7 @@ function toPicture(e) { const r = cv.getBoundingClientRect(), k = Math.min(r.wid
 function initCamera(saved, file) {
   CAMFILE = file || "";
   CAM = Object.assign(JSON.parse(JSON.stringify(CAM_DEFAULT)), saved && typeof saved === "object" ? saved : {});
-  CAM.scenes = (CAM.scenes || []).map(s => ({ t: +s.t || 0, wide: s.wide || null, vertical: s.vertical || null, move: +s.move || 0, off: s.off || [], fx: s.fx || "move", ease: s.ease || "out" }));
+  CAM.scenes = (CAM.scenes || []).map(s => ({ t: +s.t || 0, wide: s.wide || null, vertical: s.vertical || null, move: +s.move || 0, off: s.off || [], fx: s.fx || "move", ease: s.ease || "out", layout: s.layout || "" }));
   const $ = id => document.getElementById(id), box = $("cambox"), lane = $("camlane"), pop = $("campop"), vid = $("cam"), prev = $("cam_prev");
   const post = () => fetch("/camera", { method: "POST", body: JSON.stringify(CAM) }).catch(() => {});
   let timer = null;
@@ -1437,7 +1472,7 @@ function initCamera(saved, file) {
     lane.textContent = ""; const d = AN ? AN.duration : 0; if (!d || !CAMFILE) return;
     camScenes().forEach((sc, i) => {
       const b = document.createElement("div"), h = document.createElement("span"), hidden = !sc[camKey()];
-      b.className = "cs"; b.textContent = (i + 1) + (hidden ? ": no camera" : ": camera"); b.title = "scene " + (i + 1) + " from " + mmss(sc.t) + " (click to edit, drag the left edge to move)";
+      const ln = (LAYOUT_NAMES.find(x => x[0] === sc.layout) || [])[1]; b.className = "cs"; b.textContent = (i + 1) + ": " + (sc.layout ? ln : hidden ? "no camera" : "camera"); b.title = "scene " + (i + 1) + " from " + mmss(sc.t) + " (click to edit, drag the left edge to move)";
       b.style.left = clamp(sc.t / d, 0, 1) * 100 + "%"; h.className = "hd";
       h.onpointerdown = ev => {
         ev.preventDefault(); ev.stopPropagation(); try { h.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
@@ -1463,6 +1498,15 @@ function initCamera(saved, file) {
     tr.onchange = () => { sc.fx = tr.value; save(); }; ez.onchange = () => { sc.ease = ez.value; save(); };
     r1.append(mk("span", { textContent: "from", style: "color:var(--dim)" }), tm, mk("span", { textContent: "moves in", style: "color:var(--dim)" }), mv, mk("span", { textContent: "s", style: "color:var(--dim)" }));
     const r1b = row(); r1b.append(mk("span", { textContent: "change:", style: "color:var(--dim)" }), tr, ez);
+    const lay = mk("select", { title: "where the camera and the panels are in this scene" }); lay.style.flex = "1";
+    for (const [v, n] of LAYOUT_NAMES) lay.appendChild(mk("option", { value: v, textContent: n }));
+    lay.value = sc.layout || "";
+    lay.onchange = () => { // a preset puts the box where it belongs in both formats and arranges the panels around it
+      sc.layout = lay.value;
+      if (sc.layout) for (const f of ["wide", "vertical"]) { const q = PRESETS_LAYOUT[f][sc.layout] || PRESETS_LAYOUT[f][(LAYOUT_ALIAS[f] || {})[sc.layout]]; sc[f] = q && q.cam ? q.cam.slice() : null; }
+      save(); editScene(sc);
+    };
+    const r0 = row(); r0.append(mk("span", { textContent: "layout:", style: "color:var(--dim)" }), lay);
     const r2 = row(), vis = mk("input", { type: "checkbox", checked: !!sc[camKey()] });
     vis.onchange = () => { sc[camKey()] = vis.checked ? (camSceneRectNear(sc) || camDefaultRectFor(camKey())) : null; save(); };
     r2.append(vis, mk("span", { textContent: "the camera is shown in this scene (" + camKey() + " video)", style: "color:var(--dim)" }));
@@ -1476,7 +1520,7 @@ function initCamera(saved, file) {
     r4.append(mk("button", { textContent: "go", title: "play from here", onclick: () => { audio.currentTime = sc.t; } }),
       mk("button", { textContent: "delete the scene", onclick: () => { CAM.scenes = CAM.scenes.filter(x => x !== sc); pop.classList.remove("open"); save(); } }),
       mk("button", { textContent: "close", onclick: () => pop.classList.remove("open") }));
-    pop.append(r1, r1b, r2, r3, r4);
+    pop.append(r0, r1, r1b, r2, r3, r4);
     const rr = lane.getBoundingClientRect(), d = AN ? AN.duration : 1; pop.style.left = Math.max(8, Math.min(innerWidth - 660, rr.left + sc.t / d * rr.width - 120)) + "px";
   }
   const camSceneRectNear = sc => { const o = camScenes().find(x => x[camKey()]); return o ? o[camKey()].slice() : null; };
@@ -1539,8 +1583,8 @@ function initCamera(saved, file) {
   $("cam_mirror").onchange = () => { CAM.mirror = $("cam_mirror").checked; save(); };
   $("cam_layer").onchange = () => { CAM.layer = $("cam_layer").value; save(); };
   const showAll = () => { showSync(); $("cam_zoom").value = CAM.zoom; $("cam_zoomv").textContent = (+CAM.zoom).toFixed(2) + "x"; $("cam_cx").value = CAM.cx; $("cam_cy").value = CAM.cy; $("cam_round").value = CAM.round; $("cam_mirror").checked = !!CAM.mirror; $("cam_layer").value = CAM.layer; $("cam_path").value = CAMFILE ? CAMFILE : $("cam_path").value; status(); };
-  $("cam_scene").onclick = () => { if (!CAMFILE) return; const c = camSceneAt(now()), t = +now().toFixed(1); const base = c ? c.s : null; CAM.scenes.push({ t, wide: base && base.wide ? base.wide.slice() : camDefaultRectFor("wide"), vertical: base && base.vertical ? base.vertical.slice() : camDefaultRectFor("vertical"), move: 0.8, off: base ? (base.off || []).slice() : [], fx: base ? base.fx || "move" : "move", ease: base ? base.ease || "out" : "out" }); save(); };
-  $("cam_hide").onclick = () => { if (!CAMFILE) return; const c = camSceneAt(now()); CAM.scenes.push({ t: +now().toFixed(1), wide: null, vertical: null, move: 0.6, off: c ? (c.s.off || []).slice() : [], fx: "fade", ease: "out" }); save(); };
+  $("cam_scene").onclick = () => { if (!CAMFILE) return; const c = camSceneAt(now()), t = +now().toFixed(1); const base = c ? c.s : null; CAM.scenes.push({ t, wide: base && base.wide ? base.wide.slice() : camDefaultRectFor("wide"), vertical: base && base.vertical ? base.vertical.slice() : camDefaultRectFor("vertical"), move: 0.8, off: base ? (base.off || []).slice() : [], fx: base ? base.fx || "move" : "move", ease: base ? base.ease || "out" : "out", layout: base ? base.layout || "" : "" }); save(); };
+  $("cam_hide").onclick = () => { if (!CAMFILE) return; const c = camSceneAt(now()); CAM.scenes.push({ t: +now().toFixed(1), wide: null, vertical: null, move: 0.6, off: c ? (c.s.off || []).slice() : [], fx: "fade", ease: "out", layout: "" }); save(); };
   $("cambtn").onclick = () => { togglePane(box); showAll(); fillHits(); };
   vid.addEventListener("loadedmetadata", () => { status(); buildLane(); }); prev.addEventListener("loadedmetadata", status);
   window.refreshCamera = () => { showAll(); buildLane(); };
