@@ -26,7 +26,7 @@ VERSION ?=
 
 LDFLAGS := -s -w
 ifneq ($(VERSION),)
-LDFLAGS += -X github.com/moahbeatlab/404tui/version.Version=$(VERSION)
+LDFLAGS += -X github.com/moahbeatlab/404tui/version.Version=$(VERSION) -X github.com/moahbeatlab/404tui/version.Date=$(shell date -u +%Y-%m-%d)
 endif
 GOBUILD := go build -trimpath -ldflags "$(LDFLAGS)"
 

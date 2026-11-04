@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/moahbeatlab/404tui/record"
@@ -70,7 +71,7 @@ func dbText(db float64) string {
 // levelTick keeps the meter going while the PERF screen is in front: it listens to the input (when the platform's recorder can),
 // or reads the end of the recording's file, a few times a second.
 func (a *App) levelTick() {
-	if a.scr != Perform {
+	if a.scr != Perform && !(Terminal && a.link != nil) { // a computer shows the meter in its panel for as long as a unit is plugged in
 		if a.lvl != nil && a.lvl.src != nil {
 			a.lvl.src.Stop()
 			a.lvl = nil
@@ -134,5 +135,31 @@ func (a *App) levelTick() {
 		if db > l.top {
 			l.top = db
 		}
+	}
+}
+
+// drawMeter is the level of the unit's sound in the panel of a computer: two bars (left and right, the highest peak held for a
+// moment), their level, and CLIP when the sound reached full scale lately. It takes two rows from y.
+func (a *App) drawMeter(g Gfx, x, y, w int) {
+	l := a.lvl
+	if l == nil || !l.ok {
+		msg := "level: listening to the unit..."
+		if l != nil && l.err != "" {
+			msg = "level: needs ffmpeg or sox and the unit's audio"
+		}
+		g.Text(x, y, fit(msg, w), cDim, false)
+		return
+	}
+	now := time.Now()
+	bw := max(w-2-10, 6)
+	for c, name := range []string{"L", "R"} {
+		g.Text(x, y+c, name, cDim, true)
+		g.Bar(x+2, y+c, bw, levelFrac(l.hold[c]), levelColour(l.hold[c]), cPanel2)
+		db := strings.TrimSpace(dbText(l.hold[c]))
+		g.Text(x+w-len(db), y+c, db, cDim, false)
+	}
+	if l.clipping(now) { // the clip light is under the bars, over the row that keeps them apart from the tempo
+		g.Fill(x+w-6, y+2, 6, 1, cBad)
+		g.Text(x+w-5, y+2, "CLIP", cBg, true)
 	}
 }

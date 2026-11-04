@@ -96,7 +96,7 @@ func main() {
 	}
 	flag.Parse()
 	if *showVersion {
-		fmt.Println("404tui " + version.Version)
+		fmt.Println("404tui " + version.Full())
 		return
 	}
 	args := flag.Args()

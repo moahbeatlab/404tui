@@ -69,6 +69,41 @@ const (
 
 var screenNames = []string{"PADS", "SEQ", "FILES", "SLICE", "SAVE", "UNIT", "CONFIG", "PERF", "LOOP"}
 
+// termScreens are the screens of a computer, in the order of the number keys: 1 PADS, 2 SEQ, 3 PROJECTS (the unit's projects when
+// online, a folder's when offline), 4 FILES, 5 SLICE, 6 CONFIG (the writing of the project is in it). The handheld has all of them.
+var termScreens = [...]Screen{Pads, Seq, Unit, Files, Slice, Config}
+
+// screenTitle is the name a screen has on the screen: the unit's is PROJECTS on a computer.
+func screenTitle(s Screen) string {
+	if Terminal && s == Unit {
+		return "PROJECTS"
+	}
+	return screenNames[s]
+}
+
+// screenShown says whether the screen can be gone to (every one of a computer's: PROJECTS works offline too).
+func (a *App) screenShown(s Screen) bool { return true }
+
+// stepScreen goes to the next screen (d > 0) or the one before, round.
+func (a *App) stepScreen(d int) {
+	if !Terminal {
+		a.go_(Screen((int(a.scr) + d + len(screenNames)) % len(screenNames)))
+		return
+	}
+	at := 0
+	for i, s := range termScreens {
+		if s == a.scr {
+			at = i
+		}
+	}
+	for i := 1; i <= len(termScreens); i++ {
+		if s := termScreens[(at+d*i%len(termScreens)+len(termScreens))%len(termScreens)]; a.screenShown(s) {
+			a.go_(s)
+			return
+		}
+	}
+}
+
 // ScreenName is the name of the screen in front.
 func (a *App) ScreenName() string { return screenNames[a.scr] }
 
@@ -218,12 +253,15 @@ type App struct {
 	// Now is the clock; nil is the real one. A test sets it.
 	Now func() time.Time
 
-	link    Link
-	Connect func() (Link, error) // finds and opens the unit; nil when there is no way to
-	unitCur int
-	confirm bool
-	job     *job
-	connAt  time.Time
+	link          Link
+	Connect       func() (Link, error) // finds and opens the unit; nil when there is no way to
+	unitCur       int
+	connCh        chan Link // a computer looks for the unit in the background
+	connBusy      bool
+	offlineChosen bool // PROJECTS shows the folder of projects on this computer, though a unit is plugged in
+	confirm       bool
+	job           *job
+	connAt        time.Time
 
 	slot  int // PROJECT_nn to write
 	wrote []string
@@ -623,10 +661,10 @@ func (a *App) ToggleHelp() { a.help = !a.help }
 func (a *App) shifted(k Key) {
 	switch k {
 	case Left:
-		a.go_(Screen((int(a.scr) + len(screenNames) - 1) % len(screenNames)))
+		a.stepScreen(-1)
 		return
 	case Right:
-		a.go_(Screen((int(a.scr) + 1) % len(screenNames)))
+		a.stepScreen(1)
 		return
 	}
 	switch a.scr {
@@ -750,6 +788,50 @@ func (a *App) PlayStop() bool {
 	return false
 }
 
+// ExportBank is Ctrl-E of a keyboard on PADS: the pads of the bank (the marked ones) as WAV files in a folder.
+func (a *App) ExportBank() {
+	if a.scr != Pads || a.Modal() || a.prompt != nil || a.carry != nil {
+		return
+	}
+	a.CancelShift()
+	a.exportBank()
+}
+
+// StopSound is x of a keyboard on PADS and FILES: whatever sounds stops (Space plays).
+func (a *App) StopSound() {
+	if a.Modal() || a.prompt != nil || a.kb != nil {
+		return
+	}
+	a.CancelShift()
+	if a.playing >= 0 || a.looping() {
+		a.say("stopped", false)
+	}
+	a.stop()
+}
+
+// SeqTrack is m and s of a keyboard on SEQ: the track under the cursor is muted or solo (the same key again plays it).
+func (a *App) SeqTrack(mode int) {
+	if a.scr != Seq || a.Modal() || a.prompt != nil || len(a.rows) == 0 {
+		return
+	}
+	a.CancelShift()
+	pad := a.rowPad()
+	if a.trk == nil {
+		a.trk = map[int]map[int]int{}
+	}
+	if a.trk[a.pat] == nil {
+		a.trk[a.pat] = map[int]int{}
+	}
+	if a.trk[a.pat][pad] == mode {
+		delete(a.trk[a.pat], pad)
+		mode = trackOn
+	} else {
+		a.trk[a.pat][pad] = mode
+	}
+	a.say(a.label(pad)+[]string{" plays", " is muted", " is solo"}[mode], false)
+	a.replay()
+}
+
 // ToggleBars is the z key of a keyboard on SEQ: one bar in view, or as many as the window holds.
 func (a *App) ToggleBars() {
 	if a.scr != Seq || a.menu != nil || a.prompt != nil {
@@ -782,7 +864,11 @@ func (a *App) ToolsMenu() {
 		if a.pp != nil {
 			a.pp.page = 2
 		}
-	case Files, Slice, Seq:
+	case Unit:
+		a.modeMenu()
+	case Files:
+		a.placesMenu() // t on FILES: load files from where (the file tools are in it)
+	case Slice, Seq:
 		a.selShifted(B)
 	}
 }
@@ -802,7 +888,17 @@ func (a *App) Modal() bool {
 
 // GoScreen goes to the screen with that number (0 is PADS), from a keyboard's number keys; a number past the last does nothing.
 func (a *App) GoScreen(n int) {
-	if n >= 0 && n < len(screenNames) && !a.Typing() {
+	if a.Typing() {
+		return
+	}
+	if Terminal { // the number keys of a computer: see termScreens
+		if n >= 0 && n < len(termScreens) && a.screenShown(termScreens[n]) {
+			a.CancelShift()
+			a.go_(termScreens[n])
+		}
+		return
+	}
+	if n >= 0 && n < len(screenNames) {
 		a.CancelShift()
 		a.go_(Screen(n))
 	}
@@ -812,7 +908,7 @@ func (a *App) GoScreen(n int) {
 func (a *App) NextScreen(d int) {
 	if !a.Typing() {
 		a.CancelShift()
-		a.go_(Screen((int(a.scr) + d + len(screenNames)) % len(screenNames)))
+		a.stepScreen(d)
 	}
 }
 

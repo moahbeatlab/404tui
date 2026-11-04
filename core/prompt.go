@@ -121,6 +121,22 @@ func (a *App) TypeEscape() {
 
 func (a *App) drawPrompt(g Gfx) {
 	p := a.prompt
+	if Terminal { // a keyboard types straight in: a line for the text, no keys to choose from
+		wc, hr := contentCols-2, 5
+		x0, y0 := 1, Rows-2-hr
+		g.Fill(x0, y0, wc, hr, cPanel2)
+		g.Frame(x0, y0, wc, hr, cAmber)
+		g.Text(x0+2, y0+1, fit(strings.ToUpper(p.title), wc-4), cAmber, true)
+		g.Fill(x0+2, y0+2, wc-4, 1, cPanel)
+		shown := p.buf + "_"
+		g.Text(x0+3, y0+2, shown[max(len(shown)-(wc-7), 0):], cText, true)
+		hint := "Enter done   Esc gives it up   Backspace deletes"
+		if p.hint != "" {
+			hint = p.hint
+		}
+		g.Text(x0+2, y0+hr-2, fit(hint, wc-4), cDim, false)
+		return
+	}
 	wc, hr := contentCols-2, 14
 	x0 := 1
 	y0 := Rows - 2 - hr

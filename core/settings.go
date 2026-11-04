@@ -16,6 +16,11 @@ type settings struct {
 	Favourites  []string `json:"favourites,omitempty"`
 	AutosaveMin *int     `json:"autosave_min,omitempty"`
 
+	// ONLINE and OFFLINE (the PROJECTS screen of a computer): the folder of projects to work on without the unit, and the project
+	// (1..99) that was open last in it.
+	OfflineDir  string `json:"offline_dir,omitempty"`
+	LastOffline int    `json:"last_offline,omitempty"`
+
 	// The Config screen: the rule that sends a pad to a bus by its name (nil: the default), the recorder, the pad codes
 	// and the MIDI settings, as the terminal program's Config had them.
 	Theme         int          `json:"theme,omitempty"`

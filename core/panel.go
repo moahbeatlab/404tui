@@ -65,7 +65,46 @@ func (a *App) hints() (plain, shift []hint) {
 		shift = sh
 	}
 	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() {
-		plain = append(append([]hint{}, plain...), hint{"f", "freeze view"}, hint{"z", "1 bar / more"})
+		plain = append(append([]hint{}, plain...), hint{"m", "mute track"}, hint{"s", "solo track"}, hint{"f", "freeze view"}, hint{"z", "1 bar / more"})
+		sh := make([]hint, 0, len(shift)) // s is solo here: the record key is Ctrl-R
+		for _, h := range shift {
+			if h.key != "Sel+X" {
+				sh = append(sh, h)
+			}
+		}
+		shift = sh
+	}
+	if Terminal && a.scr == Pads && !a.Modal() && a.prompt == nil && a.carry == nil {
+		plain = append(append([]hint{}, plain...), hint{"^E", "export bank"})
+	}
+	if Terminal && (a.scr == Pads || a.scr == Files) && !a.Modal() && a.prompt == nil && a.kb == nil && a.carry == nil { // Space plays, x stops
+		out := make([]hint, 0, len(plain)+1)
+		for _, h := range plain {
+			switch {
+			case h.key == "X" && (h.what == "play" || h.what == "listen" || h.what == "in pattern"):
+				h = hint{"Space", h.what}
+				out = append(out, h)
+				out = append(out, hint{"x", "stop"})
+				continue
+			case h.key == "B" && h.what == "stop":
+				continue
+			}
+			out = append(out, h)
+		}
+		plain = out
+	}
+	if Terminal && a.scr == Unit && !a.Modal() && a.prompt == nil {
+		plain = append(append([]hint{}, plain...), hint{"t", "online / offline"})
+	}
+	if Terminal && a.scr == Files && !a.Modal() && a.prompt == nil && a.kb == nil { // t: load files from where
+		out := make([]hint, 0, len(plain)+1)
+		for _, h := range plain {
+			if h.key == "t" {
+				h = hint{"t", "from where"}
+			}
+			out = append(out, h)
+		}
+		plain = out
 	}
 	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() { // the keyboard: Space plays the pattern, x the note
 		out := make([]hint, 0, len(plain))
@@ -105,13 +144,16 @@ func (a *App) hints() (plain, shift []hint) {
 func (a *App) rawHints() (plain, shift []hint) {
 	screen := hint{"Y+<>", "screen"}
 	if Terminal {
-		screen = hint{"g hl", "screen (1-9)"}
+		screen = hint{"g hl", "screen (1-6)"}
 	}
 	if a.pp != nil {
 		if a.pp.page == 2 {
 			return []hint{{"^v", "choose"}, {"<>", "change"}, {"A", "run"}, {"L1 R1", "page"}, {"B", "close"}}, nil
 		}
 		return []hint{{"^v", "setting"}, {"<>", "change"}, {"A", "reset/toggle"}, {"X", "hear pad"}, {"L1 R1", "page"}, {"B", "close"}}, nil
+	}
+	if a.prompt != nil && Terminal {
+		return []hint{{"type", "the text"}, {"Enter", "done"}, {"Esc", "give it up"}, {"Bksp", "delete"}}, nil
 	}
 	if a.prompt != nil {
 		return []hint{{"^v<>", "choose a key"}, {"A", "type it"}, {"B", "delete"}, {"L1 R1", "keys page"}, {"X", "done"}}, []hint{{"Y+B", "clear all"}, {"Y+X", "cancel"}}
@@ -183,6 +225,9 @@ func (a *App) rawHints() (plain, shift []hint) {
 	case Config:
 		return []hint{{"^v", "setting"}, {"<>", "change"}, {"A", "edit / switch"}, {"L1 R1", "jump"}, {"B", "pads"}}, []hint{screen, {"Sel+X", "record"}}
 	case Unit:
+		if Terminal {
+			return []hint{{"A", "project menu"}, {"^v<>", "choose"}, {"B", "back"}}, []hint{screen, {"Sel+X", "record"}}
+		}
 		return []hint{{"A", "project menu"}, {"X", "look again"}, {"^v", "choose"}, {"L1 R1", "page"}, {"B", "back"}}, []hint{screen, {"Sel+X", "record"}}
 	default:
 		return []hint{{"A", "write"}, {"<>", "slot"}, {"^v", "autosave"}, {"L1 R1", "slot 10"}, {"X", "quit"}, {"B", "back"}}, []hint{screen}
@@ -229,21 +274,43 @@ func (a *App) drawPanel(g Gfx) {
 
 	// the map of the screens, the current one lit: buttons of whole cells with a cell between them
 	cw := w / 3
-	for i, n := range screenNames {
-		cx, cy := x+(i%3)*cw, 1+i/3
-		bg, fg := cPanel2, cDim
-		if Screen(i) == a.scr {
-			bg, fg = cAmber, cBg
+	mapRows := (len(screenNames) + 2) / 3
+	if Terminal { // the six screens of a computer; PROJECTS only with a unit
+		mapRows = 2
+		for i, sc := range termScreens {
+			if !a.screenShown(sc) {
+				continue
+			}
+			cx, cy := x+(i%3)*cw, 1+i/3
+			bg, fg := cPanel2, cDim
+			if sc == a.scr {
+				bg, fg = cAmber, cBg
+			}
+			g.Fill(cx, cy, cw-1, 1, bg)
+			n := screenTitle(sc)
+			if cw-1 >= 8 {
+				n = fmt.Sprintf("%d %s", i+1, n)
+			}
+			g.Text(cx+(cw-1-len(n))/2, cy, n, fg, sc == a.scr)
 		}
-		g.Fill(cx, cy, cw-1, 1, bg)
-		if Terminal && i < 9 && cw-1 >= 8 {
-			n = fmt.Sprintf("%d %s", i+1, n)
+	} else {
+		for i, n := range screenNames {
+			cx, cy := x+(i%3)*cw, 1+i/3
+			bg, fg := cPanel2, cDim
+			if Screen(i) == a.scr {
+				bg, fg = cAmber, cBg
+			}
+			g.Fill(cx, cy, cw-1, 1, bg)
+			g.Text(cx+(cw-1-len(n))/2, cy, n, fg, Screen(i) == a.scr)
 		}
-		g.Text(cx+(cw-1-len(n))/2, cy, n, fg, Screen(i) == a.scr)
 	}
 
 	// tempo and the state of the loop
-	y := 2 + (len(screenNames)+2)/3
+	y := 2 + mapRows
+	if Terminal && a.link != nil { // with a unit plugged in the level of its sound is always in view
+		a.drawMeter(g, x, y, w)
+		y += 3
+	}
 	g.Text(x, y, fmt.Sprintf("BPM %s", bpmText(a.tempo())), cText, true)
 	g.Text(x+len("BPM "+bpmText(a.tempo())+" "), y, a.tempoSource(), cDim, false)
 	if a.arpOn {
@@ -535,7 +602,7 @@ func (a *App) drawKeyboardKeys(g Gfx, x, y, w int) {
 	plain, shift := a.hints()
 	type pair struct{ a, b hint }
 	global := []pair{
-		{hint{"1-9", "screens"}, hint{"g hl", "prev/next"}},
+		{hint{"1-6", "screens"}, hint{"g hl", "prev/next"}},
 		{hint{"u", "undo"}, hint{"R", "redo"}},
 		{hint{"^R", "record"}, hint{"?", "all keys"}},
 		{hint{"q", "quit"}, hint{"y s", "shift keys"}},

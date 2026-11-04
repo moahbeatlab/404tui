@@ -731,7 +731,8 @@ func (a *App) drawSeq(g Gfx) {
 	if !ok {
 		sub = "empty: A puts the first note"
 	}
-	g.Text(2+len(title)+2, 1, sub, cDim, false)
+	subRoom := contentCols - 2 - 14 - 3*((a.steps()+a.viewSpan()-1)/a.viewSpan()) - (2 + len(title) + 2) // the bar label and the bars are right of it
+	g.Text(2+len(title)+2, 1, fit(sub, max(subRoom, 0)), cDim, false)
 
 	lx, x0 := 2, 6 // the pad labels, the first step
 	steps := a.steps()

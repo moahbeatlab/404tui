@@ -63,6 +63,17 @@ func (j *job) state() (done, total int, name string, err error, finished bool) {
 // Tick runs what has to happen without a key: looking for the unit while the UNIT screen is in front.
 func (a *App) Tick() {
 	a.splashTick()
+	if a.connCh != nil {
+		select {
+		case l := <-a.connCh:
+			a.connBusy = false
+			if l != nil {
+				a.link = l
+				a.connAt = a.clock()
+			}
+		default:
+		}
+	}
 	a.autosaveTick()
 	a.indexTick()
 	a.freezeTick()
@@ -72,13 +83,36 @@ func (a *App) Tick() {
 	a.recordingTick()
 	a.midiTick()
 	a.levelTick()
-	if a.scr != Unit || a.link != nil || a.Connect == nil || a.clock().Sub(a.connAt) < 2*time.Second {
+	// the handheld looks for the unit while UNIT is in front; a computer looks all the time (slowly), for PROJECTS to show
+	wait := 2 * time.Second
+	if Terminal {
+		wait = 4 * time.Second
+	}
+	if (!Terminal && a.scr != Unit) || a.link != nil || a.Connect == nil || a.clock().Sub(a.connAt) < wait {
 		return
 	}
 	a.connAt = a.clock()
-	if l, err := a.Connect(); err == nil {
-		a.link = l
+	if !Terminal { // the handheld waits for it on its UNIT screen
+		if l, err := a.Connect(); err == nil {
+			a.link = l
+		}
+		return
 	}
+	// a computer looks in the background: opening a port that is not the unit can take a while, and the screen must not wait for it
+	if a.connCh == nil {
+		a.connCh = make(chan Link, 1)
+	}
+	if a.connBusy {
+		return
+	}
+	a.connBusy = true
+	go func(connect func() (Link, error), ch chan Link) {
+		l, err := connect()
+		if err != nil {
+			l = nil
+		}
+		ch <- l
+	}(a.Connect, a.connCh)
 }
 
 func (a *App) unitKey(k Key) {
@@ -87,12 +121,33 @@ func (a *App) unitKey(k Key) {
 			return
 		}
 	}
+	if Terminal && !a.onlineNow() { // offline: the projects of a folder
+		switch k {
+		case A:
+			a.offlineMenu()
+			return
+		case X:
+			return
+		}
+	}
+	up, down := 15, 1 // the handheld lists the projects, a computer shows them as tiles, four to a row
+	if Terminal {
+		up, down = 12, 4
+		switch k {
+		case Left:
+			a.unitCur = (a.unitCur + 15) % 16
+			a.confirm = false
+		case Right:
+			a.unitCur = (a.unitCur + 1) % 16
+			a.confirm = false
+		}
+	}
 	switch k {
 	case Up:
-		a.unitCur = (a.unitCur + 15) % 16
+		a.unitCur = (a.unitCur + up) % 16
 		a.confirm = false
 	case Down:
-		a.unitCur = (a.unitCur + 1) % 16
+		a.unitCur = (a.unitCur + down) % 16
 		a.confirm = false
 	case B:
 		if a.confirm {
@@ -100,9 +155,13 @@ func (a *App) unitKey(k Key) {
 			return
 		}
 		a.job = nil
+		if Terminal {
+			a.go_(Pads)
+			return
+		}
 		a.go_(Save)
 	case A:
-		if a.link == nil {
+		if a.link == nil && !Terminal {
 			a.connAt = time.Time{}
 			a.Tick()
 			return
@@ -153,6 +212,10 @@ func (a *App) send() {
 }
 
 func (a *App) drawUnit(g Gfx) {
+	if Terminal {
+		a.drawProjects(g)
+		return
+	}
 	if a.link == nil {
 		g.Text(2, 3, "NO UNIT", cAmber, true)
 		g.Text(2, 6, "Plug the SP-404MKII into a USB port (the OTG port", cText, false)
@@ -186,6 +249,22 @@ func (a *App) drawUnit(g Gfx) {
 
 // unitContext is the panel's part of the UNIT screen: what is being sent and how far it is (x, y, w in cells).
 func (a *App) unitContext(g Gfx, x, y, w int) {
+	if Terminal && !a.onlineNow() {
+		g.Text(x, y, "OFFLINE", cAmber, true)
+		g.Text(x, y+1, fit(short2(a.offlineDir(), w), w), cDim, false)
+		g.Text(x, y+3, fmt.Sprintf("project %d", a.unitCur+1), cText, true)
+		if dir, ok := a.offlineProject(a.unitCur); ok {
+			g.Text(x, y+4, fit(filepath.Base(dir), w), cText, false)
+			g.Text(x, y+5, "A  open it in the editor", cDim, false)
+		} else {
+			g.Text(x, y+4, "empty", cDim, false)
+			g.Text(x, y+5, "A  write the project here", cDim, false)
+		}
+		if n, ok := a.lastOffline(); ok {
+			g.Text(x, y+7, fit(fmt.Sprintf("last open offline: %d", n+1), w), cDim, false)
+		}
+		return
+	}
 	if a.link == nil {
 		g.Text(x, y, "no unit", cDim, false)
 		return
@@ -219,5 +298,68 @@ func (a *App) unitContext(g Gfx, x, y, w int) {
 		g.Text(x+1, y+5, "REPLACES unit", cWhite, true)
 		g.Text(x+1, y+6, fmt.Sprintf("project %d.", a.unitCur+1), cWhite, true)
 		g.Text(x+1, y+7, "A again: send", cText, false)
+	}
+}
+
+// drawProjectTiles is the 16 projects of the unit as a 4x4 grid under the line that says it is connected.
+func (a *App) drawProjects(g Gfx) {
+	var names []string
+	if a.onlineNow() {
+		g.Text(2, 1, "ONLINE", cGood, true)
+		g.Text(2+len("ONLINE")+2, 1, fit(a.link.Name(), contentCols-20), cDim, false)
+		var err error
+		if names, err = a.link.Projects(); err != nil {
+			g.Text(2, 3, fit(err.Error(), contentCols-4), cBad, false)
+			return
+		}
+	} else {
+		g.Text(2, 1, "OFFLINE", cAmber, true)
+		where := short2(a.offlineDir(), contentCols-40)
+		note := "  no unit plugged in"
+		if a.link != nil {
+			note = "  a unit is plugged in: t goes online"
+		}
+		g.Text(2+len("OFFLINE")+2, 1, where, cText, false)
+		g.Text(contentCols-1-len(note), 1, note, cDim, false)
+		names = make([]string, 16)
+		for i := range names {
+			if dir, ok := a.offlineProject(i); ok {
+				names[i] = filepath.Base(dir)
+			}
+		}
+	}
+	a.drawProjectTiles(g, names)
+}
+
+func (a *App) drawProjectTiles(g Gfx, names []string) {
+	cols := contentCols - 2
+	ph := max((Rows-5)/4, 3)
+	for i := 0; i < 16; i++ {
+		x := 1 + (i%4)*cols/4
+		tw := 1 + (i%4+1)*cols/4 - x - 1
+		y := 2 + (i/4)*ph
+		th := ph - 1
+		nm := ""
+		if i < len(names) {
+			nm = names[i]
+		}
+		bg := cPanel
+		if nm != "" {
+			bg = cPanel2
+		}
+		g.Fill(x, y, tw, th, bg)
+		num := fmt.Sprint(i + 1)
+		g.Text(x+tw-len(num)-1, y, num, cDim, false)
+		if nm == "" {
+			g.Text(x+2, y, "empty", cDim, false)
+		} else {
+			g.Text(x+2, y, fit(nm, tw-len(num)-4), cText, true)
+		}
+		if !a.onlineNow() && a.slot == i+1 && nm != "" {
+			g.Text(x+2, y+1, "open now", cGood, false)
+		}
+		if i == a.unitCur {
+			g.Cursor(x, y, tw, th)
+		}
 	}
 }

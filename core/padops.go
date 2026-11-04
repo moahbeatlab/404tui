@@ -173,6 +173,19 @@ func (a *App) exportBank() {
 		return
 	}
 	dir := filepath.Join(a.exportDir(), fmt.Sprintf("%s_bank_%c", app.SanitizeName(a.ProjectName()), 'A'+a.bank))
+	if Terminal { // a computer asks where to: the folder is typed (this one is there already)
+		a.askText(fmt.Sprintf("export bank %c into the folder", 'A'+a.bank), "WAV files and samples.json go in it; Enter exports", dir, func(s string) {
+			if s != "" {
+				a.exportPadsTo(pads, expandHome(s))
+			}
+		})
+		return
+	}
+	a.exportPadsTo(pads, dir)
+}
+
+// exportPadsTo writes the pads as WAV files and samples.json into the folder.
+func (a *App) exportPadsTo(pads []int, dir string) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		a.say(err.Error(), true)
 		return

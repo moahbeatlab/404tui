@@ -88,7 +88,7 @@ func (a *App) titleBar(g Gfx) {
 	g.Fill(0, 0, Cols, 1, cPanel)
 	g.Fill(0, 0, 8, 1, cAmber)
 	g.Text(1, 0, "404tui", cBg, true)
-	g.Text(9, 0, screenNames[a.scr], cAmber, true)
+	g.Text(9, 0, screenTitle(a.scr), cAmber, true)
 	right := fit(fmt.Sprintf("%s  bank %c", a.ProjectName(), 'A'+rune(a.bank)), Cols-30)
 	g.Text(Cols-2-len(right), 0, right, cText, false)
 	if a.rec != nil {
@@ -128,7 +128,7 @@ func (a *App) footer(g Gfx) {
 	}
 	hintLine := "Y keys  Y+L2 undo  Y+R2 redo  Sel+Start quit"
 	if Terminal {
-		hintLine = "1-9 g h/l screens  y shift  s select  ? keys  q quit"
+		hintLine = "1-6 g h/l screens  y shift  s select  ? keys  q quit"
 	}
 	g.Text(2, top+1, hintLine, cDim, false)
 	room := Cols - 4 - len(hintLine) - 2 // what the autosave note and the version share
@@ -167,7 +167,7 @@ func (a *App) drawHelp(g Gfx) {
 			"arrows or h j k l   D-pad (as in vim)",
 			"a b x              the buttons A, B, X (Enter, Esc, Space too)",
 			"y                  the next key with Y held",
-			"1-9, Tab, g h/l    go to a screen (gh before, gl next, gg first)",
+			"1-6, Tab, g h/l    go to a screen (gh before, gl next, gg first)",
 			"s                  the next key with Select held (s b)",
 			"e                  hold A (edit a note); e again lets go",
 			"[ ] or Ctrl-U/D    L1 R1;   , .   L2 R2",

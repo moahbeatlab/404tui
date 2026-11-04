@@ -186,6 +186,9 @@ func (a *App) codeHit(pad int) {
 
 // toggleLive goes to the PERF screen, or back to where it came from.
 func (a *App) toggleLive() {
+	if Terminal { // the PERF screen is not in the program of a computer
+		return
+	}
 	if a.scr == Perform && a.liveBack != Perform {
 		a.go_(a.liveBack)
 		a.say("live mode off", false)

@@ -6,7 +6,7 @@
 
 The 16 pads of a bank. `a` opens the pad panel: SOUND and SHAPE pages with the pad's settings, and the TOOLS page.
 
-**Keys on a computer:** `a` menu · `x` play · `b` stop · `hjkl` move · `[ ]` bank · `.` arp marked · `t` tools · `g hl` screen (1-9) · `y a` mark pad · `y jk` bank · `y b` clear pad · `s x` record
+**Keys on a computer:** `a` menu · `Space` play · `x` stop · `hjkl` move · `[ ]` bank · `.` arp marked · `t` tools · `^E` export bank · `g hl` screen (1-6) · `y a` mark pad · `y jk` bank · `y b` clear pad · `s x` record
 
 **Keys on the handheld:** `A` menu · `X` play · `B` stop · `^v<>` move · `L1 R1` bank · `R2` arp marked · `Y+<>` screen · `Y+A` mark pad · `Y+^v` bank · `Y+B` clear pad · `Sel+X` record
 
@@ -173,7 +173,7 @@ The settings of the pad under the cursor, written into the project at once. With
 
 The step grid of the pattern in front. `Enter` (or `b`) opens the note panel, `t` the pattern's tools and settings.
 
-**Keys on a computer:** `a` note on/off · `e hjkl` edit (hold) · `Space` play / stop · `b` note settings · `x` hear note · `.` mute/solo · `hjkl` pad, step · `[ ]` bar · `t` tools · `f` freeze view · `z` 1 bar / more · `y x` add track · `y b` pick pattern · `y jk` pattern +- · `s x` record
+**Keys on a computer:** `a` note on/off · `e hjkl` edit (hold) · `Space` play / stop · `b` note settings · `x` hear note · `.` mute/solo · `hjkl` pad, step · `[ ]` bar · `t` tools · `m` mute track · `s` solo track · `f` freeze view · `z` 1 bar / more · `y x` add track · `y b` pick pattern · `y jk` pattern +-
 
 **Keys on the handheld:** `A` note on/off · `A+^<>` edit (hold) · `X` play · `B` note settings · `L2` hear note · `R2` mute/solo · `^v<>` pad, step · `L1 R1` bar · `Y+X` add track · `Y+B` pick pattern · `Sel+B` tools · `Y+^v` pattern +- · `Sel+X` record
 
@@ -467,16 +467,78 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 - `Clear`
 - `Add a track (choose a pad)...`
 
+## PROJECTS
+
+On a computer: the 16 projects of the unit when one is plugged in (online), else those of a folder on this computer (offline). The program looks for the unit all the time, and the start screen offers `u` online and `o` offline (the project open last). `a` opens a project's menu, `t` chooses online or offline and the offline folder. On the handheld this screen is called UNIT.
+
+**Keys on a computer:** `a` project menu · `hjkl` choose · `Esc` back · `t` online / offline · `g hl` screen (1-6) · `s x` record
+
+**Keys on the handheld:** `A` project menu · `X` look again · `^v` choose · `L1 R1` page · `B` back · `Y+<>` screen · `Sel+X` record
+
+
+### Project menu of the unit (`a`, online)
+
+- `Send the project of the editor here...`
+- `Edit it live (changes go to the unit)`
+- `Load it into the editor`
+- `Back it up to this computer`
+- `Save it into a folder...`
+- `Restore it from a backup...`
+  - **restore over unit project 1** (a dialog):
+    - `A folder somewhere else...`
+- `Rename...`
+- `Make it the unit's project`
+- `Erase it...`
+  - **erase unit project 1: samples, patterns and settings?** (a dialog):
+    - `Yes, erase it`
+    - `No`
+
+### Online or offline (`t`)
+
+
+*Work*
+
+- `Online: no unit is plugged in (looking for it)`
+- `Offline: the projects in ~ui-docs/out/ROLAND/SP-404MKII`
+
+*Offline Folder*
+
+- `Choose the folder of the offline projects...`
+
+### Project menu of the offline folder (`a`, offline)
+
+- `Write the project of the editor here`
+- `Export the project of the editor into a folder...`
+
 ## FILES
 
-The file browser: this computer, the unit's card and its storage.
+The file browser: this computer, the unit's card and its storage. `t` chooses where the files are loaded from (the computer, the samples folder, the unit's SD card, a USB drive, favourites) and leads to the file tools.
 
-**Keys on a computer:** `a` to pad A3 · `x` listen · `jk` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` tools · `g hl` screen (1-9) · `y x` places · `y a` search · `y b` favourite · `s a` mark · `s x` record
+**Keys on a computer:** `a` to pad A3 · `Space` listen · `x` stop · `jk` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where · `g hl` screen (1-6) · `y x` places · `y a` search · `y b` favourite · `s a` mark · `s x` record
 
 **Keys on the handheld:** `A` to pad A3 · `X` listen · `^v` browse · `>` open · `<` up · `L1 R1` page · `B` pads · `Y+<>` screen · `Y+X` places · `Y+A` search · `Y+B` favourite · `Sel+A` mark · `Sel+B` files menu · `Sel+X` record
 
 
-### Files menu (`t`)
+### Load files from where (`t`)
+
+
+*Places*
+
+- `samples    ~p/404tui-docs/samples`
+- `the top    /`
+
+*Favourites (0)*
+
+
+*This Folder*
+
+- `Add ~4tui-docs/samples/drums to the fav~`
+
+*Search Index*
+
+- `Index /tmp/404tui-docs/samples/drums`
+
+### File tools (in the menu of `t`)
 
 
 *Marks*
@@ -495,25 +557,6 @@ The file browser: this computer, the unit's card and its storage.
 *This Folder*
 
 - `New folder...`
-
-### Places and favourites (`y x`)
-
-
-*Places*
-
-- `samples    ~p/404tui-docs/samples`
-- `the top    /`
-
-*Favourites (0)*
-
-
-*This Folder*
-
-- `Add ~4tui-docs/samples/drums to the fav~`
-
-*Search Index*
-
-- `Index /tmp/404tui-docs/samples/drums`
 
 ## SLICE
 
@@ -713,50 +756,24 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
         - `Take the last added sample out`
         - `Settings: slice, order, grid (Y+B)...`
 
-## SAVE
-
-Writes the project as a folder for the SD card.
-
-**Keys on a computer:** `a` write · `hl` slot · `jk` autosave · `[ ]` slot 10 · `x` quit · `Esc` back · `g hl` screen (1-9)
-
-**Keys on the handheld:** `A` write · `<>` slot · `^v` autosave · `L1 R1` slot 10 · `X` quit · `B` back · `Y+<>` screen
-
-
-## UNIT
-
-The SP-404MKII over USB: its projects.
-
-**Keys on a computer:** `a` project menu · `x` look again · `jk` choose · `[ ]` page · `Esc` back · `g hl` screen (1-9) · `s x` record
-
-**Keys on the handheld:** `A` project menu · `X` look again · `^v` choose · `L1 R1` page · `B` back · `Y+<>` screen · `Sel+X` record
-
-
-### Project menu (`a`)
-
-- `Send the project of the editor here...`
-- `Edit it live (changes go to the unit)`
-- `Load it into the editor`
-- `Back it up to this computer`
-- `Restore it from a backup...`
-  - **restore over unit project 1** (a dialog):
-    - `A folder somewhere else...`
-- `Rename...`
-- `Make it the unit's project`
-- `Erase it...`
-  - **erase unit project 1: samples, patterns and settings?** (a dialog):
-    - `Yes, erase it`
-    - `No`
-
 ## CONFIG
 
-The program's settings.
+The program's settings; on a computer the writing of the project (what SAVE does on the handheld) is its first section.
 
-**Keys on a computer:** `jk` setting · `hl` change · `a` edit / switch · `[ ]` jump · `Esc` pads · `g hl` screen (1-9) · `s x` record
+**Keys on a computer:** `jk` setting · `hl` change · `a` edit / switch · `[ ]` jump · `Esc` pads · `g hl` screen (1-6) · `s x` record
 
 **Keys on the handheld:** `^v` setting · `<>` change · `A` edit / switch · `L1 R1` jump · `B` pads · `Y+<>` screen · `Sel+X` record
 
 
 ### Settings
+
+*Project*
+
+- `Project number` — left right change
+- `Write it to the card folder` — A writes
+- `Export it into a folder...` — A
+- `Autosave` — left right change
+- `Quit the program` — A
 
 *Buses By Pad Name*
 
@@ -777,7 +794,6 @@ The program's settings.
 
 *Pad Codes On The Unit*
 
-- `Live mode (the PERF screen)` — A edits
 - `Start and stop a recording` — A edits
 
 *Midi*
@@ -795,21 +811,21 @@ The program's settings.
 
 - `Colour theme of the terminal` — left right change
 
-## PERF
+## SAVE (handheld only)
+
+Writes the project as a folder for the SD card. On a computer this is in CONFIG, under PROJECT.
+
+**Keys on the handheld:** `A` write · `<>` slot · `^v` autosave · `L1 R1` slot 10 · `X` quit · `B` back · `Y+<>` screen
+
+## PERF (handheld only)
 
 The unit's MIDI as it plays, and the pattern now and next.
 
-**Keys on a computer:** `a` pattern now · `x` next pattern · `Esc` back · `g hl` screen (1-9) · `y a` next -> now · `y x` clear next · `y b` note BUS 1 · `s b` note BUS 2 · `s x` record
-
 **Keys on the handheld:** `A` pattern now · `X` next pattern · `B` back · `Y+<>` screen · `Y+A` next -> now · `Y+X` clear next · `Y+B` note BUS 1 · `Sel+B` note BUS 2 · `Sel+X` record
 
-
-## LOOP
+## LOOP (handheld only)
 
 Makes patterns from the slices of the pads.
 
-**Keys on a computer:** `a` make the pattern · `x` delete (twice) · `hjkl` move · `[ ]` bank · `Esc` pads · `g hl` screen (1-9) · `y x` remix · `y jk` slices · `s x` record
-
 **Keys on the handheld:** `A` make the pattern · `X` delete (twice) · `^v<>` move · `L1 R1` bank · `B` pads · `Y+<>` screen · `Y+X` remix · `Y+^v` slices · `Sel+X` record
-
 

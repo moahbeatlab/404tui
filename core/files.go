@@ -198,9 +198,16 @@ func (a *App) drawKeyboard(g Gfx) {
 
 func (a *App) placesMenu() {
 	m := &menu{title: "places and favourites"}
+	if Terminal {
+		m.title = "load files from where"
+	}
 	go_ := func(dir string) func(int) { return func(int) { a.cd(dir); a.say("in "+short2(dir, 44), false) } }
 	m.head("PLACES")
-	for _, pl := range []struct{ name, dir string }{{"samples", a.Root}, {"usb drive", "/mnt/usbdrive"}, {"games card", "/roms"}, {"the top", "/"}} {
+	places := []struct{ name, dir string }{{"samples", a.Root}, {"usb drive", "/mnt/usbdrive"}, {"games card", "/roms"}, {"the top", "/"}}
+	if home, err := os.UserHomeDir(); err == nil && Terminal {
+		places = append([]struct{ name, dir string }{{"computer", home}}, places...) // this computer: the home folder
+	}
+	for _, pl := range places {
 		if st, err := os.Stat(pl.dir); err == nil && st.IsDir() {
 			m.items = append(m.items, menuItem{label: fmt.Sprintf("%-10s %s", pl.name, short2(pl.dir, 22)), run: go_(pl.dir)})
 		}
@@ -224,5 +231,9 @@ func (a *App) placesMenu() {
 	}
 	m.items = append(m.items, menuItem{label: fit(label, 40), run: func(int) { a.toggleFavourite(a.dir) }})
 	a.indexItems(m)
+	if Terminal { // the keyboard's t is this menu: the file tools (copy, cut, rename, delete, tags) are one step on
+		m.head("FILES")
+		m.items = append(m.items, menuItem{label: "Copy, cut, rename, delete, tags...", run: func(int) { a.filesMenu() }})
+	}
 	a.menu = m
 }

@@ -27,19 +27,22 @@ snap 04-too-small
 tm resize-window -t $S -x 150 -y 44; sleep 0.6
 check "back to the screen" "BPM 124"
 
-uc UC03 "Go to a screen: 1-9, Tab, g h / g l, g g"
-key 4
-screenis "4 is SLICE (a pad with no sample bounces back)" PADS
+uc UC03 "Go to a screen: 1-6, Tab, g h / g l, g g (PADS SEQ PROJECTS FILES SLICE CONFIG)"
+key 5
+screenis "5 is SLICE (a pad with no sample bounces back)" PADS
 key 2
 screenis "2 is SEQ" SEQ
 key 3
-screenis "3 is FILES" FILES
-key 9
-screenis "9 is LOOP" LOOP
+screenis "3 is PROJECTS" PROJECTS
+key 4
+screenis "4 is FILES" FILES
+key 6
+screenis "6 is CONFIG" CONFIG
+absent "there is no LOOP, PERF or SAVE in the screen map" "LOOP"
 key Tab
 screenis "Tab goes on, around to PADS" PADS
 key BTab
-screenis "Shift-Tab goes back to LOOP" LOOP
+screenis "Shift-Tab goes back to CONFIG" CONFIG
 lit g; lit g
 screenis "g g is the first screen" PADS
 lit g; lit l
@@ -135,6 +138,14 @@ key Escape
 check "Esc goes back to the tools menu" "TIMING"
 key Escape
 absent "Esc again closes it" "TIMING"
+lit m
+check "m mutes the track" "is muted"
+lit m
+check "m again plays it" "plays"
+lit s
+check "s makes the track solo" "is solo"
+lit s
+check "s again plays it" "plays"
 lit x
 checkre "x hears the note without starting the pattern" "STOP"
 key Space
@@ -151,7 +162,7 @@ check "a again takes it off" "no note"
 uc UC08 "Slicer: cut, settings, tools, zoom, new order, loop, remove, undo"
 begin 150 44
 lit l l
-lit 4
+lit 5
 screenis "the slicer opens on a pad with a sample" SLICE
 lit y a
 check "y a cuts at the onsets" "16 slices"
@@ -192,7 +203,7 @@ check "u takes the removal back" "16 slices"
 snap 20-slicer-undo
 
 uc UC09 "Files: the ranger view, the one-line search, the files menu"
-lit 3
+lit 4
 check "the files screen has panes" "╭"
 check "the real samples are listed" "construction-kit"
 snap 21-files-ranger
@@ -209,28 +220,39 @@ check "Enter keeps the result" "search"
 key Escape
 absent "Esc ends the search" "search \""
 lit t
-check "t opens the files menu" "Paste here"
-snap 23-files-menu
-key Escape
+check "t asks from where the files are loaded" "LOAD FILES FROM WHERE"
+check "this computer is one of the places" "computer"
+check "so is the samples folder" "samples"
+snap 23-files-from-where
+pick "Copy, cut, rename, delete, tags..."; key Enter
+check "the file tools are one step on" "Paste here"
+snap 23b-files-menu
+key Escape; key Escape
 
-uc UC10 "Other screens: loop, perform, config, unit, help, recording"
-lit 9
-screenis "the looper" LOOP
-snap 24-looper
-lit 8
-screenis "perform" PERF
-check "no MIDI in this build says so" "no MIDI in this build"
-snap 25-perform
-lit 7
-check "config" "BUSES BY PAD NAME"
+uc UC10 "Other screens: config with the project and the prompt, offline projects, help, recording, the rename prompt"
+lit 6
+check "config starts with the project" "PROJECT"
+check "it has the writing of the project" "Write it to the card folder"
+check "and the autosave" "Autosave"
+snap 24-config-project
+lit j j j j j
 lit a
 check "config edits with a prompt" "WORDS FOR SAMPLES ON BUS 1"
+check "the prompt is one line to type in" "Enter done"
+absent "no keyboard of letters on the screen" "abcdefghij"
 snap 26-config-prompt
+for ch in x y; do lit $ch; done
+check "typed text shows in the prompt" "_"
 key Escape
 absent "Esc closes the prompt" "WORDS FOR SAMPLES ON BUS 1"
-lit 6
-check "the unit screen without a unit" "NO UNIT"
+lit 3
+check "projects offline without a unit" "OFFLINE"
+check "the folder's projects are tiles" "empty"
 snap 27-unit
+lit t
+check "t offers online and offline" "Online"
+check "and the offline folder" "Choose the folder of the offline projects"
+key Escape
 lit '?'
 check "the help page names the keys" "go to a screen"
 snap 28-help
@@ -238,11 +260,53 @@ lit '?'
 key C-r
 checkre "Ctrl-R says why it cannot record" "no recorder|no audio input|cannot record"
 
-uc UC11 "A unit (the simulator): its projects, a backup, live editing, its card, tags and the index of its files"
-begin 150 44 -sim
-lit 6
-check "the simulated unit is found" "CONNECTED"
+uc UC18 "Typing a name: one line, no keyboard of letters; export of the bank; Space plays, x stops"
+begin 150 44
+lit l l
+check "pad A3 is under the cursor" "03_Loop1_124_HDK"
+lit t
+choose "Rename..."
+check "rename asks for the name" "RENAME A3"
+absent "no keyboard of letters" "abcdefghij"
+for ch in z z; do lit $ch; done
+check "the typed text is in the line" "HDKzz_"
+snap 36-rename
+key Enter
+check "Enter renames the pad" "03_Loop1_124_HDKzz"
+lit u
+check "u takes the name back" "undone"
+key C-e
+check "Ctrl-E asks where to export the bank" "EXPORT BANK A INTO THE FOLDER"
+snap 37-export-bank
+key Enter
+check "the bank is exported" "pads exported to"
+ls "$W"/exports/*/samples.json >/dev/null 2>&1 && ok "samples.json and the WAV files are in the folder" || bad "no export folder"
+key Space
+sleep 0.3
+lit x
+check "Space plays the pad and x stops it" "stopped"
+
+uc UC11 "A unit (the simulator): found at the start, online or offline, level meter, its projects, a backup, live editing, its card, tags"
+start 150 44 -sim -project $W/proj
+check "the splash shows" "SAMPLE LAB FOR THE SP-404MKII"
+check "the splash finds the unit" "UNIT FOUND"
+check "and offers online" "u  work online"
+check "and offline" "o  work offline"
+snap 38-splash-unit
+lit o
+check "o works offline: the pads open" "BPM 124"
+lit 3
+check "PROJECTS says it is offline" "OFFLINE"
+check "and that a unit is plugged in" "a unit is plugged in"
+lit t
+check "t offers to go online" "Online: the projects of the unit"
+snap 39-online-offline
+key Enter
+check "online is chosen" "online: the projects of the unit"
+check "the simulated unit is found" "ONLINE"
 check "its projects are listed" "PROJECT_02"
+check "the level meter is in the panel while a unit is there" "level:"
+snap 40b-projects-online
 lit a
 check "the menu of a unit project" "UNIT PROJECT 1"
 snap 29-unit-menu
@@ -255,12 +319,12 @@ check "loading asks first when the editor has unsaved work" "NOT SAVED"
 lit a
 check "live editing starts" "LIVE 1"
 snap 30-live
-lit 3
+lit 4
 check "the files screen" "╭"
 lit y x
 check "the places include the unit's card" "SD card"
 snap 31-places
-lit j j; key Enter
+pick "SD card"; key Enter
 check "the card of the unit is listed" "IMPORT"
 snap 32-unit-card
 lit t
@@ -279,15 +343,16 @@ for ch in k i c k; do lit $ch; done
 key Enter
 check "the tag search finds the kick" "tagged"
 snap 34-tag-search
-lit 3
+lit 4
 
 uc UC12 "Save the project unchanged: the files are identical to the real project"
 tm kill-session -t $S 2>/dev/null
 begin 120 40
-lit 5
-check "the save screen" "WRITE THE PROJECT"
+lit 6
+check "the writing of the project is in the config" "Write it to the card folder"
+lit j
 lit a
-check "written" "WRITTEN"
+check "written" "written, "
 snap 35-saved
 dest=$(find $W/out -name PADCONF.BIN | head -1)
 if [ -n "$dest" ] && cmp -s "$dest" "$PROJECT"/PADCONF.BIN; then ok "PADCONF.BIN is identical"; else bad "PADCONF.BIN differs or was not written ($dest)"; fi
@@ -295,6 +360,13 @@ d=$(dirname "$dest")
 if diff -rq "$d/PTN" "$PROJECT"/PTN >/dev/null 2>&1; then ok "the patterns are identical"; else bad "the PTN files differ"; diff -rq "$d/PTN" "$PROJECT"/PTN | head -5; fi
 n1=$(ls "$d/SMPL" 2>/dev/null | wc -l); n2=$(ls "$PROJECT"/SMPL | wc -l)
 if [ "$n1" = "$n2" ]; then ok "all $n2 sample files written"; else bad "samples: $n1 written, $n2 in the project"; fi
+
+lit 3
+check "the written project is in the offline folder" "PROJECT_01"
+lit a
+check "its menu opens it in the editor" "Open it in the editor"
+key Enter
+check "it opens and the pads show" "BPM 124"
 
 uc UC13 "Quit, and no crash on the way"
 lit q

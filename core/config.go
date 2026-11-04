@@ -296,7 +296,25 @@ func (a *App) cfgItems() []cfgItem {
 			a.askText(title, hint, get(a), func(s string) { set(a, s); a.saveSettings() })
 		}
 	}
-	items := []cfgItem{
+	var items []cfgItem
+	if Terminal { // SAVE of the handheld is a part of this screen on a computer
+		items = append(items,
+			cfgItem{head: "PROJECT"},
+			cfgItem{label: "Project number", value: func(a *App) string { return a.ProjectName() }, hint: "< > change",
+				change: func(a *App, by int) { a.slot = max(1, min(a.slot+by, 99)); a.wrote = nil }},
+			cfgItem{label: "Write it to the card folder", value: func(a *App) string {
+				if a.wrote != nil {
+					return fmt.Sprintf("written, %d files", len(a.wrote))
+				}
+				return short2(filepath.Join(a.OutDir, cardFolder), 34)
+			}, hint: "A writes", edit: func(a *App) { a.write() }},
+			cfgItem{label: "Export it into a folder...", value: func(a *App) string { return "" }, hint: "A", edit: func(a *App) { a.exportProjectAsk() }},
+			cfgItem{label: "Autosave", value: func(a *App) string { return a.autosaveSetting() }, hint: "< > change",
+				change: func(a *App, by int) { a.setAutosave(by) }},
+			cfgItem{label: "Quit the program", value: func(a *App) string { return "" }, hint: "A", edit: func(a *App) { a.RequestQuit() }},
+		)
+	}
+	items = append(items, []cfgItem{
 		{head: "BUSES BY PAD NAME"},
 		{label: "Words for samples on BUS 1", value: func(a *App) string { return words(a.busRule().Bus1Words) }, colour: busColoured(1), hint: "A edits", edit: editWords(1)},
 		{label: "Words for samples on BUS 2", value: func(a *App) string { return words(a.busRule().Bus2Words) }, colour: busColoured(2), hint: "A edits", edit: editWords(2)},
@@ -330,7 +348,7 @@ func (a *App) cfgItems() []cfgItem {
 			edit: promptSetting("MIDI input", "a part of the name of the input; the unit's is SP-404MKII, so 404", func(a *App) string { return a.midiPort() }, func(a *App, s string) { a.set.MidiPort = strings.ToLower(s) })},
 		{label: "Control channel", value: func(a *App) string { return chanText(a.midiChan()) }, hint: "A edits",
 			edit: promptSetting("MIDI control channel", "1 to 16, or off", func(a *App) string { return chanText(a.midiChan()) }, func(a *App, s string) { a.applyChannel(&a.set.MidiChan, s) })},
-	}
+	}...)
 	for i := 0; i < 4; i++ {
 		i := i
 		label := [4]string{"Live mode", "Start and stop a recording", "Next pattern becomes the one that plays", "Clear the next pattern"}[i]
@@ -351,6 +369,9 @@ func (a *App) cfgItems() []cfgItem {
 			}},
 	)
 	_ = rule
+	if Terminal { // there is no PERF screen on a computer: its pad code has nothing to start
+		items = slices.DeleteFunc(items, func(it cfgItem) bool { return it.label == "Live mode (the PERF screen)" })
+	}
 	return items
 }
 

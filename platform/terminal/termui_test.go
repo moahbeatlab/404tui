@@ -130,12 +130,14 @@ func TestYArmsAShiftForTheNextKey(t *testing.T) {
 func TestSelectArmsForTheNextKey(t *testing.T) {
 	m := newModel(t)
 	press(m, "x")
-	press(m, "y")
-	press(m, "l")
+	for i := 0; i < 3; i++ { // PADS, SEQ, PROJECTS, FILES
+		press(m, "y")
+		press(m, "l")
+	}
 	press(m, "s")
-	press(m, "b") // Select+B on SEQ: the pattern tools
-	if !strings.Contains(m.text(), "TRACKS") {
-		t.Fatalf("s then b opens the pattern tools:\n%s", m.text())
+	press(m, "b") // Select+B on FILES: the file tools
+	if !strings.Contains(m.text(), "Mark every file here") {
+		t.Fatalf("s then b opens the file tools:\n%s", m.text())
 	}
 }
 
@@ -195,10 +197,10 @@ func TestEverySizeHasAPanelOfAThirdOfTheWidth(t *testing.T) {
 func TestSearchTypedOnTheKeyboard(t *testing.T) {
 	m := newModel(t)
 	press(m, "x")
-	press(m, "y")
-	press(m, "l")
-	press(m, "y")
-	press(m, "l") // FILES
+	for i := 0; i < 3; i++ { // SEQ, PROJECTS, FILES
+		press(m, "y")
+		press(m, "l")
+	}
 	press(m, "/")
 	for _, ch := range "kick" {
 		press(m, string(ch))
@@ -241,10 +243,15 @@ func TestThePanelNamesTheKeysOfTheKeyboard(t *testing.T) {
 func TestScreensByNumberTabAndGHL(t *testing.T) {
 	m := newModel(t)
 	name := func() string { return m.app.ScreenName() }
-	press(m, "3")
+	press(m, "4")
 	if name() != "FILES" {
-		t.Fatalf("3 is FILES, got %s", name())
+		t.Fatalf("4 is FILES, got %s", name())
 	}
+	press(m, "3")
+	if name() != "UNIT" {
+		t.Fatalf("3 is PROJECTS, got %s", name())
+	}
+	press(m, "4")
 	press(m, "g")
 	press(m, "l")
 	if name() != "SLICE" && name() != "PADS" { // SLICE bounces to PADS when the pad is empty
@@ -257,12 +264,12 @@ func TestScreensByNumberTabAndGHL(t *testing.T) {
 	}
 	press(m, "g")
 	press(m, "h")
-	if name() != "LOOP" {
+	if name() != "CONFIG" {
 		t.Fatalf("gh from the first screen wraps to the last, got %s", name())
 	}
 	press(m, "2")
 	press(m, "tab")
-	if name() != "FILES" {
+	if name() != "UNIT" {
 		t.Fatalf("Tab goes on, got %s", name())
 	}
 }
@@ -277,10 +284,10 @@ func TestEnterOpensTheSliceMenuAndSpaceStops(t *testing.T) {
 	core.Terminal = true
 	m := NewModel(app, Options{})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	press(m, "3")
+	press(m, "4")
 	press(m, "a") // into the first folder
 	press(m, "a") // its first sample to the pad
-	press(m, "4")
+	press(m, "5")
 	if m.app.ScreenName() != "SLICE" {
 		t.Fatalf("a sample on the pad opens the slicer, got %s", m.app.ScreenName())
 	}
@@ -290,17 +297,21 @@ func TestEnterOpensTheSliceMenuAndSpaceStops(t *testing.T) {
 	}
 	press(m, "esc")
 	press(m, "1")
-	press(m, "x")
-	if !m.app.Playing() {
-		t.Fatal("x plays the pad")
-	}
 	press(m, " ")
+	if !m.app.Playing() {
+		t.Fatal("Space plays the pad")
+	}
+	press(m, "x")
 	if m.app.Playing() {
-		t.Fatal("Space stops what plays")
+		t.Fatal("x stops what plays")
 	}
 	press(m, " ")
 	if !m.app.Playing() {
 		t.Fatal("Space plays when nothing does")
+	}
+	press(m, " ")
+	if m.app.Playing() {
+		t.Fatal("Space stops what plays")
 	}
 }
 
@@ -314,7 +325,7 @@ func TestSpacePlaysAndStopsTheSampleAndThePattern(t *testing.T) {
 	core.Terminal = true
 	m := NewModel(app, Options{})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	press(m, "3")
+	press(m, "4")
 	press(m, "a")
 	press(m, "a") // a sample on A1
 	press(m, "1")
@@ -409,10 +420,10 @@ func TestPlusAndMinusZoomTheSlicer(t *testing.T) {
 	core.Terminal = true
 	m := NewModel(app, Options{})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	press(m, "3")
-	press(m, "a")
-	press(m, "a")
 	press(m, "4")
+	press(m, "a")
+	press(m, "a")
+	press(m, "5")
 	if !zoomIs(m, "1x") {
 		t.Fatalf("the slicer starts whole:\n%s", m.text())
 	}

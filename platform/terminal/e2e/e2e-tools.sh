@@ -109,7 +109,7 @@ checkre "u brings the pattern back with its tracks" "Tracks +[1-9]"
 uc UC16 "Slicer tools: cut, order, mangle, lane, results"
 begin 150 44
 lit l l
-lit 4
+lit 5
 screenis "the slicer opens on A3" SLICE
 lit t
 check "the cut page" "Cut in equal parts"
@@ -155,7 +155,7 @@ snap 52-pads-with-slices
 uc UC17 "Slicer settings of one slice, undo of every change"
 begin 150 44
 lit l l
-lit 4
+lit 5
 lit y a
 checkslices "16 slices" 16
 key Enter

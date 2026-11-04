@@ -191,6 +191,9 @@ func (m *Model) key(msg tea.KeyMsg) {
 		}
 		return
 	}
+	if len(s) == 1 && m.app.SplashText(s) { // the splash: u online, o offline
+		return
+	}
 	if m.goTo {
 		m.goTo = false
 		switch s {
@@ -258,6 +261,10 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.Dispatch(core.Event{Key: core.Y, Down: false})
 		}
 		return
+	case "ctrl+e": // PADS: export the bank
+		m.disarm()
+		m.app.ExportBank()
+		return
 	case "ctrl+r": // record the unit's audio, as everywhere in the program
 		m.disarm()
 		m.app.ToggleRecording()
@@ -279,7 +286,16 @@ func (m *Model) key(msg tea.KeyMsg) {
 	case "y", "Y":
 		m.arm(yShift, core.Y)
 		return
+	case "m", "M": // SEQ: mute the track
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			m.app.SeqTrack(1)
+		}
+		return
 	case "s", "S":
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() { // SEQ: s is solo
+			m.app.SeqTrack(2)
+			return
+		}
 		m.arm(selShift, core.Sel)
 		return
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9": // the screens, straight to
@@ -334,6 +350,10 @@ func (m *Model) key(msg tea.KeyMsg) {
 		k = core.B
 	case "x", "X":
 		k = core.X
+		if m.armed == noShift && !m.aHeld && !m.app.Modal() && (m.app.ScreenName() == "PADS" || m.app.ScreenName() == "FILES") { // Space plays, x stops
+			m.app.StopSound()
+			return
+		}
 		if m.armed == noShift && !m.aHeld && m.app.ScreenName() == "SEQ" && !m.app.Modal() { // SEQ: x hears the note, Space plays the pattern
 			k = core.L2
 		}

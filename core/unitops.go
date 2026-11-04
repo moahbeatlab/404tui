@@ -77,6 +77,7 @@ func (a *App) unitMenu() {
 		}
 		add("Load it into the editor", func(int) { a.unitLoad(dev, n) })
 		add("Back it up to this computer", func(int) { a.unitBackup(dev, n) })
+		add("Save it into a folder...", func(int) { a.unitBackupAsk(dev, n) })
 		add("Restore it from a backup...", func(int) { a.unitRestoreMenu(dev, n) })
 		add("Rename...", func(int) { a.unitRename(dev, n, name) })
 		add("Make it the unit's project", func(int) {
@@ -143,6 +144,21 @@ func (a *App) unitLoadNow(dev *device.Device, n int, live bool) {
 func (a *App) unitBackup(dev *device.Device, n int) {
 	name := app.SanitizeName(a.unitProjectName(n))
 	dir := filepath.Join(a.dataDir(), "backups", fmt.Sprintf("%02d_%s_%s", n+1, name, a.clock().Format("20060102_150405")))
+	a.unitBackupTo(dev, n, dir)
+}
+
+// unitBackupAsk asks for the folder a project of the unit is saved into (on this computer, or any drive): the project is
+// written into it as it is on the unit's card, PADCONF.BIN, PTN and SMPL.
+func (a *App) unitBackupAsk(dev *device.Device, n int) {
+	def := filepath.Join(a.dataDir(), "backups", fmt.Sprintf("%02d_%s", n+1, app.SanitizeName(a.unitProjectName(n))))
+	a.askText(fmt.Sprintf("save unit project %d into the folder", n+1), "any folder, on this computer or a drive; Enter saves", def, func(s string) {
+		if s != "" {
+			a.unitBackupTo(dev, n, expandHome(s))
+		}
+	})
+}
+
+func (a *App) unitBackupTo(dev *device.Device, n int, dir string) {
 	st := app.NewRouter(dev)
 	a.startJob(n, func(progress func(done, total int, name string)) error {
 		total, _ := app.ProjectFileCount(dev, uint8(n))

@@ -26,7 +26,7 @@ func runUnified(o options) error {
 	}
 	os.MkdirAll(base, 0o755)
 	quietStderr(filepath.Join(base, "404tui.log"))
-	opt := terminal.Options{Samples: o.samples, Out: o.out, Project: o.project, Version: version.Version}
+	opt := terminal.Options{Samples: o.samples, Out: o.out, Project: o.project, Version: version.Full()}
 	if o.basicGlyphs {
 		g := terminal.BasicGlyphs
 		opt.Glyphs = &g

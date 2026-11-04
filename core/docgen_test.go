@@ -145,6 +145,8 @@ func (st padSetting) showOr(v int32) string {
 
 // configDoc lists the items of the CONFIG screen.
 func configDoc(a *App) string {
+	Terminal = true // the computer's settings: the writing of the project is among them
+	defer func() { Terminal = false }()
 	var sb strings.Builder
 	for _, it := range a.cfgItems() {
 		if it.head != "" {
@@ -157,21 +159,22 @@ func configDoc(a *App) string {
 }
 
 func keyTable(a *App, s Screen) string {
-	row := func(terminal bool) string {
-		Terminal = terminal
-		defer func() { Terminal = false }()
-		a.scr = s
-		plain, shift := a.hints()
-		var parts []string
-		for _, h := range plain {
-			parts = append(parts, fmt.Sprintf("`%s` %s", tk(h.key), h.what))
-		}
-		for _, h := range shift {
-			parts = append(parts, fmt.Sprintf("`%s` %s", tk(h.key), h.what))
-		}
-		return strings.Join(parts, " · ")
+	return fmt.Sprintf("**Keys on a computer:** %s\n\n**Keys on the handheld:** %s\n\n", keyRow(a, s, true), keyRow(a, s, false))
+}
+
+func keyRow(a *App, s Screen, terminal bool) string {
+	Terminal = terminal
+	defer func() { Terminal = false }()
+	a.scr = s
+	plain, shift := a.hints()
+	var parts []string
+	for _, h := range plain {
+		parts = append(parts, fmt.Sprintf("`%s` %s", tk(h.key), h.what))
 	}
-	return fmt.Sprintf("**Keys on a computer:** %s\n\n**Keys on the handheld:** %s\n\n", row(true), row(false))
+	for _, h := range shift {
+		parts = append(parts, fmt.Sprintf("`%s` %s", tk(h.key), h.what))
+	}
+	return strings.Join(parts, " · ")
 }
 
 func TestToolsReference(t *testing.T) {
@@ -187,28 +190,34 @@ func TestToolsReference(t *testing.T) {
 		{Seq, "SEQ", "The step grid of the pattern in front. `Enter` (or `b`) opens the note panel, `t` the pattern's tools and settings.", []docMenu{
 			{"Pattern tools and settings (`t`)", Seq, func(a *App) { a.seqMenu() }},
 		}},
-		{Files, "FILES", "The file browser: this computer, the unit's card and its storage.", []docMenu{
-			{"Files menu (`t`)", Files, func(a *App) { a.filesMenu() }},
-			{"Places and favourites (`y x`)", Files, func(a *App) { a.placesMenu() }},
+		{Unit, "PROJECTS", "On a computer: the 16 projects of the unit when one is plugged in (online), else those of a folder on this computer (offline). The program looks for the unit all the time, and the start screen offers `u` online and `o` offline (the project open last). `a` opens a project's menu, `t` chooses online or offline and the offline folder. On the handheld this screen is called UNIT.", []docMenu{
+			{"Project menu of the unit (`a`, online)", Unit, func(a *App) { connectUnit(t, a); a.unitMenu() }},
+			{"Online or offline (`t`)", Unit, func(a *App) { a.go_(Unit); a.modeMenu() }},
+			{"Project menu of the offline folder (`a`, offline)", Unit, func(a *App) { a.go_(Unit); a.offlineMenu() }},
+		}},
+		{Files, "FILES", "The file browser: this computer, the unit's card and its storage. `t` chooses where the files are loaded from (the computer, the samples folder, the unit's SD card, a USB drive, favourites) and leads to the file tools.", []docMenu{
+			{"Load files from where (`t`)", Files, func(a *App) { a.placesMenu() }},
+			{"File tools (in the menu of `t`)", Files, func(a *App) { a.filesMenu() }},
 		}},
 		{Slice, "SLICE", "The slicer: cut a sample into slices and play them in an order. `Enter` opens the settings, `t` the tools.", []docMenu{
 			{"Slice settings (`Enter`)", Slice, func(a *App) { a.go_(Slice); a.sliceMenu() }},
 			{"Slice tools (`t`)", Slice, func(a *App) { a.go_(Slice); a.sliceToolsMenu() }},
 		}},
-		{Save, "SAVE", "Writes the project as a folder for the SD card.", nil},
-		{Unit, "UNIT", "The SP-404MKII over USB: its projects.", []docMenu{
-			{"Project menu (`a`)", Unit, func(a *App) { connectUnit(t, a); a.unitMenu() }},
-		}},
-		{Config, "CONFIG", "The program's settings.", nil},
-		{Perform, "PERF", "The unit's MIDI as it plays, and the pattern now and next.", nil},
-		{Loop, "LOOP", "Makes patterns from the slices of the pads.", nil},
+		{Config, "CONFIG", "The program's settings; on a computer the writing of the project (what SAVE does on the handheld) is its first section.", nil},
+		{Save, "SAVE (handheld only)", "Writes the project as a folder for the SD card. On a computer this is in CONFIG, under PROJECT.", nil},
+		{Perform, "PERF (handheld only)", "The unit's MIDI as it plays, and the pattern now and next.", nil},
+		{Loop, "LOOP (handheld only)", "Makes patterns from the slices of the pads.", nil},
 	}
 	var sb strings.Builder
 	sb.WriteString("# Tools and settings of every screen\n\n")
 	sb.WriteString("*Written by the program's own test (`go test ./core -run ToolsReference -update-docs`): the keys and the menus below are what the program has, with the values a menu offers. Do not edit by hand.*\n\n")
 	for _, sc := range menus {
 		fmt.Fprintf(&sb, "## %s\n\n%s\n\n", sc.name, sc.intro)
-		fmt.Fprintln(&sb, keyTable(docState(t), sc.screen))
+		if strings.Contains(sc.name, "handheld only") {
+			fmt.Fprintf(&sb, "**Keys on the handheld:** %s\n\n", keyRow(docState(t), sc.screen, false))
+		} else {
+			fmt.Fprintln(&sb, keyTable(docState(t), sc.screen))
+		}
 		switch sc.screen {
 		case Pads:
 			sb.WriteString("### Pad panel (`a`)\n\nThe settings of the pad under the cursor, written into the project at once. With pads marked (`y a`) a change goes to all of them.\n\n" + padPanelDoc())
