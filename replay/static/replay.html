@@ -1031,6 +1031,7 @@ async function start() {
   try {
     const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
     FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || "") })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
+    if (window.refreshCapLane) window.refreshCapLane(); // the lane needs the length of the take, which prepare has just read
   } catch (e) { msg.textContent = "could not load the replay: " + e; msg.style.display = "block"; return; }
   const t0 = parseFloat(params.get("t") || "0");
   if (t0) audio.currentTime = t0;
