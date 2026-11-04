@@ -75,6 +75,7 @@ func (a *App) offlineMenu() {
 	if ok {
 		add("Open it in the editor", func(int) { a.openOffline(n) })
 	}
+	add("Open a project from a folder...", func(int) { a.openProjectFolder() })
 	add("Write the project of the editor here", func(int) {
 		a.slot = n + 1
 		names, err := a.exportTo(a.offlineDir())
@@ -108,6 +109,8 @@ func (a *App) modeMenu() {
 		a.offlineChosen = true
 		a.say("offline: the projects of "+short2(a.offlineDir(), 30), false)
 	})
+	m.head("OTHER PROJECTS")
+	add("Open a project from a folder...", func(int) { a.openProjectFolder() })
 	m.head("OFFLINE FOLDER")
 	add("Choose the folder of the offline projects...", func(int) {
 		a.pickFolder("the folder of the offline projects", a.offlineDir(), func(dir string) {
@@ -155,4 +158,62 @@ func (a *App) goOnline() {
 	a.unitCur = n
 	a.say(fmt.Sprintf("online: loading unit project %d, it is edited live", n+1), false)
 	a.unitLoadNow(dev, n, true)
+}
+
+// openProjectFolder opens the folder chooser to take a project from anywhere: the folder of a project (the one with PADCONF.BIN in it,
+// shown as "project") is opened in the editor; a folder that holds projects (PROJECT_01, PROJECT_02...) becomes the offline folder, so
+// that PROJECTS lists them.
+func (a *App) openProjectFolder() {
+	start := a.set.LastProjectDir
+	if start == "" {
+		start = a.offlineDir()
+	}
+	a.pickFolder("open a project: its folder, or a folder of projects", start, func(dir string) {
+		a.set.LastProjectDir = filepath.Dir(dir)
+		if isProjectFolder(dir) {
+			if err := a.OpenProject(dir); err != nil {
+				a.say("cannot open it: "+err.Error(), true)
+				return
+			}
+			var n int
+			if _, err := fmt.Sscanf(filepath.Base(dir), "PROJECT_%d", &n); err == nil && n >= 1 && n <= 99 {
+				a.slot = n
+			}
+			a.sl, a.pat, a.step = nil, 1, 0
+			a.bank, a.cur = 0, 0
+			a.saved = true
+			a.changed = false
+			a.saveSettings()
+			a.say("opened "+dir, false)
+			a.go_(Pads)
+			return
+		}
+		if n := countProjects(dir); n > 0 {
+			a.set.OfflineDir = dir
+			a.offlineChosen = true
+			a.saveSettings()
+			a.say(fmt.Sprintf("offline: %d projects in %s", n, dir), false)
+			a.go_(Unit)
+			return
+		}
+		a.set.LastProjectDir = dir
+		a.say(short2(dir, 40)+" is not a project and has none in it (a project has a PADCONF.BIN)", true)
+	})
+}
+
+// isProjectFolder says whether a folder is a project of the unit: it has a PADCONF.BIN.
+func isProjectFolder(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, "PADCONF.BIN"))
+	return err == nil
+}
+
+// countProjects is how many projects named PROJECT_nn a folder holds.
+func countProjects(dir string) int {
+	n := 0
+	for i := 1; i <= 16; i++ {
+		if isProjectFolder(filepath.Join(dir, fmt.Sprintf("PROJECT_%02d", i))) {
+			n++
+		}
+	}
+	return n
 }

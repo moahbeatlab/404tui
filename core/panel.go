@@ -114,7 +114,7 @@ func (a *App) hints() (plain, shift []hint) {
 		plain = out
 	}
 	if Terminal && a.scr == Unit && !a.Modal() && a.prompt == nil {
-		plain = append(append([]hint{}, plain...), hint{"t", "online / offline"})
+		plain = append(append([]hint{}, plain...), hint{"o", "open from a folder"}, hint{"t", "online / offline"})
 	}
 	if Terminal && a.scr == Files && !a.Modal() && a.prompt == nil && a.kb == nil {
 		plain = append(append([]hint{}, plain...), hint{"m", "mark file"}, hint{"M", "mark all"})

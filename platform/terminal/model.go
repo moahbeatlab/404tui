@@ -334,6 +334,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.NextScreen(-1)
 		}
 		return
+	case "o": // PROJECTS: open a project from a folder (on the splash o is offline: that is handled before)
+		if m.armed == noShift && !m.aHeld && !m.app.Modal() && m.app.ScreenName() == "UNIT" {
+			m.app.OpenProjectKey()
+		}
+		return
 	case "r": // PADS and SEQ: rename the pad
 		if m.armed == noShift && !m.aHeld && !m.app.Modal() && (m.app.ScreenName() == "PADS" || m.app.ScreenName() == "SEQ") {
 			m.app.RenamePadKey()

@@ -190,6 +190,9 @@ func (a *App) drawDirPicker(g Gfx) {
 			fg = cWhite
 		}
 		g.Text(x+2, yy, fit(label, wc-6), fg, i == dp.cur || i == 0)
+		if i > 0 && dp.names[i-1] != ".." && isProjectFolder(filepath.Join(dp.dir, dp.names[i-1])) { // a project of the unit
+			g.Text(x+wc-11, yy, "project", cGood, true)
+		}
 	}
 	if len(dp.names) == 0 {
 		g.Text(x+2, y+5, "no folders in it", cDim, false)

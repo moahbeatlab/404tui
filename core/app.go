@@ -848,6 +848,15 @@ func (a *App) MarkFile() {
 	}
 }
 
+// OpenProjectKey is o of a keyboard on PROJECTS: a project is opened from a folder anywhere.
+func (a *App) OpenProjectKey() {
+	if a.scr != Unit || a.Modal() || a.prompt != nil || a.job != nil {
+		return
+	}
+	a.CancelShift()
+	a.openProjectFolder()
+}
+
 // RenamePadKey is r of a keyboard on PADS and SEQ: the name of the pad under the cursor (of the track on SEQ) is typed; with pads marked
 // it asks for a prefix or a suffix for all of them.
 func (a *App) RenamePadKey() {

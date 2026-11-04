@@ -1126,3 +1126,61 @@ func TestRKeyRenamesThePad(t *testing.T) {
 		t.Fatal("a pad with no sample has no name to change")
 	}
 }
+
+func TestProjectsCanBeOpenedFromAnyFolder(t *testing.T) {
+	termOn(t)
+	src, _ := newApp(t)
+	kitKeys(t, src)
+	src.slot = 4
+	parent := t.TempDir()
+	if _, err := src.exportTo(parent); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := newApp(t)
+	a.GoScreen(2)
+	press := func(k Key) {
+		a.Dispatch(Event{Key: k, Down: true})
+		a.Dispatch(Event{Key: k, Down: false})
+	}
+	// the folder of a project: opened in the editor
+	a.OpenProjectKey()
+	if a.dp == nil {
+		t.Fatal("o opens the folder chooser")
+	}
+	a.dp.dir = parent
+	a.dpList("")
+	if txt := screenStr(a); !strings.Contains(txt, "PROJECT_04") || !strings.Contains(txt, "project") {
+		t.Fatalf("the chooser marks the project folder:\n%s", txt)
+	}
+	for i, n := range a.dp.names {
+		if n == "PROJECT_04" {
+			a.dp.cur = i + 1
+		}
+	}
+	press(A)
+	if a.ScreenName() != "PADS" || !a.info.Pads[0].File || a.slot != 4 {
+		t.Fatalf("the project is open: %s, pad 1 %v, slot %d", a.ScreenName(), a.info.Pads[0].File, a.slot)
+	}
+	// a folder of projects: it is the offline folder, PROJECTS lists them
+	a.GoScreen(2)
+	a.openProjectFolder()
+	os.Rename(filepath.Join(parent, "PROJECT_04"), filepath.Join(parent, "PROJECT_02"))
+	a.dp.dir = parent
+	a.dpList("")
+	press(A) // use this folder
+	if a.set.OfflineDir != parent || !a.offlineChosen || a.ScreenName() != "UNIT" {
+		t.Fatalf("a folder of projects becomes the offline folder: %q %v %s", a.set.OfflineDir, a.offlineChosen, a.ScreenName())
+	}
+	if txt := screenStr(a); !strings.Contains(txt, "PROJECT_02") {
+		t.Fatalf("PROJECTS lists them:\n%s", txt)
+	}
+	// a folder with no project in it
+	empty := t.TempDir()
+	a.openProjectFolder()
+	a.dp.dir = empty
+	a.dpList("")
+	press(A)
+	if !a.msgBad || !strings.Contains(a.msg, "is not a project") {
+		t.Fatalf("it says so: %q", a.msg)
+	}
+}

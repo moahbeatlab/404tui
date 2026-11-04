@@ -18,11 +18,12 @@ type settings struct {
 
 	// ONLINE and OFFLINE (the PROJECTS screen of a computer): the folder of projects to work on without the unit, and the project
 	// (1..99) that was open last in it.
-	ExportDir   string `json:"export_dir,omitempty"` // where banks and projects are exported to
-	BackupDir   string `json:"backup_dir,omitempty"` // where the unit's projects are backed up to
-	OfflineDir  string `json:"offline_dir,omitempty"`
-	Debug       int    `json:"debug,omitempty"` // the debug log: 0 off, 1 on, 2 with the wire bytes (see package dbg)
-	LastOffline int    `json:"last_offline,omitempty"`
+	ExportDir      string `json:"export_dir,omitempty"` // where banks and projects are exported to
+	BackupDir      string `json:"backup_dir,omitempty"` // where the unit's projects are backed up to
+	OfflineDir     string `json:"offline_dir,omitempty"`
+	LastProjectDir string `json:"last_project_dir,omitempty"` // where a project was last opened from
+	Debug          int    `json:"debug,omitempty"`            // the debug log: 0 off, 1 on, 2 with the wire bytes (see package dbg)
+	LastOffline    int    `json:"last_offline,omitempty"`
 
 	// The Config screen: the rule that sends a pad to a bus by its name (nil: the default), the recorder, the pad codes
 	// and the MIDI settings, as the terminal program's Config had them.
