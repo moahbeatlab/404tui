@@ -379,9 +379,10 @@ func TestOnSeqXHearsTheNoteSpacePlaysAndFFreezes(t *testing.T) {
 	core.Terminal = true
 	m := NewModel(app, Options{})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	press(m, "3")
+	press(m, "4")
 	press(m, "a")
 	press(m, "a")
+	press(m, "a") // the pad dialog
 	press(m, "2")
 	press(m, "a") // a note
 	press(m, "x")
