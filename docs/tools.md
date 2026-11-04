@@ -180,7 +180,7 @@ The step grid of the pattern in front. `Enter` (or `b`) opens the note panel, `t
 
 ### Note panel (`Enter` or `b`)
 
-The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the end of the pattern, `Timing` (how far off the grid, early or late, in ticks). `a` sets a value back to its default, `x` hears the note, `Esc` closes. On a step with no note `a` puts one.
+The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the end of the pattern, `Timing` (how far off the grid, early or late, in ticks), `Pitch` (-12 to +12 semitones above the pad's own; plain when it is not changed). `a` sets a value back to its default, `x` hears the note, `Esc` closes. On a step with no note `a` puts one.
 
 ### Pattern tools and settings (`t`)
 

@@ -1,6 +1,10 @@
 package core
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/moahbeatlab/404tui/formats"
+)
 
 // The sequencer's panel in the terminal: the pad of the track, the note under the cursor and the pattern, as the pad's
 // information is laid out.
@@ -33,10 +37,7 @@ func (a *App) seqInfoGroups() [][]infoLine {
 	note := []infoLine{{label: "NOTE", head: true},
 		{label: "Bar.step", value: fmt.Sprintf("%d.%d", a.step/16+1, a.step%16+1)}}
 	if n, ok := noteAt(d, pad, a.step); ok {
-		pitch := "plain"
-		if n.Pitch != 0 {
-			pitch = fmt.Sprintf("chromatic %d", n.Pitch)
-		}
+		pitch := formats.PitchText(uint8(n.Pitch))
 		note = append(note,
 			infoLine{label: "Velocity", value: fmt.Sprint(n.Vel)},
 			infoLine{label: "Length", value: fmt.Sprintf("%.2f steps", float64(n.Len)/stepTicks)},

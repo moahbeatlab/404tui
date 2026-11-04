@@ -227,7 +227,7 @@ func (a *App) noteEditKey(k Key, repeat int) {
 	a.step = int(a.aTick) / stepTicks
 	a.refresh()
 	a.replay()
-	if s, ok := a.noteSample(a.aPad, vel, ln); ok && k != L1 && k != R1 {
+	if s, ok := a.noteSample(a.aPad, vel, ln, n.Pitch); ok && k != L1 && k != R1 {
 		a.play(s)
 	}
 	a.say(fmt.Sprintf("%s: velocity %d, length %.2f steps, %+d ticks", a.label(a.aPad), vel, float64(ln)/stepTicks, int(a.aTick)-int(a.aTick)/stepTicks*stepTicks), false)
@@ -557,6 +557,26 @@ func (a *App) opSay(op string, args []byte) {
 func (a *App) render() (formats.Sample, bool) { return a.renderOf(a.audible, a.freeze) }
 
 // renderOf is render for the pads the filter lets through; frozen is the bar in focus, else the whole pattern.
+// pitchedID is the sample played that many semitones up or down (tape style, as the unit's chromatic keys do), made once and kept.
+func (a *App) pitchedID(id, semitones int) int {
+	if semitones == 0 {
+		return id
+	}
+	key := [2]int{id, semitones}
+	if pid, ok := a.pitchMade[key]; ok {
+		return pid
+	}
+	pid, err := a.lab.Pitched(id, semitones)
+	if err != nil {
+		return id
+	}
+	if a.pitchMade == nil {
+		a.pitchMade = map[[2]int]int{}
+	}
+	a.pitchMade[key] = pid
+	return pid
+}
+
 func (a *App) renderOf(play func(pad int) bool, frozen bool) (formats.Sample, bool) {
 	d, ok := a.doc()
 	if !ok {
@@ -585,6 +605,7 @@ func (a *App) renderOf(play func(pad int) bool, frozen bool) (formats.Sample, bo
 		if !ok {
 			continue
 		}
+		id = a.pitchedID(id, formats.PitchSemitones(uint8(nt.Pitch))) // a chromatic note is played up or down
 		s, err := a.lab.Sample(id)
 		if err != nil {
 			continue
@@ -893,11 +914,12 @@ func (a *App) drawSeq(g Gfx) {
 
 // noteSample is the sample of a pad as a note plays it: as loud as its velocity, and cut where the note ends (its length, at
 // the tempo of the pad's bank), with a short fade so the cut does not click.
-func (a *App) noteSample(pad, vel, lenTicks int) (formats.Sample, bool) {
+func (a *App) noteSample(pad, vel, lenTicks, pitch int) (formats.Sample, bool) {
 	id, ok := a.padSample(pad)
 	if !ok {
 		return formats.Sample{}, false
 	}
+	id = a.pitchedID(id, formats.PitchSemitones(uint8(pitch)))
 	s, err := a.lab.Sample(id)
 	if err != nil {
 		return formats.Sample{}, false
@@ -926,11 +948,11 @@ func (a *App) noteSample(pad, vel, lenTicks int) (formats.Sample, bool) {
 func (a *App) playNote() {
 	pad := a.rowPad()
 	d, _ := a.doc()
-	vel, ln := 100, 0
+	vel, ln, pitch := 100, 0, 0
 	if n, ok := noteAt(d, pad, a.step); ok {
-		vel, ln = n.Vel, n.Len
+		vel, ln, pitch = n.Vel, n.Len, n.Pitch
 	}
-	s, ok := a.noteSample(pad, vel, ln)
+	s, ok := a.noteSample(pad, vel, ln, pitch)
 	if !ok {
 		a.say(a.label(pad)+" has no sample", true)
 		return
@@ -972,10 +994,7 @@ func (a *App) noteInfo() string {
 		return ""
 	}
 	beat := int(n.Tick) % formats.PPQ
-	kind := "plain"
-	if n.Pitch != 0 {
-		kind = fmt.Sprintf("chromatic %d", n.Pitch)
-	}
+	kind := formats.PitchText(uint8(n.Pitch)) // "plain", or how many semitones it is up or down
 	return fmt.Sprintf("%s %d.%d  vel %d  len %.2f st  %s  beat+%dt  %s", a.label(pad), int(n.Tick)/(16*stepTicks)+1,
 		int(n.Tick)/stepTicks%16+1, n.Vel, float64(n.Len)/stepTicks, a.noteTimingForm(n, pad, true), beat, kind)
 }

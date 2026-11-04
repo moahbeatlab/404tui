@@ -399,6 +399,9 @@ type NoteEdit struct {
 	// SetLength, when above 0, gives each note that length in ticks (within the pattern), in
 	// place of Length.
 	SetLength int
+	// SetPitch gives each note the pitch of Semitones above its pad's (0 makes it a plain note).
+	SetPitch  bool
+	Semitones int
 }
 
 // PadTick names a note by its pad and the tick it starts at.
@@ -442,6 +445,9 @@ func EditNoteSet(b []byte, set map[PadTick]bool, edit NoteEdit) ([]byte, int, er
 			r.bytes[3] = byte(min(max(edit.SetVelocity, 1), 127))
 		} else if edit.Velocity != 0 {
 			r.bytes[3] = byte(min(max(int(min(r.bytes[3], 127))+edit.Velocity, 1), 127))
+		}
+		if edit.SetPitch {
+			r.bytes[2] = PitchByte(edit.Semitones)
 		}
 		if edit.Length != 0 || edit.SetLength > 0 {
 			n := int(r.bytes[5]) | int(r.bytes[6])<<8

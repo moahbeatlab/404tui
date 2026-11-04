@@ -10,6 +10,7 @@ import (
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/device"
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/sim"
 )
@@ -527,5 +528,57 @@ func TestBackupFolderIsNamedLikeTheProjectAndAsksWhenItIsThere(t *testing.T) {
 	}
 	if got != filepath.Join(root, "House") {
 		t.Fatalf("overwrite goes on with the same folder: %q", got)
+	}
+}
+
+func TestChromaticNotesOfTheLivePerformanceProject(t *testing.T) {
+	dirs, _ := filepath.Glob("/home/hermes/test-projects/07_LIVE*")
+	if len(dirs) == 0 {
+		t.Skip("the project is not here")
+	}
+	a, _ := newApp(t)
+	if err := a.OpenProject(dirs[0]); err != nil {
+		t.Fatal(err)
+	}
+	a.pat = 1
+	d, ok := a.doc()
+	if !ok {
+		t.Fatal("pattern 1 is there")
+	}
+	var got []int
+	for _, n := range d.Notes {
+		if n.Pad == 4 { // A5
+			got = append(got, formats.PitchSemitones(uint8(n.Pitch)))
+		}
+	}
+	want := []int{0, 12, 0, -12, -6, 6, 11, 12}
+	if len(got) != len(want) {
+		t.Fatalf("A5 has %d notes: %v", len(got), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("the pitches of A5 are %v, wanted %v", got, want)
+		}
+	}
+	// the note panel changes a pitch, and the pattern plays it up or down
+	a.go_(Seq)
+	pad := 4
+	tick := d.Notes[0].Tick
+	p := 7
+	if _, ok := a.editNote(pad, tick, d.Notes[0].Vel, d.Notes[0].Len, 0, &p); !ok {
+		t.Fatal("edit")
+	}
+	d, _ = a.doc()
+	if n, _ := noteAt(d, pad, int(tick)/stepTicks); formats.PitchSemitones(uint8(n.Pitch)) != 7 {
+		t.Fatalf("the pitch of the note is +7: %d", n.Pitch)
+	}
+	if _, ok := a.render(); !ok {
+		t.Fatal("the pattern renders with pitched notes")
+	}
+	plain, _ := a.noteSample(pad, 100, 0, 0)
+	up, _ := a.noteSample(pad, 100, 0, int(formats.PitchByte(12)))
+	down, _ := a.noteSample(pad, 100, 0, int(formats.PitchByte(-12)))
+	if !(up.Frames() < plain.Frames() && down.Frames() > plain.Frames()) {
+		t.Fatalf("up is shorter and down longer: %d %d %d", up.Frames(), plain.Frames(), down.Frames())
 	}
 }

@@ -222,7 +222,7 @@ func TestToolsReference(t *testing.T) {
 		case Pads:
 			sb.WriteString("### Pad panel (`a`)\n\nThe settings of the pad under the cursor, written into the project at once. With pads marked (`y a`) a change goes to all of them.\n\n" + padPanelDoc())
 		case Seq:
-			sb.WriteString("### Note panel (`Enter` or `b`)\n\nThe note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the end of the pattern, `Timing` (how far off the grid, early or late, in ticks). `a` sets a value back to its default, `x` hears the note, `Esc` closes. On a step with no note `a` puts one.\n\n")
+			sb.WriteString("### Note panel (`Enter` or `b`)\n\nThe note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the end of the pattern, `Timing` (how far off the grid, early or late, in ticks), `Pitch` (-12 to +12 semitones above the pad's own; plain when it is not changed). `a` sets a value back to its default, `x` hears the note, `Esc` closes. On a step with no note `a` puts one.\n\n")
 		case Config:
 			sb.WriteString("### Settings\n" + configDoc(docState(t)) + "\n")
 		}

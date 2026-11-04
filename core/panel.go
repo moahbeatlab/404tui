@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/moahbeatlab/404tui/formats"
 )
 
 // The right of the screen is a panel that is always there, as on the M8: where you are among the screens, the tempo,
@@ -571,7 +573,7 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 			off := a.noteTiming(n, pad)
 			g.Text(x, row(3), fit(strings.SplitN(off, " (", 2)[0], w), cText, false)
 			if n.Pitch != 0 {
-				g.Text(x, row(4), fmt.Sprintf("chromatic %d", n.Pitch), cAmber, false)
+				g.Text(x, row(4), "pitch "+formats.PitchText(uint8(n.Pitch)), cAmber, false)
 			}
 		} else {
 			g.Text(x, row(2), "no note", cLine, false)

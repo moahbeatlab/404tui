@@ -257,8 +257,9 @@ type App struct {
 	link          Link
 	Connect       func() (Link, error) // finds and opens the unit; nil when there is no way to
 	unitCur       int
-	dp            *dirPicker // the folder chooser
-	connCh        chan Link  // a computer looks for the unit in the background
+	dp            *dirPicker     // the folder chooser
+	pitchMade     map[[2]int]int // the samples made for the pitched notes: (sample, semitones) to the new sample
+	connCh        chan Link      // a computer looks for the unit in the background
 	connBusy      bool
 	linkNames     []string // the unit's project names, kept for a moment
 	linkNamesAt   time.Time

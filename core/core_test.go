@@ -1825,8 +1825,8 @@ func TestHearTheNoteUnderTheCursor(t *testing.T) {
 	}
 	keys(t, a, "A")
 	n, _ := noteOn(a, 0)
-	short, _ := a.noteSample(0, 64, 60)
-	long, _ := a.noteSample(0, 127, 100000)
+	short, _ := a.noteSample(0, 64, 60, 0)
+	long, _ := a.noteSample(0, 127, 100000, 0)
 	if short.Frames() >= long.Frames() {
 		t.Fatalf("a short note is cut: %d vs %d frames", short.Frames(), long.Frames())
 	}
@@ -2126,7 +2126,7 @@ func TestPadPanelFadersAndSwitches(t *testing.T) {
 	if l == 0 || r != 0 {
 		t.Fatalf("the pan sends it left: %d %d", l, r)
 	}
-	full, _ := a.noteSample(0, 127, 0)
+	full, _ := a.noteSample(0, 127, 0, 0)
 	var fl int
 	for _, x := range full.Samples {
 		fl = max(fl, abs(int(x)))

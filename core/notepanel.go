@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
 )
 
@@ -20,7 +21,7 @@ type notePanel struct {
 var notePanelRows = []struct {
 	label string
 	def   int
-}{{"Velocity", 100}, {"Length", stepTicks}, {"Timing", 0}}
+}{{"Velocity", 100}, {"Length", stepTicks}, {"Timing", 0}, {"Pitch", 0}}
 
 // noteHere is the note on the cursor's step.
 func (a *App) noteHere() (lab.Note, bool) {
@@ -69,7 +70,7 @@ func gridOff(tick uint32) int {
 }
 
 // editNote changes a note: velocity, length (ticks) and a move (ticks); it says where the note is after.
-func (a *App) editNote(pad int, tick uint32, vel, ln, move int) (uint32, bool) {
+func (a *App) editNote(pad int, tick uint32, vel, ln, move int, pitch *int) (uint32, bool) {
 	d, ok := a.doc()
 	if !ok {
 		return tick, false
@@ -77,7 +78,11 @@ func (a *App) editNote(pad int, tick uint32, vel, ln, move int) (uint32, bool) {
 	vel = min(max(vel, 1), 127)
 	ln = min(max(ln, 15), max(int(d.Length)-int(tick), 15))
 	move = min(max(move, -int(tick)), int(d.Length)-1-int(tick))
-	args, _ := json.Marshal(lab.PatternArgs{Notes: []lab.PadAt{{Pad: pad, Tick: tick}}, Vel: vel, Len: ln, Move: move})
+	pa := lab.PatternArgs{Notes: []lab.PadAt{{Pad: pad, Tick: tick}}, Vel: vel, Len: ln, Move: move}
+	if pitch != nil {
+		pa.SetPitch, pa.Semitones = true, min(max(*pitch, -formats.PitchRange), formats.PitchRange)
+	}
+	args, _ := json.Marshal(pa)
 	if err := a.lab.PatternOp(a.pat, "edit", args); err != nil {
 		a.say(err.Error(), true)
 		return tick, false
@@ -106,7 +111,7 @@ func (a *App) npKey(k Key, repeat int) {
 		return
 	case X:
 		if n, ok := a.npNote(); ok {
-			if s, ok := a.noteSample(n.Pad, n.Vel, n.Len); ok {
+			if s, ok := a.noteSample(n.Pad, n.Vel, n.Len, n.Pitch); ok {
 				a.play(s)
 			}
 		}
@@ -122,6 +127,8 @@ func (a *App) npKey(k Key, repeat int) {
 	}
 	acc := accel(repeat)
 	vel, ln, move := n.Vel, n.Len, 0
+	var pitch *int
+	st := formats.PitchSemitones(uint8(n.Pitch))
 	d := 1
 	switch k {
 	case Left:
@@ -135,6 +142,9 @@ func (a *App) npKey(k Key, repeat int) {
 			ln = notePanelRows[1].def
 		case 2:
 			move = -gridOff(n.Tick)
+		case 3:
+			z := 0
+			pitch = &z
 		}
 		d = 0
 	default:
@@ -148,13 +158,16 @@ func (a *App) npKey(k Key, repeat int) {
 			ln += d * 15 * acc
 		case 2:
 			move = d * 5 * acc
+		case 3:
+			p := min(max(st+d, -formats.PitchRange), formats.PitchRange)
+			pitch = &p
 		}
 	}
-	if tick, ok := a.editNote(n.Pad, n.Tick, vel, ln, move); ok {
+	if tick, ok := a.editNote(n.Pad, n.Tick, vel, ln, move, pitch); ok {
 		np.tick = tick
 		a.step = int(tick) / stepTicks
 		if n2, ok := a.npNote(); ok {
-			if s, ok := a.noteSample(n2.Pad, n2.Vel, n2.Len); ok && np.row != 2 {
+			if s, ok := a.noteSample(n2.Pad, n2.Vel, n2.Len, n2.Pitch); ok && np.row != 2 {
 				a.play(s)
 			}
 		}
@@ -164,7 +177,7 @@ func (a *App) npKey(k Key, repeat int) {
 // drawNotePanel docks the panel at the bottom of the grid, or at the top when the cursor's row is down there.
 func (a *App) drawNotePanel(g Gfx) {
 	np := a.np
-	wc, hr := contentCols-2, 10
+	wc, hr := contentCols-2, 12
 	x0 := 1
 	y0 := Rows - 2 - hr
 	if a.row >= 0 {
@@ -183,7 +196,7 @@ func (a *App) drawNotePanel(g Gfx) {
 		g.Text(x0+2, y0+hr-2, tkLine("A note   B close   R1 pattern tools"), cDim, false)
 		return
 	}
-	vals := []int{n.Vel, n.Len, gridOff(n.Tick)}
+	vals := []int{n.Vel, n.Len, gridOff(n.Tick), formats.PitchSemitones(uint8(n.Pitch))}
 	for i, row := range notePanelRows {
 		y := y0 + 2 + i*2
 		fg := cText
@@ -210,7 +223,11 @@ func (a *App) drawNotePanel(g Gfx) {
 				vt = fmt.Sprintf("%+d ticks", vals[2])
 			}
 		}
-		g.Fader(bx, y, bw, frac, dfrac, i == 2)
+		if i == 3 {
+			frac, dfrac = float64(vals[3]+formats.PitchRange)/(2*formats.PitchRange), 0.5
+			vt = formats.PitchText(uint8(n.Pitch))
+		}
+		g.Fader(bx, y, bw, frac, dfrac, i >= 2)
 		g.Text(bx+bw+1, y, vt, cAmber, true)
 	}
 	g.Text(x0+2, y0+hr-2, fit(tkLine("<> change  A default  X hear  B close  R1 tools"), wc-4), cDim, false)
