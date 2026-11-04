@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"sort"
 
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
 )
 
@@ -14,7 +15,7 @@ import (
 
 // The shapes, the rates (note values) and the shift are those of the LFOs in 404jam (PERF > LFO), in the same order.
 var (
-	lfoTargets = []string{"velocity", "length", "timing"}
+	lfoTargets = []string{"velocity", "length", "timing", "pitch"}
 	lfoShapes  = []string{"SIN", "TRI", "SQR", "SAW", "RND", "PUMP", "SAW DN", "S&H", "DRIFT"}
 	lfoRates   = []struct {
 		name  string
@@ -111,8 +112,10 @@ func lfoNotes(notes []lab.Note, st lfoState, seed int64) []lab.Note {
 			n.Vel = min(max(n.Vel+int(math.Round(ctr+w*depth*amp)), 1), 127)
 		case 1:
 			n.Len = min(max(int(math.Round(float64(n.Len)*(1+ctr/64+w*depth*0.9))), 1), 65535)
-		default:
+		case 2:
 			n.Tick = uint32(max(int(n.Tick)+int(math.Round((ctr/64+w*depth)*float64(stepTicks)/3)), 0))
+		default: // the pitch: up and down by as many semitones as the depth gives (a full depth is an octave)
+			*n = shiftPitch(*n, int(math.Round((ctr/64+w*depth)*formats.PitchRange)))
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Tick < out[j].Tick })

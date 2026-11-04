@@ -11,6 +11,7 @@ import (
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/formats"
+	"github.com/moahbeatlab/404tui/lab"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/sim"
 )
@@ -660,5 +661,89 @@ func TestEditingLiveLoadsOnlyWhatIsNeeded(t *testing.T) {
 	a.liveSync()
 	if w, _, _ := a.liveStatus(); w != 0 {
 		t.Fatalf("a fetched sample is not sent back: %d changes waiting", w)
+	}
+}
+
+func TestToolsKeepAndMakePitch(t *testing.T) {
+	st := func(n lab.Note) int { return formats.PitchSemitones(uint8(n.Pitch)) }
+	base := []lab.Note{{Tick: 0, Pad: 4, Vel: 100, Len: 120, Pitch: int(formats.PitchByte(7))}, {Tick: 480, Pad: 4, Vel: 90, Len: 120}}
+	// an echo climbs from the pitch of the note
+	e := echoNotesPitch(base[:1], 1920, 240, 3, 70, 50, 2)
+	if len(e) != 4 || st(e[0]) != 7 || st(e[1]) != 9 || st(e[2]) != 11 || st(e[3]) != 12 {
+		t.Fatalf("an echo climbs by 2 st a repeat from +7, up to the top: %v", e)
+	}
+	if got := echoNotes(base[:1], 1920, 240, 1, 70, 50); st(got[1]) != 7 {
+		t.Fatalf("an echo without a pitch step repeats the pitch: %d", st(got[1]))
+	}
+	// a ratchet rises part by part
+	r := ratchetNotesPitch(base[1:], 0, 4, 0, 0, 3, 1)
+	if len(r) != 4 || st(r[0]) != 0 || st(r[3]) != 9 {
+		t.Fatalf("the parts of a ratchet rise by 3 st: %v", r)
+	}
+	if r := ratchetNotes(base[:1], 0, 2, 0, 0, 1); st(r[0]) != 7 || st(r[1]) != 7 {
+		t.Fatal("the parts keep the pitch of the note")
+	}
+	// made notes get a pitch
+	ns := withPitch(euclidNotes(0, 1920, 120, 16, 4, 0, 50, 100), -5)
+	for _, n := range ns {
+		if st(n) != -5 {
+			t.Fatalf("every note made is at -5: %v", ns)
+		}
+	}
+	if len(ns) == 0 || len(withPitch(euclidNotes(0, 1920, 120, 16, 4, 0, 50, 100), 0)) == 0 {
+		t.Fatal("notes")
+	}
+	// randomize
+	rp := randomizePitch(append([]lab.Note(nil), base...), 3, 5)
+	for i, n := range rp {
+		if d := st(n) - st(base[i]); d < -3 || d > 3 {
+			t.Fatalf("the spread is 3 st: %d", d)
+		}
+	}
+	// the Pitch tool
+	pn := pitchNotes(base, 0, -9, 1)
+	if st(pn[0]) != -2 || st(pn[1]) != -9 {
+		t.Fatalf("transpose: %d %d", st(pn[0]), st(pn[1]))
+	}
+	if pn := pitchNotes(base, 1, 5, 1); st(pn[0]) != 5 || st(pn[1]) != 5 {
+		t.Fatal("set every note")
+	}
+	if pn := pitchNotes(base, 5, 0, 1); pn[0].Pitch != 0 || pn[1].Pitch != 0 {
+		t.Fatal("back to plain")
+	}
+	run := pitchNotes(make([]lab.Note, 6), 3, 2, 1)
+	if st(run[0]) != 0 || st(run[1]) != 2 || st(run[2]) != 4 || st(run[5]) != 10 {
+		t.Fatalf("a rising run: %v", run)
+	}
+	// an LFO on the pitch
+	l := lfoNotes([]lab.Note{{Tick: 0, Pad: 4, Vel: 100, Len: 120}, {Tick: 240, Pad: 4, Vel: 100, Len: 120}}, lfoState{target: 3, shape: 0, rate: 3, depth: 3}, 1)
+	if l[0].Pitch == 0 && l[1].Pitch == 0 {
+		t.Fatal("an LFO on the pitch moves it")
+	}
+}
+
+func TestTracksKeepTheirPitchesThroughATool(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	dirs, _ := filepath.Glob("/home/hermes/test-projects/07_LIVE*")
+	if len(dirs) == 0 {
+		t.Skip("the project is not here")
+	}
+	if err := a.OpenProject(dirs[0]); err != nil {
+		t.Fatal(err)
+	}
+	a.pat = 1
+	a.go_(Seq)
+	pad := 4
+	before := a.trackNotes(pad)
+	a.finishTrack(pad, cycleNotes(before, 3840, 3840), "cycle")
+	after := a.trackNotes(pad)
+	if len(after) != len(before) {
+		t.Fatalf("%d notes became %d", len(before), len(after))
+	}
+	for i := range before {
+		if after[i].Pitch != before[i].Pitch {
+			t.Fatalf("note %d: pitch byte %d became %d", i, before[i].Pitch, after[i].Pitch)
+		}
 	}
 }

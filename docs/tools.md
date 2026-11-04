@@ -266,6 +266,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Velocity` — 127 / 100 / 80 / 60; now 100
     - `Gate` — 25% / 50% / 75% / 100% / 150% / 200%; now 75%
     - `Decay per hit` — off / 5% / 10% / 15% / 20% / 30% / 40%; now off
+    - `Pitch` — -12 st, -11 st, ... +12 st (25 values); now plain
 
     *Trial*
 
@@ -282,6 +283,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Gate` — 25% / 50% / 75% / 100%; now 50%
     - `Velocity` — 127 / 100 / 80 / 60; now 100
     - `Decay per hit` — off / 5% / 10% / 15% / 20% / 30% / 40%; now off
+    - `Pitch` — -12 st, -11 st, ... +12 st (25 values); now plain
 
     *Trial*
 
@@ -292,7 +294,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     *Settings*
 
     - `Change` — 10% a bar / 20% a bar / 30% a bar / 40% a bar / 60% a bar; now 20% a bar
-    - `What` — moves, drops and adds / moves only / adds only / drops only / velocities only; now moves, drops and adds
+    - `What` — moves, drops and adds / moves only / adds only / drops only / velocities only / pitches only; now moves, drops and adds
     - `Back to the first bar` — never / every 2 bars / every 3 bars / every 4 bars; now never
     - `Tracks` — this one / every one with notes; now this one
     - `Another roll of the dice`
@@ -312,6 +314,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Split into` — 2 parts / 3 parts / 4 parts; now 2 parts
     - `Parts that play` — all parts / skip the first / skip the last / every other part; now all parts
     - `Velocity` — flat / louder / quieter / accent the first; now flat
+    - `Pitch of each part` — no change, +1 st, ... -12 st (15 values); now no change
     - `Another roll of the dice`
 
     *Trial*
@@ -338,7 +341,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
     *Settings*
 
-    - `Moves the notes'` — velocity / length / timing; now velocity
+    - `Moves the notes'` — velocity / length / timing / pitch; now velocity
     - `Wave` — SIN / TRI / SQR / SAW / RND / PUMP / SAW DN / S&H / DRIFT; now SIN
     - `Rate (one round)` — 8/1 / 4/1 / 2/1 / 1/1 / 1/2 / 1/4 / 1/8 / 1/16; now 1/1
     - `Velocity goes` — around the notes / between min and max; now around the notes
@@ -358,7 +361,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
     *Settings*
 
-    - `Moves the notes'` — velocity / length / timing; now velocity
+    - `Moves the notes'` — velocity / length / timing / pitch; now velocity
     - `Attack` — 0 steps / 0.5 steps / 1 steps / 2 steps / 4 steps / 8 steps; now 0 steps
     - `Decay` — 0 steps / 0.5 steps / 1 steps / 2 steps / 4 steps / 8 steps; now 1 steps
     - `Sustain` — 0% / 25% / 50% / 75% / 100%; now 25%
@@ -379,6 +382,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Repeats` — 1, 2, ... 16 (16 values); now 3
     - `Decay` — x85% / x70% / x55% / x40% / x25%; now x70%
     - `Gate` — 25% / 50% / 75% / 100%; now 50%
+    - `Pitch of each repeat` — no change, +1 st, ... -12 st (15 values); now no change
 
     *Trial*
 
@@ -403,6 +407,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Amount` — +-5 / +-10 / +-15 / +-20 / +-30 / +-40 / +-60; now +-5
     - `Shape` — even / bell; now even
     - `Bias` — -30 / -20 / -10 / +0 / +10 / +20 / +30; now +0
+    - `Pitch spread` — off / +-1 st / +-2 st / +-3 st / +-5 st / +-7 st / +-12 st; now off
     - `Another roll of the dice`
 
     *Trial*
@@ -435,6 +440,17 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     *Settings*
 
     - `Push (-) or pull (+)` — -40 ticks, -35 ticks, ... +40 ticks (17 values); now +0 ticks
+
+    *Trial*
+
+    - `Keep it (B throws it away)`
+- `Pitch (transpose, random, runs)...`
+  - **pitch of A3** (a dialog):
+
+    *Settings*
+
+    - `What to do` — transpose by / set every note to / random within / rising run, a step each note / falling run, a step each note / back to plain; now transpose by
+    - `Semitones` — -12, -11, ... +12 (25 values); now +1
 
     *Trial*
 

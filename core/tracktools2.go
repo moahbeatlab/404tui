@@ -15,6 +15,7 @@ import (
 
 type trackState2 struct {
 	raWhich, raParts, raPlays, raRamp  int
+	raPitch                            int // the pitch each part of a ratchet is above the one before (an index of pitchSteps)
 	evChange, evWhat, evReset, evScope int
 	acAccent, acVel, acOthers          int
 	acGhosts, acGhostVel, acGhostPct   int
@@ -47,13 +48,14 @@ func (a *App) ratchetMenu() {
 		val("Split into", names(ratchetParts, func(v int) string { return fmt.Sprintf("%d parts", v) }), t.raParts, func(v int) { t.raParts = v }),
 		val("Parts that play", ratchetPlays, t.raPlays, func(v int) { t.raPlays = v }),
 		val("Velocity", ratchetRamps, t.raRamp, func(v int) { t.raRamp = v }),
+		val("Pitch of each part", names(pitchSteps, stepText), t.raPitch, func(v int) { t.raPitch = v }),
 	}, "Ratchet them", func() {
 		notes := a.trackNotes(pad)
 		if len(notes) == 0 {
 			a.say("this track has no notes", true)
 			return
 		}
-		out := ratchetNotes(notes, t.raWhich, ratchetParts[t.raParts], t.raPlays, t.raRamp, a.tt.seed)
+		out := ratchetNotesPitch(notes, t.raWhich, ratchetParts[t.raParts], t.raPlays, t.raRamp, pitchSteps[t.raPitch], a.tt.seed)
 		a.finishTrack(pad, out, fmt.Sprintf("ratchet x%d", ratchetParts[t.raParts]))
 	})
 }
@@ -61,6 +63,11 @@ func (a *App) ratchetMenu() {
 // ratchetNotes splits the chosen notes: a note on a step becomes parts notes on the parts of that step, each as long as a part,
 // as the unit's SUBSTEP lays them out. The others stay as they are.
 func ratchetNotes(notes []lab.Note, which, parts, plays, ramp int, seed int64) []lab.Note {
+	return ratchetNotesPitch(notes, which, parts, plays, ramp, 0, seed)
+}
+
+// ratchetNotesPitch is ratchetNotes with each part pitchStep semitones from the one before it (a rising or falling roll).
+func ratchetNotesPitch(notes []lab.Note, which, parts, plays, ramp, pitchStep int, seed int64) []lab.Note {
 	rng := rand.New(rand.NewSource(seed))
 	sorted := append([]lab.Note(nil), notes...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Tick < sorted[j].Tick })
@@ -103,7 +110,7 @@ func ratchetNotes(notes []lab.Note, which, parts, plays, ramp int, seed int64) [
 					vel *= 0.6
 				}
 			}
-			out = append(out, lab.Note{Tick: uint32(start + p*part), Pad: n.Pad, Vel: min(max(int(math.Round(vel)), 1), 127), Len: part})
+			out = append(out, shiftPitch(lab.Note{Tick: uint32(start + p*part), Pad: n.Pad, Vel: min(max(int(math.Round(vel)), 1), 127), Len: part, Pitch: n.Pitch}, p*pitchStep))
 		}
 	}
 	return out
@@ -113,7 +120,7 @@ func ratchetNotes(notes []lab.Note, which, parts, plays, ramp int, seed int64) [
 
 var (
 	evolveChanges = []int{10, 20, 30, 40, 60}
-	evolveWhats   = []string{"moves, drops and adds", "moves only", "adds only", "drops only", "velocities only"}
+	evolveWhats   = []string{"moves, drops and adds", "moves only", "adds only", "drops only", "velocities only", "pitches only"}
 	evolveResets  = []string{"never", "every 2 bars", "every 3 bars", "every 4 bars"}
 )
 
@@ -214,6 +221,7 @@ func mutateBar(notes []lab.Note, barT, change, what int, rng *rand.Rand) []lab.N
 		occupied[int(n.Tick)/stepTicks] = true
 	}
 	moves, drops, adds, wiggles := what == 0 || what == 1, what == 0 || what == 3, what == 0 || what == 2, what == 4
+	pitches := what == 5 // the notes stay where they are and a part of them change their pitch
 	var out []lab.Note
 	var avg, count int
 	for _, n := range cur {
@@ -228,6 +236,8 @@ func mutateBar(notes []lab.Note, barT, change, what int, rng *rand.Rand) []lab.N
 		}
 		op := rng.Intn(2) // when both are on, a changed note is moved or dropped
 		switch {
+		case pitches:
+			out = append(out, shiftPitch(n, rng.Intn(9)-4))
 		case wiggles:
 			n.Vel = min(max(n.Vel+rng.Intn(41)-20, 1), 127)
 			out = append(out, n)

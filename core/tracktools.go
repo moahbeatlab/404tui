@@ -26,6 +26,8 @@ type trackState struct {
 	dispatch                                      int
 	copyTo                                        int
 	euDecay                                       int
+	euPitch, fillPitch, rndPitch, ecPitch         int // pitch settings of the tools that make notes (an index of pitchSemis, pitchSpreads, pitchSteps)
+	pitMode, pitAmount                            int // the Pitch tool
 	fillPat, fillGate, fillDecay, fillVel         int
 	shapeGate, shapeDecay                         int
 	seed                                          int64
@@ -35,7 +37,7 @@ type trackState struct {
 func (a *App) trackDefaults() *trackState {
 	t := &a.tt
 	if !t.init {
-		*t = trackState{euSteps: 16, euHits: 5, euRate: 3, euGate: 1, euVel: 1, chance: 70, ecRate: 1, ecRepeats: 3, ecDecay: 1, ecGate: 1, cycle: 12, fillGate: 2, fillVel: 1, shapeGate: 2, init: true}
+		*t = trackState{euSteps: 16, euHits: 5, euRate: 3, euGate: 1, euVel: 1, chance: 70, ecRate: 1, ecRepeats: 3, ecDecay: 1, ecGate: 1, cycle: 12, fillGate: 2, fillVel: 1, shapeGate: 2, euPitch: pitchMid, fillPitch: pitchMid, pitAmount: pitchMid + 1, init: true}
 	}
 	return t
 }
@@ -110,7 +112,7 @@ func (a *App) setTrack(pad int, notes []lab.Note) error {
 	}
 	sort.SliceStable(notes, func(i, j int) bool { return notes[i].Tick < notes[j].Tick })
 	for _, n := range notes {
-		if nb, err := formats.InsertNote(b, n.Tick, p, uint8(min(max(n.Vel, 1), 127)), uint16(min(max(n.Len, 1), 65535))); err == nil {
+		if nb, err := formats.InsertNotePitch(b, n.Tick, p, uint8(min(max(n.Vel, 1), 127)), uint16(min(max(n.Len, 1), 65535)), uint8(n.Pitch)); err == nil {
 			b = nb
 		}
 	}
@@ -230,6 +232,7 @@ func (a *App) euclidMenu() {
 		val("Gate", names(euGates, func(v int) string { return fmt.Sprintf("%d%%", v) }), t.euGate, func(v int) { t.euGate = v }),
 		val("Velocity", names(printVels, func(v int) string { return fmt.Sprint(v) }), t.euVel, func(v int) { t.euVel = v }),
 		val("Decay per hit", names(decayPcts, func(v int) string { return pct(v) }), t.euDecay, func(v int) { t.euDecay = v }),
+		val("Pitch", names(pitchSemis, semiText), t.euPitch, func(v int) { t.euPitch = v }),
 	}, "Write it over the track", func() {
 		d, err := a.ensurePattern()
 		if err != nil {
@@ -237,7 +240,7 @@ func (a *App) euclidMenu() {
 			return
 		}
 		ns := euclidNotes(pad, int(d.Length), rateTicks(t.euRate), t.euSteps, t.euHits, t.euRot, euGates[t.euGate], printVels[t.euVel])
-		a.finishTrack(pad, decayNotes(ns, decayPcts[t.euDecay]),
+		a.finishTrack(pad, withPitch(decayNotes(ns, decayPcts[t.euDecay]), pitchSemis[t.euPitch]),
 			fmt.Sprintf("euclid %d/%d", min(t.euHits, t.euSteps), t.euSteps))
 	})
 }
@@ -313,13 +316,19 @@ func (a *App) randomizeMenu() {
 		val("Amount", names(amounts, func(v int) string { return fmt.Sprintf("+-%d", v) }), t.rndAmount, func(v int) { t.rndAmount = v }),
 		val("Shape", []string{"even", "bell"}, t.rndShape, func(v int) { t.rndShape = v }),
 		val("Bias", names(biases, signed), near(biases, t.rndBias), func(v int) { t.rndBias = biases[v] }),
+		val("Pitch spread", names(pitchSpreads, func(v int) string {
+			if v == 0 {
+				return "off"
+			}
+			return fmt.Sprintf("+-%d st", v)
+		}), t.rndPitch, func(v int) { t.rndPitch = v }),
 	}, "Change the velocities", func() {
 		notes := a.trackNotes(pad)
 		if len(notes) == 0 {
 			a.say("this track has no notes", true)
 			return
 		}
-		a.finishTrack(pad, randomizeNotes(notes, amounts[t.rndAmount], t.rndShape == 1, t.rndBias, t.seed), "randomized")
+		a.finishTrack(pad, randomizePitch(randomizeNotes(notes, amounts[t.rndAmount], t.rndShape == 1, t.rndBias, t.seed), pitchSpreads[t.rndPitch], t.seed), "randomized")
 	})
 }
 
@@ -353,6 +362,7 @@ func (a *App) echoMenu() {
 		val("Repeats", reps, t.ecRepeats-1, func(v int) { t.ecRepeats = v + 1 }),
 		val("Decay", names(echoDecays, func(v int) string { return fmt.Sprintf("x%d%%", v) }), t.ecDecay, func(v int) { t.ecDecay = v }),
 		val("Gate", names(euGates, func(v int) string { return fmt.Sprintf("%d%%", v) }), t.ecGate, func(v int) { t.ecGate = v }),
+		val("Pitch of each repeat", names(pitchSteps, stepText), t.ecPitch, func(v int) { t.ecPitch = v }),
 	}, "Add the echoes", func() {
 		d, err := a.ensurePattern()
 		if err != nil {
@@ -364,12 +374,18 @@ func (a *App) echoMenu() {
 			a.say("this track has no notes", true)
 			return
 		}
-		a.finishTrack(pad, echoNotes(notes, int(d.Length), rateTicks(t.ecRate), t.ecRepeats, echoDecays[t.ecDecay], euGates[t.ecGate]), "echo")
+		a.finishTrack(pad, echoNotesPitch(notes, int(d.Length), rateTicks(t.ecRate), t.ecRepeats, echoDecays[t.ecDecay], euGates[t.ecGate], pitchSteps[t.ecPitch]), "echo")
 	})
 }
 
 // echoNotes repeats every note after it, repeats times, each a step later and quieter by decay percent, cut at the end.
 func echoNotes(notes []lab.Note, length, stepT, repeats, decay, gate int) []lab.Note {
+	return echoNotesPitch(notes, length, stepT, repeats, decay, gate, 0)
+}
+
+// echoNotesPitch is echoNotes with each repeat pitchStep semitones from the one before it (a note that is already pitched starts from
+// its own pitch).
+func echoNotesPitch(notes []lab.Note, length, stepT, repeats, decay, gate, pitchStep int) []lab.Note {
 	out := append([]lab.Note(nil), notes...)
 	for _, n := range notes {
 		vel := float64(n.Vel)
@@ -379,7 +395,7 @@ func echoNotes(notes []lab.Note, length, stepT, repeats, decay, gate int) []lab.
 			if tick >= length || vel < 4 {
 				break
 			}
-			out = append(out, lab.Note{Tick: uint32(tick), Pad: n.Pad, Vel: int(vel), Len: max(stepT*gate/100, 1)})
+			out = append(out, shiftPitch(lab.Note{Tick: uint32(tick), Pad: n.Pad, Vel: int(vel), Len: max(stepT*gate/100, 1), Pitch: n.Pitch}, r*pitchStep))
 		}
 	}
 	return out
@@ -570,6 +586,7 @@ func (a *App) fillMenu() {
 		val("Velocity", names(printVels, func(v int) string { return fmt.Sprint(v) }), t.fillVel, func(v int) { t.fillVel = v }),
 		val("Gate", names(longGates, func(v int) string { return fmt.Sprintf("%d%%", v) }), t.fillGate, func(v int) { t.fillGate = v }),
 		val("Decay per hit", names(decayPcts, func(v int) string { return pct(v) }), t.fillDecay, func(v int) { t.fillDecay = v }),
+		val("Pitch", names(pitchSemis, semiText), t.fillPitch, func(v int) { t.fillPitch = v }),
 	}, "Fill the track", func() {
 		d, err := a.ensurePattern()
 		if err != nil {
@@ -577,7 +594,7 @@ func (a *App) fillMenu() {
 			return
 		}
 		ns := fillNotes(pad, int(d.Length), fillPresets[t.fillPat].mask, printVels[t.fillVel], longGates[t.fillGate], decayPcts[t.fillDecay])
-		a.finishTrack(pad, ns, fillPresets[t.fillPat].name)
+		a.finishTrack(pad, withPitch(ns, pitchSemis[t.fillPitch]), fillPresets[t.fillPat].name)
 	})
 }
 

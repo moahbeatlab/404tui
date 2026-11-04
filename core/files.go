@@ -123,6 +123,9 @@ type keyboard struct{ r, c int }
 func (a *App) openSearch() {
 	a.tagSearch, a.searchDirs = false, false
 	a.kb = &keyboard{}
+	if Terminal {
+		a.say("searching files: Tab looks for folders only, Tab again for files", false)
+	}
 }
 
 func (a *App) kbKey(k Key) {

@@ -83,11 +83,16 @@ func RemoveNote(b []byte, offset int) error {
 // InsertNote returns the pattern with a note on pad at tick, the other records where they
 // were: the record that spans the tick is split in two, and the note goes between them.
 func InsertNote(b []byte, tick uint32, pad proto.PadIndex, velocity uint8, length uint16) ([]byte, error) {
+	return InsertNotePitch(b, tick, pad, velocity, length, 0)
+}
+
+// InsertNotePitch is InsertNote for a note with a pitch byte (0 is a plain note; see PitchByte).
+func InsertNotePitch(b []byte, tick uint32, pad proto.PadIndex, velocity uint8, length uint16, pitch uint8) ([]byte, error) {
 	if len(b) == 0 || len(b)%record != 0 {
 		return nil, errors.New("invalid pattern file: length is not a multiple of 8")
 	}
 	note := make([]byte, 0, record)
-	note = append(note, 0, noteFirst+byte(pad.Index()%groupSize), byte(pad.Index()/groupSize), 0, min(max(velocity, 1), 127), 64)
+	note = append(note, 0, noteFirst+byte(pad.Index()%groupSize), byte(pad.Index()/groupSize), pitch, min(max(velocity, 1), 127), 64)
 	note = binary.LittleEndian.AppendUint16(note, length)
 
 	var t uint32

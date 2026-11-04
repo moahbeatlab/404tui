@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
 )
 
@@ -76,8 +77,10 @@ func envNotes(notes []lab.Note, length int, st envState) []lab.Note {
 			n.Vel = min(max(n.Vel+int(math.Round(ctr+w*depth*127)), 1), 127)
 		case 1:
 			n.Len = min(max(int(math.Round(float64(n.Len)*(1+ctr/64+w*depth*0.9))), 1), 65535)
-		default:
+		case 2:
 			n.Tick = uint32(max(int(n.Tick)+int(math.Round((ctr/64+w*depth)*float64(stepTicks)/3)), 0))
+		default: // the pitch
+			*n = shiftPitch(*n, int(math.Round((ctr/64+w*depth)*formats.PitchRange)))
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Tick < out[j].Tick })

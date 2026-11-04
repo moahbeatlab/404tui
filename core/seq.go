@@ -528,6 +528,7 @@ func (a *App) seqMenu() {
 	run("Shape (gate, decay)...", a.shapeMenu)
 	run("Cycle...", a.cycleMenu)
 	run("Nudge (push, pull)...", a.nudgeMenu)
+	run("Pitch (transpose, random, runs)...", a.pitchMenu)
 	run("Invert", a.invert)
 	m.tabHead("TRACKS")
 	run("Dispatch over the marked pads...", a.dispatchMenu)
