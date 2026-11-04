@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/moahbeatlab/404tui/perflog"
 	"github.com/moahbeatlab/404tui/proto"
 )
 
@@ -91,6 +92,7 @@ func (m Model) setIsolated(pads map[proto.PadIndex]bool) (tea.Model, tea.Cmd) {
 	if len(pads) == 0 && !multi {
 		m.iso = nil
 	}
+	m.logIsolation(buses)
 	if len(writes) == 0 {
 		return m, nil
 	}
@@ -247,4 +249,24 @@ func (m Model) restoreIsolationNow() {
 			m.log.Warn("putting a bus back failed", "pad", pad.String(), "err", err)
 		}
 	}
+}
+
+// logIsolation writes what is isolated to the event log: the pads that keep their bus, the pads that were set dry, and the buses.
+func (m Model) logIsolation(buses map[int32]bool) {
+	keep, dry, bs := []string{}, []string{}, []int{}
+	if m.iso != nil {
+		for p := range m.iso.pads {
+			keep = append(keep, p.String())
+		}
+		for p := range m.iso.was {
+			dry = append(dry, p.String())
+		}
+	}
+	for b := range buses {
+		bs = append(bs, int(b))
+	}
+	slices.Sort(keep)
+	slices.Sort(dry)
+	slices.Sort(bs)
+	m.perfLog.Add(time.Now(), "isolate", perflog.P("keep", keep), perflog.P("dry", dry), perflog.P("buses", bs))
 }

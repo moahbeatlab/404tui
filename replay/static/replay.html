@@ -123,6 +123,7 @@ function prepare(events, analysis, cuesIn) {
       case "start": case "stop": case "continue": transport.push({ t: e.t, k: e.k }); break;
       case "pattern": patEv.push({ t: e.t, now: e.now, next: e.next }); break;
       case "mute": push(muteEv, e.bank + e.pad, { t: e.t, on: e.on }); break;
+      case "isolate": isoEv.push({ t: e.t, keep: new Set(e.keep || []), dry: new Set(e.dry || []), buses: e.buses || [] }); break;
     }
     if (e.k === "on" && e.ch === 13 && e.n === 48) loopStarts.push(e.t);
   }
@@ -169,6 +170,8 @@ function buildFeed(timed) {
       else feedStatic.push({ t: e.t, text: "BUS " + e.bus + " FX", val: e.on ? "ON" : "OFF", col: BUSCOL[e.bus] });
     } else if (e.k === "mute") {
       feedStatic.push({ t: e.t, text: e.bank + e.pad + (e.on ? " muted" : " back in"), val: "", col: COL.bad });
+    } else if (e.k === "isolate") {
+      feedStatic.push({ t: e.t, text: (e.keep || []).length ? "ISOLATE " + e.keep.join(" ") : "ISOLATE off", val: (e.keep || []).length ? "BUS " + (e.buses || []).join(",") : "", col: COL.blue });
     } else if (e.k === "on" && !e.bank) {
       feedStatic.push({ t: e.t, text: e.ch === 13 && e.n === 48 ? "loop start" : "MIDI note " + e.n + " ch " + e.ch, val: e.ch === 13 && e.n === 48 ? "" : "v" + e.v, col: COL.dim });
     } else if (e.k === "start" || e.k === "stop" || e.k === "continue") feedStatic.push({ t: e.t, text: e.k.toUpperCase(), val: "", col: COL.good });
@@ -330,6 +333,9 @@ function drawPads(T) {
     }
     const me = muteEv.size ? at(muteEv.get(bank + (i + 1)) || [], T) : null;
     if (me && me.on) { g.globalAlpha = 0.55; rrect(x, y, tw, th, 10, "#000"); g.globalAlpha = 1; text("MUTE", x + tw - 14, y + th - 12, COL.bad, 18, true, "right"); }
+    const iso = isoAt(T), lab = bank + (i + 1);
+    if (iso && iso.keep.has(lab)) { g.strokeStyle = BUSCOL[info && info.bus] || COL.blue; g.lineWidth = 5; g.beginPath(); g.roundRect(x + 2.5, y + 2.5, tw - 5, th - 5, 8); g.stroke(); text("ISO", x + 80, y + 28, BUSCOL[info && info.bus] || COL.blue, 20, true); }
+    else if (iso && iso.dry.has(lab)) { g.globalAlpha = 0.45; rrect(x, y, tw, th, 10, "#000"); g.globalAlpha = 1; text("DRY", x + 80, y + 28, COL.dim, 18, true); }
     const hl = hitTimes.get(bank + (i + 1)), hc = hl ? atIndex(hl, T) + 1 : 0;
     if (hc > 0) text("x" + hc, x + tw - 14, y + 28, glow > 0.5 ? "#111" : COL.dim, 18, false, "right");
     if (inPat && inPat.has(n)) { g.strokeStyle = COL.amberD; g.lineWidth = 2; g.beginPath(); g.roundRect(x + 1, y + 1, tw - 2, th - 2, 9); g.stroke(); }
@@ -356,7 +362,9 @@ function drawPads(T) {
 
 // has a pad been heard in the last pass of the pattern, while others were? (the unit does not say that a track is muted: this is a guess)
 // a mute that was made from the program (the level of the pad set to 0) is in the log: then it is known, not guessed
-const muteEv = new Map();
+const muteEv = new Map(), isoEv = [];
+// what is isolated at T: the pads that keep their bus, the pads that were set dry, the buses (the isolation is in the log when it was made from the program)
+function isoAt(T) { const e = at(isoEv, T); return e && (e.keep.size || e.dry.size) ? e : null; }
 const padLabel = n => String.fromCharCode(65 + Math.floor(n / 16)) + (n % 16 + 1);
 function mutedGuess(pad, p, T) {
   if (muteEv.size) { const e = at(muteEv.get(padLabel(pad)) || [], T); return !!(e && e.on); }
@@ -398,6 +406,9 @@ function drawPattern(T) {
     text(String.fromCharCode(65 + Math.floor(n / 16)) + (n % 16 + 1), ix + 14, y + rh * 0.68, COL.text, 17, true);
     const flags = [mi.Gate === "on" ? "G" : "", mi.Loop === "on" ? "L" : "", mi["One shot"] === "on" ? "O" : "", mi.Mode && mi.Mode !== "forward" ? "R" : ""].join("");
     text((mi.Bus && mi.Bus !== "off" ? mi.Bus.replace("BUS ", "B") : "-") + " L" + (mi.Level || "?") + " " + (mi.Pan || "") + " " + flags, ix + 76, y + rh * 0.68, COL.text, 16);
+    const iso = isoAt(T), plab = padLabel(n);
+    if (iso && iso.keep.has(plab)) text("isolated", ix + 250, y + rh * 0.68, COL.blue, 15, true);
+    else if (iso && iso.dry.has(plab)) text("dry", ix + 250, y + rh * 0.68, COL.dim, 15, true);
     if (muted) text(muteEv.size ? "muted" : "muted?", ix + 250, y + rh * 0.68, COL.bad, 15, true);
     for (let s = 0; s < visible; s++) rect(gx + s * cw + 1, y + 1, cw - 2, rh - 3, (first + s) % 4 === 0 ? "#303030" : "#262626");
     for (const nt of p.notes) {
@@ -481,6 +492,8 @@ function drawFx(T) {
       const label = defs[i] && defs[i].n ? defs[i].n : "CTRL " + (i + 1);
       knob(cx, cy, 27, v, label, c, ccHistory(bus, 16 + i, T, 6), T);
     }
+    const iso = isoAt(T);
+    if (iso && iso.buses.includes(bus)) { rrect(x + 12, y0 + h - 34, bw - 24, 24, 6, c); text("ISOLATE " + [...iso.keep].join(" "), x + bw / 2, y0 + h - 16, "#111", 16, true, "center"); }
     if (bus > 1) rect(x, y0 + 14, 1, h - 28, "#2b2b2b");
   }
 }
