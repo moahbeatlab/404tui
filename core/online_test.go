@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -1183,4 +1184,54 @@ func TestProjectsCanBeOpenedFromAnyFolder(t *testing.T) {
 	if !a.msgBad || !strings.Contains(a.msg, "is not a project") {
 		t.Fatalf("it says so: %q", a.msg)
 	}
+}
+
+func TestWhatATrackToolKeepsReachesTheUnitWhenEditingLive(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	dev := device.New(sim.Demo(), "sim")
+	a.goLive(dev, 0)
+	t.Cleanup(func() { a.stopLive() })
+	kitKeys(t, a)
+	a.liveSync()
+	drain := func() {
+		for i := 0; i < 500; i++ {
+			if w, _, _ := a.liveStatus(); w == 0 {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	drain()
+	a.GoScreen(1)
+	a.pat = 5
+	a.rows = nil
+	a.ensurePattern()
+	a.autoRows()
+	pad := a.rowPad()
+	a.euclidMenu()
+	var keep *menuItem
+	for i := range a.menu.items {
+		if strings.HasPrefix(a.menu.items[i].label, "Keep it") {
+			keep = &a.menu.items[i]
+		}
+	}
+	if keep == nil {
+		t.Fatal("the tool has a Keep it")
+	}
+	if w, _, _ := a.liveStatus(); w != 0 {
+		t.Fatalf("a trial is not sent: %d waiting", w)
+	}
+	keep.run(0)
+	drain()
+	want, err := a.lab.PatternBytes(a.pat)
+	if err != nil || len(want) == 0 {
+		t.Fatalf("the pattern the tool made: %v", err)
+	}
+	slot, _ := proto.NewPadIndex(uint16(a.pat - 1))
+	got, err := dev.ReadFile(formats.PatternPath(1, slot))
+	if err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("the unit has the pattern that was kept: %v (%d bytes, wanted %d) pad %d", err, len(got), len(want), pad)
+	}
+	a.menu = nil
 }

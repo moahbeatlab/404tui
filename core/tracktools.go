@@ -180,6 +180,7 @@ func (a *App) toolMenu(title string, settings []menuItem, applyLabel string, app
 		base = a.lab.Snapshot()
 		a.toolBase = base
 		a.say("kept: "+label, false)
+		a.liveSync() // a unit that is edited live gets what was kept (a trial is not sent)
 	}})
 	m.onClose = func() {
 		changed := a.lab.Changed(base)
