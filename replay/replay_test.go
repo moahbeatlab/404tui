@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -361,5 +362,29 @@ func TestNoCameraIsNoName(t *testing.T) {
 	r := &Replay{CuesPath: filepath.Join(t.TempDir(), "x.cues.json")}
 	if r.CameraName() != "" {
 		t.Fatalf("a take without a camera has the name %q", r.CameraName())
+	}
+}
+
+// The page is one big script: a mistake that stops it from parsing (a comment that swallows the rest of a line, a missing bracket) makes the whole
+// page dead, and nothing in Go notices. When node is there, the script is parsed with it.
+func TestThePageScriptParses(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("no node to parse the page script with")
+	}
+	page, err := assets.ReadFile("static/replay.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(page)
+	i := strings.Index(s, "<script>\n\"use strict\"")
+	j := strings.LastIndex(s, "</script>")
+	if i < 0 || j < i {
+		t.Fatal("the script of the page was not found")
+	}
+	cmd := exec.Command(node, "-e", `const vm = require("vm"), fs = require("fs"); new vm.Script(fs.readFileSync(0, "utf8"), { filename: "replay.html" });`)
+	cmd.Stdin = strings.NewReader(s[i+len("<script>") : j])
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("the script of the page does not parse: %v\n%s", err, out)
 	}
 }
