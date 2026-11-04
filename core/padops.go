@@ -156,6 +156,14 @@ type sidecarFile struct {
 
 func (a *App) exportDir() string { return filepath.Join(a.dataDir(), "exports") }
 
+// exportRoot is the folder the chooser starts in for an export: the one chosen last, else the exports folder.
+func (a *App) exportRoot() string {
+	if a.set.ExportDir != "" {
+		return expandHome(a.set.ExportDir)
+	}
+	return a.exportDir()
+}
+
 // exportBank writes the pads of the bank (the marked ones among them) as WAV files named after the pad, and samples.json with
 // their settings, into a folder of its own below the exports folder.
 func (a *App) exportBank() {
@@ -173,11 +181,11 @@ func (a *App) exportBank() {
 		return
 	}
 	dir := filepath.Join(a.exportDir(), fmt.Sprintf("%s_bank_%c", app.SanitizeName(a.ProjectName()), 'A'+a.bank))
-	if Terminal { // a computer asks where to: the folder is typed (this one is there already)
-		a.askText(fmt.Sprintf("export bank %c into the folder", 'A'+a.bank), "WAV files and samples.json go in it; Enter exports", dir, func(s string) {
-			if s != "" {
-				a.exportPadsTo(pads, expandHome(s))
-			}
+	if Terminal { // a computer asks where to: the folder chooser, then a folder of its own in it
+		a.pickFolder(fmt.Sprintf("export bank %c into the folder", 'A'+a.bank), a.exportRoot(), func(root string) {
+			a.set.ExportDir = root
+			a.saveSettings()
+			a.exportPadsTo(pads, filepath.Join(root, filepath.Base(dir)))
 		})
 		return
 	}

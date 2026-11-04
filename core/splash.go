@@ -53,8 +53,8 @@ func (a *App) SplashText(r string) bool {
 			return true
 		}
 		a.splash = nil
-		a.offlineChosen = false
 		a.go_(Unit)
+		a.goOnline() // the unit's open project comes into the editor, and what is changed goes to the unit
 		return true
 	case "o", "O":
 		a.splash = nil
@@ -147,7 +147,7 @@ func (a *App) drawSplash(g Gfx) {
 			if n, ok := a.lastOffline(); ok {
 				last = fmt.Sprintf("PROJECT_%02d, the last one", n+1)
 			}
-			lines = append(lines, fit("UNIT FOUND: "+a.link.Name(), w-6), "u  work online: the projects of the unit", "o  work offline: "+last)
+			lines = append(lines, fit("UNIT FOUND: "+a.link.Name(), w-6), "u  work online: the unit's open project is loaded and edited live", "o  work offline: "+last)
 		} else if n, ok := a.lastOffline(); ok {
 			lines = append(lines, "NO UNIT: WORKING OFFLINE", fmt.Sprintf("o  opens PROJECT_%02d again, the one open last", n+1))
 		}

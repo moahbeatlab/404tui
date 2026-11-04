@@ -33,6 +33,7 @@ type levelMeter struct {
 	top     float64
 	ok      bool
 	src     *record.Meter // the program that listens to the input when nothing is recorded
+	spec    []float64     // the spectrum of the latest reading (record.SpectrumBands values), when the input is listened to
 	err     string
 }
 
@@ -119,6 +120,7 @@ func (a *App) levelTick() {
 			return
 		}
 		peaks = p[:]
+		l.spec, _ = l.src.Spectrum()
 	default:
 		return
 	}
@@ -140,7 +142,7 @@ func (a *App) levelTick() {
 
 // drawMeter is the level of the unit's sound in the panel of a computer: two bars (left and right, the highest peak held for a
 // moment), their level, and CLIP when the sound reached full scale lately. It takes two rows from y.
-func (a *App) drawMeter(g Gfx, x, y, w int) {
+func (a *App) drawMeter(g Gfx, x, y, w int) int {
 	l := a.lvl
 	if l == nil || !l.ok {
 		msg := "level: listening to the unit..."
@@ -148,7 +150,7 @@ func (a *App) drawMeter(g Gfx, x, y, w int) {
 			msg = "level: needs ffmpeg or sox and the unit's audio"
 		}
 		g.Text(x, y, fit(msg, w), cDim, false)
-		return
+		return 3
 	}
 	now := time.Now()
 	bw := max(w-2-10, 6)
@@ -162,4 +164,15 @@ func (a *App) drawMeter(g Gfx, x, y, w int) {
 		g.Fill(x+w-6, y+2, 6, 1, cBad)
 		g.Text(x+w-5, y+2, "CLIP", cBg, true)
 	}
+	if len(l.spec) > 0 && Rows >= 36 { // the spectrum under the bars, when the window is tall enough
+		const rows = 3
+		n := w * g.BarsPerCell()
+		h := make([]float64, n)
+		for i := range h {
+			h[i] = l.spec[min(i*len(l.spec)/n, len(l.spec)-1)]
+		}
+		g.Bars(x, y+3, w, rows, h, false, cAmber)
+		return 3 + rows + 1
+	}
+	return 3
 }

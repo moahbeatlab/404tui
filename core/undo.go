@@ -203,7 +203,7 @@ func (a *App) redoStep() {
 func (a *App) restore(s *lab.Snap) {
 	a.restoreProject(s)
 	if a.menu != nil || a.picker != nil || a.kb != nil {
-		a.menu, a.picker, a.kb = nil, nil, nil
+		a.menu, a.picker, a.kb, a.dp = nil, nil, nil, nil
 	}
 }
 

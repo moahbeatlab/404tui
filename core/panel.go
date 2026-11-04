@@ -161,6 +161,9 @@ func (a *App) rawHints() (plain, shift []hint) {
 	if a.np != nil {
 		return []hint{{"^v", "setting"}, {"<>", "change"}, {"A", "default"}, {"X", "hear note"}, {"R1", "pattern tools"}, {"B", "close"}}, nil
 	}
+	if a.dp != nil {
+		return []hint{{"^v", "choose"}, {"l", "open the folder"}, {"h", "up"}, {"Enter", "use the folder in front"}, {"X", "new folder"}, {"L1 R1", "places"}, {"B", "cancel"}}, nil
+	}
 	if a.picker != nil {
 		open := "open it"
 		if a.picker.pads {
@@ -308,8 +311,7 @@ func (a *App) drawPanel(g Gfx) {
 	// tempo and the state of the loop
 	y := 2 + mapRows
 	if Terminal && a.link != nil { // with a unit plugged in the level of its sound is always in view
-		a.drawMeter(g, x, y, w)
-		y += 3
+		y += a.drawMeter(g, x, y, w)
 	}
 	g.Text(x, y, fmt.Sprintf("BPM %s", bpmText(a.tempo())), cText, true)
 	g.Text(x+len("BPM "+bpmText(a.tempo())+" "), y, a.tempoSource(), cDim, false)

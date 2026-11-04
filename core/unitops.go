@@ -77,8 +77,11 @@ func (a *App) unitMenu() {
 			add("Edit it live (changes go to the unit)", func(int) { a.unitLoadThen(dev, n, true) })
 		}
 		add("Load it into the editor", func(int) { a.unitLoad(dev, n) })
-		add("Back it up to this computer", func(int) { a.unitBackup(dev, n) })
-		add("Save it into a folder...", func(int) { a.unitBackupAsk(dev, n) })
+		if Terminal {
+			add("Back it up into a folder...", func(int) { a.unitBackupAsk(dev, n) })
+		} else {
+			add("Back it up to this computer", func(int) { a.unitBackup(dev, n) })
+		}
 		add("Restore it from a backup...", func(int) { a.unitRestoreMenu(dev, n) })
 		add("Rename...", func(int) { a.unitRename(dev, n, name) })
 		add("Make it the unit's project", func(int) {
@@ -141,21 +144,28 @@ func (a *App) unitLoadNow(dev *device.Device, n int, live bool) {
 	})
 }
 
-// unitBackup copies the project from the unit into a folder of its own below the backups folder.
-func (a *App) unitBackup(dev *device.Device, n int) {
-	name := app.SanitizeName(a.unitProjectName(n))
-	dir := filepath.Join(a.dataDir(), "backups", fmt.Sprintf("%02d_%s_%s", n+1, name, a.clock().Format("20060102_150405")))
-	a.unitBackupTo(dev, n, dir)
+// backupRoot is the folder the unit's projects are backed up into: the one chosen last, else a folder beside the card folder.
+func (a *App) backupRoot() string {
+	if a.set.BackupDir != "" {
+		return expandHome(a.set.BackupDir)
+	}
+	return filepath.Join(a.dataDir(), "backups")
 }
 
-// unitBackupAsk asks for the folder a project of the unit is saved into (on this computer, or any drive): the project is
-// written into it as it is on the unit's card, PADCONF.BIN, PTN and SMPL.
+// unitBackup copies the project from the unit into a folder of its own below the backups folder (the handheld does not ask where).
+func (a *App) unitBackup(dev *device.Device, n int) {
+	name := app.SanitizeName(a.unitProjectName(n))
+	a.unitBackupTo(dev, n, filepath.Join(a.backupRoot(), fmt.Sprintf("%02d_%s_%s", n+1, name, a.clock().Format("20060102_150405"))))
+}
+
+// unitBackupAsk opens the folder chooser: which folder a project of the unit is backed up into (on this computer, or any drive); the backup is a folder
+// of its own in it, 07_NAME_date, with PADCONF.BIN, PTN and SMPL as on the unit's card. The folder is kept for next time.
 func (a *App) unitBackupAsk(dev *device.Device, n int) {
-	def := filepath.Join(a.dataDir(), "backups", fmt.Sprintf("%02d_%s", n+1, app.SanitizeName(a.unitProjectName(n))))
-	a.askText(fmt.Sprintf("save unit project %d into the folder", n+1), "any folder, on this computer or a drive; Enter saves", def, func(s string) {
-		if s != "" {
-			a.unitBackupTo(dev, n, expandHome(s))
-		}
+	a.pickFolder(fmt.Sprintf("back up unit project %d into the folder", n+1), a.backupRoot(), func(root string) {
+		a.set.BackupDir = root
+		a.saveSettings()
+		name := app.SanitizeName(a.unitProjectName(n))
+		a.unitBackupTo(dev, n, filepath.Join(root, fmt.Sprintf("%02d_%s_%s", n+1, name, a.clock().Format("20060102_150405"))))
 	})
 }
 
@@ -170,13 +180,13 @@ func (a *App) unitBackupTo(dev *device.Device, n int, dir string) {
 			a.say("backup failed: "+err.Error(), true)
 			return
 		}
-		a.say("backed up to "+short2(dir, 40), false)
+		a.say("backed up to "+dir, false)
 	})
 }
 
 // unitRestoreMenu lists the backups there are, and a folder to type, and asks before it writes over the project.
 func (a *App) unitRestoreMenu(dev *device.Device, n int) {
-	root := filepath.Join(a.dataDir(), "backups")
+	root := a.backupRoot()
 	ents, _ := os.ReadDir(root)
 	var dirs []string
 	for _, e := range ents {

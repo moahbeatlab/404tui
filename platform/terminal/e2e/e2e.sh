@@ -312,7 +312,10 @@ check "the menu of a unit project" "UNIT PROJECT 1"
 snap 29-unit-menu
 lit j j j
 lit a
-check "a backup is made" "backed up to"
+check "the backup asks for a folder" "BACK UP UNIT PROJECT"
+snap 29b-backup-folder
+key Enter
+check "a backup is made, and it says where" "backed up to"
 ls "$W"/backups/*/PADCONF.BIN >/dev/null 2>&1 && ok "the backup has the project's files" || bad "no backup folder"
 lit a j; lit a
 check "loading asks first when the editor has unsaved work" "NOT SAVED"

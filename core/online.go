@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // ONLINE and OFFLINE, on a computer. Online the PROJECTS screen lists the 16 projects of the unit that is plugged in; offline it lists
@@ -102,19 +101,20 @@ func (a *App) modeMenu() {
 	} else {
 		add("Online: no unit is plugged in (looking for it)", func(int) {})
 	}
+	if a.link != nil {
+		add("Online: load the unit's open project and edit it live", func(int) { a.go_(Unit); a.goOnline() })
+	}
 	add("Offline: the projects in "+short2(a.offlineDir(), 30), func(int) {
 		a.offlineChosen = true
 		a.say("offline: the projects of "+short2(a.offlineDir(), 30), false)
 	})
 	m.head("OFFLINE FOLDER")
 	add("Choose the folder of the offline projects...", func(int) {
-		a.askText("folder of the offline projects", "PROJECT_01 .. PROJECT_16, each with PADCONF.BIN in it", a.offlineDir(), func(s string) {
-			if s == "" {
-				return
-			}
-			a.set.OfflineDir = strings.TrimSpace(s)
+		a.pickFolder("the folder of the offline projects", a.offlineDir(), func(dir string) {
+			a.set.OfflineDir = dir
 			a.offlineChosen = true
 			a.saveSettings()
+			a.say("offline: the projects of "+dir, false)
 		})
 	})
 	if _, ok := a.lastOffline(); ok {
@@ -123,20 +123,34 @@ func (a *App) modeMenu() {
 	a.menu = m
 }
 
-// exportProjectAsk asks for the folder the project of the editor is written into, as PROJECT_nn with PADCONF.BIN, PTN and SMPL:
+// exportProjectAsk opens the folder chooser for the folder the project of the editor is written into, as PROJECT_nn with PADCONF.BIN, PTN and SMPL:
 // the card of the unit, a drive, or a folder on this computer to send to someone.
 func (a *App) exportProjectAsk() {
-	def := a.offlineDir()
-	a.askText("export the project into the folder", fmt.Sprintf("%s is made in it; Enter exports", a.ProjectName()), def, func(s string) {
-		if s == "" {
-			return
-		}
-		dir := expandHome(s)
+	a.pickFolder("export "+a.ProjectName()+" into the folder", a.exportRoot(), func(dir string) {
+		a.set.ExportDir = dir
+		a.saveSettings()
 		names, err := a.exportTo(dir)
 		if err != nil {
 			a.say(err.Error(), true)
 			return
 		}
-		a.say(fmt.Sprintf("wrote %d files to %s", len(names), short2(filepath.Join(dir, a.ProjectName()), 40)), false)
+		a.say(fmt.Sprintf("wrote %d files to %s", len(names), filepath.Join(dir, a.ProjectName())), false)
 	})
+}
+
+// goOnline loads the project the unit has open into the editor and edits it live: the program is the unit's editor from then on.
+// The load runs in the background (its progress shows on PROJECTS) and ends on the pads.
+func (a *App) goOnline() {
+	a.offlineChosen = false
+	dev, ok := a.unitDevice()
+	if !ok {
+		return
+	}
+	n := 0
+	if cur, err := dev.CurrentProject(); err == nil && cur < 16 {
+		n = int(cur)
+	}
+	a.unitCur = n
+	a.say(fmt.Sprintf("online: loading unit project %d, it is edited live", n+1), false)
+	a.unitLoadNow(dev, n, true)
 }

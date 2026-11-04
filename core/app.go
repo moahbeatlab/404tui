@@ -256,7 +256,8 @@ type App struct {
 	link          Link
 	Connect       func() (Link, error) // finds and opens the unit; nil when there is no way to
 	unitCur       int
-	connCh        chan Link // a computer looks for the unit in the background
+	dp            *dirPicker // the folder chooser
+	connCh        chan Link  // a computer looks for the unit in the background
 	connBusy      bool
 	linkNames     []string // the unit's project names, kept for a moment
 	linkNamesAt   time.Time
@@ -569,6 +570,12 @@ func (a *App) press(k Key, repeat int) {
 	if a.picker != nil {
 		if k != Y {
 			a.pickerKey(k)
+		}
+		return
+	}
+	if a.dp != nil {
+		if k != Y {
+			a.dpKey(k)
 		}
 		return
 	}
@@ -885,7 +892,7 @@ func (a *App) Zoom(d int) {
 
 // Modal says whether a menu, the pad panel or a dialog is in front: a keyboard closes it with Esc only.
 func (a *App) Modal() bool {
-	return a.menu != nil || a.pp != nil || a.np != nil || a.picker != nil || a.help
+	return a.menu != nil || a.pp != nil || a.np != nil || a.picker != nil || a.dp != nil || a.help
 }
 
 // GoScreen goes to the screen with that number (0 is PADS), from a keyboard's number keys; a number past the last does nothing.

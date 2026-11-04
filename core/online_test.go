@@ -6,6 +6,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/moahbeatlab/404tui/app"
+	"github.com/moahbeatlab/404tui/device"
+	"github.com/moahbeatlab/404tui/proto"
+	"github.com/moahbeatlab/404tui/sim"
 )
 
 func termOn(t *testing.T) {
@@ -140,6 +145,14 @@ func TestSplashOffersOnlineAndOffline(t *testing.T) {
 	if !a.SplashText("u") || a.offlineChosen || a.ScreenName() != "UNIT" || !a.onlineNow() {
 		t.Fatalf("u goes online, to PROJECTS: %s", a.ScreenName())
 	}
+	for i := 0; i < 300 && a.live == nil; i++ {
+		a.Tick()
+		time.Sleep(10 * time.Millisecond)
+	}
+	if a.live == nil || a.ScreenName() != "PADS" {
+		t.Fatalf("online loads the unit's project and edits it live, then shows the pads: live %v, %s", a.live != nil, a.ScreenName())
+	}
+	a.stopLive()
 	if a.SplashText("o") {
 		t.Fatal("the letters are the splash's only while it is in front")
 	}
@@ -223,11 +236,12 @@ func TestProjectsAreExportedIntoAChosenFolder(t *testing.T) {
 	keys(t, a, kit)
 	dir := t.TempDir()
 	a.exportProjectAsk()
-	if a.prompt == nil || !strings.Contains(screenStr(a), "EXPORT THE PROJECT INTO THE FOLDER") {
-		t.Fatal("the export asks for a folder")
+	if a.dp == nil || !strings.Contains(screenStr(a), "EXPORT PROJECT_01 INTO THE FOLDER") {
+		t.Fatalf("the export opens the folder chooser:\n%s", screenStr(a))
 	}
-	a.prompt.buf = dir
-	a.TypeEnter()
+	a.dp.dir = dir
+	a.dpList("")
+	a.dpKey(A)
 	if _, err := os.Stat(filepath.Join(dir, "PROJECT_01", "PADCONF.BIN")); err != nil {
 		t.Fatalf("the project is in the folder that was typed: %v", err)
 	}
@@ -236,18 +250,20 @@ func TestProjectsAreExportedIntoAChosenFolder(t *testing.T) {
 	a.GoScreen(2)
 	a.unitCur = 0
 	a.unitMenu()
-	if !strings.Contains(screenStr(a), "Save it into a folder") {
+	if !strings.Contains(screenStr(a), "Back it up into a folder") {
 		t.Fatalf("the unit's project menu offers a folder:\n%s", screenStr(a))
 	}
 	a.menu = nil
 	dev, _ := a.unitDevice()
-	out := filepath.Join(t.TempDir(), "backup")
+	root := filepath.Join(t.TempDir(), "backups")
+	os.MkdirAll(root, 0o755)
 	a.unitBackupAsk(dev, 0)
-	if a.prompt == nil {
-		t.Fatal("the backup asks for a folder")
+	if a.dp == nil {
+		t.Fatal("the backup opens the folder chooser")
 	}
-	a.prompt.buf = out
-	a.TypeEnter()
+	a.dp.dir = root
+	a.dpList("")
+	a.dpKey(A)
 	for i := 0; i < 500 && a.job != nil; i++ {
 		a.Tick()
 		if _, _, _, _, fin := a.job.state(); fin {
@@ -256,8 +272,12 @@ func TestProjectsAreExportedIntoAChosenFolder(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if _, err := os.Stat(filepath.Join(out, "PADCONF.BIN")); err != nil {
-		t.Fatalf("the unit's project is in the folder: %v", err)
+	made, _ := filepath.Glob(filepath.Join(root, "01_*", "PADCONF.BIN"))
+	if len(made) != 1 {
+		t.Fatalf("the backup is a folder of its own in the folder that was typed: %v", made)
+	}
+	if a.set.BackupDir != root || !strings.Contains(a.msg, root) {
+		t.Fatalf("the folder is kept and the message says where the backup is: %q %q", a.set.BackupDir, a.msg)
 	}
 }
 
@@ -274,5 +294,145 @@ func TestLiveChangesAreCoalesced(t *testing.T) {
 		if c.pad == 4 && c.kind != "clear" {
 			t.Fatalf("nothing else waits for a cleared pad: %+v", c)
 		}
+	}
+}
+
+func TestPadsChangedOnTheUnitComeIntoTheEditor(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	dev := device.New(sim.Demo(), "sim")
+	a.goLive(dev, 0)
+	t.Cleanup(func() { a.stopLive() })
+	ps := a.live.poll()
+	if len(ps) == 0 {
+		t.Skip("the simulated unit has the same pads as the editor")
+	}
+	n := ps[0].n
+	a.applyPulls(ps)
+	if got := a.info.Pads[n].File; got != (ps[0].smp != nil) {
+		t.Fatalf("the pad %d is in the editor as the unit has it: %v", n, got)
+	}
+	if again := a.live.poll(); len(again) != 0 {
+		t.Fatalf("what came in is not pulled again: %d pads", len(again))
+	}
+	if !strings.Contains(a.msg, "changed on the unit") {
+		t.Fatalf("it says so: %q", a.msg)
+	}
+	// a change made on the unit after that comes in too
+	pad, _ := proto.NewPadIndex(uint16(n))
+	if ps[0].smp != nil {
+		if err := dev.SetParam(0x69, proto.TargetPad(pad), 50); err != nil {
+			t.Fatal(err)
+		}
+		next := a.live.poll()
+		if len(next) != 1 || next[0].n != n {
+			t.Fatalf("a setting changed on the unit is noticed: %d", len(next))
+		}
+		a.applyPulls(next)
+		if v, _ := a.lab.PadParam(n, 0x69); v != 50 {
+			t.Fatalf("the level is the unit's: %d", v)
+		}
+	}
+}
+
+func TestSpectrumIsDrawnUnderTheMeterInATallWindow(t *testing.T) {
+	termOn(t)
+	SetSize(120, 44)
+	a, _ := newApp(t)
+	waitLink(t, a)
+	a.Tick()
+	if a.lvl == nil {
+		a.lvl = newLevelMeter()
+	}
+	a.lvl.ok = true
+	a.lvl.hold = [2]float64{-12, -12}
+	a.lvl.spec = make([]float64, 64)
+	for i := range a.lvl.spec {
+		a.lvl.spec[i] = float64(i) / 63
+	}
+	if txt := screenStr(a); !strings.ContainsAny(txt, "⣿⣷⣾⣶⣤⣀⣄⣠⢀⡀") {
+		t.Fatalf("the spectrum is drawn:\n%s", txt)
+	}
+	a.lvl.spec = nil
+	SetSize(120, 30)
+}
+
+func TestFolderChooserWalksTheFolders(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	top := t.TempDir()
+	os.MkdirAll(filepath.Join(top, "music", "kits"), 0o755)
+	os.MkdirAll(filepath.Join(top, "backups"), 0o755)
+	os.MkdirAll(filepath.Join(top, ".hidden"), 0o755)
+	var got string
+	a.pickFolder("where to", top, func(d string) { got = d })
+	if a.dp == nil || !a.Modal() {
+		t.Fatal("the chooser is a dialog")
+	}
+	txt := screenStr(a)
+	for _, want := range []string{"WHERE TO", "use this folder", "backups/", "music/"} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("the chooser shows %q:\n%s", want, txt)
+		}
+	}
+	if strings.Contains(txt, ".hidden") {
+		t.Error("hidden folders are not listed")
+	}
+	a.dpKey(Down)
+	a.dpKey(Down) // music
+	a.dpKey(Right)
+	if filepath.Base(a.dp.dir) != "music" || len(a.dp.names) != 1 {
+		t.Fatalf("l opens the folder in front: %s", a.dp.dir)
+	}
+	a.dpKey(Left)
+	if a.dp.dir != top || a.dp.names[a.dp.cur-1] != "music" {
+		t.Fatalf("h goes up and stands on the folder it came from: %s %d", a.dp.dir, a.dp.cur)
+	}
+	a.dpKey(Right)
+	a.dpKey(Down)
+	a.dpKey(A)
+	if got != filepath.Join(top, "music", "kits") || a.dp != nil {
+		t.Fatalf("Enter uses the folder in front: %q", got)
+	}
+	a.pickFolder("again", top, func(d string) { got = d })
+	a.dpKey(X)
+	if a.prompt == nil {
+		t.Fatal("x asks for the name of a new folder")
+	}
+	a.prompt.buf = "fresh"
+	a.TypeEnter()
+	if _, err := os.Stat(filepath.Join(top, "fresh")); err != nil || a.dp.names[a.dp.cur-1] != "fresh" {
+		t.Fatalf("the new folder is made and under the cursor: %v", err)
+	}
+	a.dpKey(B)
+	if a.dp != nil {
+		t.Fatal("Esc closes it")
+	}
+	// a folder that is not there starts at the nearest one that is
+	a.pickFolder("gone", filepath.Join(top, "nothing", "here"), nil)
+	if a.dp.dir != top {
+		t.Fatalf("starts at %s", a.dp.dir)
+	}
+}
+
+func TestFilesLeftColumnShowsTheSourceAtTheTopOfOne(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	waitLink(t, a)
+	a.GoScreen(3)
+	a.cd("/")
+	txt := screenStr(a)
+	for _, want := range []string{"sources", "computer", "samples", "the top", "SD card", "Unit storage"} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("the left column lists %q:\n%s", want, txt)
+		}
+	}
+	a.cd(app.CardRoot)
+	if txt := screenStr(a); !strings.Contains(txt, "sources") {
+		t.Errorf("the top of the card shows the sources too:\n%s", txt)
+	}
+	a.cd(a.Root)
+	if txt := screenStr(a); strings.Contains(txt, "sources") {
+		t.Errorf("below the top the left column is the folder above:\n%s", txt)
 	}
 }

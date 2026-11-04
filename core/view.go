@@ -65,6 +65,9 @@ func (a *App) draw(g Gfx) {
 	if a.kb != nil {
 		a.drawKeyboard(g)
 	}
+	if a.dp != nil {
+		a.drawDirPicker(g)
+	}
 	if a.prompt != nil {
 		a.drawPrompt(g)
 	}

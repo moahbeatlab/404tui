@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"hash/maphash"
+	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/formats"
@@ -50,6 +53,19 @@ type liveState struct {
 	running bool
 	sent    int
 	err     error
+
+	// what the unit is known to have (the editor as it was last sent), for noticing what is changed on the unit itself
+	sig       liveBase
+	watchBank atomic.Int32
+	pulls     chan []pulled
+	stop      chan struct{}
+}
+
+// pulled is a pad that was changed on the unit: its block and its sample.
+type pulled struct {
+	n     int
+	block []byte
+	smp   []byte
 }
 
 // goLive makes the project in the editor the live one: the unit's project n.
@@ -58,14 +74,17 @@ func (a *App) goLive(dev *device.Device, n int) {
 		a.say(err.Error(), true)
 		return
 	}
-	l := &liveState{dev: dev, project: n, seed: maphash.MakeSeed()}
+	l := &liveState{dev: dev, project: n, seed: maphash.MakeSeed(), pulls: make(chan []pulled, 4), stop: make(chan struct{})}
 	l.base = a.liveBaseNow(l)
+	l.sig = l.base
 	a.live = l
+	go l.pollLoop()
 	a.say(fmt.Sprintf("live: the editor is unit project %d; what you change goes to the unit", n+1), false)
 }
 
 func (a *App) stopLive() {
 	if a.live != nil {
+		close(a.live.stop)
 		a.live = nil
 		a.say("live editing stopped", false)
 	}
@@ -140,6 +159,9 @@ func (a *App) liveSync() {
 		}
 	}
 	l.base = now
+	l.mu.Lock()
+	l.sig = now
+	l.mu.Unlock()
 	if len(ch) == 0 {
 		return
 	}
@@ -227,6 +249,12 @@ func (a *App) liveTick() {
 	if l == nil {
 		return
 	}
+	l.watchBank.Store(int32(a.bank))
+	select {
+	case ps := <-l.pulls:
+		a.applyPulls(ps)
+	default:
+	}
 	l.mu.Lock()
 	err := l.err
 	l.err = nil
@@ -255,4 +283,114 @@ func coalesce(queue, add []liveChange) []liveChange {
 		queue = append(keep, c)
 	}
 	return queue
+}
+
+// ---- what is changed on the unit itself (a pad sampled or edited there) comes into the editor
+
+// pollLoop looks at the 16 pads of the bank in view every few seconds, while nothing is on its way to the unit.
+func (l *liveState) pollLoop() {
+	t := time.NewTicker(3 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-l.stop:
+			return
+		case <-t.C:
+		}
+		if ps := l.poll(); len(ps) > 0 {
+			select {
+			case l.pulls <- ps:
+			case <-l.stop:
+				return
+			}
+		}
+	}
+}
+
+// poll reads the pads of the watched bank from the unit and returns those that differ from what the unit was last given: a sample
+// that is there or gone, its name, its settings.
+func (l *liveState) poll() []pulled {
+	l.mu.Lock()
+	sig, busy := l.sig, l.running || len(l.queue) > 0
+	l.mu.Unlock()
+	if busy {
+		return nil
+	}
+	bank := int(l.watchBank.Load())
+	var out []pulled
+	for i := 0; i < 16; i++ {
+		n := bank*16 + i
+		pad, ok := proto.NewPadIndex(uint16(n))
+		if !ok {
+			continue
+		}
+		blk, err := l.dev.PadBlock(pad)
+		if err != nil {
+			return out
+		}
+		if !padDiffers(blk, sig, n) {
+			continue
+		}
+		p := pulled{n: n, block: blk.Raw()}
+		if blk.HasSample() {
+			smp, err := l.dev.ReadFile(pad.SamplePath(uint8(l.project) + 1))
+			if err != nil {
+				continue
+			}
+			p.smp = smp
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+func padDiffers(blk *proto.PadBlock, sig liveBase, n int) bool {
+	if blk.HasSample() != sig.hasFile[n] {
+		return true
+	}
+	if !blk.HasSample() {
+		return false
+	}
+	if blk.Name() != sig.names[n] {
+		return true
+	}
+	for _, pi := range proto.Params {
+		if pi.Scope != proto.ScopePad {
+			continue
+		}
+		if want, ok := sig.params[n][pi.ID]; ok {
+			if v, ok := blk.Param(pi.ID); ok && v != want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// applyPulls puts the pads that were changed on the unit into the editor, and tells the live state they are the unit's now, so that
+// they are not sent back.
+func (a *App) applyPulls(ps []pulled) {
+	l := a.live
+	if l == nil {
+		return
+	}
+	var names []string
+	for _, p := range ps {
+		if err := a.lab.PullPad(p.n, p.block, p.smp); err != nil {
+			a.say("live: "+err.Error(), true)
+			continue
+		}
+		delete(a.pcm, p.n)
+		names = append(names, a.label(p.n))
+	}
+	if len(names) == 0 {
+		return
+	}
+	a.sl = nil
+	a.refresh()
+	l.base = a.liveBaseNow(l)
+	l.mu.Lock()
+	l.sig = l.base
+	l.mu.Unlock()
+	a.say("changed on the unit: "+strings.Join(names, ", "), false)
 }

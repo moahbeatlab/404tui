@@ -28,9 +28,20 @@ type Meter struct {
 
 	mu   sync.Mutex
 	peak [2]float64
+	spec []float64 // the spectrum of the latest window, falling slowly
 	at   time.Time
 	err  error
 	tail string
+}
+
+// Spectrum is the bands of the latest window (SpectrumBands values, 0 to 1), and whether there is one yet.
+func (m *Meter) Spectrum() ([]float64, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.spec == nil || time.Since(m.at) > time.Second {
+		return nil, false
+	}
+	return append([]float64(nil), m.spec...), true
 }
 
 // Level is the peak of each channel, 0 to 1, over the latest window, and whether there is one yet.
@@ -149,16 +160,27 @@ func (m *Meter) read(r io.Reader) {
 			return
 		}
 		var peak [2]float64
+		mono := make([]float64, 0, len(buf)/4)
 		for i := 0; i+3 < len(buf); i += 4 {
+			var sum float64
 			for c := 0; c < 2; c++ {
-				v := math.Abs(float64(int16(binary.LittleEndian.Uint16(buf[i+2*c:])))) / 32768
-				if v > peak[c] {
+				s := float64(int16(binary.LittleEndian.Uint16(buf[i+2*c:]))) / 32768
+				sum += s
+				if v := math.Abs(s); v > peak[c] {
 					peak[c] = v
 				}
 			}
+			mono = append(mono, sum/2)
 		}
+		bands := Bands(mono, 48000)
 		m.mu.Lock()
 		m.peak, m.at = peak, time.Now()
+		if m.spec == nil {
+			m.spec = make([]float64, len(bands))
+		}
+		for i, v := range bands { // up at once, down slowly
+			m.spec[i] = max(v, m.spec[i]*0.82)
+		}
 		m.mu.Unlock()
 	}
 }

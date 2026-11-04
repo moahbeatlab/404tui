@@ -482,7 +482,6 @@ On a computer: the 16 projects of the unit when one is plugged in (online), else
 - `Edit it live (changes go to the unit)`
 - `Load it into the editor`
 - `Back it up to this computer`
-- `Save it into a folder...`
 - `Restore it from a backup...`
   - **restore over unit project 1** (a dialog):
     - `A folder somewhere else...`

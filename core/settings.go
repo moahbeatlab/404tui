@@ -18,6 +18,8 @@ type settings struct {
 
 	// ONLINE and OFFLINE (the PROJECTS screen of a computer): the folder of projects to work on without the unit, and the project
 	// (1..99) that was open last in it.
+	ExportDir   string `json:"export_dir,omitempty"` // where banks and projects are exported to
+	BackupDir   string `json:"backup_dir,omitempty"` // where the unit's projects are backed up to
 	OfflineDir  string `json:"offline_dir,omitempty"`
 	LastOffline int    `json:"last_offline,omitempty"`
 

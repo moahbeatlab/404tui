@@ -2,7 +2,11 @@ package core
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/moahbeatlab/404tui/app"
 )
 
 // The ranger view of FILES, for screens wide enough to hold it: the folder above on the left, this folder in the middle
@@ -53,7 +57,13 @@ func (a *App) drawRanger(g Gfx) {
 	if hasParent && a.searchQ == "" {
 		ptitle = baseName(parent)
 	}
+	if !hasParent && a.searchQ == "" {
+		ptitle = "sources"
+	}
 	pane(1, pw, ptitle, false)
+	if !hasParent && a.searchQ == "" { // the top of a source: the left column says which source this is, and what else there is
+		a.drawSources(g, 2, pw-2)
+	}
 	if hasParent && a.searchQ == "" {
 		if ents, err := a.cachedDir(&a.rParent, parent); err == nil {
 			at := -1
@@ -135,5 +145,51 @@ func (a *App) drawPreview(g Gfx, x, w int) {
 		} else {
 			g.Text(x, 3, fit(err.Error(), w), cBad, false)
 		}
+	}
+}
+
+// fileSource is a place the files can be loaded from.
+type fileSource struct{ name, dir string }
+
+// fileSources are the places `t` offers on FILES: this computer, the samples, drives, and the unit's card and storage when one is there.
+func (a *App) fileSources() []fileSource {
+	var out []fileSource
+	if home, err := os.UserHomeDir(); err == nil {
+		out = append(out, fileSource{"computer", home})
+	}
+	out = append(out, fileSource{"samples", a.Root})
+	for _, pl := range []fileSource{{"usb drive", "/mnt/usbdrive"}, {"games card", "/roms"}, {"the top", "/"}} {
+		if st, err := os.Stat(pl.dir); err == nil && st.IsDir() {
+			out = append(out, pl)
+		}
+	}
+	if _, ok := a.unitDevice(); ok {
+		out = append(out, fileSource{"SD card", app.CardRoot}, fileSource{"Unit storage", app.StorageRoot})
+	}
+	return out
+}
+
+// drawSources lists the sources in the left column, the one this folder is in lit.
+func (a *App) drawSources(g Gfx, x0, w int) {
+	src := a.fileSources()
+	at, best := -1, -1
+	for i, s := range src {
+		if a.dir == s.dir {
+			at, best = i, len(s.dir)+1 // the folder is the source's top
+		} else if strings.HasPrefix(a.dir, strings.TrimSuffix(s.dir, "/")+"/") && len(s.dir) > best {
+			at, best = i, len(s.dir)
+		}
+	}
+	for i, s := range src {
+		y := 2 + i
+		if y >= Rows-3 {
+			break
+		}
+		fg := cText
+		if i == at {
+			g.Fill(x0, y, w, 1, cPanel2)
+			fg = cAmber
+		}
+		g.Text(x0+1, y, fit(s.name, w-2), fg, i == at)
 	}
 }

@@ -126,3 +126,21 @@ func (l *Lab) PadParams(n int) map[byte]int32 {
 	}
 	return out
 }
+
+// PullPad puts a pad as the unit has it into the project: its block (the 1E payload the unit sends) and its sample file (nil for
+// a pad without one).
+func (l *Lab) PullPad(n int, block, smp []byte) error {
+	if l.pad == nil || n < 0 || n > 159 {
+		return errors.New("no such pad")
+	}
+	if _, err := proto.ParsePadBlock(block); err != nil {
+		return err
+	}
+	l.pad.Blocks[n] = append([]byte(nil), block...)
+	if smp == nil {
+		delete(l.files, padFile(n))
+	} else {
+		l.files[padFile(n)] = append([]byte(nil), smp...)
+	}
+	return nil
+}
