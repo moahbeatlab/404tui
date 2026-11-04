@@ -155,3 +155,34 @@ func TestCuesAreKept(t *testing.T) {
 		t.Fatal(CuesPathFor("/a/b.events.jsonl"))
 	}
 }
+
+func TestTitleAndOldCuesFile(t *testing.T) {
+	dir := t.TempDir()
+	r := &Replay{CuesPath: filepath.Join(dir, "x.cues.json")}
+	if err := r.SetTitle("  Friday set "); err != nil {
+		t.Fatal(err)
+	}
+	if r.Title() != "Friday set" {
+		t.Fatal(r.Title())
+	}
+	if err := r.SetCues([]Cue{{T: 1, Label: "A1"}}); err != nil {
+		t.Fatal(err)
+	}
+	var m meta
+	b, _ := os.ReadFile(r.CuesPath)
+	if json.Unmarshal(b, &m) != nil || m.Title != "Friday set" || len(m.Cues) != 1 {
+		t.Fatalf("file: %s", b)
+	}
+	// the first form of the file was only the list of cues
+	old := filepath.Join(dir, "old.cues.json")
+	os.WriteFile(old, []byte(`[{"t":2,"label":"B1"}]`), 0o644)
+	var l []Cue
+	if b, _ := os.ReadFile(old); json.Unmarshal(b, &m) == nil {
+		t.Fatal("an array must not parse as the object")
+	} else {
+		json.Unmarshal(b, &l)
+	}
+	if len(l) != 1 {
+		t.Fatal(l)
+	}
+}

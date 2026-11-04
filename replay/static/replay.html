@@ -11,6 +11,7 @@
   #stage { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
   canvas { width:100%; height:100%; object-fit:contain; background:#121214; }
   #bar { display:flex; gap:12px; align-items:center; padding:8px 16px; background:#161616; border-top:1px solid #2a2a2a; }
+  #bar input { background:#2b2b2b; color:var(--text); border:0; padding:6px 10px; font:inherit; }
   #bar button, #bar select { background:#2b2b2b; color:var(--text); border:0; padding:6px 12px; font:inherit; cursor:pointer; }
   #bar button:hover { background:#3a3a3a; }
   #seekbox { flex:1; position:relative; display:flex; }
@@ -29,6 +30,7 @@
   <button id="play" title="Space">play</button>
   <div id="seekbox"><div id="cues"></div><input id="seek" type="range" min="0" max="1000" value="0"></div>
   <span id="time">0:00.0</span>
+  <input id="title" placeholder="title" size="16" title="the title shown in the video">
   <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button>
   <select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
   <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span>
@@ -47,11 +49,18 @@ const COL = { bg:"#121214", panel:"#1b1b1e", tile:"#2c2c30", tile2:"#1d1d20", am
 const BUSCOL = { 1: COL.blue, 2: COL.red, 3: COL.green, 4: COL.gold };
 const FONT = (px, bold) => (bold ? "bold " : "") + px + "px ui-monospace, Menlo, Consolas, monospace";
 const cv = document.getElementById("c"), g = cv.getContext("2d");
-const W = cv.width, H = cv.height;
 const params = new URLSearchParams(location.search);
+// ?format=vertical (shorts, reels: 1080x1920) lays the same panels one under the other
+const VERT = ["vertical", "shorts", "reels", "9x16"].includes(params.get("format") || "");
+if (VERT) { cv.width = 1080; cv.height = 1920; }
+const W = cv.width, H = cv.height;
+// where every panel is: [x, y, w, h]. The bottom of a vertical frame is left free for what the platforms put over it.
+const L = VERT
+  ? { pads: [20, 108, 1040, 540], pattern: [20, 660, 1040, 350], fx: [20, 1022, 1040, 220], meter: [20, 1254, 1040, 270], feed: [20, 1536, 1040, 168] }
+  : { pads: [40, 80, 880, 560], pattern: [40, 656, 880, 394], fx: [960, 80, 920, 236], meter: [960, 332, 920, 452], feed: [960, 800, 920, 250] };
 if (params.get("hud") === "0") document.body.classList.add("nohud");
 
-let EV = [], AN = null, PROJ = { pads: [], patterns: [] }, FILE = "", OFFSET = 0, NUDGE = 0;
+let TITLE = "", EV = [], AN = null, PROJ = { pads: [], patterns: [] }, FILE = "", OFFSET = 0, NUDGE = 0;
 const padInfo = new Map(), patBySlot = new Map(), patByLabel = new Map();
 const otherNotes = [], padEv = new Map(), ccEv = new Map(), fxNum = new Map(), fxOn = new Map(), beats = [], transport = [], patEv = [];
 let peak = null, spec = null, lastHit = [];
@@ -126,6 +135,8 @@ function prepare(events, analysis, cuesIn) {
   const sel = document.getElementById("pat");
   for (const p of [...patBySlot.values()].sort((a, b) => a.slot - b.slot)) { const o = document.createElement("option"); o.value = p.label; o.textContent = "pattern " + p.label + " (" + p.pads.size + " pads)"; sel.appendChild(o); }
   const want = params.get("pattern");
+  const ti = document.getElementById("title"); ti.value = TITLE;
+  let tt = null; ti.oninput = () => { TITLE = ti.value; clearTimeout(tt); tt = setTimeout(() => fetch("/title", { method: "POST", body: JSON.stringify({ title: TITLE }) }).catch(() => {}), 400); };
   if (want && patByLabel.has(want)) { chosen = want; sel.value = want; }
   sel.onchange = () => {
     if (!sel.value) return;
@@ -161,9 +172,9 @@ function buildFeed(timed) {
   }
   feedStatic.sort((a, b) => a.t - b.t);
 }
-const FEED_SPAN = 4.5, FEED_LINES = 7;
+const FEED_SPAN = 4.5;
 function drawFeed(T) {
-  const x0 = 960, y0 = 800, w = 920, h = 250;
+  const [x0, y0, w, h] = L.feed;
   panel(x0, y0, w, h, "EVENTS");
   const items = [];
   let i = atIndex(feedStatic, T);
@@ -171,7 +182,7 @@ function drawFeed(T) {
   for (const e of patEv) if (e.now && e.t <= T && e.t > T - FEED_SPAN) items.push({ t: e.t, text: "PATTERN", val: e.now, col: COL.purple });
   items.sort((a, b) => b.t - a.t);
   const seen = new Set(), out = []; // a knob that moves is one line: its latest value
-  for (const it of items) { if (it.key) { if (seen.has(it.key)) continue; seen.add(it.key); } out.push(it); if (out.length >= FEED_LINES) break; }
+  for (const it of items) { if (it.key) { if (seen.has(it.key)) continue; seen.add(it.key); } out.push(it); if (out.length >= Math.floor((h - 52) / 28)) break; }
   out.forEach((it, k) => {
     const age = T - it.t, y = y0 + 44 + k * 28;
     g.globalAlpha = clamp(1 - Math.pow(age / FEED_SPAN, 2), 0, 1);
@@ -265,31 +276,41 @@ function patternAt(T) {
 // ---- drawing
 function rect(x, y, w, h, c) { g.fillStyle = c; g.fillRect(x, y, w, h); }
 function rrect(x, y, w, h, r, c) { g.fillStyle = c; g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); }
-function text(s, x, y, c, px, bold, align) { g.fillStyle = c; g.font = FONT(px || 22, bold); g.textAlign = align || "left"; g.textBaseline = "alphabetic"; g.fillText(s, x, y); }
+function text(s, x, y, c, px, bold, align) { g.fillStyle = c; g.font = FONT((px || 22) * (VERT ? 1.22 : 1), bold); g.textAlign = align || "left"; g.textBaseline = "alphabetic"; g.fillText(s, x, y); }
 function fit(s, n) { return s.length > n ? s.slice(0, n - 1) + "~" : s; }
 const mix = (c1, c2, t) => { const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const a = p(c1), b = p(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; };
 function panel(x, y, w, h, title) { rrect(x, y, w, h, 12, COL.panel); if (title) text(title, x + 16, y + 30, COL.dim, 20, true); }
 const mmss = t => { t = Math.max(t, 0); return Math.floor(t / 60) + ":" + (t % 60).toFixed(1).padStart(4, "0"); };
 
 function drawHeader(T, A) {
+  const pos = playPosition(T), run = running(T);
+  const bar = pos ? Math.floor(pos.q / 4) + 1 : null, beat = pos ? Math.floor(pos.q % 4) + 1 : null;
+  const tp = tempoAt(T), bpm = tp.bpm, bpmText = bpm ? (Number.isInteger(bpm) ? bpm : bpm.toFixed(1)) + " BPM" : "";
+  const dur = AN ? AN.duration : 0, name = TITLE || PROJ.name || "";
+  if (VERT) {
+    rect(0, 0, W, 100, "#161616");
+    text(fit(name, 30), 24, 44, TITLE ? COL.text : COL.amber, 32, true);
+    text(mmss(A) + " / " + mmss(dur), W - 24, 44, COL.dim, 22, false, "right");
+    text(bpmText, 24, 86, tp.src === "project" ? COL.dim : COL.amber, 34, true);
+    text(pos ? "BAR " + bar + "  BEAT " + beat : "", 300, 84, COL.text, 24);
+    text(run ? "PLAY" : "STOP", W - 24, 84, run ? COL.good : COL.dim, 26, true, "right");
+    return;
+  }
   rect(0, 0, W, 64, "#161616");
   text("404tui", 28, 42, COL.amber, 30, true);
   text("REPLAY", 150, 42, COL.text, 26, true);
-  text(fit(PROJ.name || "", 24) + "   " + fit(FILE, 40), 300, 42, COL.dim, 22);
-  const pos = playPosition(T), run = running(T);
-  const bar = pos ? Math.floor(pos.q / 4) + 1 : null, beat = pos ? Math.floor(pos.q % 4) + 1 : null;
-  const tp = tempoAt(T), bpm = tp.bpm;
-  text(bpm ? (Number.isInteger(bpm) ? bpm : bpm.toFixed(1)) + " BPM" : "", 1000, 44, tp.src === "project" ? COL.dim : COL.amber, 34, true);
+  if (TITLE) text(fit(TITLE, 34), 300, 44, COL.text, 30, true);
+  else text(fit(PROJ.name || "", 24) + "   " + fit(FILE, 40), 300, 42, COL.dim, 22);
+  text(bpmText, 1000, 44, tp.src === "project" ? COL.dim : COL.amber, 34, true);
   text(pos ? "BAR " + bar + "  BEAT " + beat : "no clock: the project's tempo", 1240, 42, pos ? COL.text : COL.dim, 22);
   text(run ? "PLAY" : "STOP", 1560, 42, run ? COL.good : COL.dim, 26, true);
-  text(mmss(A) + " / " + mmss(AN ? AN.duration : 0), W - 28, 42, COL.text, 24, false, "right");
+  text(mmss(A) + " / " + mmss(dur), W - 28, 42, COL.text, 24, false, "right");
 }
-
 function drawPads(T) {
-  const x0 = 40, y0 = 80, w = 880, h = 560;
+  const [x0, y0, w, h] = L.pads;
   panel(x0, y0, w, h);
   const bank = bankInView(T), b = bank.charCodeAt(0) - 65;
-  const tw = 205, th = 108, gap = 12, gx = x0 + 20, gy = y0 + 18;
+  const gap = 12, tw = (w - 40 - 3 * gap) / 4, th = (h - 18 - 56 - 3 * gap) / 4, gx = x0 + 20, gy = y0 + 18;
   const cur = patternAt(T), inPat = cur ? cur.p.pads : null; // the pads of the pattern that plays are outlined
   for (let i = 0; i < 16; i++) {
     const n = b * 16 + i, row = Math.floor(i / 4), col = i % 4;
@@ -311,20 +332,20 @@ function drawPads(T) {
     const dark = glow > 0.5;
     text(String.fromCharCode(65 + b) + (i + 1), x + 20, y + 28, dark ? "#111" : COL.amber, 24, true);
     if (info) {
-      text(fit(info.name, 17), x + 20, y + 54, dark ? "#111" : COL.text, 19);
+      text(fit(info.name, Math.floor((tw - 30) / (VERT ? 14.2 : 11.5))), x + 20, y + 54, dark ? "#111" : COL.text, 19);
       const pk = info.peaks || [];
       for (let k = 0; k < pk.length; k++) {
         const bh = Math.max(2, pk[k] / 100 * (th - 78));
-        rect(x + 20 + k * 5.2, y + th - 10 - bh, 3.6, bh, dark ? "#5a4000" : mix("#444444", "#ffb000", 0.35));
+        rect(x + 20 + k * (tw - 40) / pk.length, y + th - 10 - bh, Math.max((tw - 40) / pk.length * 0.7, 2), bh, dark ? "#5a4000" : mix("#444444", "#ffb000", 0.35));
       }
     } else text("empty", x + 20, y + 54, COL.dim, 19);
   }
   for (let k = 0; k < 10; k++) {
-    const x = gx + k * 86, y = y0 + h - 48;
+    const sp = (w - 40) / 10, x = gx + k * sp, y = y0 + h - 48;
     const letter = String.fromCharCode(65 + k);
     let act = 0; for (let i = 1; i <= 16; i++) { const st = padState(letter, i, T); if (st && (st.held || T - st.hitAt < 0.4)) act = 1; }
-    rect(x, y, 78, 32, k === b ? COL.amber : mix("#2b2b2b", "#7a5a00", act));
-    text(letter, x + 39, y + 23, k === b ? "#111" : COL.dim, 20, true, "center");
+    rect(x, y, sp - 8, 32, k === b ? COL.amber : mix("#2b2b2b", "#7a5a00", act));
+    text(letter, x + (sp - 8) / 2, y + 23, k === b ? "#111" : COL.dim, 20, true, "center");
   }
 }
 
@@ -344,7 +365,7 @@ function mutedGuess(pad, p, T) {
 }
 
 function drawPattern(T) {
-  const x0 = 40, y0 = 656, w = 880, h = 394;
+  const [x0, y0, w, h] = L.pattern;
   panel(x0, y0, w, h);
   const r = patternAt(T);
   if (!r) { text("PATTERN", x0 + 16, y0 + 30, COL.dim, 20, true); text("not known: the unit did not say.", x0 + 16, y0 + 80, COL.dim, 22); text("Pick it in the bar below where it starts.", x0 + 16, y0 + 112, COL.dim, 22); return; }
@@ -434,7 +455,7 @@ function knob(cx, cy, r, v, label, c, hist, T) {
 
 // the four buses side by side, in one row
 function drawFx(T) {
-  const x0 = 960, y0 = 80, w = 920, h = 236;
+  const [x0, y0, w, h] = L.fx;
   panel(x0, y0, w, h);
   const bw = w / 4;
   for (let bus = 1; bus <= 4; bus++) {
@@ -457,7 +478,7 @@ function drawFx(T) {
 
 function levelDb(v) { return v <= 0 ? -Infinity : 20 * Math.log10(v); }
 function drawMeter(T) {
-  const x0 = 960, y0 = 332, w = 920, h = 452;
+  const [x0, y0, w, h] = L.meter;
   panel(x0, y0, w, h, "LEVEL");
   if (!peak) { text("no analysis of the audio", x0 + 16, y0 + 80, COL.dim, 22); return; }
   const f = clamp(Math.floor(T_audio * AN.fps), 0, AN.frames - 1);
@@ -477,7 +498,7 @@ function drawMeter(T) {
     for (let k = 0; k < 6; k++) if (peak[Math.max(f - k, 0) * 2 + c] > 65535 * 0.966) clip = true;
   }
   if (clip) { rect(x0 + w - 110, y0 + 10, 90, 28, COL.bad); text("CLIP", x0 + w - 65, y0 + 32, "#111", 20, true, "center"); }
-  const sx = x0 + 24, sy = y0 + 134, sw = w - 48, sh = 200, nb = AN.bands;
+  const sx = x0 + 24, sy = y0 + 134, sw = w - 48, sh = Math.max(h - 134 - 34 - (VERT ? 12 : 66), 40), nb = AN.bands;
   rect(sx, sy, sw, sh, "#161616");
   const bwid = sw / nb;
   for (let i = 0; i < nb; i++) {
@@ -487,7 +508,7 @@ function drawMeter(T) {
     rect(sx + i * bwid + 1, sy + sh - 4 - bh, bwid - 2, Math.max(bh, 2), mix("#ffb000", "#ff5f5f", clamp(v - 0.6, 0, 0.4) / 0.4));
   }
   text("30 Hz", sx + 4, sy + sh + 18, COL.dim, 14); text("18 kHz", sx + sw, sy + sh + 18, COL.dim, 14, false, "right");
-  drawTempo(x0 + 24, y0 + 384, w - 48, 54, T);
+  if (!VERT) drawTempo(x0 + 24, y0 + h - 68, w - 48, 54, T);
 }
 
 // the tempo over the whole take: the tempo of the bank of each pattern in turn (the clock where no pattern is known)
@@ -551,7 +572,7 @@ seek.oninput = () => { const d = AN ? AN.duration : audio.duration; audio.curren
 speed.onchange = () => { audio.playbackRate = parseFloat(speed.value); };
 document.getElementById("full").onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
 addEventListener("keydown", e => {
-  if (e.target.tagName === "SELECT") return;
+  if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT" && e.target.id === "title") return;
   if (e.code === "Space") { e.preventDefault(); play.onclick(); }
   else if (e.key === "ArrowLeft") audio.currentTime = Math.max(audio.currentTime - (e.shiftKey ? 30 : 5), 0);
   else if (e.key === "ArrowRight") audio.currentTime += e.shiftKey ? 30 : 5;
@@ -564,7 +585,7 @@ async function start() {
   const msg = document.getElementById("msg");
   try {
     const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
-    FILE = ev.file; prepare(ev.events, an, ev.cues);
+    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; prepare(ev.events, an, ev.cues);
   } catch (e) { msg.textContent = "could not load the replay: " + e; msg.style.display = "block"; return; }
   const t0 = parseFloat(params.get("t") || "0");
   if (t0) audio.currentTime = t0;

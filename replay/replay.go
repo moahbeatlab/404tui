@@ -28,9 +28,16 @@ type Replay struct {
 	AudioPath, EventsPath string
 	Events                []perflog.Entry
 	Analysis              *Analysis
-	CuesPath              string // the patterns that were set by hand, beside the event log
+	CuesPath              string // the title and the patterns that were set by hand, beside the event log
 	mu                    sync.Mutex
+	title                 string
 	cues                  []Cue
+}
+
+// meta is what is kept beside the event log: the title of the video and the cues (an older file is just the list of cues).
+type meta struct {
+	Title string `json:"title,omitempty"`
+	Cues  []Cue  `json:"cues"`
 }
 
 // Cue says which pattern plays from a time of the log on: the unit does not tell when the pattern is changed.
@@ -58,13 +65,32 @@ func (r *Replay) SetCues(c []Cue) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.cues = append([]Cue{}, c...)
-	if len(c) == 0 {
+	return r.save()
+}
+
+// Title is the title of the video ("" when none was set).
+func (r *Replay) Title() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.title
+}
+
+// SetTitle changes the title and keeps it in the file.
+func (r *Replay) SetTitle(t string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.title = strings.TrimSpace(t)
+	return r.save()
+}
+
+func (r *Replay) save() error {
+	if r.title == "" && len(r.cues) == 0 {
 		if err := os.Remove(r.CuesPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 		return nil
 	}
-	b, _ := json.MarshalIndent(c, "", " ")
+	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues}, "", " ")
 	return os.WriteFile(r.CuesPath, b, 0o644)
 }
 
@@ -89,7 +115,12 @@ func Load(audioPath, eventsPath string) (*Replay, error) {
 	}
 	r := &Replay{AudioPath: audioPath, EventsPath: eventsPath, Events: ev, Analysis: an, CuesPath: CuesPathFor(eventsPath)}
 	if b, err := os.ReadFile(r.CuesPath); err == nil {
-		json.Unmarshal(b, &r.cues)
+		var m meta
+		if json.Unmarshal(b, &m) == nil {
+			r.title, r.cues = m.Title, m.Cues
+		} else {
+			json.Unmarshal(b, &r.cues) // the first form of the file: the list of cues
+		}
 	}
 	return r, nil
 }
@@ -117,7 +148,21 @@ func (r *Replay) Handler() http.Handler {
 	})
 	mux.HandleFunc("/events.json", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues()})
+		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title()})
+	})
+	mux.HandleFunc("/title", func(w http.ResponseWriter, req *http.Request) {
+		var t struct {
+			Title string `json:"title"`
+		}
+		if req.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<16)).Decode(&t) != nil {
+			http.Error(w, "POST {\"title\": ...}", http.StatusBadRequest)
+			return
+		}
+		if err := r.SetTitle(t.Title); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/cues", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {

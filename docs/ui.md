@@ -148,7 +148,11 @@ only known once it changes.
 **Replay.** `sp404 replay take.wav` (the event log is the file beside the WAV, or give it as a second argument) opens a page in the browser that plays
 the recording and draws what the unit did: the pads that were hit, the pattern with its playhead and the settings of its pads, the four buses
 with their effect and knobs and the movement of the knobs, the BPM, the level and the spectrum. The two files are enough: the log holds the
-project. The page can be driven frame by frame, so that it can be rendered into a video. A first draft; see `replay/`.
+project. The unit does not tell which pattern plays: choose it in the bar where it starts ("pattern from here..."; it snaps to the loop start),
+and the pads follow the pattern's bank. Events that happen (a pad pressed, a knob moved, an effect, start/stop, the pattern) show for a moment in
+a list. The title of the video is typed in the bar; the title and the patterns are kept beside the log (`name.events.cues.json`). `?format=vertical`
+gives the 1080x1920 layout for shorts and reels (the bottom is left free for what the platforms put over it); `?title=...` sets a title for one
+viewing. The page can be driven frame by frame, so that it can be rendered into a video. A first draft; see `replay/`.
 
 ## The unit: whole projects, and live
 
