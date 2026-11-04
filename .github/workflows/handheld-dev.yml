@@ -1,11 +1,9 @@
 name: handheld-dev
 
-# Every push to cli-lab builds the handheld program (no cgo, arm64) and puts it in ONE rolling pre-release,
-# dev-cli-lab, replacing the one before. The launcher on the R36S downloads it from there (packaging/arkos/404tui.sh).
-# A stable channel is a normal release (release.yml); this one is only for trying things.
+# Builds the handheld program (no cgo, arm64) and puts it in ONE rolling pre-release, dev-cli-lab, replacing the one before. The launcher
+# on the R36S downloads it from there (packaging/arkos/404tui.sh). It runs only when asked (Actions > handheld-dev > Run workflow, or
+# `gh workflow run handheld-dev.yml --ref cli-lab`), not on every push. A stable channel is a normal release (release.yml).
 on:
-  push:
-    branches: [cli-lab]
   workflow_dispatch:
 
 permissions:

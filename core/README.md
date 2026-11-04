@@ -381,7 +381,7 @@ actions (rename, find, export, restore, copy and move patterns), recording a set
 
 ## Updating the handheld over WiFi
 
-Every push to `cli-lab` builds `sp404tui-arm64` in GitHub Actions (`.github/workflows/handheld-dev.yml`) and puts it, with
+When asked for (Actions > handheld-dev > Run workflow, or `gh workflow run handheld-dev.yml --ref cli-lab`; not on every push) GitHub Actions builds `sp404tui-arm64` (`.github/workflows/handheld-dev.yml`) and puts it, with
 its `.sha256`, into one rolling pre-release, `dev-cli-lab`, replacing the one before. The launcher (`packaging/arkos/404tui.sh`)
 asks for the checksum at every start; when it differs it downloads the program, checks the checksum, checks that it runs,
 keeps the old one as `sp404tui-arm64.prev` and starts the new one. Offline, or when anything fails, the program that is
