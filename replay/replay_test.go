@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/moahbeatlab/404tui/perflog"
@@ -132,5 +133,25 @@ func TestReplayServesThePageTheEventsAndTheAnalysis(t *testing.T) {
 	}
 	if _, err := Load(filepath.Join(dir, "none.wav"), ""); err == nil {
 		t.Fatal("a missing file is an error")
+	}
+}
+
+func TestCuesAreKept(t *testing.T) {
+	r := &Replay{CuesPath: filepath.Join(t.TempDir(), "x.cues.json")}
+	if err := r.SetCues([]Cue{{T: 6.3, Label: "A2"}}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(r.CuesPath)
+	if !strings.Contains(string(b), "A2") {
+		t.Fatalf("not kept: %s", b)
+	}
+	if err := r.SetCues(nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(r.CuesPath); err == nil {
+		t.Fatal("empty cues should remove the file")
+	}
+	if CuesPathFor("/a/b.events.jsonl") != "/a/b.events.cues.json" {
+		t.Fatal(CuesPathFor("/a/b.events.jsonl"))
 	}
 }

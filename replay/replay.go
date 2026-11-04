@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/moahbeatlab/404tui/perflog"
@@ -26,6 +28,40 @@ type Replay struct {
 	AudioPath, EventsPath string
 	Events                []perflog.Entry
 	Analysis              *Analysis
+	CuesPath              string // the patterns that were set by hand, beside the event log
+	mu                    sync.Mutex
+	cues                  []Cue
+}
+
+// Cue says which pattern plays from a time of the log on: the unit does not tell when the pattern is changed.
+type Cue struct {
+	T     float64 `json:"t"`
+	Label string  `json:"label"`
+}
+
+// CuesPathFor is where the cues of an event log are kept.
+func CuesPathFor(events string) string { return strings.TrimSuffix(events, ".jsonl") + ".cues.json" }
+
+// Cues are the patterns set by hand.
+func (r *Replay) Cues() []Cue {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]Cue{}, r.cues...)
+}
+
+// SetCues replaces the cues and keeps them in the file.
+func (r *Replay) SetCues(c []Cue) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cues = append([]Cue{}, c...)
+	if len(c) == 0 {
+		if err := os.Remove(r.CuesPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	b, _ := json.MarshalIndent(c, "", " ")
+	return os.WriteFile(r.CuesPath, b, 0o644)
 }
 
 // Load reads the event log (the file beside the audio when eventsPath is empty) and analyses the audio.
@@ -47,7 +83,11 @@ func Load(audioPath, eventsPath string) (*Replay, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Replay{AudioPath: audioPath, EventsPath: eventsPath, Events: ev, Analysis: an}, nil
+	r := &Replay{AudioPath: audioPath, EventsPath: eventsPath, Events: ev, Analysis: an, CuesPath: CuesPathFor(eventsPath)}
+	if b, err := os.ReadFile(r.CuesPath); err == nil {
+		json.Unmarshal(b, &r.cues)
+	}
+	return r, nil
 }
 
 // Handler is the web side: the page and what it asks for.
@@ -73,7 +113,23 @@ func (r *Replay) Handler() http.Handler {
 	})
 	mux.HandleFunc("/events.json", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events})
+		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues()})
+	})
+	mux.HandleFunc("/cues", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "POST the cues", http.StatusMethodNotAllowed)
+			return
+		}
+		var c []Cue
+		if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20)).Decode(&c); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := r.SetCues(c); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/analysis.json", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

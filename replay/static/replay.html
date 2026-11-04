@@ -13,7 +13,10 @@
   #bar { display:flex; gap:12px; align-items:center; padding:8px 16px; background:#161616; border-top:1px solid #2a2a2a; }
   #bar button, #bar select { background:#2b2b2b; color:var(--text); border:0; padding:6px 12px; font:inherit; cursor:pointer; }
   #bar button:hover { background:#3a3a3a; }
+  #seekbox { flex:1; position:relative; display:flex; }
   #seek { flex:1; accent-color:var(--amber); }
+  #cues { position:absolute; left:8px; right:8px; top:-12px; height:12px; pointer-events:none; }
+  #cues span { position:absolute; transform:translateX(-50%); background:var(--amber); color:#000; font-size:10px; padding:0 3px; cursor:pointer; pointer-events:auto; }
   #time { min-width:150px; text-align:right; color:var(--dim); }
   #nudge { color:var(--dim); min-width:110px; }
   body.nohud #bar { display:none; }
@@ -24,9 +27,9 @@
 <div id="stage"><canvas id="c" width="1920" height="1080"></canvas></div>
 <div id="bar">
   <button id="play" title="Space">play</button>
-  <input id="seek" type="range" min="0" max="1000" value="0">
+  <div id="seekbox"><div id="cues"></div><input id="seek" type="range" min="0" max="1000" value="0"></div>
   <span id="time">0:00.0</span>
-  <select id="pat" title="the pattern that plays: the unit did not say"><option value="">pattern: auto</option></select>
+  <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button>
   <select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
   <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span>
   <button id="full" title="f">full screen</button>
@@ -52,6 +55,32 @@ let EV = [], AN = null, PROJ = { pads: [], patterns: [] }, FILE = "", OFFSET = 0
 const padInfo = new Map(), patBySlot = new Map(), patByLabel = new Map();
 const otherNotes = [], padEv = new Map(), ccEv = new Map(), fxNum = new Map(), fxOn = new Map(), beats = [], transport = [], patEv = [];
 let peak = null, spec = null, lastHit = [];
+const loopStarts = []; // the unit marks every loop of the pattern with a note (channel 13, note 48)
+let cues = [];         // the patterns set by hand: { t (time of the log), label }, kept by the server beside the event log
+const recordedPat = [];
+function rebuildCues() {
+  if (!recordedPat.length) recordedPat.push(...patEv);
+  patEv.length = 0;
+  patEv.push(...recordedPat, ...cues.map(c => ({ t: c.t, now: c.label, next: "", cue: true })));
+  patEv.sort((a, b) => a.t - b.t);
+  const box = document.getElementById("cues"); if (!box) return;
+  box.textContent = "";
+  const d = AN ? AN.duration : 0;
+  for (const c of cues) {
+    if (!d) break;
+    const sp = document.createElement("span"); sp.textContent = c.label; sp.title = "click to remove this cue";
+    sp.style.left = clamp((c.t - OFFSET) / d * 100, 0, 100) + "%";
+    sp.onclick = () => { cues = cues.filter(x => x !== c); rebuildCues(); saveCues(); };
+    box.appendChild(sp);
+  }
+}
+function saveCues() { fetch("/cues", { method: "POST", body: JSON.stringify(cues) }).catch(() => {}); }
+// the pattern changes at the start of a loop: a cue is put on the loop start nearest to the time
+function snapLoop(T) {
+  let best = T, bd = 1.9;
+  for (const l of loopStarts) { const d = Math.abs(l - T); if (d < bd) { bd = d; best = l; } }
+  return best;
+}
 
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 // the last item of a sorted list with t <= T (or null)
@@ -67,7 +96,7 @@ function atIndex(list, T) {
 }
 const push = (map, key, v) => { if (!map.has(key)) map.set(key, []); map.get(key).push(v); };
 
-function prepare(events, analysis) {
+function prepare(events, analysis, cuesIn) {
   EV = events; AN = analysis;
   const timed = EV.filter(e => e.t !== undefined);
   const ps = [...timed].reverse().find(e => e.k === "project"); // the last: the unit's own project when it was read
@@ -85,13 +114,23 @@ function prepare(events, analysis) {
       case "start": case "stop": case "continue": transport.push({ t: e.t, k: e.k }); break;
       case "pattern": patEv.push({ t: e.t, now: e.now, next: e.next }); break;
     }
+    if (e.k === "on" && e.ch === 13 && e.n === 48) loopStarts.push(e.t);
   }
+  cues = (cuesIn || []).map(c => ({ t: c.t, label: c.label }));
+  rebuildCues();
   const bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
   const sel = document.getElementById("pat");
   for (const p of [...patBySlot.values()].sort((a, b) => a.slot - b.slot)) { const o = document.createElement("option"); o.value = p.label; o.textContent = "pattern " + p.label + " (" + p.pads.size + " pads)"; sel.appendChild(o); }
   const want = params.get("pattern");
   if (want && patByLabel.has(want)) { chosen = want; sel.value = want; }
-  sel.onchange = () => { chosen = sel.value || null; };
+  sel.onchange = () => {
+    if (!sel.value) return;
+    const T = snapLoop(audio.currentTime + OFFSET + NUDGE / 1000);
+    cues = cues.filter(c => Math.abs(c.t - T) > 0.05);
+    cues.push({ t: +T.toFixed(3), label: sel.value });
+    sel.value = ""; rebuildCues(); saveCues();
+  };
+  document.getElementById("clearcues").onclick = () => { cues = []; rebuildCues(); saveCues(); };
   if (AN && AN.frames) { peak = new Uint16Array(bytes(AN.peak).buffer); spec = bytes(AN.spec); }
 }
 
@@ -131,7 +170,7 @@ let sticky = null, chosen = null;
 function patternAt(T) {
   if (chosen && patByLabel.has(chosen)) return { p: patByLabel.get(chosen), how: "chosen" };
   const e = at(patEv, T);
-  if (e && e.now && patByLabel.has(e.now)) return { p: patByLabel.get(e.now), how: "known" };
+  if (e && e.now && patByLabel.has(e.now)) return { p: patByLabel.get(e.now), how: e.cue ? "cue" : "known" };
   // no word from the unit: the pattern whose pads are the ones just heard
   const pos = playPosition(T), bpm = pos ? pos.bpm : 120;
   const hits = new Set();
@@ -230,9 +269,9 @@ function drawPattern(T) {
   const x0 = 40, y0 = 656, w = 880, h = 394;
   panel(x0, y0, w, h);
   const r = patternAt(T);
-  if (!r) { text("PATTERN", x0 + 16, y0 + 30, COL.dim, 20, true); text("not known: the unit did not say and sent no notes. Choose one in the bar below (or ?pattern=A1)", x0 + 16, y0 + 80, COL.dim, 22); return; }
+  if (!r) { text("PATTERN", x0 + 16, y0 + 30, COL.dim, 20, true); text("not known: the unit did not say and sent no notes. Choose one in the bar below at the time it starts (or ?pattern=A1)", x0 + 16, y0 + 80, COL.dim, 22); return; }
   const p = r.p, steps = Math.max(Math.round(p.length / 120), 16);
-  text("PATTERN " + p.label + "   " + p.bars + " bars" + (r.how === "guess" ? "   (guessed from the pads)" : r.how === "chosen" ? "   (chosen)" : ""), x0 + 16, y0 + 30, COL.amber, 20, true);
+  text("PATTERN " + p.label + "   " + p.bars + " bars" + (r.how === "guess" ? "   (guessed from the pads)" : r.how === "chosen" ? "   (chosen)" : r.how === "cue" ? "   (set by hand)" : ""), x0 + 16, y0 + 30, COL.amber, 20, true);
   const pads = [...p.pads].sort((a, b) => a - b).slice(0, 10);
   const rows = Math.max(pads.length, 1), rh = Math.min(32, (h - 70) / rows);
   const ix = x0 + 12, iw = 330;           // the pads of the pattern: their settings
@@ -392,7 +431,7 @@ async function start() {
   const msg = document.getElementById("msg");
   try {
     const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
-    FILE = ev.file; prepare(ev.events, an);
+    FILE = ev.file; prepare(ev.events, an, ev.cues);
   } catch (e) { msg.textContent = "could not load the replay: " + e; msg.style.display = "block"; return; }
   const t0 = parseFloat(params.get("t") || "0");
   if (t0) audio.currentTime = t0;
