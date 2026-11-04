@@ -41,6 +41,8 @@ commands:
   replay <wav> [events.jsonl]
                  show a recorded performance in the browser: the sound with what the unit did (pads, pattern, effects,
                  level, spectrum); the event log is the file beside the WAV (name.events.jsonl) unless one is given
+  probe pad|pc   try what the unit does when it is told: press a pad over USB (probe pad A1), or send a Program Change at once
+                 or at the next loop start and print what comes back (probe pc A 2 loop); see sp404 probe
   midimap        print the map of the Faderfox EC4 for 404tui (one group of 16 pushes)
   check          check this installation: the computer, the program on a simulated unit, a plugged-in unit
   doctor         read-only checks of this program against the unit; run it first
@@ -227,6 +229,8 @@ func run(args []string, o options) error {
 		return runUI(o, l, true)
 	case "replay":
 		return runReplay(args[1:], o)
+	case "probe":
+		return runProbe(args[1:], o, l.Logger)
 	}
 
 	dev, err := open(o, l.Logger)
