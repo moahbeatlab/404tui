@@ -152,7 +152,9 @@ project. The unit does not tell which pattern plays: choose it in the bar where 
 and the pads follow the pattern's bank. Events that happen (a pad pressed, a knob moved, an effect, start/stop, the pattern) show for a moment in
 a list. The title of the video is typed in the bar; the title and the patterns are kept beside the log (`name.events.cues.json`). `?format=vertical`
 gives the 1080x1920 layout for shorts and reels (the bottom is left free for what the platforms put over it); `?title=...` sets a title for one
-viewing. The page can be driven frame by frame, so that it can be rendered into a video. A first draft; see `replay/`.
+viewing. The "style" button in the bar sets the look of the video: a palette (404 dark, midnight, neon, forest, mono), an accent colour, a
+background (the palette's, a colour, a gradient or a picture), a logo, a handle (`@name`) and a subtitle; it is kept in the same file, and
+`?preset=neon&accent=%23ff3b30&handle=@name&subtitle=...` sets it for one viewing. The page can be driven frame by frame, so that it can be rendered into a video. A first draft; see `replay/`.
 
 ## The unit: whole projects, and live
 

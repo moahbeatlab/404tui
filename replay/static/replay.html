@@ -20,7 +20,12 @@
   #cues span { position:absolute; transform:translateX(-50%); background:var(--amber); color:#000; font-size:10px; padding:0 3px; cursor:pointer; pointer-events:auto; }
   #time { min-width:150px; text-align:right; color:var(--dim); }
   #nudge { color:var(--dim); min-width:110px; }
-  body.nohud #bar { display:none; }
+  body.nohud #bar, body.nohud #stylebox { display:none !important; }
+  #stylebox { position:fixed; right:16px; bottom:60px; background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; max-width:min(440px, 92vw); }
+  #stylebox.open { display:flex; }
+  #stylebox label { display:flex; gap:8px; align-items:center; justify-content:space-between; color:var(--dim); }
+  #stylebox input[type=color] { width:44px; height:26px; padding:0; border:0; background:none; }
+  #stylebox input, #stylebox select, #stylebox button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
   #msg { position:fixed; left:50%; top:45%; transform:translateX(-50%); background:#2b2b2b; padding:16px 24px; display:none; }
 </style>
 </head>
@@ -34,7 +39,20 @@
   <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button>
   <select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
   <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span>
+  <button id="stylebtn" title="colours, background, logo, handle">style</button>
   <button id="full" title="f">full screen</button>
+</div>
+<div id="stylebox">
+  <label>look <select id="s_preset"></select></label>
+  <label>accent <input id="s_accent" type="color" value="#ffb000"> <button id="s_accent_auto" title="the colour of the look">auto</button></label>
+  <label>background <select id="s_bgkind"><option value="preset">the look's</option><option value="solid">colour</option><option value="gradient">gradient</option><option value="image">picture</option></select></label>
+  <label>colours <input id="s_bg1" type="color" value="#000000"> <input id="s_bg2" type="color" value="#1b1b2e"></label>
+  <label>picture <input id="s_bgimg" type="file" accept="image/*"></label>
+  <label>picture dimmed <input id="s_bgdim" type="range" min="0" max="95" value="60"></label>
+  <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
+  <label>handle <input id="s_handle" placeholder="@yourname" size="18"></label>
+  <label>subtitle <input id="s_sub" placeholder="under the title" size="22"></label>
+  <button id="s_reset">reset the look</button>
 </div>
 <div id="msg"></div>
 <audio id="audio" preload="auto" src="/audio"></audio>
@@ -44,7 +62,7 @@
 // ---- the page of a replay: everything on the screen is a function of the time, so that it can be watched (the audio drives the time)
 // and rendered frame by frame (a program sets the time: window.replay.setTime(t)).
 // the colours of 404jam (src/styles/main.css), so that the replay looks like the rest of the family
-const COL = { bg:"#121214", panel:"#1b1b1e", tile:"#2c2c30", tile2:"#1d1d20", amber:"#ffb000", amberD:"#7a5a00", text:"#ececf0", dim:"#9a9aa4", line:"#34343a",
+const COL = { bg:"#121214", deep:"#161616", panel:"#1b1b1e", tile:"#2c2c30", tile2:"#1d1d20", amber:"#ffb000", amberD:"#7a5a00", amberDD:"#5a4000", text:"#ececf0", dim:"#9a9aa4", line:"#34343a",
               good:"#87d787", bad:"#ff5f5f", blue:"#5fafff", red:"#ff3b30", green:"#3ddc84", gold:"#ffb300", purple:"#c792ea" };
 const BUSCOL = { 1: COL.blue, 2: COL.red, 3: COL.green, 4: COL.gold };
 const FONT = (px, bold) => (bold ? "bold " : "") + px + "px ui-monospace, Menlo, Consolas, monospace";
@@ -285,7 +303,8 @@ function rrect(x, y, w, h, r, c) { g.fillStyle = c; g.beginPath(); g.roundRect(x
 function text(s, x, y, c, px, bold, align) { g.fillStyle = c; g.font = FONT((px || 22) * (VERT ? 1.22 : 1), bold); g.textAlign = align || "left"; g.textBaseline = "alphabetic"; g.fillText(s, x, y); }
 function fit(s, n) { return s.length > n ? s.slice(0, n - 1) + "~" : s; }
 const mix = (c1, c2, t) => { const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const a = p(c1), b = p(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; };
-function panel(x, y, w, h, title) { rrect(x, y, w, h, 12, COL.panel); if (title) text(title, x + 16, y + 30, COL.dim, 20, true); }
+let PANEL_A = 1;
+function panel(x, y, w, h, title) { g.globalAlpha = PANEL_A; rrect(x, y, w, h, 12, COL.panel); g.globalAlpha = 1; if (title) text(title, x + 16, y + 30, COL.dim, 20, true); }
 const mmss = t => { t = Math.max(t, 0); return Math.floor(t / 60) + ":" + (t % 60).toFixed(1).padStart(4, "0"); };
 
 function drawHeader(T, A) {
@@ -294,7 +313,7 @@ function drawHeader(T, A) {
   const tp = tempoAt(T), bpm = tp.bpm, bpmText = bpm ? (Number.isInteger(bpm) ? bpm : bpm.toFixed(1)) + " BPM" : "";
   const dur = AN ? AN.duration : 0, name = TITLE || PROJ.name || "";
   if (VERT) {
-    rect(0, 0, W, 100, "#161616");
+    rect(0, 0, W, 100, COL.deep);
     text(fit(name, 30), 24, 44, TITLE ? COL.text : COL.amber, 32, true);
     text(mmss(A) + " / " + mmss(dur), W - 24, 44, COL.dim, 22, false, "right");
     text(bpmText, 24, 86, tp.src === "project" ? COL.dim : COL.amber, 34, true);
@@ -302,10 +321,10 @@ function drawHeader(T, A) {
     text(run ? "PLAY" : "STOP", W - 24, 84, run ? COL.good : COL.dim, 26, true, "right");
     return;
   }
-  rect(0, 0, W, 64, "#161616");
+  rect(0, 0, W, 64, COL.deep);
   text("404tui", 28, 42, COL.amber, 30, true);
   text("REPLAY", 150, 42, COL.text, 26, true);
-  if (TITLE) text(fit(TITLE, 34), 300, 44, COL.text, 30, true);
+  if (TITLE) { text(fit(TITLE, 34), 300, 44, COL.text, 30, true); if (STYLE.subtitle) { g.font = FONT(30, true); text(fit(STYLE.subtitle, 30), 300 + g.measureText(fit(TITLE, 34)).width + 24, 42, COL.dim, 22); } }
   else text(fit(PROJ.name || "", 24) + "   " + fit(FILE, 40), 300, 42, COL.dim, 22);
   text(bpmText, 1000, 44, tp.src === "project" ? COL.dim : COL.amber, 34, true);
   text(pos ? "BAR " + bar + "  BEAT " + beat : "no clock: the project's tempo", 1240, 42, pos ? COL.text : COL.dim, 22);
@@ -360,7 +379,7 @@ function drawPads(T) {
       const pk = info.peaks || [];
       for (let k = 0; k < pk.length; k++) {
         const bh = Math.max(2, pk[k] / 100 * (th - 78));
-        rect(x + 20 + k * (tw - 40) / pk.length, y + th - 10 - bh, Math.max((tw - 40) / pk.length * 0.7, 2), bh, dark ? "#5a4000" : mix("#444444", "#ffb000", 0.35));
+        rect(x + 20 + k * (tw - 40) / pk.length, y + th - 10 - bh, Math.max((tw - 40) / pk.length * 0.7, 2), bh, dark ? COL.amberDD : mix("#444444", COL.amber, 0.35));
       }
     } else text("empty", x + 20, y + 54, COL.dim, 19);
   }
@@ -368,7 +387,7 @@ function drawPads(T) {
     const sp = (w - 40) / 10, x = gx + k * sp, y = y0 + h - 48;
     const letter = String.fromCharCode(65 + k);
     let act = 0; for (let i = 1; i <= 16; i++) { const st = padState(letter, i, T); if (st && (st.held || T - st.hitAt < 0.4)) act = 1; }
-    rect(x, y, sp - 8, 32, k === b ? COL.amber : mix("#2b2b2b", "#7a5a00", act));
+    rect(x, y, sp - 8, 32, k === b ? COL.amber : mix("#2b2b2b", COL.amberD, act));
     text(letter, x + (sp - 8) / 2, y + 23, k === b ? "#111" : COL.dim, 20, true, "center");
   }
 }
@@ -429,7 +448,7 @@ function drawPattern(T) {
       const s = nt[0] / 120 - first; if (s < -0.01 || s >= visible) continue;
       const hgt = Math.max(5, (rh - 5) * nt[2] / 127);
       let c = COL.amber;
-      if (phase >= 0) { const d = (phase * 4 - (nt[0] / 120)); if (d >= 0 && d < 1.5) c = mix("#ffb000", "#ffffff", 1 - d / 1.5); }
+      if (phase >= 0) { const d = (phase * 4 - (nt[0] / 120)); if (d >= 0 && d < 1.5) c = mix(COL.amber, "#ffffff", 1 - d / 1.5); }
       rect(gx + s * cw + 1, y + rh - 3 - hgt, Math.max(cw * 0.9, 5), hgt, c);
     }
     g.globalAlpha = 1;
@@ -534,13 +553,13 @@ function drawMeter(T) {
   }
   if (clip) { rect(x0 + w - 110, y0 + 10, 90, 28, COL.bad); text("CLIP", x0 + w - 65, y0 + 32, "#111", 20, true, "center"); }
   const sx = x0 + 24, sy = y0 + 134, sw = w - 48, sh = Math.max(h - 134 - 34 - (VERT ? 12 : 66), 40), nb = AN.bands;
-  rect(sx, sy, sw, sh, "#161616");
+  rect(sx, sy, sw, sh, COL.deep);
   const bwid = sw / nb;
   for (let i = 0; i < nb; i++) {
     let v = 0;
     for (let k = 0; k < 5; k++) { const ff = f - k; if (ff < 0) break; v = Math.max(v, spec[ff * nb + i] / 255 - k * 0.04); }
     const bh = clamp(v, 0, 1) * (sh - 8);
-    rect(sx + i * bwid + 1, sy + sh - 4 - bh, bwid - 2, Math.max(bh, 2), mix("#ffb000", "#ff5f5f", clamp(v - 0.6, 0, 0.4) / 0.4));
+    rect(sx + i * bwid + 1, sy + sh - 4 - bh, bwid - 2, Math.max(bh, 2), mix(COL.amber, "#ff5f5f", clamp(v - 0.6, 0, 0.4) / 0.4));
   }
   text("30 Hz", sx + 4, sy + sh + 18, COL.dim, 14); text("18 kHz", sx + sw, sy + sh + 18, COL.dim, 14, false, "right");
   if (!VERT) drawTempo(x0 + 24, y0 + h - 68, w - 48, 54, T);
@@ -565,7 +584,7 @@ function drawTempo(sx, sy, sw, sh, T) {
   let lo = Infinity, hi = -Infinity; for (const e of pts) { lo = Math.min(lo, e.bpm); hi = Math.max(hi, e.bpm); }
   const mid = (lo + hi) / 2, half = Math.max((hi - lo) / 2, 2) * 1.2;
   const gx = sx + 90, gw = sw - 190, gy = sy + 2, gh = sh - 4;
-  rect(gx, gy, gw, gh, "#161616");
+  rect(gx, gy, gw, gh, COL.deep);
   g.strokeStyle = COL.amber; g.lineWidth = 2; g.beginPath();
   pts.forEach((e, i) => { const x = gx + clamp(e.t / d, 0, 1) * gw, y = gy + gh / 2 - (e.bpm - mid) / half * gh / 2; i ? g.lineTo(x, y) : g.moveTo(x, y); });
   g.stroke();
@@ -575,17 +594,70 @@ function drawTempo(sx, sy, sw, sh, T) {
   text(lo === hi ? "steady" : lo + " - " + hi, sx + sw, sy + 12, COL.dim, 14, false, "right");
 }
 
+// ---- the look: a palette, an accent colour, a background, a logo and a handle. Kept by the server beside the log ({style}), set from the
+// "style" button in the bar, and also by the URL (?preset=midnight&accent=%23ff3b30&handle=@name&subtitle=...) for one viewing.
+const PRESETS = {
+  "404 dark": { accent: "#ffb000", bg: "#121214", deep: "#161616", panel: "#1b1b1e", tile: "#2c2c30", tile2: "#1d1d20", text: "#ececf0", dim: "#9a9aa4" },
+  "midnight": { accent: "#5fd0ff", bg: "#0b1020", deep: "#0e1428", panel: "#121a30", tile: "#1c2744", tile2: "#141d36", text: "#e8eeff", dim: "#8d9bc4" },
+  "neon":     { accent: "#ff4fd8", bg: "#0a0a12", deep: "#0d0d18", panel: "#14121f", tile: "#221d38", tile2: "#181428", text: "#f4f0ff", dim: "#a79cc8" },
+  "forest":   { accent: "#7bd88f", bg: "#0d1511", deep: "#101a15", panel: "#14201a", tile: "#203329", tile2: "#182820", text: "#e9f5ec", dim: "#8fb09a" },
+  "mono":     { accent: "#f2f2f2", bg: "#0d0d0d", deep: "#111111", panel: "#181818", tile: "#262626", tile2: "#1c1c1c", text: "#f2f2f2", dim: "#8c8c8c" },
+};
+const STYLE_DEFAULT = { preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6 }, logo: "", handle: "", subtitle: "" };
+let STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)), logoImg = null, bgImg = null;
+const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const hexMix = (a, b, t) => "#" + hexRgb(a).map((v, i) => Math.round(v + (hexRgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
+const validHex = h => typeof h === "string" && /^#[0-9a-fA-F]{6}$/.test(h);
+function loadImg(src) { if (!src) return null; const i = new Image(); i.src = src; return i; }
+function applyStyle() {
+  const pal = PRESETS[STYLE.preset] || PRESETS["404 dark"];
+  Object.assign(COL, pal);
+  COL.amber = validHex(STYLE.accent) ? STYLE.accent : pal.accent;
+  COL.amberD = hexMix(COL.amber, "#000000", 0.5); COL.amberDD = hexMix(COL.amber, "#000000", 0.65);
+  const b = STYLE.bg || {};
+  if (b.kind === "solid" && validHex(b.color)) COL.bg = b.color;
+  PANEL_A = b.kind === "gradient" || (b.kind === "image" && b.image) ? 0.9 : 1;
+  if (loadedKeys.logo !== STYLE.logo) { loadedKeys.logo = STYLE.logo; logoImg = loadImg(STYLE.logo); }
+  if (loadedKeys.bg !== b.image) { loadedKeys.bg = b.image; bgImg = loadImg(b.image); }
+  document.documentElement.style.setProperty("--amber", COL.amber);
+}
+const loadedKeys = {};
+function drawBackground() {
+  const b = STYLE.bg || {};
+  rect(0, 0, W, H, COL.bg);
+  if (b.kind === "gradient" && validHex(b.color) && validHex(b.color2)) {
+    const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, b.color); gr.addColorStop(1, b.color2); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  } else if (b.kind === "image" && bgImg && bgImg.complete && bgImg.naturalWidth) {
+    const k = Math.max(W / bgImg.naturalWidth, H / bgImg.naturalHeight), iw = bgImg.naturalWidth * k, ih = bgImg.naturalHeight * k;
+    g.drawImage(bgImg, (W - iw) / 2, (H - ih) / 2, iw, ih);
+    g.globalAlpha = clamp(b.dim === undefined ? 0.6 : b.dim, 0, 0.95); rect(0, 0, W, H, "#000"); g.globalAlpha = 1;
+  }
+}
+// the logo and the handle: wide, in the strip under the panels at the right; vertical, centred in the strip under the feed
+function drawBrand() {
+  const has = logoImg && logoImg.complete && logoImg.naturalWidth, handle = STYLE.handle || "", sub = VERT ? (STYLE.subtitle || "") : "";
+  if (!has && !handle && !sub) return;
+  const lh = VERT ? 64 : 26, lw = has ? lh * logoImg.naturalWidth / logoImg.naturalHeight : 0;
+  const px = VERT ? 34 : 20; g.font = FONT(px * (VERT ? 1.22 : 1), true);
+  const tw = handle ? g.measureText(handle).width : 0, gap = has && handle ? 16 : 0, total = lw + gap + tw;
+  const y = VERT ? 1722 : 1050, x = VERT ? (W - total) / 2 : W - 28 - total;
+  if (has) g.drawImage(logoImg, x, y, lw, lh);
+  if (handle) text(handle, x + lw + gap, y + lh / 2 + px * 0.35, COL.dim, px, true);
+  if (sub) text(fit(sub, 44), W / 2, y + lh + 34, COL.dim, 24, false, "center");
+}
+
 let T_audio = 0;
 function draw(audioTime) {
   T_audio = audioTime;
   const T = audioTime + OFFSET + NUDGE / 1000;
-  rect(0, 0, W, H, COL.bg);
+  drawBackground();
   drawHeader(T, audioTime);
   drawPads(T);
   drawPattern(T);
   drawFx(T);
   drawMeter(T);
   drawFeed(T);
+  drawBrand();
 }
 
 // ---- the page: the audio drives the time
@@ -616,11 +688,57 @@ addEventListener("keydown", e => {
   else if (e.key === "f") document.getElementById("full").onclick();
 });
 
+// the controls of the look
+function mergeStyle(saved) {
+  const st = JSON.parse(JSON.stringify(STYLE_DEFAULT));
+  if (saved && typeof saved === "object") { Object.assign(st, saved); st.bg = Object.assign({}, STYLE_DEFAULT.bg, saved.bg || {}); }
+  return st;
+}
+function initStyle(saved) {
+  STYLE = mergeStyle(saved);
+  const q = params.get("preset"); if (q && PRESETS[q]) STYLE.preset = q;
+  if (validHex(params.get("accent"))) STYLE.accent = params.get("accent");
+  if (params.get("handle")) STYLE.handle = params.get("handle");
+  if (params.get("subtitle")) STYLE.subtitle = params.get("subtitle");
+  if (validHex(params.get("bgcolor"))) STYLE.bg = Object.assign({}, STYLE.bg, { kind: "solid", color: params.get("bgcolor") });
+  applyStyle();
+  const $ = id => document.getElementById(id), box = $("stylebox"), sel = $("s_preset");
+  for (const k of Object.keys(PRESETS)) { const o = document.createElement("option"); o.value = k; o.textContent = k; sel.appendChild(o); }
+  const show = () => {
+    sel.value = STYLE.preset; $("s_accent").value = validHex(STYLE.accent) ? STYLE.accent : (PRESETS[STYLE.preset] || PRESETS["404 dark"]).accent;
+    $("s_bgkind").value = STYLE.bg.kind; $("s_bg1").value = validHex(STYLE.bg.color) ? STYLE.bg.color : "#000000"; $("s_bg2").value = validHex(STYLE.bg.color2) ? STYLE.bg.color2 : "#1b1b2e";
+    $("s_bgdim").value = Math.round((STYLE.bg.dim === undefined ? 0.6 : STYLE.bg.dim) * 100); $("s_handle").value = STYLE.handle || ""; $("s_sub").value = STYLE.subtitle || "";
+  };
+  show();
+  let timer = null;
+  const changed = () => { applyStyle(); clearTimeout(timer); timer = setTimeout(() => fetch("/style", { method: "POST", body: JSON.stringify(STYLE) }).catch(() => {}), 500); };
+  $("stylebtn").onclick = () => box.classList.toggle("open");
+  sel.onchange = () => { STYLE.preset = sel.value; STYLE.accent = ""; show(); changed(); };
+  $("s_accent").oninput = () => { STYLE.accent = $("s_accent").value; changed(); };
+  $("s_accent_auto").onclick = () => { STYLE.accent = ""; show(); changed(); };
+  $("s_bgkind").onchange = () => { STYLE.bg.kind = $("s_bgkind").value; changed(); };
+  $("s_bg1").oninput = () => { STYLE.bg.color = $("s_bg1").value; if (STYLE.bg.kind === "preset") STYLE.bg.kind = "solid"; show(); changed(); };
+  $("s_bg2").oninput = () => { STYLE.bg.color2 = $("s_bg2").value; STYLE.bg.kind = "gradient"; show(); changed(); };
+  $("s_bgdim").oninput = () => { STYLE.bg.dim = $("s_bgdim").value / 100; changed(); };
+  $("s_handle").oninput = () => { STYLE.handle = $("s_handle").value; changed(); };
+  $("s_sub").oninput = () => { STYLE.subtitle = $("s_sub").value; changed(); };
+  // pictures are made small before they are kept (a logo 480 px wide, a background 1920 px), so that the file beside the log stays small
+  const picture = (file, maxW, type, done) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => { const k = Math.min(1, maxW / img.naturalWidth), c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); done(c.toDataURL(type, 0.84)); };
+    img.src = url;
+  };
+  $("s_logo").onchange = e => { const f = e.target.files[0]; if (f) picture(f, 480, "image/png", d => { STYLE.logo = d; changed(); }); };
+  $("s_logo_clear").onclick = () => { STYLE.logo = ""; changed(); };
+  $("s_bgimg").onchange = e => { const f = e.target.files[0]; if (f) picture(f, 1920, "image/jpeg", d => { STYLE.bg.image = d; STYLE.bg.kind = "image"; show(); changed(); }); };
+  $("s_reset").onclick = () => { STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)); show(); changed(); };
+}
+
 async function start() {
   const msg = document.getElementById("msg");
   try {
     const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
-    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; prepare(ev.events, an, ev.cues);
+    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; initStyle(ev.style); prepare(ev.events, an, ev.cues);
   } catch (e) { msg.textContent = "could not load the replay: " + e; msg.style.display = "block"; return; }
   const t0 = parseFloat(params.get("t") || "0");
   if (t0) audio.currentTime = t0;

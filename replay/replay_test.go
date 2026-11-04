@@ -186,3 +186,22 @@ func TestTitleAndOldCuesFile(t *testing.T) {
 		t.Fatal(l)
 	}
 }
+
+func TestStyleIsKept(t *testing.T) {
+	r := &Replay{CuesPath: filepath.Join(t.TempDir(), "x.cues.json")}
+	if err := r.SetStyle([]byte(`{"accent":"#ff3b30","handle":"@moahbeatlab"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(r.Style()), "@moahbeatlab") {
+		t.Fatalf("style %s", r.Style())
+	}
+	if r.SetStyle([]byte(`[1]`)) == nil {
+		t.Error("a list is no style")
+	}
+	if err := r.SetStyle([]byte(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(r.CuesPath); err == nil {
+		t.Error("an empty style, no title and no cues should leave no file")
+	}
+}

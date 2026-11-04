@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -31,13 +32,15 @@ type Replay struct {
 	CuesPath              string // the title and the patterns that were set by hand, beside the event log
 	mu                    sync.Mutex
 	title                 string
+	style                 json.RawMessage
 	cues                  []Cue
 }
 
 // meta is what is kept beside the event log: the title of the video and the cues (an older file is just the list of cues).
 type meta struct {
-	Title string `json:"title,omitempty"`
-	Cues  []Cue  `json:"cues"`
+	Title string          `json:"title,omitempty"`
+	Cues  []Cue           `json:"cues"`
+	Style json.RawMessage `json:"style,omitempty"` // colours, logo, handle, background: the page's own object, kept as it is
 }
 
 // Cue says which pattern plays from a time of the log on: the unit does not tell when the pattern is changed.
@@ -83,14 +86,40 @@ func (r *Replay) SetTitle(t string) error {
 	return r.save()
 }
 
+// Style is the look of the video as the page saved it.
+func (r *Replay) Style() json.RawMessage {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.style) == 0 {
+		return nil // null in the answer
+	}
+	return append(json.RawMessage{}, r.style...)
+}
+
+// SetStyle keeps the look of the video (any JSON object; "{}" or empty clears it).
+func (r *Replay) SetStyle(b []byte) error {
+	var probe map[string]any
+	if len(b) > 0 && json.Unmarshal(b, &probe) != nil {
+		return errors.New("the style is not a JSON object")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(probe) == 0 {
+		r.style = nil
+	} else {
+		r.style = append(json.RawMessage{}, b...)
+	}
+	return r.save()
+}
+
 func (r *Replay) save() error {
-	if r.title == "" && len(r.cues) == 0 {
+	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 {
 		if err := os.Remove(r.CuesPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 		return nil
 	}
-	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues}, "", " ")
+	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues, Style: r.style}, "", " ")
 	return os.WriteFile(r.CuesPath, b, 0o644)
 }
 
@@ -117,7 +146,7 @@ func Load(audioPath, eventsPath string) (*Replay, error) {
 	if b, err := os.ReadFile(r.CuesPath); err == nil {
 		var m meta
 		if json.Unmarshal(b, &m) == nil {
-			r.title, r.cues = m.Title, m.Cues
+			r.title, r.cues, r.style = m.Title, m.Cues, m.Style
 		} else {
 			json.Unmarshal(b, &r.cues) // the first form of the file: the list of cues
 		}
@@ -148,7 +177,19 @@ func (r *Replay) Handler() http.Handler {
 	})
 	mux.HandleFunc("/events.json", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title()})
+		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style()})
+	})
+	mux.HandleFunc("/style", func(w http.ResponseWriter, req *http.Request) {
+		b, err := io.ReadAll(http.MaxBytesReader(w, req.Body, 8<<20)) // a logo and a background picture are in it
+		if req.Method != http.MethodPost || err != nil {
+			http.Error(w, "POST the style", http.StatusBadRequest)
+			return
+		}
+		if err := r.SetStyle(b); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/title", func(w http.ResponseWriter, req *http.Request) {
 		var t struct {
