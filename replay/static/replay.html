@@ -14,11 +14,29 @@
   #bar input { background:#2b2b2b; color:var(--text); border:0; padding:6px 10px; font:inherit; }
   #bar button, #bar select { background:#2b2b2b; color:var(--text); border:0; padding:6px 12px; font:inherit; cursor:pointer; }
   #bar button:hover { background:#3a3a3a; }
-  #ph { position:absolute; width:2px; background:rgba(255,255,255,.8); pointer-events:none; z-index:2; }
-  #tl { position:relative; display:grid; grid-template-columns:72px minmax(0, 1fr); align-items:center; row-gap:4px; column-gap:10px; }
+  #ph { position:absolute; left:0; width:2px; background:rgba(255,255,255,.8); pointer-events:none; z-index:2; }
+  #main { flex:1; min-height:0; display:flex; }
+  #main #stage { flex:1; min-width:0; }
+  #side { display:none; width:min(400px, 42vw); flex-direction:column; background:#1b1b1e; border-left:1px solid #2a2a2e; min-height:0; }
+  #side.on { display:flex; }
+  #sidetabs { display:flex; gap:4px; padding:8px 10px; border-bottom:1px solid #2a2a2e; }
+  #sidetabs button { background:#2b2b2b; color:var(--text); border:0; padding:6px 10px; font:inherit; cursor:pointer; }
+  #sidetabs button.act { background:var(--amber); color:#111; }
+  #sidetabs #sideclose { margin-left:auto; }
+  #sidebody { flex:1; min-height:0; overflow:auto; padding:12px 14px; }
+  #side .pane { display:none; position:static; width:auto; max-width:none; max-height:none; border:0; padding:0; background:transparent; flex-direction:column; gap:8px; }
+  #side .pane.open { display:flex; }
+  body.nohud #side { display:none !important; }
+  #tl { position:relative; display:grid; grid-template-columns:72px minmax(0, 1fr); align-items:start; row-gap:4px; column-gap:10px; }
+  #lbls { display:flex; flex-direction:column; gap:4px; }
+  #lbls .lbl { height:22px; line-height:22px; white-space:nowrap; overflow:hidden; }
+  #lanes { overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; }
+  #lanesin { position:relative; width:100%; display:flex; flex-direction:column; gap:4px; }
+  #seekrow { position:relative; }
+  #vwin { position:absolute; top:50%; height:8px; transform:translateY(-50%); background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35); border-radius:4px; pointer-events:none; display:none; }
   #tl .lbl { color:var(--dim); font-size:11px; text-align:right; }
-  #camlane, #buslane, #chaplane, #cues, #capslane { position:relative; height:26px; margin:0 8px; background:#1d1d20; border-radius:4px; }
-  #capslane, #chaplane, #buslane, #camlane { height:22px; }
+  #camlane, #buslane, #chaplane, #cues, #capslane { position:relative; height:22px; margin:0 8px; flex:none; background:#1d1d20; border-radius:4px; }
+  #capslane, #chaplane, #buslane, #camlane, #cues { height:22px; }
   #camlane .cs { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(199,146,234,.22); border-left:3px solid #c792ea; border-radius:3px; color:var(--text); font-size:11px; padding:2px 6px 0 10px; white-space:nowrap; cursor:pointer; touch-action:none; overflow:hidden; text-overflow:ellipsis; }
   #camlane .cs .hd { position:absolute; left:-5px; top:0; bottom:0; width:12px; cursor:ew-resize; }
   #buslane .bn { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(255,255,255,.1); border-left:3px solid var(--bc, #888); border-radius:3px; color:var(--text); font-size:11px; padding:2px 6px 0 10px; white-space:nowrap; cursor:pointer; touch-action:none; max-width:30%; overflow:hidden; text-overflow:ellipsis; }
@@ -81,40 +99,26 @@
 </style>
 </head>
 <body>
+<div id="main">
 <div id="stage"><canvas id="c" width="1920" height="1080"></canvas></div>
-<div id="bar">
-  <div id="tl">
-    <span class="lbl">camera</span><div id="camlane" title="the camera scenes: click one to edit it, drag its left edge to move it"></div>
-    <span class="lbl">chapters</span><div id="chaplane" title="the chapters of the video: click one to edit it, drag its left edge to move it"></div>
-    <span class="lbl">patterns</span><div id="cues" title="the patterns: click one to edit it, drag its left edge to move it"></div>
-    <span class="lbl">bus changes</span><div id="buslane" title="what a bus is used for, from a time on: click one to edit it, drag its left edge to move it"></div>
-    <span class="lbl">captions</span><div id="capslane" title="the captions: click one to edit it"></div>
-    <div id="ph"></div>
-    <span class="lbl"></span><input id="seek" type="range" min="0" max="1000" value="0">
-  </div>
-  <div id="ctl">
-    <span class="grp"><button id="play" title="Space">play</button><span id="time">0:00.0</span>
-      <button id="undo" title="Ctrl-Z">undo</button><button id="redo" title="Ctrl-Shift-Z">redo</button></span>
-    <span class="grp"><input id="title" placeholder="title" size="18" title="the title shown in the video">
-      <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button></span>
-    <span class="grp"><select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
-      <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span></span>
-    <span class="grp right"><button id="cambtn" title="the video of you playing">camera</button>
-      <button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
-      <button id="chbtn" title="the chapters, and the list for YouTube">chapters</button>
-      <button id="capbtn" title="text shown at times of the take">captions</button>
-      <button id="stylebtn" title="colours, background, logo, handle">style</button>
-      <button id="full" title="f">full screen</button></span>
-  </div>
-  <div id="cuepop"></div>
+<div id="side">
+  <div id="sidetabs"><button data-p="capbox">captions</button><button data-p="chbox">chapters</button><button data-p="cambox">camera</button><button data-p="stylebox">style</button><button id="sideclose" title="close the sidebar">x</button></div>
+  <div id="sidebody">
+<div id="capbox" class="pane">
+  <div id="caplist"></div>
+  <label class="g">fade in and out <input id="c_fade" type="number" min="0" max="3" step="0.05" style="width:64px"> s <span class="h">for all captions</span></label>
+  <label class="g">blur behind a caption <input id="c_blur" type="range" min="0" max="12" step="0.5" style="width:130px"> <span id="c_blurv" class="h"></span></label>
+  <label class="g">dim behind a caption <input id="c_dim" type="range" min="0" max="80" step="1" style="width:130px"> <span id="c_dimv" class="h"></span></label>
+  <label class="g">a new caption lasts <input id="c_len" type="number" min="1" max="60" step="0.5" style="width:64px"> s <span class="h">for all new captions</span></label>
+  <button id="capadd" title="a caption from the time you are at">add a caption here</button>
 </div>
-<div id="chbox">
+<div id="chbox" class="pane">
   <div class="h2">chapters <span class="h">(they show on the picture, and as the list for the description on YouTube)</span></div>
   <textarea id="chtext" readonly rows="6" placeholder="no chapters yet"></textarea>
   <div id="chhint" class="h"></div>
   <div class="row"><button id="chadd" title="a chapter from the time you are at">add a chapter here</button><button id="chcopy">copy the list</button></div>
 </div>
-<div id="cambox">
+<div id="cambox" class="pane">
   <div class="h2">camera <span class="h">(the video of you playing; drag the box on the picture, its corners change the size)</span></div>
   <div class="row"><input id="cam_path" placeholder="path of the video, e.g. ~/Movies/take.mov" style="flex:1"><button id="cam_use">use</button></div>
   <div id="cam_status" class="h"></div>
@@ -132,18 +136,7 @@
   <label class="g">the box is <select id="cam_layer"><option value="front">in front of the panels</option><option value="behind">behind the panels</option></select></label>
   <div class="row"><button id="cam_scene" title="a new scene from here: the box and the panels can differ">new scene here</button><button id="cam_hide" title="a scene without the camera">hide the camera from here</button><button id="cam_off">no camera</button></div>
 </div>
-<div id="campop"></div>
-<div id="chpop"></div>
-<div id="bpop"></div>
-<div id="capbox">
-  <div id="caplist"></div>
-  <label class="g">fade in and out <input id="c_fade" type="number" min="0" max="3" step="0.05" style="width:64px"> s <span class="h">for all captions</span></label>
-  <label class="g">blur behind a caption <input id="c_blur" type="range" min="0" max="12" step="0.5" style="width:130px"> <span id="c_blurv" class="h"></span></label>
-  <label class="g">dim behind a caption <input id="c_dim" type="range" min="0" max="80" step="1" style="width:130px"> <span id="c_dimv" class="h"></span></label>
-  <label class="g">a new caption lasts <input id="c_len" type="number" min="1" max="60" step="0.5" style="width:64px"> s <span class="h">for all new captions</span></label>
-  <button id="capadd" title="a caption from the time you are at">add a caption here</button>
-</div>
-<div id="stylebox">
+<div id="stylebox" class="pane">
   <label>look <select id="s_preset"></select></label>
   <label>accent <input id="s_accent" type="color" value="#ffb000"> <button id="s_accent_auto" title="the colour of the look">auto</button></label>
   <label>background <select id="s_bgkind"><option value="preset">the look's</option><option value="solid">colour</option><option value="gradient">gradient</option><option value="image">picture</option></select></label>
@@ -160,6 +153,48 @@
   <label>subtitle <input id="s_sub" placeholder="under the title" size="22"></label>
   <button id="s_reset">reset the look</button>
 </div>
+  </div>
+</div>
+</div>
+<div id="bar">
+  <div id="tl">
+    <div id="lbls"><span class="lbl">camera</span><span class="lbl">chapters</span><span class="lbl">patterns</span><span class="lbl">bus fx</span><span class="lbl">captions</span></div>
+    <div id="lanes" title="Ctrl + wheel zooms, the wheel or a drag of the bar below moves along">
+      <div id="lanesin">
+        <div id="camlane" title="the camera scenes: click one to edit it, drag its left edge to move it"></div>
+        <div id="chaplane" title="the chapters of the video: click one to edit it, drag its left edge to move it"></div>
+        <div id="cues" title="the patterns: click one to edit it, drag its left edge to move it"></div>
+        <div id="buslane" title="what a bus is used for, from a time on: click one to edit it, drag its left edge to move it"></div>
+        <div id="capslane" title="the captions: click one to edit it"></div>
+        <div id="ph"></div>
+      </div>
+    </div>
+    <span class="lbl"></span><div id="seekrow"><input id="seek" type="range" min="0" max="1000" value="0"><div id="vwin"></div></div>
+  </div>
+  <div id="ctl">
+    <span class="grp"><button id="play" title="Space">play</button><span id="time">0:00.0</span>
+      <button id="undo" title="Ctrl-Z">undo</button><button id="redo" title="Ctrl-Shift-Z">redo</button></span>
+    <span class="grp"><button id="zout" title="show more of the take (Ctrl + wheel, or -)">-</button><span id="zlev" style="min-width:34px;text-align:center;color:var(--dim)">1x</span><button id="zin" title="show less of the take (Ctrl + wheel, or +)">+</button><button id="zfit" title="the whole take">fit</button></span>
+    <span class="grp"><input id="title" placeholder="title" size="18" title="the title shown in the video">
+      <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button></span>
+    <span class="grp"><select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
+      <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span></span>
+    <span class="grp right"><button id="cambtn" title="the video of you playing">camera</button>
+      <button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
+      <button id="chbtn" title="the chapters, and the list for YouTube">chapters</button>
+      <button id="capbtn" title="text shown at times of the take">captions</button>
+      <button id="stylebtn" title="colours, background, logo, handle">style</button>
+      <button id="full" title="f">full screen</button></span>
+  </div>
+  <div id="cuepop"></div>
+</div>
+
+
+<div id="campop"></div>
+<div id="chpop"></div>
+<div id="bpop"></div>
+
+
 <div id="msg"></div>
 <video id="cam" muted playsinline preload="auto" style="position:fixed;left:-9999px;width:2px;height:2px;opacity:0"></video>
 <audio id="audio" preload="auto" src="/audio"></audio>
@@ -871,6 +906,46 @@ function fillBusSelect(sl) {
   group("other"); add("__custom__", "my own text...");
 }
 
+// ---- the sidebar: captions, chapters, camera and the look are panes of it (the button of a pane opens it, again closes it)
+function showPane(box) {
+  for (const p of document.querySelectorAll("#side .pane")) p.classList.toggle("open", p === box);
+  const side = document.getElementById("side"); side.classList.add("on");
+  for (const b of document.querySelectorAll("#sidetabs button[data-p]")) b.classList.toggle("act", b.dataset.p === box.id);
+  const cb = document.getElementById("cambox"); if (window.camEditSet) window.camEditSet(box === cb);
+}
+function togglePane(box) {
+  if (box.classList.contains("open") && document.getElementById("side").classList.contains("on")) { closeSide(); return; }
+  showPane(box);
+}
+function closeSide() {
+  for (const p of document.querySelectorAll("#side .pane")) p.classList.remove("open");
+  document.getElementById("side").classList.remove("on"); if (window.camEditSet) window.camEditSet(false);
+}
+
+// ---- the zoom of the timeline: the lanes get wider inside a box that scrolls (so everything on them keeps its place), the slider stays the whole take
+let ZOOM = 1;
+function setZoom(z, anchorFrac) {
+  const sc = document.getElementById("lanes"), inn = document.getElementById("lanesin"), f = anchorFrac !== undefined ? anchorFrac : (sc.scrollLeft + sc.clientWidth / 2) / Math.max(inn.clientWidth, 1);
+  const before = f * inn.clientWidth - sc.scrollLeft;
+  ZOOM = clamp(z, 1, 60); inn.style.width = ZOOM * 100 + "%";
+  sc.scrollLeft = f * inn.clientWidth - (anchorFrac !== undefined ? before : sc.clientWidth / 2);
+  document.getElementById("zlev").textContent = (ZOOM >= 10 ? ZOOM.toFixed(0) : ZOOM.toFixed(1).replace(".0", "")) + "x";
+  showWindow();
+}
+function showWindow() {
+  const sc = document.getElementById("lanes"), inn = document.getElementById("lanesin"), w = document.getElementById("vwin"), sk = document.getElementById("seek");
+  if (ZOOM <= 1.001) { w.style.display = "none"; return; }
+  const k = sk.clientWidth - 16; w.style.display = "block";
+  w.style.left = 8 + sc.scrollLeft / inn.clientWidth * k + "px"; w.style.width = Math.max(sc.clientWidth / inn.clientWidth * k, 6) + "px";
+}
+let lastFollowT = -1;
+function followPlayhead(frac, playing) { // the lanes keep the playhead in view while it plays, and when the time jumps
+  const moved = Math.abs(frac - lastFollowT) > 1e-6; lastFollowT = frac;
+  if (ZOOM <= 1.001 || !(playing || moved)) return;
+  const sc = document.getElementById("lanes"), inn = document.getElementById("lanesin"), x = frac * inn.clientWidth;
+  if (x < sc.scrollLeft + 30 || x > sc.scrollLeft + sc.clientWidth - 60) { sc.scrollLeft = x - sc.clientWidth * 0.25; showWindow(); }
+}
+
 // ---- undo and redo: the patterns, the captions, the chapters and the title (not the look). A step is a whole picture of them, taken
 // after every change; typing in one text counts as one step.
 let CHAPS = [], BUSN = [];
@@ -985,11 +1060,10 @@ function draw(audioTime) {
   camVideoKeep(audioTime);
   if (CAM.layer === "behind") drawCamera(audioTime);
   drawHeader(T, audioTime);
-  if (panelOn("pads", audioTime)) drawPads(T);
-  if (panelOn("pattern", audioTime)) drawPattern(T);
-  if (panelOn("fx", audioTime)) drawFx(T);
-  if (panelOn("meter", audioTime)) drawMeter(T);
-  if (panelOn("feed", audioTime)) drawFeed(T);
+  for (const [id, fn] of [["pads", drawPads], ["pattern", drawPattern], ["fx", drawFx], ["meter", drawMeter], ["feed", drawFeed]]) {
+    const a = panelAlpha(id, audioTime); if (a <= 0.001) continue;
+    fn(T); panelVeil(id, a);
+  }
   if (CAM.layer !== "behind") drawCamera(audioTime);
   drawCaption(audioTime);
   drawChapter(audioTime);
@@ -1009,8 +1083,9 @@ function frame() {
   const d = AN ? AN.duration : audio.duration || 0;
   if (!seeking && d) seek.value = String(Math.round(t / d * 1000)); // it follows the time, except while it is being dragged
   if (d) { // the playhead through the lanes: the same x as the lanes' times
-    const tl = document.getElementById("tl").getBoundingClientRect(), ln = document.getElementById("cues").getBoundingClientRect(), top0 = document.getElementById("camlane").getBoundingClientRect(), cp = document.getElementById("capslane").getBoundingClientRect();
-    ph.style.left = (ln.left - tl.left + clamp(t / d, 0, 1) * ln.width - 1) + "px"; ph.style.top = (top0.top - tl.top) + "px"; ph.style.height = (cp.bottom - top0.top) + "px";
+    const inn = document.getElementById("lanesin"), ln = document.getElementById("cues"), cp = document.getElementById("capslane"), camL = document.getElementById("camlane");
+    ph.style.left = (ln.offsetLeft + clamp(t / d, 0, 1) * ln.offsetWidth - 1) + "px"; ph.style.top = camL.offsetTop + "px"; ph.style.height = (cp.offsetTop + cp.offsetHeight - camL.offsetTop) + "px";
+    followPlayhead(t / d, !audio.paused);
   }
   timeEl.textContent = mmss(t) + " / " + mmss(d);
   play.textContent = audio.paused ? "play" : "pause";
@@ -1021,6 +1096,17 @@ seek.addEventListener("pointerdown", () => { seeking = true; });
 addEventListener("pointerup", () => { seeking = false; });
 seek.oninput = () => { const d = AN ? AN.duration : audio.duration; audio.currentTime = seek.value / 1000 * d; };
 speed.onchange = () => { audio.playbackRate = parseFloat(speed.value); };
+document.getElementById("zin").onclick = () => setZoom(ZOOM * 1.6);
+document.getElementById("zout").onclick = () => setZoom(ZOOM / 1.6);
+document.getElementById("zfit").onclick = () => setZoom(1);
+document.getElementById("lanes").addEventListener("scroll", showWindow);
+document.getElementById("lanes").addEventListener("wheel", e => { // Ctrl (or Cmd) + wheel zooms around the pointer
+  if (!(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault(); const sc = document.getElementById("lanes"), inn = document.getElementById("lanesin"), r = sc.getBoundingClientRect();
+  setZoom(ZOOM * (e.deltaY < 0 ? 1.25 : 0.8), (sc.scrollLeft + (e.clientX - r.left)) / Math.max(inn.clientWidth, 1));
+}, { passive: false });
+document.getElementById("sideclose").onclick = () => closeSide();
+for (const b of document.querySelectorAll("#sidetabs button[data-p]")) b.onclick = () => showPane(document.getElementById(b.dataset.p));
 document.getElementById("undo").onclick = () => undo();
 document.getElementById("redo").onclick = () => redo();
 document.getElementById("full").onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
@@ -1028,6 +1114,8 @@ addEventListener("keydown", e => {
   if (e.target.tagName === "SELECT" || (e.target.tagName === "INPUT" && e.target.type !== "range")) return; // typing in a field is not a key for the player
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
+  if ((e.key === "+" || e.key === "=") && !e.ctrlKey && !e.metaKey) { setZoom(ZOOM * 1.6); return; }
+  if (e.key === "-" && !e.ctrlKey && !e.metaKey) { setZoom(ZOOM / 1.6); return; }
   if (e.code === "Space") { e.preventDefault(); play.onclick(); }
   else if (e.key === "ArrowLeft") audio.currentTime = Math.max(audio.currentTime - (e.shiftKey ? 30 : 5), 0);
   else if (e.key === "ArrowRight") audio.currentTime += e.shiftKey ? 30 : 5;
@@ -1118,7 +1206,7 @@ function initCaptions() {
     });
   };
   window.refreshCapLane = lane;
-  document.getElementById("capbtn").onclick = () => { showSettings(); box.classList.toggle("open"); render(); };
+  document.getElementById("capbtn").onclick = () => { showSettings(); togglePane(box); render(); };
   document.getElementById("capadd").onclick = () => {
     const a = now(), d = AN ? AN.duration : a + 5;
     CAPS.push({ from: +a.toFixed(1), to: +Math.min(a + (+STYLE.capLength || 5), d).toFixed(1), text: "" }); save(); render();
@@ -1220,7 +1308,7 @@ function initChapters() {
     });
   }
   window.refreshChapters = refresh;
-  document.getElementById("chbtn").onclick = () => { refresh(); box.classList.toggle("open"); };
+  document.getElementById("chbtn").onclick = () => { refresh(); togglePane(box); };
   document.getElementById("chadd").onclick = () => { const c = { t: +Math.max(now(), 0).toFixed(1), title: CHAPS.length ? "New chapter" : "Intro" }; CHAPS.push(c); save(); edit(c, true); };
   document.getElementById("chcopy").onclick = () => { const t = text(); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { hint.textContent = "copied"; }, () => { txt.select(); hint.textContent = "select the text and copy it"; }); };
   refresh();
@@ -1237,16 +1325,52 @@ const camDefaultRect = () => (VERT ? [20, 108, 1040, 640] : [40, 74, 560, 976]);
 const camScenes = () => CAM.scenes.slice().sort((a, b) => a.t - b.t);
 function camSceneAt(A) { let i = -1; const sc = camScenes(); for (let k = 0; k < sc.length; k++) if (sc[k].t <= A + 0.001) i = k; return i < 0 ? null : { sc, i, s: sc[i] }; }
 const panelOn = (id, A) => { const c = camSceneAt(A); return !(c && (c.s.off || []).includes(id)); };
-// the box at a time: [x, y, w, h, alpha] (it moves from the box of the scene before to its own in "move" seconds; a scene without the camera fades it)
-function camRect(A) {
-  if (!CAMFILE) return null;
+const easeBy = (name, u) => {
+  if (name === "inout") return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+  if (name === "spring") { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2); }
+  return 1 - Math.pow(1 - u, 3);
+};
+// where a box comes in from: outside the picture, at the edge it is nearest to
+function slideFrom(r) {
+  const [x, y, w, h] = r, d = [x, W - (x + w), y, H - (y + h)], m = Math.min(...d), i = d.indexOf(m);
+  return i === 0 ? [-w, y, w, h] : i === 1 ? [W, y, w, h] : i === 2 ? [x, -h, w, h] : [x, H, w, h];
+}
+// the progress of the scene that runs: 0 to 1 over its "moves in" time, and the scene before it
+function camProgress(A) {
   const c = camSceneAt(A); if (!c) return null;
-  const key = camKey(), cur = c.s[key] || null, prev = c.i > 0 ? c.sc[c.i - 1][key] || null : null, mv = +c.s.move || 0;
-  const u = mv > 0 ? easeOut(clamp((A - c.s.t) / mv, 0, 1)) : 1;
-  if (cur && prev) return cur.map((v, k) => v + (prev[k] - v) * (1 - u)).concat([1]);
-  if (cur) return cur.concat([c.i > 0 ? u : 1]);
-  if (prev) return prev.concat([1 - u]);
-  return null;
+  const mv = +c.s.move || 0, raw = mv > 0 ? clamp((A - c.s.t) / mv, 0, 1) : 1;
+  return { c, raw, e: easeBy(c.s.ease || "out", raw), tr: c.s.fx || "move" };
+}
+// the boxes at a time, each [x, y, w, h] with an alpha (and a scale): how the change from the scene before to this one looks depends on the
+// scene's transition: move (the box glides), fade (cross-fade), pop (grows in), slide (comes in from the edge), cut
+function camLayers(A) {
+  if (!CAMFILE) return [];
+  const p = camProgress(A); if (!p) return [];
+  const { c, raw, e, tr } = p, key = camKey(), cur = c.s[key] || null, prev = c.i > 0 ? c.sc[c.i - 1][key] || null : null;
+  if (raw >= 1 || tr === "cut" || c.i === 0) return cur ? [{ r: cur, a: 1 }] : [];
+  if (cur && prev) {
+    if (tr === "fade") return [{ r: prev, a: 1 - raw }, { r: cur, a: e }];
+    if (tr === "pop") return [{ r: prev, a: 1 - raw }, { r: cur, a: e, k: 0.85 + 0.15 * e }];
+    if (tr === "slide") { const o = slideFrom(cur); return [{ r: prev, a: 1 - raw }, { r: cur.map((v, k) => v + (o[k] - v) * (1 - e)), a: Math.min(1, e * 2.5) }]; }
+    return [{ r: cur.map((v, k) => v + (prev[k] - v) * (1 - e)), a: 1 }];
+  }
+  if (cur) return [{ r: tr === "slide" ? cur.map((v, k) => v + (slideFrom(cur)[k] - v) * (1 - e)) : cur, a: tr === "slide" ? Math.min(1, e * 2.5) : e, k: tr === "pop" ? 0.85 + 0.15 * e : 1 }];
+  if (prev) return [{ r: prev, a: 1 - e }];
+  return [];
+}
+// how much of a panel shows: a panel that the scene turns on or off fades over the scene's time (1 = all, 0 = none)
+function panelAlpha(id, A) {
+  const p = camProgress(A); if (!p) return 1;
+  const { c, raw, e, tr } = p, off = (c.s.off || []).includes(id), was = c.i > 0 ? (c.sc[c.i - 1].off || []).includes(id) : off;
+  if (off === was || raw >= 1 || tr === "cut") return off ? 0 : 1;
+  const u = tr === "move" || tr === "slide" || tr === "pop" ? e : raw;
+  return off ? 1 - u : u;
+}
+const PANEL_RECT = id => ({ pads: L.pads, pattern: L.pattern, fx: L.fx, meter: L.meter, feed: L.feed })[id];
+// a panel that is partly there: the background is laid over it again
+function panelVeil(id, a) {
+  if (a >= 0.999 || a <= 0.001) return;
+  const [x, y, w, h] = PANEL_RECT(id); g.save(); g.beginPath(); g.rect(x - 2, y - 2, w + 4, h + 4); g.clip(); g.globalAlpha = 1 - a; drawBackground(); g.restore();
 }
 // the picture of the camera at a time: the picture a render has put there, else the video (kept at the time of the audio plus the sync)
 function camSource(A) {
@@ -1267,9 +1391,10 @@ function camVideoKeep(A) { // in the page: the video follows the audio
   if (Math.abs(v.currentTime - want) > 0.15 && !v.seeking) v.currentTime = want;
 }
 let camEdit = false;
-function drawCamera(A) {
-  const r = camRect(A); if (!r) return;
-  const [x, y, w, h, al] = r; if (al <= 0.001 || w < 4 || h < 4) return;
+window.camEditSet = on => { camEdit = on && !!CAMFILE; };
+function drawCamBox(box, al, k, A, last) {
+  let [x, y, w, h] = box; if (al <= 0.001 || w < 4 || h < 4) return;
+  if (k && k !== 1) { const cx = x + w / 2, cy = y + h / 2; w *= k; h *= k; x = cx - w / 2; y = cy - h / 2; }
   const src = camSource(A), rad = clamp(+CAM.round || 0, 0, Math.min(w, h) / 2);
   g.save(); g.globalAlpha = al;
   g.beginPath(); g.roundRect(x, y, w, h, rad); g.clip();
@@ -1281,18 +1406,22 @@ function drawCamera(A) {
     else g.drawImage(src, sx, sy, rw, rh, x, y, w, h);
   } else { rect(x, y, w, h, "#0b0b0c"); text("camera: no picture here", x + w / 2, y + h / 2, COL.dim, 22, false, "center"); }
   g.restore();
-  if (camEdit && !(window.replay && window.replay._renderCam)) { // the handles of the box
+  if (last && camEdit && !(window.replay && window.replay._renderCam)) { // the handles of the box
     g.save(); g.strokeStyle = COL.amber; g.lineWidth = 3; g.beginPath(); g.roundRect(x, y, w, h, rad); g.stroke();
     for (const [hx, hy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) { rect(hx - 9, hy - 9, 18, 18, COL.amber); }
     g.restore();
   }
+}
+function drawCamera(A) {
+  const layers = camLayers(A);
+  layers.forEach((l, i) => drawCamBox(l.r, l.a, l.k, A, i === layers.length - 1));
 }
 // pointer on the canvas -> the picture's own coordinates
 function toPicture(e) { const r = cv.getBoundingClientRect(), k = Math.min(r.width / W, r.height / H), ox = (r.width - W * k) / 2, oy = (r.height - H * k) / 2; return [(e.clientX - r.left - ox) / k, (e.clientY - r.top - oy) / k, k]; }
 function initCamera(saved, file) {
   CAMFILE = file || "";
   CAM = Object.assign(JSON.parse(JSON.stringify(CAM_DEFAULT)), saved && typeof saved === "object" ? saved : {});
-  CAM.scenes = (CAM.scenes || []).map(s => ({ t: +s.t || 0, wide: s.wide || null, vertical: s.vertical || null, move: +s.move || 0, off: s.off || [] }));
+  CAM.scenes = (CAM.scenes || []).map(s => ({ t: +s.t || 0, wide: s.wide || null, vertical: s.vertical || null, move: +s.move || 0, off: s.off || [], fx: s.fx || "move", ease: s.ease || "out" }));
   const $ = id => document.getElementById(id), box = $("cambox"), lane = $("camlane"), pop = $("campop"), vid = $("cam"), prev = $("cam_prev");
   const post = () => fetch("/camera", { method: "POST", body: JSON.stringify(CAM) }).catch(() => {});
   let timer = null;
@@ -1327,7 +1456,13 @@ function initCamera(saved, file) {
     mv.style.width = "64px"; mv.title = "how long the box takes to get here (0 = a cut)";
     tm.onchange = () => { const m = tm.value.match(/^(\d+):(\d+(?:\.\d+)?)$/); sc.t = Math.max(0, m ? +m[1] * 60 + +m[2] : parseFloat(tm.value) || 0); save(); };
     mv.oninput = () => { sc.move = Math.max(0, parseFloat(mv.value) || 0); save(); };
+    const tr = mk("select", { title: "how the change to this scene looks" }), ez = mk("select", { title: "how the movement speeds up and slows down" });
+    for (const [v, n] of [["move", "glide"], ["fade", "cross-fade"], ["pop", "pop in"], ["slide", "slide in"], ["cut", "cut"]]) tr.appendChild(mk("option", { value: v, textContent: n }));
+    for (const [v, n] of [["out", "smooth"], ["inout", "slow start and end"], ["spring", "springy"]]) ez.appendChild(mk("option", { value: v, textContent: n }));
+    tr.value = sc.fx || "move"; ez.value = sc.ease || "out";
+    tr.onchange = () => { sc.fx = tr.value; save(); }; ez.onchange = () => { sc.ease = ez.value; save(); };
     r1.append(mk("span", { textContent: "from", style: "color:var(--dim)" }), tm, mk("span", { textContent: "moves in", style: "color:var(--dim)" }), mv, mk("span", { textContent: "s", style: "color:var(--dim)" }));
+    const r1b = row(); r1b.append(mk("span", { textContent: "change:", style: "color:var(--dim)" }), tr, ez);
     const r2 = row(), vis = mk("input", { type: "checkbox", checked: !!sc[camKey()] });
     vis.onchange = () => { sc[camKey()] = vis.checked ? (camSceneRectNear(sc) || camDefaultRectFor(camKey())) : null; save(); };
     r2.append(vis, mk("span", { textContent: "the camera is shown in this scene (" + camKey() + " video)", style: "color:var(--dim)" }));
@@ -1341,7 +1476,7 @@ function initCamera(saved, file) {
     r4.append(mk("button", { textContent: "go", title: "play from here", onclick: () => { audio.currentTime = sc.t; } }),
       mk("button", { textContent: "delete the scene", onclick: () => { CAM.scenes = CAM.scenes.filter(x => x !== sc); pop.classList.remove("open"); save(); } }),
       mk("button", { textContent: "close", onclick: () => pop.classList.remove("open") }));
-    pop.append(r1, r2, r3, r4);
+    pop.append(r1, r1b, r2, r3, r4);
     const rr = lane.getBoundingClientRect(), d = AN ? AN.duration : 1; pop.style.left = Math.max(8, Math.min(innerWidth - 660, rr.left + sc.t / d * rr.width - 120)) + "px";
   }
   const camSceneRectNear = sc => { const o = camScenes().find(x => x[camKey()]); return o ? o[camKey()].slice() : null; };
@@ -1404,9 +1539,9 @@ function initCamera(saved, file) {
   $("cam_mirror").onchange = () => { CAM.mirror = $("cam_mirror").checked; save(); };
   $("cam_layer").onchange = () => { CAM.layer = $("cam_layer").value; save(); };
   const showAll = () => { showSync(); $("cam_zoom").value = CAM.zoom; $("cam_zoomv").textContent = (+CAM.zoom).toFixed(2) + "x"; $("cam_cx").value = CAM.cx; $("cam_cy").value = CAM.cy; $("cam_round").value = CAM.round; $("cam_mirror").checked = !!CAM.mirror; $("cam_layer").value = CAM.layer; $("cam_path").value = CAMFILE ? CAMFILE : $("cam_path").value; status(); };
-  $("cam_scene").onclick = () => { if (!CAMFILE) return; const c = camSceneAt(now()), t = +now().toFixed(1); const base = c ? c.s : null; CAM.scenes.push({ t, wide: base && base.wide ? base.wide.slice() : camDefaultRectFor("wide"), vertical: base && base.vertical ? base.vertical.slice() : camDefaultRectFor("vertical"), move: 0.6, off: base ? (base.off || []).slice() : [] }); save(); };
-  $("cam_hide").onclick = () => { if (!CAMFILE) return; const c = camSceneAt(now()); CAM.scenes.push({ t: +now().toFixed(1), wide: null, vertical: null, move: 0.5, off: c ? (c.s.off || []).slice() : [] }); save(); };
-  $("cambtn").onclick = () => { box.classList.toggle("open"); camEdit = box.classList.contains("open") && !!CAMFILE; showAll(); fillHits(); };
+  $("cam_scene").onclick = () => { if (!CAMFILE) return; const c = camSceneAt(now()), t = +now().toFixed(1); const base = c ? c.s : null; CAM.scenes.push({ t, wide: base && base.wide ? base.wide.slice() : camDefaultRectFor("wide"), vertical: base && base.vertical ? base.vertical.slice() : camDefaultRectFor("vertical"), move: 0.8, off: base ? (base.off || []).slice() : [], fx: base ? base.fx || "move" : "move", ease: base ? base.ease || "out" : "out" }); save(); };
+  $("cam_hide").onclick = () => { if (!CAMFILE) return; const c = camSceneAt(now()); CAM.scenes.push({ t: +now().toFixed(1), wide: null, vertical: null, move: 0.6, off: c ? (c.s.off || []).slice() : [], fx: "fade", ease: "out" }); save(); };
+  $("cambtn").onclick = () => { togglePane(box); showAll(); fillHits(); };
   vid.addEventListener("loadedmetadata", () => { status(); buildLane(); }); prev.addEventListener("loadedmetadata", status);
   window.refreshCamera = () => { showAll(); buildLane(); };
   ensureScene(); loadVideo(); showAll(); buildLane();
@@ -1441,7 +1576,7 @@ function initStyle(saved) {
   show();
   let timer = null;
   const changed = window.styleChanged = () => { applyStyle(); clearTimeout(timer); timer = setTimeout(() => fetch("/style", { method: "POST", body: JSON.stringify(STYLE) }).catch(() => {}), 500); };
-  $("stylebtn").onclick = () => box.classList.toggle("open");
+  $("stylebtn").onclick = () => togglePane(box);
   sel.onchange = () => { STYLE.preset = sel.value; STYLE.accent = ""; show(); changed(); };
   $("s_accent").oninput = () => { STYLE.accent = $("s_accent").value; changed(); };
   $("s_accent_auto").onclick = () => { STYLE.accent = ""; show(); changed(); };
