@@ -642,6 +642,7 @@ func (a *App) togglePlay() {
 }
 
 func (a *App) startLoop() {
+	a.playPat = a.pat // the pattern that plays is the one in view when it starts; the view may go on to others
 	s, ok := a.render()
 	if !ok {
 		a.say("the pattern is empty: A puts a note", true)
@@ -664,6 +665,9 @@ func (a *App) replay() {
 	if !a.seqOn {
 		return
 	}
+	if a.playPat != 0 && a.playPat != a.pat { // another pattern is in view: what plays is not touched (Space stops it, Space plays this one)
+		return
+	}
 	s, ok := a.render()
 	if !ok { // nothing left to play (the last note was taken away): the loop ends
 		a.stop()
@@ -683,7 +687,7 @@ func (a *App) clock() time.Time {
 
 // playStep is the step the loop is at, -1 when it is not playing.
 func (a *App) playStep() int {
-	if !a.seqOn {
+	if !a.seqOn || a.playPat != 0 && a.playPat != a.pat { // nothing plays, or another pattern does: no playhead in this one
 		return -1
 	}
 	bpm := a.tempo()

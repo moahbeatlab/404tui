@@ -249,6 +249,7 @@ type App struct {
 	rowFocus          int             // a pad the cursor should go to when the rows are worked out again (-1: none)
 	seqOn             bool            // the pattern is playing
 	seqStart          time.Time
+	playPat           int                 // the pattern that loops (1..160), 0 when none: the view can be on another pattern
 	trk               map[int]map[int]int // SEQ: pattern -> pad -> mute/solo
 	freeze            bool                // SEQ: loop only the bar in focus
 	frozenPage        int
@@ -1111,6 +1112,7 @@ func (a *App) padsKey(k Key) {
 }
 
 func (a *App) stop() {
+	a.playPat = 0
 	a.placed = nil
 	if a.Audio != nil {
 		a.Audio.Stop()

@@ -1412,3 +1412,54 @@ func TestTheAppNoticesWhatTheUnitDoesByItself(t *testing.T) {
 		t.Fatalf("live editing stops when the unit opens another project: live %v %q", a.live != nil, a.msg)
 	}
 }
+
+func TestSwitchingPatternsWhilePlayingLeavesTheLoopAlone(t *testing.T) {
+	termOn(t)
+	a, au := newApp(t)
+	kitKeys(t, a)
+	a.GoScreen(1)
+	a.pat = 1
+	a.ensurePattern()
+	a.autoRows()
+	a.toggle(a.rowPad(), 0)
+	a.togglePlay()
+	if !a.seqOn || a.playPat != 1 {
+		t.Fatalf("pattern 1 plays: on %v, playing %d", a.seqOn, a.playPat)
+	}
+	loops := au.Loops
+	a.SeqBank(1) // bank B: the view goes to pattern 17
+	if a.pat != 17 || !a.seqOn || a.playPat != 1 {
+		t.Fatalf("the view is on 17 and 1 still plays: pat %d, on %v, playing %d", a.pat, a.seqOn, a.playPat)
+	}
+	if au.Loops != loops {
+		t.Fatalf("the loop was not replaced: %d loops, was %d", au.Loops, loops)
+	}
+	if a.playStep() != -1 {
+		t.Fatal("no playhead in a pattern that does not play")
+	}
+	// an edit of the pattern in view does not reach the loop
+	a.ensurePattern()
+	a.autoRows()
+	a.toggle(a.rowPad(), 3)
+	a.replay()
+	if au.Loops != loops {
+		t.Fatalf("an edit of another pattern leaves the loop alone: %d, was %d", au.Loops, loops)
+	}
+	// Space stops what plays, Space plays the pattern in view
+	a.togglePlay()
+	if a.seqOn || a.playPat != 0 {
+		t.Fatal("Space stops it")
+	}
+	a.togglePlay()
+	if !a.seqOn || a.playPat != 17 || au.Loops != loops+1 {
+		t.Fatalf("Space again plays the new pattern: on %v, playing %d, loops %d", a.seqOn, a.playPat, au.Loops)
+	}
+	// back on the playing pattern, an edit goes into the loop again
+	a.SeqBank(-1)
+	a.SeqBank(1)
+	before := au.Loops
+	a.toggle(a.rowPad(), 7)
+	if au.Loops <= before {
+		t.Fatalf("an edit of the pattern that plays is heard: %d, was %d", au.Loops, before)
+	}
+}
