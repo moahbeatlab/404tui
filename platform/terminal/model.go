@@ -296,10 +296,6 @@ func (m *Model) key(msg tea.KeyMsg) {
 		m.send(l, 0)
 		m.app.Dispatch(core.Event{Key: core.Y, Down: false})
 		return
-	case "ctrl+p", "f10": // while recording: say which pattern plays now (the unit does not tell), for the replay
-		m.disarm()
-		m.app.CuePattern()
-		return
 	case "?":
 		m.disarm()
 		m.app.ToggleHelp()

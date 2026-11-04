@@ -39,19 +39,6 @@ func (a *App) ToggleRecording() {
 	a.say("recording to "+short2(s.Path, 40)+" ("+s.Tool+")", false)
 }
 
-// CuePattern asks which pattern plays now, while a recording runs: the unit does not tell when its pattern changes, and the event log
-// keeps the answer with the time, for the replay.
-func (a *App) CuePattern() {
-	if a.rec == nil {
-		a.say("no recording runs: the pattern is noted only in a recording", true)
-		return
-	}
-	a.pickPattern("the pattern that plays now", max(a.perfNow, 1), func(n int) {
-		a.perfNow = n
-		a.say("now: pattern "+a.label(n-1)+" (noted in the recording)", false)
-	})
-}
-
 type recResult struct {
 	s   *record.Session
 	err error
