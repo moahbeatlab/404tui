@@ -360,7 +360,7 @@ func (a *App) transformPad(n int, op string, arg int) error {
 		return err
 	}
 	name := a.info.Pads[n].Name
-	if err := a.lab.Assign(n, nid, name); err != nil {
+	if err := a.assignPad(n, nid, name); err != nil {
 		return err
 	}
 	a.lab.Free(nid)
@@ -390,7 +390,7 @@ func (a *App) carryKey(k Key) {
 			if !ok {
 				return
 			}
-			if err := a.lab.Assign(to, id, a.info.Pads[c.from].Name); err != nil {
+			if err := a.assignPad(to, id, a.info.Pads[c.from].Name); err != nil {
 				a.say(err.Error(), true)
 				return
 			}

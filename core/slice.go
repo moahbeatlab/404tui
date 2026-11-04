@@ -292,7 +292,7 @@ func (a *App) slicesToPadsFrom(first int, shuffled bool) {
 		}
 		var m lab.Meta
 		json.Unmarshal(mb, &m)
-		err = a.lab.Assign(n, m.ID, fmt.Sprintf("%s_%02d", fit(base, 14), i+1))
+		err = a.assignPad(n, m.ID, fmt.Sprintf("%s_%02d", fit(base, 14), i+1))
 		a.lab.Free(m.ID)
 		if err == nil {
 			delete(a.pcm, n)

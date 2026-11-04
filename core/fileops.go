@@ -117,7 +117,7 @@ func (a *App) assignByNumber(files []string) {
 			}
 			pad := bank*16 + n - 1
 			name := strings.TrimSuffix(baseName(f), filepath.Ext(baseName(f)))
-			if err := a.lab.Assign(pad, id, name); err != nil {
+			if err := a.assignPad(pad, id, name); err != nil {
 				a.say(err.Error(), true)
 				continue
 			}
@@ -166,7 +166,7 @@ func (a *App) assignInOrder(all []string) {
 				continue
 			}
 			name := strings.TrimSuffix(baseName(p), filepath.Ext(baseName(p)))
-			if err := a.lab.Assign(at, id, name); err != nil {
+			if err := a.assignPad(at, id, name); err != nil {
 				a.say(err.Error(), true)
 				continue
 			}
@@ -191,8 +191,22 @@ func (a *App) finishAssign(first, done int) {
 	a.go_(Pads)
 }
 
-// markAllHere marks every audio file of the folder in front.
+// markAllHere marks every audio file of the folder in front; when they are all marked already it takes every mark away.
 func (a *App) markAllHere() {
+	all, any := true, false
+	for _, e := range a.entries {
+		if !e.dir {
+			any = true
+			if !a.fmarks[joinPath(a.dir, e.name)] {
+				all = false
+			}
+		}
+	}
+	if any && all { // everything here is marked already: M takes every mark away again
+		a.fmarks = nil
+		a.say("nothing marked", false)
+		return
+	}
 	if a.fmarks == nil {
 		a.fmarks = map[string]bool{}
 	}

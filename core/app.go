@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/moahbeatlab/404tui/app"
+	"github.com/moahbeatlab/404tui/dbg"
 	"github.com/moahbeatlab/404tui/perform"
 	"github.com/moahbeatlab/404tui/record"
 	"os"
@@ -290,6 +291,7 @@ func New(root, outDir string, a Audio) *App {
 	app.lab.NewProject("PROJECT_01")
 	app.dir = root
 	app.loadSettings()
+	app.applyDebug()
 	app.loopBank, app.loopDelAsk, app.loopSlicesAt = app.set.LooperBank, -1, 1
 	SetTextTheme(app.set.Theme)
 	app.loadAutosaveSetting()
@@ -405,7 +407,16 @@ func (a *App) readDir(dir string, projects bool) ([]entry, error) {
 
 func (a *App) padN() int { return a.bank*16 + a.cur }
 
-func (a *App) say(s string, bad bool) { a.msg, a.msgBad = s, bad }
+func (a *App) say(s string, bad bool) {
+	a.msg, a.msgBad = s, bad
+	if dbg.Enabled() {
+		l := dbg.Logger.Debug
+		if bad {
+			l = dbg.Logger.Warn
+		}
+		l("say", "msg", s)
+	}
+}
 
 // Screen is the screen in front.
 func (a *App) Screen() Screen { return a.scr }
@@ -1218,7 +1229,7 @@ func (a *App) filesKey(k Key) {
 
 // assignFile puts the decoded file on pad n and goes to the pads.
 func (a *App) assignFile(id int, name string, n int) {
-	if err := a.lab.Assign(n, id, name); err != nil {
+	if err := a.assignPad(n, id, name); err != nil {
 		a.say(err.Error(), true)
 		return
 	}

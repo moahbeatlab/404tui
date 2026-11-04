@@ -216,7 +216,7 @@ func (a *App) bounceMarkedArp() {
 			a.say("cannot keep the arp", true)
 			return
 		}
-		err = a.lab.Assign(to, meta.ID, fmt.Sprintf("arp_%s_%d", arpTypes[a.arpp.typ], len(keys)))
+		err = a.assignPad(to, meta.ID, fmt.Sprintf("arp_%s_%d", arpTypes[a.arpp.typ], len(keys)))
 		a.lab.Free(meta.ID)
 		if err != nil {
 			a.say(err.Error(), true)

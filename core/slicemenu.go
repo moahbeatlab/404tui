@@ -299,7 +299,7 @@ func (a *App) resultTo(n int) {
 		return
 	}
 	name := fmt.Sprintf("%s_mix", fit(a.info.Pads[a.spad].Name, 12))
-	err = a.lab.Assign(n, id, name)
+	err = a.assignPad(n, id, name)
 	a.lab.Free(id)
 	if err != nil {
 		a.say(err.Error(), true)

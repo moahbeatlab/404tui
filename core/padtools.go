@@ -126,7 +126,7 @@ func (a *App) arpToPad(n int) {
 			return
 		}
 		name := fmt.Sprintf("%s_%s%s", fit(a.info.Pads[n].Name, 8), formats.PitchNames[a.arp.Root], formats.ArpChords[a.arp.chord].Name)
-		err = a.lab.Assign(to, id, fit(name, 15))
+		err = a.assignPad(to, id, fit(name, 15))
 		a.lab.Free(id)
 		if err != nil {
 			a.say(err.Error(), true)
@@ -188,7 +188,7 @@ func (a *App) keyboard(n, keys, scale int) {
 			a.say(err.Error(), true)
 			return
 		}
-		err = a.lab.Assign(first+i, pid, fmt.Sprintf("%s_%+d", base, semi))
+		err = a.assignPad(first+i, pid, fmt.Sprintf("%s_%+d", base, semi))
 		a.lab.Free(pid)
 		if err != nil {
 			a.say(err.Error(), true)

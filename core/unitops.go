@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/moahbeatlab/404tui/dbg"
 	"os"
 	"path/filepath"
 	"sort"
@@ -128,6 +129,8 @@ func (a *App) unitLoadNow(dev *device.Device, n int, live bool) {
 	if live {
 		a.jobWhat = "opening for live editing"
 	}
+	loadStart := time.Now()
+	dbg.Logger.Info("unit: load", "project", n+1, "live", live)
 	a.startJob(n, func(progress func(done, total int, name string)) error {
 		if !live {
 			total, _ := app.ProjectFileCount(dev, uint8(n))
@@ -138,6 +141,7 @@ func (a *App) unitLoadNow(dev *device.Device, n int, live bool) {
 		if _, err := app.ExportProjectLight(st, uint8(n), dir, func(done int, name string) { progress(done, total, name) }); err != nil {
 			return err
 		}
+		dbg.Logger.Debug("unit: load: the small files are here", "files", total, "ms", time.Since(loadStart).Milliseconds())
 		names, err := app.ProjectSampleFiles(dev, uint8(n))
 		if err != nil {
 			return err
@@ -157,6 +161,7 @@ func (a *App) unitLoadNow(dev *device.Device, n int, live bool) {
 		}
 		return nil
 	}, func(err error) {
+		dbg.Logger.Info("unit: load finished", "project", n+1, "live", live, "ms", time.Since(loadStart).Milliseconds(), "remote samples", len(headers), "err", err)
 		if err != nil {
 			a.say("load failed: "+err.Error(), true)
 			return
@@ -309,7 +314,9 @@ func (a *App) fetchPad(dev *device.Device, n, p int) ([]byte, error) {
 		return nil, fmt.Errorf("no pad %d", p)
 	}
 	a.say(fmt.Sprintf("fetching %s from the unit...", a.label(p)), false)
+	st := time.Now()
 	data, err := dev.ReadFile(pi.SamplePath(uint8(n) + 1))
+	dbg.Logger.Info("unit: sample fetched at once (something needed it)", "pad", a.label(p), "bytes", len(data), "ms", time.Since(st).Milliseconds(), "err", err)
 	if err != nil {
 		return nil, err
 	}

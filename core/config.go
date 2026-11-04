@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/moahbeatlab/404tui/app"
+	"github.com/moahbeatlab/404tui/dbg"
 	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/record"
 )
@@ -368,6 +369,20 @@ func (a *App) cfgItems() []cfgItem {
 				a.saveSettings()
 			}},
 	)
+	if Terminal { // the debug log: a file for whoever looks at a problem
+		items = append(items,
+			cfgItem{head: "DEBUG"},
+			cfgItem{label: "Debug log", value: func(a *App) string { return a.debugValue() }, hint: "< > change",
+				change: func(a *App, by int) { a.setDebug(dbg.Mode() + by) },
+				edit:   func(a *App) { a.setDebug(dbg.Mode() + 1) }},
+			cfgItem{label: "The log is written to", value: func(a *App) string {
+				if p := dbg.Path(); p != "" {
+					return short2(p, 40)
+				}
+				return "(it is off)"
+			}},
+		)
+	}
 	_ = rule
 	if Terminal { // there is no PERF screen on a computer: its pad code has nothing to start
 		items = slices.DeleteFunc(items, func(it cfgItem) bool { return it.label == "Live mode (the PERF screen)" })

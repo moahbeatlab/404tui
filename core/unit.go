@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/moahbeatlab/404tui/dbg"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,6 +72,7 @@ func (a *App) Tick() {
 			if l != nil {
 				a.link = l
 				a.connAt = a.clock()
+				dbg.Logger.Info("unit: found", "name", l.Name())
 			}
 		default:
 		}

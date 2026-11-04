@@ -826,6 +826,11 @@ The program's settings; on a computer the writing of the project (what SAVE does
 
 - `Colour theme of the terminal` — left right change
 
+*Debug*
+
+- `Debug log` — left right change
+- `The log is written to` — 
+
 ## SAVE (handheld only)
 
 Writes the project as a folder for the SD card. On a computer this is in CONFIG, under PROJECT.

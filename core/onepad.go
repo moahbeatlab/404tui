@@ -298,7 +298,7 @@ func (a *App) onePadBounce(n int, chord bool) {
 			a.say("cannot keep the arp", true)
 			return
 		}
-		err = a.lab.Assign(to, meta.ID, fmt.Sprintf("%s_%s", fit(a.info.Pads[n].Name, 9), name))
+		err = a.assignPad(to, meta.ID, fmt.Sprintf("%s_%s", fit(a.info.Pads[n].Name, 9), name))
 		a.lab.Free(meta.ID)
 		if err != nil {
 			a.say(err.Error(), true)
@@ -328,7 +328,7 @@ func (a *App) onePadPattern(n int) {
 	for i, s := range semis {
 		pid, err := a.lab.Pitched(id, s)
 		if err == nil {
-			err = a.lab.Assign(first+i, pid, fmt.Sprintf("%s_%+d", base, s))
+			err = a.assignPad(first+i, pid, fmt.Sprintf("%s_%+d", base, s))
 			a.lab.Free(pid)
 		}
 		if err != nil {

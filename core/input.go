@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/moahbeatlab/404tui/dbg"
 )
 
 var keyNames = []string{"Up", "Down", "Left", "Right", "A", "B", "X", "Y", "L1", "R1", "L2", "R2", "Sel"}
@@ -23,6 +25,16 @@ func (a *App) Dispatch(e Event) {
 		return
 	}
 	if e.Down {
+		if dbg.Enabled() {
+			st := time.Now()
+			defer func() {
+				l := dbg.Logger.Debug
+				if d := time.Since(st); d > 60*time.Millisecond {
+					l = dbg.Logger.Warn
+				}
+				l("key", "key", e.Key.String(), "repeat", e.Repeat, "screen", a.ScreenName(), "modal", a.Modal(), "ms", time.Since(st).Milliseconds(), "msg", a.msg)
+			}()
+		}
 		a.Press(e.Key, e.Repeat)
 	} else {
 		a.Release(e.Key)

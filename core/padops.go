@@ -290,7 +290,7 @@ func (a *App) restorePads(dir string) {
 		}
 		id := meta.ID
 		n := int(pad.Index())
-		if err := a.lab.Assign(n, id, sp.Name); err != nil {
+		if err := a.assignPad(n, id, sp.Name); err != nil {
 			continue
 		}
 		for name, v := range sp.Params {

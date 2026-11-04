@@ -2,8 +2,10 @@ package terminal
 
 import (
 	"fmt"
+	"github.com/moahbeatlab/404tui/dbg"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -124,6 +126,12 @@ func tick() tea.Cmd {
 func (m *Model) tooSmall() bool { return m.cols < core.MinCols || m.rows < core.MinRows }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	defer func() { // a crash leaves its stack in the debug log (and goes on to the screen)
+		if r := recover(); r != nil {
+			dbg.Logger.Error("panic", "value", r, "stack", string(debug.Stack()))
+			panic(r)
+		}
+	}()
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.cols, m.rows = msg.Width, msg.Height
@@ -427,5 +435,11 @@ func (m *Model) View() string {
 	if m.tooSmall() {
 		return fmt.Sprintf("404tui needs a window of at least %dx%d characters; this one is %dx%d.\nMake it bigger (or the font smaller). Ctrl-C quits.", core.MinCols, core.MinRows, m.cols, m.rows)
 	}
-	return Render(m.app.RenderCells(), m.profile, m.glyphs)
+	st := time.Now()
+	cells := m.app.RenderCells()
+	out := Render(cells, m.profile, m.glyphs)
+	if d := time.Since(st); d > 80*time.Millisecond && dbg.Enabled() {
+		dbg.Logger.Warn("slow frame", "ms", d.Milliseconds(), "screen", m.app.ScreenName(), "cols", m.cols, "rows", m.rows)
+	}
+	return out
 }

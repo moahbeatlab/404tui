@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/moahbeatlab/404tui/app"
+	"github.com/moahbeatlab/404tui/dbg"
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
@@ -912,6 +914,11 @@ func TestNumberedKitFilesGoOnThePadOfTheirNumberAndEmptyOnesAreLeftOut(t *testin
 	if len(a.fmarks) != 6 {
 		t.Fatalf("M marks every file: %d", len(a.fmarks))
 	}
+	a.MarkAll()
+	if len(a.fmarks) != 0 {
+		t.Fatalf("M again takes every mark away: %d", len(a.fmarks))
+	}
+	a.MarkAll()
 	press := func(k Key) {
 		a.Dispatch(Event{Key: k, Down: true})
 		a.Dispatch(Event{Key: k, Down: false})
@@ -936,5 +943,99 @@ func TestNumberedKitFilesGoOnThePadOfTheirNumberAndEmptyOnesAreLeftOut(t *testin
 	}
 	if !strings.Contains(a.msg, "no pad for 00_DrumLoop_01.wav") || !strings.Contains(a.msg, "2 empty left out") {
 		t.Errorf("it says what it left out: %q", a.msg)
+	}
+}
+
+func TestTheDebugLogSaysWhatHappened(t *testing.T) {
+	termOn(t)
+	path := filepath.Join(t.TempDir(), "debug.log")
+	if _, err := dbg.Set(dbg.Basic, path); err != nil {
+		t.Fatal(err)
+	}
+	defer dbg.Set(dbg.Off, "")
+	a, _ := newApp(t)
+	waitLink(t, a)
+	dev, _ := a.unitDevice()
+	a.goLive(dev, 0)
+	t.Cleanup(func() { a.stopLive() })
+	kitKeys(t, a)
+	a.liveSync()
+	a.Dispatch(Event{Key: Right, Down: true})
+	a.say("a message", true)
+	time.Sleep(50 * time.Millisecond)
+	b, _ := os.ReadFile(path)
+	txt := string(b)
+	for _, want := range []string{"unit: found", "live: start", "pad assigned", "live: changes found", "msg=\"a message\"", "level=WARN", "msg=key"} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("the debug log has %q:\n%s", want, txt)
+		}
+	}
+	a.GoScreen(5)
+	for i, it := range a.cfgItems() {
+		if strings.HasPrefix(it.label, "Debug log") {
+			a.cfgAt = i
+		}
+	}
+	if txt := screenStr(a); !strings.Contains(txt, "Debug log") || !strings.Contains(txt, "The log is written to") {
+		t.Fatalf("CONFIG shows the log and where it is written:\n%s", txt)
+	}
+}
+
+func TestASampleAssignedWhileEditingLiveReachesTheUnit(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	dev := device.New(sim.Demo(), "sim")
+	a.goLive(dev, 0)
+	t.Cleanup(func() { a.stopLive() })
+	// a pad that is empty on the unit gets a sample in the editor
+	pad := -1
+	for n := 0; n < 16; n++ {
+		pi, _ := proto.NewPadIndex(uint16(n))
+		if blk, err := dev.PadBlock(pi); err == nil && !blk.HasSample() {
+			pad = n
+			break
+		}
+	}
+	if pad < 0 {
+		t.Skip("the simulated unit has every pad of bank A in use")
+	}
+	id := a.lab.Decode
+	_ = id
+	kitKeys(t, a)
+	for n := range a.info.Pads {
+		if a.info.Pads[n].File && n != pad && pad > 2 {
+			break
+		}
+	}
+	a.GoScreen(0)
+	src, _ := os.ReadFile(filepath.Join(a.Root, "bass", "bass_C1.wav"))
+	mb, err := a.lab.Decode(src, ".wav")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m lab.Meta
+	json.Unmarshal(mb, &m)
+	if err := a.assignPad(pad, m.ID, "fresh"); err != nil {
+		t.Fatal(err)
+	}
+	a.refresh()
+	a.liveSync()
+	for i := 0; i < 500; i++ {
+		if w, _, _ := a.liveStatus(); w == 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	a.liveTick()
+	if _, _, err := a.liveStatus(); err != nil {
+		t.Fatalf("sending the sample failed: %v", err)
+	}
+	if strings.Contains(a.msg, "live:") && a.msgBad {
+		t.Fatalf("the unit refused: %s", a.msg)
+	}
+	pi, _ := proto.NewPadIndex(uint16(pad))
+	blk, err := dev.PadBlock(pi)
+	if err != nil || !blk.HasSample() {
+		t.Fatalf("the unit has the sample on pad %d: %v", pad+1, err)
 	}
 }

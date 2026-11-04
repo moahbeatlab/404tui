@@ -1110,7 +1110,7 @@ func (a *App) bounce(play func(int) bool, tag string) {
 			a.say("cannot keep the bounce", true)
 			return
 		}
-		err = a.lab.Assign(to, meta.ID, fit(fmt.Sprintf("bnc_%s_%s", a.label(a.pat-1), tag), 15))
+		err = a.assignPad(to, meta.ID, fit(fmt.Sprintf("bnc_%s_%s", a.label(a.pat-1), tag), 15))
 		a.lab.Free(meta.ID)
 		if err != nil {
 			a.say(err.Error(), true)

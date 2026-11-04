@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/moahbeatlab/404tui/core"
+	"github.com/moahbeatlab/404tui/dbg"
 	"github.com/moahbeatlab/404tui/device"
 	"github.com/moahbeatlab/404tui/platform/terminal"
 	"github.com/moahbeatlab/404tui/playback"
@@ -26,6 +27,16 @@ func runUnified(o options) error {
 	}
 	os.MkdirAll(base, 0o755)
 	quietStderr(filepath.Join(base, "404tui.log"))
+	if o.trace || o.verbose { // -v and -trace turn the debug log on from the start (CONFIG does it while the program runs)
+		mode := dbg.Basic
+		if o.trace {
+			mode = dbg.Trace
+		}
+		if p, err := dbg.Set(mode, o.logPath); err == nil {
+			defer dbg.Set(dbg.Off, "")
+			_ = p
+		}
+	}
 	opt := terminal.Options{Samples: o.samples, Out: o.out, Project: o.project, Version: version.Full()}
 	if o.basicGlyphs {
 		g := terminal.BasicGlyphs
@@ -47,13 +58,13 @@ func runUnified(o options) error {
 		MIDI:     midiin.Default(),
 		Connect: func() (core.Link, error) {
 			if o.simulate {
-				return core.DeviceLink{Dev: device.New(sim.Demo(), "sim")}, nil
+				return core.DeviceLink{Dev: device.New(sim.Demo(), "sim", device.WithLogger(dbg.Logger))}, nil
 			}
 			p, name, err := serialport.OpenFirst()
 			if err != nil {
 				return nil, err
 			}
-			return core.DeviceLink{Dev: device.New(p, name)}, nil
+			return core.DeviceLink{Dev: device.New(p, name, device.WithLogger(dbg.Logger))}, nil
 		},
 		Keyboard: true,
 	}

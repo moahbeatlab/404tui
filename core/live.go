@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"fmt"
+	"github.com/moahbeatlab/404tui/dbg"
 	"hash/maphash"
 	"strings"
 	"sync"
@@ -80,6 +81,7 @@ func (a *App) goLive(dev *device.Device, n int) {
 		a.say(err.Error(), true)
 		return
 	}
+	dbg.Logger.Info("live: start", "project", n+1)
 	l := &liveState{dev: dev, project: n, seed: maphash.MakeSeed(), pulls: make(chan []pulled, 4), stop: make(chan struct{})}
 	l.base = a.liveBaseNow(l)
 	l.sig = l.base
@@ -165,6 +167,17 @@ func (a *App) liveSync() {
 		}
 	}
 	l.base = now
+	if dbg.Enabled() && len(ch) > 0 {
+		kinds := map[string]int{}
+		var pads []string
+		for _, c := range ch {
+			kinds[c.kind]++
+			if c.kind != "param" && len(pads) < 12 {
+				pads = append(pads, padLabelOf(c))
+			}
+		}
+		dbg.Logger.Info("live: changes found", "n", len(ch), "kinds", kinds, "pads", pads, "queued before", len(l.queue))
+	}
 	l.mu.Lock()
 	l.sig = now
 	start := false
@@ -192,7 +205,16 @@ func (l *liveState) run() {
 		c := l.queue[0]
 		l.queue = l.queue[1:]
 		l.mu.Unlock()
+		st := time.Now()
 		err := l.send(c)
+		if dbg.Enabled() {
+			size := len(c.data)
+			if err != nil {
+				dbg.Logger.Warn("live: send failed", "kind", c.kind, "what", padLabelOf(c), "bytes", size, "ms", time.Since(st).Milliseconds(), "err", err)
+			} else {
+				dbg.Logger.Debug("live: sent", "kind", c.kind, "what", padLabelOf(c), "bytes", size, "ms", time.Since(st).Milliseconds())
+			}
+		}
 		l.mu.Lock()
 		l.quietUntil = time.Now().Add(settleTime) // the unit may need a moment to show what it was given
 		l.sent++
@@ -214,7 +236,7 @@ func (l *liveState) send(c liveChange) error {
 	switch c.kind {
 	case "sample":
 		pad, _ := proto.NewPadIndex(uint16(c.pad))
-		return l.dev.ImportSMPLive(uint8(l.project), pad, c.data, c.name)
+		return l.dev.ImportSMPLive(uint8(l.project)+1, pad, c.data, c.name) // the import takes the project number from 1
 	case "clear":
 		pad, _ := proto.NewPadIndex(uint16(c.pad))
 		return l.dev.PadOp(proto.PadOpDelete, pad)
@@ -323,6 +345,7 @@ func (l *liveState) poll() []pulled {
 		l.seen = nil
 		return nil
 	}
+	pollStart := time.Now()
 	if l.seen == nil {
 		l.seen = map[int]uint64{}
 	}
@@ -357,6 +380,9 @@ func (l *liveState) poll() []pulled {
 			p.smp = smp
 		}
 		out = append(out, p)
+	}
+	if dbg.Enabled() {
+		dbg.Logger.Debug("live: poll", "bank", bank, "pulled", len(out), "waiting for a second look", len(l.seen), "ms", time.Since(pollStart).Milliseconds())
 	}
 	return out
 }
@@ -393,6 +419,7 @@ func (a *App) applyPulls(ps []pulled) {
 	}
 	var names []string
 	for _, p := range ps {
+		dbg.Logger.Info("live: pad pulled from the unit", "pad", a.label(p.n), "sample bytes", len(p.smp), "had sample", a.info.Pads[p.n].File)
 		if err := a.lab.PullPad(p.n, p.block, p.smp); err != nil {
 			a.say("live: "+err.Error(), true)
 			continue
@@ -501,7 +528,9 @@ func (a *App) fetchTick() {
 	a.fetchBusy = next
 	dev, project, ch := l.dev, l.project, a.fetchCh
 	go func() {
+		st := time.Now()
 		data, err := dev.ReadFile(pi.SamplePath(uint8(project) + 1))
+		dbg.Logger.Debug("live: sample fetched in the background", "pad", next+1, "bytes", len(data), "ms", time.Since(st).Milliseconds(), "err", err)
 		ch <- padFetch{next, data, err}
 	}()
 }

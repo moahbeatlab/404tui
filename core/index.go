@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/sha1"
 	"fmt"
+	"github.com/moahbeatlab/404tui/dbg"
 	"io/fs"
 	"os"
 	"path"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/moahbeatlab/404tui/app"
 )
@@ -76,8 +78,11 @@ func (a *App) startIndex(root string) {
 	atomic.StoreInt64(&j.count, 0)
 	j.mu.Unlock()
 	a.say("indexing "+short2(root, 30)+" in the background", false)
+	dbg.Logger.Info("index: start", "root", root)
 	go func() {
+		st := time.Now()
 		n, err := a.buildIndex(root, &j.count)
+		dbg.Logger.Info("index: done", "root", root, "files", n, "ms", time.Since(st).Milliseconds(), "err", err)
 		j.mu.Lock()
 		j.running = false
 		if err != nil {
