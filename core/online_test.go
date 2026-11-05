@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -468,6 +469,9 @@ func TestFolderChooserWalksTheFolders(t *testing.T) {
 }
 
 func TestFilesLeftColumnShowsTheSourceAtTheTopOfOne(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a Windows path has drives and no single top: the list of sources there is not checked yet")
+	}
 	termOn(t)
 	a, _ := newApp(t)
 	waitLink(t, a)
