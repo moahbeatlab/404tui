@@ -48,7 +48,7 @@ func TestReplayHelpSaysEverything(t *testing.T) {
 }
 
 func TestPlanFramesLeavesTheCutsOut(t *testing.T) {
-	cuts := []replay.Cut{{2, 4}, {7, 8.5}}
+	cuts := []replay.Cut{{From: 2, To: 4}, {From: 7, To: 8.5}}
 	spans, times := planFrames(cuts, 0, 10, 10)
 	if len(spans) != 3 || spans[0].n != 20 || spans[1].n != 30 || spans[2].n != 15 || len(times) != 65 {
 		t.Fatalf("spans %+v, %d frames", spans, len(times))
