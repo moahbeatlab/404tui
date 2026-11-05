@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
@@ -3693,6 +3694,9 @@ type fakeMIDI struct{ ch chan midiin.Event }
 
 func (f fakeMIDI) Ports() ([]string, error) { return []string{"SP-404MKII"}, nil }
 func (f fakeMIDI) Open(part string, on func(midiin.Event)) (func(), string, error) {
+	if !strings.Contains(strings.ToLower("SP-404MKII"), strings.ToLower(part)) { // as a real one: only the input that has this in its name
+		return nil, "", errors.New("no MIDI input with " + part + " in its name")
+	}
 	go func() {
 		for e := range f.ch {
 			on(e)
