@@ -258,9 +258,10 @@ const params = new URLSearchParams(location.search);
 const VERT = ["vertical", "shorts", "reels", "9x16"].includes(params.get("format") || "");
 if (VERT) { cv.width = 1080; cv.height = 1920; }
 const W = cv.width, H = cv.height;
-// where every panel is: [x, y, w, h]. The bottom of a vertical frame is left free for what the platforms put over it.
+// where every panel is: [x, y, w, h]. The bottom of a vertical frame is left free for what the platforms put over it, and so are the sides (a phone that
+// is taller than 9:16 shows the video larger than its screen, Instagram and YouTube cut about 48 px of each side: 72 px stay free).
 const L = VERT
-  ? { pads: [20, 108, 1040, 540], pattern: [20, 660, 1040, 350], fx: [20, 1022, 1040, 220], meter: [20, 1254, 1040, 270], feed: [20, 1536, 1040, 168] }
+  ? { pads: [72, 108, 936, 540], pattern: [72, 660, 936, 350], fx: [72, 1022, 936, 220], meter: [72, 1254, 936, 270], feed: [72, 1536, 936, 168] }
   : { pads: [40, 80, 880, 560], pattern: [40, 656, 880, 394], fx: [960, 80, 920, 236], meter: [960, 332, 920, 452], feed: [960, 800, 920, 250] };
 const L0 = JSON.parse(JSON.stringify(L)); // the layout without a camera: what a preset of a scene is laid over
 const PANEL_IDS = ["pads", "pattern", "fx", "meter", "feed"];
@@ -574,11 +575,11 @@ function drawHeader(T, A) {
   const dur = AN ? AN.duration : 0, name = TITLE || PROJ.name || "";
   if (VERT) {
     rect(0, 0, W, 100, COL.deep);
-    text(fit(name, 30), 24, 44, TITLE ? COL.text : COL.amber, 32, true);
-    text(mmss(outTime(A)) + " / " + mmss(outDur()), W - 24, 44, COL.dim, 22, false, "right");
-    text(bpmText, 24, 86, tp.src === "project" ? COL.dim : COL.amber, 34, true);
-    text(pos ? "BAR " + bar + "  BEAT " + beat : "", 300, 84, COL.text, 24);
-    text(run ? "PLAY" : "STOP", W - 24, 84, run ? COL.good : COL.dim, 26, true, "right");
+    text(fit(name, 27), 72, 44, TITLE ? COL.text : COL.amber, 32, true);
+    text(mmss(outTime(A)) + " / " + mmss(outDur()), W - 72, 44, COL.dim, 22, false, "right");
+    text(bpmText, 72, 86, tp.src === "project" ? COL.dim : COL.amber, 34, true);
+    text(pos ? "BAR " + bar + "  BEAT " + beat : "", 336, 84, COL.text, 24);
+    text(run ? "PLAY" : "STOP", W - 72, 84, run ? COL.good : COL.dim, 26, true, "right");
     return;
   }
   rect(0, 0, W, 64, COL.deep);
@@ -1127,7 +1128,7 @@ function drawChapter(A) {
   const cs = CHAPS.slice().sort((a, b) => a.t - b.t); let i = -1;
   for (let k = 0; k < cs.length; k++) if (cs[k].t <= A + 0.001) i = k;
   if (i < 0 || !cs[i].title) return;
-  const fresh = A - cs[i].t < 3, x = 44, y = VERT ? 1727 : 1069; // vertical: just above the handle and the logo
+  const fresh = A - cs[i].t < 3, x = VERT ? 72 : 44, y = VERT ? 1727 : 1069; // vertical: just above the handle and the logo
   rect(x, y - 14, 8, 8, COL.amber);
   text(cs[i].title, x + 18, y, fresh ? COL.text : COL.dim, 22, fresh);
   text((i + 1) + " / " + cs.length, x + 18 + (function () { g.font = FONT(22 * (VERT ? 1.22 : 1), fresh); return g.measureText(cs[i].title).width; })() + 16, y, COL.dim, 18);
@@ -1171,7 +1172,7 @@ function drawCaption(A) {
   g.restore();
   if (fr) { g.save(); g.globalAlpha = fade; g.strokeStyle = COL.amber; g.lineWidth = 4; g.shadowColor = COL.amber; g.shadowBlur = 24; g.beginPath(); g.roundRect(fr[0] - 4, fr[1] - 4, fr[2] + 8, fr[3] + 8, 14); g.stroke(); g.restore(); }
   if (!c.text) return;
-  const px = 34, k = VERT ? 1.22 : 1, bwMax = Math.min(W - 80, VERT ? 940 : 1260);
+  const px = 34, k = VERT ? 1.22 : 1, bwMax = Math.min(W - 80, VERT ? 860 : 1260);
   const words = capWords(c.text), lines = wrapText(words.map(x => x.w).join(" "), bwMax - 96, px).slice(0, 5), lh = px * k * 1.32, bh = lines.length * lh + 52;
   g.font = FONT(px * k, false); // the card is as wide as its longest line (a short caption gets a small card)
   const bw = clamp(Math.max(...lines.map(l => g.measureText(l).width)) + 104, 360, bwMax);
@@ -1592,9 +1593,9 @@ const PRESETS_LAYOUT = {
   },
   vertical: {
     panels: { cam: null, rects: {}, off: [] },
-    top: { cam: [20, 108, 1040, 720], rects: { pads: [20, 840, 1040, 420], pattern: [20, 1272, 1040, 290], fx: [20, 1574, 1040, 210] }, off: ["meter", "feed"] },
-    bottom: { cam: [20, 1180, 1040, 520], rects: { pads: [20, 108, 1040, 540], pattern: [20, 660, 1040, 250], fx: [20, 922, 1040, 246] }, off: ["meter", "feed"] },
-    corner: { cam: [560, 1254, 500, 450], rects: {}, off: ["feed"] },
+    top: { cam: [72, 108, 936, 720], rects: { pads: [72, 840, 936, 420], pattern: [72, 1272, 936, 290], fx: [72, 1574, 936, 210] }, off: ["meter", "feed"] },
+    bottom: { cam: [72, 1180, 936, 520], rects: { pads: [72, 108, 936, 540], pattern: [72, 660, 936, 250], fx: [72, 922, 936, 246] }, off: ["meter", "feed"] },
+    corner: { cam: [508, 1254, 500, 450], rects: {}, off: ["feed"] },
     full: { cam: [0, 100, 1080, 1720], rects: {}, off: PANEL_IDS },
   },
 };
@@ -1612,7 +1613,7 @@ function applyLayout(A) {
   const cur = sceneRects(p.c.s), prev = p.c.i > 0 ? sceneRects(p.c.sc[p.c.i - 1]) : cur, k = p.raw >= 1 || p.tr === "cut" ? 1 : p.e;
   for (const id of PANEL_IDS) L[id] = cur[id].map((v, i) => prev[id][i] + (v - prev[id][i]) * k);
 }
-const camDefaultRect = () => (VERT ? [20, 108, 1040, 640] : [40, 74, 560, 976]);
+const camDefaultRect = () => (VERT ? [72, 108, 936, 640] : [40, 74, 560, 976]);
 const camScenes = () => CAM.scenes.slice().sort((a, b) => a.t - b.t);
 function camSceneAt(A) { let i = -1; const sc = camScenes(); for (let k = 0; k < sc.length; k++) if (sc[k].t <= A + 0.001) i = k; return i < 0 ? null : { sc, i, s: sc[i] }; }
 const panelOn = (id, A) => { const c = camSceneAt(A); return !(c && sceneOff(c.s).includes(id)); };
@@ -1721,7 +1722,7 @@ function initCamera(saved, file) {
   const ensureScene = () => { // a camera with no scene gets one at the start
     if (CAMFILE && !CAM.scenes.length) CAM.scenes.push({ t: 0, wide: camDefaultRectFor("wide"), vertical: camDefaultRectFor("vertical"), move: 0.6, off: [] });
   };
-  function camDefaultRectFor(k) { return k === "vertical" ? [20, 108, 1040, 640] : [40, 74, 560, 976]; }
+  function camDefaultRectFor(k) { return k === "vertical" ? [72, 108, 936, 640] : [40, 74, 560, 976]; }
   const status = () => { $("cam_status").textContent = CAMFILE ? "video: " + CAMFILE + (vid.duration ? "  (" + mmss(vid.duration) + ")" : "") : "no video yet: type the path of the file and press use"; };
   // ---- the lane of the scenes
   function buildLane() {
