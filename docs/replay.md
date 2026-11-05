@@ -64,6 +64,8 @@ pattern, the buses, one bus (`bus 3`), the events, the level and the tempo.
 
 ![A caption that looks at a pad](img/replay-frame-pad.jpg)
 
+![A caption that looks at a bus](img/replay-frame-spotlight.jpg)
+
 - **Animation** (for all captions): the card appears; the words pop in one after the other; or the text is typed letter by letter.
 - **\*Stars\*:** a word between stars, like `*snare*`, is shown in the accent colour (it swells for a moment when it comes).
 - **Settings for all captions:** the fade in and out, the blur and the dimming behind a caption, and how long a new caption lasts.
@@ -104,8 +106,8 @@ playhead: "from here on bus 3 is Filter + Drive". The bus headers on the picture
 
 ![The camera tab](img/replay-camera.png)
 
-**Camera** takes a video of you playing: type its path and press *use*. The camera has no sound, so match it by eye: find a pad hit in the take, find its frame in the
-video and set the sync. The box is dragged on the picture (its corners change the size; the zoom and the position of the cut-out are sliders), as a circle or a rectangle, mirrored or not, in front of the
+**Camera** takes a video of you playing: type its path and press *use*. The camera has no sound, so match it by eye: pick a pad hit of the take (*go to the hit*), step the video to the frame where that pad is hit (*frame <* and *frame >*, or the offset buttons) and the
+sync is set. The box is dragged on the picture (its corners change the size; the zoom and the position of the cut-out are sliders, and another slider rounds the corners), can be mirrored, and is in front of the
 panels or behind them.
 
 A **scene** is a point on the timeline from which the box has a place and a size, for each format, and the panels that are shown. The box moves to the next scene's place in the time
