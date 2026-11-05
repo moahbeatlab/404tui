@@ -11,7 +11,7 @@ It was observed on one unit; the firmware version was not noted. Where it says "
 | the sequencer plays | the clock (24 pulses per quarter note), `start`, `stop` |
 | a pattern loops | a note on channel 13, note 48, at every loop start (not every pattern sends it) |
 | `SUB PAD` + a pattern pad | a `stop` and a `start` within 10 to 40 ms of each other |
-| a pattern is **changed** | **nothing was seen** |
+| a pattern is **changed** | **nothing was seen** when the new pattern is in the same bank (A1 to A2); when a pattern of **another bank** starts, status byte 3 changes (see below) |
 | the sequencer **plays its notes** | **no pad notes**: only the loop marker above. A pad note in the log is a pad someone hit |
 | a knob is turned | a control change (the bus effect knobs, with the effect's switch), as `cc` in the log |
 
@@ -24,8 +24,8 @@ The status request (`FE 66 00`) is answered with a status of 19 bytes. What is k
 | Byte | Meaning |
 | --- | --- |
 | 1 | the project |
-| 3 | the bank of the selected pad: it follows the bank buttons in **pad mode**; in pattern mode a change of bank **changes nothing** in the status |
-| 5 | the selected pad (0 to 15) |
+| 3 | the bank: in **pad mode** it follows the bank buttons. In pattern mode, switching the bank in view **changes nothing**, but when a pattern of another bank **starts** (at the end of the loop that was playing) the byte takes that bank. So it follows the bank of the pattern that plays; the pattern within the bank is not in it. Seen once, with A to B |
+| 5 | the selected pad (0 to 15): a pad press selects it, also in mute mode; a change of bank in pad mode sets it back to 0 |
 | 8 to 11 | the frames played of the pad that sounds, all `FF` when none does |
 | 12 | 0 when the sequencer is stopped, 4 when it plays |
 | the others | did not change in the takes tried; they may hold more (the pattern?), which is what `probe watch` is for |
@@ -35,10 +35,12 @@ A pad hit **selects** the pad, so the recorder polls the status four times a sec
 What can be **sent**: a pad pressed and released (`PreviewStart`, `PreviewStop`; whether it layers over a playing pattern and goes through the bus effects is what `sp404 probe pad` is for), a pad's parameters (`SetParam`:
 setting its level to 0 mutes it, which is how the program mutes), the project data (pads, patterns, project settings), and files.
 
+**Mute.** Muting a pad on the unit (mute mode, pressing the pad) changed only byte 5, the selected pad. No MIDI was sent. Whether the mute is in the pad's data was not seen: the pad that was muted was not among the pads `probe watch` polled.
+
 ## So: which pattern plays?
 
 Nothing the unit sends names the pattern that plays. The program therefore asks to be told (the web page's patterns, the Perform tab's pattern, `pattern from here...` in the replay), and knows it for
-sure only when it sent the change itself (a Program Change, or a pattern started from the web page). A guess from the loop length and the tempo is possible but not built. See [replay.md](replay.md#which-pattern-plays).
+sure only when it sent the change itself (a Program Change, or a pattern started from the web page). The status gives the **bank** of the pattern that plays at the moments when it changes (byte 3), which could suggest a pattern marker with the bank filled in; the pattern within the bank has to be told. A guess from the loop length and the tempo is possible but not built. See [replay.md](replay.md#which-pattern-plays).
 
 ## `sp404 probe`
 
