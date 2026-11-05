@@ -12,7 +12,7 @@ import (
 
 const replayUsage = `sp404 replay: show a recorded performance, and render it as a video
 
-  sp404 [-web addr] replay <take.wav> [take.events.jsonl]
+  sp404 [-web addr] replay <take.wav> [take.events.jsonl] [-format vertical]
         opens the replay in the browser (the events file is the one beside the WAV, name.events.jsonl, unless given;
         -web sets the address, 127.0.0.1 and any free port by default). Ctrl-C ends it.
   sp404 replay render <take.wav> [events.jsonl] [options]
@@ -65,9 +65,29 @@ func runReplay(args []string, o options) error {
 	if args[0] == "render" {
 		return runRender(args[1:], o)
 	}
-	if len(args) < 1 || len(args) > 2 {
-		return fmt.Errorf("usage: sp404 replay <audio.wav> [events.jsonl]   (without the second the file beside the WAV is used)")
+	// the files, and -format vertical|wide to open the page in that format (render takes it as well, and -o for the video)
+	var files []string
+	format := ""
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "-format" || a == "--format":
+			if i+1 >= len(args) || (args[i+1] != "vertical" && args[i+1] != "wide") {
+				return fmt.Errorf("-format: vertical or wide")
+			}
+			format = args[i+1]
+			i++
+		case a == "-vertical" || a == "--vertical":
+			format = "vertical"
+		case len(a) > 1 && a[0] == '-':
+			return fmt.Errorf("%s: the viewer takes only -format vertical|wide; to make a video use: sp404 replay render <take.wav> -o video.mp4 (-format vertical)", a)
+		default:
+			files = append(files, a)
+		}
 	}
+	if len(files) < 1 || len(files) > 2 {
+		return fmt.Errorf("usage: sp404 replay <audio.wav> [events.jsonl] [-format vertical]   (without the second file the one beside the WAV is used)")
+	}
+	args = files
 	events := ""
 	if len(args) == 2 {
 		events = args[1]
@@ -86,6 +106,9 @@ func runReplay(args []string, o options) error {
 		return err
 	}
 	defer stop()
+	if format == "vertical" {
+		url += "?format=vertical"
+	}
 	fmt.Printf("%d events, %.1f s of sound. Open %s (Space plays, the arrows move, [ and ] move the events against the sound, f is full screen). Ctrl-C ends.\n",
 		len(r.Events), r.Analysis.Duration, url)
 	openBrowser(url)

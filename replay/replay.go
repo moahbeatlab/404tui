@@ -39,6 +39,7 @@ type Replay struct {
 	style                 json.RawMessage
 	captions              []Caption
 	chapters              []Chapter
+	cuts                  []Cut
 	busNotes              []BusNote
 	cameraFile            string
 	camera                json.RawMessage
@@ -71,8 +72,11 @@ type Chapter struct {
 
 // ChaptersText is the list as YouTube wants it in a description: "0:00 Title" a line each. The first chapter has to start at 0:00, so one is put
 // there when the list does not begin with it.
-func ChaptersText(chs []Chapter) string {
+func ChaptersText(chs []Chapter, cuts []Cut) string {
 	c := append([]Chapter{}, chs...)
+	for i := range c {
+		c[i].T = OutTime(cuts, c[i].T) // the times of the video: what is cut before a chapter is taken off
+	}
 	sort.Slice(c, func(i, j int) bool { return c[i].T < c[j].T })
 	if len(c) == 0 {
 		return ""
@@ -101,6 +105,7 @@ type meta struct {
 	Captions        []Caption `json:"captions,omitempty"`
 	Chapters        []Chapter `json:"chapters,omitempty"`
 	BusNotes        []BusNote `json:"bus_notes,omitempty"`
+	Cuts            []Cut     `json:"cuts,omitempty"`
 	// CameraFile is the video of the player (a path, relative to this file when it is beside it); Camera is the page's own object about it
 	// (the sync, the crop, the scenes, the box on the picture), kept as it is.
 	CameraFile string          `json:"camera_file,omitempty"`
@@ -304,6 +309,21 @@ func (r *Replay) SetChapters(c []Chapter) error {
 	return r.save()
 }
 
+// Cuts are the parts of the take that the video leaves out.
+func (r *Replay) Cuts() []Cut {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]Cut{}, r.cuts...)
+}
+
+// SetCuts replaces the cuts (sorted, clipped to the take, joined where they touch) and keeps them in the file.
+func (r *Replay) SetCuts(c []Cut) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cuts = NormalizeCuts(c, r.Analysis.Duration)
+	return r.save()
+}
+
 // Style is the look of the video as the page saved it.
 func (r *Replay) Style() json.RawMessage {
 	r.mu.Lock()
@@ -332,13 +352,13 @@ func (r *Replay) SetStyle(b []byte) error {
 
 func (r *Replay) save() error {
 	r.fresh = false
-	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 && len(r.captions) == 0 && len(r.chapters) == 0 && len(r.busNotes) == 0 && r.cameraFile == "" && len(r.camera) == 0 && !r.adopted {
+	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 && len(r.captions) == 0 && len(r.chapters) == 0 && len(r.cuts) == 0 && len(r.busNotes) == 0 && r.cameraFile == "" && len(r.camera) == 0 && !r.adopted {
 		if err := os.Remove(r.CuesPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 		return nil
 	}
-	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues, PatternsAdopted: r.adopted, Captions: r.captions, Chapters: r.chapters, BusNotes: r.busNotes, CameraFile: r.cameraFile, Camera: r.camera, Style: r.style}, "", " ")
+	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues, PatternsAdopted: r.adopted, Captions: r.captions, Chapters: r.chapters, BusNotes: r.busNotes, Cuts: r.cuts, CameraFile: r.cameraFile, Camera: r.camera, Style: r.style}, "", " ")
 	return os.WriteFile(r.CuesPath, b, 0o644)
 }
 
@@ -366,6 +386,7 @@ func Load(audioPath, eventsPath string) (*Replay, error) {
 		var m meta
 		if json.Unmarshal(b, &m) == nil {
 			r.title, r.cues, r.style, r.captions, r.chapters, r.busNotes, r.adopted = m.Title, m.Cues, m.Style, m.Captions, m.Chapters, m.BusNotes, m.PatternsAdopted
+			r.cuts = m.Cuts
 			r.cameraFile, r.camera = m.CameraFile, m.Camera
 		} else {
 			json.Unmarshal(b, &r.cues) // the first form of the file: the list of cues
@@ -399,7 +420,7 @@ func (r *Replay) Handler() http.Handler {
 	})
 	mux.HandleFunc("/events.json", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style(), "captions": r.Captions(), "chapters": r.Chapters(), "busnotes": r.BusNotes(), "adopted": r.Adopted(), "camera": r.Camera(), "camera_file": r.CameraName(), "default_template": r.freshTemplate()})
+		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style(), "captions": r.Captions(), "chapters": r.Chapters(), "cuts": r.Cuts(), "busnotes": r.BusNotes(), "adopted": r.Adopted(), "camera": r.Camera(), "camera_file": r.CameraName(), "default_template": r.freshTemplate()})
 	})
 	mux.HandleFunc("/captions", func(w http.ResponseWriter, req *http.Request) {
 		var c []Caption
@@ -420,6 +441,18 @@ func (r *Replay) Handler() http.Handler {
 			return
 		}
 		if err := r.SetChapters(c); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/cuts", func(w http.ResponseWriter, req *http.Request) {
+		var c []Cut
+		if req.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20)).Decode(&c) != nil {
+			http.Error(w, "POST the cuts", http.StatusBadRequest)
+			return
+		}
+		if err := r.SetCuts(c); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -478,7 +511,7 @@ func (r *Replay) Handler() http.Handler {
 	})
 	mux.HandleFunc("/chapters.txt", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		io.WriteString(w, ChaptersText(r.Chapters()))
+		io.WriteString(w, ChaptersText(r.Chapters(), r.Cuts()))
 	})
 	mux.HandleFunc("/style", func(w http.ResponseWriter, req *http.Request) {
 		b, err := io.ReadAll(http.MaxBytesReader(w, req.Body, 8<<20)) // a logo and a background picture are in it

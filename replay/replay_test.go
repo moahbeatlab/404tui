@@ -241,12 +241,12 @@ func TestPatternsCanBeAdopted(t *testing.T) {
 }
 
 func TestChaptersAreTextForYouTube(t *testing.T) {
-	got := ChaptersText([]Chapter{{T: 75.4, Title: " Drums "}, {T: 0, Title: "Intro"}, {T: 3725, Title: "Outro"}})
+	got := ChaptersText([]Chapter{{T: 75.4, Title: " Drums "}, {T: 0, Title: "Intro"}, {T: 3725, Title: "Outro"}}, nil)
 	want := "0:00 Intro\n1:15 Drums\n1:02:05 Outro\n"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
-	if got := ChaptersText([]Chapter{{T: 30, Title: "A"}}); !strings.HasPrefix(got, "0:00 Intro\n0:30 A") {
+	if got := ChaptersText([]Chapter{{T: 30, Title: "A"}}, nil); !strings.HasPrefix(got, "0:00 Intro\n0:30 A") {
 		t.Errorf("YouTube needs a chapter at 0:00: %q", got)
 	}
 	r := &Replay{CuesPath: filepath.Join(t.TempDir(), "x.cues.json")}
@@ -386,5 +386,35 @@ func TestThePageScriptParses(t *testing.T) {
 	cmd.Stdin = strings.NewReader(s[i+len("<script>") : j])
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the script of the page does not parse: %v\n%s", err, out)
+	}
+}
+
+func TestCuts(t *testing.T) {
+	cuts := NormalizeCuts([]Cut{{20, 30}, {-5, 2}, {10, 12}, {11, 15}, {40, 90}, {50, 50}}, 60)
+	want := []Cut{{0, 2}, {10, 15}, {20, 30}, {40, 60}}
+	if len(cuts) != len(want) {
+		t.Fatalf("normalized: %v", cuts)
+	}
+	for i := range want {
+		if cuts[i] != want[i] {
+			t.Fatalf("normalized: %v", cuts)
+		}
+	}
+	keep := KeepSpans(cuts, 0, 60)
+	if len(keep) != 3 || keep[0] != (Cut{2, 10}) || keep[1] != (Cut{15, 20}) || keep[2] != (Cut{30, 40}) {
+		t.Fatalf("keep: %v", keep)
+	}
+	if k := KeepSpans(cuts, 5, 18); len(k) != 2 || k[0] != (Cut{5, 10}) || k[1] != (Cut{15, 18}) {
+		t.Fatalf("keep part: %v", k)
+	}
+	for _, c := range []struct{ in, out float64 }{{1, 0}, {5, 3}, {12, 8}, {18, 11}, {35, 18}} {
+		if got := OutTime(cuts, c.in); got != c.out {
+			t.Fatalf("OutTime(%v) = %v, want %v", c.in, got, c.out)
+		}
+	}
+	// the chapters of the video are shifted by what was cut before them
+	got := ChaptersText([]Chapter{{T: 0, Title: "Intro"}, {T: 18, Title: "Drums"}}, cuts)
+	if !strings.Contains(got, "0:11 Drums") {
+		t.Fatalf("chapters with cuts: %q", got)
 	}
 }
