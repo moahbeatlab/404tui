@@ -20,12 +20,11 @@ web page for Perform: open one of these on a phone on this network:
 ```
 
 Under the link it draws a QR code of the first one: scan it with the phone camera instead of typing
-(`sp404 serve` only; with `-web` the TUI covers the terminal right away). The key is made once and kept (so the link stays the same from one run to the
+(`sp404 serve` prints it under the link). The key is made once and kept (so the link stays the same from one run to the
 next); the phone keeps it too. Ctrl-C stops the server and puts back what the program changed on the
 unit (the buses of pads that focus made dry).
 
-The terminal program can serve the page as well, while you use it: `sp404 -web :8404`. Its Perform tab
-shows the address (`web: …`).
+To try it without a unit: `sp404 -sim serve`.
 
 | Flag | |
 | --- | --- |
@@ -37,7 +36,18 @@ address and a key if it was not opened from the link), or give it in the link: `
 
 ## On the phone
 
-*Landscape* (the way to play): the pads in the middle, STAGE on the left (bank, tempo, bar and beat,
+| PADS | PATTERNS | MOTION | LOOPER |
+| --- | --- | --- | --- |
+| <img src="img/serve-pads.png" width="200"> | <img src="img/serve-patterns.png" width="200"> | <img src="img/serve-motion.png" width="200"> | <img src="img/serve-looper.png" width="200"> |
+
+(Pictures taken against the simulator, so no clock and no level.)
+
+
+*Landscape* (the way to play):
+
+![The page in landscape](img/serve-landscape.png)
+
+the pads in the middle, STAGE on the left (bank, tempo, bar and beat,
 what plays now and next, record, focus, mix, next → now, clear next), MOTION on the right. On a small
 phone the side panel is one of two tabs, STAGE or MOTION.
 
@@ -152,7 +162,7 @@ Not tried on the unit yet: how the 7-bit steps sound on each knob, and how tight
 
 ## What it needs
 
-* The computer runs 404tui (`sp404 serve` or the terminal program), with the unit plugged in by USB.
+* The computer runs 404tui (`sp404 serve`), with the unit plugged in by USB.
   MIDI (the clock, the pads you hit, the knobs) needs a build with MIDI: the release builds have it, and
   `make build` makes one; without it, the page shows the pads and takes the pad and volume commands.
 * The phone and the computer are on the **same network**. A guest network that keeps devices apart
