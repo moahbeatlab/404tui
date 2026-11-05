@@ -1,74 +1,25 @@
-# Config (tab 6)
+# CONFIG (screen 6)
 
-Settings of the program, kept in `state.json` in the user's config folder under `404tui`
-(`~/Library/Application Support/404tui` on a Mac, `~/.config/404tui` on Linux, `%AppData%\404tui` on
-Windows).
+The program's settings. On a computer the writing of the project (what SAVE does on the handheld) is the first section.
+
+![CONFIG](img/pc-config.png)
+
+Move with `j k`, change a value with `h l`, and `a` edits (a one-line prompt: `Enter` done, `Esc` gives it up) or switches. `[ ]` jump between the sections.
+
+## Sections
+
+- **Project:** the project number, *Write it to the card folder*, *Export it into a folder...*, the **autosave** (every 3 minutes by default; autosaves and settings are kept beside the card folder), and *Quit the program*.
+- **Buses by pad name:** a pad goes to a bus by its name. Two lines of words, one for the samples that go to BUS 1 and one for BUS 2 (the second starts with the words of a drum kit: kick, snare, hat, perc...), the colour each bus is drawn in, the bus of a name with none of the
+  words (BUS 1 to start with), and whether the bus is set when a sample is put on a pad. A word matches a word of the pad's name (`Kick_125`, `OHat`, `14_Perc1`); a name with words of both lines goes to BUS 1. *Set the buses of this bank by the names...* applies the rule, and *Back to the defaults* resets it.
+- **Recorder:** the folder `Ctrl-R` records into (`~/Music/404tui` by default), the part of the input's name (`404`), what records and meters (the program itself, ffmpeg or sox) and the keys that start and stop a recording. See [ui.md](ui.md#recording-a-set).
+- **MIDI:** the part of the input's name (`404`), the control channel, the live mode, and the notes that start and stop a recording, make the next pattern the one that plays or clear it, and the channel of the pad volumes.
+- **Colours:** the colour theme of the terminal (Hardware, Ocean, Paper).
+- **Debug:** a debug log (what the program does, with timings; see [install.md](install.md)) and where it is written.
 
 ## Keys
 
-| Key | What |
-| --- | --- |
-| `j k`, arrows | next / previous setting; `g` `G` first / last |
-| `h l`, arrows | change the setting (colours, choices, on/off) |
-| `Enter`, `Space` | edit a text setting in a prompt, switch an on/off, run "back to the defaults" |
-| `c` | clear the MIDI monitor |
-| `Ctrl-T` / `T` | next colour theme |
+**On a computer:** `j k` setting · `h l` change · `a` edit / switch · `[ ]` jump · `Esc` pads · `1`-`6` a screen.
 
-In a prompt: type, `Enter` keeps it, `Esc` cancels.
+**On the handheld:** D-pad setting and change · `A` edit / switch · `L1 R1` jump · `B` pads.
 
-## Buses by pad name
-
-Which pads go to **BUS 1** and **BUS 2** is decided from the pad's name: a word of the name
-(`Kick_125`, `OHat`, `DrumLoop`, `14_Perc1`; a longer word matches by its start) found in a list of words.
-Where a name has words of both buses, BUS 1 wins.
-
-- *Words for samples on BUS 1 / BUS 2* — `Enter` edits the comma-separated list.
-- *Colour of BUS 1 / BUS 2* — `h l` change; used on pads, in Perform and in the sequencer.
-- *A name with none of the words* — no bus, BUS 1 or BUS 2.
-- *Set the bus when a file is assigned* — on / off.
-- *Back to the defaults* — `Enter`.
-
-`B` in Pads applies the rule to the bank, the marked pads or the project. The lower part of the view
-shows what the rule makes of the bank in front.
-
-## Recorder
-
-*Record into folder* (default `~/Music/404tui`) and *Input with this in its name* (default `404`: the
-unit's USB audio). `Ctrl-R` anywhere records to a WAV (24-bit, 48 kHz, stereo) with `ffmpeg` (or `sox`
-where there is no ffmpeg; Windows needs ffmpeg). The line under the settings says which tool was found.
-
-## Pad codes on the unit
-
-Pads hit in turn on the unit switch things on (read from the pad the unit has selected, or from MIDI
-when it is open): *Live mode* (default `1 3 3 7`) and *Start and stop a recording* (default `1 16 16 16`).
-Pad numbers 1–16 with spaces; `off` turns a code off. A code has to be played within four seconds,
-in any bank. While the unit's sequencer runs and MIDI is open, the notes it plays are not read as pad
-hits.
-
-## MIDI
-
-*Input with this in its name* (default `404`), *Control channel* (1–16 or `off`, default 16), *Pad volumes channel* (default 15, see [ec4.md](ec4.md)) and four
-messages on that channel, `note 60` … or `cc 20` (a controller turned up past half), or `off`:
-
-| Default | Does |
-| --- | --- |
-| `note 62` | live mode (the Perform tab and back) |
-| `note 60` | start / stop a recording |
-| `note 74` | the next pattern becomes the one that plays |
-| `note 75` | clear the next pattern |
-
-These are four of the 16 pushes of the map for the Faderfox EC4, which also drives focus, the length and the
-motion slots of Perform: see [ec4.md](ec4.md) (or `sp404 midimap`).
-
-MIDI input is built in on every release build (macOS: CoreMIDI, Linux: ALSA, Windows: winmm, on Intel and ARM alike). A build from source needs `go build -tags midi` on macOS and Linux (cgo; on Linux the ALSA headers `libasound2-dev`); on Windows there is nothing to add. The line under the settings says whether it is listening.
-
-### MIDI monitor
-
-Counts per kind of message, the tempo from the clock, the controllers seen and the last messages, to
-see what the unit and anything plugged into it really send (`c` clears). Run with `-v` for a debug log
-that also records every non-clock message.
-
-## Checking the installation
-
-`sp404 check` (see the README) checks the computer, the program on a simulated unit and a plugged-in
-unit.
+Every setting with its values: [tools.md](tools.md#config).
