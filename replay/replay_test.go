@@ -376,7 +376,7 @@ func TestThePageScriptParses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := string(page)
+	s := strings.ReplaceAll(string(page), "\r\n", "\n") // a Windows checkout has CRLF
 	i := strings.Index(s, "<script>\n\"use strict\"")
 	j := strings.LastIndex(s, "</script>")
 	if i < 0 || j < i {
