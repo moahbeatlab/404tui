@@ -909,18 +909,18 @@ function bgPicture() {
   const M = bgMoves() ? BG_OVER : 1, LW = Math.round(W * M), LH = Math.round(H * M); // with movement the layer is larger than the video, so that there is room to move
   const key = [im.src.length, im.naturalWidth, b.fit, b.px, b.py, b.zoom, b.blur, b.dim, COL.bg, LW, LH].join("|");
   if (bgLayer && key === bgKey) return bgLayer;
-  const c = document.createElement("canvas"); c.width = LW; c.height = LH; const x = c.getContext("2d"), W = LW, H = LH;
+  const c = document.createElement("canvas"); c.width = LW; c.height = LH; const x = c.getContext("2d");
   const iw = im.naturalWidth, ih = im.naturalHeight, z = clamp(+b.zoom || 1, 0.2, 4), px = clamp(b.px === undefined ? 0.5 : +b.px, 0, 1), py = clamp(b.py === undefined ? 0.5 : +b.py, 0, 1), fit = b.fit || "cover";
-  x.fillStyle = COL.bg; x.fillRect(0, 0, W, H);
+  x.fillStyle = COL.bg; x.fillRect(0, 0, LW, LH);
   const blur = clamp(+b.blur || 0, 0, 40); if (blur > 0) x.filter = "blur(" + blur + "px)";
-  const put = (w, h) => x.drawImage(im, (W - w) * px, (H - h) * py, w, h);
-  if (fit === "stretch") { const w = W * z, h = H * z; put(w, h); }
-  else if (fit === "tile") { const pat = x.createPattern(im, "repeat"); x.save(); x.translate(-(W * (px - 0.5)) * (z - 1) , 0); x.scale(z, z); x.fillStyle = pat; x.fillRect(-W, -H, W * 3 / z, H * 3 / z); x.restore(); }
+  const put = (w, h) => x.drawImage(im, (LW - w) * px, (LH - h) * py, w, h);
+  if (fit === "stretch") { const w = LW * z, h = LH * z; put(w, h); }
+  else if (fit === "tile") { const pat = x.createPattern(im, "repeat"); x.save(); x.translate(-(LW * (px - 0.5)) * (z - 1) , 0); x.scale(z, z); x.fillStyle = pat; x.fillRect(-LW, -LH, LW * 3 / z, LH * 3 / z); x.restore(); }
   else if (fit === "center") put(iw * z, ih * z);
-  else if (fit === "contain") { const k = Math.min(W / iw, H / ih) * z; put(iw * k, ih * k); }
-  else { const k = Math.max(W / iw, H / ih) * z; put(iw * k, ih * k); }
+  else if (fit === "contain") { const k = Math.min(LW / iw, LH / ih) * z; put(iw * k, ih * k); }
+  else { const k = Math.max(LW / iw, LH / ih) * z; put(iw * k, ih * k); }
   x.filter = "none";
-  x.globalAlpha = clamp(b.dim === undefined ? 0.6 : b.dim, 0, 0.95); x.fillStyle = "#000"; x.fillRect(0, 0, W, H);
+  x.globalAlpha = clamp(b.dim === undefined ? 0.6 : b.dim, 0, 0.95); x.fillStyle = "#000"; x.fillRect(0, 0, LW, LH);
   bgLayer = c; bgKey = key; return c;
 }
 function drawBackground() {
