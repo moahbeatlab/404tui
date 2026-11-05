@@ -180,7 +180,7 @@
   <label>picture drifts <input id="s_bgdrift" type="range" min="0" max="100" title="moves slowly from side to side"> <span id="s_bgdriftv" class="h"></span></label>
   <label>picture breathes <input id="s_bgbreath" type="range" min="0" max="100" title="zooms in and out a little"> <span id="s_bgbreathv" class="h"></span></label>
   <label>a new direction every <input id="s_bgper" type="range" min="4" max="60"> <span id="s_bgperv" class="h"></span></label>
-  <label>hit reactions <input id="s_hits" type="range" min="0" max="100" title="a pad that is hit pops up, glows and sends out a ring and sparks (0 = off)"> <span id="s_hitsv" class="h"></span></label>
+  <label>hit reactions <input id="s_hits" type="range" min="0" max="100" title="a pad that is hit pops up and glows a little (25 %); more adds a ring, over 50 % sparks; 0 = off"> <span id="s_hitsv" class="h"></span></label>
   <label>panel opacity <input id="s_bgpanels" type="range" min="0" max="100"> <span id="s_bgpanelsv" class="h"></span></label>
   <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
   <label>BUS 1 at the start <span class="bw"><select id="s_bussel0"></select> <input id="s_bus0" placeholder="your own text" size="18" hidden></span></label>
@@ -617,7 +617,7 @@ function drawPads(T) {
   };
   // hit reactions: a pad that is hit pops up (a quick rise, a soft fall; harder hits pop more), glows, sends a ring out and a few sparks.
   // Everything is a function of the time since the hit, so a render shows what the page shows. The pads that pop are drawn last, on top.
-  const hitS = clamp(STYLE.hits === undefined ? 0.6 : +STYLE.hits, 0, 1);
+  const hitS = clamp(STYLE.hits === undefined ? 0.25 : +STYLE.hits, 0, 1);
   const popOf = i => {
     const s0 = hitS > 0 ? padState(bank, i + 1, T) : null; if (!s0 || s0.hitAt === undefined || s0.hitAt < 0) return { pop: 0, age: -1 };
     const age = T - s0.hitAt, vv = (s0.v || 100) / 127; if (age < 0) return { pop: 0, age: -1 };
@@ -681,7 +681,7 @@ function drawPads(T) {
       const col2 = BUSCOL[info && info.bus] || COL.amber, u = pr.age / 0.55, ex = 4 + 44 * easeOut(u) * (0.5 + 0.5 * hitS);
       g.save(); g.globalAlpha = (1 - u) * 0.85 * (0.4 + 0.6 * pr.vv) * Math.min(hitS * 1.6, 1); g.strokeStyle = col2; g.lineWidth = 1.5 + 4 * (1 - u);
       g.beginPath(); g.roundRect(x - ex, y - ex, tw + 2 * ex, th + 2 * ex, 10 + ex); g.stroke(); g.restore();
-      if (pr.age < 0.5) {
+      if (pr.age < 0.5 && hitS >= 0.5) { // sparks only when the reactions are turned up
         const cnt = Math.round(3 + 6 * hitS), uu = pr.age / 0.5, seed = Math.round(st.hitAt * 1000);
         g.save(); g.fillStyle = col2; g.globalAlpha = (1 - uu) * Math.min(hitS * 1.6, 1);
         for (let j = 0; j < cnt; j++) {
@@ -931,7 +931,7 @@ const PRESETS = {
   "forest":   { accent: "#7bd88f", bg: "#0d1511", deep: "#101a15", panel: "#14201a", tile: "#203329", tile2: "#182820", text: "#e9f5ec", dim: "#8fb09a" },
   "mono":     { accent: "#f2f2f2", bg: "#0d0d0d", deep: "#111111", panel: "#181818", tile: "#262626", tile2: "#1c1c1c", text: "#f2f2f2", dim: "#8c8c8c" },
 };
-const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.6, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
+const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
 let STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)), logoImg = null, bgImg = null;
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const hexMix = (a, b, t) => "#" + hexRgb(a).map((v, i) => Math.round(v + (hexRgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
@@ -1921,7 +1921,7 @@ function initStyle(saved) {
     const bg = STYLE.bg; $("s_bgfit").value = bg.fit || "cover"; $("s_bgpx").value = Math.round((bg.px === undefined ? 0.5 : bg.px) * 100); $("s_bgpy").value = Math.round((bg.py === undefined ? 0.5 : bg.py) * 100);
     $("s_bgzoom").value = Math.round((bg.zoom || 1) * 100); $("s_bgblur").value = bg.blur || 0; $("s_bgpanels").value = Math.round((bg.panels !== undefined ? bg.panels : (bg.kind === "gradient" || (bg.kind === "image" && bg.image) ? 0.9 : 1)) * 100); $("s_bgpanelsv").textContent = $("s_bgpanels").value + " %";
     $("s_bgdrift").value = Math.round((bg.mvDrift || 0) * 100); $("s_bgdriftv").textContent = $("s_bgdrift").value + " %"; $("s_bgbreath").value = Math.round((bg.mvZoom || 0) * 100); $("s_bgbreathv").textContent = $("s_bgbreath").value + " %"; $("s_bgper").value = bg.mvPeriod || 12; $("s_bgperv").textContent = $("s_bgper").value + " s";
-    $("s_hits").value = Math.round((STYLE.hits === undefined ? 0.6 : STYLE.hits) * 100); $("s_hitsv").textContent = $("s_hits").value + " %";
+    $("s_hits").value = Math.round((STYLE.hits === undefined ? 0.25 : STYLE.hits) * 100); $("s_hitsv").textContent = $("s_hits").value + " %";
     $("s_bgdim").value = Math.round((STYLE.bg.dim === undefined ? 0.6 : STYLE.bg.dim) * 100); $("s_handle").value = STYLE.handle || ""; $("s_sub").value = STYLE.subtitle || "";
   };
   show();
