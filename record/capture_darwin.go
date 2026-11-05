@@ -276,7 +276,3 @@ func openCoreAudio(device string, onFrames func([]float32), onEnd func(error)) (
 		return nil
 	}), nil
 }
-
-type closerFunc func() error
-
-func (f closerFunc) Close() error { return f() }

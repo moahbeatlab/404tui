@@ -25,7 +25,7 @@ func TestHandheldScreensStayAsTheyAre(t *testing.T) {
 		t.Skip("the handheld is drawn with Terminal off")
 	}
 	// the folders have fixed names: the screens show their paths
-	base := filepath.Join(os.TempDir(), "404tui-golden")
+	base := fixedBase(t, "404tui-golden")
 	os.RemoveAll(base)
 	defer os.RemoveAll(base)
 	if err := WriteDemo(filepath.Join(base, "samples")); err != nil {

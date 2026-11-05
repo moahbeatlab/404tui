@@ -19,7 +19,7 @@ var updateDocs = flag.Bool("update-docs", false, "write docs/tools.md")
 
 // docState is a program with a kit on the pads, a pattern with notes and a unit to talk to: what the menus need to show everything.
 func docState(t *testing.T) *App {
-	base := filepath.Join(os.TempDir(), "404tui-docs") // a fixed folder: the file menus show it
+	base := fixedBase(t, "404tui-docs") // a fixed folder: the file menus show it
 	os.RemoveAll(base)
 	t.Cleanup(func() { os.RemoveAll(base) })
 	if err := WriteDemo(filepath.Join(base, "samples")); err != nil {
