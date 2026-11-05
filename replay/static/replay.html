@@ -137,6 +137,7 @@
   <div id="caplist"></div>
   <label class="g">fade in and out <input id="c_fade" type="number" min="0" max="3" step="0.05" style="width:64px"> s <span class="h">for all captions</span></label>
   <label class="g">blur behind a caption <input id="c_blur" type="range" min="0" max="12" step="0.5" style="width:130px"> <span id="c_blurv" class="h"></span></label>
+  <label class="g">animation <select id="c_anim"><option value="card">the card appears</option><option value="words">words pop in</option><option value="type">typed letter by letter</option></select> <span class="h">*word* is shown in the accent colour</span></label>
   <label class="g">dim behind a caption <input id="c_dim" type="range" min="0" max="80" step="1" style="width:130px"> <span id="c_dimv" class="h"></span></label>
   <label class="g">a new caption lasts <input id="c_len" type="number" min="1" max="60" step="0.5" style="width:64px"> s <span class="h">for all new captions</span></label>
   <button id="capadd" title="a caption from the time you are at">add a caption here</button>
@@ -179,6 +180,7 @@
   <label>picture drifts <input id="s_bgdrift" type="range" min="0" max="100" title="moves slowly from side to side"> <span id="s_bgdriftv" class="h"></span></label>
   <label>picture breathes <input id="s_bgbreath" type="range" min="0" max="100" title="zooms in and out a little"> <span id="s_bgbreathv" class="h"></span></label>
   <label>a new direction every <input id="s_bgper" type="range" min="4" max="60"> <span id="s_bgperv" class="h"></span></label>
+  <label>hit reactions <input id="s_hits" type="range" min="0" max="100" title="a pad that is hit pops up, glows and sends out a ring and sparks (0 = off)"> <span id="s_hitsv" class="h"></span></label>
   <label>panel opacity <input id="s_bgpanels" type="range" min="0" max="100"> <span id="s_bgpanelsv" class="h"></span></label>
   <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
   <label>BUS 1 at the start <span class="bw"><select id="s_bussel0"></select> <input id="s_bus0" placeholder="your own text" size="18" hidden></span></label>
@@ -612,10 +614,28 @@ function drawPads(T) {
       f = Math.max(f, clamp(1 - sec / 0.35, 0, 1) * (0.5 + 0.5 * nt[2] / 127));
     }
     return f;
-  };  for (let i = 0; i < 16; i++) {
+  };
+  // hit reactions: a pad that is hit pops up (a quick rise, a soft fall; harder hits pop more), glows, sends a ring out and a few sparks.
+  // Everything is a function of the time since the hit, so a render shows what the page shows. The pads that pop are drawn last, on top.
+  const hitS = clamp(STYLE.hits === undefined ? 0.6 : +STYLE.hits, 0, 1);
+  const popOf = i => {
+    const s0 = hitS > 0 ? padState(bank, i + 1, T) : null; if (!s0 || s0.hitAt === undefined || s0.hitAt < 0) return { pop: 0, age: -1 };
+    const age = T - s0.hitAt, vv = (s0.v || 100) / 127; if (age < 0) return { pop: 0, age: -1 };
+    const k = s0.held ? 0.55 : age < 0.5 ? (age < 0.05 ? age / 0.05 : Math.exp(-(age - 0.05) * 9)) : 0;
+    return { pop: hitS * vv * k, age, vv };
+  };
+  for (let ord = 0; ord < 32; ord++) {
+    const i = ord % 16, pr = popOf(i), top = ord >= 16;
+    if (top !== (pr.pop > 0.004 || (pr.age >= 0 && pr.age < 0.55 && hitS > 0))) continue;
     const n = b * 16 + i, row = Math.floor(i / 4), col = i % 4;
     const x = gx + col * (tw + gap), y = gy + row * (th + gap);
     const info = padInfo.get(n), st = padState(bank, i + 1, T);
+    g.save();
+    if (pr.pop > 0) { // up to 14 % bigger around its middle, with a glow in the pad's colour
+      const sc = 1 + 0.14 * pr.pop, cx = x + tw / 2, cy = y + th / 2, col2 = BUSCOL[info && info.bus] || COL.amber;
+      g.translate(cx, cy); g.scale(sc, sc); g.translate(-cx, -cy);
+      g.shadowColor = col2; g.shadowBlur = 40 * pr.pop;
+    }
     g.globalAlpha = PANEL_A; rrect(x, y, tw, th, 10, info ? COL.tile : COL.tile2); g.globalAlpha = 1;
     let glow = 0;
     if (st) { const age = T - st.hitAt; glow = st.held ? 1 : clamp(1 - age / 0.45, 0, 1); glow *= 0.35 + 0.65 * (st.v || 100) / 127; }
@@ -656,6 +676,22 @@ function drawPads(T) {
         rect(x + 20 + k * (tw - 40) / pk.length, y + th - 10 - bh, Math.max((tw - 40) / pk.length * 0.7, 2), bh, dark ? COL.amberDD : mix("#444444", COL.amber, 0.35));
       }
     } else text("empty", x + 20, y + 54, COL.dim, 19);
+    g.restore();
+    if (hitS > 0 && pr.age >= 0 && pr.age < 0.55 && st) { // the ring and the sparks leave the pad
+      const col2 = BUSCOL[info && info.bus] || COL.amber, u = pr.age / 0.55, ex = 4 + 44 * easeOut(u) * (0.5 + 0.5 * hitS);
+      g.save(); g.globalAlpha = (1 - u) * 0.85 * (0.4 + 0.6 * pr.vv) * Math.min(hitS * 1.6, 1); g.strokeStyle = col2; g.lineWidth = 1.5 + 4 * (1 - u);
+      g.beginPath(); g.roundRect(x - ex, y - ex, tw + 2 * ex, th + 2 * ex, 10 + ex); g.stroke(); g.restore();
+      if (pr.age < 0.5) {
+        const cnt = Math.round(3 + 6 * hitS), uu = pr.age / 0.5, seed = Math.round(st.hitAt * 1000);
+        g.save(); g.fillStyle = col2; g.globalAlpha = (1 - uu) * Math.min(hitS * 1.6, 1);
+        for (let j = 0; j < cnt; j++) {
+          const ang = (bgHash(seed, 10 + j) + 1) * Math.PI, dist = (16 + 44 * (bgHash(seed, 40 + j) + 1) / 2) * easeOut(uu) + 6, rr = Math.max(1, 4 * (1 - uu) * (0.6 + 0.4 * pr.vv));
+          const ox = Math.cos(ang) * (tw / 2 + dist), oy = Math.sin(ang) * (th / 2 + dist);
+          g.beginPath(); g.arc(x + tw / 2 + Math.max(-tw / 2 - dist, Math.min(tw / 2 + dist, ox)), y + th / 2 + Math.max(-th / 2 - dist, Math.min(th / 2 + dist, oy)), rr, 0, 6.2832); g.fill();
+        }
+        g.restore();
+      }
+    }
   }
   for (let k = 0; k < 10; k++) {
     const sp = (w - 40) / 10, x = gx + k * sp, y = y0 + h - 48;
@@ -895,7 +931,7 @@ const PRESETS = {
   "forest":   { accent: "#7bd88f", bg: "#0d1511", deep: "#101a15", panel: "#14201a", tile: "#203329", tile2: "#182820", text: "#e9f5ec", dim: "#8fb09a" },
   "mono":     { accent: "#f2f2f2", bg: "#0d0d0d", deep: "#111111", panel: "#181818", tile: "#262626", tile2: "#1c1c1c", text: "#f2f2f2", dim: "#8c8c8c" },
 };
-const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
+const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.6, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
 let STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)), logoImg = null, bgImg = null;
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const hexMix = (a, b, t) => "#" + hexRgb(a).map((v, i) => Math.round(v + (hexRgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
@@ -1117,7 +1153,7 @@ function drawCaption(A) {
   if (fr) { g.save(); g.globalAlpha = fade; g.strokeStyle = COL.amber; g.lineWidth = 4; g.shadowColor = COL.amber; g.shadowBlur = 24; g.beginPath(); g.roundRect(fr[0] - 4, fr[1] - 4, fr[2] + 8, fr[3] + 8, 14); g.stroke(); g.restore(); }
   if (!c.text) return;
   const px = 34, k = VERT ? 1.22 : 1, bwMax = Math.min(W - 80, VERT ? 940 : 1260);
-  const lines = wrapText(c.text, bwMax - 96, px).slice(0, 5), lh = px * k * 1.32, bh = lines.length * lh + 52;
+  const words = capWords(c.text), lines = wrapText(words.map(x => x.w).join(" "), bwMax - 96, px).slice(0, 5), lh = px * k * 1.32, bh = lines.length * lh + 52;
   g.font = FONT(px * k, false); // the card is as wide as its longest line (a short caption gets a small card)
   const bw = clamp(Math.max(...lines.map(l => g.measureText(l).width)) + 104, 360, bwMax);
   const x0 = (W - bw) / 2; let y0 = (H - bh) / 2;
@@ -1130,8 +1166,44 @@ function drawCaption(A) {
   g.shadowColor = "rgba(0,0,0,0.5)"; g.shadowBlur = 30; rrect(x0, y0, bw, bh, 18, COL.panel); g.shadowBlur = 0;
   rect(x0 + 22, y0 + 22, 6, bh - 44, COL.amber);
   let y = y0 + 26 + px * k * 0.95;
-  for (const l of lines) { text(l, x0 + 52, y, COL.text, px, false); y += lh; }
+  capText(lines, words, c, A, x0 + 52, y, px, k, lh);
   g.restore();
+}
+// the words of a caption; one between *stars* (or several) is shown in the accent colour
+function capWords(str) {
+  const out = []; let st = false;
+  for (const raw of String(str).split(/\s+/)) {
+    if (!raw) continue;
+    const stars = (raw.match(/\*/g) || []).length, w = raw.replace(/\*/g, "");
+    if (stars % 2 === 1 && !st) { st = true; if (w) out.push({ w, em: true }); continue; }
+    if (stars % 2 === 1 && st) { st = false; if (w) out.push({ w, em: true }); continue; }
+    if (w) out.push({ w, em: st || stars > 0 });
+  }
+  return out;
+}
+const easeBack = u => 1 + 2.70158 * Math.pow(u - 1, 3) + 1.70158 * Math.pow(u - 1, 2);
+// the lines of the card: whole ("card"), a word after the other popping in ("words") or a letter after the other ("type")
+function capText(lines, words, c, A, x, y, px, k, lh) {
+  const mode = STYLE.capAnim || "card", N = words.length, dur = c.to - c.from;
+  const step = Math.min(0.2, Math.min(1.4, dur * 0.4) / Math.max(N, 1)), cps = 30, shown = Math.floor((A - c.from - 0.1) * cps);
+  let wi = 0, chars = 0;
+  for (const l of lines) {
+    let xx = x; g.font = FONT(px * k, false); const sp = g.measureText(" ").width;
+    for (const part of l.split(" ")) {
+      const wd = words[wi] || { w: part, em: false }, w = g.measureText(part).width, col = wd.em ? COL.amber : COL.text;
+      let alpha = 1, sc = 1, dy = 0, str = part;
+      if (mode === "words") { const u = clamp((A - c.from - 0.1 - wi * step) / 0.3, 0, 1); alpha = Math.min(u * 2, 1); sc = 0.6 + 0.4 * easeBack(u); dy = (1 - easeOut(u)) * 16; }
+      else if (mode === "type") { const n = clamp(shown - chars, 0, part.length); str = part.slice(0, n); if (n === 0) alpha = 0; }
+      if (wd.em && mode !== "card") { const u = clamp((A - c.from - 0.1 - wi * step) / 0.5, 0, 1); sc *= 1 + 0.12 * Math.sin(u * Math.PI); } // an emphasised word swells for a moment
+      if (alpha > 0) {
+        g.save(); g.globalAlpha *= alpha; g.translate(xx + w / 2, y - px * k * 0.3 + dy); g.scale(sc, sc); g.translate(-(xx + w / 2), -(y - px * k * 0.3));
+        if (wd.em) { g.shadowColor = COL.amber; g.shadowBlur = 14; }
+        g.fillStyle = col; g.font = FONT(px * k, !!wd.em); g.textAlign = "left"; g.textBaseline = "alphabetic"; g.fillText(str, xx, y); g.restore();
+      }
+      xx += w + sp; chars += part.length + 1; wi++;
+    }
+    y += lh;
+  }
 }
 
 let T_audio = 0;
@@ -1249,14 +1321,15 @@ function initCaptions() {
   const showSettings = () => {
     fadeIn.value = STYLE.capFade; lenIn.value = STYLE.capLength; blurIn.value = STYLE.capBlur; dimIn.value = Math.round(STYLE.capDim * 100);
     document.getElementById("c_blurv").textContent = (+blurIn.value).toFixed(1) + " px"; document.getElementById("c_dimv").textContent = dimIn.value + " %";
+    document.getElementById("c_anim").value = STYLE.capAnim || "card";
   };
   const keepSettings = () => {
     STYLE.capFade = Math.max(0, Math.min(3, parseFloat(fadeIn.value) || 0)); STYLE.capLength = Math.max(1, parseFloat(lenIn.value) || 5);
-    STYLE.capBlur = parseFloat(blurIn.value) || 0; STYLE.capDim = (parseFloat(dimIn.value) || 0) / 100;
+    STYLE.capBlur = parseFloat(blurIn.value) || 0; STYLE.capDim = (parseFloat(dimIn.value) || 0) / 100; STYLE.capAnim = document.getElementById("c_anim").value;
     document.getElementById("c_blurv").textContent = STYLE.capBlur.toFixed(1) + " px"; document.getElementById("c_dimv").textContent = Math.round(STYLE.capDim * 100) + " %";
     window.styleChanged && window.styleChanged();
   };
-  fadeIn.oninput = lenIn.oninput = blurIn.oninput = dimIn.oninput = keepSettings;
+  fadeIn.oninput = lenIn.oninput = blurIn.oninput = dimIn.oninput = keepSettings; document.getElementById("c_anim").onchange = keepSettings;
   window.refreshCapList = render;
   const lane = () => { // the captions as blocks under the patterns: click one to edit it
     const el = document.getElementById("capslane"); el.textContent = ""; const d = AN ? AN.duration : 0; if (!d) return;
@@ -1756,8 +1829,8 @@ const TPL_PARTS = [["look", "the look (colours, background, logo, handle, subtit
   ["scenes", "the scenes and layouts"], ["chapters", "the chapters"], ["bus", "what the buses are used for"]];
 function tplBuild(parts) {
   const d = Math.max(AN ? AN.duration : 1, 1), rel = t => +(t / d).toFixed(4), out = { version: 1, created: new Date().toISOString(), parts: {} };
-  if (parts.look) { const o = JSON.parse(JSON.stringify(STYLE)); for (const k of ["busNotes", "capFade", "capLength", "capBlur", "capDim"]) delete o[k]; out.parts.look = o; }
-  if (parts.captions) out.parts.captions = { capFade: STYLE.capFade, capLength: STYLE.capLength, capBlur: STYLE.capBlur, capDim: STYLE.capDim };
+  if (parts.look) { const o = JSON.parse(JSON.stringify(STYLE)); for (const k of ["busNotes", "capFade", "capLength", "capBlur", "capDim", "capAnim"]) delete o[k]; out.parts.look = o; }
+  if (parts.captions) out.parts.captions = { capFade: STYLE.capFade, capLength: STYLE.capLength, capBlur: STYLE.capBlur, capDim: STYLE.capDim, capAnim: STYLE.capAnim };
   if (parts.camera) out.parts.camera = { layer: CAM.layer, round: CAM.round, mirror: CAM.mirror, zoom: CAM.zoom, cx: CAM.cx, cy: CAM.cy };
   if (parts.scenes && CAM.scenes.length) out.parts.scenes = camScenes().map(sc => ({ rel: rel(sc.t), wide: sc.wide, vertical: sc.vertical, move: sc.move, off: sc.off, fx: sc.fx, ease: sc.ease, layout: sc.layout }));
   if (parts.chapters && CHAPS.length) out.parts.chapters = CHAPS.map(c => ({ rel: rel(c.t), title: c.title }));
@@ -1767,7 +1840,7 @@ function tplBuild(parts) {
 // a template laid over this take (the parts that are asked for and that it has)
 function tplApply(t, parts) {
   const p = (t && t.parts) || {}, d = Math.max(AN ? AN.duration : 1, 1), at = r => +(Math.min(Math.max(+r || 0, 0), 1) * d).toFixed(1), done = [];
-  const keep = { busNotes: STYLE.busNotes, capFade: STYLE.capFade, capLength: STYLE.capLength, capBlur: STYLE.capBlur, capDim: STYLE.capDim };
+  const keep = { busNotes: STYLE.busNotes, capFade: STYLE.capFade, capLength: STYLE.capLength, capBlur: STYLE.capBlur, capDim: STYLE.capDim, capAnim: STYLE.capAnim };
   if (parts.look && p.look) { STYLE = Object.assign(mergeStyle(p.look), keep); done.push("look"); }
   if (parts.captions && p.captions) { Object.assign(STYLE, p.captions); done.push("captions"); }
   if (parts.bus && p.bus) { STYLE.busNotes = [0, 1, 2, 3].map(i => String((p.bus.notes || [])[i] || "")); BUSN = (p.bus.changes || []).map(n => ({ bus: +n.bus || 1, t: at(n.rel), text: String(n.text || "") })); done.push("bus"); }
@@ -1848,6 +1921,7 @@ function initStyle(saved) {
     const bg = STYLE.bg; $("s_bgfit").value = bg.fit || "cover"; $("s_bgpx").value = Math.round((bg.px === undefined ? 0.5 : bg.px) * 100); $("s_bgpy").value = Math.round((bg.py === undefined ? 0.5 : bg.py) * 100);
     $("s_bgzoom").value = Math.round((bg.zoom || 1) * 100); $("s_bgblur").value = bg.blur || 0; $("s_bgpanels").value = Math.round((bg.panels !== undefined ? bg.panels : (bg.kind === "gradient" || (bg.kind === "image" && bg.image) ? 0.9 : 1)) * 100); $("s_bgpanelsv").textContent = $("s_bgpanels").value + " %";
     $("s_bgdrift").value = Math.round((bg.mvDrift || 0) * 100); $("s_bgdriftv").textContent = $("s_bgdrift").value + " %"; $("s_bgbreath").value = Math.round((bg.mvZoom || 0) * 100); $("s_bgbreathv").textContent = $("s_bgbreath").value + " %"; $("s_bgper").value = bg.mvPeriod || 12; $("s_bgperv").textContent = $("s_bgper").value + " s";
+    $("s_hits").value = Math.round((STYLE.hits === undefined ? 0.6 : STYLE.hits) * 100); $("s_hitsv").textContent = $("s_hits").value + " %";
     $("s_bgdim").value = Math.round((STYLE.bg.dim === undefined ? 0.6 : STYLE.bg.dim) * 100); $("s_handle").value = STYLE.handle || ""; $("s_sub").value = STYLE.subtitle || "";
   };
   show();
@@ -1868,6 +1942,7 @@ function initStyle(saved) {
   $("s_bgdrift").oninput = () => { STYLE.bg.mvDrift = $("s_bgdrift").value / 100; $("s_bgdriftv").textContent = $("s_bgdrift").value + " %"; changed(); };
   $("s_bgbreath").oninput = () => { STYLE.bg.mvZoom = $("s_bgbreath").value / 100; $("s_bgbreathv").textContent = $("s_bgbreath").value + " %"; changed(); };
   $("s_bgper").oninput = () => { STYLE.bg.mvPeriod = +$("s_bgper").value; $("s_bgperv").textContent = $("s_bgper").value + " s"; changed(); };
+  $("s_hits").oninput = () => { STYLE.hits = $("s_hits").value / 100; $("s_hitsv").textContent = $("s_hits").value + " %"; changed(); };
   $("s_bgpanels").oninput = () => { STYLE.bg.panels = $("s_bgpanels").value / 100; $("s_bgpanelsv").textContent = $("s_bgpanels").value + " %"; changed(); };
   // what each bus is used for: one of the unit's effects, or your own text
   const setNotes = () => { STYLE.busNotes = [0, 1, 2, 3].map(k => { const v = $("s_bussel" + k).value; return v === "__custom__" ? $("s_bus" + k).value : v; }); changed(); };

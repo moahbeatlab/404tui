@@ -480,6 +480,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     *Trial*
 
     - `Keep it (B throws it away)`
+- `Swap with a pad...`
 - `Clear`
 - `Add a track (choose a pad)...`
 
