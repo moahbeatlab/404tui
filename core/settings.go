@@ -39,7 +39,8 @@ type settings struct {
 	MidiMap       [4]string    `json:"midi_map,omitempty"`
 	MidiLevelChan string       `json:"midi_level_chan,omitempty"`
 	MidiCtlPort   string       `json:"midi_ctl_port,omitempty"` // the controller (an EC4): a part of the name of its input, off for none
-	MidiPatChan   string       `json:"midi_pat_chan,omitempty"` // the channel of its pattern group
+	MidiCtlChan   string       `json:"midi_ctl_chan,omitempty"` // the channel of its groups
+	MidiCtlSend   string       `json:"midi_ctl_send,omitempty"` // "off": the pattern it plays is not sent to the unit
 	BusNotes      [2]string    `json:"bus_notes,omitempty"`
 	LooperBank    int          `json:"looper_bank,omitempty"`
 }

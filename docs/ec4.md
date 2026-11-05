@@ -62,20 +62,25 @@ stays.
 
 ## Patterns: a group of its own
 
-On **channel 16** the EC4 can say which pattern is played, by a group of its own (`PTN`). **Turning** the knob of E1 to E10 chooses the **bank** A to J (the controller number 60 to 69; any turn of the knob counts, whichever way);
-**pushing** an encoder is the **pattern** 1 to 16 of that bank (the note 60 to 75, in the order of the encoders, so the 16 pushes lie like the 16 pads of the unit). The bank stays chosen until another knob is turned (it starts as A).
+The EC4 can say which pattern is played, by a group of its own (`PTN`) on the **controller channel** (16 by default; CONFIG). **Turning** the knob of E1 to E10 chooses the **bank** A to J (the controller number 60 to 69; any turn of the knob counts,
+whichever way); **pushing** an encoder is the **pattern** 1 to 16 of that bank (the note 60 to 75, in the order of the encoders, so the 16 pushes lie like the 16 pads of the unit). The bank stays chosen until another knob is turned (it starts as A).
 
 | | on the EC4 |
 | --- | --- |
 | **turn** E1 to E10 | the bank A to J (CC 60 to 69) |
 | **push** E1 to E16 | the pattern 1 to 16 of that bank (Note On 60 to 75) |
 
-The EC4 sends this to the unit too, so that the unit plays the pattern (a Program Change, set up in the EC4 by its own routing: the channel is the bank, the program the pattern), and sends it to the **computer** over USB, which is what
-404tui hears: it knows which pattern plays and writes it into the event log of a recording (`pattern`, with `by: controller`), so that the replay shows the pattern at the time it was played, with nothing to set by hand. 404tui sends nothing
-to the unit for this.
+A note on the controller channel means nothing to the unit, so 404tui does the rest: it **sends the Program Change to the unit** (the channel is the bank, the program the pattern, which is how the unit switches pattern; CONFIG, *Send its pattern to the unit*, yes by default), notes
+which pattern plays, shows it, and writes it into the event log of a recording (`pattern`, with `by: controller`), so that the replay shows the pattern at the time it was played, with nothing set by hand. The EC4 therefore only needs to reach the computer (by USB);
+the unit is reached from there, by the program's own connection to it.
 
-404tui listens to the EC4 on a MIDI input **of its own**, beside the unit's: CONFIG, *Controller input with this in its name* (`ec4` by default; `off` for none), and *Controller pattern group channel* (16 by default; `off` for none). The unit's own MIDI input (the one with `404`
-in its name) is not used for this: connect the EC4 to the computer by USB as well as to the unit's MIDI IN, and set its routing so that the group goes out of both.
+The numbers of this group are 60 to 75. A second group on the same channel (for the pads, see below) uses other numbers, so one channel is enough for all of them.
+
+**The other way:** an encoder can also send a **Program Change** by itself: the channel is the bank and the program the pattern (0 to 15), so ten groups of the EC4 (A to J), each on its own channel 1 to 10, with the push of each encoder sending the program 0 to 15. Routed to the unit's MIDI IN and to the computer's USB, the unit switches itself and 404tui
+hears the same message and notes the pattern. It sends nothing then.
+
+404tui listens to the controller on a MIDI input **of its own**, beside the unit's: CONFIG, *Controller input with this in its name* (`ec4` by default; `off` for none) and *Controller channel* (16; `off` for none). The unit's own MIDI input
+(the one with `404` in its name) is where the Program Change is sent.
 
 ## Morph: a third group
 

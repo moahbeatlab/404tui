@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"path/filepath"
 	"testing"
 	"time"
@@ -48,12 +49,12 @@ func TestControllerPatternGroup(t *testing.T) {
 		t.Fatalf("something else moved the pattern: %s, bank %d", a.slotLabel(a.perfNow), a.ctlBank)
 	}
 	// the channel can be changed or switched off
-	a.set.MidiPatChan = "off"
+	a.set.MidiCtlChan = "off"
 	a.ctlEvent(on(16, 60, 100))
 	if a.slotLabel(a.perfNow) != "C2" {
 		t.Fatal("the group is off")
 	}
-	a.set.MidiPatChan = "12"
+	a.set.MidiCtlChan = "12"
 	a.ctlEvent(on(12, 75, 100))
 	if a.slotLabel(a.perfNow) != "C16" {
 		t.Fatalf("channel 12, E16: %s", a.slotLabel(a.perfNow))
@@ -93,5 +94,60 @@ func TestControllerPortSetting(t *testing.T) {
 	}
 	if a.ctlStatus() == "" {
 		t.Fatal("no status")
+	}
+}
+
+// fakeOutputs is a MIDI source that can also send: what is sent is kept.
+type fakeOutputs struct {
+	fakeMIDI
+	sent *[][]byte
+	part *string
+}
+
+func (f fakeOutputs) OpenOut(part string) (midiin.Out, string, error) {
+	*f.part = part
+	return fakeOut{f.sent}, "SP-404MKII", nil
+}
+
+type fakeOut struct{ sent *[][]byte }
+
+func (o fakeOut) Send(m []byte) error {
+	*o.sent = append(*o.sent, append([]byte(nil), m...))
+	return nil
+}
+func (o fakeOut) Close() {}
+
+func TestControllerSendsThePatternToTheUnit(t *testing.T) {
+	a, _ := newApp(t)
+	var sent [][]byte
+	var part string
+	a.SetPlatform(Platform{Name: "test", MIDI: fakeOutputs{fakeMIDI: fakeMIDI{ch: make(chan midiin.Event, 1)}, sent: &sent, part: &part}})
+	on := func(n int) midiin.Event { return midiin.Event{Kind: midiin.NoteOn, Channel: 16, Data1: n, Data2: 100} }
+	// bank C (the turn of E3), then E2: pattern 2 of bank C is the Program Change 1 on channel 3
+	a.ctlEvent(midiin.Event{Kind: midiin.CC, Channel: 16, Data1: 62, Data2: 65})
+	a.ctlEvent(on(61))
+	if len(sent) != 1 || !bytes.Equal(sent[0], []byte{0xC2, 0x01}) {
+		t.Fatalf("sent %v", sent)
+	}
+	if part != "404" {
+		t.Fatalf("to the unit's input: %q", part)
+	}
+	// turned off: the controller sends it itself
+	a.set.MidiCtlSend = "off"
+	a.ctlEvent(on(62))
+	if len(sent) != 1 || a.slotLabel(a.perfNow) != "C3" {
+		t.Fatalf("not sent: %v, %s", sent, a.slotLabel(a.perfNow))
+	}
+	// a Program Change of the controller (on a bank's channel) is the unit's own way: the pattern is noted, nothing is sent
+	a.set.MidiCtlSend = ""
+	a.ctlEvent(midiin.Event{Kind: midiin.ProgramChange, Channel: 5, Data1: 7})
+	if a.slotLabel(a.perfNow) != "E8" || a.ctlBank != 4 || len(sent) != 1 {
+		t.Fatalf("PC ch 5 prog 7: %s, bank %d, sent %v", a.slotLabel(a.perfNow), a.ctlBank, sent)
+	}
+	// out of range: ignored
+	a.ctlEvent(midiin.Event{Kind: midiin.ProgramChange, Channel: 12, Data1: 7})
+	a.ctlEvent(midiin.Event{Kind: midiin.ProgramChange, Channel: 5, Data1: 16})
+	if a.slotLabel(a.perfNow) != "E8" {
+		t.Fatal("out of range moved the pattern")
 	}
 }

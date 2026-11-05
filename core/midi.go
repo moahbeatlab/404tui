@@ -165,7 +165,11 @@ func (a *App) ctlStatus() string {
 
 // ctlEvent takes in one message of the controller.
 func (a *App) ctlEvent(e midiin.Event) {
-	pc := a.patChan()
+	if e.Kind == midiin.ProgramChange {
+		a.ctlProgram(e)
+		return
+	}
+	pc := a.ctlChan()
 	if pc == 0 || e.Channel != pc {
 		return
 	}
@@ -176,13 +180,48 @@ func (a *App) ctlEvent(e midiin.Event) {
 			a.say("controller: bank "+string(rune('A'+bank)), false)
 		}
 	case e.Kind == midiin.NoteOn && e.Data2 > 0 && e.Data1 >= 60 && e.Data1 <= 75:
-		a.ctlPattern(a.ctlBank*16+e.Data1-60+1, e.At)
+		a.ctlPattern(a.ctlBank*16+e.Data1-60+1, e.At, a.ctlSend())
 	}
 }
 
-// ctlPattern notes that the controller played the pattern of this slot (1 to 160): it is the pattern that plays, and the event log has it.
-func (a *App) ctlPattern(slot int, at time.Time) {
+// ctlProgram takes in a Program Change of the controller on a bank's channel (1 to 10): the unit's own way to say a pattern (the channel is the
+// bank, the program the pattern, 0 to 15). The controller has sent it to the unit as well (or has not: then it is not played), so nothing is sent.
+func (a *App) ctlProgram(e midiin.Event) {
+	if e.Channel < 1 || e.Channel > 10 || e.Data1 < 0 || e.Data1 > 15 {
+		return
+	}
+	a.ctlBank = e.Channel - 1
+	a.ctlPattern(a.ctlBank*16+e.Data1+1, e.At, false)
+}
+
+// sendPattern sends the Program Change of a slot to the unit (the channel is the bank, the program the pattern).
+func (a *App) sendPattern(slot int) {
+	outs, ok := a.plat.MIDI.(midiin.Outputs)
+	if !ok {
+		return
+	}
+	if a.unitOut == nil {
+		out, _, err := outs.OpenOut(a.midiPort())
+		if err != nil {
+			a.say("controller: cannot send to the unit: "+err.Error(), true)
+			return
+		}
+		a.unitOut = out
+	}
+	if err := a.unitOut.Send([]byte{0xC0 | byte((slot-1)/16), byte((slot - 1) % 16)}); err != nil {
+		a.unitOut.Close()
+		a.unitOut = nil
+		a.say("controller: cannot send to the unit: "+err.Error(), true)
+	}
+}
+
+// ctlPattern notes that the controller played the pattern of this slot (1 to 160): it is the pattern that plays, and the event log has it. With send, the
+// unit is told as well (the push of the pattern group is a note, which the unit does not understand).
+func (a *App) ctlPattern(slot int, at time.Time, send bool) {
 	a.perfNow, a.perfNext = slot, 0
+	if send {
+		a.sendPattern(slot)
+	}
 	a.say("controller: pattern "+a.slotLabel(slot), false)
 	if l := a.evlog; l != nil {
 		if at.IsZero() {

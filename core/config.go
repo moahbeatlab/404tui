@@ -26,7 +26,7 @@ const (
 	defaultMidiChan  = 16
 	defaultLevelChan = 15
 	defaultCtlPort   = "ec4" // the controller's input (its own MIDI port, beside the unit's)
-	defaultPatChan   = 16    // the pattern group of the controller
+	defaultCtlChan   = 16    // the pattern group of the controller
 )
 
 var defaultMidiMap = [4]string{"note 62", "note 60", "note 74", "note 75"}
@@ -205,7 +205,10 @@ func (a *App) ctlPort() string {
 	}
 }
 
-func (a *App) patChan() int { return channelOf(a.set.MidiPatChan, defaultPatChan) }
+// ctlSend: the controller's pattern is sent to the unit (a Program Change), unless it is turned off.
+func (a *App) ctlSend() bool { return strings.ToLower(strings.TrimSpace(a.set.MidiCtlSend)) != "off" }
+
+func (a *App) ctlChan() int { return channelOf(a.set.MidiCtlChan, defaultCtlChan) }
 
 func (a *App) midiChan() int  { return channelOf(a.set.MidiChan, defaultMidiChan) }
 func (a *App) levelChan() int { return channelOf(a.set.MidiLevelChan, defaultLevelChan) }
@@ -406,8 +409,15 @@ func (a *App) cfgItems() []cfgItem {
 		items = append(items,
 			cfgItem{label: "Controller input with this in its name", value: func(a *App) string { return textOrOff(a.ctlPort()) }, hint: "A edits",
 				edit: promptSetting("MIDI input of the controller", "a part of the name of its input (EC4), off for none", func(a *App) string { return textOrOff(a.ctlPort()) }, func(a *App, s string) { a.set.MidiCtlPort = strings.ToLower(s); a.restartCtl() })},
-			cfgItem{label: "Controller pattern group channel", value: func(a *App) string { return chanText(a.patChan()) }, hint: "A edits",
-				edit: promptSetting("MIDI channel of the pattern group", "1 to 16, or off", func(a *App) string { return chanText(a.patChan()) }, func(a *App, s string) { a.applyChannel(&a.set.MidiPatChan, s) })},
+			cfgItem{label: "Controller channel", value: func(a *App) string { return chanText(a.ctlChan()) }, hint: "A edits",
+				edit: promptSetting("MIDI channel of the controller", "1 to 16, or off", func(a *App) string { return chanText(a.ctlChan()) }, func(a *App, s string) { a.applyChannel(&a.set.MidiCtlChan, s) })},
+			cfgItem{label: "Send its pattern to the unit", value: func(a *App) string {
+				return map[bool]string{true: "yes (a Program Change)", false: "no (the controller sends it)"}[a.ctlSend()]
+			}, hint: "< > change",
+				change: func(a *App, by int) {
+					a.set.MidiCtlSend = map[bool]string{true: "off", false: "on"}[a.ctlSend()]
+					a.saveSettings()
+				}},
 			cfgItem{label: "Controller", value: func(a *App) string { return a.ctlStatus() }},
 		)
 	}

@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/dbg"
+	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/perform"
 	"github.com/moahbeatlab/404tui/record"
 	"os"
@@ -214,6 +215,7 @@ type App struct {
 	ctl               *midiLink // the controller's MIDI input (an EC4), beside the unit's
 	ctlTry            time.Time
 	ctlErr            string
+	unitOut           midiin.Out  // the output to the unit, opened when a pattern is sent to it
 	ctlBank           int         // the bank the controller has chosen (0 is A): what a push of the pattern group is a pattern of
 	codes             padCode     // the pads hit in turn
 	liveBack          Screen      // where the live mode came from
