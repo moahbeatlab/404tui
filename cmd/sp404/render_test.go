@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/moahbeatlab/404tui/replay"
 )
 
 func TestRenderRefusesWhatIsWrongBeforeTheBrowserStarts(t *testing.T) {
@@ -42,5 +44,27 @@ func TestReplayHelpSaysEverything(t *testing.T) {
 		if !strings.Contains(replayUsage, want) {
 			t.Errorf("the help does not mention %q", want)
 		}
+	}
+}
+
+func TestPlanFramesLeavesTheCutsOut(t *testing.T) {
+	cuts := []replay.Cut{{2, 4}, {7, 8.5}}
+	spans, times := planFrames(cuts, 0, 10, 10)
+	if len(spans) != 3 || spans[0].n != 20 || spans[1].n != 30 || spans[2].n != 15 || len(times) != 65 {
+		t.Fatalf("spans %+v, %d frames", spans, len(times))
+	}
+	if spans[1].first != 20 || times[20] != 4 || times[49] < 6.89 || times[50] != 8.5 || spans[0].cutBefore || !spans[0].cutAfter || !spans[2].cutBefore || spans[2].cutAfter {
+		t.Fatalf("spans %+v, times %v", spans, times[18:22])
+	}
+	if f := audioFilter(spans, 10); !strings.Contains(f, "concat=n=3") || !strings.Contains(f, "atrim=start=4.0000:duration=3.0000") {
+		t.Fatal(f)
+	}
+	// nothing cut: one part, as before
+	if sp, tm := planFrames(nil, 3, 5, 30); len(sp) != 1 || len(tm) != 60 || sp[0].cutBefore || sp[0].cutAfter {
+		t.Fatalf("%+v %d", sp, len(tm))
+	}
+	// everything cut
+	if sp, _ := planFrames([]replay.Cut{{0, 20}}, 0, 10, 30); len(sp) != 0 {
+		t.Fatalf("%+v", sp)
 	}
 }

@@ -119,17 +119,19 @@ func runRender(args []string, o options) error {
 	if start < 0 || start >= end {
 		return fmt.Errorf("-from %.1f is not inside the take (%.1f s)", start, r.Analysis.Duration)
 	}
-	frames := int((end - start) * float64(*fps))
+	// the parts that are cut leave the video: what is rendered is the list of the parts that are left, frame by frame
+	spans, times := planFrames(r.Cuts(), start, end, *fps)
+	frames := len(times)
 	if frames < 1 {
-		return errors.New("nothing to render")
+		return errors.New("nothing to render (everything is cut)")
 	}
+	cut := len(spans) != 1 || spans[0].cutBefore || spans[0].cutAfter || spans[0].n != int((end-start)*float64(*fps))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// the video of the player: its pictures for these frames are cut out with ffmpeg (a picture for every frame of the render, from the
 	// time of the camera that matches the start, by the sync of the take) and given to the page one by one
 	var camDir string
-	var camLead int
 	if cp := r.CameraPath(); cp != "" && !*noCamera {
 		if _, err := os.Stat(cp); err != nil {
 			fmt.Printf("the camera video %s is not there: rendering without it\n", cp)
@@ -139,9 +141,10 @@ func runRender(args []string, o options) error {
 				return err
 			}
 			defer os.RemoveAll(camDir)
-			camLead, err = extractCameraFrames(ctx, ff, cp, camDir, cameraSync(r.Camera()), start, *fps, frames)
-			if err != nil {
-				return err
+			for _, sp := range spans {
+				if err = extractCameraFrames(ctx, ff, cp, camDir, cameraSync(r.Camera()), sp.from, *fps, sp.n, sp.first); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -167,10 +170,15 @@ func runRender(args []string, o options) error {
 
 	// ffmpeg: the pictures (PNG) from its input, the sound from the WAV (from the same second)
 	fa := []string{"-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", fmt.Sprint(*fps), "-c:v", "png", "-i", "-"}
-	if start > 0 {
-		fa = append(fa, "-ss", fmt.Sprintf("%.3f", start))
+	if cut { // the sound of the parts that are left, joined
+		fa = append(fa, "-i", files[0], "-filter_complex", audioFilter(spans, *fps), "-map", "0:v", "-map", "[a]")
+	} else {
+		if start > 0 {
+			fa = append(fa, "-ss", fmt.Sprintf("%.3f", start))
+		}
+		fa = append(fa, "-i", files[0], "-map", "0:v", "-map", "1:a")
 	}
-	fa = append(fa, "-i", files[0], "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "17", "-preset", "medium",
+	fa = append(fa, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "17", "-preset", "medium",
 		"-c:a", "aac", "-b:a", "192k", "-t", fmt.Sprintf("%.3f", float64(frames)/float64(*fps)), "-movflags", "+faststart", dest)
 	cmd := exec.CommandContext(ctx, ff, fa...)
 	cmd.Stderr = os.Stderr
@@ -182,7 +190,7 @@ func runRender(args []string, o options) error {
 		return err
 	}
 
-	fmt.Printf("rendering %d frames (%.1f s, %d fps, %s) to %s\n", frames, end-start, *fps, *format, dest)
+	fmt.Printf("rendering %d frames (%.1f s, %d fps, %s) to %s\n", frames, float64(frames)/float64(*fps), *fps, *format, dest)
 	// the pages draw frames side by side (each in a tab of its own); the pictures go to ffmpeg in their order
 	var (
 		mu      sync.Mutex
@@ -212,15 +220,15 @@ func runRender(args []string, o options) error {
 				nextJob++
 				mu.Unlock()
 				var cam []byte
-				if camDir != "" && i >= camLead {
-					cam, _ = os.ReadFile(filepath.Join(camDir, fmt.Sprintf("c%06d.jpg", i-camLead+1))) // none after the end of the video
+				if camDir != "" {
+					cam, _ = os.ReadFile(filepath.Join(camDir, fmt.Sprintf("c%06d.jpg", i+1))) // none before the video begins or after its end
 				}
 				var b []byte
 				var err error
 				if camDir != "" {
-					b, err = br.frameWithCamera(sess, start+float64(i)/float64(*fps), cam)
+					b, err = br.frameWithCamera(sess, times[i], cam)
 				} else {
-					b, err = br.frame(sess, start+float64(i)/float64(*fps))
+					b, err = br.frame(sess, times[i])
 				}
 				mu.Lock()
 				if err != nil && failed == nil {
@@ -576,7 +584,8 @@ func cameraSync(raw json.RawMessage) float64 {
 
 // extractCameraFrames cuts the video into pictures, one for every frame of the render: file i (from 1) is the picture for the frame i-1+lead.
 // Frames before the video begins are left out (lead says how many); a video that ends early just gives fewer files.
-func extractCameraFrames(ctx context.Context, ffmpeg, video, dir string, sync, start float64, fps, frames int) (lead int, err error) {
+func extractCameraFrames(ctx context.Context, ffmpeg, video, dir string, sync, start float64, fps, frames, first int) error {
+	lead := 0
 	camStart := start + sync
 	if camStart < 0 {
 		lead = int(math.Ceil(-camStart*float64(fps) - 1e-9))
@@ -587,12 +596,12 @@ func extractCameraFrames(ctx context.Context, ffmpeg, video, dir string, sync, s
 		args = append(args, "-ss", fmt.Sprintf("%.4f", camStart))
 	}
 	args = append(args, "-i", video, "-vf", fmt.Sprintf("fps=%d,scale='min(1920,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease:flags=lanczos", fps),
-		"-frames:v", fmt.Sprint(max(frames-lead, 1)), "-q:v", "3", filepath.Join(dir, "c%06d.jpg"))
+		"-frames:v", fmt.Sprint(max(frames-lead, 1)), "-q:v", "3", "-start_number", fmt.Sprint(first+lead+1), filepath.Join(dir, "c%06d.jpg"))
 	fmt.Printf("cutting the camera video into pictures (sync %+.3f s)...\n", sync)
 	cmd := exec.CommandContext(ctx, ffmpeg, args...)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return 0, fmt.Errorf("the camera video: %w", err)
+		return fmt.Errorf("the camera video: %w", err)
 	}
-	return lead, nil
+	return nil
 }

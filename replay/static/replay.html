@@ -81,6 +81,12 @@
   #ctl { display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; }
   #ctl .grp { display:flex; gap:8px; align-items:center; }
   #ctl .grp.right { margin-left:auto; }
+  #cutlane { position:relative; height:22px; margin:0 8px; flex:none; background:#1d1d20; border-radius:4px; cursor:crosshair; }
+  #cutlane .cutb { position:absolute; top:2px; bottom:2px; box-sizing:border-box; border:1px solid #ff5f5f; border-radius:3px; background:repeating-linear-gradient(135deg, rgba(255,95,95,.28) 0 5px, rgba(255,95,95,.08) 5px 10px); color:var(--text); font-size:11px; padding:2px 6px; overflow:hidden; white-space:nowrap; cursor:pointer; touch-action:none; }
+  #cutlane .cutb .hd { position:absolute; top:0; bottom:0; width:9px; cursor:ew-resize; } #cutlane .cutb .hd.l { left:-3px; } #cutlane .cutb .hd.r { right:-3px; }
+  #cutlane .cutin { position:absolute; top:0; bottom:0; width:2px; background:#ff5f5f; } #cutlane .cutdraft { position:absolute; top:2px; bottom:2px; background:rgba(255,95,95,.25); border:1px dashed #ff5f5f; }
+  #cutpop { position:fixed; bottom:calc(var(--barh, 110px) + 8px); display:none; gap:6px; align-items:center; background:#1b1b1e; border:1px solid #34343a; padding:8px 10px; z-index:6; }
+  #cutpop.open { display:flex; } #cutpop input, #cutpop button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; cursor:pointer; }
   #cuepop { position:fixed; bottom:calc(var(--barh, 110px) + 8px); display:none; gap:6px; align-items:center; background:#1b1b1e; border:1px solid #34343a; padding:8px 10px; z-index:6; }
   #cuepop.open { display:flex; }
   #cuepop input, #cuepop select, #cuepop button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
@@ -184,7 +190,7 @@
 </div>
 <div id="bar">
   <div id="tl">
-    <div id="lbls"><span class="lbl">camera</span><span class="lbl">chapters</span><span class="lbl">patterns</span><span class="lbl">bus fx</span><span class="lbl">captions</span></div>
+    <div id="lbls"><span class="lbl">camera</span><span class="lbl">chapters</span><span class="lbl">patterns</span><span class="lbl">bus fx</span><span class="lbl">captions</span><span class="lbl">cuts</span></div>
     <div id="lanes" title="Ctrl + wheel zooms, the wheel or a drag of the bar below moves along">
       <div id="lanesin">
         <div id="camlane" title="the camera scenes: click one to edit it, drag its left edge to move it"></div>
@@ -192,6 +198,7 @@
         <div id="cues" title="the patterns: click one to edit it, drag its left edge to move it"></div>
         <div id="buslane" title="what a bus is used for, from a time on: click one to edit it, drag its left edge to move it"></div>
         <div id="capslane" title="the captions: click one to edit it"></div>
+        <div id="cutlane" title="the parts the video leaves out: drag over the lane to cut a part, click a cut to edit it, drag its edges to change it"></div>
         <div id="ph"></div>
       </div>
     </div>
@@ -202,7 +209,8 @@
       <button id="undo" title="Ctrl-Z">undo</button><button id="redo" title="Ctrl-Shift-Z">redo</button></span>
     <span class="grp"><button id="zout" title="show more of the take (Ctrl + wheel, or -)">-</button><span id="zlev" style="min-width:34px;text-align:center;color:var(--dim)">1x</span><button id="zin" title="show less of the take (Ctrl + wheel, or +)">+</button><button id="zfit" title="the whole take">fit</button></span>
     <span class="grp"><input id="title" placeholder="title" size="18" title="the title shown in the video">
-      <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button></span>
+      <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button>
+      <select id="cutsel" title="leave a part of the take out of the video (keys: i starts a cut here, o ends it)"><option value="">cut...</option><option value="in">start a cut here (i)</option><option value="out">end the cut here (o)</option><option value="before">cut everything before here</option><option value="after">cut everything after here</option><option value="none">restore all cuts</option></select></span>
     <span class="grp"><select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
       <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span></span>
     <span class="grp right"><button id="tplbtn" title="save a setup as a template, use one on this take">templates</button>
@@ -219,6 +227,7 @@
 
 <div id="campop"></div>
 <div id="chpop"></div>
+<div id="cutpop"></div>
 <div id="bpop"></div>
 
 
@@ -558,7 +567,7 @@ function drawHeader(T, A) {
   if (VERT) {
     rect(0, 0, W, 100, COL.deep);
     text(fit(name, 30), 24, 44, TITLE ? COL.text : COL.amber, 32, true);
-    text(mmss(A) + " / " + mmss(dur), W - 24, 44, COL.dim, 22, false, "right");
+    text(mmss(outTime(A)) + " / " + mmss(outDur()), W - 24, 44, COL.dim, 22, false, "right");
     text(bpmText, 24, 86, tp.src === "project" ? COL.dim : COL.amber, 34, true);
     text(pos ? "BAR " + bar + "  BEAT " + beat : "", 300, 84, COL.text, 24);
     text(run ? "PLAY" : "STOP", W - 24, 84, run ? COL.good : COL.dim, 26, true, "right");
@@ -579,7 +588,7 @@ function drawHeader(T, A) {
   text(bpmText, 1000, 44, tp.src === "project" ? COL.dim : COL.amber, 34, true);
   text(pos ? "BAR " + bar + "  BEAT " + beat : "no clock", 1240, 42, pos ? COL.text : COL.dim, 22);
   text(run ? "PLAY" : "STOP", 1560, 42, run ? COL.good : COL.dim, 26, true);
-  text(mmss(A) + " / " + mmss(dur), W - 28, 42, COL.text, 24, false, "right");
+  text(mmss(outTime(A)) + " / " + mmss(outDur()), W - 28, 42, COL.text, 24, false, "right");
 }
 function drawPads(T) {
   const [x0, y0, w, h] = L.pads;
@@ -1016,9 +1025,9 @@ function followPlayhead(frac, playing) { // the lanes keep the playhead in view 
 
 // ---- undo and redo: the patterns, the captions, the chapters and the title (not the look). A step is a whole picture of them, taken
 // after every change; typing in one text counts as one step.
-let CHAPS = [], BUSN = [];
+let CHAPS = [], BUSN = [], CUTS = [];
 const HIST = { undo: [], redo: [], last: null, kind: "", at: 0 };
-const histState = () => JSON.stringify({ cues, adopted, caps: CAPS, chaps: CHAPS, busn: BUSN, cam: CAM, title: TITLE });
+const histState = () => JSON.stringify({ cues, adopted, caps: CAPS, chaps: CHAPS, busn: BUSN, cuts: CUTS, cam: CAM, title: TITLE });
 function histButtons() {
   const u = document.getElementById("undo"), r = document.getElementById("redo");
   if (u) { u.disabled = !HIST.undo.length; u.style.opacity = HIST.undo.length ? 1 : 0.4; }
@@ -1034,11 +1043,11 @@ function histChanged(kind) {
 }
 function histApply(str) {
   const st = JSON.parse(str), post = (u, b) => fetch(u, { method: "POST", body: JSON.stringify(b) }).catch(() => {});
-  cues = st.cues; adopted = st.adopted; CAPS = st.caps; CHAPS = st.chaps; BUSN = st.busn || []; CAM = st.cam || CAM; TITLE = st.title;
+  cues = st.cues; adopted = st.adopted; CAPS = st.caps; CHAPS = st.chaps; BUSN = st.busn || []; CUTS = st.cuts || []; CAM = st.cam || CAM; TITLE = st.title;
   document.getElementById("title").value = TITLE;
-  for (const id of ["cuepop", "chpop", "bpop", "campop"]) document.getElementById(id).classList.remove("open");
-  rebuildCues(); if (window.refreshCapLane) window.refreshCapLane(); if (window.refreshChapters) window.refreshChapters(); if (window.refreshBusNotes) window.refreshBusNotes(); if (window.refreshCamera) window.refreshCamera(); if (window.refreshCapList) window.refreshCapList();
-  post("/cues", { cues, adopted }); post("/captions", CAPS); post("/chapters", CHAPS); post("/busnotes", BUSN); post("/camera", CAM); post("/title", { title: TITLE });
+  for (const id of ["cuepop", "chpop", "bpop", "campop", "cutpop"]) document.getElementById(id).classList.remove("open");
+  rebuildCues(); if (window.refreshCapLane) window.refreshCapLane(); if (window.refreshChapters) window.refreshChapters(); if (window.refreshBusNotes) window.refreshBusNotes(); if (window.refreshCamera) window.refreshCamera(); if (window.refreshCuts) window.refreshCuts(); if (window.refreshCapList) window.refreshCapList();
+  post("/cues", { cues, adopted }); post("/captions", CAPS); post("/chapters", CHAPS); post("/busnotes", BUSN); post("/cuts", CUTS); post("/camera", CAM); post("/title", { title: TITLE });
 }
 function undo() { if (!HIST.undo.length) return; HIST.redo.push(HIST.last); HIST.last = HIST.undo.pop(); HIST.kind = ""; histApply(HIST.last); histButtons(); }
 function redo() { if (!HIST.redo.length) return; HIST.undo.push(HIST.last); HIST.last = HIST.redo.pop(); HIST.kind = ""; histApply(HIST.last); histButtons(); }
@@ -1148,15 +1157,16 @@ let manual = null; // a program that sets the time itself (a render)
 function now() { return manual !== null ? manual : audio.currentTime; }
 function frame() {
   const t = now();
+  if (manual === null && !audio.paused && !audio.seeking && CUTS.length) { const c = cutAt(t); if (c) audio.currentTime = c.to; } // playing: a cut is skipped
   draw(t);
   const d = AN ? AN.duration : audio.duration || 0;
   if (!seeking && d) seek.value = String(Math.round(t / d * 1000)); // it follows the time, except while it is being dragged
   if (d) { // the playhead through the lanes: the same x as the lanes' times
-    const inn = document.getElementById("lanesin"), ln = document.getElementById("cues"), cp = document.getElementById("capslane"), camL = document.getElementById("camlane");
+    const inn = document.getElementById("lanesin"), ln = document.getElementById("cues"), cp = document.getElementById("cutlane"), camL = document.getElementById("camlane");
     ph.style.left = (ln.offsetLeft + clamp(t / d, 0, 1) * ln.offsetWidth - 1) + "px"; ph.style.top = camL.offsetTop + "px"; ph.style.height = (cp.offsetTop + cp.offsetHeight - camL.offsetTop) + "px";
     followPlayhead(t / d, !audio.paused);
   }
-  timeEl.textContent = mmss(t) + " / " + mmss(d);
+  timeEl.textContent = CUTS.length ? mmss(outTime(t)) + " / " + mmss(outDur()) + "  (take " + mmss(t) + ")" : mmss(t) + " / " + mmss(d);
   play.textContent = audio.paused ? "play" : "pause";
   requestAnimationFrame(frame);
 }
@@ -1191,6 +1201,7 @@ addEventListener("keydown", e => {
   else if (e.key === "[") { NUDGE -= 10; nudgeEl.textContent = "sync " + (NUDGE >= 0 ? "+" : "") + NUDGE + " ms"; }
   else if (e.key === "]") { NUDGE += 10; nudgeEl.textContent = "sync " + (NUDGE >= 0 ? "+" : "") + NUDGE + " ms"; }
   else if (e.key === "f") document.getElementById("full").onclick();
+  else if (e.key === "i" || e.key === "o") window.cutKey && window.cutKey(e.key);
 });
 
 // the controls of the captions: a row for each (from, to, the text); "add" puts one at the time the page is at
@@ -1328,6 +1339,82 @@ function initBusNotes() {
   refresh();
 }
 
+// ---- cuts: parts of the take that the video leaves out. Everything keeps the time of the take (the lanes show the whole take, a cut is a hatched
+// block); playing skips a cut, the clock shows the time of the video (what is cut before it taken off), and the render leaves the cuts out.
+const cutsNorm = cs => {
+  const c = cs.filter(x => x.to - x.from >= 0.01).map(x => ({ from: Math.max(x.from, 0), to: x.to })).sort((a, b) => a.from - b.from), out = [];
+  for (const x of c) { const l = out[out.length - 1]; if (l && x.from <= l.to + 0.0005) l.to = Math.max(l.to, x.to); else out.push(x); }
+  return out;
+};
+const cutAt = t => CUTS.find(c => t >= c.from - 0.003 && t < c.to);
+function outTime(t) { let off = 0; for (const c of CUTS) { if (c.from >= t) break; off += Math.min(c.to, t) - c.from; } return t - off; }
+const outDur = () => (AN ? AN.duration : 0) - CUTS.reduce((a, c) => a + Math.min(c.to, AN ? AN.duration : c.to) - c.from, 0);
+function initCuts() {
+  const lane = document.getElementById("cutlane"), pop = document.getElementById("cutpop"), sel = document.getElementById("cutsel");
+  let cutIn = null;
+  const d = () => (AN ? AN.duration : 0);
+  const post = () => fetch("/cuts", { method: "POST", body: JSON.stringify(CUTS) }).catch(() => {});
+  const save = () => { CUTS = cutsNorm(CUTS); post(); build(); histChanged(); };
+  const add = (from, to) => { if (Math.abs(to - from) < 0.05) return; CUTS.push({ from: +Math.min(from, to).toFixed(2), to: +Math.max(from, to).toFixed(2) }); pop.classList.remove("open"); save(); };
+  const snap = t => { let best = t, bd = 0.2; for (const l of loopStarts) { const dd = Math.abs(l - OFFSET - t); if (dd < bd) { bd = dd; best = l - OFFSET; } } return +best.toFixed(2); };
+  function edit(c) {
+    pop.textContent = ""; pop.classList.add("open");
+    const mk = (n, t, fn) => { const b = document.createElement("button"); b.textContent = n; b.title = t; b.onclick = fn; return b; };
+    const f = document.createElement("input"), tt = document.createElement("input"), ln = document.createElement("span");
+    f.value = mmss(c.from); tt.value = mmss(c.to); f.size = tt.size = 7; ln.textContent = (c.to - c.from).toFixed(1) + " s cut";
+    f.onchange = () => { c.from = clamp(+parseTime(f.value).toFixed(2), 0, c.to - 0.05); save(); pop.classList.remove("open"); };
+    tt.onchange = () => { c.to = clamp(+parseTime(tt.value).toFixed(2), c.from + 0.05, d()); save(); pop.classList.remove("open"); };
+    pop.append("from", f, "to", tt, ln,
+      mk("play around", "hear how the join sounds: 2 s before the cut, then what follows it", () => { audio.currentTime = Math.max(c.from - 2, 0); audio.play(); }),
+      mk("restore", "take the cut away: this part is in the video again", () => { CUTS = CUTS.filter(x => x !== c); pop.classList.remove("open"); save(); }),
+      mk("x", "close", () => pop.classList.remove("open")));
+    const r = lane.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(innerWidth - 560, r.left + c.from / d() * r.width - 60)) + "px";
+  }
+  function build() {
+    lane.textContent = ""; const D = d(); if (!D) return;
+    for (const c of CUTS) {
+      const b = document.createElement("div"), hl = document.createElement("span"), hr = document.createElement("span"), x0 = clamp(c.from / D, 0, 1), x1 = clamp(c.to / D, 0, 1);
+      b.className = "cutb"; b.textContent = "-" + (c.to - c.from).toFixed(1) + " s"; b.title = "cut " + mmss(c.from) + " to " + mmss(c.to) + ": click to edit, drag the edges to change it";
+      b.style.left = x0 * 100 + "%"; b.style.width = Math.max(x1 - x0, 0.002) * 100 + "%"; hl.className = "hd l"; hr.className = "hd r"; b.append(hl, hr);
+      const drag = (ev, side) => {
+        ev.preventDefault(); ev.stopPropagation(); try { b.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+        const w = lane.getBoundingClientRect().width, x = ev.clientX, f0 = c.from, t0 = c.to; let moved = false;
+        b.onpointermove = e => {
+          if (!moved && Math.abs(e.clientX - x) < 3) return; moved = true; b._moved = true;
+          const dt = (e.clientX - x) / w * D;
+          if (side === "l") c.from = clamp(snap(f0 + dt), 0, c.to - 0.05); else c.to = clamp(snap(t0 + dt), c.from + 0.05, D);
+          b.style.left = c.from / D * 100 + "%"; b.style.width = (c.to - c.from) / D * 100 + "%"; b.textContent = "-" + (c.to - c.from).toFixed(1) + " s"; b.append(hl, hr);
+        };
+        b.onpointerup = () => { b.onpointermove = b.onpointerup = null; if (moved) save(); };
+      };
+      hl.onpointerdown = ev => drag(ev, "l"); hr.onpointerdown = ev => drag(ev, "r");
+      b.onclick = () => { if (b._moved) { b._moved = false; return; } edit(c); };
+      lane.appendChild(b);
+    }
+    if (cutIn !== null) { const m = document.createElement("div"); m.className = "cutin"; m.style.left = cutIn / D * 100 + "%"; m.title = "the cut starts here: press o (or choose \"end the cut here\") where it ends"; lane.appendChild(m); }
+  }
+  // drag over the empty lane to cut that part
+  lane.onpointerdown = ev => {
+    if (ev.target !== lane) return;
+    ev.preventDefault(); try { lane.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+    const r = lane.getBoundingClientRect(), D = d(), x0 = ev.clientX, t0 = snap(clamp((x0 - r.left) / r.width, 0, 1) * D), draft = document.createElement("div"); draft.className = "cutdraft"; let moved = false, t1 = t0;
+    lane.onpointermove = e => { if (Math.abs(e.clientX - x0) < 4) return; moved = true; t1 = snap(clamp((e.clientX - r.left) / r.width, 0, 1) * D); draft.style.left = Math.min(t0, t1) / D * 100 + "%"; draft.style.width = Math.abs(t1 - t0) / D * 100 + "%"; if (!draft.parentNode) lane.appendChild(draft); };
+    lane.onpointerup = () => { lane.onpointermove = lane.onpointerup = null; draft.remove(); if (moved) add(t0, t1); };
+  };
+  const run = what => {
+    const t = +now().toFixed(2), D = d();
+    if (what === "in") { cutIn = t; build(); }
+    else if (what === "out") { if (cutIn === null) { cutIn = t; build(); return; } add(cutIn, t); cutIn = null; }
+    else if (what === "before") add(0, t);
+    else if (what === "after") add(t, D);
+    else if (what === "none") { CUTS = []; pop.classList.remove("open"); save(); }
+  };
+  sel.onchange = () => { const v = sel.value; sel.value = ""; if (v) run(v); };
+  window.cutKey = k => run(k === "i" ? "in" : "out");
+  window.refreshCuts = build;
+  build();
+}
+
 // the chapters: blocks on a lane of their own, a pop-up for the title and time, and the list for YouTube
 function initChapters() {
   const lane = document.getElementById("chaplane"), pop = document.getElementById("chpop"), box = document.getElementById("chbox"), txt = document.getElementById("chtext"), hint = document.getElementById("chhint");
@@ -1335,7 +1422,7 @@ function initChapters() {
   const save = kind => { post(); refresh(); histChanged(kind); };
   const text = () => { // as YouTube wants it: "0:00 Title" a line each
     const c = CHAPS.slice().sort((a, b) => a.t - b.t); if (!c.length) return "";
-    return (c[0].t > 0.5 ? [{ t: 0, title: "Intro" }, ...c] : c).map(ch => { const t = Math.floor(ch.t + 0.0001), h = Math.floor(t / 3600);
+    return (c[0].t > 0.5 ? [{ t: 0, title: "Intro" }, ...c] : c).map(ch => { const t = Math.floor(outTime(ch.t) + 0.0001), h = Math.floor(t / 3600);
       return (h ? h + ":" + String(Math.floor(t / 60) % 60).padStart(2, "0") : String(Math.floor(t / 60))) + ":" + String(t % 60).padStart(2, "0") + " " + (ch.title || "").trim(); }).join("\n") + "\n";
   };
   const hints = () => { // what YouTube wants of the list
@@ -1804,8 +1891,8 @@ async function start() {
   const msg = document.getElementById("msg");
   try {
     const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
-    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || ""), focus: String(c.focus || "") })); CHAPS = (ev.chapters || []).map(c => ({ t: +c.t || 0, title: String(c.title || "") })); BUSN = (ev.busnotes || []).map(n => ({ bus: +n.bus || 1, t: +n.t || 0, text: String(n.text || "") })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
-    initChapters(); initBusNotes(); initCamera(ev.camera, ev.camera_file); initTemplates();
+    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || ""), focus: String(c.focus || "") })); CHAPS = (ev.chapters || []).map(c => ({ t: +c.t || 0, title: String(c.title || "") })); CUTS = cutsNorm((ev.cuts || []).map(c => ({ from: +c.from || 0, to: +c.to || 0 }))); BUSN = (ev.busnotes || []).map(n => ({ bus: +n.bus || 1, t: +n.t || 0, text: String(n.text || "") })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
+    initChapters(); initCuts(); initBusNotes(); initCamera(ev.camera, ev.camera_file); initTemplates();
     if (ev.default_template) { const all = {}; for (const [k] of TPL_PARTS) all[k] = true; tplApply(ev.default_template, all); } // a new take starts with the default template
     if (window.refreshCapLane) window.refreshCapLane(); // the lanes need the length of the take, which prepare has just read
     histInit();
