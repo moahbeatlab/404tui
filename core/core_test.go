@@ -4140,3 +4140,44 @@ func TestUndoAndRedoInTheSlicerTakeBackCutsAndJoins(t *testing.T) {
 		t.Fatalf("the slicer stays in front, got %v", a.Screen())
 	}
 }
+
+func TestSwapTwoTracks(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.addTrack(0)
+	a.seqMenu()
+	a.trackDefaults()
+	a.tt.fillPat, a.tt.fillDecay = 3, 3
+	chooseMenu(t, a, "Fill...")
+	chooseMenuContaining(t, a, "Keep it")
+	keys(t, a, "B")
+	n0 := a.trackNotes(0)
+	if len(n0) == 0 {
+		t.Fatal("no notes to swap")
+	}
+	// pad 1 gets two notes by hand
+	a.toggle(1, 0)
+	a.toggle(1, 4)
+	n1 := a.trackNotes(1)
+	if len(n1) != 2 {
+		t.Fatalf("pad 1 has %d notes", len(n1))
+	}
+	a.swapTracks(0, 1)
+	if got := a.trackNotes(0); len(got) != 2 || got[0].Pad != 0 || got[0].Tick != n1[0].Tick || got[1].Tick != n1[1].Tick {
+		t.Fatalf("pad 0 after the swap: %+v", got)
+	}
+	got1 := a.trackNotes(1)
+	if len(got1) != len(n0) || got1[0].Pad != 1 || got1[0].Tick != n0[0].Tick || got1[0].Vel != n0[0].Vel {
+		t.Fatalf("pad 1 after the swap: %d notes, first %+v (was %+v)", len(got1), got1[0], n0[0])
+	}
+	// undo puts both back
+	a.undoStep()
+	if len(a.trackNotes(0)) != len(n0) || len(a.trackNotes(1)) != 2 {
+		t.Fatalf("after undo: %d and %d notes", len(a.trackNotes(0)), len(a.trackNotes(1)))
+	}
+	a.swapTracks(0, 0)
+	if len(a.trackNotes(0)) != len(n0) {
+		t.Fatal("swapping a pad with itself changed it")
+	}
+}

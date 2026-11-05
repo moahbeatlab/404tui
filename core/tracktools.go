@@ -547,6 +547,71 @@ func (a *App) copyTrackMenu() {
 	})
 }
 
+// ---- Swap
+
+// swapTrackPick asks for a pad (the dialog the tracks are added in) and swaps this track with it.
+func (a *App) swapTrackPick() {
+	pad := a.rowPad()
+	start := pad
+	for off := 1; off < 160; off++ {
+		if p := (pad + off) % 160; a.info.Pads[p].File {
+			start = p
+			break
+		}
+	}
+	a.pickPad(fmt.Sprintf("Swap %s with which pad?", a.label(pad)), start, true, func(q int) { a.swapTracks(pad, q) })
+}
+
+// swapTracks gives the notes of pad p to pad q and the notes of q to p (the snare plays where the maracas were, and the other way round); the mute
+// and solo of the two tracks go with the notes. In a frozen bar only that bar is swapped.
+func (a *App) swapTracks(p, q int) {
+	if p == q {
+		a.say("that is the same pad", true)
+		return
+	}
+	np, nq := a.trackNotes(p), a.trackNotes(q)
+	if len(np) == 0 && len(nq) == 0 {
+		a.say("neither pad has notes in this pattern", true)
+		return
+	}
+	pre := a.lab.Snapshot()
+	to := func(ns []lab.Note, pad int) []lab.Note {
+		out := make([]lab.Note, len(ns))
+		for i, n := range ns {
+			n.Pad = pad
+			out[i] = n
+		}
+		return out
+	}
+	if err := a.setTrack(p, to(nq, p)); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	if err := a.setTrack(q, to(np, q)); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	if m := a.trk[a.pat]; m != nil && !a.freeze {
+		mp, okp := m[p]
+		mq, okq := m[q]
+		delete(m, p)
+		delete(m, q)
+		if okq {
+			m[p] = mq
+		}
+		if okp {
+			m[q] = mp
+		}
+	}
+	a.commitUndo(pre, A, 0)
+	a.refresh()
+	a.addTrack(q) // the other pad gets a row too, if it has none
+	a.rowFocus = p
+	a.autoRows()
+	a.replay()
+	a.say(fmt.Sprintf("%s (%d notes) and %s (%d notes) swapped", a.label(p), len(np), a.label(q), len(nq)), false)
+}
+
 // ---- Fill
 
 // fillPresets are rhythms over the 16 steps of a bar; the track is filled with them in every bar.

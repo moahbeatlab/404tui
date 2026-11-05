@@ -533,6 +533,7 @@ func (a *App) seqMenu() {
 	m.tabHead("TRACKS")
 	run("Dispatch over the marked pads...", a.dispatchMenu)
 	run("Copy to a pad...", a.copyTrackMenu)
+	run("Swap with a pad...", a.swapTrackPick)
 	run("Clear", func() {
 		args, _ := json.Marshal(lab.PatternArgs{Pad: pad})
 		a.lab.PatternOp(a.pat, "clearPad", args)
