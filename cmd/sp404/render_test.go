@@ -64,7 +64,7 @@ func TestPlanFramesLeavesTheCutsOut(t *testing.T) {
 		t.Fatalf("%+v %d", sp, len(tm))
 	}
 	// everything cut
-	if sp, _ := planFrames([]replay.Cut{{0, 20}}, 0, 10, 30); len(sp) != 0 {
+	if sp, _ := planFrames([]replay.Cut{{From: 0, To: 20}}, 0, 10, 30); len(sp) != 0 {
 		t.Fatalf("%+v", sp)
 	}
 }

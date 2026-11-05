@@ -36,7 +36,6 @@ const usage = `usage: sp404 [flags] <command>
 commands:
   menu           the full-screen terminal UI (the default when no command is given): pads, sequencer, files, slicer,
                  save and unit, with the same screens, layout, menus and features as the handheld version
-  classic        the earlier terminal UI with its tabs (Perform, Looper, Config, ...), until they are in the one above
   serve          run without a screen and serve Perform to a browser on this network (phone, tablet)
   replay <wav> [events.jsonl]
                  show a recorded performance in the browser: the sound with what the unit did (pads, pattern, effects,
@@ -192,7 +191,7 @@ func (l logging) banner(o options) {
 }
 
 func run(args []string, o options) error {
-	forUI := args[0] == "menu" || args[0] == "classic" || args[0] == "lab"
+	forUI := args[0] == "menu" || args[0] == "lab"
 	l, err := newLogging(o, forUI)
 	if err != nil {
 		return err
@@ -225,8 +224,6 @@ func run(args []string, o options) error {
 		return runUnified(o)
 	case "lab": // the name it had for a while
 		return runUnified(o)
-	case "classic":
-		return runUI(o, l, false)
 	case "serve":
 		return runUI(o, l, true)
 	case "replay":
@@ -235,6 +232,11 @@ func run(args []string, o options) error {
 		return runProbe(args[1:], o, l.Logger)
 	}
 
+	switch args[0] {
+	case "doctor", "status", "pads", "ls": // the commands that talk to the unit
+	default:
+		return fmt.Errorf("unknown command %q (sp404 -h lists the commands)", args[0])
+	}
 	dev, err := open(o, l.Logger)
 	if err != nil {
 		l.Error("could not open the unit", "err", err)
