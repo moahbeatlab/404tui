@@ -42,3 +42,27 @@ Write it in `core` against `Gfx` (never against pixels or characters), take the 
 menu entry, and test it in `core` (the layout test draws every screen at eight sizes and checks that no text lands on other text).
 A new system is a new package under `platform/` that builds a `Platform`, shows `RenderCells()` or `Render()`, and turns its input into
 `Event`s.
+
+## The packages
+
+| Package | Role |
+| --- | --- |
+| `proto`, `proto/septet`, `proto/fileapi` | Wire format, with no I/O |
+| `device` | Session with the unit over a `Port`: transactions, events, files, import, render |
+| `serialport` | Finds and opens the unit's USB serial port |
+| `sim` | In-memory SP-404MKII, for tests, and over folders of projects for offline work |
+| `formats` | SMP, WAV, AIFF, FLAC, MP3 decoding with resampling to 48 kHz, patterns, `PADCONF.BIN`, the slicer's slices and sequencer |
+| `app` | What the tool does with a unit, apart from how it is shown: assign, export/restore, patterns, file tree |
+| `playback` | Plays samples on this computer's speakers |
+| `record`, `midiin`, `perflog` | The unit's audio and MIDI, and the event log that is written while recording |
+| `replay` | The replay page (`static/replay.html`, one file), the server behind it, the file with what you set (`take.events.cues.json`), the templates, the analysis of the audio |
+| `cmd/sp404` | The command, with `replay render` (a headless browser draws the page frame by frame, ffmpeg makes the video) and `probe` (what the unit does when it is told something) |
+| `tui` | The earlier terminal UI (`sp404 classic`) and the web page for a phone |
+
+Tests: `go test -race ./...`, or `make test` (vet, gofmt check and the tests).
+
+## The replay
+
+The replay page is a pure function of the time: `draw(audioTime)` draws everything from the event log, the analysis of the audio and what was set, with no state of its own. So it plays in a browser,
+and a program can set the time (`window.replay.setTime(t)`) and take a picture of each frame: that is how `sp404 replay render` makes a video without a screen recorder. Cuts are a list of parts of the
+take left out; the render lists the parts that are left, frame by frame, and joins the sound of the parts with a very short fade at each join. See [replay.md](replay.md).

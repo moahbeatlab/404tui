@@ -17,7 +17,7 @@ beside it), `-project`, `-basic-glyphs` (see below), and the usual `-sim`, `-por
 **Every screen, with its keys, menus and settings, is listed in [tools.md](tools.md)**, which the program's own test writes (so it is
 always what the program has). What the keys are, how the layout works and what each screen is for is here.
 
-![The pads in a 150x44 terminal](img/e2e-pads.png)
+![The pads, with the project's tempo, the pad under the cursor in the panel and the keys that work now](img/pc-pads.png)
 
 ## How the program is built
 
@@ -39,6 +39,10 @@ The screen is a grid of characters, and every screen is laid out on it:
 - 80 columns by 30 rows is the smallest window (it is the handheld's screen). In a smaller one the program says so and waits.
 - What is drawn in steps (the sequencer's steps, the banks, the pads) shares the whole width, whatever it is.
 - The bottom right corner shows the version and the day the program was built (`sp404 -version` prints them too).
+
+| 200x56 | 80x30 (the handheld's size) |
+| --- | --- |
+| ![At 200x56](img/pc-pads-200x56.png) | ![At 80x30](img/pc-pads-80x30.png) |
 
 The look: flat tiles, one amber accent, rounded dialogs, waveforms in braille dots. 24-bit colour when the terminal has it, else the
 256-colour palette. A terminal font with few glyphs (the old Windows console) gets only blocks: `-basic-glyphs` or
@@ -90,6 +94,10 @@ The look: flat tiles, one amber accent, rounded dialogs, waveforms in braille do
 
 The side panel always lists the keys that work now, in the keyboard's names; on the handheld it lists the buttons.
 
+The `?` page lists the keys of the screen in front:
+
+![The help page](img/pc-help.png)
+
 ## The screens
 
 Six screens side by side, numbered 1 to 6 on the screen map. Their menus and settings are in [tools.md](tools.md). (The handheld
@@ -104,6 +112,46 @@ also has SAVE, PERF and LOOP; on a computer the writing of the project is in CON
 | 5 SLICE | cut by hand, tap, at the onsets, equal parts, random places, on the grid; the order lane; several samples; the pattern under the slices. The panel tells about the slice under the cursor: start, end, length, beats, pitch, gain, chance, reverse, envelope, roll, and where it plays in the order |
 | 6 CONFIG | the **project** (its number, write it to the card folder, export it into a folder, the autosave, quit), the buses by pad name, the recorder, the pad codes of the unit, MIDI, the colour theme |
 
+### The screens, in pictures
+
+**PADS.** The pad under the cursor in the panel (its sample, sound, envelope, routing and playback); `a` opens the pad's settings, `t` its tools.
+
+| The panel and the tiles | The pad's settings | The pad's tools |
+| --- | --- | --- |
+| ![](img/pc-pad-info.png) | ![](img/pc-pad-panel.png) | ![](img/pc-pad-tools.png) |
+
+**SEQ.** Two bars side by side, the steps numbered through, a track for each pad; `Enter` opens a note, `t` the pattern tools (Fill, Euclid, Echo, ratchets, templates, swap a track with another pad...).
+
+| The pattern | A note | The pattern tools |
+| --- | --- | --- |
+| ![](img/pc-seq.png) | ![](img/pc-note-panel.png) | ![](img/pc-pattern-tools.png) |
+
+| Fill, with its trial in the pattern | New pattern from a template | The template as a pattern |
+| --- | --- | --- |
+| ![](img/pc-fill.png) | ![](img/pc-templates.png) | ![](img/pc-template-pattern.png) |
+
+*Swap with a pad...* (TRACKS page of the pattern tools) asks for a pad with the same dialog that adds a track, and swaps the notes of the two tracks, with their mute and solo, as one undo step:
+
+![Choosing the pad to swap with](img/pc-swap-picker.png)
+
+**SLICE.** A waveform with its slices, the order lane under it, the slice under the cursor in the panel; `Enter` opens the slice's settings, `t` the tools.
+
+| The slices | A slice's settings | The slice tools |
+| --- | --- | --- |
+| ![](img/pc-slicer.png) | ![](img/pc-slice-settings.png) | ![](img/pc-slice-tools.png) |
+
+**FILES.** The ranger view: the folder above, this one and the preview; `/` searches.
+
+| The ranger view | The search |
+| --- | --- |
+| ![](img/pc-files.png) | ![](img/pc-file-search.png) |
+
+**CONFIG** and **PROJECTS** (offline, here; with a unit see the next section):
+
+| CONFIG | PROJECTS, offline |
+| --- | --- |
+| ![](img/pc-config.png) | ![](img/pc-projects-offline.png) |
+
 ## Online and offline
 
 The program looks for the SP-404MKII all the time (a USB cable, nothing to set up). The **start screen** says whether it found one:
@@ -112,11 +160,13 @@ goes on with the project that is open. With no unit it says so and works offline
 chooses the folder of the offline projects. **While a unit is plugged in the panel has a level meter** (left and right, the highest peak
 held for a moment, and a CLIP light), so the volume can be watched; it listens to the unit's USB audio itself (a Mac, Linux), else with `ffmpeg` or `sox`. Under the bars, in a window of 36 rows or more, is a **spectrum** (64 bands from 30 Hz to 18 kHz, falling slowly).
 
+| The start screen with a unit | The unit's projects | A project's menu |
+| --- | --- | --- |
+| ![](img/pc-splash-unit.png) | ![](img/pc-projects-online.png) | ![](img/pc-unit-menu.png) |
+
+(These pictures are made against the simulator, `sp404 -sim`.)
+
 `u` loads the unit's open project into the editor and edits it **live**: what you change goes to the unit, and what is changed on the unit itself comes into the editor within a few seconds: pads of the bank in view (a sample, a name, a setting), patterns (written or deleted there), and the program says when the unit has opened another project (live editing of the first one stops, so nothing goes to the wrong project) or when the project names changed. Backups and exports (the unit's project menu, `Ctrl-E` on the pads, CONFIG) open a **folder chooser** (`l` opens a folder, `h` goes up, `Enter` uses the one in front, `x` makes a new folder, `/` types a path to go anywhere, the row `..` goes up, `[ ]` jump between home, the samples, the card folder and the drives); the folder is remembered. On FILES the left column of the top of a place lists the **sources** (computer, samples, drives, the unit's card and storage) with this one lit, and an index being built shows its progress in the panel.
-
-![The slicer](img/e2e-slicer.png)
-
-![The sequencer](img/e2e-seq-two-bars.png)
 
 ## Tags and the index of the unit's files
 
@@ -145,27 +195,11 @@ picture of the sound) and the patterns with their notes, so that a replay needs 
 frame of the WAV was heard. The unit has to send its pad notes and clock over MIDI for the pads and the beat to show; its effect state is
 only known once it changes.
 
-**Replay.** `sp404 replay take.wav` (the event log is the file beside the WAV, or give it as a second argument) opens a page in the browser that plays
-the recording and draws what the unit did: the pads that were hit, the pattern with its playhead and the settings of its pads, the four buses
-with their effect and knobs and the movement of the knobs, the BPM, the level and the spectrum. The two files are enough: the log holds the
-project. The unit does not tell which pattern plays: choose it in the bar where it starts ("pattern from here..."; it snaps to the loop start),
-and the pads follow the pattern's bank. Events that happen (a pad pressed, a knob moved, an effect, start/stop, the pattern) show for a moment in
-a list. The title of the video is typed in the bar; the title and the patterns are kept beside the log (`name.events.cues.json`). `?format=vertical`
-gives the 1080x1920 layout for shorts and reels (the bottom is left free for what the platforms put over it); `?title=...` sets a title for one
-viewing. The "style" button in the bar sets the look of the video: a palette (404 dark, midnight, neon, forest, mono), an accent colour, a
-background (the palette's, a colour, a gradient or a picture), a logo, a handle (`@name`) and a subtitle; it is kept in the same file, and
-`?preset=neon&accent=%23ff3b30&handle=@name&subtitle=...` sets it for one viewing. The timeline under the picture has lanes (chapters, patterns, bus changes, captions) with a playhead line; blocks are dragged by
-their left edge (captions by the body, and the edges change their length), clicked to edit, and every change can be undone (Ctrl-Z) and
-redone (Ctrl-Shift-Z). A caption can turn the picture to a pad, a bus, the pattern, the level or the events (spotlight). The "camera" button
-takes a video of you playing: the path is typed, one pad hit of the log is matched with its frame by eye (the camera has no sound), and the box
-is dragged on the picture (the corners change its size; the zoom and the position of the cut-out are sliders). A scene is a point of the timeline
-from which the box has a place and size for each format, and the panels that are shown; the box moves to the next scene's place over the time
-set, in the way the scene says (glide, cross-fade, pop in, slide in, cut; smooth, slow start and end, or springy), and the panels that a scene turns on or off fade. A scene can take a layout preset (camera left, right, in a corner, top, bottom, the whole picture, or panels only): the panels then move and resize around the camera, with the same transition. The background picture fills the video in the way the style says (cropped to fit, all of it, stretched, as tiles or centred), with a position, zoom and blur, and the panels can let it show through. The picture can also move slowly like a screensaver: it wanders at random (always the same way for the same take) and breathes in and out ("picture drifts", "picture breathes", "a new direction every"); it is a function of the time, so the render shows the same movement. **Templates:** the "templates" tab saves the current setup (the look, the style of the captions, the camera, the scenes and layouts, the chapters, what the buses are used for) under a name, and lays it over another take, part by part; one template can be the default for new takes. The times of scenes and chapters are kept as a part of the length of the take; the templates are files in the configuration folder (`404tui/replay-templates`, or `$SP404_TEMPLATES`). **Vertical format and phones:** phones that are taller than 9:16 (Instagram Reels, YouTube Shorts) show the video larger than the screen and cut about 48 px from each side, so the panels, the header and the captions of the vertical format keep 72 px free at each side; the bottom stays free for the caption and the buttons of the platform. **Chapter cards:** the chapters tab has a switch for a title card at the start of each chapter (about 1.2 s, set in the same place): the number, the title, the time in the video and a dot for each chapter, fading in and out over the running video; a chapter inside a cut gets none. It is off by default and goes into templates with the chapters. **Captions** can appear as the whole card, with words popping in, or typed (a choice in the captions tab); a word between stars (`*snare*`) is shown in the accent colour. **Hit reactions** (a slider in the style tab, 25 % by default, 0 is off): a pad that is hit pops and glows; more adds a ring, over 50 % sparks. **Cuts:** parts of the take can be left out of the video: drag over the "cuts" lane, or use the "cut..." menu (start/end a cut at the playhead, or `i` and `o`; everything before or after the playhead; restore all). A cut is a hatched block: click it to edit its times, drag its edges, or restore it. Playing skips the cuts and the clocks show the time of the video; captions, chapters, patterns and camera scenes keep the time of the take, and the chapter list for YouTube is shifted by what was cut before each chapter. `sp404 replay render` leaves the cuts out of the pictures and the sound (a very short fade at every join). The timeline zooms (`-`, `+`, Ctrl+wheel); captions, chapters, camera and style are tabs of a sidebar. `sp404 replay render` cuts the camera video into pictures with ffmpeg and puts them into the video (`-no-camera` leaves them out). The "chapters"
-button gives the list for a YouTube description (`0:00 Title`, also at `/chapters.txt`); what a bus is used for can change in the take
-("bus change"). **Video:** `sp404 replay render take.wav -o take.mp4` (add `-format vertical` for shorts and reels, `-fps 60`, `-from 10 -to 40` for a part,
-`-q "preset=neon"` for the page's parameters) draws the page in a headless Chrome, Chromium, Edge or Brave, one picture at a time, and ffmpeg puts the
-pictures and the WAV together (H.264 and AAC); it needs the browser and ffmpeg on the computer (`-chrome`, `-ffmpeg`, `-no-sandbox` for a container),
-and several pages draw side by side (`-workers`, at most 4 by default). The page can be driven frame by frame, so that it can be rendered into a video. A first draft; see `replay/`.
+**Replay.** `sp404 replay take.wav` opens the recording in the browser and draws what the unit did; it is also a small video editor (captions, chapters, cuts, a camera, a look), and
+`sp404 replay render take.wav -o take.mp4` makes the video, wide or vertical for shorts and reels. It has its own page: **[replay.md](replay.md)**. What the unit does and does not
+tell the program (it never says which pattern plays) is in [unit-messages.md](unit-messages.md).
+
+![The replay editor](img/replay-editor.png)
 
 ## The unit: whole projects, and live
 
@@ -174,7 +208,7 @@ and several pages draw side by side (`-workers`, at most 4 by default). The page
   the editor goes to the unit as it is changed: names, settings, samples, clears, patterns. Undo goes to the unit too. `LIVE n` in the
   title bar shows it, with how many changes are still on their way.
 
-The unit is tried against its simulator (`sp404 -sim`); it has not been tried against a real SP-404MKII yet.
+The unit is tried against its simulator (`sp404 -sim`) and, for what is listed in the README's *Status*, against a real SP-404MKII.
 
 ## Loading a project
 
@@ -185,8 +219,7 @@ Projects are folders with a `PADCONF.BIN`. **FILES**: go to the folder, the proj
 
 The features of the earlier tabs (`sp404 classic`) that were not moved here, on purpose: the Perform and Looper screens, the Faderfox EC4 map, the motion, punch, LFO and
 morph of PERF, the web page for a phone, the columns view of the file browser, the conditions of the notes, the substep mode and the note
-selection of the editor, and the checking and the origin of a pad's sample. Not tried on a real SP-404MKII, on real audio output, MIDI
-or recording on macOS and Windows, and the handheld with these changes.
+selection of the editor, and the checking and the origin of a pad's sample. Not tried: Windows (audio output, MIDI, recording), and the handheld with these changes (see [handheld.md](handheld.md)).
 
 ## Tests
 
