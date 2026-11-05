@@ -45,3 +45,16 @@ appear (`check`), or for a pattern (`checkre`), or says a text must not be there
 
 Real sound, a real unit, a real recorder or MIDI port; macOS and Windows (the program is built for them, but only Linux is run here);
 the handheld (its screens are guarded by `go test ./core -run Handheld`, a picture of every screen that must not change).
+
+## The pictures in the docs
+
+The pictures in [ui.md](ui.md), [replay.md](replay.md), [handheld.md](handheld.md) and the README are made from the real program, not drawn:
+
+- **The computer's program** (`docs/img/pc-*.png`): the same helpers as above (`e2e-lib.sh`: `start`, `key`, `snap`) start `sp404` in a tmux window of 150x44 (200x56 and 80x30 for the sizes), against a copy of the Construction Kits House 01
+  project, and play the keys of the use case; `snap` keeps the screen with its colours and `platform/terminal/e2e/ansipng` turns that into a PNG. A private tmux socket (`TMUX_SOCKET`) keeps it apart from any other session, and `-samples` and `-out`
+  are given neutral folders so that no path of the maker's computer is on a picture. The unit pictures use `-sim`.
+- **The handheld** (`docs/img/handheld-*.png`): `sp404h -script "@pads Y+R @seq"` writes a PNG of the framebuffer for each `@name`.
+- **The replay** (`docs/img/replay-*.png`, `.jpg`): the editor pages are the replay page in a headless Chrome driven over the DevTools protocol (the buttons of the sidebar are clicked, the audio is put at a time, the screen is
+  saved); the frames are `sp404 replay render take.wav -from 22 -to 22.06 -fps 20`, the first picture of the video. The take is a real recording with its captions, chapters and a cut set in `take.events.cues.json`.
+
+When the look of a screen changes, take its picture again the same way; a picture that shows an old screen is a bug of the docs.
