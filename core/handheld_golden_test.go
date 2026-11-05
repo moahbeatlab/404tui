@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/moahbeatlab/404tui/device"
@@ -18,6 +19,9 @@ import (
 var updateGolden = flag.Bool("update", false, "write the pictures of the handheld's screens")
 
 func TestHandheldScreensStayAsTheyAre(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the pictures show Unix paths: they are checked on Linux and macOS")
+	}
 	oldVersion := Version
 	Version = "golden"
 	defer func() { Version = oldVersion }()
@@ -25,7 +29,7 @@ func TestHandheldScreensStayAsTheyAre(t *testing.T) {
 		t.Skip("the handheld is drawn with Terminal off")
 	}
 	// the folders have fixed names: the screens show their paths
-	base := filepath.Join(os.TempDir(), "404tui-golden")
+	base := fixedBase(t, "404tui-golden")
 	os.RemoveAll(base)
 	defer os.RemoveAll(base)
 	if err := WriteDemo(filepath.Join(base, "samples")); err != nil {
