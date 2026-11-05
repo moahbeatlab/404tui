@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -178,6 +179,9 @@ func keyRow(a *App, s Screen, terminal bool) string {
 }
 
 func TestToolsReference(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("tools.md shows Unix paths: it is checked on Linux and macOS")
+	}
 	menus := []struct {
 		screen Screen
 		name   string

@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/moahbeatlab/404tui/device"
@@ -18,6 +19,9 @@ import (
 var updateGolden = flag.Bool("update", false, "write the pictures of the handheld's screens")
 
 func TestHandheldScreensStayAsTheyAre(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the pictures show Unix paths: they are checked on Linux and macOS")
+	}
 	oldVersion := Version
 	Version = "golden"
 	defer func() { Version = oldVersion }()
