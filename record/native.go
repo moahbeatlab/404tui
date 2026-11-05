@@ -15,6 +15,11 @@ import (
 	"github.com/moahbeatlab/404tui/dbg"
 )
 
+// closerFunc makes a function an io.Closer (the capture of each system returns one).
+type closerFunc func() error
+
+func (f closerFunc) Close() error { return f() }
+
 // Native capture: the program listens to the input itself (CoreAudio on a Mac, PulseAudio or PipeWire on Linux) in place of starting
 // ffmpeg or sox. One capture of the input feeds everything that wants it, the level meter and the recording, so they hear the same sound at
 // the same time, a few milliseconds after it was played, and nothing is started or buffered in another program.
