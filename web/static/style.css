@@ -536,3 +536,5 @@ button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
 .startbox .big { min-height: 56px; font-size: 16px; }
 #start[hidden] { display: none; }
 #app.local .pad .lv { display: none; } #app.local .pad { padding-top: 8px; }
+
+.toolsbtn { display: inline-flex !important; align-items: center; text-decoration: none; } /* the way to the tools page, in both orientations */

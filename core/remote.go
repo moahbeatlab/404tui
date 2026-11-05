@@ -44,7 +44,7 @@ type RItem struct {
 	Label string   `json:"label"`
 	Kind  string   `json:"kind"`
 	Vals  []string `json:"vals,omitempty"`
-	Val   int      `json:"val,omitempty"`
+	Val   int      `json:"val"`
 	Opens bool     `json:"opens,omitempty"` // an action that opens another menu ("...")
 }
 
@@ -257,4 +257,103 @@ func (a *App) remotePattern() RPattern {
 	}
 	p.Tracks = out
 	return p
+}
+
+// RState is everything a page needs to draw: the menu that is open (nil when none), the pattern, what the program says (the line under the screen:
+// the trial of a tool says what it did), and whether the pattern plays (on the computer's speakers).
+type RState struct {
+	Menu     *RMenu   `json:"menu"`
+	Pattern  RPattern `json:"pattern"`
+	Msg      string   `json:"msg"`
+	MsgBad   bool     `json:"msgBad"`
+	Playing  bool     `json:"playing"`
+	Unit     string   `json:"unit"`               // the unit the program has a link to ("" for none)
+	Live     int      `json:"live,omitempty"`     // the project of the unit that is edited live (1 to 16), 0 for none
+	Pad      int      `json:"pad"`                // the track in front
+	Projects []string `json:"projects,omitempty"` // the unit's projects, when there is a link
+	Job      *RJob    `json:"job,omitempty"`      // a load or a send that is under way
+}
+
+// RJob is what the unit is busy with.
+type RJob struct {
+	What  string `json:"what"`
+	Name  string `json:"name"`
+	Done  int    `json:"done"`
+	Total int    `json:"total"`
+	Error string `json:"error,omitempty"`
+	Ended bool   `json:"ended"`
+}
+
+// State is everything at once.
+func (r *Remote) State() RState {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.a.remoteState()
+}
+
+func (a *App) remoteState() RState {
+	s := RState{Menu: a.remoteMenu(), Pattern: a.remotePattern(), Msg: a.msg, MsgBad: a.msgBad, Playing: a.seqOn, Pad: a.rowPad()}
+	if a.link != nil {
+		s.Unit = a.link.Name()
+	}
+	if a.live != nil {
+		s.Live = a.live.project + 1
+	}
+	if a.link != nil {
+		if names, err := a.unitNames(); err == nil {
+			s.Projects = names
+		}
+	}
+	if a.job != nil {
+		done, total, name, err, fin := a.job.state()
+		s.Job = &RJob{What: a.jobWhat, Name: name, Done: done, Total: total, Ended: fin}
+		if err != nil {
+			s.Job.Error = err.Error()
+		}
+	}
+	return s
+}
+
+// LoadProject loads the unit's project n (0 based) into the editor: with live, the unit is edited live from then on. When the editor has work that is not saved
+// the program asks first, and that is a menu like any other.
+func (r *Remote) LoadProject(n int, live bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if dev, ok := r.a.unitDevice(); ok && n >= 0 && n < 16 {
+		r.a.unitLoadThen(dev, n, live)
+	}
+}
+
+// Play starts or stops the pattern on the computer's speakers (what Space does on SEQ), and says whether it plays now.
+func (r *Remote) Play(on bool) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.a
+	a.go_(Seq)
+	if a.seqOn != on {
+		a.Script("X", nil)
+	}
+	return a.seqOn
+}
+
+// Undo and Redo step through the changes (a tool that was kept is one step).
+func (r *Remote) Undo() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.a.undoStep()
+}
+
+func (r *Remote) Redo() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.a.redoStep()
+}
+
+// Track puts a pad's track in front (the tools of the pattern act on it): the cursor of SEQ goes to that row.
+func (r *Remote) Track(pad int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if pad >= 0 && pad < 160 {
+		r.a.addTrack(pad)
+	}
 }

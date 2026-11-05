@@ -26,7 +26,7 @@ One page for each screen of the program, with its picture, what it is for, what 
 | `5` SLICE | [slicer.md](slicer.md) |
 | `6` CONFIG | [config.md](config.md) |
 | `sp404 replay`: the recording as a picture, the video editor | [replay.md](replay.md) |
-| `sp404 serve`: Perform on a phone | [web.md](web.md) |
+| `sp404 serve`: Perform on a phone, and the pattern tools in the page | [web.md](web.md) |
 
 ## Earlier pages
 
