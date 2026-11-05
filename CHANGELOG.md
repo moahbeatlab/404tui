@@ -7,7 +7,7 @@ Since `v0.1-alpha`.
 ### One program on every system
 
 - `sp404` is now **one set of screens** on Linux, macOS and Windows and on the R36S handheld (PADS, SEQ, PROJECTS, FILES, SLICE, CONFIG, and on the handheld SAVE, PERF, LOOP), drawn for a terminal window, with vim keys and a panel that
-  always lists the keys that work now. The earlier tabs are still there as `sp404 classic`. → [docs/ui.md](docs/ui.md), [docs/tools.md](docs/tools.md)
+  always lists the keys that work now. The earlier tabs (`sp404 classic`) have been removed as a command; the phone page (`sp404 serve`) stays. → [docs/ui.md](docs/ui.md), [docs/tools.md](docs/tools.md)
 - The program is split into `core` (screens, menus, features) and platforms (`platform/terminal`, `platform/handheld`). → [docs/architecture.md](docs/architecture.md)
 - **Handheld version** for the R36S (`sp404h`), with its own launcher, an emulator for trying it without the device, and screenshots from a script. → [docs/handheld.md](docs/handheld.md)
 

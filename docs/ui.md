@@ -2,14 +2,13 @@
 
 `sp404` with no command is the one program on Linux, macOS and Windows: the screens, the layout, the menus and the features of the
 handheld version (R36S), drawn for a terminal window. The handheld version (`sp404h`) is the same program with its own drawing and
-its own buttons. The earlier terminal program with its tabs is still there as `sp404 classic`.
+its own buttons. (The earlier terminal program with its tabs, `sp404 classic`, has been removed.)
 
     sp404                                  # starts in ~/404tui/samples, writes below ~/404tui/out
     sp404 -project "path/to/PROJECT_01"    # open a project folder (one with a PADCONF.BIN in it)
     sp404 -samples ~/Music/kits -out ~/Desktop/card
     sp404 -sim                             # PROJECTS finds a simulated unit
     sp404 -audio silent                    # nothing is played (for tests); the program acts as if it were
-    sp404 classic                          # the earlier tabs
 
 Flags: `-samples` (where the file browser starts), `-out` (where the card folder is made; settings, autosaves, backups and exports are kept
 beside it), `-project`, `-basic-glyphs` (see below), and the usual `-sim`, `-port`, `-audio`, `-v`.
@@ -217,9 +216,9 @@ Projects are folders with a `PADCONF.BIN`. **FILES**: go to the folder, the proj
 
 ## What the program does not have
 
-The features of the earlier tabs (`sp404 classic`) that were not moved here, on purpose: the Perform and Looper screens, the Faderfox EC4 map, the motion, punch, LFO and
-morph of PERF, the web page for a phone, the columns view of the file browser, the conditions of the notes, the substep mode and the note
-selection of the editor, and the checking and the origin of a pad's sample. Not tried: Windows (audio output, MIDI, recording), and the handheld with these changes (see [handheld.md](handheld.md)).
+The features of the earlier terminal program (its tabs, `sp404 classic`, are gone) that were not moved here, on purpose: the Perform and Looper screens, the Faderfox EC4 map, the motion, punch, LFO and
+morph of PERF, the columns view of the file browser, the conditions of the notes, the substep mode and the note
+selection of the editor, and the checking and the origin of a pad's sample. The web page for a phone is still there as `sp404 serve` ([web.md](web.md)). Not tried: Windows (audio output, MIDI, recording), and the handheld with these changes (see [handheld.md](handheld.md)).
 
 ## Tests
 
