@@ -38,6 +38,8 @@ type settings struct {
 	MidiChan      string       `json:"midi_chan,omitempty"`
 	MidiMap       [4]string    `json:"midi_map,omitempty"`
 	MidiLevelChan string       `json:"midi_level_chan,omitempty"`
+	MidiCtlPort   string       `json:"midi_ctl_port,omitempty"` // the controller (an EC4): a part of the name of its input, off for none
+	MidiPatChan   string       `json:"midi_pat_chan,omitempty"` // the channel of its pattern group
 	BusNotes      [2]string    `json:"bus_notes,omitempty"`
 	LooperBank    int          `json:"looper_bank,omitempty"`
 }

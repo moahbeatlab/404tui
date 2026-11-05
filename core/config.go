@@ -25,6 +25,8 @@ const (
 	defaultMidiPort  = "404"
 	defaultMidiChan  = 16
 	defaultLevelChan = 15
+	defaultCtlPort   = "ec4" // the controller's input (its own MIDI port, beside the unit's)
+	defaultPatChan   = 16    // the pattern group of the controller
 )
 
 var defaultMidiMap = [4]string{"note 62", "note 60", "note 74", "note 75"}
@@ -191,8 +193,29 @@ func channelOf(s string, def int) int {
 	return def
 }
 
+// ctlPort is the part of the name of the controller's MIDI input; "" is off.
+func (a *App) ctlPort() string {
+	switch p := strings.ToLower(strings.TrimSpace(a.set.MidiCtlPort)); p {
+	case "":
+		return defaultCtlPort
+	case "off":
+		return ""
+	default:
+		return p
+	}
+}
+
+func (a *App) patChan() int { return channelOf(a.set.MidiPatChan, defaultPatChan) }
+
 func (a *App) midiChan() int  { return channelOf(a.set.MidiChan, defaultMidiChan) }
 func (a *App) levelChan() int { return channelOf(a.set.MidiLevelChan, defaultLevelChan) }
+
+func textOrOff(s string) string {
+	if s == "" {
+		return "off"
+	}
+	return s
+}
 
 func chanText(n int) string {
 	if n == 0 {
@@ -378,6 +401,15 @@ func (a *App) cfgItems() []cfgItem {
 		items = append(items, cfgItem{label: label, value: func(a *App) string { return a.midiMapText(i) }, hint: "A edits",
 			edit: promptSetting("MIDI message for "+midiActions[i], "note 60 or cc 20 (a controller turned up past half), off for none", func(a *App) string { return a.midiMapText(i) },
 				func(a *App, s string) { a.applyMidiMap(i, s) })})
+	}
+	if Terminal { // the handheld has no MIDI: its CONFIG stays as it is
+		items = append(items,
+			cfgItem{label: "Controller input with this in its name", value: func(a *App) string { return textOrOff(a.ctlPort()) }, hint: "A edits",
+				edit: promptSetting("MIDI input of the controller", "a part of the name of its input (EC4), off for none", func(a *App) string { return textOrOff(a.ctlPort()) }, func(a *App, s string) { a.set.MidiCtlPort = strings.ToLower(s); a.restartCtl() })},
+			cfgItem{label: "Controller pattern group channel", value: func(a *App) string { return chanText(a.patChan()) }, hint: "A edits",
+				edit: promptSetting("MIDI channel of the pattern group", "1 to 16, or off", func(a *App) string { return chanText(a.patChan()) }, func(a *App, s string) { a.applyChannel(&a.set.MidiPatChan, s) })},
+			cfgItem{label: "Controller", value: func(a *App) string { return a.ctlStatus() }},
+		)
 	}
 	items = append(items,
 		cfgItem{label: "Pad volumes channel", value: func(a *App) string { return chanText(a.levelChan()) }, hint: "A edits",

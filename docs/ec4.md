@@ -60,6 +60,23 @@ The messages of Config (live mode, recording, next becomes now, clear next) are 
 and sixteenth push by default; changing them there moves those away from the map, the rest of the table
 stays.
 
+## Patterns: a group of its own
+
+On **channel 16** the EC4 can say which pattern is played, by a group of its own (`PTN`). **Turning** the knob of E1 to E10 chooses the **bank** A to J (the controller number 60 to 69; any turn of the knob counts, whichever way);
+**pushing** an encoder is the **pattern** 1 to 16 of that bank (the note 60 to 75, in the order of the encoders, so the 16 pushes lie like the 16 pads of the unit). The bank stays chosen until another knob is turned (it starts as A).
+
+| | on the EC4 |
+| --- | --- |
+| **turn** E1 to E10 | the bank A to J (CC 60 to 69) |
+| **push** E1 to E16 | the pattern 1 to 16 of that bank (Note On 60 to 75) |
+
+The EC4 sends this to the unit too, so that the unit plays the pattern (a Program Change, set up in the EC4 by its own routing: the channel is the bank, the program the pattern), and sends it to the **computer** over USB, which is what
+404tui hears: it knows which pattern plays and writes it into the event log of a recording (`pattern`, with `by: controller`), so that the replay shows the pattern at the time it was played, with nothing to set by hand. 404tui sends nothing
+to the unit for this.
+
+404tui listens to the EC4 on a MIDI input **of its own**, beside the unit's: CONFIG, *Controller input with this in its name* (`ec4` by default; `off` for none), and *Controller pattern group channel* (16 by default; `off` for none). The unit's own MIDI input (the one with `404`
+in its name) is not used for this: connect the EC4 to the computer by USB as well as to the unit's MIDI IN, and set its routing so that the group goes out of both.
+
 ## Morph: a third group
 
 On **channel 14** the first four encoders are the Morph of Punch (see [web.md](web.md)): encoder 1 to 4 belongs to

@@ -826,6 +826,9 @@ The program's settings; on a computer the writing of the project (what SAVE does
 - `Start and stop a recording` — A edits
 - `Next pattern becomes the one that plays` — A edits
 - `Clear the next pattern` — A edits
+- `Controller input with this in its name` — A edits
+- `Controller pattern group channel` — A edits
+- `Controller` — 
 - `Pad volumes channel` — A edits
 - `MIDI` — 
 

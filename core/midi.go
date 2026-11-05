@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/perflog"
 	"github.com/moahbeatlab/404tui/perform"
 )
 
@@ -86,6 +87,7 @@ func (a *App) midiTick() {
 			a.midi, a.midiErr = link, ""
 		}
 	}
+	a.ctlTick()
 	if a.midi == nil {
 		return
 	}
@@ -96,6 +98,99 @@ func (a *App) midiTick() {
 		default:
 			return
 		}
+	}
+}
+
+// The controller: a Faderfox EC4 (or any controller) has a MIDI input of its own, beside the unit's. Its pattern group (a channel of its own,
+// 16 by default) says which pattern is played: the knob of E1 to E10 (a turn of its controller number 60 to 69) chooses the bank A to J, and a push
+// (the note 60 to 75) is the pattern 1 to 16 of that bank. The controller sends it to the unit as well (a Program Change, by its own routing),
+// so this is heard here to know the pattern and to write it into the event log; nothing is sent to the unit from here.
+
+// ctlTick opens the controller's input when there is one (it may be plugged in later) and takes in what has come.
+func (a *App) ctlTick() {
+	if a.plat.MIDI == nil || a.ctlPort() == "" {
+		return
+	}
+	if a.ctl == nil && time.Since(a.ctlTry) > 3*time.Second {
+		a.ctlTry = time.Now()
+		link := &midiLink{ch: make(chan midiin.Event, 128)}
+		stop, name, err := a.plat.MIDI.Open(a.ctlPort(), func(e midiin.Event) {
+			e.At = time.Now()
+			select {
+			case link.ch <- e:
+			default:
+			}
+		})
+		if err != nil {
+			a.ctlErr = err.Error()
+		} else {
+			link.stop, link.name = stop, name
+			a.ctl, a.ctlErr = link, ""
+		}
+	}
+	if a.ctl == nil {
+		return
+	}
+	for i := 0; i < 128; i++ {
+		select {
+		case e := <-a.ctl.ch:
+			a.ctlEvent(e)
+		default:
+			return
+		}
+	}
+}
+
+// restartCtl closes the controller's input so that it is opened again with the setting as it is now.
+func (a *App) restartCtl() {
+	if a.ctl != nil && a.ctl.stop != nil {
+		a.ctl.stop()
+	}
+	a.ctl, a.ctlTry = nil, time.Time{}
+}
+
+func (a *App) ctlStatus() string {
+	switch {
+	case a.plat.MIDI == nil:
+		return "no MIDI in this build"
+	case a.ctlPort() == "":
+		return "off"
+	case a.ctl != nil:
+		return "listening to " + a.ctl.name
+	case a.ctlErr != "":
+		return "not listening: " + a.ctlErr
+	}
+	return "looking for the controller..."
+}
+
+// ctlEvent takes in one message of the controller.
+func (a *App) ctlEvent(e midiin.Event) {
+	pc := a.patChan()
+	if pc == 0 || e.Channel != pc {
+		return
+	}
+	switch {
+	case e.Kind == midiin.CC && e.Data1 >= 60 && e.Data1 <= 69:
+		if bank := e.Data1 - 60; bank != a.ctlBank {
+			a.ctlBank = bank
+			a.say("controller: bank "+string(rune('A'+bank)), false)
+		}
+	case e.Kind == midiin.NoteOn && e.Data2 > 0 && e.Data1 >= 60 && e.Data1 <= 75:
+		a.ctlPattern(a.ctlBank*16+e.Data1-60+1, e.At)
+	}
+}
+
+// ctlPattern notes that the controller played the pattern of this slot (1 to 160): it is the pattern that plays, and the event log has it.
+func (a *App) ctlPattern(slot int, at time.Time) {
+	a.perfNow, a.perfNext = slot, 0
+	a.say("controller: pattern "+a.slotLabel(slot), false)
+	if l := a.evlog; l != nil {
+		if at.IsZero() {
+			at = time.Now()
+		}
+		l.last = [2]int{slot, 0}
+		l.log.Add(at, "pattern", perflog.P("now", a.slotLabel(slot)), perflog.P("next", ""), perflog.P("by", "controller"))
+		l.eventCount++
 	}
 }
 

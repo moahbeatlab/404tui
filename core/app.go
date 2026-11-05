@@ -211,6 +211,10 @@ type App struct {
 	midi              *midiLink        // the MIDI input that is open
 	midiTry           time.Time        // when it was last tried to open it
 	midiErr           string
+	ctl               *midiLink // the controller's MIDI input (an EC4), beside the unit's
+	ctlTry            time.Time
+	ctlErr            string
+	ctlBank           int         // the bank the controller has chosen (0 is A): what a push of the pattern group is a pattern of
 	codes             padCode     // the pads hit in turn
 	liveBack          Screen      // where the live mode came from
 	perfNow           int         // the pattern that plays (slot 1..160), 0 for none
