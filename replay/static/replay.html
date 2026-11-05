@@ -146,6 +146,7 @@
   <div class="h2">chapters <span class="h">(they show on the picture, and as the list for the description on YouTube)</span></div>
   <textarea id="chtext" readonly rows="6" placeholder="no chapters yet"></textarea>
   <div id="chhint" class="h"></div>
+  <label class="g"><input id="ch_cards" type="checkbox"> a title card at the start of each chapter <input id="ch_cardlen" type="number" min="0.5" max="4" step="0.1" style="width:56px"> s <span class="h">(over the running video)</span></label>
   <div class="row"><button id="chadd" title="a chapter from the time you are at">add a chapter here</button><button id="chcopy">copy the list</button></div>
 </div>
 <div id="cambox" class="pane">
@@ -931,7 +932,7 @@ const PRESETS = {
   "forest":   { accent: "#7bd88f", bg: "#0d1511", deep: "#101a15", panel: "#14201a", tile: "#203329", tile2: "#182820", text: "#e9f5ec", dim: "#8fb09a" },
   "mono":     { accent: "#f2f2f2", bg: "#0d0d0d", deep: "#111111", panel: "#181818", tile: "#262626", tile2: "#1c1c1c", text: "#f2f2f2", dim: "#8c8c8c" },
 };
-const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
+const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, chapCards: 0, chapCardLen: 1.2, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
 let STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)), logoImg = null, bgImg = null;
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const hexMix = (a, b, t) => "#" + hexRgb(a).map((v, i) => Math.round(v + (hexRgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
@@ -1131,6 +1132,24 @@ function drawChapter(A) {
   text(cs[i].title, x + 18, y, fresh ? COL.text : COL.dim, 22, fresh);
   text((i + 1) + " / " + cs.length, x + 18 + (function () { g.font = FONT(22 * (VERT ? 1.22 : 1), fresh); return g.measureText(cs[i].title).width; })() + 16, y, COL.dim, 18);
 }
+// the chapter card: about a second at the start of each chapter, over the running video (the music goes on): the number, the title, the time in the
+// video and a dot for each chapter. It fades in and out; a chapter inside a cut gets none.
+function drawChapterCard(A) {
+  if (!STYLE.chapCards || !CHAPS.length) return;
+  const len = clamp(+STYLE.chapCardLen || 1.2, 0.5, 4), cs = CHAPS.slice().sort((a, b) => a.t - b.t);
+  const i = cs.findIndex(c => A >= c.t && A < c.t + len); if (i < 0 || cutAt(cs[i].t)) return;
+  const c = cs[i], u = A - c.t, a = easeOut(clamp(Math.min(u / 0.25, (len - u) / 0.35), 0, 1)), cx = W / 2, cy = H / 2, k = VERT ? 1.22 : 1;
+  g.save(); g.globalAlpha = 0.78 * a; rect(0, 0, W, H, "#000"); g.globalAlpha = a;
+  g.translate(0, (1 - a) * 14);
+  text(String(i + 1), cx, cy - 120 * k, COL.amber, 56, true, "center");
+  rect(cx - 40, cy - 100 * k, 80, 4, COL.amber);
+  let px = 96; g.font = FONT(px * k, true); const maxW = W - 160, w0 = g.measureText(c.title || "").width; if (w0 > maxW) px = Math.max(40, Math.floor(px * maxW / w0));
+  text(c.title || "", cx, cy + 20 * k, COL.text, px, true, "center");
+  text(mmss(outTime(c.t)), cx, cy + 80 * k, COL.dim, 26, false, "center");
+  const n = cs.length, gap = 40, x0 = cx - (n - 1) * gap / 2;
+  for (let j = 0; j < n; j++) { g.fillStyle = j === i ? COL.amber : "#3a3a40"; g.beginPath(); g.arc(x0 + j * gap, cy + 150 * k, j === i ? 9 : 6, 0, 6.2832); g.fill(); }
+  g.restore();
+}
 let blurLayer = null;
 const easeOut = u => 1 - Math.pow(1 - u, 3);
 // the caption is in front of the picture, in the middle of it (the same place in both formats), and the picture behind it is blurred and
@@ -1222,6 +1241,7 @@ function draw(audioTime) {
   if (CAM.layer !== "behind") drawCamera(audioTime);
   drawCaption(audioTime);
   drawChapter(audioTime);
+  drawChapterCard(audioTime);
   drawBrand();
 }
 
@@ -1541,7 +1561,11 @@ function initChapters() {
       b.appendChild(h); lane.appendChild(b);
     });
   }
-  window.refreshChapters = refresh;
+  const cardOn = document.getElementById("ch_cards"), cardLen = document.getElementById("ch_cardlen");
+  const showCards = () => { cardOn.checked = !!STYLE.chapCards; cardLen.value = STYLE.chapCardLen || 1.2; };
+  cardOn.onchange = cardLen.oninput = () => { STYLE.chapCards = cardOn.checked ? 1 : 0; STYLE.chapCardLen = clamp(parseFloat(cardLen.value) || 1.2, 0.5, 4); window.styleChanged && window.styleChanged(); };
+  showCards();
+  window.refreshChapters = () => { refresh(); showCards(); };
   document.getElementById("chbtn").onclick = () => { refresh(); togglePane(box); };
   document.getElementById("chadd").onclick = () => { const c = { t: +Math.max(now(), 0).toFixed(1), title: CHAPS.length ? "New chapter" : "Intro" }; CHAPS.push(c); save(); edit(c, true); };
   document.getElementById("chcopy").onclick = () => { const t = text(); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { hint.textContent = "copied"; }, () => { txt.select(); hint.textContent = "select the text and copy it"; }); };
@@ -1829,18 +1853,19 @@ const TPL_PARTS = [["look", "the look (colours, background, logo, handle, subtit
   ["scenes", "the scenes and layouts"], ["chapters", "the chapters"], ["bus", "what the buses are used for"]];
 function tplBuild(parts) {
   const d = Math.max(AN ? AN.duration : 1, 1), rel = t => +(t / d).toFixed(4), out = { version: 1, created: new Date().toISOString(), parts: {} };
-  if (parts.look) { const o = JSON.parse(JSON.stringify(STYLE)); for (const k of ["busNotes", "capFade", "capLength", "capBlur", "capDim", "capAnim"]) delete o[k]; out.parts.look = o; }
+  if (parts.look) { const o = JSON.parse(JSON.stringify(STYLE)); for (const k of ["busNotes", "capFade", "capLength", "capBlur", "capDim", "capAnim", "chapCards", "chapCardLen"]) delete o[k]; out.parts.look = o; }
   if (parts.captions) out.parts.captions = { capFade: STYLE.capFade, capLength: STYLE.capLength, capBlur: STYLE.capBlur, capDim: STYLE.capDim, capAnim: STYLE.capAnim };
   if (parts.camera) out.parts.camera = { layer: CAM.layer, round: CAM.round, mirror: CAM.mirror, zoom: CAM.zoom, cx: CAM.cx, cy: CAM.cy };
   if (parts.scenes && CAM.scenes.length) out.parts.scenes = camScenes().map(sc => ({ rel: rel(sc.t), wide: sc.wide, vertical: sc.vertical, move: sc.move, off: sc.off, fx: sc.fx, ease: sc.ease, layout: sc.layout }));
   if (parts.chapters && CHAPS.length) out.parts.chapters = CHAPS.map(c => ({ rel: rel(c.t), title: c.title }));
+  if (parts.chapters) out.parts.chapcards = { on: STYLE.chapCards ? 1 : 0, len: STYLE.chapCardLen };
   if (parts.bus) out.parts.bus = { notes: (STYLE.busNotes || []).slice(), changes: BUSN.map(n => ({ rel: rel(n.t), bus: n.bus, text: n.text })) };
   return JSON.parse(JSON.stringify(out));
 }
 // a template laid over this take (the parts that are asked for and that it has)
 function tplApply(t, parts) {
   const p = (t && t.parts) || {}, d = Math.max(AN ? AN.duration : 1, 1), at = r => +(Math.min(Math.max(+r || 0, 0), 1) * d).toFixed(1), done = [];
-  const keep = { busNotes: STYLE.busNotes, capFade: STYLE.capFade, capLength: STYLE.capLength, capBlur: STYLE.capBlur, capDim: STYLE.capDim, capAnim: STYLE.capAnim };
+  const keep = { busNotes: STYLE.busNotes, capFade: STYLE.capFade, capLength: STYLE.capLength, capBlur: STYLE.capBlur, capDim: STYLE.capDim, capAnim: STYLE.capAnim, chapCards: STYLE.chapCards, chapCardLen: STYLE.chapCardLen };
   if (parts.look && p.look) { STYLE = Object.assign(mergeStyle(p.look), keep); done.push("look"); }
   if (parts.captions && p.captions) { Object.assign(STYLE, p.captions); done.push("captions"); }
   if (parts.bus && p.bus) { STYLE.busNotes = [0, 1, 2, 3].map(i => String((p.bus.notes || [])[i] || "")); BUSN = (p.bus.changes || []).map(n => ({ bus: +n.bus || 1, t: at(n.rel), text: String(n.text || "") })); done.push("bus"); }
@@ -1848,6 +1873,7 @@ function tplApply(t, parts) {
   if (parts.scenes && p.scenes) {
     CAM.scenes = p.scenes.map(sc => ({ t: at(sc.rel), wide: sc.wide || null, vertical: sc.vertical || null, move: +sc.move || 0, off: sc.off || [], fx: sc.fx || "move", ease: sc.ease || "out", layout: sc.layout || "" })); done.push("scenes");
   }
+  if (parts.chapters && p.chapcards) { STYLE.chapCards = p.chapcards.on ? 1 : 0; STYLE.chapCardLen = +p.chapcards.len || 1.2; }
   if (parts.chapters && p.chapters) { CHAPS = p.chapters.map(c => ({ t: at(c.rel), title: String(c.title || "") })); done.push("chapters"); }
   applyStyle();
   const post = (u, b) => fetch(u, { method: "POST", body: JSON.stringify(b) }).catch(() => {});
