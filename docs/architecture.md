@@ -57,7 +57,7 @@ A new system is a new package under `platform/` that builds a `Platform`, shows 
 | `record`, `midiin`, `perflog` | The unit's audio and MIDI, and the event log that is written while recording |
 | `replay` | The replay page (`static/replay.html`, one file), the server behind it, the file with what you set (`take.events.cues.json`), the templates, the analysis of the audio |
 | `cmd/sp404` | The command, with `replay render` (a headless browser draws the page frame by frame, ffmpeg makes the video) and `probe` (what the unit does when it is told something) |
-| `tui` | The earlier terminal UI (`sp404 classic`) and the web page for a phone |
+| `tui` | The code of the earlier terminal UI, which `sp404 serve` (the web page for a phone), `sp404 midimap` and `sp404 check` still use; the UI itself is no longer a command |
 
 Tests: `go test -race ./...`, or `make test` (vet, gofmt check and the tests).
 

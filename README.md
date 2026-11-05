@@ -65,7 +65,6 @@ Keys are vim-style (`h j k l`, `g`/`G`), `y` is the shift, `?` lists every key. 
 | Command | What it does |
 | --- | --- |
 | `sp404` | the program (also `sp404 menu`) |
-| `sp404 classic` | the earlier terminal UI with its tabs (one page per tab in [`docs/`](docs/README.md)) |
 | `sp404 serve` | Perform on a phone or tablet, served on the network ([docs/web.md](docs/web.md)) |
 | `sp404 replay take.wav` | the replay of a recording in the browser, with the editor ([docs/replay.md](docs/replay.md)) |
 | `sp404 replay render take.wav -o take.mp4` | the video (`-format vertical` for shorts and reels) |
