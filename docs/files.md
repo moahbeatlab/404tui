@@ -1,63 +1,33 @@
-# Files (tab 2) and Projects (tab 3)
+# FILES (screen 4)
 
-## Files
+The file browser: this computer, the samples folder, the unit's SD card and storage, a USB drive. It is where samples and projects come from.
 
-The files of the SD card, the unit's own storage, or this computer (`t` changes the source). It is
-where samples come from: pick a file, assign it to a pad.
+![FILES](img/pc-files.png)
 
-The view is a **tree** of folders, or (`w`) **three columns** like a file manager.
+## What is on the screen
 
-| Key | What |
-| --- | --- |
-| `j k`, arrows, `g` `G` | move |
-| `Tab` / `l` | open a folder (in three columns: go into it; `Enter` too) |
-| `h` | close it / go to the parent |
-| `Shift-Tab` | fold every folder |
-| `{` `}` (`Alt-p` `Alt-n`) | previous / next folder in the list |
-| `w` | switch between the tree and three columns |
-| `t` | next source: SD card, unit storage, this computer |
-| `[` `]` | choose the target **bank** for assigns |
-| `Space` | listen to the file on this computer |
-| `Ctrl-A` | autoplay: a file plays as the cursor rests on it |
-| `Enter` | assign the file to a pad: a picker opens on the target bank's next free pad |
-| `Z` | slice the file in the **Slicer** |
+On a wide window the **ranger view**: the folder above, this folder and a preview of what the cursor is on (the contents of a folder, a sample's shape and length, its tags). Audio files are listed with their size; a project (a folder with a `PADCONF.BIN`) is listed in green with the word *project*.
+The panel names the target pad (`TARGET A3`, the pad the cursor was on in PADS) and the keys.
 
-### Choosing a pad (picker)
+## What you do here
 
-Type a bank letter and a pad number (`C`, `7`, `Enter`); `A`–`J` bank, `1`–`16` pad, arrows move,
-`[ ]` bank, `Enter` choose, `Esc` back.
+- **Browse.** `j k` up and down, `l` opens a folder, `h` goes up, `[ ]` page. `Space` listens to a sample on the computer's speakers, `x` stops. `Esc` goes back to PADS.
+- **Put a file on a pad.** `a` opens the pad dialog and puts the sample on the pad you choose (the cursor follows to that pad). With files marked (`m` marks the file and moves on, `M` marks the whole folder), `a` puts them all on pads: files that start with a number (a kit: `03_Loop.wav`,
+  `12_Clap.wav`) go on the pad of that number in the bank you choose, the others one after the other from the pad you choose, in the order of their names (`clap_2` before `clap_10`); files named EMPTY and silent ones are left out.
+- **Search.** `y a` (or `/`) opens a one-line search: what you type filters the files of the folder and everything below it, and the line says how many are left. `Enter` keeps the result, `Esc` ends the search.
 
-### Marking, copying, deleting (SD card)
+![The search](img/pc-file-search.png)
 
-| Key | What |
-| --- | --- |
-| `v` | mark a file or folder (`Enter` then fills free pads in order) |
-| `V` | mark every file in the folder |
-| `J` | mark macOS / Windows junk (`._` files, `.DS_Store`) |
-| `u` | unmark everything |
-| `d` | delete the marked (SD card only) |
-| `c` / `x` | copy / cut the marked to the clipboard |
-| `p` | paste into the folder in front (also from another source) |
-| `N` / `n` | new folder / rename |
-| `R` | restore pads from this folder's export (asks which bank) |
+- **Places and favourites.** `y x` lists the places (this computer, the samples folder, the unit's card and storage, drives, favourites); `y b` makes the folder or file a favourite. `t` chooses where files are loaded from and leads to the file tools.
+- **File tools** (`t`, then *Copy, cut, rename, delete, tags...*): mark every file here, unmark, copy, cut and paste between the computer and the card, delete, rename, new folder.
+- **Load a project.** A project in the list is loaded with `a` (see [projects.md](projects.md)).
+- **Tags and the index of the unit's files.** With a unit plugged in, the files menu can **index** the folder you are in: every sample gets tags worked out from its name and the folders it is in (`SD:Synth/House/124_bass_wobble.wav` is synth, house, 124, bass, wobble).
+  The index is one file on the card. **Search by tags** finds the samples that have them; **Tag** gives files tags of your own, **Favourite** the tag `favourite`. A platform without a unit does not offer this.
 
-### Search, tags and the index
+## Keys
 
-| Key | What |
-| --- | --- |
-| `/` | search every audio file in the source by keyword: `Enter` assigns, `Tab` shows it in the tree |
-| `s` (in a search) | search tags only |
-| `f` | find a folder by name among the indexed and open folders |
-| `i` | index the folder in front in the background (tags from file and folder names, saved to `SD:404tui-index.json.gz`); again stops it |
-| `*` | favourite: tag the marked files (or the one in front); again takes it off |
-| `+` | tag the marked files with words you type (a word with `-` in front takes the tag off) |
+**On a computer:** `a` to a pad... · `Space` listen · `x` stop · `j k` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where / file tools · `m` mark file · `M` mark all · `y x` places · `y a` search · `y b` favourite.
 
-## Projects (tab 3)
+**On the handheld:** `A` to pad · `X` listen · D-pad browse, open and up · `L1 R1` page · `B` pads · `Y+X` places · `Y+A` search · `Y+B` favourite · `Sel+A` mark · `Sel+B` files menu.
 
-The unit's projects. Keys: `Enter` select the project, `n` rename, `e` export it (SD card or this
-computer), `R` restore from a backup folder, `X` erase it (asks first), `/` find by name.
-
-## Working offline
-
-`sp404 -offline <folder>` works on a folder of exported projects (each a folder with `PADCONF.BIN`)
-without a unit. `U` leaves offline mode when a unit is plugged in.
+Every menu with its entries: [tools.md](tools.md#files).

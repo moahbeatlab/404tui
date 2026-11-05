@@ -1,88 +1,42 @@
-# Pads (tab 1)
+# PADS (screen 1)
 
-The sixteen pads of a bank, the ten banks (A to J) of the project in front, and under the grid the
-patterns of that bank. Everything that changes a pad is done here.
+The 16 pads of the bank in front, with the project's tempo. This is where you see what is on the pads and where you change how they sound.
 
-Press `?` in the view for the searchable list of its keys (the same list as `:`). Keys marked
-*computer* play on this computer's audio output, not on the unit.
+![PADS](img/pc-pads.png)
 
-## Moving
+## What is on the screen
 
-| Key | What |
-| --- | --- |
-| `h j k l`, arrows | move on the grid |
-| `[` `]` | previous / next bank (the rail on the left lists the banks) |
-| `g` `G` | first / last |
-| `Tab` | move between the pads and the patterns panel under them |
-| `/` | find a pad by name |
-| `1`–`7`, `Shift-Tab` | other tabs |
-| mouse | click a pad, a bank or a tab; the wheel scrolls |
+- **The tiles** are the pads of the bank: the name of the sample, the length of its loop in bars, and the pad's switches in one row, **G L O R S V** (gate, loop, one shot, reverse or ping-pong, BPM sync, vinyl; a switch that is on is lit).
+  The strip of a tile is the colour of the pad's bus (blue BUS 1, red BUS 2). Marked pads are marked on their tile.
+- **The bank row** under the tiles, A to J, and the number of the bank in the corner of the panel.
+- **The panel** on the right tells everything about the pad under the cursor: its sample (size, tempo, bars, where it is used), its sound (level, pan, pitch, fine pitch, stretch), its envelope, its routing (bus, mute group) and its playback (mode, gate, loop, one shot).
 
-## Marking
+![The panel for a pad](img/pc-pad-info.png)
 
-Most keys work on the pad in front, or on every **marked** pad when some are marked.
+## What you do here
 
-| Key | What |
-| --- | --- |
-| `v` | mark / unmark the pad |
-| `V` | mark every pad with a sample in the bank (again, or `Esc`, unmarks) |
+- **Move and play.** `h j k l` move over the tiles, `[` and `]` change the bank, `Space` plays the pad under the cursor and `x` stops what sounds.
+- **Put a sample on a pad.** From FILES (4): `a` puts the file on a pad that you choose in the same dialog everything else uses to choose a pad. Marked files go on the pads of their numbers when they start with one (a kit's `03_Loop.wav` goes on pad 3 of the bank you choose).
+  Or use *Pick a sample...* in the pad's tools. See [files.md](files.md).
+- **Change how it sounds.** `a` opens the pad panel on the page SOUND (level, pan, pitch, fine pitch, time stretch, sample BPM); `[` and `]` turn to SHAPE (attack, hold, release, play mode, gate, loop, one shot, fixed velocity, vinyl, BPM sync, mute group, bus).
+  A change is written into the project at once, `u` takes it back.
 
-## Hearing
+![The pad's settings](img/pc-pad-panel.png)
 
-| Key | What |
-| --- | --- |
-| `Enter` | preview the pad, on the unit or on the computer (see `o`) |
-| `o` (`O`, `0`) | switch where pads preview: unit / this computer |
-| `P` | play the pad once on this computer |
-| `C` | **Chromatic** (computer): play the pad as notes. `a w s e d f …` are piano keys, `z` / `x` move the octave, `Space` / `Enter` play the note, `Esc` leaves |
-| `A` | **Chords & arps** (computer): make a chord or an arp of the pad's sample and put it on a pad. `↑ ↓` pick a setting, `← →` change it, `a w s e d f t g y h u j` switch the twelve notes, `Space` plays it, `Enter` asks for the pad, `Esc` leaves |
-| `Z` | the **Slicer** on this pad's sample (see [slicer.md](slicer.md)) |
+- **Change several pads at once.** `m` marks the pad and moves on, `M` marks all the pads of the bank (and again clears the marks); with pads marked, a change in the panel goes to all of them, and `.` plays an arp over the marked pads.
+- **Use the tools.** `t` (or the page TOOLS of the panel) lists what can be done with the pad: slice it (opens SLICE), chords and arps, an arp from this one sample, a keyboard from it, rename, reverse, normalize, pitch, a pattern with this pad, move or swap, copy, clear,
+  find a pad by name, set up the pads that were never set up, switches for every pad of the bank, set the buses of the bank by the names, export the bank to a folder (`Ctrl-E`), restore pads from an export, mark every pad with a sample.
 
-## Samples
+![The pad's tools](img/pc-pad-tools.png)
 
-| Key | What |
-| --- | --- |
-| `a` | assign a file to the pad (opens the file dialog where you left it) |
-| `n` | rename (with marked pads: add a prefix / suffix) |
-| `d` | delete the sample (of every marked pad) |
-| `c` | copy the pad (or the marked ones) to another pad, in any bank |
-| `x`, then `p` / `s` | pick a pad up, then `p` moves it onto the pad in front (overwrites) or `s` swaps |
-| `e` | export the bank: choose a folder, get WAV files and `samples.json` |
-| `R` | restore pads from an export (`p` there also makes a pattern) |
-| `K` | check the pad's sample on the unit against the file it came from |
-| `F` | find where the samples came from (names and lengths matched against the file index) |
-| `W` | find which folder each bank was filled from |
-| `H` | set up pads that were never set up (pan centre, hold 100, time stretch 100 %) |
+- **Buses by name.** A pad goes to a bus by its name: CONFIG has the words for BUS 1 and BUS 2 (the second starts with the words of a drum kit: kick, snare, hat, perc...), and the tool *Set the buses of the bank by the names...* applies the rule to the bank. See [config.md](config.md).
+- **Rename** a pad with `r`: a one-line prompt, `Enter` done, `Esc` gives it up.
+- **Clear** a pad with `y` then `b`.
 
-## Settings
+## Keys
 
-| Key | What |
-| --- | --- |
-| `S` | the pad's settings dialog (level, pan, pitch, fine pitch, time stretch, BPM, play mode, gate, loop, BPM sync, vinyl, mute group, bus FX, attack, hold, release) |
-| `,` `.` | level down / up (of the marked pads) |
-| `t` | menu of switches for the pad: gate, loop, BPM sync, vinyl, one shot, fixed velocity, bus FX |
-| `T` | the same switches on every pad of the bank |
-| `b` | the bank's tempo and volume in a dialog |
-| `<` `>` | bank tempo down / up by 1 BPM |
-| `-` `+` | bank volume down / up |
-| `B` | set the buses of the bank's pads (the marked ones; `p`: the whole project) from their names, as **Config** says |
+**On a computer:** `a` pad panel · `Space` play · `x` stop · `h j k l` move · `[ ]` bank · `.` arp marked · `t` tools · `m` mark pad · `M` mark all / none · `r` rename · `Ctrl-E` export the bank · `y j k` bank · `y b` clear pad · `g h` and `g l` the screen before and after · `1`-`6` a screen · `u` undo, `R` redo · `?` every key.
 
-**Settings dialog (`S`):** `j k` / `Tab` choose a setting, `h l` / `- +` / `Space` change it, `0` puts it
-back to its default (a step stops on the default, e.g. the centre of the pan), `g` `G` first / last,
-`Esc` / `Enter` closes. With marked pads it changes all of them.
+**On the handheld:** `A` menu · `X` play · `B` stop · D-pad move · `L1 R1` bank · `R2` arp marked · `Y+<>` screen · `Y+A` mark pad · `Y+^v` bank · `Y+B` clear pad.
 
-**Switch menu (`t`):** `j k` choose, `Enter` / `Space` switch, a letter picks a switch directly,
-`0` `1` `2` set the bus (off, BUS 1, BUS 2), `Esc` / `t` closes.
-
-## Patterns of the bank
-
-`Tab` goes to the patterns panel. Keys there: `Enter` opens a pattern (then see
-[sequencer.md](sequencer.md)), `d` deletes, `v` marks, `c` / `x` pick up to copy / move and `p` puts
-it in a slot (twice replaces), `P` plays it on the computer, `b` retargets it to another bank,
-`N` makes a new pattern from a template. `m` mutes and `M` / `s` solos a pad in the pattern playing
-on the computer.
-
-## Everywhere
-
-`Ctrl-R` records the unit's audio, `Ctrl-F` full screen, `Ctrl-T` / `T` next colour theme, `r` refresh
-from the unit, `U` leave offline mode, `?` the keys, `q` quit.
+Every setting and every tool with the values it offers: [tools.md](tools.md#pads). The layout and the keys that work everywhere: [ui.md](ui.md).
