@@ -12,7 +12,6 @@ The program itself (`sp404`) is described in [ui.md](ui.md), its screens with ev
 | [install.md](install.md) | checking an installation, building, audio, what to do before you run it on a unit |
 | [architecture.md](architecture.md) | how it is put together: core, platforms, packages, the replay |
 | [e2e.md](e2e.md) | the end-to-end tests of the computer's program: the use cases |
-| [classic.md](classic.md) | the earlier tabs (`sp404 classic`) as the README described them |
 
 The pages in the table below describe the earlier tabs (`sp404 classic`).
 
