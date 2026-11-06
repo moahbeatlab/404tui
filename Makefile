@@ -131,11 +131,12 @@ endif
 SITE_IMG = serve-tools-pattern serve-tools-slicer serve-pads serve-patterns serve-tools-laptop serve-motion pc-pads pc-seq pc-pattern-tools pc-slicer replay-editor handheld-pads
 site:
 	rm -rf $(DIST)/site && mkdir -p $(DIST)/site/app $(DIST)/site/img && cp web/static/* $(DIST)/site/app/
-	echo "window.SP404_LOCAL = true; // the unit is reached by Web MIDI, there is no server" > $(DIST)/site/app/mode.js
+	echo "window.SP404_LOCAL = true; window.SP404_BUILD = '$$(date +%s)'; // the unit is reached by Web MIDI, there is no server" > $(DIST)/site/app/mode.js
 	for i in $(SITE_IMG); do cp docs/img/$$i.png $(DIST)/site/img/; done
 	GOOS=js GOARCH=wasm go build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/site/app/demo.wasm ./cmd/demowasm
 	cp -f "$$(go env GOROOT)/lib/wasm/wasm_exec.js" $(DIST)/site/app/wasm_exec.js && chmod u+w $(DIST)/site/app/wasm_exec.js
 	v=$$(sed -n 's/^var Version = "\(.*\)"$$/\1/p' version/version.go); sed "s/__VERSION__/v$$v/g" web/landing/index.html > $(DIST)/site/index.html
+	b=$$(date +%s); sed -i "s#\(src=\"[a-z]*\.js\)\"#\1?v=$$b\"#; s#href=\"style\.css\"#href=\"style.css?v=$$b\"#" $(DIST)/site/app/index.html; sed -i "s#src=\"tools\.js\"#src=\"tools.js?v=$$b\"#; s#href=\"tools\.css\"#href=\"tools.css?v=$$b\"#" $(DIST)/site/app/tools.html
 	touch $(DIST)/site/.nojekyll
 
 clean:
