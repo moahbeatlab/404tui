@@ -1,6 +1,7 @@
 package core
 
 import (
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -69,6 +70,7 @@ type RMenu struct {
 type RTrack struct {
 	Pad   int     `json:"pad"`
 	Label string  `json:"label"`
+	Name  string  `json:"name,omitempty"` // the sample on the pad
 	Notes []RNote `json:"notes"`
 }
 
@@ -256,12 +258,20 @@ func (a *App) remotePattern() RPattern {
 	for _, n := range d.Notes {
 		t := byPad[n.Pad]
 		if t == nil {
-			p.Tracks = append(p.Tracks, RTrack{Pad: n.Pad, Label: a.label(n.Pad), Notes: []RNote{}})
+			p.Tracks = append(p.Tracks, RTrack{Pad: n.Pad, Label: a.label(n.Pad), Name: a.info.Pads[n.Pad].Name, Notes: []RNote{}})
 			t = &p.Tracks[len(p.Tracks)-1]
 			byPad[n.Pad] = t
 		}
 		t.Notes = append(t.Notes, RNote{Step: int(n.Tick) / stepTicks, Tick: n.Tick, Vel: n.Vel, Len: n.Len, Pitch: n.Pitch})
 	}
+	// a track that was added and has no note yet is a track too
+	for _, pad := range a.rowExtra {
+		if pad >= 0 && pad < 160 && byPad[pad] == nil {
+			p.Tracks = append(p.Tracks, RTrack{Pad: pad, Label: a.label(pad), Name: a.info.Pads[pad].Name, Notes: []RNote{}})
+			byPad[pad] = &p.Tracks[len(p.Tracks)-1]
+		}
+	}
+	sort.SliceStable(p.Tracks, func(i, j int) bool { return p.Tracks[i].Pad < p.Tracks[j].Pad })
 	// the pointers into p.Tracks may have moved when it grew: build again from the final slice
 	out := make([]RTrack, 0, len(p.Tracks))
 	for _, t := range p.Tracks {

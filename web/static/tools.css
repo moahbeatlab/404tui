@@ -75,3 +75,9 @@ body.embed .strip .btn small { font-size: 10px; font-weight: 600; letter-spacing
 .tile.opens::after { content: ' ▸'; color: var(--accent); }
 .tile.go { background: var(--accent); color: var(--ink); border-color: var(--accent); } .tile.wide { grid-column: 1 / -1; text-align: center; }
 .tile:active { filter: brightness(1.25); }
+
+.thead { color: var(--dim); font-size: 11px; font-weight: 800; letter-spacing: .08em; margin: 6px 0; }
+.tracks { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 6px; }
+.trk { font: inherit; text-align: left; display: grid; gap: 1px; padding: 8px 10px; border-radius: 10px; background: var(--tile); color: var(--text); border: 2px solid transparent; cursor: pointer; min-width: 0; }
+.trk b { font-size: 15px; } .trk span { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .trk small { color: var(--dim); font-size: 11px; }
+.trk.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, var(--tile)); } .trk.sel b { color: var(--accent); }

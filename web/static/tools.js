@@ -8,7 +8,7 @@
   const key = qs.get('key') || store.get('key');
   if (qs.get('embed')) { document.body.classList.add('embed'); $('bankOpen').hidden = false; }
   $('back').href = './' + (key ? '?key=' + encodeURIComponent(key) : '');
-  let st = null, busy = false, editing = 0, mode = 'pattern', pads = null, cbank = 0, win = null, armed = -1, armTimer = 0;
+  let lastProject = 0, st = null, busy = false, editing = 0, mode = 'pattern', pads = null, cbank = 0, win = null, armed = -1, armTimer = 0;
 
   async function call(body) {
     const url = '/tools/api' + (key ? '?key=' + encodeURIComponent(key) : '');
@@ -49,8 +49,8 @@
   };
   $('mPattern').onclick = () => setMode('pattern'); $('mSlicer').onclick = () => setMode('slicer'); $('mPad').onclick = () => setMode('pad');
   $('otherClose').onclick = () => act({ op: 'escape' });
-  for (let i = 0; i < 10; i++) { const o = document.createElement('option'); o.value = i; o.textContent = bankNames[i]; $('cbank').appendChild(o); }
-  $('cbank').onchange = () => { cbank = +$('cbank').value; renderChooser(); };
+  // the pad chooser uses the bank of the whole page (its dialog is the page's own, when this is a tab of it; else the pattern's bank select)
+  $('cbankOpen').onclick = () => { if (window.parent !== window) window.parent.postMessage({ t: 'openBank' }, location.origin); else { $('bank').focus(); } };
   const loadPads = () => fetch('/tools/api' + (key ? '?key=' + encodeURIComponent(key) : ''), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'pads' }) }).then((r) => r.json()).then((p) => { pads = p; renderChooser(); }).catch(() => {});
 
   // the pad chooser: a bank of 16, a pad with a sample for the slicer, any pad for the tools
@@ -58,7 +58,7 @@
     const box = $('chooser'); const show = (mode === 'slicer' && !(st && st.slicer)) || (mode === 'pad' && !(st && st.menu));
     box.hidden = !show; if (!show) return;
     if (!pads) { loadPads(); return; }
-    $('cbank').value = cbank;
+    cbank = +$('bank').value; $('cbankL').textContent = bankNames[cbank];
     $('chooseWhy').textContent = mode === 'slicer' ? 'Choose a pad with a sample to slice.' : 'Choose a pad: its tools open.';
     const cells = $('cells'); cells.textContent = '';
     for (let i = 0; i < 16; i++) {
@@ -149,21 +149,24 @@
   }
   $('dCancel').onclick = () => act({ op: 'escape' });
 
+  // the tracks of the pattern: the one in front is the one the tools act on (the pattern itself is on the unit)
   function renderGrid(p) {
     const g = $('grid'); g.textContent = '';
-    if (!p.exists || !p.tracks.length) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = p.exists ? 'The pattern has no notes.' : 'No pattern in ' + p.label + ' yet. A tool writes one.'; g.appendChild(d); return; }
-    for (const t of p.tracks) {
-      const row = document.createElement('div'); row.className = 'track' + (t.pad === st.pad ? ' sel' : '');
-      const l = document.createElement('b'); l.textContent = t.label; l.title = 'Put this track in front: the tools act on it'; l.onclick = () => act({ op: 'track', pad: t.pad });
-      const steps = document.createElement('div'); steps.className = 'steps'; steps.style.gridTemplateColumns = 'repeat(' + p.steps + ', minmax(6px, 1fr))';
-      const on = new Map(); for (const n of t.notes) on.set(n.step, n);
-      for (let s = 0; s < p.steps; s++) {
-        const c = document.createElement('div'); c.className = 'step' + (s % 16 === 0 && s ? ' bar' : s % 4 === 0 && s ? ' b4' : '');
-        const n = on.get(s); if (n) { c.classList.add('on'); c.style.opacity = String(0.35 + 0.65 * Math.min(n.vel, 127) / 127); c.title = 'step ' + (s + 1) + ', velocity ' + n.vel + ', length ' + n.len + (n.pitch ? ', pitch ' + n.pitch : ''); }
-        steps.appendChild(c);
-      }
-      row.append(l, steps); g.appendChild(row);
+    const head = document.createElement('div'); head.className = 'thead';
+    head.textContent = p.tracks.length ? 'TRACK: tap the one the tools work on' : '';
+    if (!p.exists || !p.tracks.length) {
+      const d = document.createElement('div'); d.className = 'empty'; d.textContent = p.exists ? 'The pattern has no notes.' : 'No pattern in ' + p.label + ' yet. A tool writes one.'; g.appendChild(d); return;
     }
+    g.appendChild(head);
+    const box = document.createElement('div'); box.className = 'tracks';
+    for (const t of p.tracks) {
+      const b = document.createElement('button'); b.className = 'trk' + (t.pad === st.pad ? ' sel' : '');
+      const l = document.createElement('b'); l.textContent = t.label;
+      const n = document.createElement('span'); n.textContent = t.name || 'pad';
+      const c = document.createElement('small'); c.textContent = t.notes.length + (t.notes.length === 1 ? ' note' : ' notes') + (t.pad === st.pad ? ' · in front' : '');
+      b.append(l, n, c); b.onclick = () => act({ op: 'track', pad: t.pad }); box.appendChild(b);
+    }
+    g.appendChild(box);
   }
 
   function renderMenu(m) {
@@ -247,6 +250,7 @@
     if (st.liveErr) line = 'writing to the unit failed: ' + st.liveErr; else if (st.sending) line = 'sending to the unit… (' + st.sending + ')';
     if (!line && st.job && st.job.ended) line = st.job.error ? 'failed: ' + st.job.error : (st.job.what || 'sent to the unit') + ': done';
     $('status').textContent = line; $('status').className = 'status' + (st.msgBad || st.liveErr || (st.job && st.job.error) ? ' bad' : '');
+    if (st.project !== lastProject) { lastProject = st.project; pads = null; } // another project: its pads
     if (st.screen === 'slicer') mode = 'slicer';
     const sl = st.screen === 'slicer';
     $('patview').hidden = sl; $('sliceview').hidden = !sl;
