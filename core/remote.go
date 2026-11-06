@@ -259,30 +259,32 @@ func (r *Remote) SetPattern(slot int) RPattern {
 func (a *App) remotePattern() RPattern {
 	d, ok := a.doc()
 	p := RPattern{Slot: a.pat, Label: a.label(a.pat - 1), Exists: ok, Bars: d.Bars, Steps: d.Bars * 16, Tempo: a.tempo(), Tracks: []RTrack{}}
+	// the tracks are pointers: a track found later must be the one that was made first (a slice that grows moves its elements)
 	byPad := map[int]*RTrack{}
-	for _, n := range d.Notes {
-		t := byPad[n.Pad]
+	var tracks []*RTrack
+	track := func(pad int) *RTrack {
+		t := byPad[pad]
 		if t == nil {
-			p.Tracks = append(p.Tracks, RTrack{Pad: n.Pad, Label: a.label(n.Pad), Name: a.info.Pads[n.Pad].Name, Notes: []RNote{}})
-			t = &p.Tracks[len(p.Tracks)-1]
-			byPad[n.Pad] = t
+			t = &RTrack{Pad: pad, Label: a.label(pad), Name: a.info.Pads[pad].Name, Notes: []RNote{}}
+			byPad[pad] = t
+			tracks = append(tracks, t)
 		}
+		return t
+	}
+	for _, n := range d.Notes {
+		t := track(n.Pad)
 		t.Notes = append(t.Notes, RNote{Step: int(n.Tick) / stepTicks, Tick: n.Tick, Vel: n.Vel, Len: n.Len, Pitch: n.Pitch})
 	}
 	// a track that was added and has no note yet is a track too
 	for _, pad := range a.rowExtra {
-		if pad >= 0 && pad < 160 && byPad[pad] == nil {
-			p.Tracks = append(p.Tracks, RTrack{Pad: pad, Label: a.label(pad), Name: a.info.Pads[pad].Name, Notes: []RNote{}})
-			byPad[pad] = &p.Tracks[len(p.Tracks)-1]
+		if pad >= 0 && pad < 160 {
+			track(pad)
 		}
 	}
-	sort.SliceStable(p.Tracks, func(i, j int) bool { return p.Tracks[i].Pad < p.Tracks[j].Pad })
-	// the pointers into p.Tracks may have moved when it grew: build again from the final slice
-	out := make([]RTrack, 0, len(p.Tracks))
-	for _, t := range p.Tracks {
-		out = append(out, t)
+	sort.SliceStable(tracks, func(i, j int) bool { return tracks[i].Pad < tracks[j].Pad })
+	for _, t := range tracks {
+		p.Tracks = append(p.Tracks, *t)
 	}
-	p.Tracks = out
 	return p
 }
 
