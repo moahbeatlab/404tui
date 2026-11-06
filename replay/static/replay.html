@@ -269,7 +269,7 @@ if (params.get("hud") === "0") document.body.classList.add("nohud");
 
 let TITLE = "", EV = [], AN = null, PROJ = { pads: [], patterns: [] }, FILE = "", OFFSET = 0, NUDGE = 0;
 const padInfo = new Map(), patBySlot = new Map(), patByLabel = new Map();
-const recEv = [], selEv = [], otherNotes = [], padEv = new Map(), ccEv = new Map(), fxNum = new Map(), fxOn = new Map(), beats = [], transport = [], patEv = [];
+const selEv = [], otherNotes = [], padEv = new Map(), ccEv = new Map(), fxNum = new Map(), fxOn = new Map(), beats = [], transport = [], patEv = [];
 let peak = null, spec = null, lastHit = [];
 const loopStarts = []; // the unit marks every loop of the pattern with a note (channel 13, note 48)
 let cues = [];         // the patterns set by hand: { t (time of the log), label }, kept by the server beside the event log
@@ -285,7 +285,7 @@ function cueFor(label, t) {
     pads: p ? [...p.pads].map(n => padInfo.get(n)).filter(Boolean) : undefined };
 }
 function patEvents() {
-  patEv.length = 0; recMemo.clear();
+  patEv.length = 0;
   patEv.push(...(adopted ? [] : logPat), ...cues.map(c => ({ t: c.t, now: c.label, next: "", cue: true })));
   patEv.sort((a, b) => a.t - b.t);
 }
@@ -392,7 +392,6 @@ function prepare(events, analysis, cuesIn, adoptedIn) {
       case "beat": beats.push({ t: e.t, n: e.n, bpm: e.bpm }); break;
       case "start": case "stop": case "continue": transport.push({ t: e.t, k: e.k }); break;
       case "pattern": patRaw.push(e); break;
-      case "patrec": recEv.push({ t: e.t, on: !!e.on }); break;
       case "select": if (e.bank) selEv.push({ t: e.t, bank: e.bank }); break;
       case "mute": push(muteEv, e.bank + e.pad, { t: e.t, on: e.on }); break;
       case "isolate": isoEv.push({ t: e.t, keep: new Set(e.keep || []), dry: new Set(e.dry || []), buses: e.buses || [] }); break;
@@ -542,29 +541,6 @@ function tempoAt(T) {
 function running(T) { const e = at(transport, T); return e ? e.k !== "stop" : !!playPosition(T); }
 
 let sticky = null, chosen = null;
-// Recording live into the pattern that plays (REC on the unit, told by the page): the pads played meanwhile are notes of the pattern
-// from then on. Each lands at its place in the loop (the playing position when it was hit) and stays in the loop after.
-function recSpans() { const out = []; let from = null; for (const e of recEv) { if (e.on && from === null) from = e.t; else if (!e.on && from !== null) { out.push([from, e.t]); from = null; } } if (from !== null) out.push([from, Infinity]); return out; }
-const recMemo = new Map();
-function recNotesOf(p) {
-  if (!recEv.length) return [];
-  if (recMemo.has(p.label)) return recMemo.get(p.label);
-  const out = [], spans = recSpans(), lenQ = p.length / 480;
-  for (const [k, l] of padEv) {
-    const n = (k.charCodeAt(0) - 65) * 16 + parseInt(k.slice(1), 10) - 1;
-    for (const e of l) {
-      if (!e.on || !spans.some(s => e.t >= s[0] && e.t < s[1])) continue;
-      const r = patternAt(e.t), pos = playPosition(e.t);
-      if (!r || r.p !== p || !pos) continue;
-      out.push([Math.round(((pos.q % lenQ) + lenQ) % lenQ * 480), n, e.v || 100, 120, 0, e.t]);
-    }
-  }
-  recMemo.set(p.label, out);
-  return out;
-}
-// the notes of a pattern at a time: its own, and the recorded ones that were played before it
-function notesAt(p, T) { return recEv.length ? p.notes.concat(recNotesOf(p).filter(n => n[5] <= T)) : p.notes; }
-function recOn(T) { const e = at(recEv, T); return !!(e && e.on); }
 function patternAt(T) {
   if (chosen && patByLabel.has(chosen)) return { p: patByLabel.get(chosen), how: "chosen" };
   const e = at(patEv, T);
@@ -639,7 +615,7 @@ function drawPads(T) {
   const patFlash = n => {
     if (!ppos || !plen) return 0;
     let f = 0;
-    for (const nt of notesAt(cur.p, T)) {
+    for (const nt of cur.p.notes) {
       if (nt[1] !== n) continue;
       const d = (((ppos.q % plen) - nt[0] / 480) % plen + plen) % plen, sec = d * 60 / ppos.bpm;
       f = Math.max(f, clamp(1 - sec / 0.35, 0, 1) * (0.5 + 0.5 * nt[2] / 127));
@@ -776,9 +752,7 @@ function drawPattern(T) {
   if (!r) { text("PATTERN", x0 + 16, y0 + 30, COL.dim, 20, true); text("not known: the unit did not say.", x0 + 16, y0 + 80, COL.dim, 22); text("Pick it in the bar below where it starts.", x0 + 16, y0 + 112, COL.dim, 22); return; }
   const p = r.p, steps = Math.max(Math.round(p.length / 120), 16);
   text("PATTERN " + p.label + "   " + p.bars + " bars" + (r.how === "guess" ? "   (guessed from the pads)" : r.how === "chosen" ? "   (chosen)" : r.how === "cue" ? "   (set by hand)" : ""), x0 + 16, y0 + 30, COL.amber, 20, true);
-  const pnotes = notesAt(p, T), pset = new Set(p.pads); for (const nt of pnotes) pset.add(nt[1]);
-  if (recOn(T)) text("● REC", x0 + w - 16, y0 + 30, COL.bad, 22, true, "right");
-  const pads = [...pset].sort((a, b) => a - b).slice(0, 10);
+  const pads = [...p.pads].sort((a, b) => a - b).slice(0, 10);
   drawPatternStrip(x0 + 16, y0 + 44, w - 32, T);
   const rows = Math.max(pads.length, 1), rh = Math.min(32, (h - 118) / rows);
   const ix = x0 + 12, iw = 330;           // the pads of the pattern: their settings
@@ -801,7 +775,7 @@ function drawPattern(T) {
     else if (iso && iso.dry.has(plab)) text("dry", ix + 250, y + rh * 0.68, COL.dim, 15, true);
     if (muted) text(muteEv.size ? "muted" : "muted?", ix + 250, y + rh * 0.68, COL.bad, 15, true);
     for (let s = 0; s < visible; s++) rect(gx + s * cw + 1, y + 1, cw - 2, rh - 3, (first + s) % 4 === 0 ? "#303030" : "#262626");
-    for (const nt of pnotes) {
+    for (const nt of p.notes) {
       if (nt[1] !== n) continue;
       const s = nt[0] / 120 - first; if (s < -0.01 || s >= visible) continue;
       const hgt = Math.max(5, (rh - 5) * nt[2] / 127);
@@ -813,7 +787,7 @@ function drawPattern(T) {
   });
   if (phase >= 0) { const s = phase * 4 - first; if (s >= 0 && s <= visible) rect(gx + s * cw - 1, y0 + 90, 3, rows * rh + 8, COL.good); }
   if (steps > visible) text("steps " + (first + 1) + "-" + (first + visible) + " of " + steps, x0 + w - 16, y0 + 30, COL.dim, 18, false, "right");
-  if (pads.length < pset.size) text("+" + (pset.size - pads.length) + " more pads", ix, y0 + h - 10, COL.dim, 16);
+  if (pads.length < p.pads.size) text("+" + (p.pads.size - pads.length) + " more pads", ix, y0 + h - 10, COL.dim, 16);
 }
 
 // the patterns in turn: the ones before, the one that plays, the ones to come (the cues are known) and when the next one starts

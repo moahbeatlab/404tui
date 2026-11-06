@@ -801,7 +801,6 @@
     const beats = $('beats').children;
     for (let i = 0; i < 4; i++) cls(beats[i], 'on', s.beat === i && s.running);
     cls($('beats'), 'stopped', !s.running);
-    cls($('bPatRec'), 'hot', s.patRec); cls($('top'), 'patrec', s.patRec);
     cls($('bRec'), 'hot', s.rec); set($('bRecT'), 'textContent', s.rec ? 'STOP REC' : 'RECORD');
 
     s.pads.forEach((p, i) => {

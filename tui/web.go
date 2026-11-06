@@ -8,7 +8,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/moahbeatlab/404tui/perflog"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/record"
 )
@@ -51,7 +50,6 @@ type webState struct {
 	Bar      int       `json:"bar"`
 	Beat     int       `json:"beat"` // 0 to 3, -1 when there is no clock
 	Rec      bool      `json:"rec"`
-	PatRec   bool      `json:"patRec"` // recording live into the pattern that plays
 	Now      string    `json:"now"`
 	Next     string    `json:"next"`
 	Msg      string    `json:"msg"`
@@ -183,7 +181,6 @@ func (m Model) webSnapshot() webState {
 	s.Motion.Bars = m.scenes().bars
 	s.Motion.Overdub = m.scenes().overdub
 	s.Rec = m.rec != nil
-	s.PatRec = m.patRec
 	if m.snap == nil {
 		return s
 	}
@@ -418,15 +415,6 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		return m.looperBankSet(c.I)
 	case "view":
 		m.webView = c.Name
-		return m, m.wanted()
-	case "patrec":
-		m.patRec = !m.patRec
-		m.perfLog.Add(time.Now(), "patrec", perflog.P("on", m.patRec))
-		if m.patRec {
-			m.message = "REC: the pads you play are added to the pattern that plays"
-		} else {
-			m.message = "REC off"
-		}
 		return m, m.wanted()
 	case "ptn", "ptnmark", "ptnbank", "ptnbankset", "ptnfollow":
 		return m.ptnCommand(c.A, c.I)

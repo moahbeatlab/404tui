@@ -326,11 +326,7 @@ type Model struct {
 	midiOpening bool
 	midiErr     string
 	midiPadAt   time.Time
-	// patRec is set when the unit records live into the pattern that plays (told by the page: the unit does not say); recNotes are
-	// the notes played meanwhile, by pattern slot and pad (bank*16 + pad), in clock ticks within the pattern.
-	patRec   bool
-	recNotes map[proto.PadIndex]map[int][]int
-	clock    *clockState
+	clock       *clockState
 	// mon is what the MIDI input said lately; perfLog the event log of the recording that runs.
 	mon     *monitor
 	perfLog *perflog.Log
