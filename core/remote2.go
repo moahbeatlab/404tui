@@ -41,6 +41,7 @@ type RSlicer struct {
 	Slices  []RSlice `json:"slices"`
 	Order   []int    `json:"order"`
 	Mode    string   `json:"mode"`
+	Playing bool     `json:"playing"` // the order plays in a loop (on the computer's speakers)
 	CanUndo bool     `json:"canUndo"`
 	CanRedo bool     `json:"canRedo"`
 }
@@ -121,7 +122,7 @@ func (a *App) remoteSlicer(from, to, cols int) *RSlicer {
 		return nil
 	}
 	s := &RSlicer{Pad: a.spad, Label: a.label(a.spad), Name: a.info.Pads[a.spad].Name, Frames: a.sl.Frames, Rate: 48000, At: a.at, Sel: a.sliceAt(a.at),
-		Order: a.sl.Order, Mode: modeNames[int(a.sl.Mode)%len(modeNames)], Slices: []RSlice{}, CanUndo: len(a.slUndo) > 0, CanRedo: len(a.slRedo) > 0}
+		Order: a.sl.Order, Mode: modeNames[int(a.sl.Mode)%len(modeNames)], Slices: []RSlice{}, Playing: a.orderOn, CanUndo: len(a.slUndo) > 0, CanRedo: len(a.slRedo) > 0}
 	if to <= from {
 		from, to = 0, a.sl.Frames
 	}
@@ -518,4 +519,40 @@ func (r *Remote) ReloadUnit() {
 	defer r.mu.Unlock()
 	r.fl.reload, r.fl.holding = false, false
 	r.a.reloadLive()
+}
+
+// SlicerOrder starts the whole order in a loop on the computer's speakers, or stops it.
+func (r *Remote) SlicerOrder(on bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.a
+	if a.sl == nil || a.scr != Slice {
+		return
+	}
+	switch {
+	case on && !a.orderOn:
+		a.hearOrder(false)
+	case !on && (a.orderOn || a.looping()):
+		a.stop()
+		a.say("the order stopped", false)
+	}
+}
+
+// SlicerShuffle puts the order of the slices in a new random order (what plays takes it at once). It is one step of the slicer's undo.
+func (r *Remote) SlicerShuffle() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.a
+	if a.sl == nil || a.scr != Slice {
+		return
+	}
+	before, _, _ := a.slicingNow()
+	a.shuffleOrder()
+	if now, _, _ := a.slicingNow(); before != "" && now != before {
+		a.slUndo = append(a.slUndo, before)
+		a.slRedo = nil
+	}
+	if a.orderOn {
+		a.hearOrder(false) // the loop goes on with the new order
+	}
 }

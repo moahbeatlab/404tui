@@ -121,6 +121,8 @@
   $('slCut').onclick = () => act({ op: 'slicer-cut', i: cur() });
   $('slJoin').onclick = () => act({ op: 'slicer-join', i: cur() });
   $('slPlay').onclick = () => act({ op: 'slicer-play', i: cur() });
+  $('slOrder').onclick = () => act({ op: 'slicer-order', on: !st.slicer.playing });
+  $('slShuffle').onclick = () => act({ op: 'slicer-shuffle' });
   $('slUndo').onclick = () => act({ op: 'slicer-undo', on: false });
   $('slRedo').onclick = () => act({ op: 'slicer-undo', on: true });
   $('slClose').onclick = () => act({ op: 'slicer-close' });
@@ -272,7 +274,7 @@
     $('other').hidden = !st.other; if (st.other) $('otherText').textContent = 'The program has opened ' + st.other + '. It is made for the terminal; close it here.';
     $('idPattern').hidden = mode !== 'pattern'; $('idSlicer').hidden = !(mode === 'slicer' && sl);
     if (sl) {
-      const s = st.slicer; $('slTitle').textContent = 'Slicer · ' + s.label + ' ' + s.name; $('slUndo').disabled = !s.canUndo; $('slRedo').disabled = !s.canRedo;
+      const s = st.slicer; $('slTitle').textContent = 'Slicer · ' + s.label + ' ' + s.name; $('slOrder').textContent = s.playing ? '■ STOP' : '▶ PLAY ORDER'; $('slOrder').classList.toggle('on', s.playing); $('slUndo').disabled = !s.canUndo; $('slRedo').disabled = !s.canRedo;
       $('slInfo').textContent = s.slices.length + ' slices · cursor ' + (atNow() / s.rate).toFixed(3) + ' s · plays ' + s.mode;
       drawWave();
     }

@@ -140,6 +140,10 @@ func (t toolsAPI) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		t.r.SlicerJoin(in.I)
 	case "slicer-play":
 		t.r.SlicerPlay(in.I)
+	case "slicer-order":
+		t.r.SlicerOrder(in.On)
+	case "slicer-shuffle":
+		t.r.SlicerShuffle()
 	case "slicer-menu":
 		t.r.SlicerMenu(in.Kind)
 	case "slicer-undo":
