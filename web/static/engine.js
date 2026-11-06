@@ -151,6 +151,36 @@
   ];
   const demoKit = (bank, i) => (DEMO_BANKS[bank] || [])[i] || null;
   const demoPtn = (bank, i) => (DEMO_PTNS[bank] || [])[i] || null;
+  // What the demo unit holds. At first it is the data above; once the tools (demo.wasm) are running it is what that unit holds (the
+  // pads with their names and samples, the patterns with their notes), so a bounced pad or a pattern tool's notes show in the Pads and
+  // Patterns pages, and are played. Patterns are kept as notes by clock tick (24 to a beat).
+  // One audio context for the whole page (the pads, the tools in the frame): a browser lets only a touch unlock it, once.
+  const sharedCtx = () => { window.__sp404ctx = window.__sp404ctx || new (window.AudioContext || window.webkitAudioContext)(); return window.__sp404ctx; };
+  window.SP404SharedCtx = sharedCtx;
+  const unlockCtx = (ctx) => { // the old iOS trick: a silent sound started in the touch makes the context run
+    try { const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); } catch (e) {}
+    return ctx.state === 'running' ? Promise.resolve() : ctx.resume();
+  };
+  window.SP404UnlockCtx = unlockCtx;
+  const DU = { pads: null, pat: new Map(), buf: new Map(), fromUnit: false };
+  const duFill = (bank, i, steps) => { // a pattern of the data above in the same form
+    const map = new Map(), pads = new Set();
+    for (const k in steps) { pads.add(bank * 16 + +k); for (let s = 0; s < 16; s++) if (steps[k][s] === 'x') { const t = s * 6; map.set(t, (map.get(t) || []).concat([[bank * 16 + +k, 100]])); } }
+    return { exists: true, len: 96, map, pads };
+  };
+  DEMO_PTNS.forEach((list, b) => list.forEach((steps, i) => DU.pat.set(b * 16 + i, duFill(b, i, steps))));
+  const duPad = (bank, i) => {
+    const k = demoKit(bank, i);
+    if (DU.pads) { const p = DU.pads[bank * 16 + i]; return p && p.has ? { name: p.name, bus: k && k[0] === p.name ? k[1] : 0 } : null; }
+    return k ? { name: k[0], bus: k[1] } : null;
+  };
+  const duPtn = (bank, i) => { const d = DU.pat.get(bank * 16 + i); return d && d.exists ? d : null; };
+  const duSetPattern = (slot, o) => {
+    if (!o || !o.exists) { DU.pat.set(slot, { exists: false }); return; }
+    const len = Math.max(1, Math.round(o.length / 20)), map = new Map(), pads = new Set();
+    for (const [tick, pad, vel] of o.notes) { const t = Math.round(tick / 20) % len; map.set(t, (map.get(t) || []).concat([[pad, vel]])); pads.add(pad); }
+    DU.pat.set(slot, { exists: true, len, map, pads });
+  };
   class Demo {
     constructor(onEvent, onChange) { this.onEvent = onEvent; this.onChange = onChange; this.ok = true; this.name = 'demo'; this.error = ''; this.ctx = null; this.running = true; this.where = () => ({ bank: 0, i: 0 }); }
     // The play and stop of the demo's clock (a real unit is started on the unit).
@@ -179,17 +209,18 @@
         if (!this.running) { t = now; return; }
         while (t + per <= now) {
           t += per; this.onEvent({ kind: 'clock' }); n++;
-          if (n % 6 === 1) {
-            // the pattern that plays: its pads hit on their steps (the unit sends no notes for a pattern, the demo lets the pads flash)
-            const w = this.where(), pat = demoPtn(w.bank, w.i), step = ((n - 1) / 6) % 16;
-            if (pat) for (const k in pat) if (pat[k][step] === 'x') { this.voice(w.bank, +k); this.onEvent({ kind: 'on', ch: w.bank + 1, d1: 36 + PAD_OFFSET[+k], d2: 100 }); }
+          // the pattern that plays: its pads hit on their notes (the unit sends no notes for a pattern, the demo lets the pads flash)
+          const w = this.where(), d = duPtn(w.bank, w.i);
+          if (d) {
+            const hits = d.map.get((n - 1) % d.len);
+            if (hits) for (const [pad, vel] of hits) { this.hit(pad, vel); this.onEvent({ kind: 'on', ch: (pad >> 4) + 1, d1: 36 + PAD_OFFSET[pad & 15], d2: vel }); }
           }
         }
       }, 10);
       return true;
     }
     send(bytes) {
-      if ((bytes[0] & 0xF0) === 0x90 && bytes[2] > 0) { const p = padOfNote(bytes[1]); if (p) this.voice(bytes[0] & 15, p - 1); else this.blip(bytes[1]); }
+      if ((bytes[0] & 0xF0) === 0x90 && bytes[2] > 0) { const p = padOfNote(bytes[1]); if (p) this.hit((bytes[0] & 15) * 16 + p - 1, bytes[2]); else this.blip(bytes[1]); }
       return true;
     }
     // The sound is on after the first touch (a browser keeps a page silent until then).
@@ -199,16 +230,39 @@
         if (!this.keep) { // an audio element that plays nothing keeps older iOS in the playback mode too
           this.keep = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='); this.keep.loop = true; this.keep.play().catch(() => {});
         }
-        this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)();
+        this.ctx = sharedCtx();
         const done = () => {
           if (this.ctx.state === 'running') {
             if (this.hint) { this.hint.remove(); this.hint = null; }
             ['pointerdown', 'touchend', 'click', 'keydown'].forEach((t) => document.removeEventListener(t, this.unlockOnce));
-            this.voice(0, 0); // a first sound, so that it is clear it works
+            this.hit(0, 100); // a first sound, so that it is clear it works
           } else if (this.hint) this.hint.textContent = 'No sound yet: tap again (and switch the ringer on)';
         };
-        if (this.ctx.state !== 'running') this.ctx.resume().then(done, done); else done();
+        unlockCtx(this.ctx).then(done, done);
       } catch (e) { /* no audio: the demo is silent */ }
+    }
+    // A pad is hit: its sample from the unit when the tools have it, else a sound made of oscillators and noise.
+    hit(pad, vel) {
+      const ctx = this.ctx; if (!ctx || ctx.state !== 'running') return;
+      const p = DU.pads && DU.pads[pad];
+      if (p) {
+        if (!p.has) return;
+        const b = this.buffer(pad, p);
+        if (b) { const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = b; g.gain.value = Math.min(1, (vel || 100) / 110); s.connect(g); g.connect(ctx.destination); s.start(); return; }
+      }
+      this.voice(pad >> 4, pad & 15);
+    }
+    buffer(pad, p) {
+      const key = pad + '/' + (p.secs || 0);
+      if (DU.buf.has(key)) return DU.buf.get(key);
+      if (!window.sp404PadAudio) return null;
+      DU.buf.set(key, null); // asked for once; the buffer comes when it is read
+      const o = window.sp404PadAudio(pad);
+      if (!o) return null;
+      const n = o.pcm.length >> 1, ch = o.channels, frames = Math.floor(n / ch), buf = this.ctx.createBuffer(ch, frames, o.rate), v = new DataView(o.pcm.buffer, o.pcm.byteOffset, o.pcm.length);
+      for (let c = 0; c < ch; c++) { const d = buf.getChannelData(c); for (let i = 0; i < frames; i++) d[i] = v.getInt16((i * ch + c) * 2, true) / 32768; }
+      DU.buf.set(key, buf);
+      return buf;
     }
     // A pad of the demo kit, made of oscillators and noise: a kick, a snare, hats and so on.
     voice(bank, i) {
@@ -732,8 +786,8 @@
       };
       for (let i = 0; i < 16; i++) {
         const at = this.lastHit.get(bank * 16 + i), age = at ? now - at : 1e9;
-        const kit = this.demo ? demoKit(bank, i) : null, playing = this.demo && this.ptn.nowBank === bank ? demoPtn(bank, this.ptn.now) : null;
-        s.pads.push({ n: i + 1, name: kit ? kit[0] : '', has: !this.demo || !!kit, bus: kit ? kit[1] : 0, level: 127, muted: false, heard: age < 250, inPat: !!(playing && playing[i]),
+        const kit = this.demo ? duPad(bank, i) : null, playing = this.demo && this.ptn.nowBank >= 0 ? duPtn(this.ptn.nowBank, this.ptn.now) : null;
+        s.pads.push({ n: i + 1, name: kit ? kit.name : '', has: !this.demo || !!kit, bus: kit ? kit.bus : 0, level: 127, muted: false, heard: age < 250, inPat: !!(playing && playing.pads.has(bank * 16 + i)),
           glow: Math.round(clamp(1 - age / 1500, 0, 1) * 5) / 5, sel: false, keep: false, bars: '', dry: false });
       }
       sc.bus.forEach((bs, b) => {
@@ -755,7 +809,7 @@
         const set = this.lfoSetting(i), run = sc.lfo[i];
         s.lfo.push({ bus: set.bus, knob: set.knob, shape: set.shape, rate: set.rate, depth: set.depth, shift: set.shift, on: run.on, value: run.value });
       }
-      for (let i = 0; i < 16; i++) { const d = this.demo ? demoPtn(bank, i) : null; s.patterns.push({ n: i + 1, exists: !this.demo || !!d, pads: d ? Object.keys(d).length : 0, now: this.demo && this.ptn.nowBank === bank && this.ptn.now === i, next: false }); }
+      for (let i = 0; i < 16; i++) { const d = this.demo ? duPtn(bank, i) : null; s.patterns.push({ n: i + 1, exists: !this.demo || !!d, pads: d ? d.pads.size : 0, now: this.demo && this.ptn.nowBank === bank && this.ptn.now === i, next: false }); }
       return s;
     }
     webPunch() {
@@ -779,7 +833,7 @@
     webPtn() {
       const bank = this.ptnBank(), p = this.ptn;
       return { bank: String.fromCharCode(65 + bank), known: true, now: p.now >= 0 && p.nowBank === bank ? p.now : -1, next: p.next >= 0 && p.nextBank === bank ? p.next : -1,
-        slots: Array.from({ length: 16 }, (_, i) => { const d = this.demo ? demoPtn(bank, i) : null; return { n: i + 1, exists: !this.demo || !!d, pads: d ? Object.keys(d).length : 0 }; }) };
+        slots: Array.from({ length: 16 }, (_, i) => { const d = this.demo ? duPtn(bank, i) : null; return { n: i + 1, exists: !this.demo || !!d, pads: d ? d.pads.size : 0 }; }) };
     }
   }
 
@@ -880,6 +934,12 @@
   }
 
   window.SP404Local = {
+    // the pads and patterns of the unit of the demo (from the tools), for the Pads and Patterns pages
+    unit: {
+      setPads(list) { DU.pads = Array.from({ length: 160 }, (_, i) => { const p = list[i]; return p ? { name: p.name, has: p.has, secs: p.secs } : { name: '', has: false }; }); DU.fromUnit = true; },
+      setPattern: duSetPattern,
+      clearBuffers() { DU.buf.clear(); },
+    },
     supported: () => !!navigator.requestMIDIAccess,
     start: async (opts) => { const e = new Engine(opts || {}); await e.start(); return e; },
   };

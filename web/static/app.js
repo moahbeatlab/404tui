@@ -55,7 +55,7 @@
     if (toolsLoading) return toolsLoading;
     const script = (src) => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error(src)); document.head.appendChild(s); });
     let ctx = null, src = null;
-    const unlock = () => { try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state !== 'running') ctx.resume(); } catch (e) {} };
+    const unlock = () => { try { ctx = window.SP404SharedCtx(); window.SP404UnlockCtx(ctx); } catch (e) {} };
     ['pointerdown', 'touchend', 'click', 'keydown'].forEach((t) => document.addEventListener(t, unlock, { passive: true }));
     let started = 0, dur = 0, pv = null;
     const make = (bytes, rate, channels) => {
@@ -67,7 +67,7 @@
     const halt = () => { try { if (src) src.stop(); } catch (e) {} src = null; };
     window.SP404Audio = {
       unlock,
-      play(bytes, rate, channels, loop) { unlock(); if (!ctx) return; halt(); const buf = make(bytes, rate, channels); src = start(buf, !!loop); started = ctx.currentTime; dur = buf.duration; },
+      play(bytes, rate, channels, loop) { unlock(); if (!ctx) return; halt(); const buf = make(bytes, rate, channels); const go = () => { halt(); src = start(buf, !!loop); started = ctx.currentTime; dur = buf.duration; }; if (ctx.state === 'running') go(); else ctx.resume().then(go, () => {}); },
       // a new loop takes over where the old one is, so a change is heard in the beat
       replace(bytes, rate, channels) { unlock(); if (!ctx) return; const buf = make(bytes, rate, channels), at = dur ? ((ctx.currentTime - started) % dur) % buf.duration : 0; halt(); src = start(buf, true, at); started = ctx.currentTime - at; dur = buf.duration; },
       stop() { halt(); },
@@ -82,9 +82,29 @@
       const wasm = await WebAssembly.instantiateStreaming(fetch('demo.wasm' + (window.SP404_BUILD ? '?v=' + window.SP404_BUILD : '')), go.importObject).catch(async () => WebAssembly.instantiate(await (await fetch('demo.wasm' + (window.SP404_BUILD ? '?v=' + window.SP404_BUILD : ''))).arrayBuffer(), go.importObject));
       go.run(wasm.instance);
       await new Promise((ok) => { const t = setInterval(() => { if (window.sp404ToolsReady) { clearInterval(t); ok(); } }, 100); });
+      syncDemoUnit();
     })();
     window.SP404Tools = async (text) => { await toolsLoading; return JSON.parse(window.sp404Tools(text)); };
     return toolsLoading;
+  }
+  // The Pads and Patterns pages show what the unit of the demo holds (the tools write to it): its pads (names, samples) and the patterns
+  // of the bank on show and of the one that plays, asked for every second and a half.
+  function syncDemoUnit() {
+    let n = 0, sig = '';
+    const tick = async () => {
+      try {
+        const u = window.SP404Local.unit, r = await window.SP404Tools(JSON.stringify({ op: 'pads' }));
+        if (!r.code) { const s = r.body.map((p) => p.name + p.has + p.secs).join('|'); if (s !== sig) { sig = s; u.clearBuffers(); } u.setPads(r.body); }
+        const want = new Set(), bank = eng ? eng.ptnBank() : 0;
+        for (let i = 0; i < 16; i++) want.add(bank * 16 + i);
+        if (eng && eng.ptn.nowBank >= 0 && eng.ptn.now >= 0) want.add(eng.ptn.nowBank * 16 + eng.ptn.now);
+        if (n === 0) for (let s = 0; s < 64; s++) want.add(s);
+        for (const slot of want) u.setPattern(slot, JSON.parse(window.sp404Pattern(slot)));
+        n++; if (eng) eng.changed();
+      } catch (e) { /* the next round */ }
+      setTimeout(tick, 1500);
+    };
+    tick();
   }
   async function startEngine(demo) {
     $('startErr').textContent = '';
@@ -757,7 +777,7 @@
   for (let i = 0; i < 10; i++) {
     const b = document.createElement('button');
     b.innerHTML = String.fromCharCode(65 + i) + '<small></small>';
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); chooseBank(bankKind, i); $('bankPick').hidden = true; });
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); chooseBank(bankKind, i); closeBankSoon(); });
     bankGrid.appendChild(b);
   }
   // One bank for the whole page: choosing it in Pads, Patterns, the Slicer or Tools shows the same bank in all of them. (The bank the slices go to is its own.)
@@ -796,8 +816,11 @@
     box.classList.add('pick');
     box.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!box.parentElement.querySelector('button:disabled')) openBanks(kind); });
   }
-  $('bankX').addEventListener('pointerdown', (e) => { e.preventDefault(); $('bankPick').hidden = true; });
-  $('bankPick').addEventListener('pointerdown', (e) => { if (e.target === $('bankPick')) $('bankPick').hidden = true; });
+  // The dialog stays a moment after the touch: the click that follows it would else land on what is underneath (a pad of the Tools in
+  // the frame) and choose it.
+  function closeBankSoon() { setTimeout(() => { $('bankPick').hidden = true; }, 350); }
+  $('bankX').addEventListener('pointerdown', (e) => { e.preventDefault(); closeBankSoon(); });
+  $('bankPick').addEventListener('pointerdown', (e) => { if (e.target === $('bankPick')) closeBankSoon(); });
 
   // ---- drawing the state, at most once a frame ----
   let queued = false;
