@@ -442,7 +442,7 @@
   // tabs (portrait), and the switch between Perform and the Looper (the tab in portrait, the button in the top bar)
   const app = $('app');
   app.dataset.tab = store.get('tab') === 'looper' ? 'pads' : (store.get('tab') || 'pads');
-  app.dataset.view = ['looper', 'patterns', 'tools'].includes(store.get('view')) && !(LOCAL && ['looper', 'tools'].includes(store.get('view'))) ? store.get('view') : 'perform';
+  app.dataset.view = ['patterns', 'tools'].includes(store.get('view')) && !(LOCAL && store.get('view') === 'tools') ? store.get('view') : 'perform';
   if (LOCAL) {
     app.classList.add('local');
     const hint = document.querySelector('#rail .hint');
@@ -452,7 +452,7 @@
   function syncTabs() {
     tabBtns.forEach((x) => x.classList.toggle('on', app.dataset.view !== 'perform' ? x.dataset.tab === app.dataset.view : x.dataset.tab === app.dataset.tab));
     // The button in the top bar (landscape) names the view it goes to: Perform, Looper, Patterns, and round.
-    $('viewBtn').textContent = { perform: LOCAL ? 'PATTERNS' : 'SLICER', looper: 'PATTERNS', patterns: LOCAL ? 'PERFORM' : 'TOOLS', tools: 'PERFORM' }[app.dataset.view];
+    $('viewBtn').textContent = { perform: 'PATTERNS', patterns: LOCAL ? 'PERFORM' : 'TOOLS', tools: 'PERFORM' }[app.dataset.view];
     if (app.dataset.view === 'tools') showTools();
     $('viewBtn').classList.toggle('on', app.dataset.view !== 'perform');
   }
@@ -476,14 +476,14 @@
   tabBtns.forEach((b) => b.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     if (b.dataset.tab === 'patterns' && ptnDouble()) return;
-    if (b.dataset.tab === 'looper' || b.dataset.tab === 'patterns' || b.dataset.tab === 'tools') return setView(b.dataset.tab);
+    if (b.dataset.tab === 'patterns' || b.dataset.tab === 'tools') return setView(b.dataset.tab);
     app.dataset.tab = b.dataset.tab; store.set('tab', b.dataset.tab); setView('perform');
   }));
   $('viewBtn').addEventListener('pointerdown', (e) => {
     e.preventDefault();
     // Tapped twice quickly where it said PATTERNS: stay on the Patterns page, and show the bank of the pattern that plays.
     if (app.dataset.view === 'patterns' && performance.now() - ptnTapAt < 450) { ptnTapAt = performance.now(); send({ a: 'ptnfollow' }); return; }
-    const to = { perform: LOCAL ? 'patterns' : 'looper', looper: 'patterns', patterns: LOCAL ? 'perform' : 'tools', tools: 'perform' }[app.dataset.view];
+    const to = { perform: 'patterns', patterns: LOCAL ? 'perform' : 'tools', tools: 'perform' }[app.dataset.view];
     if (to === 'patterns') ptnTapAt = performance.now();
     setView(to);
   });
@@ -567,7 +567,7 @@
   const lpSw = document.querySelectorAll('.lpsw button');
   function setLp(v) { $('looper').dataset.lp = v; lpSw.forEach((b) => b.classList.toggle('on', b.dataset.lp === v)); store.set('lp', v); try { render(); } catch (e) { /* before the first state */ } }
   lpSw.forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); setLp(b.dataset.lp); }));
-  setLp('slice'); // the Looper page is gone: this tab is the Slicer
+  setLp('slice');
   const PHASE = { idle: 'READY', starting: 'STARTING…', armed: 'ARMED', recording: 'REC', saving: 'SAVING…' };
   // The level meters (there is one on the stage panel and one on each page of the Looper): -60 dB to 0 dB.
   const meters = [...document.querySelectorAll('[data-meter]')].map((el) => ({ el, bars: [...el.querySelectorAll('.mbar')].map((b) => ({ i: b.querySelector('i'), u: b.querySelector('u') })), clip: el.querySelector('em'), txt: el.querySelector('b') }));

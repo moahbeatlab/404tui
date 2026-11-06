@@ -36,7 +36,7 @@ address and a key if it was not opened from the link), or give it in the link: `
 
 ## On the phone
 
-| PADS | PATTERNS | MOTION | SLICER | TOOLS |
+| PADS | PATTERNS | MOTION | TOOLS | STAGE |
 | --- | --- | --- | --- |
 | <img src="img/serve-pads.png" width="200"> | <img src="img/serve-patterns.png" width="200"> | <img src="img/serve-motion.png" width="200"> | <img src="img/serve-looper.png" width="200"> |
 
@@ -162,7 +162,7 @@ Not tried on the unit yet: how the 7-bit steps sound on each knob, and how tight
 
 ## Tools: the pattern, slicer and pad tools in the page
 
-The **TOOLS** tab (the bottom bar, beside PADS, PATTERNS, MOTION, SLICER and STAGE; in landscape the button at the top right goes Perform, Slicer, Patterns, Tools) opens the tools of the program (the same ones as SEQ in the terminal: fill, Euclid, echo, ratchet, LFO and ENV on the notes, chance, cycle, nudge, pitch, swing and humanize, templates, copy and move patterns, tempo of a bank and the rest) in the page, with every page, setting and value that the terminal has.
+The **TOOLS** tab (the bottom bar, beside PADS, PATTERNS, MOTION and STAGE; in landscape the button at the top right goes Perform, Patterns, Tools) opens the tools of the program (the same ones as SEQ in the terminal: fill, Euclid, echo, ratchet, LFO and ENV on the notes, chance, cycle, nudge, pitch, swing and humanize, templates, copy and move patterns, tempo of a bank and the rest) in the page, with every page, setting and value that the terminal has.
 
 <img src="img/serve-tools-tab-phone.png" width="240"> ![The TOOLS tab](img/serve-tools-tab-laptop.png)
 
@@ -237,22 +237,9 @@ The bank chip at the top (BANK) is global: a bank chosen on Patterns, Pads, the 
 
 The Tools tab always shows the project that is loaded on the unit, with its pads and patterns (a row of the 16 patterns of the bank, the used ones lit): there is no list of projects to choose from. When the unit's project is changed, the page loads the new one within a few seconds. It is edited **LIVE**: a tool that is kept (**Keep it**, which also goes back one menu) is written to the unit, and then the unit is told to read the project again so that the pattern shows on it (**this stops the sound on the unit**). While the unit plays, the reload waits: the pattern is written, and the page says so; stop the unit, or press **RELOAD UNIT**, and it shows. The line under the pattern says "sending to the unit…" while it is on its way, and why when a write fails. Switch to **COPY** to keep the unit unchanged; in a copy, **SEND TO UNIT** writes the editor's project over the unit's (asks twice) and the unit reads the project again. Changing the unit's project discards the changes of a copy.
 
-## Slicer (the former Looper page)
+## The Looper page and its Slicer are gone
 
-The Looper page is gone. Its Slicer is the **SLICER** tab; the LOOP page (make a pattern, delete) was removed.
-
-The **LOOPER** tab in portrait (the button at the top right in landscape) is the bank of loops that play together
-([looper.md](looper.md)), for the phone: the 16 pads of a bank, and a pattern in which all 16 pads start on beat 1 and last
-the whole pattern. The samples come from the unit's own looper (copy one to a pad), the Slicer or anywhere else; this page keeps
-the bank and the pattern in order (the bank is chosen with the chip at the top left, which says LOOP there). The length of the pattern is the unit's: it is read from the pattern of the bank in which all 16 pads play, or else from how long the loops on the pads are (2 bars when neither is known). It has two pages, switched at the top: **LOOP** and **SLICER**.
-
-| Button | Does |
-| --- | --- |
-| **MAKE PATTERN** | writes the pattern of the bank in which all 16 pads start on beat 1 (it says whether there is one) |
-| a pad, then **DELETE** | deletes the sample of the pad (tap DELETE twice; asking again before it happens takes it back) |
-
-While the unit's clock runs a delete (and a slice that is placed) waits for beat 1 of the pattern, so that the work on the
-unit is not heard as a gap; a pad that waits is striped red, and the page says in how many beats it happens.
+The Looper tab and the Slicer that was on it were removed from the page: the slicer is in the **TOOLS** tab (SLICER mode).
 
 ## Level meter
 
