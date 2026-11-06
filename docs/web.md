@@ -160,7 +160,7 @@ Punch, so they move the effects the unit has (no others). Pick an LFO (1 to 4), 
 
 Not tried on the unit yet: how the 7-bit steps sound on each knob, and how tight a pump feels against a kick.
 
-## Tools: the pattern tools in the page
+## Tools: the pattern, slicer and pad tools in the page
 
 The **TOOLS** button in the top bar of the page opens the tools of the program (the same ones as SEQ in the terminal: fill, Euclid, echo, ratchet, LFO and ENV on the notes, chance, cycle, nudge, pitch, swing and humanize, templates, copy and move patterns, tempo of a bank and the rest) in a page of their own, with every page, setting and value that the terminal has.
 
@@ -179,7 +179,19 @@ The **TOOLS** button in the top bar of the page opens the tools of the program (
 
 The page runs in the same process as the rest of `sp404 serve` and uses its connection to the unit (only one program can hold the unit's serial port). It does not listen to MIDI itself, so the controller groups (`ec4.md`) are not available in it. The tools page is behind the same key as the rest of the page.
 
-Not in the page yet: the slicer and the tools of the pads, and sending the result to the unit in one step (use *Edit live*, or the terminal program).
+### The slicer, the pad tools and sending to the unit
+
+The mode bar under the top bar switches between **PATTERN**, **SLICER** and **PAD**.
+
+| Slicer | Result to a pad | Tools of a pad | On a phone |
+| --- | --- | --- | --- |
+| ![](img/serve-tools-slicer.png) | ![](img/serve-tools-picker.png) | ![](img/serve-tools-padtools.png) | <img src="img/serve-tools-phone-slicer.png" width="200"> |
+
+- **SLICER:** choose a pad with a sample (a bank of 16 buttons). The sample is drawn as a real waveform (lowest to highest sample of each column, the loudness inside it, a time scale), with the slices numbered and the one under the cursor lit. **Tap** the waveform to put the cursor; **CUT AT CURSOR** cuts there (moved to a zero crossing, as in the terminal), **JOIN** joins the slice with the one before, **PLAY SLICE** plays it on the computer's speakers, **ZOOM +/−/ALL** change the window, **UNDO/REDO** go through the slicing.
+- **SLICE SETTINGS** and **SLICER TOOLS** are the terminal's menus with all their pages and values: cut in equal parts, at random places, on the grid, mangle the order, play order, grid, swing, humanize, length, and the slices (or the result) to pads. A choice that is also done (*Cut in equal parts*: how many) has a **DO IT** button next to it.
+- When a menu asks for a pad or a pattern (*Result to a pad*, *Slices to pads*), a dialog with the bank and its 16 cells opens in the page; a text that is asked for (a name) opens as a text field. A dialog that only the terminal can show (the folder picker, the search keyboard, the slicer's tap and order lane) is named in a bar at the top with a button that closes it.
+- **PAD:** choose any pad; the menu of the pad's tools opens (pick a sample, slice, chords and arps, keyboard, rename, reverse, normalize, pitch, pattern with this pad, move, swap, copy...).
+- **SEND** (in the unit's projects): writes the editor's project **over** the unit's project, which is replaced. The button asks twice (it turns into *SURE? REPLACES n* for five seconds). Back the project up first. A project that is edited live is not sent: it is on the unit already.
 
 ## What it needs
 

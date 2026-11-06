@@ -15,8 +15,16 @@
   <div id="unit" class="unit"><i></i><b id="unitText">no unit</b></div>
 </header>
 
+<nav id="modes" aria-label="Tools">
+  <button id="mPattern" class="btn on">PATTERN</button>
+  <button id="mSlicer" class="btn">SLICER</button>
+  <button id="mPad" class="btn">PAD</button>
+</nav>
+<div id="other" class="other" hidden><span id="otherText"></span> <button id="otherClose" class="btn">CLOSE IT</button></div>
+
 <main>
   <section id="left" class="panel">
+   <div id="patview">
     <div class="row" id="patbar">
       <label>BANK <select id="bank"></select></label>
       <label>PATTERN <select id="pat"></select></label>
@@ -26,18 +34,50 @@
     </div>
     <div id="patinfo" class="dim"></div>
     <div id="grid" role="grid" aria-label="The pattern"></div>
+   </div>
+   <div id="sliceview" hidden>
+    <div class="row">
+      <b id="slTitle" class="slt"></b>
+      <button id="slUndo" class="btn">UNDO</button>
+      <button id="slRedo" class="btn">REDO</button>
+      <button id="slClose" class="btn">CLOSE</button>
+    </div>
+    <canvas id="wave" height="170" aria-label="The sample: tap to put the cursor"></canvas>
+    <div class="row">
+      <button id="slCut" class="btn go">CUT AT CURSOR</button>
+      <button id="slJoin" class="btn">JOIN</button>
+      <button id="slPlay" class="btn">▶ PLAY SLICE</button>
+    </div>
+    <div class="row">
+      <button id="zIn" class="btn">ZOOM +</button><button id="zOut" class="btn">ZOOM −</button><button id="zAll" class="btn">ALL</button>
+      <span id="slInfo" class="dim"></span>
+    </div>
+   </div>
     <div id="status" class="status"></div>
     <details id="projects" class="projects">
       <summary>The unit's projects <small id="projSum"></small></summary>
       <div id="projList"></div>
+      <p class="warn"><b>SEND</b> writes the editor's project over the unit's project, which is replaced. The button asks twice.</p>
       <p class="warn">“Edit live” sends every change you keep to the unit's card. Back the project up first (the terminal program: PROJECTS, then <b>a</b>, Back up). The unit shows changed patterns only after it reloads the project, which stops the sound.</p>
     </details>
   </section>
 
   <section id="right" class="panel">
     <div id="idle">
-      <button id="open" class="btn big">PATTERN TOOLS</button>
-      <p class="dim">The tools write into the pattern in front: a trial is in the pattern while a tool is open, <b>Keep it</b> commits it, <b>Back</b> throws it away. “Play here” plays on the computer's speakers.</p>
+      <div id="idPattern">
+        <button id="open" class="btn big">PATTERN TOOLS</button>
+        <p class="dim">The tools write into the pattern in front: a trial is in the pattern while a tool is open, <b>Keep it</b> commits it, <b>Back</b> throws it away. “Play here” plays on the computer's speakers.</p>
+      </div>
+      <div id="idSlicer" hidden>
+        <div class="row"><button id="slSet" class="btn big">SLICE SETTINGS</button></div>
+        <div class="row"><button id="slTools" class="btn big">SLICER TOOLS</button></div>
+        <p class="dim">Tap the waveform to put the cursor, then cut, join or play the slice. The tools cut in equal parts, at random places or on the grid, mangle the order, and put the slices (or the result) on pads.</p>
+      </div>
+
+      <div id="chooser" hidden>
+        <div class="row"><label>BANK <select id="cbank"></select></label><span id="chooseWhy" class="dim"></span></div>
+        <div id="cells"></div>
+      </div>
     </div>
     <div id="menu" hidden>
       <div class="mhead"><button id="mback" class="btn">◂ BACK</button><h2 id="mtitle"></h2></div>
@@ -46,6 +86,13 @@
     </div>
   </section>
 </main>
+<div id="modal" hidden>
+  <div class="dialog">
+    <h2 id="dTitle"></h2>
+    <div id="dBody"></div>
+    <div class="row"><button id="dCancel" class="btn">CANCEL</button><button id="dOk" class="btn go" hidden>OK</button></div>
+  </div>
+</div>
 <script src="tools.js"></script>
 </body>
 </html>

@@ -10,8 +10,9 @@ import (
 // behaves as it does in the terminal: opening it applies it to the pattern as a trial, a change of a setting applies it again, "Keep it" commits it and
 // going back throws it away. The program is not made for two users at a time: every call, and the ticks of Loop, take the lock.
 type Remote struct {
-	mu sync.Mutex
-	a  *App
+	mu   sync.Mutex
+	a    *App
+	view [3]int // the window of the slicer's peaks: from, to, columns
 }
 
 // NewRemote wraps a program (which the caller no longer touches but through the Remote).
@@ -46,6 +47,7 @@ type RItem struct {
 	Vals  []string `json:"vals,omitempty"`
 	Val   int      `json:"val"`
 	Opens bool     `json:"opens,omitempty"` // an action that opens another menu ("...")
+	Runs  bool     `json:"runs,omitempty"`  // a choice that is also done ("Cut in equal parts": the value is how many): Run does it
 }
 
 // RMenu is the menu that is open: its title, its pages (when it has them) and the entries of the page in front.
@@ -102,7 +104,7 @@ func (a *App) remoteMenu() *RMenu {
 		case it.header || it.tab:
 			ri.Kind = "head"
 		case len(it.vals) > 0:
-			ri.Kind, ri.Vals, ri.Val = "choice", it.vals, it.val
+			ri.Kind, ri.Vals, ri.Val, ri.Runs = "choice", it.vals, it.val, it.run != nil
 		default:
 			ri.Kind = "action"
 			ri.Opens = len(it.label) > 3 && it.label[len(it.label)-3:] == "..."
@@ -190,7 +192,7 @@ func (r *Remote) Set(index, val int) *RMenu {
 	if m := r.a.menu; m != nil {
 		if it := m.find(index); it != nil && len(it.vals) > 0 && val >= 0 && val < len(it.vals) && val != it.val {
 			it.val = (val - 1 + len(it.vals)) % len(it.vals) // one step before: Right makes it val, and runs what a change runs
-			r.a.menuKey(Right)
+			r.a.remoteKey(Right)
 		}
 	}
 	return r.a.remoteMenu()
@@ -202,7 +204,7 @@ func (r *Remote) Run(index int) *RMenu {
 	defer r.mu.Unlock()
 	if m := r.a.menu; m != nil {
 		if it := m.find(index); it != nil {
-			r.a.menuKey(A)
+			r.a.remoteKey(A)
 		}
 	}
 	return r.a.remoteMenu()
@@ -212,9 +214,7 @@ func (r *Remote) Run(index int) *RMenu {
 func (r *Remote) Back() *RMenu {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.a.menu != nil {
-		r.a.menuKey(B)
-	}
+	r.a.remoteEscape()
 	return r.a.remoteMenu()
 }
 
@@ -272,6 +272,11 @@ type RState struct {
 	Pad      int      `json:"pad"`                // the track in front
 	Projects []string `json:"projects,omitempty"` // the unit's projects, when there is a link
 	Job      *RJob    `json:"job,omitempty"`      // a load or a send that is under way
+	Screen   string   `json:"screen"`             // "slicer" when the slicer is open, else "pattern"
+	Slicer   *RSlicer `json:"slicer,omitempty"`
+	Picker   *RPicker `json:"picker,omitempty"` // a pad or pattern is asked for
+	Prompt   *RPrompt `json:"prompt,omitempty"` // a text is asked for
+	Other    string   `json:"other,omitempty"`  // a dialog of the program that the page cannot show
 }
 
 // RJob is what the unit is busy with.
@@ -288,11 +293,14 @@ type RJob struct {
 func (r *Remote) State() RState {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.a.remoteState()
+	return r.a.remoteState(r.view)
 }
 
-func (a *App) remoteState() RState {
-	s := RState{Menu: a.remoteMenu(), Pattern: a.remotePattern(), Msg: a.msg, MsgBad: a.msgBad, Playing: a.seqOn, Pad: a.rowPad()}
+func (a *App) remoteState(view [3]int) RState {
+	s := RState{Screen: "pattern", Picker: a.remotePicker(), Prompt: a.remotePrompt(), Other: a.remoteOther(), Menu: a.remoteMenu(), Pattern: a.remotePattern(), Msg: a.msg, MsgBad: a.msgBad, Playing: a.seqOn, Pad: a.rowPad()}
+	if a.scr == Slice && a.sl != nil {
+		s.Screen, s.Slicer = "slicer", a.remoteSlicer(view[0], view[1], view[2])
+	}
 	if a.link != nil {
 		s.Unit = a.link.Name()
 	}
