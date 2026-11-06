@@ -757,7 +757,7 @@
   for (let i = 0; i < 10; i++) {
     const b = document.createElement('button');
     b.innerHTML = String.fromCharCode(65 + i) + '<small></small>';
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); chooseBank(bankKind, i); $('bankPick').hidden = true; });
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); chooseBank(bankKind, i); closeBankSoon(); });
     bankGrid.appendChild(b);
   }
   // One bank for the whole page: choosing it in Pads, Patterns, the Slicer or Tools shows the same bank in all of them. (The bank the slices go to is its own.)
@@ -796,8 +796,11 @@
     box.classList.add('pick');
     box.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!box.parentElement.querySelector('button:disabled')) openBanks(kind); });
   }
-  $('bankX').addEventListener('pointerdown', (e) => { e.preventDefault(); $('bankPick').hidden = true; });
-  $('bankPick').addEventListener('pointerdown', (e) => { if (e.target === $('bankPick')) $('bankPick').hidden = true; });
+  // The dialog stays a moment after the touch: the click that follows it would else land on what is underneath (a pad of the Tools in
+  // the frame) and choose it.
+  function closeBankSoon() { setTimeout(() => { $('bankPick').hidden = true; }, 350); }
+  $('bankX').addEventListener('pointerdown', (e) => { e.preventDefault(); closeBankSoon(); });
+  $('bankPick').addEventListener('pointerdown', (e) => { if (e.target === $('bankPick')) closeBankSoon(); });
 
   // ---- drawing the state, at most once a frame ----
   let queued = false;
