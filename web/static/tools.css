@@ -86,3 +86,6 @@ body.embed .strip .btn small { font-size: 10px; font-weight: 600; letter-spacing
 #sliceview .btn, #chooser .btn.bankchip2 { min-height: 30px; padding: 3px 9px; font-size: 11px; }
 #sliceview .row { gap: 6px; margin-bottom: 6px; } #sliceview .slt { font-size: 13px; }
 #idSlicer .btn.big { min-height: 40px; font-size: 12px; }
+
+/* on a phone the tools come first: under the mode bar, above the pattern, the pads and the unit */
+@media (max-width: 860px) { #right { order: -1; } }
