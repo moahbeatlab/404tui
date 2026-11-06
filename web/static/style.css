@@ -284,8 +284,14 @@ code { background: var(--tile); padding: 1px 6px; border-radius: 6px; }
   .bankbpm { gap: 10px; } .bank b { font-size: 30px; } .bankbpm b { font-size: 24px; }
 }
 @media (orientation: landscape) and (min-width: 1100px) {
-  .slots { grid-template-columns: repeat(4, minmax(0, 1.2fr)) repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); }
-  .slots .slot, .slots .ctl { grid-column: auto; } #app { grid-template-columns: minmax(200px, 18%) minmax(0, 1fr) minmax(380px, 1fr); } }
+  /* wide: a slim stage column, the pads as big as the height allows, the motion panel in a column of its own (not wide enough for one row of seven) */
+  #app { grid-template-columns: minmax(190px, 15%) minmax(0, 1fr) minmax(400px, 30%); }
+  #grid { --gap: 12px; }
+  #rail { gap: 14px; }
+}
+@media (orientation: landscape) and (min-width: 1700px) {
+  #app { grid-template-columns: minmax(220px, 14%) minmax(0, 1fr) minmax(480px, 28%); }
+}
 
 /* ---- narrow landscape (a small phone): the pads and one side panel, with two tabs ---- */
 @media (orientation: landscape) and (max-width: 759px) {
