@@ -18,6 +18,8 @@ Since `v0.1-alpha`.
 - Offline: a folder of projects on the computer, opened and written like the unit's.
 - Pads: rename, find, set up, switches and buses of a bank, export a bank, restore pads, bus by pad name.
 
+- **EC4 pad group** (numbers 76 to 91 on the controller channel): a push mutes a pad of the chosen bank, a turn isolates it; the levels come back when you quit. → [docs/ec4.md](docs/ec4.md)
+
 ### Sequencer and slicer
 
 - The pattern as step boxes with a bar as tall as the velocity, two bars side by side, notes with velocity, length, timing and **pitch** (the pitch byte of a note is decoded).

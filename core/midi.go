@@ -143,6 +143,7 @@ func (a *App) ctlTick() {
 
 // restartCtl closes the controller's input so that it is opened again with the setting as it is now.
 func (a *App) restartCtl() {
+	a.padsRestore()
 	if a.ctl != nil && a.ctl.stop != nil {
 		a.ctl.stop()
 	}
@@ -174,6 +175,8 @@ func (a *App) ctlEvent(e midiin.Event) {
 		return
 	}
 	switch {
+	case e.Data1 >= ctlPadFirst && e.Data1 <= ctlPadLast && (e.Kind == midiin.CC || e.Kind == midiin.NoteOn):
+		a.ctlPadEvent(e)
 	case e.Kind == midiin.CC && e.Data1 >= 60 && e.Data1 <= 69:
 		if bank := e.Data1 - 60; bank != a.ctlBank {
 			a.ctlBank = bank

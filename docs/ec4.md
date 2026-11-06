@@ -82,6 +82,18 @@ hears the same message and notes the pattern. It sends nothing then.
 404tui listens to the controller on a MIDI input **of its own**, beside the unit's: CONFIG, *Controller input with this in its name* (`ec4` by default; `off` for none) and *Controller channel* (16; `off` for none). The unit's own MIDI input
 (the one with `404` in its name) is where the Program Change is sent.
 
+## Pads: mute and isolate
+
+A second group on the same controller channel works on the **pads of the bank that is chosen** (the pattern group's bank: turn a knob of E1 to E10 to choose it, or play a Program Change). Its numbers are 76 to 91, in the order of the encoders, so the 16 encoders lie like the 16 pads of the unit.
+
+| | on the EC4 | does |
+| --- | --- | --- |
+| **push** E1 to E16 | Note On 76 to 91 | **mutes** the pad 1 to 16 of the bank; the same push brings it back |
+| **turn** E1 to E16 | CC 76 to 91 | **isolates** the pad: every other pad of the bank is muted, this one is heard alone. A turn of another knob moves the isolation; the same knob turned again after a pause (about a second) ends it |
+
+The unit has no message for a mute from outside, so 404tui sets the pad's **level to 0** on the unit and puts the level back (the same way as the old PERFORM mute). It needs the unit's connection, so the unit has to be plugged into the computer. The levels also come back when you quit, when the group is switched off in CONFIG (*Pad group: mute and isolate*), and when the controller is changed.
+In a recording the event log gets a `mute` entry for each pad (bank, pad, on), so the replay shows it.
+
 ## Morph: a third group
 
 On **channel 14** the first four encoders are the Morph of Punch (see [web.md](web.md)): encoder 1 to 4 belongs to
