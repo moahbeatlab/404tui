@@ -88,7 +88,8 @@
     s.slices.forEach((sl, i) => {
       const x0 = Math.max(X(sl.start), 0), x1 = Math.min(X(sl.end), W);
       if (x1 < 0 || x0 > W) return;
-      g.fillStyle = i === s.sel ? 'rgba(255,176,0,.16)' : (i % 2 ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.07)'); g.fillRect(x0, 0, x1 - x0, H);
+      g.fillStyle = i === s.active ? 'rgba(255,176,0,.42)' : i === s.sel ? 'rgba(255,176,0,.16)' : (i % 2 ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.07)'); g.fillRect(x0, 0, x1 - x0, H);
+      if (i === s.active) { g.fillStyle = accent; g.fillRect(x0, 0, x1 - x0, 3); }
       g.fillStyle = dim; g.font = '11px system-ui'; if (x1 - x0 > 16) g.fillText(String(i + 1), x0 + 4, 12);
     });
     const mins = s.mins || [], maxs = s.maxs || [], rms = s.rms || [], n = maxs.length || 1, mid = H / 2, amp = H / 2 - 8, cw = W / n;
@@ -295,5 +296,9 @@
   }
 
   call({ op: 'state' });
-  setInterval(() => { if (!busy && !document.hidden) call({ op: 'state' }); }, 1000);
+  // the state is asked for every second, and about ten times a second while the order plays, so that the slice that sounds is lit
+  (function poll() {
+    if (!busy && !document.hidden) call({ op: 'state' });
+    setTimeout(poll, st && st.slicer && st.slicer.playing ? 120 : 1000);
+  })();
 })();

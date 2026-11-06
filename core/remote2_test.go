@@ -330,3 +330,29 @@ func TestTheSlicingStaysWhenThePatternIsShownAndEndsOnClose(t *testing.T) {
 		t.Fatalf("CLOSE ends it: %+v", st.Resume)
 	}
 }
+
+func TestTheSliceThatSoundsIsReported(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	r := NewRemote(a)
+	r.OpenSlicer(1)
+	r.SlicerMenu("tools")
+	r.Run(findItem(r.Menu(), "Cut in equal parts"))
+	r.Escape()
+	if r.State().Slicer.Active != -1 {
+		t.Fatal("nothing sounds yet")
+	}
+	r.SlicerOrder(true)
+	seen := map[int]bool{}
+	end := time.Now().Add(2 * time.Second)
+	for time.Now().Before(end) && len(seen) < 3 {
+		if s := r.State().Slicer; s.Active >= 0 && s.Active < len(s.Slices) {
+			seen[s.Active] = true
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(seen) < 2 {
+		t.Fatalf("the slice that sounds moves on: %v", seen)
+	}
+}

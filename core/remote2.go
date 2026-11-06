@@ -42,6 +42,7 @@ type RSlicer struct {
 	Order   []int    `json:"order"`
 	Mode    string   `json:"mode"`
 	Playing bool     `json:"playing"` // the order plays in a loop (on the computer's speakers)
+	Active  int      `json:"active"`  // the slice that sounds now while the order plays (-1 for none)
 	CanUndo bool     `json:"canUndo"`
 	CanRedo bool     `json:"canRedo"`
 }
@@ -122,7 +123,12 @@ func (a *App) remoteSlicer(from, to, cols int) *RSlicer {
 		return nil
 	}
 	s := &RSlicer{Pad: a.spad, Label: a.label(a.spad), Name: a.info.Pads[a.spad].Name, Frames: a.sl.Frames, Rate: 48000, At: a.at, Sel: a.sliceAt(a.at),
-		Order: a.sl.Order, Mode: modeNames[int(a.sl.Mode)%len(modeNames)], Slices: []RSlice{}, Playing: a.orderOn, CanUndo: len(a.slUndo) > 0, CanRedo: len(a.slRedo) > 0}
+		Order: a.sl.Order, Mode: modeNames[int(a.sl.Mode)%len(modeNames)], Slices: []RSlice{}, Playing: a.orderOn, Active: -1, CanUndo: len(a.slUndo) > 0, CanRedo: len(a.slRedo) > 0}
+	if a.orderOn {
+		if i := a.playingStep(); i >= 0 && i < len(a.placed) && !a.placed[i].Rest {
+			s.Active = a.placed[i].Slice
+		}
+	}
 	if to <= from {
 		from, to = 0, a.sl.Frames
 	}
