@@ -26,10 +26,10 @@ One page for each screen of the program, with its picture, what it is for, what 
 | `5` SLICE | [slicer.md](slicer.md) |
 | `6` CONFIG | [config.md](config.md) |
 | `sp404 replay`: the recording as a picture, the video editor | [replay.md](replay.md) |
-| `sp404 serve`: Perform on a phone, and the pattern tools in the page | [web.md](web.md) |
+| `sp404 serve`: Perform on a phone, and the pattern, slicer and pad tools in the page | [web.md](web.md) |
 
 ## Earlier pages
 
-Perform ([perform.md](perform.md)), the Faderfox EC4 map ([ec4.md](ec4.md)) and the Looper ([looper.md](looper.md)) were tabs of the earlier terminal program, which is gone; what is left of them is reached through `sp404 serve`.
+Perform ([perform.md](perform.md)) and the Faderfox EC4 map ([ec4.md](ec4.md)) were tabs of the earlier terminal program, which is gone; what is left of them is reached through `sp404 serve`. (The Looper is gone.)
 
 Everywhere: `1`-`6` go to a screen, `g h` and `g l` the one before and after, `Ctrl-R` records the unit's audio, `?` lists the keys, `q` quits. `sp404 check` checks the installation.

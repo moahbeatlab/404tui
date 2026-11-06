@@ -25,7 +25,14 @@ Since `v0.1-alpha`.
   Pattern templates from House to Footwork, per-bank tempo, copy and move patterns, undo and redo everywhere.
 - **Slicer:** cut by hand, at the onsets, equal parts, random places, on the grid; reorder, mangle, roll; slices to pads with a pattern under them. Switching bank or pattern while a pattern plays leaves the loop alone.
 
-- **Tools in the phone page:** `sp404 serve` has a TOOLS page with the pattern tools (every page, setting and value of the terminal, a trial that is kept or thrown away, play on the computer, the unit's projects), the **slicer** (a real waveform, cut, join, play, all menus), the **tools of a pad**, dialogs for a pad or a text a menu asks for, and **SEND** of the editor's project to the unit. - The phone page: **TOOLS** is a tab of its own; the unit's current project is always the one shown (no project list); one bank for the whole page; the Looper's LOOP page is removed, its Slicer stays as the SLICER tab.
+### The phone page: Tools
+
+- **`sp404 serve` has a TOOLS tab** (PADS, PATTERNS, MOTION, TOOLS, STAGE) with the tools of the program, every page, setting and value of the terminal, on a phone and on a laptop. It works on **the project that is loaded on the unit** (it follows the unit when the project is changed there). → [docs/web.md](docs/web.md)
+- **Pattern:** the tracks as tiles to choose from, the 16 patterns of the bank, the tools as a sheet that slides up (every tool a tile, a trial that is kept, as one step and back one menu, or discarded), play on the computer, undo and redo.
+- **Live or copy:** edited live by default (a kept tool is written to the unit, which then reads the project again; it waits while the unit plays; RELOAD UNIT), or a copy with SEND TO UNIT.
+- **Slicer:** a real waveform, touch and slide for the cursor, cut, join, play the slice or the whole order in a loop (the slice that sounds is lit; changes are heard at once), shuffle, marks for reversed, rolled, pitched and chance slices, all settings and tools of the terminal, the slicing kept when you go to another mode.
+- **Pad tools** and the dialogs a menu opens (a pad or pattern to choose, a text to type) in the page.
+- **One bank** for the whole page (Pads, Patterns, Tools). The Looper tab, with its Slicer, is gone from the page.
 
 ### Recording and replay
 

@@ -121,3 +121,6 @@ main:has(#right[hidden]) { grid-template-columns: minmax(0, 1fr); }
 .unitbar:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; } .unitbar b { margin: 0; }
 .ub-btns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; } .ub-btns .btn { min-height: 34px; font-size: 11px; padding: 4px 6px; }
 .ub-btns .btn[hidden] { display: none; }
+
+/* on a wide screen the page keeps a readable width, in the middle */
+@media (min-width: 900px) { main { max-width: 860px; margin: 0 auto; } #modes { max-width: 860px; margin-left: auto; margin-right: auto; } .other { max-width: 860px; margin-left: auto; margin-right: auto; } }

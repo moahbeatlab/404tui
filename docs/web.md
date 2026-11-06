@@ -36,9 +36,11 @@ address and a key if it was not opened from the link), or give it in the link: `
 
 ## On the phone
 
-| PADS | PATTERNS | MOTION | TOOLS | STAGE |
+| PADS | PATTERNS | MOTION | TOOLS |
 | --- | --- | --- | --- |
-| <img src="img/serve-pads.png" width="200"> | <img src="img/serve-patterns.png" width="200"> | <img src="img/serve-motion.png" width="200"> | <img src="img/serve-looper.png" width="200"> |
+| <img src="img/serve-pads.png" width="200"> | <img src="img/serve-patterns.png" width="200"> | <img src="img/serve-motion.png" width="200"> | <img src="img/serve-tools-pattern.png" width="200"> |
+
+The tabs under the screen are PADS, PATTERNS, MOTION, TOOLS and STAGE (the bank, tempo, bar and beat, record, mix).
 
 (Pictures taken against the simulator, so no clock and no level.)
 
@@ -51,7 +53,7 @@ the pads in the middle, STAGE on the left (bank, tempo, bar and beat,
 what plays now and next, record, focus, mix, next → now, clear next), MOTION on the right. On a small
 phone the side panel is one of two tabs, STAGE or MOTION.
 
-*Portrait*: three tabs under the screen, PADS, MOTION and STAGE.
+*Portrait*: the five tabs under the screen.
 
 Everything reacts when the finger goes **down**, not when it comes up, and the page shows the round trip
 to the program at the top right (a few milliseconds on a good network).
@@ -160,49 +162,62 @@ Punch, so they move the effects the unit has (no others). Pick an LFO (1 to 4), 
 
 Not tried on the unit yet: how the 7-bit steps sound on each knob, and how tight a pump feels against a kick.
 
-## Tools: the pattern, slicer and pad tools in the page
+## Tools: the pattern, slicer and pad tools
 
-The **TOOLS** tab (the bottom bar, beside PADS, PATTERNS, MOTION and STAGE; in landscape the button at the top right goes Perform, Patterns, Tools) opens the tools of the program (the same ones as SEQ in the terminal: fill, Euclid, echo, ratchet, LFO and ENV on the notes, chance, cycle, nudge, pitch, swing and humanize, templates, copy and move patterns, tempo of a bank and the rest) in the page, with every page, setting and value that the terminal has.
+The **TOOLS** tab (in landscape the button at the top right goes Perform, Patterns, Tools) has the tools of the program in the page, with every page, setting and value that the terminal has ([tools.md](tools.md)). It works on **the project that is loaded on the unit**: there is no list of projects to choose from, and when the project is changed on the unit the page opens the new one within a few seconds.
 
-<img src="img/serve-tools-tab-phone.png" width="240"> ![The TOOLS tab](img/serve-tools-tab-laptop.png)
+Three modes under the top bar: **PATTERN**, **SLICER** and **PAD**.
 
-| In a browser | On a phone | The unit's projects |
-| --- | --- | --- |
-| ![](img/serve-tools-desktop.png) | <img src="img/serve-tools-phone.png" width="240"> | <img src="img/serve-tools-projects.png" width="240"> |
-
-- **The tracks** of the pattern in front are tiles: the pad, its sample and how many notes it has (the pattern itself is on the unit). A tap on a tile puts that track in front, lit in the accent colour: the tools act on it. **BANK** opens the page's own bank dialog and the 4 × 4 grid of patterns under it chooses the pattern.
-- **A menu is a sheet** that slides up over the page (the page is dimmed behind it, a handle on top, the title, and **DONE**; a tap on the dimmed page closes it too). A tool's dialog has **◂ DISCARD** instead, which throws the trial away.
-- **PATTERN TOOLS** (in the toolbar of the pattern, which stays at the top while the page scrolls; the slicer's **SETTINGS** and **TOOLS** are under its waveform) opens the menu of the pattern, as `t` does on SEQ: its pages (*Pattern*, *Timing*, *Length*, *Notes*, *Tracks*), and under them every tool. A choice (a rhythm, a velocity, a gate...) is a list of **all** its values, with ◂ and ▸ to step; a tool that opens a dialog of its own (Fill, Euclid...) lists all its settings the same way.
-- **A tool works on a trial.** Opening it applies it to the pattern at once, and a change of a setting applies it again; the line under the pattern says what it did ("euclid 5/16 on A1: 20 notes"). **Keep it** commits the trial as one step, **BACK** throws it away (and goes back a menu). **UNDO** and **REDO** go through what was kept.
-- **PLAY HERE** plays the pattern in a loop on **the speakers of the computer that runs `sp404 serve`** (not on the unit), so each trial can be heard while you change it.
-- **The unit's projects** (the list under the pattern, when a unit is found): **OPEN A COPY** copies the project from the unit into the editor (the unit is not changed); **EDIT LIVE** does the same and then sends every change you keep to the unit's card as it is made. Back a project up before you edit it live. Pad changes show on the unit at once; **patterns written to the unit show only after the unit reloads the project, which stops its sound** (the terminal program has a *Reload on the unit* entry for it).
-- If the editor has work that is not saved, the program asks before it replaces it, in the same menu.
-
-The page runs in the same process as the rest of `sp404 serve` and uses its connection to the unit (only one program can hold the unit's serial port). It does not listen to MIDI itself, so the controller groups (`ec4.md`) are not available in it. The tools page is behind the same key as the rest of the page.
-
-### On a laptop or a desktop
-
-The page uses the width: the pattern (or the waveform) on the left, the menu of the tool on the right.
-
-| Pattern tool (Euclid), 1440 × 900 | Slicer, 1440 × 900 |
-| --- | --- |
-| ![](img/serve-laptop-tools-euclid.png) | ![](img/serve-laptop-slicer.png) |
-
-Pictures at 1920 × 1080: [Perform](img/serve-desktop-perform.png), [Euclid](img/serve-desktop-tools-euclid.png), [slicer](img/serve-desktop-slicer.png), [pad tools](img/serve-desktop-padtools.png).
-
-### The slicer, the pad tools and sending to the unit
-
-The mode bar under the top bar switches between **PATTERN**, **SLICER** and **PAD**.
-
-| Slicer | Result to a pad | Tools of a pad | On a phone |
+| Pattern | The tools | A tool's trial | The bank |
 | --- | --- | --- | --- |
-| ![](img/serve-tools-slicer.png) | ![](img/serve-tools-picker.png) | ![](img/serve-tools-padtools.png) | <img src="img/serve-tools-phone-slicer.png" width="200"> |
+| <img src="img/serve-tools-pattern.png" width="200"> | <img src="img/serve-tools-menu.png" width="200"> | <img src="img/serve-tools-trial.png" width="200"> | <img src="img/serve-tools-bank.png" width="200"> |
 
-- **SLICER:** choose a pad with a sample (a bank of 16 buttons). The sample is drawn as a real waveform (lowest to highest sample of each column, the loudness inside it, a time scale), with the slices numbered and the one under the cursor lit. A slice that is reversed, rolls, is pitched or has a chance below 100 carries a small mark (◂ REV, × 4, +2 st, 50%). **Tap** the waveform to put the cursor; **CUT AT CURSOR** cuts there (moved to a zero crossing, as in the terminal), **JOIN** joins the slice with the one before, **PLAY SLICE** plays it on the computer's speakers, **ORDER** plays the whole order in a loop (it turns into **STOP**; the slice that sounds is lit on the waveform, and the page asks for the position about ten times a second while it plays), **SHUFFLE** puts the slices in a new order (a loop that plays takes it at once; undo puts it back), **ZOOM +/−/ALL** change the window, **UNDO/REDO** go through the slicing. Switching to PATTERN or PAD and back to SLICER keeps the slicing as it was (the cuts, the order and the settings); only **CLOSE** ends it.
-- **SLICE SETTINGS** and **SLICER TOOLS** are the terminal's menus with all their pages and values: cut in equal parts, at random places, on the grid, mangle the order, play order, grid, swing, humanize, length, and the slices (or the result) to pads. A choice that is also done (*Cut in equal parts*: how many) has a **DO IT** button next to it.
-- When a menu asks for a pad or a pattern (*Result to a pad*, *Slices to pads*), a dialog with the bank and its 16 cells opens in the page; a text that is asked for (a name) opens as a text field. A dialog that only the terminal can show (the folder picker, the search keyboard, the slicer's tap and order lane) is named in a bar at the top with a button that closes it.
-- **PAD:** choose any pad; the menu of the pad's tools opens (pick a sample, slice, chords and arps, keyboard, rename, reverse, normalize, pitch, pattern with this pad, move, swap, copy...).
-- **SEND** (in the unit's projects): writes the editor's project **over** the unit's project, which is replaced. The button asks twice (it turns into *SURE? REPLACES n* for five seconds). Back the project up first. A project that is edited live is not sent: it is on the unit already.
+### Pattern
+
+- **The toolbar** (it stays at the top while the page scrolls): **BANK** opens the page's own bank dialog (the bank is one for the whole page: Pads, Patterns and Tools always show the same one, and the unit moves to it), **PATTERN TOOLS** opens the tools, and **PLAY HERE**, **UNDO** and **REDO** are under them.
+- **The tracks** of the pattern are tiles: the pad, its sample and how many notes it has (the pattern itself is on the unit). Tap one to put that track in front, outlined in the accent colour: the tools act on it.
+- **The 16 patterns** of the bank are a grid under the unit bar; a tap chooses the pattern. The ones with notes are outlined.
+- **A menu is a sheet** that slides up over the page (the page dimmed behind it, a handle, the title, **DONE**; a tap on the dimmed page closes it). **PATTERN TOOLS** has the pages *Pattern*, *Timing*, *Length*, *Notes* and *Tracks* as the terminal's `t` has them; every tool is a tile, and a tap opens its options. A choice (a rhythm, a velocity, a gate...) lists **all** its values, with ◂ and ▸ to step.
+- **A tool works on a trial.** Opening it applies it to the pattern at once, and a change of a setting applies it again; the line under the tracks says what it did ("kept: euclid 6/16 on A3: 24 notes"). **Keep it** commits the trial as one step **and goes back one menu**; **◂ DISCARD** throws it away. **UNDO** and **REDO** go through what was kept.
+- **PLAY HERE** plays the pattern in a loop on **the speakers of the computer that runs `sp404 serve`**, not on the unit, so each trial can be heard while you change it.
+
+### The unit: live, copy and send
+
+The line under the tracks names the unit's project. It is edited **LIVE** by default: a tool that is kept is written to the unit, and then the unit is told to read the project again so that the pattern shows on it. **That stops the sound on the unit.** While the unit plays, the reload waits (the pattern is written, and the page says so); stop the unit, or press **RELOAD UNIT**, and it shows. The line under the pattern says "sending to the unit…" while a write is on its way, and why when it fails.
+
+Press **LIVE** to switch to **COPY**: nothing is written to the unit, and **SEND TO UNIT** writes the editor's project over the unit's project when you want it (it asks twice, as it replaces the project). Changing the unit's project discards the changes of a copy. Back a project up before you edit it live (the terminal program: PROJECTS, then `a`).
+
+### Slicer
+
+| The slicer | Its tools | On a laptop |
+| --- | --- | --- |
+| <img src="img/serve-tools-slicer.png" width="200"> | <img src="img/serve-tools-slicer-menu.png" width="200"> | <img src="img/serve-tools-laptop-slicer.png" width="360"> |
+
+- Choose a pad with a sample (the bank is a button, the pads are a grid). The sample is a real waveform (lowest to highest sample of each column, the loudness inside it, a time scale) with the slices numbered and the one under the cursor lit. A slice that is reversed, rolls, is pitched or has a chance below 100 carries a small mark (◂ REV, × 4, +2 st, 50%).
+- **Touch the waveform and slide**: the cursor follows the finger. **ZOOM −/ALL/+** by the info line change the window.
+- **PLAY:** **▶ ORDER** plays the whole order in a loop (it turns into **■ STOP**; the slice that sounds is lit; any change of a setting, a cut, the order or an undo is heard in the loop at once), **▶ SLICE** plays the one under the cursor, **SHUFFLE** puts the slices in a new order. It plays on the computer's speakers.
+- **CUT:** **CUT AT CURSOR** (moved to a zero crossing, as in the terminal) and **JOIN** (with the slice before).
+- **MORE:** **SETTINGS** and **TOOLS** are the terminal's menus with all their pages: cut in equal parts, at random places, on the grid, mangle, play order, grid, swing, humanize, length, and the slices (or the result) to pads. A choice that is also done (*Cut in equal parts*: how many) has a **DO IT** button.
+- **UNDO** and **REDO** go through the slicing. Switching to PATTERN or PAD and back keeps the slicing as it was (the cuts, the order, the settings); only **CLOSE** ends it.
+- When a menu asks for a pad or a pattern (*Result to a pad*, *Slices to pads*) a dialog with the bank and its 16 cells opens; a name that is asked for opens as a text field. A dialog that only the terminal can show (the folder picker, the search keyboard, the slicer's tap and order lane) is named in a bar at the top with a button that closes it.
+
+### Pad
+
+Choose any pad: the menu of the pad's tools opens (pick a sample, slice, chords and arps, keyboard, rename, reverse, normalize, pitch, pattern with this pad, move, swap, copy, and the tools of the bank).
+
+<img src="img/serve-tools-pad.png" width="200">
+
+### On a laptop
+
+The page keeps a readable width in the middle of the window.
+
+| Pattern | The tools |
+| --- | --- |
+| ![](img/serve-tools-laptop.png) | ![](img/serve-tools-laptop-menu.png) |
+
+### Notes
+
+The page runs in the same process as the rest of `sp404 serve` and uses its connection to the unit (only one program can hold the unit's serial port). It does not listen to MIDI itself, so the controller groups ([ec4.md](ec4.md)) are not in it. It is behind the same key as the rest of the page. The Looper tab of earlier versions, with its Slicer, is gone: the slicer is here.
 
 ## What it needs
 
@@ -229,18 +244,6 @@ network carries: a slow phone skips states), and takes commands as JSON: `{"a":"
 (`bus`), `bars` (`n`), `dub`, `cue` (`i`, `n` 1 now, 2 next), `nextnow`, `clearnext`. The code is in
 `web/` (server and page) and `tui/web.go` (state and commands).
 
-## The bank is one for the whole page
-
-The bank chip at the top (BANK) is global: a bank chosen on Patterns, Pads, the Slicer or Tools is the bank on all of them, and the unit moves to it as well. (The bank the Slicer's slices go to, TO, is its own.)
-
-## The project is the unit's
-
-The Tools tab always shows the project that is loaded on the unit, with its pads and patterns (a row of the 16 patterns of the bank, the used ones lit): there is no list of projects to choose from. When the unit's project is changed, the page loads the new one within a few seconds. It is edited **LIVE**: a tool that is kept (**Keep it**, which also goes back one menu) is written to the unit, and then the unit is told to read the project again so that the pattern shows on it (**this stops the sound on the unit**). While the unit plays, the reload waits: the pattern is written, and the page says so; stop the unit, or press **RELOAD UNIT**, and it shows. The line under the pattern says "sending to the unit…" while it is on its way, and why when a write fails. Switch to **COPY** to keep the unit unchanged; in a copy, **SEND TO UNIT** writes the editor's project over the unit's (asks twice) and the unit reads the project again. Changing the unit's project discards the changes of a copy.
-
-## The Looper page and its Slicer are gone
-
-The Looper tab and the Slicer that was on it were removed from the page: the slicer is in the **TOOLS** tab (SLICER mode).
-
 ## Level meter
 
 A stereo level meter (left and right, with the held peak as a white mark and a **CLIP** light that stays on for
@@ -249,34 +252,11 @@ there to see whether the sound is loud enough: it shows what the unit sends over
 open (on Linux the program listens itself, elsewhere ffmpeg or sox does), and the sound being recorded (marked **REC**) while Ctrl-R runs. The number is the loudest recent peak in dB below full scale: aim for the yellow, not the red.
 If the computer cannot listen, the meter says why.
 
-The bank chip at the top left of the page opens a list of the ten banks with the number of pads that hold a sample; choosing one moves the unit to that bank, as the bank keys do in the Pads view, and the Pads view shows it.
-
-In the Looper and the Slicer the bank boxes (BANK, FROM, TO) can be tapped for a list of all ten banks, so a bank is chosen in one tap.
-
-
-In the Slicer, holding a pad (0.5 s) mutes it, in the bank the grid shows (again brings it back); muted pads are striped red. A tap
-chooses the pad. The Looper's and Slicer's settings (bank, bars, slices …) are no longer held up while the unit is busy reading; a command that
-needs the unit says "busy (…)" and why, instead of doing nothing.
-
-The bank chip at the top follows the page: on the Pads and Stage pages it is the unit's bank (BANK), in the Looper it is the bank the loops go to (LOOP), and on the Slicer page it is the bank a pad is taken from (FROM). A pad the Slicer puts on a pad of a bank starts muted (level 0); hold it in the Slicer, or mute it on the Pads page, to bring it in at the level it had.
-
-The Slicer's settings (slices, cuts, order, grid 1/2 to 1/16, swing) are chosen from a list, as in the LFO page; the list for the order says what shuffle (every slice once, mixed) and random (every step a random slice, some twice, some never) mean. What was rolled (the cuts, the order, the dice) is kept when you change a setting, also after the slices are made and with PREVIEW off: the waiting slices are cut again from the same roll, so you can play with the grid, swing and the mangle dice on one order (a different number of slices cannot keep it). Holding the order button (0.5 s) rolls a new order of the same slices; SLICE and NEW VERSION roll everything anew.
-
-The Slicer page has a **MANGLE** button: dice that decide, for the slices, DROP-OUTS (how many of them stay silent), REVERSE (how many are played backwards), PITCH (how many go up or down, by up to the PITCH RANGE of 2, 5 or 12 semitones, at random), ROLLS (how many stutter 2 to 8 times), HUMANIZE (loudness, and timing on a grid, in percent) and FADE (at the ends of every slice). The first four count slices, from none to all of them; the slices they hit are fixed by the roll, so one more slice keeps the ones it had. The result always has the length of the original, so it still fits the pattern; a pitched slice keeps its place in the rhythm (a shorter one ends in silence, a longer one is cut).
-
-**PREVIEW** (next to SLICE): hear the result before it is on any pad. The slices stay in the computer's memory and play as a loop
-on the computer's audio output, as the Slicer of the terminal does; send that output to the unit (USB cable, the unit's EXT SOURCE
-button, and the unit as the computer's sound output) and the loop is in the mix. The loop starts on beat 1 of the unit's clock (at once
-without a clock) and has the length of the sample, so it stays in step with a pattern of that length. Change any setting (slices, cuts,
-order, grid, swing, the dice, NEW VERSION): the slices are cut again and take over from the loop's next round, without a break. Then
-choose the pad and press **PLACE** as ever: the loop stops and the slices go on the pad (on beat 1 of the pattern). **DISCARD** stops the loop.
-The loop can drift from the unit's clock over a long time (two clocks), and the audio output has a delay of its own: it is a preview,
-not a replacement for the pad. Needs an audio output on the computer.
-
+The bank chip at the top left of the page opens a list of the ten banks with the number of pads that hold a sample; choosing one moves the unit to that bank, as the bank keys do in the Pads view. **The bank is one for the whole page**: the Pads, the Patterns and the Tools show the same one.
 
 ## Patterns
 
-The **PATTERNS** tab in portrait (the button at the top right in landscape goes Perform, Looper, Patterns) shows the 16 patterns of a bank, each with the number of pads it plays; empty slots are dark. The pattern that plays is **lit**. The program finds it from the pads the unit plays (the unit sends every note of a pattern over MIDI, and the patterns whose pads fit what is heard are looked for in all ten banks), and the page follows it to its bank when it changes; the chip at the top left (PTN there) chooses another bank, which stays until the pattern that plays changes.
+The **PATTERNS** tab in portrait (the button at the top right in landscape goes Perform, Patterns, Tools) shows the 16 patterns of a bank, each with the number of pads it plays; empty slots are dark. The pattern that plays is **lit**. The program finds it from the pads the unit plays (the unit sends every note of a pattern over MIDI, and the patterns whose pads fit what is heard are looked for in all ten banks), and the page follows it to its bank when it changes; the chip at the top left (PTN there) chooses another bank, which stays until the pattern that plays changes.
 
 Tapping a pattern makes the unit play it **next**: the program sends a MIDI Program Change on the channel of the bank (1 for A to 10 for J) with the number of the pattern, as 404jam does. The unit needs **PC Rx** switched on (and the MIDI mode B of its MIDI settings). The pattern sent **blinks until it is really playing**: it becomes the lit one when the pads heard in the last bar fit its notes clearly better than the notes of the pattern that played (so the old pattern keeps the light until the unit has switched, whenever that is). Two patterns that no pad tells apart (or one that has too few notes to hear) take over after a whole pattern has gone by after the time the old one was due to end. The unit does not confirm anything, so all of this is the program's reading of what the unit plays.
 
@@ -293,7 +273,7 @@ SP-404MKII** picks the unit's MIDI port (as 404jam does), **Try the demo** runs 
 What works there, as in the program: the clock (BPM, bar and beat), the pads (a tap plays the pad on the channel of the bank), **Motion**, **Punch**
 with its presets, **Morph** (slider, and the EC4 group on channel 14), the four **LFOs**, and the **Patterns** page (a Program Change). The effects
 and the knobs a bus has are what the unit says over MIDI, and what was punched is kept in the browser. What needs the unit's USB serial link is
-not there: the pad names, levels and samples, recording, the level meter, the Looper and the Slicer.
+not there: the pad names, levels and samples, recording, the level meter and the Tools.
 
 `engine.js` is a port of `tui/motion.go`, `punch.go`, `morph.go`, `lfo.go` and of what `midi.go` does with a message: change one, change the other.
 `fxdata.js` (the effects, their knobs and the presets) is made from `tui/fxnames.go`, `fxparams.go` and `punchpresets.go`; a test fails when they differ.

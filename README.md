@@ -19,13 +19,14 @@ It is a Go port of [SparkyMK2](https://github.com/TuscanPL/SparkyMK2), whose aut
 - **Files and projects:** a ranger-style file browser with search, favourites, tags and an index of the unit's card; offline projects in a folder, the unit's 16 projects as tiles; back up, restore, send, edit live.
 - **Record a set:** `Ctrl-R` records the unit's audio (24-bit, 48 kHz) with an event log of what the unit did (pads, knobs, clock, status).
 - **Replay and video:** play a recording back as a picture of the unit, caption it, add chapters, cuts and a camera, and render an MP4 for YouTube, Instagram and TikTok (wide or vertical). → [replay.md](docs/replay.md)
+- **On a phone or a laptop (`sp404 serve`):** the pattern, slicer and pad tools in a browser, on the project that is on the unit, with a trial you keep, a real waveform for slicing, and live editing of the unit. → [docs/web.md](docs/web.md)
 - **Perform (experimental):** a stage dashboard, pad codes, the Faderfox EC4 map, and a phone page that also runs without any program, over Web MIDI, at <https://moahbeatlab.github.io/404tui/> ([docs/web.md](docs/web.md)). → [`docs/`](docs/README.md)
 
 ## Status: v0.1
 
 - **Checked against a real SP-404MKII:** reading the unit's project (pads and patterns), polling its status, MIDI input (pad notes, clock, start/stop), recording its USB audio, pressing a pad over USB, setting a pad's
   level (which is how the program mutes) and switching the pattern with a Program Change. What the unit does and does not tell the program: [docs/unit-messages.md](docs/unit-messages.md).
-- **Tried against the simulator and real project files only:** sending, restoring and live-editing whole projects, and the files of the unit and its card. `sp404 doctor` compares the program with the unit read-only; run it first (see below).
+- **Tried against the simulator and real project files, and only in part on a unit:** sending, restoring and live-editing whole projects, the files of the unit and its card, and the Tools of the phone page (a pattern written live shows on the unit after it reads the project again, which stops its sound). `sp404 doctor` compares the program with the unit read-only; run it first (see below).
 - **The handheld version** is tried on an R36S in part: see [docs/handheld.md](docs/handheld.md).
 - It is not signed, and not affiliated with Roland.
 
@@ -65,7 +66,7 @@ Keys are vim-style (`h j k l`, `g`/`G`), `y` is the shift, `?` lists every key. 
 | Command | What it does |
 | --- | --- |
 | `sp404` | the program (also `sp404 menu`) |
-| `sp404 serve` | Perform on a phone or tablet, served on the network ([docs/web.md](docs/web.md)) |
+| `sp404 serve` | Perform and the Tools in a browser on a phone, tablet or laptop, served on the network ([docs/web.md](docs/web.md)) |
 | `sp404 replay take.wav` | the replay of a recording in the browser, with the editor ([docs/replay.md](docs/replay.md)) |
 | `sp404 replay render take.wav -o take.mp4` | the video (`-format vertical` for shorts and reels) |
 | `sp404 probe pad\|pc\|watch` | what the unit does when it is told something, and what it says when you do something ([docs/unit-messages.md](docs/unit-messages.md)) |
