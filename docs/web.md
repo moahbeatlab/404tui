@@ -179,6 +179,16 @@ The **TOOLS** button in the top bar of the page opens the tools of the program (
 
 The page runs in the same process as the rest of `sp404 serve` and uses its connection to the unit (only one program can hold the unit's serial port). It does not listen to MIDI itself, so the controller groups (`ec4.md`) are not available in it. The tools page is behind the same key as the rest of the page.
 
+### On a laptop or a desktop
+
+The page uses the width: the pattern (or the waveform) on the left, the menu of the tool on the right.
+
+| Pattern tool (Euclid), 1440 × 900 | Slicer, 1440 × 900 |
+| --- | --- |
+| ![](img/serve-laptop-tools-euclid.png) | ![](img/serve-laptop-slicer.png) |
+
+Pictures at 1920 × 1080: [Perform](img/serve-desktop-perform.png), [Euclid](img/serve-desktop-tools-euclid.png), [slicer](img/serve-desktop-slicer.png), [pad tools](img/serve-desktop-padtools.png).
+
 ### The slicer, the pad tools and sending to the unit
 
 The mode bar under the top bar switches between **PATTERN**, **SLICER** and **PAD**.
