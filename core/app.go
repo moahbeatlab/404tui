@@ -171,9 +171,10 @@ type App struct {
 	mg                mangleSet // the dice of the slicer
 	autoMax           int       // the most slices Y+A cuts at the onsets (0: 16)
 	peakCache         map[peakKey]*peakBlocks
-	aHeld             bool // A is down in SEQ: the arrows edit the note under it
-	aDelete           bool // A went down on a note: if nothing is edited, letting go takes it off
-	aPad              int  // the note being edited
+	waveMemo          waveCache // the slicer's waveform for the page, as it was last worked out
+	aHeld             bool      // A is down in SEQ: the arrows edit the note under it
+	aDelete           bool      // A went down on a note: if nothing is edited, letting go takes it off
+	aPad              int       // the note being edited
 	aTick             uint32
 	aSession          int // counts the holds of A, so that an edit session is one undo step
 	undoSes           int

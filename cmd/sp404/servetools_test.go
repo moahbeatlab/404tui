@@ -124,3 +124,50 @@ func TestTheToolsRouteNeedsTheKey(t *testing.T) {
 		t.Fatalf("an unknown operation: %d", resp.StatusCode)
 	}
 }
+
+func TestTheToolsPageSlicesAndOpensPadTools(t *testing.T) {
+	ts, remote := toolsServer(t, "")
+	remote.Do(func(a *core.App) {
+		if err := a.Script("A A D R D D A  R A A D A  R A A U U U A", nil); err != nil { // a sample on a pad, the way a user does it
+			t.Fatal(err)
+		}
+	})
+	st := post(t, ts, "", `{"op":"state"}`)
+	// the demo pads: find one with a sample
+	resp, err := http.Post(ts.URL+"/tools/api", "application/json", strings.NewReader(`{"op":"pads"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pads []core.RPad
+	json.NewDecoder(resp.Body).Decode(&pads)
+	resp.Body.Close()
+	pad := -1
+	for _, p := range pads {
+		if p.Has {
+			pad = p.Pad
+			break
+		}
+	}
+	if pad < 0 {
+		t.Skip("the demo project has no pad with a sample")
+	}
+	st = post(t, ts, "", `{"op":"slicer","pad":`+itoa(pad)+`}`)
+	if st.Screen != "slicer" || st.Slicer == nil || len(st.Slicer.Peaks) == 0 {
+		t.Fatalf("the slicer: %+v", st.Slicer)
+	}
+	st = post(t, ts, "", `{"op":"slicer-cut","i":`+itoa(st.Slicer.Frames/2)+`}`)
+	if len(st.Slicer.Slices) != 2 {
+		t.Fatalf("a cut: %d slices", len(st.Slicer.Slices))
+	}
+	st = post(t, ts, "", `{"op":"slicer-menu","kind":"tools"}`)
+	if st.Menu == nil {
+		t.Fatal("the slicer's tools are a menu")
+	}
+	st = post(t, ts, "", `{"op":"escape"}`)
+	st = post(t, ts, "", `{"op":"slicer-close"}`)
+	st = post(t, ts, "", `{"op":"pad-tools","pad":`+itoa(pad)+`}`)
+	if st.Menu == nil {
+		t.Fatal("the tools of a pad are a menu")
+	}
+	post(t, ts, "", `{"op":"escape"}`)
+}

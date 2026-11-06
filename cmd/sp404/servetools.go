@@ -80,6 +80,12 @@ func (t toolsAPI) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		Pad  int    `json:"pad"`
 		On   bool   `json:"on"`
 		Live bool   `json:"live"`
+		From int    `json:"from"`
+		To   int    `json:"to"`
+		Cols int    `json:"cols"`
+		Text string `json:"text"`
+		Done bool   `json:"done"`
+		Kind string `json:"kind"`
 	}
 	if req.Method == http.MethodPost {
 		if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<16)).Decode(&in); err != nil {
@@ -113,6 +119,44 @@ func (t toolsAPI) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		t.r.Redo()
 	case "load":
 		t.r.LoadProject(in.I, in.Live)
+	case "pads":
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		json.NewEncoder(w).Encode(t.r.Pads())
+		return
+	case "slicer":
+		t.r.OpenSlicer(in.Pad)
+	case "slicer-close":
+		t.r.CloseSlicer()
+	case "slicer-view":
+		t.r.SlicerView(in.From, in.To, in.Cols)
+	case "slicer-at":
+		t.r.SlicerAt(in.I)
+	case "slicer-cut":
+		t.r.SlicerCut(in.I)
+	case "slicer-join":
+		t.r.SlicerJoin(in.I)
+	case "slicer-play":
+		t.r.SlicerPlay(in.I)
+	case "slicer-menu":
+		t.r.SlicerMenu(in.Kind)
+	case "slicer-undo":
+		t.r.SlicerUndo(in.On)
+	case "pad-tools":
+		t.r.OpenPadTools(in.Pad)
+	case "picker-bank":
+		t.r.PickerBank(in.I)
+	case "picker-pick":
+		t.r.PickerPick(in.I)
+	case "prompt":
+		t.r.PromptSet(in.Text, in.Done, in.On)
+	case "escape":
+		t.r.Escape()
+	case "send":
+		if msg := t.r.SendToUnit(in.I); msg != "" {
+			http.Error(w, msg, http.StatusConflict)
+			return
+		}
 	default:
 		http.Error(w, "unknown operation", http.StatusBadRequest)
 		return
