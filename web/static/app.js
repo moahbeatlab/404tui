@@ -885,6 +885,9 @@
     $('startLive').addEventListener('click', () => startEngine(false));
     $('startDemo').addEventListener('click', () => startEngine(true));
     // Back to the unit when it was used last time (the browser remembers the permission).
-    if (store.get('mode') === 'live' && SP404Local.supported()) startEngine(false); else showStart('');
+    if ($('backHome')) $('backHome').hidden = false;
+    document.querySelectorAll('[data-tab="tools"]').forEach((b) => { b.hidden = true; }); // the tools need the program (sp404 serve)
+    if (location.hash === '#demo') startEngine(true);
+    else if (store.get('mode') === 'live' && SP404Local.supported()) startEngine(false); else showStart('');
   } else open();
 })();

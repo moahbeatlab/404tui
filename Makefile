@@ -127,9 +127,13 @@ else
 endif
 
 # The page without a server (web/static with mode.js set), for GitHub Pages: it talks to the unit by Web MIDI.
+# The landing page (a gallery, then a button that starts the web app against a demo unit) is the site's index; the app is in app/.
+SITE_IMG = serve-tools-pattern serve-tools-slicer serve-pads serve-patterns serve-tools-laptop serve-motion pc-pads pc-seq pc-pattern-tools pc-slicer replay-editor handheld-pads
 site:
-	rm -rf $(DIST)/site && mkdir -p $(DIST)/site && cp web/static/* $(DIST)/site/
-	echo "window.SP404_LOCAL = true; // the unit is reached by Web MIDI, there is no server" > $(DIST)/site/mode.js
+	rm -rf $(DIST)/site && mkdir -p $(DIST)/site/app $(DIST)/site/img && cp web/static/* $(DIST)/site/app/
+	echo "window.SP404_LOCAL = true; // the unit is reached by Web MIDI, there is no server" > $(DIST)/site/app/mode.js
+	for i in $(SITE_IMG); do cp docs/img/$$i.png $(DIST)/site/img/; done
+	v=$$(sed -n 's/^var Version = "\(.*\)"$$/\1/p' version/version.go); sed "s/__VERSION__/v$$v/g" web/landing/index.html > $(DIST)/site/index.html
 	touch $(DIST)/site/.nojekyll
 
 clean:
