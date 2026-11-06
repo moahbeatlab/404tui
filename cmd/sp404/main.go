@@ -276,7 +276,8 @@ func runUI(o options, l logging, headless bool) error {
 	} else {
 		l.Warn("no audio output", "err", audioErr)
 	}
-	model := tui.NewConnecting(connector(o, l.Logger), player, tui.DefaultStore()).WithAudio(player, audioErr).WithRecorder(record.Default()).WithMIDI(midiin.Default()).
+	shared := &sharedUnit{}
+	model := tui.NewConnecting(shared.remembering(connector(o, l.Logger)), player, tui.DefaultStore()).WithAudio(player, audioErr).WithRecorder(record.Default()).WithMIDI(midiin.Default()).
 		WithOffline(offlineOpener(l.Logger), unitPresent(o), o.offline)
 	if l.path != "" {
 		model = model.WithLogger(l.Logger, l.path)
@@ -289,6 +290,12 @@ func runUI(o options, l logging, headless bool) error {
 			o.webAddr = ":8404"
 		}
 		srv = &web.Server{Key: webKey(o.webKey)}
+		// The tools of the program (SEQ's pattern tools, the slicer) for the page, in this process beside the old part.
+		remote := newToolsApp(o, shared, player)
+		stopTools := make(chan struct{})
+		go remote.Loop(stopTools)
+		defer close(stopTools)
+		srv.Mount("/tools/api", toolsAPI{remote})
 		listener, err := srv.Listen(o.webAddr)
 		if err != nil {
 			return fmt.Errorf("web page: %w", err)

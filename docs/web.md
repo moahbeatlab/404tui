@@ -160,6 +160,49 @@ Punch, so they move the effects the unit has (no others). Pick an LFO (1 to 4), 
 
 Not tried on the unit yet: how the 7-bit steps sound on each knob, and how tight a pump feels against a kick.
 
+## Tools: the pattern, slicer and pad tools in the page
+
+The **TOOLS** button in the top bar of the page opens the tools of the program (the same ones as SEQ in the terminal: fill, Euclid, echo, ratchet, LFO and ENV on the notes, chance, cycle, nudge, pitch, swing and humanize, templates, copy and move patterns, tempo of a bank and the rest) in a page of their own, with every page, setting and value that the terminal has.
+
+![The TOOLS button](img/serve-tools-button.png)
+
+| In a browser | On a phone | The unit's projects |
+| --- | --- | --- |
+| ![](img/serve-tools-desktop.png) | <img src="img/serve-tools-phone.png" width="240"> | <img src="img/serve-tools-projects.png" width="240"> |
+
+- **The pattern** in front is drawn as its tracks, one row of steps for each pad (the notes are the lit steps, as bright as their velocity; the bars are set apart). A tap on a track's name puts that track in front: the tools act on it. **BANK** and **PATTERN** choose the pattern.
+- **PATTERN TOOLS** opens the menu of the pattern, as `t` does on SEQ: its pages (*Pattern*, *Timing*, *Length*, *Notes*, *Tracks*), and under them every tool. A choice (a rhythm, a velocity, a gate...) is a list of **all** its values, with ◂ and ▸ to step; a tool that opens a dialog of its own (Fill, Euclid...) lists all its settings the same way.
+- **A tool works on a trial.** Opening it applies it to the pattern at once, and a change of a setting applies it again; the line under the pattern says what it did ("euclid 5/16 on A1: 20 notes"). **Keep it** commits the trial as one step, **BACK** throws it away (and goes back a menu). **UNDO** and **REDO** go through what was kept.
+- **PLAY HERE** plays the pattern in a loop on **the speakers of the computer that runs `sp404 serve`** (not on the unit), so each trial can be heard while you change it.
+- **The unit's projects** (the list under the pattern, when a unit is found): **OPEN A COPY** copies the project from the unit into the editor (the unit is not changed); **EDIT LIVE** does the same and then sends every change you keep to the unit's card as it is made. Back a project up before you edit it live. Pad changes show on the unit at once; **patterns written to the unit show only after the unit reloads the project, which stops its sound** (the terminal program has a *Reload on the unit* entry for it).
+- If the editor has work that is not saved, the program asks before it replaces it, in the same menu.
+
+The page runs in the same process as the rest of `sp404 serve` and uses its connection to the unit (only one program can hold the unit's serial port). It does not listen to MIDI itself, so the controller groups (`ec4.md`) are not available in it. The tools page is behind the same key as the rest of the page.
+
+### On a laptop or a desktop
+
+The page uses the width: the pattern (or the waveform) on the left, the menu of the tool on the right.
+
+| Pattern tool (Euclid), 1440 × 900 | Slicer, 1440 × 900 |
+| --- | --- |
+| ![](img/serve-laptop-tools-euclid.png) | ![](img/serve-laptop-slicer.png) |
+
+Pictures at 1920 × 1080: [Perform](img/serve-desktop-perform.png), [Euclid](img/serve-desktop-tools-euclid.png), [slicer](img/serve-desktop-slicer.png), [pad tools](img/serve-desktop-padtools.png).
+
+### The slicer, the pad tools and sending to the unit
+
+The mode bar under the top bar switches between **PATTERN**, **SLICER** and **PAD**.
+
+| Slicer | Result to a pad | Tools of a pad | On a phone |
+| --- | --- | --- | --- |
+| ![](img/serve-tools-slicer.png) | ![](img/serve-tools-picker.png) | ![](img/serve-tools-padtools.png) | <img src="img/serve-tools-phone-slicer.png" width="200"> |
+
+- **SLICER:** choose a pad with a sample (a bank of 16 buttons). The sample is drawn as a real waveform (lowest to highest sample of each column, the loudness inside it, a time scale), with the slices numbered and the one under the cursor lit. **Tap** the waveform to put the cursor; **CUT AT CURSOR** cuts there (moved to a zero crossing, as in the terminal), **JOIN** joins the slice with the one before, **PLAY SLICE** plays it on the computer's speakers, **ZOOM +/−/ALL** change the window, **UNDO/REDO** go through the slicing.
+- **SLICE SETTINGS** and **SLICER TOOLS** are the terminal's menus with all their pages and values: cut in equal parts, at random places, on the grid, mangle the order, play order, grid, swing, humanize, length, and the slices (or the result) to pads. A choice that is also done (*Cut in equal parts*: how many) has a **DO IT** button next to it.
+- When a menu asks for a pad or a pattern (*Result to a pad*, *Slices to pads*), a dialog with the bank and its 16 cells opens in the page; a text that is asked for (a name) opens as a text field. A dialog that only the terminal can show (the folder picker, the search keyboard, the slicer's tap and order lane) is named in a bar at the top with a button that closes it.
+- **PAD:** choose any pad; the menu of the pad's tools opens (pick a sample, slice, chords and arps, keyboard, rename, reverse, normalize, pitch, pattern with this pad, move, swap, copy...).
+- **SEND** (in the unit's projects): writes the editor's project **over** the unit's project, which is replaced. The button asks twice (it turns into *SURE? REPLACES n* for five seconds). Back the project up first. A project that is edited live is not sent: it is on the unit already.
+
 ## What it needs
 
 * The computer runs 404tui (`sp404 serve`), with the unit plugged in by USB.

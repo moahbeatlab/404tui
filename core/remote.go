@@ -10,8 +10,9 @@ import (
 // behaves as it does in the terminal: opening it applies it to the pattern as a trial, a change of a setting applies it again, "Keep it" commits it and
 // going back throws it away. The program is not made for two users at a time: every call, and the ticks of Loop, take the lock.
 type Remote struct {
-	mu sync.Mutex
-	a  *App
+	mu   sync.Mutex
+	a    *App
+	view [3]int // the window of the slicer's peaks: from, to, columns
 }
 
 // NewRemote wraps a program (which the caller no longer touches but through the Remote).
@@ -44,8 +45,9 @@ type RItem struct {
 	Label string   `json:"label"`
 	Kind  string   `json:"kind"`
 	Vals  []string `json:"vals,omitempty"`
-	Val   int      `json:"val,omitempty"`
+	Val   int      `json:"val"`
 	Opens bool     `json:"opens,omitempty"` // an action that opens another menu ("...")
+	Runs  bool     `json:"runs,omitempty"`  // a choice that is also done ("Cut in equal parts": the value is how many): Run does it
 }
 
 // RMenu is the menu that is open: its title, its pages (when it has them) and the entries of the page in front.
@@ -102,7 +104,7 @@ func (a *App) remoteMenu() *RMenu {
 		case it.header || it.tab:
 			ri.Kind = "head"
 		case len(it.vals) > 0:
-			ri.Kind, ri.Vals, ri.Val = "choice", it.vals, it.val
+			ri.Kind, ri.Vals, ri.Val, ri.Runs = "choice", it.vals, it.val, it.run != nil
 		default:
 			ri.Kind = "action"
 			ri.Opens = len(it.label) > 3 && it.label[len(it.label)-3:] == "..."
@@ -190,7 +192,7 @@ func (r *Remote) Set(index, val int) *RMenu {
 	if m := r.a.menu; m != nil {
 		if it := m.find(index); it != nil && len(it.vals) > 0 && val >= 0 && val < len(it.vals) && val != it.val {
 			it.val = (val - 1 + len(it.vals)) % len(it.vals) // one step before: Right makes it val, and runs what a change runs
-			r.a.menuKey(Right)
+			r.a.remoteKey(Right)
 		}
 	}
 	return r.a.remoteMenu()
@@ -202,7 +204,7 @@ func (r *Remote) Run(index int) *RMenu {
 	defer r.mu.Unlock()
 	if m := r.a.menu; m != nil {
 		if it := m.find(index); it != nil {
-			r.a.menuKey(A)
+			r.a.remoteKey(A)
 		}
 	}
 	return r.a.remoteMenu()
@@ -212,9 +214,7 @@ func (r *Remote) Run(index int) *RMenu {
 func (r *Remote) Back() *RMenu {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.a.menu != nil {
-		r.a.menuKey(B)
-	}
+	r.a.remoteEscape()
 	return r.a.remoteMenu()
 }
 
@@ -257,4 +257,111 @@ func (a *App) remotePattern() RPattern {
 	}
 	p.Tracks = out
 	return p
+}
+
+// RState is everything a page needs to draw: the menu that is open (nil when none), the pattern, what the program says (the line under the screen:
+// the trial of a tool says what it did), and whether the pattern plays (on the computer's speakers).
+type RState struct {
+	Menu     *RMenu   `json:"menu"`
+	Pattern  RPattern `json:"pattern"`
+	Msg      string   `json:"msg"`
+	MsgBad   bool     `json:"msgBad"`
+	Playing  bool     `json:"playing"`
+	Unit     string   `json:"unit"`               // the unit the program has a link to ("" for none)
+	Live     int      `json:"live,omitempty"`     // the project of the unit that is edited live (1 to 16), 0 for none
+	Pad      int      `json:"pad"`                // the track in front
+	Projects []string `json:"projects,omitempty"` // the unit's projects, when there is a link
+	Job      *RJob    `json:"job,omitempty"`      // a load or a send that is under way
+	Screen   string   `json:"screen"`             // "slicer" when the slicer is open, else "pattern"
+	Slicer   *RSlicer `json:"slicer,omitempty"`
+	Picker   *RPicker `json:"picker,omitempty"` // a pad or pattern is asked for
+	Prompt   *RPrompt `json:"prompt,omitempty"` // a text is asked for
+	Other    string   `json:"other,omitempty"`  // a dialog of the program that the page cannot show
+}
+
+// RJob is what the unit is busy with.
+type RJob struct {
+	What  string `json:"what"`
+	Name  string `json:"name"`
+	Done  int    `json:"done"`
+	Total int    `json:"total"`
+	Error string `json:"error,omitempty"`
+	Ended bool   `json:"ended"`
+}
+
+// State is everything at once.
+func (r *Remote) State() RState {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.a.remoteState(r.view)
+}
+
+func (a *App) remoteState(view [3]int) RState {
+	s := RState{Screen: "pattern", Picker: a.remotePicker(), Prompt: a.remotePrompt(), Other: a.remoteOther(), Menu: a.remoteMenu(), Pattern: a.remotePattern(), Msg: a.msg, MsgBad: a.msgBad, Playing: a.seqOn, Pad: a.rowPad()}
+	if a.scr == Slice && a.sl != nil {
+		s.Screen, s.Slicer = "slicer", a.remoteSlicer(view[0], view[1], view[2])
+	}
+	if a.link != nil {
+		s.Unit = a.link.Name()
+	}
+	if a.live != nil {
+		s.Live = a.live.project + 1
+	}
+	if a.link != nil {
+		if names, err := a.unitNames(); err == nil {
+			s.Projects = names
+		}
+	}
+	if a.job != nil {
+		done, total, name, err, fin := a.job.state()
+		s.Job = &RJob{What: a.jobWhat, Name: name, Done: done, Total: total, Ended: fin}
+		if err != nil {
+			s.Job.Error = err.Error()
+		}
+	}
+	return s
+}
+
+// LoadProject loads the unit's project n (0 based) into the editor: with live, the unit is edited live from then on. When the editor has work that is not saved
+// the program asks first, and that is a menu like any other.
+func (r *Remote) LoadProject(n int, live bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if dev, ok := r.a.unitDevice(); ok && n >= 0 && n < 16 {
+		r.a.unitLoadThen(dev, n, live)
+	}
+}
+
+// Play starts or stops the pattern on the computer's speakers (what Space does on SEQ), and says whether it plays now.
+func (r *Remote) Play(on bool) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.a
+	a.go_(Seq)
+	if a.seqOn != on {
+		a.Script("X", nil)
+	}
+	return a.seqOn
+}
+
+// Undo and Redo step through the changes (a tool that was kept is one step).
+func (r *Remote) Undo() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.a.undoStep()
+}
+
+func (r *Remote) Redo() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.a.redoStep()
+}
+
+// Track puts a pad's track in front (the tools of the pattern act on it): the cursor of SEQ goes to that row.
+func (r *Remote) Track(pad int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if pad >= 0 && pad < 160 {
+		r.a.addTrack(pad)
+	}
 }
