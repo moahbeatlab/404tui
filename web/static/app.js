@@ -10,6 +10,7 @@
 
   // On the hosted page (mode.js says so) there is no server: the engine in engine.js talks to the unit by Web MIDI, or plays a demo.
   const LOCAL = !!window.SP404_LOCAL;
+  const noTools = () => LOCAL && !(eng && eng.demo); // on the hosted page only the demo has tools (the program is not there)
   let eng = null;
   // ---- connection ----
   let ws = null, retry = 0, retryTimer = 0, host = '', key = '', everOpen = false, state = null, rtt = null;
@@ -55,7 +56,7 @@
     const script = (src) => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error(src)); document.head.appendChild(s); });
     let ctx = null, src = null;
     const unlock = () => { try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state !== 'running') ctx.resume(); } catch (e) {} };
-    ['pointerdown', 'keydown'].forEach((t) => document.addEventListener(t, unlock, { passive: true }));
+    ['pointerdown', 'touchend', 'click', 'keydown'].forEach((t) => document.addEventListener(t, unlock, { passive: true }));
     let started = 0, dur = 0, pv = null;
     const make = (bytes, rate, channels) => {
       const n = bytes.length >> 1, frames = Math.floor(n / channels), buf = ctx.createBuffer(channels, frames, rate), v = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
@@ -65,6 +66,7 @@
     const start = (buf, loop, offset) => { const s = ctx.createBufferSource(); s.buffer = buf; s.loop = loop; s.connect(ctx.destination); s.start(0, offset || 0); return s; };
     const halt = () => { try { if (src) src.stop(); } catch (e) {} src = null; };
     window.SP404Audio = {
+      unlock,
       play(bytes, rate, channels, loop) { unlock(); if (!ctx) return; halt(); const buf = make(bytes, rate, channels); src = start(buf, !!loop); started = ctx.currentTime; dur = buf.duration; },
       // a new loop takes over where the old one is, so a change is heard in the beat
       replace(bytes, rate, channels) { unlock(); if (!ctx) return; const buf = make(bytes, rate, channels), at = dur ? ((ctx.currentTime - started) % dur) % buf.duration : 0; halt(); src = start(buf, true, at); started = ctx.currentTime - at; dur = buf.duration; },
@@ -74,9 +76,10 @@
     };
     let ready = null;
     toolsLoading = (async () => {
-      await script('memfs.js'); await script('wasm_exec.js');
+      const v = window.SP404_BUILD ? '?v=' + window.SP404_BUILD : '';
+      await script('memfs.js' + v); await script('wasm_exec.js' + v);
       const go = new Go();
-      const wasm = await WebAssembly.instantiateStreaming(fetch('demo.wasm'), go.importObject).catch(async () => WebAssembly.instantiate(await (await fetch('demo.wasm')).arrayBuffer(), go.importObject));
+      const wasm = await WebAssembly.instantiateStreaming(fetch('demo.wasm' + (window.SP404_BUILD ? '?v=' + window.SP404_BUILD : '')), go.importObject).catch(async () => WebAssembly.instantiate(await (await fetch('demo.wasm' + (window.SP404_BUILD ? '?v=' + window.SP404_BUILD : ''))).arrayBuffer(), go.importObject));
       go.run(wasm.instance);
       await new Promise((ok) => { const t = setInterval(() => { if (window.sp404ToolsReady) { clearInterval(t); ok(); } }, 100); });
     })();
@@ -490,7 +493,7 @@
   function syncTabs() {
     tabBtns.forEach((x) => x.classList.toggle('on', app.dataset.view !== 'perform' ? x.dataset.tab === app.dataset.view : x.dataset.tab === app.dataset.tab));
     // The button in the top bar (landscape) names the view it goes to: Perform, Looper, Patterns, and round.
-    $('viewBtn').textContent = { perform: 'PATTERNS', patterns: LOCAL ? 'PERFORM' : 'TOOLS', tools: 'PERFORM' }[app.dataset.view];
+    $('viewBtn').textContent = { perform: 'PATTERNS', patterns: noTools() ? 'PERFORM' : 'TOOLS', tools: 'PERFORM' }[app.dataset.view];
     if (app.dataset.view === 'tools') showTools();
     $('viewBtn').classList.toggle('on', app.dataset.view !== 'perform');
   }
@@ -499,7 +502,7 @@
     const f = $('toolsFrame');
     if (f.getAttribute('src')) return;
     const k = new URLSearchParams(location.search).get('key') || store.get('key') || '';
-    f.src = 'tools.html?embed=1' + (k ? '&key=' + encodeURIComponent(k) : '');
+    f.src = 'tools.html?embed=1' + (k ? '&key=' + encodeURIComponent(k) : '') + (window.SP404_BUILD ? '&v=' + window.SP404_BUILD : '');
     f.addEventListener('load', () => { toolsBank = -1; if (state && state.bank) tellTools(state.bank.charCodeAt(0) - 65); });
   }
   function setView(v) { if (state && state.bank && v !== 'perform' && !(v === 'patterns' && app.dataset.view === 'patterns')) { const i = state.bank.charCodeAt(0) - 65; if (i >= 0 && i < 10) { send({ a: 'ptnbankset', i }); send({ a: 'slbankset', i }); tellTools(i); } } app.dataset.view = v; store.set('view', v); syncTabs(); send({ a: 'view', name: v }); try { if (state) render(); } catch (e) { /* before the first state */ } }
@@ -521,7 +524,7 @@
     e.preventDefault();
     // Tapped twice quickly where it said PATTERNS: stay on the Patterns page, and show the bank of the pattern that plays.
     if (app.dataset.view === 'patterns' && performance.now() - ptnTapAt < 450) { ptnTapAt = performance.now(); send({ a: 'ptnfollow' }); return; }
-    const to = { perform: 'patterns', patterns: LOCAL ? 'perform' : 'tools', tools: 'perform' }[app.dataset.view];
+    const to = { perform: 'patterns', patterns: noTools() ? 'perform' : 'tools', tools: 'perform' }[app.dataset.view];
     if (to === 'patterns') ptnTapAt = performance.now();
     setView(to);
   });

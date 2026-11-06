@@ -121,8 +121,7 @@
       // a pattern on the first pads, so there is something to hear and see (pad flashes) from the start
       const steps = { 0: [0, 4, 8, 12], 1: [4, 12], 3: [2, 6, 10, 14], 4: [14], 8: [0, 3, 6, 10], 11: [7, 15] };
       this.unlockOnce = () => this.unlock();
-      document.addEventListener('pointerdown', this.unlockOnce, { once: true });
-      document.addEventListener('keydown', this.unlockOnce, { once: true });
+      ['pointerdown', 'touchend', 'click', 'keydown'].forEach((t) => document.addEventListener(t, this.unlockOnce)); // iOS counts touchend and click, not pointerdown
       if (!this.hint) {
         this.hint = document.createElement('div'); this.hint.textContent = 'Tap anywhere to turn the sound on';
         this.hint.style.cssText = 'position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#ffb000;color:#161618;font:700 14px system-ui;padding:10px 16px;border-radius:12px;z-index:50;pointer-events:none';
@@ -149,9 +148,19 @@
     // The sound is on after the first touch (a browser keeps a page silent until then).
     unlock() {
       try {
+        if (navigator.audioSession) navigator.audioSession.type = 'playback'; // iOS 17: sound although the ringer is on silent
+        if (!this.keep) { // an audio element that plays nothing keeps older iOS in the playback mode too
+          this.keep = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='); this.keep.loop = true; this.keep.play().catch(() => {});
+        }
         this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)();
-        if (this.ctx.state !== 'running') this.ctx.resume();
-        if (this.hint) { this.hint.remove(); this.hint = null; }
+        const done = () => {
+          if (this.ctx.state === 'running') {
+            if (this.hint) { this.hint.remove(); this.hint = null; }
+            ['pointerdown', 'touchend', 'click', 'keydown'].forEach((t) => document.removeEventListener(t, this.unlockOnce));
+            this.voice(0); // a first sound, so that it is clear it works
+          } else if (this.hint) this.hint.textContent = 'No sound yet: tap again (and switch the ringer on)';
+        };
+        if (this.ctx.state !== 'running') this.ctx.resume().then(done, done); else done();
       } catch (e) { /* no audio: the demo is silent */ }
     }
     // A pad of the demo kit, made of oscillators and noise: a kick, a snare, hats and so on.
@@ -721,8 +730,8 @@
     }
     webPtn() {
       const bank = this.ptnBank(), p = this.ptn;
-      return { bank: String.fromCharCode(65 + bank), known: true, now: p.now >= 0 && p.nowBank === bank ? p.now : -1, next: p.next >= 0 && p.nextBank === bank ? p.next : -1,
-        slots: Array.from({ length: 16 }, (_, i) => ({ n: i + 1, exists: true, pads: 0 })) };
+      return { bank: String.fromCharCode(65 + bank), known: true, now: p.now >= 0 && p.nowBank === bank ? p.now : (this.demo && bank === 0 && p.now < 0 ? 0 : -1), next: p.next >= 0 && p.nextBank === bank ? p.next : -1,
+        slots: Array.from({ length: 16 }, (_, i) => ({ n: i + 1, exists: !this.demo || (bank === 0 && i < DEMO_PATTERNS.length), pads: this.demo && bank === 0 ? DEMO_PATTERNS[i] || 0 : 0 })) };
     }
   }
 

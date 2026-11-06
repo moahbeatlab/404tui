@@ -11,6 +11,8 @@
   let padsAt = 0, loadingPads = false, lastProject = 0, st = null, busy = false, editing = 0, mode = 'pattern', pads = null, cbank = 0, win = null, armed = -1, armTimer = 0;
 
   // On the hosted demo (GitHub Pages) the tools run in the browser (demo.wasm, started by the page around this one); else they are asked of the program.
+  // a touch in this frame turns the sound on in the page around it (a browser wants a touch in the frame that plays)
+  ['pointerdown', 'touchend', 'click'].forEach((t) => document.addEventListener(t, () => { try { window.parent.SP404Audio && window.parent.SP404Audio.unlock(); } catch (e) {} }, { passive: true }));
   const local = () => { try { return window.parent !== window && window.parent.SP404Tools; } catch (e) { return null; } };
   const request = async (body) => {
     const l = local();

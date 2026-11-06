@@ -551,6 +551,5 @@ button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
 @media (orientation: landscape) { #tools { grid-column: 1 / -1; grid-row: 2; } }
 @media (orientation: landscape) and (max-width: 759px) { #tools { grid-row: 2 / 4; } #app[data-view="tools"] #tabs { display: none; } #tabs button[data-tab="tools"] { display: none; } }
 @media (orientation: portrait) { #tools { grid-area: main; } #tabs { grid-template-columns: repeat(5, 1fr); } #tabs button { font-size: 11px; letter-spacing: .02em; } }
-#app.local #tabs button[data-tab="tools"] { display: none; }
 .lpsw { display: none !important; }
 
