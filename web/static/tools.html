@@ -86,13 +86,15 @@
         <div id="cells"></div>
       </div>
     </div>
-    <div id="menu" hidden>
-      <div class="mhead"><button id="mback" class="btn">◂ BACK</button><h2 id="mtitle"></h2></div>
+    <div id="menu" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="mtitle">
+      <div class="grab" aria-hidden="true"></div>
+      <div class="mhead"><button id="mback" class="btn">◂ BACK</button><h2 id="mtitle"></h2><button id="mdone" class="btn go">DONE</button></div>
       <div id="tabs" role="tablist"></div>
       <div id="items"></div>
     </div>
   </section>
 </main>
+<div id="sheetBack" hidden></div>
 <div id="modal" hidden>
   <div class="dialog">
     <h2 id="dTitle"></h2>

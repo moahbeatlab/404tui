@@ -156,6 +156,8 @@ func (t toolsAPI) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		t.r.PickerPick(in.I)
 	case "prompt":
 		t.r.PromptSet(in.Text, in.Done, in.On)
+	case "close-menus":
+		t.r.CloseMenus()
 	case "escape":
 		t.r.Escape()
 	case "reload":

@@ -39,6 +39,8 @@
   $('redo').onclick = () => act({ op: 'redo' });
   $('open').onclick = () => act({ op: 'open' });
   $('mback').onclick = () => act({ op: 'back' });
+  $('mdone').onclick = () => act({ op: 'close-menus' });
+  $('sheetBack').onclick = () => act({ op: 'close-menus' });
 
   // the three kinds of tools: the pattern's, the slicer's, a pad's
   const setMode = (m) => {
@@ -185,10 +187,14 @@
 
   function renderMenu(m) {
     const wasOpen = !$('menu').hidden;
-    $('idle').hidden = !!m; $('menu').hidden = !m;
+    $('menu').hidden = !m; $('sheetBack').hidden = !m;
     if (!m) return;
-    if (!wasOpen) $('right').scrollIntoView({ block: 'start' }); // on a phone the menu is under the pattern: bring it up
-    $('mtitle').textContent = m.title; $('mback').textContent = m.depth > 1 ? '◂ BACK' : '✕ CLOSE';
+    if (!wasOpen) $('menu').scrollTop = 0;
+    // the menu is a sheet over the page: DONE leaves it (a trial that is open is thrown away: then it says so), BACK goes up one level
+    const trial = m.items.some((it) => /^keep it/i.test(it.label));
+    $('mtitle').textContent = m.title;
+    $('mback').hidden = m.depth <= 1 && !trial; $('mback').textContent = trial ? '◂ DISCARD' : '◂ BACK';
+    $('mdone').hidden = trial; // a tool's dialog has one way out besides Keep it: DISCARD
     const tabs = $('tabs'); tabs.textContent = '';
     (m.tabs || []).forEach((name, i) => { const b = document.createElement('button'); b.className = 'btn' + (i === m.tab ? ' on' : ''); b.textContent = name; b.onclick = () => act({ op: 'tab', tab: i }); tabs.appendChild(b); });
     const box = $('items'); if (editing && document.activeElement && box.contains(document.activeElement)) return; // do not replace a control while it is in the hand

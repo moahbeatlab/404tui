@@ -556,3 +556,12 @@ func (r *Remote) SlicerShuffle() {
 		a.hearOrder(false) // the loop goes on with the new order
 	}
 }
+
+// CloseMenus leaves every menu that is open (as B does, level by level: a trial that is open is thrown away).
+func (r *Remote) CloseMenus() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := 0; i < 8 && (r.a.menu != nil || r.a.prompt != nil || r.a.picker != nil); i++ {
+		r.a.remoteEscape()
+	}
+}

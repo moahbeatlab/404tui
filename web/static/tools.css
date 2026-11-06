@@ -90,3 +90,12 @@ body.embed .strip .btn small { font-size: 10px; font-weight: 600; letter-spacing
 /* on a phone the tools come first: under the mode bar, above the pattern, the pads and the unit */
 @media (max-width: 860px) { #right { order: -1; } }
 [hidden] { display: none !important; }
+
+/* a menu is a sheet over the page: dimmed page behind, a handle, a title, DONE */
+#sheetBack { position: fixed; inset: 0; background: rgba(0,0,0,.58); z-index: 5; }
+.sheet:not([hidden]) { position: fixed; left: 0; right: 0; bottom: 0; margin: 0 auto; width: min(720px, 100%); max-height: 84vh; overflow-y: auto; z-index: 6;
+  background: var(--panel); border: 1px solid var(--line); border-bottom: 0; border-radius: 18px 18px 0 0; padding: 6px 12px max(14px, env(safe-area-inset-bottom)); box-shadow: 0 -10px 30px rgba(0,0,0,.5); }
+.grab { width: 44px; height: 5px; border-radius: 3px; background: var(--line); margin: 4px auto 8px; }
+.sheet .mhead { position: sticky; top: -6px; background: var(--panel); padding: 6px 0 8px; z-index: 1; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.sheet .mhead h2 { flex: 1; min-width: 0; }
+.sheet .mhead .btn { min-height: 34px; font-size: 11px; }
