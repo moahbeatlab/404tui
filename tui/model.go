@@ -1654,7 +1654,7 @@ func (m Model) polled(msg pollMsg) (tea.Model, tea.Cmd) {
 	var codeCmd tea.Cmd
 	if msg.have {
 		a := msg.activity
-		if m.padHit(m.hasSelected, a) && time.Since(m.midiPadAt) > 10*time.Second {
+		if m.web == nil && m.padHit(m.hasSelected, a) && time.Since(m.midiPadAt) > 10*time.Second {
 			m, codeCmd = m.codeHit(int(a.Selected.Pad()) + 1)
 		}
 		if a.Playing != m.playing || a.Playing && a.Selected != m.playingPad {

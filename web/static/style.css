@@ -547,3 +547,6 @@ button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
 @media (orientation: portrait) { #tools { grid-area: main; } #tabs { grid-template-columns: repeat(5, 1fr); } #tabs button { font-size: 11px; letter-spacing: .02em; } }
 #app.local #tabs button[data-tab="tools"] { display: none; }
 .lpsw { display: none !important; }
+
+#ptnMark { width: 100%; min-height: 36px; margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .04em; background: var(--tile); color: var(--dim); border-radius: 8px; }
+#ptnMark.on { background: var(--hot); color: #000; }

@@ -213,8 +213,8 @@ func (m Model) webSnapshot() webState {
 	now := time.Now()
 	for i, row := range m.snap.Bank(bank) {
 		p := webPad{N: i + 1, Name: row.Name, Has: row.HasSample, Bus: int(m.busOf(row.Pad)), Level: int(row.Level),
-			Muted: m.padMuted(row.Pad) || m.lvlWas[row.Pad] > 0, Sel: m.hasSelected && m.selected == row.Pad,
-			Bars: m.padBars(row, 20)}
+			Muted: m.muted[row.Pad] || m.lvlWas[row.Pad] > 0, // only what the page muted, never a guess from the unit Sel: m.hasSelected && m.selected == row.Pad,
+			Bars:  m.padBars(row, 20)}
 		p.Heard, p.InPat = m.padUsed(row.Pad)
 		if m.iso != nil {
 			_, p.Keep = m.iso.pads[row.Pad]
@@ -416,7 +416,7 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 	case "view":
 		m.webView = c.Name
 		return m, m.wanted()
-	case "ptn", "ptnbank", "ptnbankset", "ptnfollow":
+	case "ptn", "ptnmark", "ptnbank", "ptnbankset", "ptnfollow":
 		return m.ptnCommand(c.A, c.I)
 	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute", "slmang", "slprev", "slreorder":
 		i := c.I

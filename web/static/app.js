@@ -644,10 +644,12 @@
 
   // ---- the Patterns page ----
   const ptnBtns = [];
+  let ptnMark = false; // the next tap says which pattern the unit plays, and sends nothing
+  $('ptnMark').addEventListener('click', () => { ptnMark = !ptnMark; cls($('ptnMark'), 'on', ptnMark); });
   for (let i = 0; i < 16; i++) {
     const b = document.createElement('button');
     b.innerHTML = '<span>' + (i + 1) + '</span><small></small>';
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!b.disabled) send({ a: 'ptn', i }); });
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); if (b.disabled) return; if (ptnMark) { ptnMark = false; cls($('ptnMark'), 'on', false); send({ a: 'ptnmark', i }); } else send({ a: 'ptn', i }); });
     $('ptnGrid').appendChild(b);
     ptnBtns.push({ b, s: b.querySelector('small') });
   }

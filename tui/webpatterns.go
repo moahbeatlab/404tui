@@ -51,6 +51,16 @@ func (m Model) ptnCommand(act string, i int) (tea.Model, tea.Cmd) {
 		}
 		lp.ptSet, lp.ptBank = true, (i%proto.Banks+proto.Banks)%proto.Banks
 		return m, m.wanted()
+	case "ptnmark":
+		// Tells the page which pattern the unit plays (started on the unit), without sending anything.
+		rows := m.patterns[bank]
+		if i < 0 || i > 15 || i >= len(rows) || !rows[i].Exists {
+			return m, nil
+		}
+		slot := rows[i].Slot
+		m.perfNow, m.perfNext, m.perfAuto = &slot, nil, false
+		m.message = fmt.Sprintf("pattern %s is the one that plays", slotText(m.perfNow))
+		return m, m.wanted()
 	case "ptn":
 		rows := m.patterns[bank]
 		if i < 0 || i > 15 || i >= len(rows) || !rows[i].Exists {

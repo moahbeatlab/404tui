@@ -319,6 +319,9 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 				}
 				return nm, next
 			}
+			if m.web != nil {
+				return m, next // a pad hit on the unit changes nothing in the page's world
+			}
 			nm, cmd := m.codeHit(pad)
 			return nm, tea.Batch(cmd, next)
 		}
