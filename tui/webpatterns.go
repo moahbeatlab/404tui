@@ -88,6 +88,29 @@ func (m Model) ptnCommand(act string, i int) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// recordedNote adds a pad played while the unit records into the pattern that plays to what the page knows of that pattern.
+func (m Model) recordedNote(key int) Model {
+	if !m.patRec || m.perfNow == nil || m.clock == nil {
+		return m
+	}
+	d := m.patPreview[*m.perfNow]
+	if d == nil || d.Length == 0 {
+		return m
+	}
+	length := int(d.Length) / (formats.PPQ / 24)
+	if length <= 0 {
+		return m
+	}
+	if m.recNotes == nil {
+		m.recNotes = map[proto.PadIndex]map[int][]int{}
+	}
+	if m.recNotes[*m.perfNow] == nil {
+		m.recNotes[*m.perfNow] = map[int][]int{}
+	}
+	m.recNotes[*m.perfNow][key] = append(m.recNotes[*m.perfNow][key], m.clock.ticks%length)
+	return m
+}
+
 // ptnNotes are the places of the notes of a pattern in clock ticks within it, by pad (bank*16 + pad), and its length in clock ticks.
 func (m Model) ptnNotes(slot proto.PadIndex) (map[int][]int, int, bool) {
 	d := m.patPreview[slot]
@@ -103,6 +126,9 @@ func (m Model) ptnNotes(slot proto.PadIndex) (map[int][]int, int, bool) {
 	for _, n := range d.Notes {
 		key := int(n.Pad.Bank())*16 + int(n.Pad.Pad())
 		notes[key] = append(notes[key], int(n.Tick)/per)
+	}
+	for key, ticks := range m.recNotes[slot] {
+		notes[key] = append(notes[key], ticks...)
 	}
 	return notes, length, true
 }

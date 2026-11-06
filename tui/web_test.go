@@ -1362,3 +1362,35 @@ func TestAPatternMarkedAsPlayingSendsNothingAndIsTheOneThatPlays(t *testing.T) {
 		t.Errorf("now %d next %d, want 2 and -1", p.Now, p.Next)
 	}
 }
+
+func TestPadsPlayedWhileTheUnitRecordsAreNotesOfThePatternThatPlays(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	bank := m.snap.Bank(0)
+	slot := bank[2].Pad
+	if err := app.WriteStartPattern(m.unit, slot, []proto.PadIndex{bank[0].Pad}, 2); err != nil {
+		t.Fatal(err)
+	}
+	m.patterns = map[int][]app.PatternRow{}
+	r.s.model = m
+	r.s.run(m.loadPatternsQuietly(0))
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.tick(5)
+	m = r.s.m()
+	m.perfNow = &slot
+	m.patPreview[slot], _ = app.OpenPattern(m.unit, slot)
+	r.s.model = m
+	r.web(`{"a":"patrec"}`)
+	r.tick(20)
+	r.feed(midiin.Event{Kind: midiin.NoteOn, Channel: 10, Data1: 48 + 3, Data2: 100}) // J4
+	r.s.press("r")
+	s := w.last(t)
+	if !s.PatRec {
+		t.Fatal("REC is not shown")
+	}
+	got := r.s.m().recNotes[slot][9*16+3]
+	if len(got) != 1 || got[0] != 25 {
+		t.Errorf("recorded %v, want [25]", got)
+	}
+}

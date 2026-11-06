@@ -312,6 +312,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 				// The sequencer runs: these notes are what the pattern plays (the unit sends them
 				// over MIDI), not pads hit by hand. They find the pattern, not the pad codes.
 				m.mon.heard((e.Channel-1)*16+pad-1, m.clock.ticks)
+				m = m.recordedNote((e.Channel-1)*16 + pad - 1)
 				nm := m.detectPattern().ptnConfirm()
 				if nm.perfNow != m.perfNow {
 					// A new pattern: its notes are read for the Perform view.

@@ -550,3 +550,5 @@ button.bankchip { border: 0; font-family: inherit; touch-action: manipulation; }
 
 #ptnMark { width: 100%; min-height: 36px; margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .04em; background: var(--tile); color: var(--dim); border-radius: 8px; }
 #ptnMark.on { background: var(--hot); color: #000; }
+
+#top.patrec .brand::after { content: " ● REC"; color: #fff; background: #d33; border-radius: 6px; padding: 1px 7px; margin-left: 8px; font-size: 12px; font-weight: 800; letter-spacing: .08em; }
