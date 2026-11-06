@@ -1362,3 +1362,44 @@ func TestAPatternMarkedAsPlayingSendsNothingAndIsTheOneThatPlays(t *testing.T) {
 		t.Errorf("now %d next %d, want 2 and -1", p.Now, p.Next)
 	}
 }
+
+// A pad recorded into the pattern on the unit shows in the page once the pattern is read again.
+func TestThePatternThatPlaysIsReadAgainForNewPads(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	bank := m.snap.Bank(0)
+	slot := bank[2].Pad
+	if err := app.WriteStartPattern(m.unit, slot, []proto.PadIndex{bank[0].Pad}, 2); err != nil {
+		t.Fatal(err)
+	}
+	m.patterns = map[int][]app.PatternRow{}
+	r.s.model = m
+	r.s.run(m.loadPatternsQuietly(0))
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.tick(5)
+	m = r.s.m()
+	m.perfNow = &slot
+	m.patPreview[slot], _ = app.OpenPattern(m.unit, slot)
+	r.s.model = m
+	r.s.press("r")
+	count := func() int {
+		n := 0
+		for _, p := range w.last(t).Pads {
+			n += len(p.Hits)
+		}
+		return n
+	}
+	before := count()
+	if err := app.WriteStartPattern(m.unit, slot, []proto.PadIndex{bank[0].Pad, bank[1].Pad}, 2); err != nil {
+		t.Fatal(err)
+	}
+	mm := r.s.m()
+	mm.patReadAt = time.Time{}
+	r.s.model = mm
+	r.tick(2)
+	r.s.press("r")
+	if after := count(); after <= before {
+		t.Errorf("notes %d before, %d after the unit got a pad", before, after)
+	}
+}
