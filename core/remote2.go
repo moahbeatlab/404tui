@@ -401,6 +401,7 @@ type follow struct {
 	loaded   int  // the project in the editor (0 based), -1 for none
 	liveMode bool // the mode it was loaded in
 	tried    time.Time
+	reload   bool // something was kept: when it has all been sent the unit is told to read the project again
 }
 
 // Follow makes the editor follow the unit's current project: the page shows the project that is loaded on the unit, with its pads and patterns,
@@ -470,4 +471,27 @@ func (a *App) remotePatterns() []RCell {
 		out[i] = RCell{Used: true, Info: fmt.Sprintf("%d bars, %d notes", d.Bars, len(d.Notes))}
 	}
 	return out
+}
+
+// reloadTick makes the unit read the project again once what was kept has been sent: a pattern written to its card shows on the unit only then
+// (this stops the sound there). A page that edits live does it by itself; the terminal has it on a key (Reload on the unit).
+func (r *Remote) reloadTick() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.fl.reload {
+		return
+	}
+	a := r.a
+	if a.live == nil {
+		r.fl.reload = false
+		return
+	}
+	if waiting, _, err := a.liveStatus(); waiting > 0 {
+		return
+	} else if err != nil {
+		r.fl.reload = false // what was kept did not get there: the message says so
+		return
+	}
+	r.fl.reload = false
+	a.reloadLive()
 }

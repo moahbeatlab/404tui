@@ -242,7 +242,9 @@
     $('unitText').textContent = st.live ? 'live: unit project ' + st.live : st.unit ? 'unit: ' + st.unit : 'no unit';
     let line = st.msg || '';
     if (st.job && !st.job.ended) line = st.job.what + (st.job.total ? ' ' + st.job.done + '/' + st.job.total : '') + ' ' + st.job.name;
-    $('status').textContent = line; $('status').className = 'status' + (st.msgBad || (st.job && st.job.error) ? ' bad' : '');
+    if (st.liveErr) line = 'writing to the unit failed: ' + st.liveErr; else if (st.sending) line = 'sending to the unit… (' + st.sending + ')';
+    if (!line && st.job && st.job.ended) line = st.job.error ? 'failed: ' + st.job.error : (st.job.what || 'sent to the unit') + ': done';
+    $('status').textContent = line; $('status').className = 'status' + (st.msgBad || st.liveErr || (st.job && st.job.error) ? ' bad' : '');
     if (st.screen === 'slicer') mode = 'slicer';
     const sl = st.screen === 'slicer';
     $('patview').hidden = sl; $('sliceview').hidden = !sl;

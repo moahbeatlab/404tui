@@ -37,6 +37,7 @@ func (r *Remote) Loop(stop <-chan struct{}) {
 			return
 		case <-t.C:
 			r.Do(func(a *App) { a.Tick() })
+			r.reloadTick()
 			if n%40 == 0 { // about every two seconds
 				r.followTick()
 			}
@@ -214,6 +215,7 @@ func (r *Remote) Run(index int) *RMenu {
 			// "Keep it" commits the trial (and, on a unit that is edited live, sends it); on a page that is the end of the tool: back to the menu it came from
 			if keep && r.a.menu == m && strings.HasPrefix(r.a.msg, "kept") {
 				r.a.remoteKey(B)
+				r.fl.reload = r.a.live != nil // a pattern written to the unit shows there when the unit reads the project again
 			}
 		}
 	}
@@ -282,6 +284,8 @@ type RState struct {
 	Pad      int      `json:"pad"`                // the track in front
 	Projects []string `json:"projects,omitempty"` // the unit's projects, when there is a link
 	Job      *RJob    `json:"job,omitempty"`      // a load or a send that is under way
+	Sending  int      `json:"sending,omitempty"`  // changes still on their way to the unit (live editing)
+	LiveErr  string   `json:"liveErr,omitempty"`  // why the last write to the unit failed
 	Follow   bool     `json:"follow"`             // the editor follows the unit's current project
 	Mode     string   `json:"mode,omitempty"`     // "live": changes go to the unit as they are made; "copy": they stay in the editor
 	Project  int      `json:"project,omitempty"`  // the unit's project that is in the editor (1 to 16)
@@ -323,6 +327,13 @@ func (a *App) remoteState(view [3]int, fl follow) RState {
 		s.Live = a.live.project + 1
 	}
 	s.Follow = fl.on
+	if a.live != nil {
+		w, _, err := a.liveStatus()
+		s.Sending = w
+		if err != nil {
+			s.LiveErr = err.Error()
+		}
+	}
 	if fl.on && fl.loaded >= 0 {
 		s.Project, s.Name, s.Mode = fl.loaded+1, a.unitProjectName(fl.loaded), map[bool]string{true: "live", false: "copy"}[fl.liveMode]
 		if a.live == nil && fl.liveMode {

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -201,5 +202,48 @@ func TestKeepItKeepsTheTrialAndGoesBack(t *testing.T) {
 	r.Undo()
 	if got := len(r.Pattern().Tracks[0].Notes); got >= n {
 		t.Fatalf("one undo takes the tool back: %d, was %d", got, n)
+	}
+}
+
+func TestAKeptToolIsWrittenToTheUnitLiveAndTheUnitReloads(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	r := NewRemote(a)
+	r.Follow(true, true)
+	deadline := time.Now().Add(15 * time.Second)
+	wait := func(cond func() bool) bool {
+		for time.Now().Before(deadline) {
+			r.Do(func(a *App) { a.connAt = time.Time{}; a.Tick() })
+			r.followTick()
+			r.reloadTick()
+			if cond() {
+				return true
+			}
+			time.Sleep(30 * time.Millisecond)
+		}
+		return false
+	}
+	if !wait(func() bool { return r.State().Live > 0 }) {
+		t.Fatalf("not live: %+v", r.State())
+	}
+	r.Do(func(a *App) { a.addTrack(1); a.toggle(1, 0) })
+	m := r.OpenPatternTools()
+	for i, n := range m.Tabs {
+		if strings.EqualFold(n, "notes") {
+			m = r.Tab(i)
+		}
+	}
+	d := r.Run(findItem(m, "Fill"))
+	if d == nil {
+		t.Fatal("no Fill")
+	}
+	r.Run(findItem(d, "Keep it"))
+	r.Do(func(a *App) { a.live.mu.Lock(); a.live.reloaded = false; a.live.mu.Unlock() })
+	if !wait(func() bool {
+		var done bool
+		r.Do(func(a *App) { a.live.mu.Lock(); done = a.live.reloaded; a.live.mu.Unlock() })
+		return done
+	}) {
+		t.Fatalf("the unit was not told to read the project again: %+v", r.State())
 	}
 }

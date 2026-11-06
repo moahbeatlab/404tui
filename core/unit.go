@@ -211,6 +211,14 @@ func (a *App) send() {
 			j.mu.Unlock()
 		})
 		os.RemoveAll(tmp)
+		if dl, ok := link.(DeviceLink); ok && err == nil {
+			// the files are on the card: the unit shows them when it reads the project again (that stops its sound)
+			if cur, cerr := dl.Dev.CurrentProject(); cerr == nil && int(cur) == n {
+				if rerr := dl.Dev.ReloadProject(uint8(n)); rerr != nil {
+					err = fmt.Errorf("sent, but the unit did not reload the project: %w", rerr)
+				}
+			}
+		}
 		j.mu.Lock()
 		j.err, j.finished = err, true
 		j.mu.Unlock()
