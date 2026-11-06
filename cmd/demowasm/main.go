@@ -210,6 +210,7 @@ func demoUnit() *device.Device {
 			s.SetSMP(pad(b*16+i), k.name, k.smp.SMP())
 		}
 	}
+	s.Keep() // a reload of the project (a kept tool makes the unit read it again) must not empty the pads
 	dev := device.New(s, "demo unit")
 	// each bank has patterns of its own: genre grooves on that bank's pads
 	lanesOf := func(b int, m map[formats.Lane]int) map[formats.Lane]proto.PadIndex {
