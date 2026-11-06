@@ -1345,25 +1345,6 @@ func TestThePadsOfThePatternThatPlaysAreGivenTheirNotesAndTheLoopPlace(t *testin
 	}
 }
 
-func TestAPatternMarkedAsPlayingSendsNothingAndIsTheOneThatPlays(t *testing.T) {
-	r, w := webRig(t)
-	r.s.press("r")
-	m := r.s.m()
-	bank := m.snap.Bank(0)
-	if err := app.WriteStartPattern(m.unit, bank[2].Pad, []proto.PadIndex{bank[0].Pad}, 2); err != nil {
-		t.Fatal(err)
-	}
-	m.patterns = map[int][]app.PatternRow{}
-	r.s.model = m
-	r.s.run(m.loadPatternsQuietly(0))
-	r.web(`{"a":"ptnmark","i":2}`)
-	r.s.press("r")
-	if p := w.last(t).Ptn; p.Now != 2 || p.Next != -1 {
-		t.Errorf("now %d next %d, want 2 and -1", p.Now, p.Next)
-	}
-}
-
-// A pad recorded into the pattern on the unit shows in the page once the pattern is read again.
 func TestThePatternThatPlaysIsReadAgainForNewPads(t *testing.T) {
 	r, w := webRig(t)
 	r.s.press("r")

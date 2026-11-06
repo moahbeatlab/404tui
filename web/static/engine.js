@@ -102,6 +102,10 @@
   function realtime(st) { return { kind: st === 0xF8 ? 'clock' : st === 0xFA ? 'start' : st === 0xFB ? 'continue' : st === 0xFC ? 'stop' : 'other' }; }
 
   // ---- a unit that is not there, for a try: a clock, four buses that have said what they have, and a click for a pad ----
+  // The demo unit: a kit on the pads (name, bus, in the pattern that plays) and how many pads each pattern uses.
+  const DEMO_KIT = [['KICK', 1, true], ['SNARE', 1, true], ['CLAP', 0, false], ['HAT', 2, true], ['OPEN HAT', 2, true], ['RIM', 0, false], ['TOM LO', 0, false], ['TOM HI', 0, false],
+    ['BASS', 0, true], ['STAB', 1, false], ['CHORD', 1, false], ['PERC', 0, true], ['SHAKER', 2, false], ['FX', 2, false], ['VOX', 0, false], ['NOISE', 2, false]];
+  const DEMO_PATTERNS = [6, 5, 4, 7, 3, 8, 5, 6];
   class Demo {
     constructor(onEvent, onChange) { this.onEvent = onEvent; this.onChange = onChange; this.ok = true; this.name = 'demo'; this.error = ''; this.ctx = null; }
     async connect() {
@@ -114,17 +118,74 @@
           [16, 17, 18, 80, 81, 82].forEach((cc, i) => set(ch, cc, clamp(k + i * 13, 0, 127)));
         });
       }, 400);
+      // a pattern on the first pads, so there is something to hear and see (pad flashes) from the start
+      const steps = { 0: [0, 4, 8, 12], 1: [4, 12], 3: [2, 6, 10, 14], 4: [14], 8: [0, 3, 6, 10], 11: [7, 15] };
+      this.unlockOnce = () => this.unlock();
+      document.addEventListener('pointerdown', this.unlockOnce, { once: true });
+      document.addEventListener('keydown', this.unlockOnce, { once: true });
+      if (!this.hint) {
+        this.hint = document.createElement('div'); this.hint.textContent = 'Tap anywhere to turn the sound on';
+        this.hint.style.cssText = 'position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#ffb000;color:#161618;font:700 14px system-ui;padding:10px 16px;border-radius:12px;z-index:50;pointer-events:none';
+        document.body.appendChild(this.hint);
+      }
       let t = performance.now(), n = 0;
       this.onEvent({ kind: 'start' });
       this.timer = setInterval(() => {
         const per = 60000 / 125 / 24, now = performance.now();
-        while (t + per <= now) { t += per; this.onEvent({ kind: 'clock' }); n++; }
+        while (t + per <= now) {
+          t += per; this.onEvent({ kind: 'clock' }); n++;
+          if (n % 6 === 1) {
+            const step = ((n - 1) / 6) % 16;
+            for (const k in steps) if (steps[k].includes(step)) { this.voice(+k); this.onEvent({ kind: 'on', ch: 1, d1: 36 + PAD_OFFSET[+k], d2: 100 }); }
+          }
+        }
       }, 10);
       return true;
     }
     send(bytes) {
-      if ((bytes[0] & 0xF0) === 0x90 && bytes[2] > 0) this.blip(bytes[1]);
+      if ((bytes[0] & 0xF0) === 0x90 && bytes[2] > 0) { const p = padOfNote(bytes[1]); if (p) this.voice(p - 1); else this.blip(bytes[1]); }
       return true;
+    }
+    // The sound is on after the first touch (a browser keeps a page silent until then).
+    unlock() {
+      try {
+        this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)();
+        if (this.ctx.state !== 'running') this.ctx.resume();
+        if (this.hint) { this.hint.remove(); this.hint = null; }
+      } catch (e) { /* no audio: the demo is silent */ }
+    }
+    // A pad of the demo kit, made of oscillators and noise: a kick, a snare, hats and so on.
+    voice(i) {
+      const ctx = this.ctx; if (!ctx || ctx.state !== 'running') return;
+      const t = ctx.currentTime, name = (DEMO_KIT[i] || [''])[0];
+      const out = ctx.createGain(); out.connect(ctx.destination);
+      const env = (g, peak, len) => { g.gain.setValueAtTime(peak, t); g.gain.exponentialRampToValueAtTime(0.0008, t + len); };
+      const osc = (type, f0, f1, len, peak) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + len); env(g, peak, len); o.connect(g); g.connect(out); o.start(t); o.stop(t + len + 0.05); };
+      const noise = (len, peak, hp, bp) => {
+        const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * len), ctx.sampleRate), d = buf.getChannelData(0);
+        for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1;
+        const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+        s.buffer = buf; f.type = bp ? 'bandpass' : 'highpass'; f.frequency.value = bp || hp; env(g, peak, len); s.connect(f); f.connect(g); g.connect(out); s.start(t);
+      };
+      out.gain.value = 0.9;
+      switch (name) {
+        case 'KICK': osc('sine', 160, 45, 0.35, 0.9); break;
+        case 'SNARE': osc('triangle', 220, 160, 0.14, 0.4); noise(0.2, 0.5, 1500); break;
+        case 'CLAP': noise(0.18, 0.6, 0, 1400); break;
+        case 'HAT': noise(0.06, 0.3, 7000); break;
+        case 'OPEN HAT': noise(0.3, 0.25, 6000); break;
+        case 'RIM': osc('square', 900, 700, 0.04, 0.25); break;
+        case 'TOM LO': osc('sine', 130, 80, 0.3, 0.6); break;
+        case 'TOM HI': osc('sine', 220, 140, 0.25, 0.6); break;
+        case 'BASS': osc('sawtooth', 55, 0, 0.3, 0.35); break;
+        case 'STAB': osc('sawtooth', 330, 0, 0.18, 0.2); osc('sawtooth', 415, 0, 0.18, 0.2); break;
+        case 'CHORD': [262, 330, 392].forEach((f) => osc('triangle', f, 0, 0.6, 0.15)); break;
+        case 'PERC': osc('square', 520, 300, 0.08, 0.25); break;
+        case 'SHAKER': noise(0.09, 0.2, 5000); break;
+        case 'FX': osc('sawtooth', 200, 1600, 0.5, 0.15); break;
+        case 'VOX': osc('triangle', 300, 260, 0.35, 0.3); break;
+        default: noise(0.3, 0.2, 800);
+      }
     }
     blip(note) {
       try {
@@ -614,7 +675,8 @@
       };
       for (let i = 0; i < 16; i++) {
         const at = this.lastHit.get(bank * 16 + i), age = at ? now - at : 1e9;
-        s.pads.push({ n: i + 1, name: '', has: true, bus: 0, level: 127, muted: false, heard: age < 250, inPat: false,
+        const kit = this.demo ? DEMO_KIT[i] : null;
+        s.pads.push({ n: i + 1, name: kit ? kit[0] : '', has: !this.demo || !!kit, bus: kit ? kit[1] : 0, level: 127, muted: false, heard: age < 250, inPat: !!kit && kit[2],
           glow: Math.round(clamp(1 - age / 1500, 0, 1) * 5) / 5, sel: false, keep: false, bars: '', dry: false });
       }
       sc.bus.forEach((bs, b) => {
@@ -636,7 +698,7 @@
         const set = this.lfoSetting(i), run = sc.lfo[i];
         s.lfo.push({ bus: set.bus, knob: set.knob, shape: set.shape, rate: set.rate, depth: set.depth, shift: set.shift, on: run.on, value: run.value });
       }
-      for (let i = 0; i < 16; i++) s.patterns.push({ n: i + 1, exists: true, pads: 0, now: false, next: false });
+      for (let i = 0; i < 16; i++) s.patterns.push({ n: i + 1, exists: !this.demo || i < DEMO_PATTERNS.length, pads: this.demo ? DEMO_PATTERNS[i] || 0 : 0, now: this.demo && i === 0, next: false });
       return s;
     }
     webPunch() {
