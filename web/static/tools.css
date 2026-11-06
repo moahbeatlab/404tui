@@ -81,3 +81,8 @@ body.embed .strip .btn small { font-size: 10px; font-weight: 600; letter-spacing
 .trk { font: inherit; text-align: left; display: grid; gap: 1px; padding: 8px 10px; border-radius: 10px; background: var(--tile); color: var(--text); border: 2px solid transparent; cursor: pointer; min-width: 0; }
 .trk b { font-size: 15px; } .trk span { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .trk small { color: var(--dim); font-size: 11px; }
 .trk.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, var(--tile)); } .trk.sel b { color: var(--accent); }
+
+#wave { touch-action: pan-y; cursor: ew-resize; }
+#sliceview .btn, #chooser .btn.bankchip2 { min-height: 30px; padding: 3px 9px; font-size: 11px; }
+#sliceview .row { gap: 6px; margin-bottom: 6px; } #sliceview .slt { font-size: 13px; }
+#idSlicer .btn.big { min-height: 40px; font-size: 12px; }

@@ -101,11 +101,23 @@
     for (let t = Math.ceil(s.from / s.rate / stepS) * stepS; t < s.to / s.rate; t += stepS) { const x = X(t * s.rate); g.fillRect(x, H - 8, 1, 8); g.fillText((stepS < 1 ? t.toFixed(2) : t.toFixed(0)) + ' s', x + 3, H - 10); }
     g.strokeStyle = dim; g.lineWidth = 1;
     s.slices.forEach((sl) => { const x = X(sl.start); if (sl.start > 0 && x >= 0 && x <= W) { g.beginPath(); g.moveTo(x + .5, 0); g.lineTo(x + .5, H); g.stroke(); } });
-    const cx = X(s.at); g.strokeStyle = text; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, 0); g.lineTo(cx, H); g.stroke();
+    const cx = X(localAt !== null && Date.now() - localTs < 1500 ? localAt : s.at); g.strokeStyle = text; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, 0); g.lineTo(cx, H); g.stroke();
   }
   const frameAt = (ev) => { const s = st.slicer, r = wave.getBoundingClientRect(); return Math.round(s.from + Math.min(Math.max((ev.clientX - r.left) / r.width, 0), 1) * (s.to - s.from)); };
-  wave.onclick = (ev) => { if (st && st.slicer) act({ op: 'slicer-at', i: frameAt(ev) }); };
-  const cur = () => st.slicer.at;
+  // the cursor follows the finger: it is drawn at once from here and sent to the program about every 70 ms
+  let localAt = null, localTs = 0, dragging = false, sentAt = 0, sentVal = -1;
+  const atNow = () => (localAt !== null && Date.now() - localTs < 1500 ? localAt : st.slicer.at);
+  const moveTo = (ev, last) => {
+    if (!st || !st.slicer) return;
+    localAt = frameAt(ev); localTs = Date.now(); drawWave();
+    const now = Date.now();
+    if (last || now - sentAt > 70) { if (localAt !== sentVal || last) { sentAt = now; sentVal = localAt; act({ op: 'slicer-at', i: localAt }); } }
+  };
+  wave.addEventListener('pointerdown', (ev) => { dragging = true; try { wave.setPointerCapture(ev.pointerId); } catch (e) { /* no capture */ } moveTo(ev, false); });
+  wave.addEventListener('pointermove', (ev) => { if (dragging) moveTo(ev, false); });
+  const stopDrag = (ev) => { if (dragging) { dragging = false; moveTo(ev, true); } };
+  wave.addEventListener('pointerup', stopDrag); wave.addEventListener('pointercancel', () => { dragging = false; });
+  const cur = () => atNow();
   $('slCut').onclick = () => act({ op: 'slicer-cut', i: cur() });
   $('slJoin').onclick = () => act({ op: 'slicer-join', i: cur() });
   $('slPlay').onclick = () => act({ op: 'slicer-play', i: cur() });
@@ -259,7 +271,7 @@
     $('idPattern').hidden = mode !== 'pattern'; $('idSlicer').hidden = !(mode === 'slicer' && sl);
     if (sl) {
       const s = st.slicer; $('slTitle').textContent = 'Slicer · ' + s.label + ' ' + s.name; $('slUndo').disabled = !s.canUndo; $('slRedo').disabled = !s.canRedo;
-      $('slInfo').textContent = s.slices.length + ' slices · cursor ' + (s.at / s.rate).toFixed(3) + ' s · plays ' + s.mode;
+      $('slInfo').textContent = s.slices.length + ' slices · cursor ' + (atNow() / s.rate).toFixed(3) + ' s · plays ' + s.mode;
       drawWave();
     }
     $('idle').hidden = !!st.menu ? true : false;
