@@ -36,7 +36,7 @@ address and a key if it was not opened from the link), or give it in the link: `
 
 ## On the phone
 
-| PADS | PATTERNS | MOTION | LOOPER |
+| PADS | PATTERNS | MOTION | SLICER | TOOLS |
 | --- | --- | --- | --- |
 | <img src="img/serve-pads.png" width="200"> | <img src="img/serve-patterns.png" width="200"> | <img src="img/serve-motion.png" width="200"> | <img src="img/serve-looper.png" width="200"> |
 
@@ -162,9 +162,9 @@ Not tried on the unit yet: how the 7-bit steps sound on each knob, and how tight
 
 ## Tools: the pattern, slicer and pad tools in the page
 
-The **TOOLS** button in the top bar of the page opens the tools of the program (the same ones as SEQ in the terminal: fill, Euclid, echo, ratchet, LFO and ENV on the notes, chance, cycle, nudge, pitch, swing and humanize, templates, copy and move patterns, tempo of a bank and the rest) in a page of their own, with every page, setting and value that the terminal has.
+The **TOOLS** tab (the bottom bar, beside PADS, PATTERNS, MOTION, SLICER and STAGE; in landscape the button at the top right goes Perform, Slicer, Patterns, Tools) opens the tools of the program (the same ones as SEQ in the terminal: fill, Euclid, echo, ratchet, LFO and ENV on the notes, chance, cycle, nudge, pitch, swing and humanize, templates, copy and move patterns, tempo of a bank and the rest) in the page, with every page, setting and value that the terminal has.
 
-![The TOOLS button](img/serve-tools-button.png)
+<img src="img/serve-tools-tab-phone.png" width="240"> ![The TOOLS tab](img/serve-tools-tab-laptop.png)
 
 | In a browser | On a phone | The unit's projects |
 | --- | --- | --- |
@@ -228,7 +228,17 @@ network carries: a slow phone skips states), and takes commands as JSON: `{"a":"
 (`bus`), `bars` (`n`), `dub`, `cue` (`i`, `n` 1 now, 2 next), `nextnow`, `clearnext`. The code is in
 `web/` (server and page) and `tui/web.go` (state and commands).
 
-## Looper and Slicer
+## The bank is one for the whole page
+
+The bank chip at the top (BANK) is global: a bank chosen on Patterns, Pads, the Slicer or Tools is the bank on all of them, and the unit moves to it as well. (The bank the Slicer's slices go to, TO, is its own.)
+
+## The project is the unit's
+
+The Tools tab always shows the project that is loaded on the unit, with its pads and patterns (a row of the 16 patterns of the bank, the used ones lit): there is no list of projects to choose from. When the unit's project is changed, the page loads the new one within a few seconds. It is held as a **COPY** (the unit is not changed) until you switch it to **LIVE**; in a copy, **SEND TO UNIT** writes the editor's project over the unit's (asks twice). Changing the unit's project discards the changes of a copy.
+
+## Slicer (the former Looper page)
+
+The Looper page is gone. Its Slicer is the **SLICER** tab; the LOOP page (make a pattern, delete) was removed.
 
 The **LOOPER** tab in portrait (the button at the top right in landscape) is the bank of loops that play together
 ([looper.md](looper.md)), for the phone: the 16 pads of a bank, and a pattern in which all 16 pads start on beat 1 and last

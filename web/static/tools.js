@@ -6,6 +6,7 @@
   const qs = new URLSearchParams(location.search);
   const store = { get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } } };
   const key = qs.get('key') || store.get('key');
+  if (qs.get('embed')) document.body.classList.add('embed');
   $('back').href = './' + (key ? '?key=' + encodeURIComponent(key) : '');
   let st = null, busy = false, editing = 0, mode = 'pattern', pads = null, cbank = 0, win = null, armed = -1, armTimer = 0;
 
@@ -26,7 +27,12 @@
   for (let i = 0; i < 10; i++) { const o = document.createElement('option'); o.value = i; o.textContent = bankNames[i]; $('bank').appendChild(o); }
   for (let i = 0; i < 16; i++) { const o = document.createElement('option'); o.value = i; o.textContent = i + 1; $('pat').appendChild(o); }
   const slot = () => (+$('bank').value) * 16 + (+$('pat').value) + 1;
-  $('bank').onchange = $('pat').onchange = () => act({ op: 'pattern', slot: slot() });
+  $('bank').onchange = () => { act({ op: 'pattern', slot: slot() }); if (window.parent !== window) window.parent.postMessage({ t: 'bank', i: +$('bank').value }, location.origin); };
+  $('pat').onchange = () => act({ op: 'pattern', slot: slot() });
+  window.addEventListener('message', (e) => { // the page around this one has another bank chosen
+    if (e.origin !== location.origin || !e.data || e.data.t !== 'bank' || !(e.data.i >= 0 && e.data.i < 10)) return;
+    if (+$('bank').value !== e.data.i) { $('bank').value = e.data.i; act({ op: 'pattern', slot: e.data.i * 16 + (+$('pat').value) + 1 }); }
+  });
   $('play').onclick = () => act({ op: 'play', on: !(st && st.playing) });
   $('undo').onclick = () => act({ op: 'undo' });
   $('redo').onclick = () => act({ op: 'redo' });
@@ -193,21 +199,26 @@
     }
   }
 
-  function renderProjects() {
-    const list = $('projList'); list.textContent = '';
-    const names = st.projects || [];
-    $('projSum').textContent = names.length ? '(' + names.length + ')' : '(no unit)';
-    names.forEach((n, i) => {
-      const r = document.createElement('div'); r.className = 'proj';
-      const s = document.createElement('span'); s.textContent = (i + 1) + '  ' + (n || '(empty)');
-      const copy = document.createElement('button'); copy.className = 'btn'; copy.textContent = 'OPEN A COPY'; copy.title = 'Copies the project from the unit into the editor; the unit is not changed'; copy.onclick = () => act({ op: 'load', i, live: false });
-      const live = document.createElement('button'); live.className = 'btn' + (st.live === i + 1 ? ' on' : ''); live.textContent = st.live === i + 1 ? 'LIVE' : 'EDIT LIVE'; live.title = 'Every change you keep goes to the unit'; live.onclick = () => act({ op: 'load', i, live: true });
-      const send = document.createElement('button'); send.className = 'btn' + (armed === i ? ' go' : ''); send.textContent = armed === i ? 'SURE? REPLACES ' + (i + 1) : 'SEND'; send.title = 'Writes the editor\'s project over this project of the unit';
-      send.onclick = () => {
-        if (armed !== i) { armed = i; clearTimeout(armTimer); armTimer = setTimeout(() => { armed = -1; renderProjects(); }, 5000); renderProjects(); return; }
-        armed = -1; clearTimeout(armTimer); act({ op: 'send', i });
-      };
-      r.append(s, copy, live, send); list.appendChild(r);
+  // the unit's current project: the page follows it (the program loads it again when the unit's project changes)
+  $('ubMode').onclick = () => act({ op: 'live', on: !(st && st.mode === 'live') });
+  $('ubSend').onclick = () => {
+    if (armed !== 1) { armed = 1; clearTimeout(armTimer); armTimer = setTimeout(() => { armed = -1; renderUnit(); }, 5000); renderUnit(); return; }
+    armed = -1; clearTimeout(armTimer); act({ op: 'send', i: st.project - 1 });
+  };
+  function renderUnit() {
+    const live = st.mode === 'live', has = !!st.project;
+    $('ubTitle').textContent = has ? 'Unit project ' + st.project + (st.name ? ' · ' + st.name : '') : st.unit ? 'loading the unit\'s project…' : 'no unit';
+    $('ubMode').hidden = !has; $('ubMode').textContent = live ? 'LIVE' : 'COPY'; $('ubMode').classList.toggle('on', live);
+    $('ubSend').hidden = !has || live; $('ubSend').textContent = armed === 1 ? 'SURE? REPLACES ' + st.project : 'SEND TO UNIT'; $('ubSend').classList.toggle('go', armed === 1);
+    const w = $('ubWarn'); w.hidden = !has;
+    w.textContent = live ? 'Live: every change you keep goes to the unit. Back the project up first. The unit shows changed patterns only after it reloads the project, which stops the sound.' : 'Copy: the unit is not changed. LIVE writes each kept change to it; SEND writes the whole project over it.';
+  }
+  function renderStrip(p) {
+    const box = $('ptnStrip'); box.textContent = '';
+    (st.patterns || []).forEach((c, i) => {
+      const bank = Math.floor((p.slot - 1) / 16), b = document.createElement('button');
+      b.className = 'btn' + (c.used ? ' used' : '') + (p.slot - 1 === bank * 16 + i ? ' on' : ''); b.textContent = i + 1; b.title = c.used ? c.info : 'empty';
+      b.onclick = () => act({ op: 'pattern', slot: bank * 16 + i + 1 }); box.appendChild(b);
     });
   }
 
@@ -233,7 +244,7 @@
       drawWave();
     }
     $('idle').hidden = !!st.menu ? true : false;
-    renderGrid(p); renderMenu(st.menu); renderProjects(); renderChooser(); renderModal();
+    renderGrid(p); renderMenu(st.menu); renderUnit(); renderStrip(p); renderChooser(); renderModal();
   }
 
   call({ op: 'state' });

@@ -140,3 +140,30 @@ func TestARemoteSendsTheProjectToTheUnit(t *testing.T) {
 	}
 	t.Fatal("the send did not end")
 }
+
+func TestARemoteFollowsTheUnitsCurrentProject(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	r := NewRemote(a)
+	r.Follow(true, false)
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		r.Do(func(a *App) { a.connAt = time.Time{}; a.Tick() })
+		r.followTick()
+		r.Do(func(a *App) { a.Tick() })
+		if st := r.State(); st.Project > 0 && st.Job == nil || (st.Job != nil && st.Job.Ended && st.Project > 0) {
+			if st.Mode != "copy" || len(st.Patterns) != 16 || !st.Follow {
+				t.Fatalf("the project is in: %+v", st)
+			}
+			// the project is not loaded again and again
+			before := a.job
+			r.followTick()
+			if a.job != before {
+				t.Fatal("loaded again")
+			}
+			return
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+	t.Fatal("the unit's current project was not loaded")
+}

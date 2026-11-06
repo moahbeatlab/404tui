@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="tools.css">
 </head>
 <body>
-<header id="bar">
+<header id="bar" class="bar">
   <a id="back" href="./" title="Back to Perform">◂ PERFORM</a>
   <div class="brand">404<span>tui</span> <small>TOOLS</small></div>
   <div id="unit" class="unit"><i></i><b id="unitText">no unit</b></div>
@@ -54,12 +54,13 @@
     </div>
    </div>
     <div id="status" class="status"></div>
-    <details id="projects" class="projects">
-      <summary>The unit's projects <small id="projSum"></small></summary>
-      <div id="projList"></div>
-      <p class="warn"><b>SEND</b> writes the editor's project over the unit's project, which is replaced. The button asks twice.</p>
-      <p class="warn">“Edit live” sends every change you keep to the unit's card. Back the project up first (the terminal program: PROJECTS, then <b>a</b>, Back up). The unit shows changed patterns only after it reloads the project, which stops the sound.</p>
-    </details>
+    <div id="unitbar" class="unitbar">
+      <b id="ubTitle">no unit</b>
+      <button id="ubMode" class="btn" title="Live: every change you keep goes to the unit. Copy: changes stay in the editor.">COPY</button>
+      <button id="ubSend" class="btn" title="Writes the editor's project over the unit's project">SEND TO UNIT</button>
+    </div>
+    <p id="ubWarn" class="warn" hidden></p>
+    <div id="ptnStrip" class="strip" aria-label="Patterns of this bank"></div>
   </section>
 
   <section id="right" class="panel">

@@ -1,8 +1,12 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"time"
+
+	"github.com/moahbeatlab/404tui/lab"
 )
 
 // More of the Remote: the slicer, the tools of a pad, the dialogs a menu may open (a pad or pattern to choose, a text to type) and the project's
@@ -388,4 +392,82 @@ type waveKey struct{ sid, from, to, cols int }
 type waveCache struct {
 	key             waveKey
 	mins, maxs, rms []int
+}
+
+// follow is the editor following the unit's current project: what it loaded, in which mode, and when it tried last.
+type follow struct {
+	on       bool
+	live     bool // what is wanted: edit live (else a copy)
+	loaded   int  // the project in the editor (0 based), -1 for none
+	liveMode bool // the mode it was loaded in
+	tried    time.Time
+}
+
+// Follow makes the editor follow the unit's current project: the page shows the project that is loaded on the unit, with its pads and patterns,
+// and opens the other one when the unit's project is changed. With live, every change that is kept goes to the unit; else the project is a copy.
+func (r *Remote) Follow(on, live bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.fl = follow{on: on, live: live, loaded: -1}
+}
+
+// SetLive changes how the current project is held (live or a copy); it is loaded again in that mode.
+func (r *Remote) SetLive(live bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.fl.live != live {
+		r.fl.live, r.fl.loaded = live, -1
+	}
+}
+
+// followTick looks at the unit's current project and loads it when it is not the one in the editor.
+func (r *Remote) followTick() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a, f := r.a, &r.fl
+	if !f.on {
+		return
+	}
+	dev, ok := a.unitDevice()
+	if !ok {
+		f.loaded = -1
+		return
+	}
+	if a.job != nil {
+		if _, _, _, _, fin := a.job.state(); !fin {
+			return
+		}
+	}
+	cur, err := dev.CurrentProject()
+	if err != nil || int(cur) > 15 {
+		return
+	}
+	n := int(cur)
+	stale := f.loaded != n || (f.live && !f.liveMode) || (!f.live && f.liveMode)
+	if !stale && f.live && a.live == nil && time.Since(f.tried) > 10*time.Second {
+		stale = true // live editing stopped by itself
+	}
+	if !stale || time.Since(f.tried) < 3*time.Second {
+		return
+	}
+	f.tried = time.Now()
+	f.loaded, f.liveMode = n, f.live
+	a.menu, a.picker, a.prompt = nil, nil, nil
+	a.unitLoadNow(dev, n, f.live) // the unit's project replaces what is in the editor: it follows the unit
+}
+
+// remotePatterns are the 16 patterns of the bank in front: which have notes.
+func (a *App) remotePatterns() []RCell {
+	bank := (a.pat - 1) / 16
+	out := make([]RCell, 16)
+	for i := range out {
+		slot := bank*16 + i + 1
+		b, err := a.lab.Pattern(slot)
+		var d lab.PatternDoc
+		if err != nil || json.Unmarshal(b, &d) != nil {
+			continue
+		}
+		out[i] = RCell{Used: true, Info: fmt.Sprintf("%d bars, %d notes", d.Bars, len(d.Notes))}
+	}
+	return out
 }

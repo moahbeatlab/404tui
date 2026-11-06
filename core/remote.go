@@ -13,6 +13,7 @@ type Remote struct {
 	mu   sync.Mutex
 	a    *App
 	view [3]int // the window of the slicer's peaks: from, to, columns
+	fl   follow
 }
 
 // NewRemote wraps a program (which the caller no longer touches but through the Remote).
@@ -29,12 +30,15 @@ func (r *Remote) Do(f func(*App)) {
 func (r *Remote) Loop(stop <-chan struct{}) {
 	t := time.NewTicker(50 * time.Millisecond)
 	defer t.Stop()
-	for {
+	for n := 1; ; n++ {
 		select {
 		case <-stop:
 			return
 		case <-t.C:
 			r.Do(func(a *App) { a.Tick() })
+			if n%40 == 0 { // about every two seconds
+				r.followTick()
+			}
 		}
 	}
 }
@@ -272,6 +276,11 @@ type RState struct {
 	Pad      int      `json:"pad"`                // the track in front
 	Projects []string `json:"projects,omitempty"` // the unit's projects, when there is a link
 	Job      *RJob    `json:"job,omitempty"`      // a load or a send that is under way
+	Follow   bool     `json:"follow"`             // the editor follows the unit's current project
+	Mode     string   `json:"mode,omitempty"`     // "live": changes go to the unit as they are made; "copy": they stay in the editor
+	Project  int      `json:"project,omitempty"`  // the unit's project that is in the editor (1 to 16)
+	Name     string   `json:"name,omitempty"`     // its name
+	Patterns []RCell  `json:"patterns,omitempty"` // the 16 patterns of the bank in front
 	Screen   string   `json:"screen"`             // "slicer" when the slicer is open, else "pattern"
 	Slicer   *RSlicer `json:"slicer,omitempty"`
 	Picker   *RPicker `json:"picker,omitempty"` // a pad or pattern is asked for
@@ -293,10 +302,10 @@ type RJob struct {
 func (r *Remote) State() RState {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.a.remoteState(r.view)
+	return r.a.remoteState(r.view, r.fl)
 }
 
-func (a *App) remoteState(view [3]int) RState {
+func (a *App) remoteState(view [3]int, fl follow) RState {
 	s := RState{Screen: "pattern", Picker: a.remotePicker(), Prompt: a.remotePrompt(), Other: a.remoteOther(), Menu: a.remoteMenu(), Pattern: a.remotePattern(), Msg: a.msg, MsgBad: a.msgBad, Playing: a.seqOn, Pad: a.rowPad()}
 	if a.scr == Slice && a.sl != nil {
 		s.Screen, s.Slicer = "slicer", a.remoteSlicer(view[0], view[1], view[2])
@@ -307,6 +316,14 @@ func (a *App) remoteState(view [3]int) RState {
 	if a.live != nil {
 		s.Live = a.live.project + 1
 	}
+	s.Follow = fl.on
+	if fl.on && fl.loaded >= 0 {
+		s.Project, s.Name, s.Mode = fl.loaded+1, a.unitProjectName(fl.loaded), map[bool]string{true: "live", false: "copy"}[fl.liveMode]
+		if a.live == nil && fl.liveMode {
+			s.Mode = "copy" // live editing has stopped
+		}
+	}
+	s.Patterns = a.remotePatterns()
 	if a.link != nil {
 		if names, err := a.unitNames(); err == nil {
 			s.Projects = names

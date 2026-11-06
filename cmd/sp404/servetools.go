@@ -64,7 +64,9 @@ func newToolsApp(o options, shared *sharedUnit, player app.Player) *core.Remote 
 		}
 		return nil, io.ErrClosedPipe
 	}
-	return core.NewRemote(a)
+	r := core.NewRemote(a)
+	r.Follow(true, false) // the page shows the project that is on the unit, as a copy until it is told to write to the unit
+	return r
 }
 
 // toolsAPI is the page's way to the tools: one JSON call, an operation and what it needs, and the whole state back.
@@ -152,6 +154,8 @@ func (t toolsAPI) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		t.r.PromptSet(in.Text, in.Done, in.On)
 	case "escape":
 		t.r.Escape()
+	case "live":
+		t.r.SetLive(in.On)
 	case "send":
 		if msg := t.r.SendToUnit(in.I); msg != "" {
 			http.Error(w, msg, http.StatusConflict)

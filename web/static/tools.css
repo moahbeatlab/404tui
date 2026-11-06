@@ -55,3 +55,11 @@ select { max-width: 100%; }
 @media (max-width: 520px) { .proj { grid-template-columns: 1fr auto auto; } .proj span { grid-column: 1 / -1; } }
 
 .other[hidden] { display: none; }
+
+body.embed #bar #back, body.embed #bar .brand { display: none; }
+body.embed { padding-top: 8px; }
+body.embed #bar { margin-bottom: 6px; }
+
+.unitbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; } .unitbar b { margin-right: auto; font-size: 13px; overflow-wrap: anywhere; }
+.strip { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 3px; margin-top: 8px; } .strip .btn { padding: 4px 0; min-height: 34px; font-size: 11px; text-align: center; opacity: .55; } .strip .btn.used { opacity: 1; border-color: var(--accent); } .strip .btn.on { background: var(--accent); color: var(--ink); opacity: 1; }
+@media (max-width: 520px) { .strip { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
