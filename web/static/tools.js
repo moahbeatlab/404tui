@@ -45,7 +45,8 @@
   // the three kinds of tools: the pattern's, the slicer's, a pad's
   const setMode = (m) => {
     mode = m;
-    if (m !== 'slicer' && st && st.screen === 'slicer') return act({ op: 'slicer-close' });
+    if (m !== 'slicer' && st && st.screen === 'slicer') return act({ op: 'pattern-view' }); // the slicing stays: CLOSE ends it
+    if (m === 'slicer' && st && st.resume) return act({ op: 'slicer-resume' });
     if (m !== 'pattern' && st && st.menu && !st.slicer) return act({ op: 'escape' });
     render();
   };

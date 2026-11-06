@@ -308,6 +308,7 @@ type RState struct {
 	Patterns []RCell  `json:"patterns,omitempty"` // the 16 patterns of the bank in front
 	Screen   string   `json:"screen"`             // "slicer" when the slicer is open, else "pattern"
 	Slicer   *RSlicer `json:"slicer,omitempty"`
+	Resume   string   `json:"resume,omitempty"` // a slicing that was left (the pad it is of): ResumeSlicer comes back to it
 	Picker   *RPicker `json:"picker,omitempty"` // a pad or pattern is asked for
 	Prompt   *RPrompt `json:"prompt,omitempty"` // a text is asked for
 	Other    string   `json:"other,omitempty"`  // a dialog of the program that the page cannot show
@@ -340,6 +341,9 @@ func (a *App) remoteState(view [3]int, fl follow) RState {
 	}
 	if a.live != nil {
 		s.Live = a.live.project + 1
+	}
+	if a.sl != nil && a.scr != Slice {
+		s.Resume = a.label(a.spad)
 	}
 	s.Follow = fl.on
 	if a.live != nil {

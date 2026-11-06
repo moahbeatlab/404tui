@@ -182,12 +182,37 @@ func (r *Remote) OpenSlicer(pad int) {
 	}
 }
 
-// CloseSlicer goes back to the pads.
+// CloseSlicer ends the slicing (what was cut and set is dropped) and goes back to the pads.
 func (r *Remote) CloseSlicer() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.a.menu, r.a.picker, r.a.prompt = nil, nil, nil
 	r.a.go_(Pads)
+	r.a.sl = nil
+}
+
+// ShowPattern leaves the slicer's screen without ending the slicing: the cuts and the settings stay, and ResumeSlicer comes back to them.
+func (r *Remote) ShowPattern() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.a
+	a.menu, a.picker, a.prompt = nil, nil, nil
+	if a.scr == Slice {
+		a.go_(Seq)
+	}
+}
+
+// ResumeSlicer comes back to the slicing that was left (the same sample, the same cuts, order and settings).
+func (r *Remote) ResumeSlicer() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.a
+	if a.sl == nil {
+		return
+	}
+	a.menu, a.picker, a.prompt, a.pp, a.np = nil, nil, nil, nil, nil
+	a.bank, a.cur = a.spad/16, a.spad%16 // go_ opens a new slicing when the pad in front is not the one that was sliced
+	a.go_(Slice)
 }
 
 // SlicerAt moves the cursor to a frame.

@@ -128,6 +128,10 @@ func (t toolsAPI) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	case "slicer":
 		t.r.OpenSlicer(in.Pad)
+	case "pattern-view":
+		t.r.ShowPattern()
+	case "slicer-resume":
+		t.r.ResumeSlicer()
 	case "slicer-close":
 		t.r.CloseSlicer()
 	case "slicer-view":

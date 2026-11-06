@@ -299,3 +299,34 @@ func TestTheLoopingOrderTakesWhatIsChanged(t *testing.T) {
 		t.Fatalf("play the whole order stops the loop: playing %v, %d loops, was %d", r.State().Slicer.Playing, au.Loops, n)
 	}
 }
+
+func TestTheSlicingStaysWhenThePatternIsShownAndEndsOnClose(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	r := NewRemote(a)
+	r.OpenSlicer(1)
+	r.SlicerMenu("tools")
+	r.Run(findItem(r.Menu(), "Cut in equal parts"))
+	r.Escape()
+	n := len(r.State().Slicer.Slices)
+	if n < 4 {
+		t.Fatalf("cut: %d", n)
+	}
+	r.ShowPattern()
+	st := r.State()
+	if st.Screen != "pattern" || st.Resume == "" {
+		t.Fatalf("the slicing is kept: screen %q resume %q", st.Screen, st.Resume)
+	}
+	r.OpenPatternTools()
+	r.Escape()
+	r.ResumeSlicer()
+	st = r.State()
+	if st.Screen != "slicer" || len(st.Slicer.Slices) != n || !st.Slicer.CanUndo {
+		t.Fatalf("resumed: %q, %d slices (was %d), undo %v", st.Screen, len(st.Slicer.Slices), n, st.Slicer.CanUndo)
+	}
+	r.CloseSlicer()
+	if st := r.State(); st.Resume != "" || st.Screen != "pattern" {
+		t.Fatalf("CLOSE ends it: %+v", st.Resume)
+	}
+}
