@@ -91,6 +91,22 @@
       g.fillStyle = i === s.active ? 'rgba(255,176,0,.42)' : i === s.sel ? 'rgba(255,176,0,.16)' : (i % 2 ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.07)'); g.fillRect(x0, 0, x1 - x0, H);
       if (i === s.active) { g.fillStyle = accent; g.fillRect(x0, 0, x1 - x0, 3); }
       g.fillStyle = dim; g.font = '11px system-ui'; if (x1 - x0 > 16) g.fillText(String(i + 1), x0 + 4, 12);
+      // small marks for what is set on the slice: reversed, a roll, a pitch, a chance below 100 (stacked, so a narrow slice shows them too)
+      if (x1 - x0 > 22) {
+        const tags = [];
+        if (sl.reverse) tags.push('◂ REV');
+        if (sl.roll) tags.push('× ' + sl.roll);
+        if (sl.pitch) tags.push((sl.pitch > 0 ? '+' : '') + sl.pitch + ' st');
+        if (sl.chance < 100) tags.push(sl.chance + '%');
+        g.save(); g.beginPath(); g.rect(x0, 0, x1 - x0, H); g.clip(); g.font = '600 9px system-ui';
+        tags.forEach((tx, k) => {
+          const w = g.measureText(tx).width + 8, y = 20 + k * 15;
+          g.fillStyle = 'rgba(18,18,20,.82)'; g.strokeStyle = accent; g.lineWidth = 1;
+          g.beginPath(); if (g.roundRect) g.roundRect(x0 + 3.5, y + .5, w, 13, 6); else g.rect(x0 + 3.5, y + .5, w, 13); g.fill(); g.stroke();
+          g.fillStyle = text; g.fillText(tx, x0 + 7.5, y + 10);
+        });
+        g.restore();
+      }
     });
     const mins = s.mins || [], maxs = s.maxs || [], rms = s.rms || [], n = maxs.length || 1, mid = H / 2, amp = H / 2 - 8, cw = W / n;
     // the shape: from the lowest to the highest sample of each column, and inside it the loudness (RMS)
