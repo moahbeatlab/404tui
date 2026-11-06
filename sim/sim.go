@@ -637,6 +637,13 @@ func (s *Sim) eraseFolder() {
 	}
 }
 
+// Keep stores the pads as they are now in the project's folder, so that a reload of the project (which reads them from there) leaves them.
+func (s *Sim) Keep() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.saveProject()
+}
+
 // saveProject and loadProject keep each project's pad blocks in a file of its folder, so
 // that switching projects switches pads.
 func (s *Sim) saveProject() {
