@@ -416,7 +416,7 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 	case "view":
 		m.webView = c.Name
 		return m, m.wanted()
-	case "ptn", "ptnmark", "ptnbank", "ptnbankset", "ptnfollow":
+	case "ptn", "ptnbank", "ptnbankset", "ptnfollow":
 		return m.ptnCommand(c.A, c.I)
 	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute", "slmang", "slprev", "slreorder":
 		i := c.I

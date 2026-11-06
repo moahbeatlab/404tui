@@ -21,6 +21,8 @@ jobs:
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
       - run: go test ./...
+      - name: The tools of the demo build as WebAssembly
+        run: GOOS=js GOARCH=wasm go build -o /dev/null ./cmd/demowasm
       - name: The program checks itself (simulated unit)
         run: go run ./cmd/sp404 -sim check
 
