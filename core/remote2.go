@@ -206,6 +206,7 @@ func (r *Remote) SlicerCut(frame int) {
 	if a := r.a; a.sl != nil && a.scr == Slice && a.menu == nil {
 		a.at = min(max(frame, 0), a.sl.Frames-1)
 		a.remoteKey(A)
+		a.remoteReplay()
 	}
 }
 
@@ -216,6 +217,7 @@ func (r *Remote) SlicerJoin(frame int) {
 	if a := r.a; a.sl != nil && a.scr == Slice && a.menu == nil && len(a.sl.Slices) > 1 {
 		a.at = min(max(frame, 0), a.sl.Frames-1)
 		a.remoteKey(B)
+		a.remoteReplay()
 	}
 }
 
@@ -250,6 +252,7 @@ func (r *Remote) SlicerUndo(redo bool) {
 	defer r.mu.Unlock()
 	if a := r.a; a.sl != nil && a.scr == Slice {
 		a.slicerUndo(redo)
+		a.remoteReplay()
 	}
 }
 
@@ -563,5 +566,12 @@ func (r *Remote) CloseMenus() {
 	defer r.mu.Unlock()
 	for i := 0; i < 8 && (r.a.menu != nil || r.a.prompt != nil || r.a.picker != nil); i++ {
 		r.a.remoteEscape()
+	}
+}
+
+// remoteReplay makes the order that loops take what was just changed (the settings, the cuts, the order): the loop goes on with the new one, with no gap.
+func (a *App) remoteReplay() {
+	if a.scr == Slice && a.sl != nil && a.orderOn {
+		a.hearOrder(false)
 	}
 }

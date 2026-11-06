@@ -247,3 +247,55 @@ func TestAKeptToolIsWrittenToTheUnitLiveAndTheUnitReloads(t *testing.T) {
 		t.Fatalf("the unit was not told to read the project again: %+v", r.State())
 	}
 }
+
+func TestTheLoopingOrderTakesWhatIsChanged(t *testing.T) {
+	termOn(t)
+	a, au := newApp(t)
+	keys(t, a, kit)
+	r := NewRemote(a)
+	r.OpenSlicer(1)
+	r.SlicerMenu("tools")
+	r.Run(findItem(r.Menu(), "Cut in equal parts"))
+	r.Escape()
+	r.SlicerOrder(true)
+	if !r.State().Slicer.Playing {
+		t.Fatal("the order does not loop")
+	}
+	n := au.Loops
+	// a setting of the slicer
+	r.SlicerMenu("settings")
+	m := r.Menu()
+	for i, tn := range m.Tabs {
+		if tn == "PLAY" {
+			m = r.Tab(i)
+		}
+	}
+	var order RItem
+	for _, it := range m.Items {
+		if it.Label == "Play order" {
+			order = it
+		}
+	}
+	r.Set(order.Index, (order.Val+1)%len(order.Vals))
+	if au.Loops <= n {
+		t.Fatalf("a changed setting is not heard: %d loops", au.Loops)
+	}
+	r.Escape()
+	n = au.Loops
+	r.SlicerShuffle()
+	r.SlicerCut(100)
+	if au.Loops <= n {
+		t.Fatal("a cut is not heard")
+	}
+	n = au.Loops
+	r.SlicerMenu("settings")
+	for i, tn := range r.Menu().Tabs {
+		if tn == "PLAY" {
+			r.Tab(i)
+		}
+	}
+	r.Run(findItem(r.Menu(), "Play the whole order")) // that one stops it
+	if r.State().Slicer.Playing || au.Loops != n {
+		t.Fatalf("play the whole order stops the loop: playing %v, %d loops, was %d", r.State().Slicer.Playing, au.Loops, n)
+	}
+}

@@ -201,6 +201,7 @@ func (r *Remote) Set(index, val int) *RMenu {
 		if it := m.find(index); it != nil && len(it.vals) > 0 && val >= 0 && val < len(it.vals) && val != it.val {
 			it.val = (val - 1 + len(it.vals)) % len(it.vals) // one step before: Right makes it val, and runs what a change runs
 			r.a.remoteKey(Right)
+			r.a.remoteReplay()
 		}
 	}
 	return r.a.remoteMenu()
@@ -213,7 +214,11 @@ func (r *Remote) Run(index int) *RMenu {
 	if m := r.a.menu; m != nil {
 		if it := m.find(index); it != nil {
 			keep := strings.HasPrefix(it.label, "Keep it")
+			label := it.label
 			r.a.remoteKey(A)
+			if !strings.HasPrefix(label, "Play") && !strings.HasPrefix(label, "Tap") { // those start or stop the sound themselves
+				r.a.remoteReplay()
+			}
 			// "Keep it" commits the trial (and, on a unit that is edited live, sends it); on a page that is the end of the tool: back to the menu it came from
 			if keep && r.a.menu == m && strings.HasPrefix(r.a.msg, "kept") {
 				r.a.remoteKey(B)
