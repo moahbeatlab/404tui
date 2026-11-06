@@ -418,6 +418,16 @@ func (a *App) cfgItems() []cfgItem {
 					a.set.MidiCtlSend = map[bool]string{true: "off", false: "on"}[a.ctlSend()]
 					a.saveSettings()
 				}},
+			cfgItem{label: "Pad group: mute and isolate", value: func(a *App) string {
+				return map[bool]string{true: "on (push mutes, turn isolates)", false: "off"}[a.ctlPadsOn()]
+			}, hint: "< > change",
+				change: func(a *App, by int) {
+					if a.ctlPadsOn() {
+						a.padsRestore()
+					}
+					a.set.MidiCtlPads = map[bool]string{true: "off", false: "on"}[a.ctlPadsOn()]
+					a.saveSettings()
+				}},
 			cfgItem{label: "Controller", value: func(a *App) string { return a.ctlStatus() }},
 		)
 	}

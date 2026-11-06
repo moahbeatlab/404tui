@@ -8,6 +8,7 @@ import (
 
 	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/perflog"
+	"github.com/moahbeatlab/404tui/proto"
 )
 
 func TestControllerPatternGroup(t *testing.T) {
@@ -149,5 +150,85 @@ func TestControllerSendsThePatternToTheUnit(t *testing.T) {
 	a.ctlEvent(midiin.Event{Kind: midiin.ProgramChange, Channel: 5, Data1: 16})
 	if a.slotLabel(a.perfNow) != "E8" {
 		t.Fatal("out of range moved the pattern")
+	}
+}
+
+func TestControllerPadGroup(t *testing.T) {
+	a, _ := newApp(t)
+	l, err := a.Connect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.link = l
+	dev := l.(DeviceLink).Dev
+	a.pads.sync = func(f func()) { f() }
+	level := func(pad int) int32 {
+		idx, _ := proto.NewPadIndex(uint16(pad))
+		blk, err := dev.PadBlock(idx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, _ := blk.Param(0x69)
+		return v
+	}
+	on := func(n int) midiin.Event {
+		return midiin.Event{Kind: midiin.NoteOn, Channel: 16, Data1: n, Data2: 100}
+	}
+	turn := func(n int, at time.Time) midiin.Event {
+		return midiin.Event{Kind: midiin.CC, Channel: 16, Data1: n, Data2: 65, At: at}
+	}
+	for i := 0; i < 32; i++ { // the demo pads have no level
+		idx, _ := proto.NewPadIndex(uint16(i))
+		if err := dev.SetParam(0x69, proto.TargetPad(idx), 90); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a.ctlBank = 1 // bank B
+	before := level(16 + 2)
+	if before != 90 {
+		t.Fatalf("level %d", before)
+	}
+	// a push of E3 mutes B3, the same push brings it back
+	a.ctlEvent(on(78))
+	if level(18) != 0 {
+		t.Fatalf("B3 is not muted: %d", level(18))
+	}
+	a.ctlEvent(on(78))
+	if level(18) != before {
+		t.Fatalf("B3 level %d, was %d", level(18), before)
+	}
+	// a turn of E5 isolates B5: the others of bank B are 0, bank A is left alone
+	other := level(3)
+	t0 := time.Now()
+	a.ctlEvent(turn(80, t0))
+	a.ctlEvent(turn(80, t0.Add(100*time.Millisecond)))
+	for i := 16; i < 32; i++ {
+		got := level(i)
+		if i == 20 && got == 0 {
+			t.Fatalf("B5 is silent")
+		}
+		if i != 20 && got != 0 {
+			t.Fatalf("pad %d is not muted: %d", i, got)
+		}
+	}
+	if level(3) != other {
+		t.Fatal("bank A was touched")
+	}
+	// the same knob after a pause ends it
+	a.ctlEvent(turn(80, t0.Add(3*time.Second)))
+	if level(18) != before {
+		t.Fatalf("not back: %d", level(18))
+	}
+	// a mute is put back when the pad group is left
+	a.ctlEvent(on(78))
+	a.padsRestore()
+	if level(18) != before {
+		t.Fatalf("restore: %d", level(18))
+	}
+	// off: nothing happens
+	a.set.MidiCtlPads = "off"
+	a.ctlEvent(on(78))
+	if level(18) != before {
+		t.Fatal("the group is off")
 	}
 }

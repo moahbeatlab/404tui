@@ -216,6 +216,7 @@ type App struct {
 	ctlTry            time.Time
 	ctlErr            string
 	unitOut           midiin.Out  // the output to the unit, opened when a pattern is sent to it
+	pads              ctlPads     // what the controller's pad group has muted
 	ctlBank           int         // the bank the controller has chosen (0 is A): what a push of the pattern group is a pattern of
 	codes             padCode     // the pads hit in turn
 	liveBack          Screen      // where the live mode came from
@@ -521,6 +522,7 @@ func (a *App) RequestQuit() {
 		a.say("not saved! "+again+" again to quit, any key to stay", true)
 		return
 	}
+	a.padsRestore() // the levels the controller's mutes took come back
 	a.Quit = true
 }
 
