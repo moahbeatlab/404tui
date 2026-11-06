@@ -103,3 +103,21 @@ body.embed .strip .btn small { font-size: 10px; font-weight: 600; letter-spacing
 #patbar { position: sticky; top: 0; z-index: 3; background: var(--panel); padding: 6px 0; margin: 0 0 4px; border-bottom: 1px solid var(--line); }
 #patview { display: contents; }
 main:has(#right[hidden]) { grid-template-columns: minmax(0, 1fr); }
+
+/* the slicer's buttons in groups: play, cut, more; zoom is a small control by the info line */
+.zoombar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -2px 0 8px; font-size: 12px; } .zoombar .dim { min-width: 0; }
+.zoomsw { display: inline-flex; flex: none; } .zoomsw .btn { border-radius: 0; margin-left: -1px; min-width: 40px; } .zoomsw .btn:first-child { border-radius: 8px 0 0 8px; margin-left: 0; } .zoomsw .btn:last-child { border-radius: 0 8px 8px 0; }
+.grp { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: center; margin-bottom: 6px; }
+.gl { color: var(--dim); font-size: 10px; font-weight: 800; letter-spacing: .1em; }
+.g2, .g3 { display: grid; gap: 6px; } .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grp .btn { width: 100%; min-height: 38px; padding: 4px 6px; } #sliceview .grp .btn { min-height: 38px; font-size: 11px; }
+.btn.strong { border-color: var(--accent); color: var(--accent); }
+
+/* the toolbar of the pattern: the bank and the tools on the first line, play / undo / redo as three equal buttons under them */
+#patbar { display: grid; gap: 6px; }
+.pb-top { display: flex; gap: 6px; align-items: stretch; flex-wrap: wrap; } .pb-top #open { flex: 1 1 140px; min-height: 40px; font-size: 13px; }
+.pb-top .bankchip2 { min-height: 40px; }
+.pb-seg { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 6px; } .pb-seg .btn { min-height: 36px; font-size: 11px; padding: 4px 6px; }
+.unitbar:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; } .unitbar b { margin: 0; }
+.ub-btns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; } .ub-btns .btn { min-height: 34px; font-size: 11px; padding: 4px 6px; }
+.ub-btns .btn[hidden] { display: none; }

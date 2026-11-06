@@ -25,14 +25,18 @@
 <main>
   <section id="left" class="panel">
    <div id="patview">
-    <div class="row" id="patbar">
-      <button id="bankOpen" class="btn bankchip2" hidden>BANK <b id="bankOpenL">A</b> ▾</button>
-      <label>BANK <select id="bank"></select></label>
-      <label>PATTERN <select id="pat"></select></label>
-      <button id="open" class="btn go" title="The tools of the pattern: they write into it as a trial; Keep it commits">PATTERN TOOLS</button>
-      <button id="play" class="btn">▶ PLAY HERE</button>
-      <button id="undo" class="btn" title="Undo (a kept tool is one step)">UNDO</button>
-      <button id="redo" class="btn">REDO</button>
+    <div id="patbar">
+      <div class="pb-top">
+        <button id="bankOpen" class="btn bankchip2" hidden>BANK <b id="bankOpenL">A</b> ▾</button>
+        <label>BANK <select id="bank"></select></label>
+        <label>PATTERN <select id="pat"></select></label>
+        <button id="open" class="btn go" title="The tools of the pattern: they write into it as a trial; Keep it commits">PATTERN TOOLS</button>
+      </div>
+      <div class="pb-seg">
+        <button id="play" class="btn">▶ PLAY HERE</button>
+        <button id="undo" class="btn" title="Undo (a kept tool is one step)">UNDO</button>
+        <button id="redo" class="btn">REDO</button>
+      </div>
     </div>
     <div id="patinfo" class="dim"></div>
     <div id="grid" role="grid" aria-label="The pattern"></div>
@@ -44,31 +48,26 @@
       <button id="slRedo" class="btn">REDO</button>
       <button id="slClose" class="btn">CLOSE</button>
     </div>
-    <canvas id="wave" height="170" aria-label="The sample: tap to put the cursor"></canvas>
-    <div class="row">
-      <button id="slCut" class="btn go">CUT AT CURSOR</button>
-      <button id="slJoin" class="btn">JOIN</button>
-      <button id="slPlay" class="btn">▶ PLAY SLICE</button>
-    </div>
-    <div class="row">
-      <button id="slOrder" class="btn go">▶ PLAY ORDER</button>
-      <button id="slShuffle" class="btn">SHUFFLE</button>
-    </div>
-    <div class="row">
-      <button id="slSet" class="btn">SETTINGS</button>
-      <button id="slTools" class="btn">TOOLS</button>
-    </div>
-    <div class="row">
-      <button id="zIn" class="btn">ZOOM +</button><button id="zOut" class="btn">ZOOM −</button><button id="zAll" class="btn">ALL</button>
+    <canvas id="wave" height="170" aria-label="The sample: touch and slide to put the cursor"></canvas>
+    <div class="zoombar">
       <span id="slInfo" class="dim"></span>
+      <span class="zoomsw" role="group" aria-label="Zoom"><button id="zOut" class="btn" aria-label="Zoom out">−</button><button id="zAll" class="btn">ALL</button><button id="zIn" class="btn" aria-label="Zoom in">+</button></span>
     </div>
+    <div class="grp"><span class="gl">PLAY</span>
+      <div class="g3"><button id="slOrder" class="btn go" title="Plays the whole order in a loop">▶ ORDER</button><button id="slPlay" class="btn">▶ SLICE</button><button id="slShuffle" class="btn">SHUFFLE</button></div></div>
+    <div class="grp"><span class="gl">CUT</span>
+      <div class="g2"><button id="slCut" class="btn strong">CUT AT CURSOR</button><button id="slJoin" class="btn">JOIN</button></div></div>
+    <div class="grp"><span class="gl">MORE</span>
+      <div class="g2"><button id="slSet" class="btn">SETTINGS</button><button id="slTools" class="btn">TOOLS</button></div></div>
    </div>
     <div id="status" class="status"></div>
     <div id="unitbar" class="unitbar">
       <b id="ubTitle">no unit</b>
-      <button id="ubMode" class="btn" title="Live: every change you keep goes to the unit. Copy: changes stay in the editor.">COPY</button>
-      <button id="ubReload" class="btn" title="The unit reads the project again, so that patterns written to it show (stops the sound)" hidden>RELOAD UNIT</button>
-      <button id="ubSend" class="btn" title="Writes the editor's project over the unit's project">SEND TO UNIT</button>
+      <div class="ub-btns">
+        <button id="ubMode" class="btn" title="Live: every change you keep goes to the unit. Copy: changes stay in the editor.">COPY</button>
+        <button id="ubReload" class="btn" title="The unit reads the project again, so that patterns written to it show (stops the sound)" hidden>RELOAD UNIT</button>
+        <button id="ubSend" class="btn" title="Writes the editor's project over the unit's project">SEND TO UNIT</button>
+      </div>
     </div>
     <p id="ubWarn" class="warn" hidden></p>
     <div id="ptnStrip" class="strip" aria-label="Patterns of this bank"></div>

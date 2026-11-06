@@ -280,8 +280,8 @@
     $('other').hidden = !st.other; if (st.other) $('otherText').textContent = 'The program has opened ' + st.other + '. It is made for the terminal; close it here.';
    
     if (sl) {
-      const s = st.slicer; $('slTitle').textContent = 'Slicer · ' + s.label + ' ' + s.name; $('slOrder').textContent = s.playing ? '■ STOP' : '▶ PLAY ORDER'; $('slOrder').classList.toggle('on', s.playing); $('slUndo').disabled = !s.canUndo; $('slRedo').disabled = !s.canRedo;
-      $('slInfo').textContent = s.slices.length + ' slices · cursor ' + (atNow() / s.rate).toFixed(3) + ' s · plays ' + s.mode;
+      const s = st.slicer; $('slTitle').textContent = 'Slicer · ' + s.label + ' ' + s.name; $('slOrder').textContent = s.playing ? '■ STOP' : '▶ ORDER'; $('slOrder').classList.toggle('on', s.playing); $('slUndo').disabled = !s.canUndo; $('slRedo').disabled = !s.canRedo;
+      $('slInfo').textContent = s.slices.length + ' slices · ' + (atNow() / s.rate).toFixed(2) + ' s · ' + s.mode;
       drawWave();
     }
     $('idle').hidden = !!st.menu ? true : false;
