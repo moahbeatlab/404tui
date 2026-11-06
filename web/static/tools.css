@@ -85,7 +85,6 @@ body.embed .strip .btn small { font-size: 10px; font-weight: 600; letter-spacing
 #wave { touch-action: pan-y; cursor: ew-resize; }
 #sliceview .btn, #chooser .btn.bankchip2 { min-height: 30px; padding: 3px 9px; font-size: 11px; }
 #sliceview .row { gap: 6px; margin-bottom: 6px; } #sliceview .slt { font-size: 13px; }
-#idSlicer .btn.big { min-height: 40px; font-size: 12px; }
 
 /* on a phone the tools come first: under the mode bar, above the pattern, the pads and the unit */
 @media (max-width: 860px) { #right { order: -1; } }
@@ -99,3 +98,8 @@ body.embed .strip .btn small { font-size: 10px; font-weight: 600; letter-spacing
 .sheet .mhead { position: sticky; top: -6px; background: var(--panel); padding: 6px 0 8px; z-index: 1; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
 .sheet .mhead h2 { flex: 1; min-width: 0; }
 .sheet .mhead .btn { min-height: 34px; font-size: 11px; }
+
+/* the toolbar of the pattern stays at the top while the page scrolls, with PATTERN TOOLS in it */
+#patbar { position: sticky; top: 0; z-index: 3; background: var(--panel); padding: 6px 0; margin: 0 0 4px; border-bottom: 1px solid var(--line); }
+#patview { display: contents; }
+main:has(#right[hidden]) { grid-template-columns: minmax(0, 1fr); }

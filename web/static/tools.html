@@ -29,6 +29,7 @@
       <button id="bankOpen" class="btn bankchip2" hidden>BANK <b id="bankOpenL">A</b> ▾</button>
       <label>BANK <select id="bank"></select></label>
       <label>PATTERN <select id="pat"></select></label>
+      <button id="open" class="btn go" title="The tools of the pattern: they write into it as a trial; Keep it commits">PATTERN TOOLS</button>
       <button id="play" class="btn">▶ PLAY HERE</button>
       <button id="undo" class="btn" title="Undo (a kept tool is one step)">UNDO</button>
       <button id="redo" class="btn">REDO</button>
@@ -54,6 +55,10 @@
       <button id="slShuffle" class="btn">SHUFFLE</button>
     </div>
     <div class="row">
+      <button id="slSet" class="btn">SETTINGS</button>
+      <button id="slTools" class="btn">TOOLS</button>
+    </div>
+    <div class="row">
       <button id="zIn" class="btn">ZOOM +</button><button id="zOut" class="btn">ZOOM −</button><button id="zAll" class="btn">ALL</button>
       <span id="slInfo" class="dim"></span>
     </div>
@@ -71,30 +76,21 @@
 
   <section id="right" class="panel">
     <div id="idle">
-      <div id="idPattern">
-        <button id="open" class="btn big">PATTERN TOOLS</button>
-        <p class="dim">The tools write into the pattern in front: a trial is in the pattern while a tool is open, <b>Keep it</b> commits it, <b>Back</b> throws it away. “Play here” plays on the computer's speakers.</p>
-      </div>
-      <div id="idSlicer" hidden>
-        <div class="row"><button id="slSet" class="btn big">SLICE SETTINGS</button></div>
-        <div class="row"><button id="slTools" class="btn big">SLICER TOOLS</button></div>
-        <p class="dim">Tap the waveform to put the cursor, then cut, join or play the slice. The tools cut in equal parts, at random places or on the grid, mangle the order, and put the slices (or the result) on pads.</p>
-      </div>
-
       <div id="chooser" hidden>
         <div class="row"><button id="cbankOpen" class="btn bankchip2">BANK <b id="cbankL">A</b> ▾</button><span id="chooseWhy" class="dim"></span></div>
         <div id="cells"></div>
       </div>
     </div>
-    <div id="menu" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="mtitle">
-      <div class="grab" aria-hidden="true"></div>
-      <div class="mhead"><button id="mback" class="btn">◂ BACK</button><h2 id="mtitle"></h2><button id="mdone" class="btn go">DONE</button></div>
-      <div id="tabs" role="tablist"></div>
-      <div id="items"></div>
-    </div>
   </section>
 </main>
 <div id="sheetBack" hidden></div>
+    <div id="menu" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="mtitle">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="mhead"><button id="mback" class="btn">◂ BACK</button><h2 id="mtitle"></h2><button id="mdone" class="btn go">DONE</button></div>
+  <div id="tabs" role="tablist"></div>
+  <div id="items"></div>
+</div>
+
 <div id="modal" hidden>
   <div class="dialog">
     <h2 id="dTitle"></h2>

@@ -278,7 +278,7 @@
     $('patview').hidden = !patMode; $('sliceview').hidden = !sl;
     for (const [id, m] of [['mPattern', 'pattern'], ['mSlicer', 'slicer'], ['mPad', 'pad']]) $(id).classList.toggle('on', mode === m);
     $('other').hidden = !st.other; if (st.other) $('otherText').textContent = 'The program has opened ' + st.other + '. It is made for the terminal; close it here.';
-    $('idPattern').hidden = mode !== 'pattern'; $('idSlicer').hidden = !(mode === 'slicer' && sl);
+   
     if (sl) {
       const s = st.slicer; $('slTitle').textContent = 'Slicer · ' + s.label + ' ' + s.name; $('slOrder').textContent = s.playing ? '■ STOP' : '▶ PLAY ORDER'; $('slOrder').classList.toggle('on', s.playing); $('slUndo').disabled = !s.canUndo; $('slRedo').disabled = !s.canRedo;
       $('slInfo').textContent = s.slices.length + ' slices · cursor ' + (atNow() / s.rate).toFixed(3) + ' s · plays ' + s.mode;
@@ -288,6 +288,8 @@
     renderGrid(p); renderMenu(st.menu); renderUnit(); renderStrip(p); renderChooser(); renderModal();
     for (const id of ['unitbar', 'ptnStrip']) $(id).hidden = !patMode;
     if (!patMode) $('ubWarn').hidden = true;
+    // the right-hand panel holds the pattern tools button or the pad chooser: when it would be empty it is not there (a menu is a sheet over the page)
+    $('right').hidden = $('chooser').hidden;
     $('left').hidden = !(patMode || sl || st.msg || st.liveErr || st.sending);
   }
 
