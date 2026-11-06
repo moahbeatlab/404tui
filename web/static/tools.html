@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>404tui tools</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#161618">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="tools.css">
+</head>
+<body>
+<header id="bar">
+  <a id="back" href="./" title="Back to Perform">◂ PERFORM</a>
+  <div class="brand">404<span>tui</span> <small>TOOLS</small></div>
+  <div id="unit" class="unit"><i></i><b id="unitText">no unit</b></div>
+</header>
+
+<main>
+  <section id="left" class="panel">
+    <div class="row" id="patbar">
+      <label>BANK <select id="bank"></select></label>
+      <label>PATTERN <select id="pat"></select></label>
+      <button id="play" class="btn">▶ PLAY HERE</button>
+      <button id="undo" class="btn" title="Undo (a kept tool is one step)">UNDO</button>
+      <button id="redo" class="btn">REDO</button>
+    </div>
+    <div id="patinfo" class="dim"></div>
+    <div id="grid" role="grid" aria-label="The pattern"></div>
+    <div id="status" class="status"></div>
+    <details id="projects" class="projects">
+      <summary>The unit's projects <small id="projSum"></small></summary>
+      <div id="projList"></div>
+      <p class="warn">“Edit live” sends every change you keep to the unit's card. Back the project up first (the terminal program: PROJECTS, then <b>a</b>, Back up). The unit shows changed patterns only after it reloads the project, which stops the sound.</p>
+    </details>
+  </section>
+
+  <section id="right" class="panel">
+    <div id="idle">
+      <button id="open" class="btn big">PATTERN TOOLS</button>
+      <p class="dim">The tools write into the pattern in front: a trial is in the pattern while a tool is open, <b>Keep it</b> commits it, <b>Back</b> throws it away. “Play here” plays on the computer's speakers.</p>
+    </div>
+    <div id="menu" hidden>
+      <div class="mhead"><button id="mback" class="btn">◂ BACK</button><h2 id="mtitle"></h2></div>
+      <div id="tabs" role="tablist"></div>
+      <div id="items"></div>
+    </div>
+  </section>
+</main>
+<script src="tools.js"></script>
+</body>
+</html>

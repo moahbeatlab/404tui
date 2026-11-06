@@ -25,6 +25,8 @@ Since `v0.1-alpha`.
   Pattern templates from House to Footwork, per-bank tempo, copy and move patterns, undo and redo everywhere.
 - **Slicer:** cut by hand, at the onsets, equal parts, random places, on the grid; reorder, mangle, roll; slices to pads with a pattern under them. Switching bank or pattern while a pattern plays leaves the loop alone.
 
+- **Tools in the phone page:** `sp404 serve` has a TOOLS page with the pattern tools (every page, setting and value of the terminal, a trial that is kept or thrown away, play on the computer, the unit's projects). → [docs/web.md](docs/web.md)
+
 ### Recording and replay
 
 - `Ctrl-R` records the unit's audio with an **event log** (pads, knobs, clock, status, mutes, isolation, the project as it was).

@@ -160,6 +160,27 @@ Punch, so they move the effects the unit has (no others). Pick an LFO (1 to 4), 
 
 Not tried on the unit yet: how the 7-bit steps sound on each knob, and how tight a pump feels against a kick.
 
+## Tools: the pattern tools in the page
+
+The **TOOLS** button in the top bar of the page opens the tools of the program (the same ones as SEQ in the terminal: fill, Euclid, echo, ratchet, LFO and ENV on the notes, chance, cycle, nudge, pitch, swing and humanize, templates, copy and move patterns, tempo of a bank and the rest) in a page of their own, with every page, setting and value that the terminal has.
+
+![The TOOLS button](img/serve-tools-button.png)
+
+| In a browser | On a phone | The unit's projects |
+| --- | --- | --- |
+| ![](img/serve-tools-desktop.png) | <img src="img/serve-tools-phone.png" width="240"> | <img src="img/serve-tools-projects.png" width="240"> |
+
+- **The pattern** in front is drawn as its tracks, one row of steps for each pad (the notes are the lit steps, as bright as their velocity; the bars are set apart). A tap on a track's name puts that track in front: the tools act on it. **BANK** and **PATTERN** choose the pattern.
+- **PATTERN TOOLS** opens the menu of the pattern, as `t` does on SEQ: its pages (*Pattern*, *Timing*, *Length*, *Notes*, *Tracks*), and under them every tool. A choice (a rhythm, a velocity, a gate...) is a list of **all** its values, with ◂ and ▸ to step; a tool that opens a dialog of its own (Fill, Euclid...) lists all its settings the same way.
+- **A tool works on a trial.** Opening it applies it to the pattern at once, and a change of a setting applies it again; the line under the pattern says what it did ("euclid 5/16 on A1: 20 notes"). **Keep it** commits the trial as one step, **BACK** throws it away (and goes back a menu). **UNDO** and **REDO** go through what was kept.
+- **PLAY HERE** plays the pattern in a loop on **the speakers of the computer that runs `sp404 serve`** (not on the unit), so each trial can be heard while you change it.
+- **The unit's projects** (the list under the pattern, when a unit is found): **OPEN A COPY** copies the project from the unit into the editor (the unit is not changed); **EDIT LIVE** does the same and then sends every change you keep to the unit's card as it is made. Back a project up before you edit it live. Pad changes show on the unit at once; **patterns written to the unit show only after the unit reloads the project, which stops its sound** (the terminal program has a *Reload on the unit* entry for it).
+- If the editor has work that is not saved, the program asks before it replaces it, in the same menu.
+
+The page runs in the same process as the rest of `sp404 serve` and uses its connection to the unit (only one program can hold the unit's serial port). It does not listen to MIDI itself, so the controller groups (`ec4.md`) are not available in it. The tools page is behind the same key as the rest of the page.
+
+Not in the page yet: the slicer and the tools of the pads, and sending the result to the unit in one step (use *Edit live*, or the terminal program).
+
 ## What it needs
 
 * The computer runs 404tui (`sp404 serve`), with the unit plugged in by USB.

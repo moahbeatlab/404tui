@@ -46,6 +46,7 @@
       <div id="bar">–</div>
     </div>
     <button id="viewBtn" class="viewbtn">LOOPER</button>
+    <a id="toolsBtn" class="viewbtn toolsbtn" href="tools.html">TOOLS</a>
     <div id="conn" class="conn"><i></i><b id="connText">…</b></div>
   </header>
 
@@ -171,6 +172,7 @@
 <div id="lost" hidden><div><b>Connection lost</b><span id="lostS">reconnecting…</span><button id="lostB">Change address</button></div></div>
 
 <script src="mode.js"></script>
+<script>(function(){var k=new URLSearchParams(location.search).get("key")||(function(){try{return localStorage.getItem("key")||""}catch(e){return ""}})();var a=document.getElementById("toolsBtn");if(a&&window.SP404_LOCAL)a.hidden=true;if(a&&k)a.href="tools.html?key="+encodeURIComponent(k);})();</script>
 <script src="fxdata.js"></script>
 <script src="engine.js"></script>
 <script src="app.js"></script>
