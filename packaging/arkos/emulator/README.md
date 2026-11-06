@@ -1,12 +1,12 @@
 # Trying 404tui without the R36S
 
 An arm64 container with the ArkOS userspace (Ubuntu 19.10), running the **same launcher script** as the device
-(`../404tui.sh`) and your local `sp404h-arm64`. The screen is the web page of `-web`, with the eight keys.
+(`../404tui.sh`) and your local `sp404tui-arm64`. The screen is the web page of `-web`, with the eight keys.
 
 ```sh
-GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o sp404h-arm64 ./cmd/sp404h   # in the repo root
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o sp404tui-arm64 ./cmd/sp404h   # in the repo root
 cd packaging/arkos/emulator
-./prepare.sh ../../../sp404h-arm64
+./prepare.sh ../../../sp404tui-arm64
 docker run --privileged --rm tonistiigi/binfmt --install arm64                 # once, on x86 hosts
 docker compose up --build
 ```

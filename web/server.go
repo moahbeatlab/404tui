@@ -23,6 +23,9 @@ import (
 //go:embed static
 var assets embed.FS
 
+// Asset is a file of the page (fxdata.js, the names of the effects), for the programs that serve a page of their own.
+func Asset(name string) ([]byte, error) { return assets.ReadFile("static/" + name) }
+
 // Server is the web side of the program.
 type Server struct {
 	// Key is what a browser must give (as ?key=) to connect; empty lets everyone on the network in.
@@ -33,6 +36,7 @@ type Server struct {
 	mu      sync.Mutex
 	latest  []byte
 	clients map[*client]struct{}
+	extra   map[string]http.Handler
 }
 
 // client is a connected browser: it wakes when there is a newer state and is sent the latest one, so a
@@ -77,7 +81,27 @@ func (s *Server) Handler() http.Handler {
 		files.ServeHTTP(w, r)
 	}))
 	mux.HandleFunc("/ws", s.serveWS)
+	for pattern, h := range s.extra { // what the program mounted (the tools): behind the same key as the socket
+		h := h
+		mux.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !s.authorized(r) {
+				http.Error(w, "wrong key", http.StatusForbidden)
+				return
+			}
+			h.ServeHTTP(w, r)
+		}))
+	}
 	return mux
+}
+
+// Mount adds a route to the server (before it listens): it is served only to those who have the key.
+func (s *Server) Mount(pattern string, h http.Handler) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.extra == nil {
+		s.extra = map[string]http.Handler{}
+	}
+	s.extra[pattern] = h
 }
 
 func (s *Server) authorized(r *http.Request) bool {

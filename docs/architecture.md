@@ -1,0 +1,68 @@
+# How the program is put together
+
+One program, several systems. The features are written once; each system is an implementation around them.
+
+    cmd/sp404            the program for a computer (Linux, macOS, Windows): flags, the system's pieces, then platform/terminal
+    cmd/sp404h           the program for the handheld (R36S): then platform/handheld
+    platform/terminal    a terminal: bubbletea, the keyboard as the buttons, colours and glyphs of the terminal
+    platform/handheld    the R36S: the framebuffer, the gamepad (evdev), the screen as a web page for trying it on a computer
+    core                 the app: every screen, every dialog, every feature, and how they are drawn
+    perform              the unit's MIDI as a state (clock, tempo, pads hit, controllers)
+    lab                  the project in memory: pads, samples, patterns, slicing (also built as WebAssembly for the web page)
+    app, device, proto   talking to the unit: files, projects, pads, importing samples
+    formats, record, midiin, playback, serialport   file formats and the pieces of the system
+
+## core
+
+`core.App` is the whole program minus the system. It is driven by `Dispatch(Event)` (a button down or up) and `Tick()`, and it draws
+through `Gfx` (gfxapi.go): the screens say what they want (a filled block of cells, text, a bar, a waveform, a frame around a
+dialog, the selected row) and a backend decides how it looks. `App.Render()` is the pixel backend (the handheld, the web page,
+screenshots); `App.RenderCells()` is the text backend (the terminal, in the style of the terminal program). A screen is laid out in
+cells for the size set with `core.SetSize(cols, rows)`.
+
+## What a platform hands over
+
+`core.Platform` is what differs between systems:
+
+| Field | What |
+| --- | --- |
+| `Name` | "linux", "macos", "windows", "handheld" |
+| `Audio` | opens the sound output (in the background) |
+| `Recorder` | records the unit's audio (`record.Backend`); nil when the system cannot. Windows may need another device name or tool than Linux: it is the platform's to say |
+| `MIDI` | listens to the unit's MIDI (`midiin.Source`); nil when the build has none |
+| `Connect` | finds a plugged-in unit for UNIT (and live editing) |
+| `Keyboard` | there is a computer's keyboard |
+
+A feature whose piece is missing says so (for example "this build cannot record", "no MIDI in this build") and does not fail. So a
+feature may be missing from one build; none is written twice.
+
+## Adding a feature
+
+Write it in `core` against `Gfx` (never against pixels or characters), take the system's part from `Platform`, give it a screen or a
+menu entry, and test it in `core` (the layout test draws every screen at eight sizes and checks that no text lands on other text).
+A new system is a new package under `platform/` that builds a `Platform`, shows `RenderCells()` or `Render()`, and turns its input into
+`Event`s.
+
+## The packages
+
+| Package | Role |
+| --- | --- |
+| `proto`, `proto/septet`, `proto/fileapi` | Wire format, with no I/O |
+| `device` | Session with the unit over a `Port`: transactions, events, files, import, render |
+| `serialport` | Finds and opens the unit's USB serial port |
+| `sim` | In-memory SP-404MKII, for tests, and over folders of projects for offline work |
+| `formats` | SMP, WAV, AIFF, FLAC, MP3 decoding with resampling to 48 kHz, patterns, `PADCONF.BIN`, the slicer's slices and sequencer |
+| `app` | What the tool does with a unit, apart from how it is shown: assign, export/restore, patterns, file tree |
+| `playback` | Plays samples on this computer's speakers |
+| `record`, `midiin`, `perflog` | The unit's audio and MIDI, and the event log that is written while recording |
+| `replay` | The replay page (`static/replay.html`, one file), the server behind it, the file with what you set (`take.events.cues.json`), the templates, the analysis of the audio |
+| `cmd/sp404` | The command, with `replay render` (a headless browser draws the page frame by frame, ffmpeg makes the video) and `probe` (what the unit does when it is told something) |
+| `tui` | The code of the earlier terminal UI, which `sp404 serve` (the web page for a phone), `sp404 midimap` and `sp404 check` still use; the UI itself is no longer a command |
+
+Tests: `go test -race ./...`, or `make test` (vet, gofmt check and the tests).
+
+## The replay
+
+The replay page is a pure function of the time: `draw(audioTime)` draws everything from the event log, the analysis of the audio and what was set, with no state of its own. So it plays in a browser,
+and a program can set the time (`window.replay.setTime(t)`) and take a picture of each frame: that is how `sp404 replay render` makes a video without a screen recorder. Cuts are a list of parts of the
+take left out; the render lists the parts that are left, frame by frame, and joins the sound of the parts with a very short fade at each join. See [replay.md](replay.md).

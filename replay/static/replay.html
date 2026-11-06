@@ -1,0 +1,2032 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>404tui replay</title>
+<style>
+  :root { --bg:#121214; --panel:#1b1b1e; --amber:#ffb000; --text:#ddd; --dim:#888; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:14px ui-monospace, Menlo, Consolas, monospace; }
+  body { display:flex; flex-direction:column; }
+  #stage { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
+  canvas { width:100%; height:100%; object-fit:contain; background:#121214; }
+  #bar { display:flex; flex-direction:column; gap:8px; padding:8px 16px 10px; background:#161616; border-top:1px solid #2a2a2a; }
+  #bar input { background:#2b2b2b; color:var(--text); border:0; padding:6px 10px; font:inherit; }
+  #bar button, #bar select { background:#2b2b2b; color:var(--text); border:0; padding:6px 12px; font:inherit; cursor:pointer; }
+  #bar button:hover { background:#3a3a3a; }
+  #ph { position:absolute; left:0; width:2px; background:rgba(255,255,255,.8); pointer-events:none; z-index:2; }
+  #main { flex:1; min-height:0; display:flex; }
+  #main #stage { flex:1; min-width:0; }
+  #side { display:none; width:min(400px, 42vw); flex-direction:column; background:#1b1b1e; border-left:1px solid #2a2a2e; min-height:0; }
+  #side.on { display:flex; }
+  #sidetabs { display:flex; flex-wrap:wrap; gap:4px; padding:8px 10px; border-bottom:1px solid #2a2a2e; }
+  #sidetabs button { background:#2b2b2b; color:var(--text); border:0; padding:6px 10px; font:inherit; cursor:pointer; }
+  #sidetabs button.act { background:var(--amber); color:#111; }
+  #sidetabs #sideclose { margin-left:auto; }
+  #sidebody { flex:1; min-height:0; overflow:auto; padding:12px 14px; }
+  #side .pane { display:none; position:static; width:auto; max-width:none; max-height:none; border:0; padding:0; background:transparent; flex-direction:column; gap:8px; }
+  #side .pane.open { display:flex; }
+  #tplbox input, #tplbox button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; cursor:pointer; }
+  #tplbox .h2 { color:var(--text); } #tplbox .h2.sub { margin-top:6px; } #tplbox .h { color:#777; font-size:11px; } #tplbox .row { display:flex; gap:6px; align-items:center; }
+  #tplbox .parts { display:flex; flex-direction:column; gap:3px; color:var(--dim); } #tplbox .parts label { display:flex; gap:6px; align-items:center; }
+  #tplbox .trow { display:flex; gap:6px; align-items:center; padding:6px 0; border-bottom:1px solid #2a2a2e; flex-wrap:wrap; }
+  #tplbox .trow .nm { flex:1; min-width:120px; color:var(--text); } #tplbox .trow .pt { color:#777; font-size:11px; width:100%; }
+  #tplbox .star { background:transparent; font-size:16px; padding:2px 6px; }
+  body.nohud #side { display:none !important; }
+  #tl { position:relative; display:grid; grid-template-columns:72px minmax(0, 1fr); align-items:start; row-gap:4px; column-gap:10px; }
+  #lbls { display:flex; flex-direction:column; gap:4px; }
+  #lbls .lbl { height:22px; line-height:22px; white-space:nowrap; overflow:hidden; }
+  #lanes { overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; }
+  #lanesin { position:relative; width:100%; display:flex; flex-direction:column; gap:4px; }
+  #seekrow { position:relative; }
+  #vwin { position:absolute; top:50%; height:8px; transform:translateY(-50%); background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35); border-radius:4px; pointer-events:none; display:none; }
+  #tl .lbl { color:var(--dim); font-size:11px; text-align:right; }
+  #camlane, #buslane, #chaplane, #cues, #capslane { position:relative; height:22px; margin:0 8px; flex:none; background:#1d1d20; border-radius:4px; }
+  #capslane, #chaplane, #buslane, #camlane, #cues { height:22px; }
+  #camlane .cs { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(199,146,234,.22); border-left:3px solid #c792ea; border-radius:3px; color:var(--text); font-size:11px; padding:2px 6px 0 10px; white-space:nowrap; cursor:pointer; touch-action:none; overflow:hidden; text-overflow:ellipsis; }
+  #camlane .cs .hd { position:absolute; left:-5px; top:0; bottom:0; width:12px; cursor:ew-resize; }
+  #buslane .bn { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(255,255,255,.1); border-left:3px solid var(--bc, #888); border-radius:3px; color:var(--text); font-size:11px; padding:2px 6px 0 10px; white-space:nowrap; cursor:pointer; touch-action:none; max-width:30%; overflow:hidden; text-overflow:ellipsis; }
+  #buslane .bn .hd { position:absolute; left:-5px; top:0; bottom:0; width:12px; cursor:ew-resize; }
+  #bpop { position:fixed; bottom:calc(var(--barh, 110px) + 8px); display:none; gap:6px; align-items:center; background:#1b1b1e; border:1px solid #34343a; padding:8px 10px; z-index:6; }
+  #bpop.open { display:flex; }
+  #bpop button, #bpop input, #bpop select { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; cursor:pointer; }
+  #chaplane .ch { position:absolute; top:0; bottom:0; box-sizing:border-box; border-left:2px solid #5fd0a0; background:rgba(95,208,160,.16); color:var(--text); font-size:11px; padding:3px 6px 0 11px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; touch-action:none; }
+  #chaplane .ch .hd { position:absolute; left:-4px; top:0; bottom:0; width:12px; cursor:ew-resize; }
+  /* the thumb has a size of its own (the browsers' differ), so that its middle is at the lanes' ends: 7 px of the thumb + 1 px of margin = the 8 px the lanes are inset by */
+  #bar #seek { -webkit-appearance:none; appearance:none; width:calc(100% - 2px); min-width:0; box-sizing:border-box; margin:0 1px; padding:0; border:0; height:16px; background:transparent; accent-color:var(--amber); }
+  #seek::-webkit-slider-runnable-track { height:6px; background:#34343a; border-radius:3px; }
+  #seek::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:14px; height:14px; margin-top:-4px; border-radius:50%; background:var(--amber); border:0; }
+  #seek::-moz-range-track { height:6px; background:#34343a; border-radius:3px; }
+  #seek::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:var(--amber); border:0; }
+  html, body { overflow-x:hidden; }
+  #cues .seg { position:absolute; top:0; bottom:0; box-sizing:border-box; border-left:2px solid var(--amber); background:rgba(255,176,0,.2); color:var(--text); font-size:12px; padding:4px 6px 0 11px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; touch-action:none; }
+  #cues .seg.auto { border-left-color:#8a6a2a; background:rgba(255,176,0,.08); color:#c9b27a; }
+  #cues .seg .h { position:absolute; left:-4px; top:0; bottom:0; width:12px; cursor:ew-resize; }
+  #capslane .cap { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(95,175,255,.22); border-left:2px solid #5fafff; border-radius:3px; font-size:11px; padding:2px 6px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:grab; touch-action:none; }
+  #capslane .cap .hd { position:absolute; top:0; bottom:0; width:9px; cursor:ew-resize; }
+  #capslane .cap .hd.l { left:-3px; } #capslane .cap .hd.r { right:-1px; }
+  #cambox { position:fixed; right:16px; bottom:calc(var(--barh, 110px) + 8px); background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:7px; z-index:5; width:min(430px, 92vw); max-height:78vh; overflow:auto; }
+  #cambox.open { display:flex; }
+  #cambox .h2 { color:var(--text); } #cambox .h2.sub { margin-top:4px; } #cambox .h { color:#777; font-size:11px; } #cambox .row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  #cambox input, #cambox select, #cambox button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; cursor:pointer; }
+  #cambox label.g { display:flex; gap:8px; align-items:center; color:var(--dim); } #cambox label.g input[type=range] { flex:1; }
+  #cam_prev { width:100%; max-height:260px; background:#000; }
+  #campop { position:fixed; bottom:calc(var(--barh, 110px) + 8px); display:none; gap:8px; align-items:center; flex-wrap:wrap; background:#1b1b1e; border:1px solid #34343a; padding:8px 10px; z-index:6; max-width:min(640px, 94vw); }
+  #campop.open { display:flex; }
+  #campop button, #campop input, #campop select { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; cursor:pointer; }
+  #chbox { position:fixed; right:16px; bottom:calc(var(--barh, 110px) + 8px); background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; width:min(460px, 92vw); }
+  #chbox.open { display:flex; }
+  #chbox textarea { background:#2b2b2b; color:var(--text); border:0; padding:8px; font:inherit; resize:vertical; }
+  #chbox .h2 { color:var(--text); } #chbox .h { color:#777; font-size:11px; } #chbox .row { display:flex; gap:8px; }
+  #chbox button, #chpop button, #chpop input { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; cursor:pointer; }
+  #chpop { position:fixed; bottom:calc(var(--barh, 110px) + 8px); display:none; gap:6px; align-items:center; background:#1b1b1e; border:1px solid #34343a; padding:8px 10px; z-index:6; }
+  #chpop.open { display:flex; }
+  #capbox .crow { display:flex; flex-direction:column; gap:4px; padding-bottom:8px; border-bottom:1px solid #2a2a2e; }
+  #capbox select { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
+  #ctl { display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; }
+  #ctl .grp { display:flex; gap:8px; align-items:center; }
+  #ctl .grp.right { margin-left:auto; }
+  #cutlane { position:relative; height:22px; margin:0 8px; flex:none; background:#1d1d20; border-radius:4px; cursor:crosshair; }
+  #cutlane .cutb { position:absolute; top:2px; bottom:2px; box-sizing:border-box; border:1px solid #ff5f5f; border-radius:3px; background:repeating-linear-gradient(135deg, rgba(255,95,95,.28) 0 5px, rgba(255,95,95,.08) 5px 10px); color:var(--text); font-size:11px; padding:2px 6px; overflow:hidden; white-space:nowrap; cursor:pointer; touch-action:none; }
+  #cutlane .cutb .hd { position:absolute; top:0; bottom:0; width:9px; cursor:ew-resize; } #cutlane .cutb .hd.l { left:-3px; } #cutlane .cutb .hd.r { right:-3px; }
+  #cutlane .cutin { position:absolute; top:0; bottom:0; width:2px; background:#ff5f5f; } #cutlane .cutdraft { position:absolute; top:2px; bottom:2px; background:rgba(255,95,95,.25); border:1px dashed #ff5f5f; }
+  #cutpop { position:fixed; bottom:calc(var(--barh, 110px) + 8px); display:none; gap:6px; align-items:center; background:#1b1b1e; border:1px solid #34343a; padding:8px 10px; z-index:6; }
+  #cutpop.open { display:flex; } #cutpop input, #cutpop button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; cursor:pointer; }
+  #cuepop { position:fixed; bottom:calc(var(--barh, 110px) + 8px); display:none; gap:6px; align-items:center; background:#1b1b1e; border:1px solid #34343a; padding:8px 10px; z-index:6; }
+  #cuepop.open { display:flex; }
+  #cuepop input, #cuepop select, #cuepop button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
+  #time { min-width:150px; text-align:right; color:var(--dim); }
+  #nudge { color:var(--dim); min-width:110px; }
+  body.nohud #bar, body.nohud #stylebox, body.nohud #chbox, body.nohud #chpop, body.nohud #bpop, body.nohud #cambox, body.nohud #campop { display:none !important; }
+  #capbox { position:fixed; right:16px; bottom:calc(var(--barh, 110px) + 8px); background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; width:min(520px, 92vw); max-height:70vh; overflow:auto; }
+  #capbox.open { display:flex; }
+  #capbox label.g { display:flex; gap:8px; align-items:center; color:var(--dim); }
+  #capbox .h { color:#666; font-size:11px; }
+  #capbox .row { display:flex; gap:6px; align-items:center; }
+  #capbox input, #capbox button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
+  #capbox input.t { width:64px; } #capbox input.x { flex:1; min-width:0; }
+  body.nohud #capbox { display:none !important; }
+  #stylebox { position:fixed; right:16px; bottom:calc(var(--barh, 110px) + 8px); background:#1b1b1e; border:1px solid #34343a; padding:12px 14px; display:none; flex-direction:column; gap:8px; z-index:5; max-width:min(440px, 92vw); }
+  #stylebox.open { display:flex; }
+  #stylebox .two { display:flex; gap:6px; flex:1; } #stylebox .two input { flex:1; min-width:0; }
+  #stylebox .bw { display:flex; gap:6px; align-items:center; }
+  #stylebox label { white-space:nowrap; display:flex; gap:8px; align-items:center; justify-content:space-between; color:var(--dim); }
+  #stylebox input[type=color] { width:44px; height:26px; padding:0; border:0; background:none; }
+  #stylebox input, #stylebox select, #stylebox button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
+  #msg { position:fixed; left:50%; top:45%; transform:translateX(-50%); background:#2b2b2b; padding:16px 24px; display:none; }
+</style>
+</head>
+<body>
+<div id="main">
+<div id="stage"><canvas id="c" width="1920" height="1080"></canvas></div>
+<div id="side">
+  <div id="sidetabs"><button data-p="tplbox">templates</button><button data-p="capbox">captions</button><button data-p="chbox">chapters</button><button data-p="cambox">camera</button><button data-p="stylebox">style</button><button id="sideclose" title="close the sidebar">x</button></div>
+  <div id="sidebody">
+<div id="tplbox" class="pane">
+  <div class="h2">templates <span class="h">(a setup to use for other takes)</span></div>
+  <div class="h2 sub">save the current setup</div>
+  <div class="row"><input id="tpl_name" placeholder="a name, e.g. Reel look" style="flex:1"><button id="tpl_save">save</button></div>
+  <div id="tpl_parts" class="parts"></div>
+  <div class="h2 sub">saved templates</div>
+  <div id="tpl_list"></div>
+  <div class="h2 sub">apply these parts</div>
+  <div id="tpl_apply_parts" class="parts"></div>
+  <div id="tpl_msg" class="h"></div>
+</div>
+<div id="capbox" class="pane">
+  <div id="caplist"></div>
+  <label class="g">fade in and out <input id="c_fade" type="number" min="0" max="3" step="0.05" style="width:64px"> s <span class="h">for all captions</span></label>
+  <label class="g">blur behind a caption <input id="c_blur" type="range" min="0" max="12" step="0.5" style="width:130px"> <span id="c_blurv" class="h"></span></label>
+  <label class="g">animation <select id="c_anim"><option value="card">the card appears</option><option value="words">words pop in</option><option value="type">typed letter by letter</option></select> <span class="h">*word* is shown in the accent colour</span></label>
+  <label class="g">dim behind a caption <input id="c_dim" type="range" min="0" max="80" step="1" style="width:130px"> <span id="c_dimv" class="h"></span></label>
+  <label class="g">a new caption lasts <input id="c_len" type="number" min="1" max="60" step="0.5" style="width:64px"> s <span class="h">for all new captions</span></label>
+  <button id="capadd" title="a caption from the time you are at">add a caption here</button>
+</div>
+<div id="chbox" class="pane">
+  <div class="h2">chapters <span class="h">(they show on the picture, and as the list for the description on YouTube)</span></div>
+  <textarea id="chtext" readonly rows="6" placeholder="no chapters yet"></textarea>
+  <div id="chhint" class="h"></div>
+  <label class="g"><input id="ch_cards" type="checkbox"> a title card at the start of each chapter <input id="ch_cardlen" type="number" min="0.5" max="4" step="0.1" style="width:56px"> s <span class="h">(over the running video)</span></label>
+  <div class="row"><button id="chadd" title="a chapter from the time you are at">add a chapter here</button><button id="chcopy">copy the list</button></div>
+</div>
+<div id="cambox" class="pane">
+  <div class="h2">camera <span class="h">(the video of you playing; drag the box on the picture, its corners change the size)</span></div>
+  <div class="row"><input id="cam_path" placeholder="path of the video, e.g. ~/Movies/take.mov" style="flex:1"><button id="cam_use">use</button></div>
+  <div id="cam_status" class="h"></div>
+  <div class="h2 sub">sync <span class="h">(the camera has no sound: match one pad hit by eye)</span></div>
+  <div class="row"><select id="cam_hit" style="flex:1"></select><button id="cam_gohit" title="show this hit in the replay">go to the hit</button></div>
+  <video id="cam_prev" controls muted playsinline preload="auto"></video>
+  <div class="row"><button id="cam_fm" title="a frame back">&lt; frame</button><button id="cam_fp" title="a frame on">frame &gt;</button><button id="cam_set" style="flex:1">this camera frame = that hit</button></div>
+  <div class="row"><span class="h">offset</span><input id="cam_sync" type="number" step="0.001" style="width:96px"><span class="h">s</span>
+    <button data-n="-1">-1 s</button><button data-n="-0.1">-0.1</button><button data-n="-0.0333">-1 f</button><button data-n="0.0333">+1 f</button><button data-n="0.1">+0.1</button><button data-n="1">+1 s</button></div>
+  <div class="h2 sub">picture</div>
+  <label class="g">zoom <input id="cam_zoom" type="range" min="1" max="3" step="0.01"> <span id="cam_zoomv" class="h"></span></label>
+  <label class="g">left / right <input id="cam_cx" type="range" min="0" max="1" step="0.005"></label>
+  <label class="g">up / down <input id="cam_cy" type="range" min="0" max="1" step="0.005"></label>
+  <label class="g">corners <input id="cam_round" type="range" min="0" max="60" step="1"> <label class="g" style="margin-left:8px"><input id="cam_mirror" type="checkbox"> mirror</label></label>
+  <label class="g">the box is <select id="cam_layer"><option value="front">in front of the panels</option><option value="behind">behind the panels</option></select></label>
+  <div class="row"><button id="cam_scene" title="a new scene from here: the box and the panels can differ">new scene here</button><button id="cam_hide" title="a scene without the camera">hide the camera from here</button><button id="cam_off">no camera</button></div>
+</div>
+<div id="stylebox" class="pane">
+  <label>look <select id="s_preset"></select></label>
+  <label>accent <input id="s_accent" type="color" value="#ffb000"> <button id="s_accent_auto" title="the colour of the look">auto</button></label>
+  <label>background <select id="s_bgkind"><option value="preset">the look's</option><option value="solid">colour</option><option value="gradient">gradient</option><option value="image">picture</option></select></label>
+  <label>colours <input id="s_bg1" type="color" value="#000000"> <input id="s_bg2" type="color" value="#1b1b2e"></label>
+  <label>picture <input id="s_bgimg" type="file" accept="image/*"></label>
+  <label>picture dimmed <input id="s_bgdim" type="range" min="0" max="95" value="60"></label>
+  <label>picture fills <select id="s_bgfit"><option value="cover">the video (cropped to fit)</option><option value="contain">the video (all of it)</option><option value="stretch">the video (stretched)</option><option value="tile">as tiles</option><option value="center">centred (its own size)</option></select></label>
+  <label>picture position <span class="two"><input id="s_bgpx" type="range" min="0" max="100"><input id="s_bgpy" type="range" min="0" max="100"></span></label>
+  <label>picture zoom <input id="s_bgzoom" type="range" min="50" max="300"></label>
+  <label>picture blur <input id="s_bgblur" type="range" min="0" max="30"></label>
+  <label>picture drifts <input id="s_bgdrift" type="range" min="0" max="100" title="moves slowly from side to side"> <span id="s_bgdriftv" class="h"></span></label>
+  <label>picture breathes <input id="s_bgbreath" type="range" min="0" max="100" title="zooms in and out a little"> <span id="s_bgbreathv" class="h"></span></label>
+  <label>a new direction every <input id="s_bgper" type="range" min="4" max="60"> <span id="s_bgperv" class="h"></span></label>
+  <label>hit reactions <input id="s_hits" type="range" min="0" max="100" title="a pad that is hit pops up and glows a little (25 %); more adds a ring, over 50 % sparks; 0 = off"> <span id="s_hitsv" class="h"></span></label>
+  <label>panel opacity <input id="s_bgpanels" type="range" min="0" max="100"> <span id="s_bgpanelsv" class="h"></span></label>
+  <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
+  <label>BUS 1 at the start <span class="bw"><select id="s_bussel0"></select> <input id="s_bus0" placeholder="your own text" size="18" hidden></span></label>
+  <label>BUS 2 at the start <span class="bw"><select id="s_bussel1"></select> <input id="s_bus1" placeholder="your own text" size="18" hidden></span></label>
+  <label>BUS 3 at the start <span class="bw"><select id="s_bussel2"></select> <input id="s_bus2" placeholder="your own text" size="18" hidden></span></label>
+  <label>BUS 4 at the start <span class="bw"><select id="s_bussel3"></select> <input id="s_bus3" placeholder="your own text" size="18" hidden></span></label>
+  <div class="h" style="color:#777;font-size:11px">later in the take: the "bus change" button</div>
+  <label>handle <input id="s_handle" placeholder="@yourname" size="18"></label>
+  <label>subtitle <input id="s_sub" placeholder="under the title" size="22"></label>
+  <button id="s_reset">reset the look</button>
+</div>
+  </div>
+</div>
+</div>
+<div id="bar">
+  <div id="tl">
+    <div id="lbls"><span class="lbl">camera</span><span class="lbl">chapters</span><span class="lbl">patterns</span><span class="lbl">bus fx</span><span class="lbl">captions</span><span class="lbl">cuts</span></div>
+    <div id="lanes" title="Ctrl + wheel zooms, the wheel or a drag of the bar below moves along">
+      <div id="lanesin">
+        <div id="camlane" title="the camera scenes: click one to edit it, drag its left edge to move it"></div>
+        <div id="chaplane" title="the chapters of the video: click one to edit it, drag its left edge to move it"></div>
+        <div id="cues" title="the patterns: click one to edit it, drag its left edge to move it"></div>
+        <div id="buslane" title="what a bus is used for, from a time on: click one to edit it, drag its left edge to move it"></div>
+        <div id="capslane" title="the captions: click one to edit it"></div>
+        <div id="cutlane" title="the parts the video leaves out: drag over the lane to cut a part, click a cut to edit it, drag its edges to change it"></div>
+        <div id="ph"></div>
+      </div>
+    </div>
+    <span class="lbl"></span><div id="seekrow"><input id="seek" type="range" min="0" max="1000" value="0"><div id="vwin"></div></div>
+  </div>
+  <div id="ctl">
+    <span class="grp"><button id="play" title="Space">play</button><span id="time">0:00.0</span>
+      <button id="undo" title="Ctrl-Z">undo</button><button id="redo" title="Ctrl-Shift-Z">redo</button></span>
+    <span class="grp"><button id="zout" title="show more of the take (Ctrl + wheel, or -)">-</button><span id="zlev" style="min-width:34px;text-align:center;color:var(--dim)">1x</span><button id="zin" title="show less of the take (Ctrl + wheel, or +)">+</button><button id="zfit" title="the whole take">fit</button></span>
+    <span class="grp"><input id="title" placeholder="title" size="18" title="the title shown in the video">
+      <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button>
+      <select id="cutsel" title="leave a part of the take out of the video (keys: i starts a cut here, o ends it)"><option value="">cut...</option><option value="in">start a cut here (i)</option><option value="out">end the cut here (o)</option><option value="before">cut everything before here</option><option value="after">cut everything after here</option><option value="none">restore all cuts</option></select></span>
+    <span class="grp"><select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
+      <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span></span>
+    <span class="grp right"><button id="tplbtn" title="save a setup as a template, use one on this take">templates</button>
+      <button id="cambtn" title="the video of you playing">camera</button>
+      <button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
+      <button id="chbtn" title="the chapters, and the list for YouTube">chapters</button>
+      <button id="capbtn" title="text shown at times of the take">captions</button>
+      <button id="stylebtn" title="colours, background, logo, handle">style</button>
+      <button id="full" title="f">full screen</button></span>
+  </div>
+  <div id="cuepop"></div>
+</div>
+
+
+<div id="campop"></div>
+<div id="chpop"></div>
+<div id="cutpop"></div>
+<div id="bpop"></div>
+
+
+<div id="msg"></div>
+<video id="cam" muted playsinline preload="auto" style="position:fixed;left:-9999px;width:2px;height:2px;opacity:0"></video>
+<audio id="audio" preload="auto" src="/audio"></audio>
+<script src="/fxdata.js"></script>
+<script>
+"use strict";
+// ---- the page of a replay: everything on the screen is a function of the time, so that it can be watched (the audio drives the time)
+// and rendered frame by frame (a program sets the time: window.replay.setTime(t)).
+// the colours of 404jam (src/styles/main.css), so that the replay looks like the rest of the family
+const COL = { bg:"#121214", deep:"#161616", panel:"#1b1b1e", tile:"#2c2c30", tile2:"#1d1d20", amber:"#ffb000", amberD:"#7a5a00", amberDD:"#5a4000", text:"#ececf0", dim:"#9a9aa4", line:"#34343a",
+              good:"#87d787", bad:"#ff5f5f", blue:"#5fafff", red:"#ff3b30", green:"#3ddc84", gold:"#ffb300", purple:"#c792ea" };
+const BUSCOL = { 1: COL.blue, 2: COL.red, 3: COL.green, 4: COL.gold };
+const FONT = (px, bold) => (bold ? "bold " : "") + px + "px ui-monospace, Menlo, Consolas, monospace";
+const cv = document.getElementById("c"), g = cv.getContext("2d");
+const params = new URLSearchParams(location.search);
+// ?format=vertical (shorts, reels: 1080x1920) lays the same panels one under the other
+const VERT = ["vertical", "shorts", "reels", "9x16"].includes(params.get("format") || "");
+if (VERT) { cv.width = 1080; cv.height = 1920; }
+const W = cv.width, H = cv.height;
+// where every panel is: [x, y, w, h]. The bottom of a vertical frame is left free for what the platforms put over it, and so are the sides (a phone that
+// is taller than 9:16 shows the video larger than its screen, Instagram and YouTube cut about 48 px of each side: 72 px stay free).
+const L = VERT
+  ? { pads: [72, 108, 936, 540], pattern: [72, 660, 936, 350], fx: [72, 1022, 936, 220], meter: [72, 1254, 936, 270], feed: [72, 1536, 936, 168] }
+  : { pads: [40, 80, 880, 560], pattern: [40, 656, 880, 394], fx: [960, 80, 920, 236], meter: [960, 332, 920, 452], feed: [960, 800, 920, 250] };
+const L0 = JSON.parse(JSON.stringify(L)); // the layout without a camera: what a preset of a scene is laid over
+const PANEL_IDS = ["pads", "pattern", "fx", "meter", "feed"];
+if (params.get("hud") === "0") document.body.classList.add("nohud");
+
+let TITLE = "", EV = [], AN = null, PROJ = { pads: [], patterns: [] }, FILE = "", OFFSET = 0, NUDGE = 0;
+const padInfo = new Map(), patBySlot = new Map(), patByLabel = new Map();
+const selEv = [], otherNotes = [], padEv = new Map(), ccEv = new Map(), fxNum = new Map(), fxOn = new Map(), beats = [], transport = [], patEv = [];
+let peak = null, spec = null, lastHit = [];
+const loopStarts = []; // the unit marks every loop of the pattern with a note (channel 13, note 48)
+let cues = [];         // the patterns set by hand: { t (time of the log), label }, kept by the server beside the event log
+// ---- the patterns on the timeline: the ones the log says (dim tags) and the ones set by hand (amber tags). A tag can be dragged or edited
+// (its pattern, its time, deleted); the first change takes the log's patterns over as cues ("adopted"), so that the list is one and whole.
+// Everything that follows from the pattern (the bank of the pads, the pattern panel, the tempo, the countdown, the flashes) follows the tags.
+let logPat = null, adopted = false;
+const parseTime = v => { const m = String(v).match(/^(\d+):(\d+(?:\.\d+)?)$/); return m ? +m[1] * 60 + +m[2] : parseFloat(v) || 0; };
+function cueFor(label, t) {
+  const p = patByLabel.get(label);
+  return { t: +t.toFixed(3), label,
+    pattern: p ? { slot: p.slot, label: p.label, bars: p.bars, length: p.length, notes: p.notes } : undefined,
+    pads: p ? [...p.pads].map(n => padInfo.get(n)).filter(Boolean) : undefined };
+}
+function patEvents() {
+  patEv.length = 0;
+  patEv.push(...(adopted ? [] : logPat), ...cues.map(c => ({ t: c.t, now: c.label, next: "", cue: true })));
+  patEv.sort((a, b) => a.t - b.t);
+}
+function adoptNow() {
+  if (adopted) return;
+  for (const e of logPat) if (!cues.some(c => Math.abs(c.t - e.t) < 0.05)) cues.push(cueFor(e.now, e.t));
+  cues.sort((a, b) => a.t - b.t); adopted = true;
+}
+function rebuildCues() {
+  if (!logPat) logPat = patEv.slice();
+  patEvents();
+  const box = document.getElementById("cues"); if (!box) return;
+  box.textContent = "";
+  const d = AN ? AN.duration : 0; if (!d) return;
+  const items = [...(adopted ? [] : logPat.map(e => ({ auto: true, t: e.t, label: e.now, e }))), ...cues.map(c => ({ t: c.t, label: c.label, c }))].sort((a, b) => a.t - b.t);
+  items.forEach((it, i) => { // a block from the change to the next one, named by its pattern; its left edge moves it
+    const end = i + 1 < items.length ? items[i + 1].t : d + OFFSET, x0 = clamp((it.t - OFFSET) / d, 0, 1), x1 = clamp((end - OFFSET) / d, 0, 1);
+    const sp = document.createElement("div"); sp.className = "seg" + (it.auto ? " auto" : ""); sp.textContent = it.label;
+    sp.title = it.label + " from " + mmss(it.t - OFFSET) + ": click to edit, drag the left edge to move";
+    sp.style.left = x0 * 100 + "%"; sp.style.width = Math.max(x1 - x0, 0.002) * 100 + "%";
+    const h = document.createElement("span"); h.className = "h"; h.onpointerdown = ev => startDrag(ev, sp, it); sp.appendChild(h);
+    sp.onclick = ev => { if (ev.target === h) return; openCuePop(it, sp); };
+    box.appendChild(sp);
+  });
+}
+function saveCues() { fetch("/cues", { method: "POST", body: JSON.stringify({ cues, adopted }) }).catch(() => {}); histChanged(); }
+function cueOf(it) { if (it.c) return it.c; adoptNow(); return cues.find(c => Math.abs(c.t - it.t) < 0.05 && c.label === it.label) || cues.find(c => Math.abs(c.t - it.t) < 0.05); }
+function startDrag(ev, sp, it) {
+  ev.preventDefault(); try { sp.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+  const box = document.getElementById("cues"), x0 = ev.clientX; let moved = false, cue = null;
+  sp.onpointermove = e2 => {
+    if (!moved && Math.abs(e2.clientX - x0) < 4) return;
+    if (!moved) { moved = true; cue = cueOf(it); if (!cue) return; }
+    const r = box.getBoundingClientRect(), frac = clamp((e2.clientX - r.left) / r.width, 0, 1), d = AN ? AN.duration : 0;
+    cue.t = +snapLoop(frac * d + OFFSET).toFixed(3);
+    sp.style.left = clamp((cue.t - OFFSET) / d * 100, 0, 100) + "%";
+    patEvents();
+  };
+  sp.onpointerup = () => {
+    sp.onpointermove = sp.onpointerup = null;
+    if (moved) { cues.sort((a, b) => a.t - b.t); rebuildCues(); saveCues(); }
+  };
+}
+// the small editor of a tag: the pattern, the time, a step to the loop before or after, delete
+function openCuePop(it, sp) {
+  const cue = cueOf(it); if (!cue) return;
+  rebuildCues();
+  const pop = document.getElementById("cuepop"); pop.textContent = ""; pop.classList.add("open");
+  const sel = document.createElement("select"), time = document.createElement("input");
+  const labels = new Set([...patByLabel.keys(), cue.label]);
+  for (const l of [...labels].sort((a, b) => (patByLabel.get(a) ? patByLabel.get(a).slot : 999) - (patByLabel.get(b) ? patByLabel.get(b).slot : 999) || (a < b ? -1 : 1))) { const o = document.createElement("option"); o.value = l; o.textContent = l; sel.appendChild(o); }
+  sel.value = cue.label;
+  time.value = mmss(cue.t - OFFSET); time.size = 7; time.title = "the time (m:ss.s)";
+  const apply = () => { cues.sort((a, b) => a.t - b.t); rebuildCues(); saveCues(); };
+  sel.onchange = () => { const n = cueFor(sel.value, cue.t); cue.label = n.label; cue.pattern = n.pattern; cue.pads = n.pads; apply(); };
+  time.onchange = () => { cue.t = +(parseTime(time.value) + OFFSET).toFixed(3); apply(); };
+  const step = dir => () => {
+    const ls = loopStarts.slice().sort((a, b) => a - b), t = dir < 0 ? [...ls].reverse().find(l => l < cue.t - 0.05) : ls.find(l => l > cue.t + 0.05);
+    cue.t = +(t !== undefined ? t : cue.t + dir * 0.1).toFixed(3); time.value = mmss(cue.t - OFFSET); apply();
+  };
+  const mk = (txt, title, fn) => { const b = document.createElement("button"); b.textContent = txt; b.title = title; b.onclick = fn; return b; };
+  const seek = mk("go", "play from here", () => { audio.currentTime = Math.max(cue.t - OFFSET - 1, 0); });
+  pop.append(sel, time, mk("<", "to the loop start before", step(-1)), mk(">", "to the loop start after", step(1)), seek,
+    mk("delete", "remove this change", () => { cues = cues.filter(c => c !== cue); pop.classList.remove("open"); apply(); }),
+    mk("x", "close", () => pop.classList.remove("open")));
+  const box = document.getElementById("cues").getBoundingClientRect(), x = box.left + (cue.t - OFFSET) / (AN ? AN.duration : 1) * box.width;
+  pop.style.left = clamp(x - 150, 8, innerWidth - 340) + "px";
+}
+// the pattern changes at the start of a loop: a cue is put on the loop start nearest to the time
+function snapLoop(T) {
+  let best = T, bd = 1.9;
+  for (const l of loopStarts) { const d = Math.abs(l - T); if (d < bd) { bd = d; best = l; } }
+  return best;
+}
+
+const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+// the last item of a sorted list with t <= T (or null)
+function at(list, T) {
+  let lo = 0, hi = list.length - 1, r = -1;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (list[m].t <= T) { r = m; lo = m + 1; } else hi = m - 1; }
+  return r < 0 ? null : list[r];
+}
+function atIndex(list, T) {
+  let lo = 0, hi = list.length - 1, r = -1;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (list[m].t <= T) { r = m; lo = m + 1; } else hi = m - 1; }
+  return r;
+}
+const push = (map, key, v) => { if (!map.has(key)) map.set(key, []); map.get(key).push(v); };
+
+function prepare(events, analysis, cuesIn, adoptedIn) {
+  EV = events; AN = analysis;
+  const timed = EV.filter(e => e.t !== undefined);
+  const ps = [...timed].reverse().find(e => e.k === "project"); // the last: the unit's own project when it was read
+  if (ps) PROJ = ps.data;
+  for (const p of PROJ.pads || []) padInfo.set(p.n, p);
+  for (const p of PROJ.patterns || []) { patBySlot.set(p.slot, p); patByLabel.set(p.label, p); p.pads = new Set(p.notes.map(n => n[1])); }
+  const a = timed.find(e => e.k === "audio_start");
+  OFFSET = a ? a.t : 0;
+  for (const e of timed) {
+    switch (e.k) {
+      case "on": case "off": if (e.bank) push(padEv, e.bank + e.pad, { t: e.t, on: e.k === "on", v: e.v || 0 }); else if (e.k === "on") otherNotes.push({ t: e.t, ch: e.ch, n: e.n, v: e.v }); break;
+      case "cc": push(ccEv, e.ch + ":" + e.n, { t: e.t, v: e.v }); break;
+      case "fx": if (e.fx !== undefined) push(fxNum, e.bus, { t: e.t, v: e.fx }); else push(fxOn, e.bus, { t: e.t, v: e.on }); break;
+      case "beat": beats.push({ t: e.t, n: e.n, bpm: e.bpm }); break;
+      case "start": case "stop": case "continue": transport.push({ t: e.t, k: e.k }); break;
+      case "pattern": patRaw.push(e); break;
+      case "select": if (e.bank) selEv.push({ t: e.t, bank: e.bank }); break;
+      case "mute": push(muteEv, e.bank + e.pad, { t: e.t, on: e.on }); break;
+      case "isolate": isoEv.push({ t: e.t, keep: new Set(e.keep || []), dry: new Set(e.dry || []), buses: e.buses || [] }); break;
+    }
+    if (e.k === "on" && e.ch === 13 && e.n === 48) loopStarts.push(e.t);
+  }
+  // the pattern events: a pattern that was only asked for ("next", the unit has it from the end of its loop) plays from the next loop start
+  const known = l => l && l !== "—" && l !== "-";
+  for (const e of patRaw) {
+    if (known(e.now)) { if (!patEv.length || patEv[patEv.length - 1].now !== e.now) patEv.push({ t: e.t, now: e.now, next: "" }); }
+    else if (known(e.next) && (e.sent || !known(e.now))) {
+      const ls = loopStarts.find(l => l >= e.t - 0.05 && l < e.t + 12);
+      const t = ls !== undefined ? ls : e.t;
+      if (!patEv.length || patEv[patEv.length - 1].now !== e.next) patEv.push({ t, now: e.next, next: "" });
+    }
+  }
+  patEv.sort((a, b) => a.t - b.t);
+  adopted = !!adoptedIn;
+  cues = (cuesIn || []).map(c => ({ t: c.t, label: c.label, pattern: c.pattern, pads: c.pads }));
+  for (const c of cues) { // what the cue kept of the pattern and its pads stands in for a project that has no (or another) one
+    if (c.pattern && !patByLabel.has(c.label)) { const p = c.pattern; p.pads = new Set(p.notes.map(n => n[1])); patBySlot.set(p.slot, p); patByLabel.set(p.label, p); }
+    for (const pd of c.pads || []) if (!padInfo.has(pd.n)) padInfo.set(pd.n, pd);
+  }
+  rebuildCues();
+  const bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const sel = document.getElementById("pat");
+  for (const p of [...patBySlot.values()].sort((a, b) => a.slot - b.slot)) { const o = document.createElement("option"); o.value = p.label; o.textContent = "pattern " + p.label + " (" + p.pads.size + " pads)"; sel.appendChild(o); }
+  const want = params.get("pattern");
+  const ti = document.getElementById("title"); ti.value = TITLE;
+  let tt = null; ti.oninput = () => { TITLE = ti.value; histChanged("text"); clearTimeout(tt); tt = setTimeout(() => fetch("/title", { method: "POST", body: JSON.stringify({ title: TITLE }) }).catch(() => {}), 400); };
+  if (want && patByLabel.has(want)) { chosen = want; sel.value = want; }
+  sel.onchange = () => {
+    if (!sel.value) return;
+    const T = snapLoop(now() + OFFSET + NUDGE / 1000);
+    cues = cues.filter(c => Math.abs(c.t - T) > 0.05);
+    cues.push(cueFor(sel.value, T)); cues.sort((a, b) => a.t - b.t);
+    sel.value = ""; rebuildCues(); saveCues();
+  };
+  document.getElementById("clearcues").onclick = () => { cues = []; adopted = false; document.getElementById("cuepop").classList.remove("open"); rebuildCues(); saveCues(); };
+  if (AN && AN.frames) { peak = new Uint16Array(bytes(AN.peak).buffer); spec = bytes(AN.spec); }
+  for (const [k, l] of padEv) hitTimes.set(k, l.filter(e => e.on).map(e => ({ t: e.t })));
+  for (const e of beats) if (e.bpm) tempoSeries.push(e);
+  buildFeed(timed);
+}
+// ---- the feed: what happens, for a moment (pads pressed, knobs moved, effects, the clock, the pattern)
+const feedStatic = [];
+function buildFeed(timed) {
+  for (const [k, l] of padEv) for (const e of l) if (e.on) feedStatic.push({ t: e.t, text: k + " pressed", val: "v" + e.v, col: COL.amber });
+  for (const e of timed) {
+    if (e.k === "cc") {
+      const bus = e.ch >= 1 && e.ch <= 4 && ((e.n >= 16 && e.n <= 18) || (e.n >= 80 && e.n <= 82));
+      if (bus) feedStatic.push({ t: e.t, key: "cc" + e.ch + ":" + e.n, text: "BUS " + e.ch + " CTRL " + (e.n < 30 ? e.n - 15 : e.n - 79), val: String(e.v), col: BUSCOL[e.ch] });
+      else if (e.n !== 83 && e.n !== 19) feedStatic.push({ t: e.t, key: "cc" + e.ch + ":" + e.n, text: "CC " + e.n + " ch " + e.ch, val: String(e.v), col: COL.dim });
+    } else if (e.k === "fx") {
+      if (e.fx !== undefined) feedStatic.push({ t: e.t, text: "BUS " + e.bus + " effect", val: ((window.SP404_FX || {})[e.bus >= 3 ? "fx34" : "fx12"] || [])[e.fx] || String(e.fx), col: BUSCOL[e.bus] });
+      else feedStatic.push({ t: e.t, text: "BUS " + e.bus + " FX", val: e.on ? "ON" : "OFF", col: BUSCOL[e.bus] });
+    } else if (e.k === "mute") {
+      feedStatic.push({ t: e.t, text: e.bank + e.pad + (e.on ? " muted" : " back in"), val: "", col: COL.bad });
+    } else if (e.k === "isolate") {
+      feedStatic.push({ t: e.t, text: (e.keep || []).length ? "ISOLATE " + e.keep.join(" ") : "ISOLATE off", val: (e.keep || []).length ? "BUS " + (e.buses || []).join(",") : "", col: COL.blue });
+    } else if (e.k === "on" && !e.bank) {
+      feedStatic.push({ t: e.t, text: e.ch === 13 && e.n === 48 ? "loop start" : "MIDI note " + e.n + " ch " + e.ch, val: e.ch === 13 && e.n === 48 ? "" : "v" + e.v, col: COL.dim });
+    } else if (e.k === "start" || e.k === "stop" || e.k === "continue") feedStatic.push({ t: e.t, text: e.k.toUpperCase(), val: "", col: COL.good });
+  }
+  feedStatic.sort((a, b) => a.t - b.t);
+}
+const FEED_SPAN = 4.5;
+function drawFeed(T) {
+  const [x0, y0, w, h] = L.feed;
+  panel(x0, y0, w, h, "EVENTS");
+  const items = [];
+  let i = atIndex(feedStatic, T);
+  for (; i >= 0 && feedStatic[i].t > T - FEED_SPAN; i--) items.push(feedStatic[i]);
+  for (const e of patEv) if (e.now && e.t <= T && e.t > T - FEED_SPAN) items.push({ t: e.t, text: "PATTERN", val: e.now, col: COL.purple });
+  items.sort((a, b) => b.t - a.t);
+  const seen = new Set(), out = []; // a knob that moves is one line: its latest value
+  for (const it of items) { if (it.key) { if (seen.has(it.key)) continue; seen.add(it.key); } out.push(it); if (out.length >= Math.floor((h - 52) / 28)) break; }
+  out.forEach((it, k) => {
+    const age = T - it.t, y = y0 + 44 + k * 28;
+    g.globalAlpha = clamp(1 - Math.pow(age / FEED_SPAN, 2), 0, 1);
+    rect(x0 + 20, y + 2, 5, 20, it.col);
+    text(it.text, x0 + 36, y + 20, COL.text, 20, true);
+    text(it.val, x0 + w - 24, y + 20, it.col, 20, true, "right");
+    g.globalAlpha = 1;
+  });
+}
+
+const hitTimes = new Map(), tempoSeries = [], patRaw = [];
+
+// ---- what the unit was doing at time T (the time of the log)
+function padState(bank, pad, T) {
+  const l = padEv.get(bank + pad); if (!l) return null;
+  const i = atIndex(l, T); if (i < 0) return null;
+  let on = null;
+  for (let j = i; j >= 0 && j > i - 8; j--) { if (l[j].on) { on = l[j]; break; } }
+  return { held: l[i].on, hitAt: on ? on.t : -1, v: on ? on.v : 0 };
+}
+function ccValue(ch, n, T) { const e = at(ccEv.get(ch + ":" + n) || [], T); return e ? e.v : null; }
+function ccHistory(ch, n, T, span) {
+  const l = ccEv.get(ch + ":" + n); if (!l) return [];
+  const i = atIndex(l, T), out = [];
+  for (let j = i; j >= 0 && l[j].t >= T - span; j--) out.unshift(l[j]);
+  return out;
+}
+const fxName = (bus, T) => {
+  const e = at(fxNum.get(bus) || [], T); if (!e) return null;
+  const list = (window.SP404_FX || {})[bus >= 3 ? "fx34" : "fx12"] || [];
+  return list[e.v] || ("effect " + e.v);
+};
+function bankInView(T) {
+  // The bank you are on is the one of the last pad you hit or the last bank you went to (the unit's selected pad carries its bank,
+  // so a jump to another bank to play bongos over a pattern shows); a few seconds after that the pads show the bank of the pattern again.
+  let best = -1, bank = "A";
+  for (const [k, l] of padEv) { const e = at(l, T); if (e && e.t > best) { best = e.t; bank = k[0]; } }
+  const s = at(selEv, T);
+  if (s && s.t > best) { best = s.t; bank = s.bank; }
+  if (best < 0 || T - best > 8) { // nothing touched lately: the bank of the pattern that plays
+    const r = patternAt(T);
+    if (r && r.p.pads.size) {
+      bank = patternBank(r.p) || bank;
+    }
+  }
+  return bank;
+}
+function playPosition(T) {
+  const i = atIndex(beats, T); if (i < 0) return null;
+  const b = beats[i]; if (T - b.t > 2.5) return null; // the clock stopped
+  return { q: b.n + clamp((T - b.t) * b.bpm / 60, 0, 1), bpm: b.bpm };
+}
+// the tempo is in the project: the one of the bank of the pattern that plays (or the project's when the banks share it); the clock only
+// shows where in the bar the unit is, and stands in when the project does not say
+function bankTempo(letter) {
+  const bt = PROJ.bank_tempos;
+  if (bt && !PROJ.project_tempo && bt[letter.charCodeAt(0) - 65]) return bt[letter.charCodeAt(0) - 65];
+  return PROJ.tempo || 0;
+}
+function patternBank(p) {
+  const n = new Map(); for (const pad of p.pads) { const b = Math.floor(pad / 16); n.set(b, (n.get(b) || 0) + 1); }
+  return n.size ? String.fromCharCode(65 + [...n].sort((a, b) => b[1] - a[1])[0][0]) : "";
+}
+function tempoAt(T) {
+  const r = patternAt(T), pos = playPosition(T);
+  if (r) { const b = patternBank(r.p), t = b ? bankTempo(b) : 0; if (t) return { bpm: t, src: "bank " + b }; }
+  if (pos) return { bpm: pos.bpm, src: "clock" };
+  return { bpm: PROJ.tempo || 0, src: "project" };
+}
+function running(T) { const e = at(transport, T); return e ? e.k !== "stop" : !!playPosition(T); }
+
+let sticky = null, chosen = null;
+function patternAt(T) {
+  if (chosen && patByLabel.has(chosen)) return { p: patByLabel.get(chosen), how: "chosen" };
+  const e = at(patEv, T);
+  if (e && e.now && patByLabel.has(e.now)) return { p: patByLabel.get(e.now), how: e.cue ? "cue" : "known" };
+  // no word from the unit: the pattern whose pads are the ones just heard
+  const pos = playPosition(T), bpm = pos ? pos.bpm : 120;
+  const hits = new Set();
+  for (const [k, l] of padEv) {
+    const i = atIndex(l, T);
+    for (let j = i; j >= 0 && l[j].t >= T - 8 * 60 / bpm; j--) if (l[j].on) { hits.add((k.charCodeAt(0) - 65) * 16 + parseInt(k.slice(1), 10) - 1); break; }
+  }
+  if (!hits.size) return sticky ? { p: sticky, how: "guess" } : null;
+  let best = null, bs = 0.5;
+  for (const p of patBySlot.values()) {
+    let inter = 0; for (const h of hits) if (p.pads.has(h)) inter++;
+    const score = inter / hits.size - 0.2 * (p.pads.size - inter) / Math.max(p.pads.size, 1);
+    if (score > bs) { bs = score; best = p; }
+  }
+  if (best) sticky = best;
+  return sticky ? { p: sticky, how: "guess" } : null;
+}
+
+// ---- drawing
+function rect(x, y, w, h, c) { g.fillStyle = c; g.fillRect(x, y, w, h); }
+function rrect(x, y, w, h, r, c) { g.fillStyle = c; g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); }
+function text(s, x, y, c, px, bold, align) { g.fillStyle = c; g.font = FONT((px || 22) * (VERT ? 1.22 : 1), bold); g.textAlign = align || "left"; g.textBaseline = "alphabetic"; g.fillText(s, x, y); }
+function fit(s, n) { return s.length > n ? s.slice(0, n - 1) + "~" : s; }
+const mix = (c1, c2, t) => { const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const a = p(c1), b = p(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; };
+let PANEL_A = 1;
+function panel(x, y, w, h, title) { g.globalAlpha = PANEL_A; rrect(x, y, w, h, 12, COL.panel); g.globalAlpha = 1; if (title) text(title, x + 16, y + 30, COL.dim, 20, true); }
+const mmss = t => { t = Math.max(t, 0); return Math.floor(t / 60) + ":" + (t % 60).toFixed(1).padStart(4, "0"); };
+
+function drawHeader(T, A) {
+  const pos = playPosition(T), run = running(T);
+  const bar = pos ? Math.floor(pos.q / 4) + 1 : null, beat = pos ? Math.floor(pos.q % 4) + 1 : null;
+  const tp = tempoAt(T), bpm = tp.bpm, bpmText = bpm ? (Number.isInteger(bpm) ? bpm : bpm.toFixed(1)) + " BPM" : "";
+  const dur = AN ? AN.duration : 0, name = TITLE || PROJ.name || "";
+  if (VERT) {
+    rect(0, 0, W, 100, COL.deep);
+    text(fit(name, 27), 72, 44, TITLE ? COL.text : COL.amber, 32, true);
+    text(mmss(outTime(A)) + " / " + mmss(outDur()), W - 72, 44, COL.dim, 22, false, "right");
+    text(bpmText, 72, 86, tp.src === "project" ? COL.dim : COL.amber, 34, true);
+    text(pos ? "BAR " + bar + "  BEAT " + beat : "", 336, 84, COL.text, 24);
+    text(run ? "PLAY" : "STOP", W - 72, 84, run ? COL.good : COL.dim, 26, true, "right");
+    return;
+  }
+  rect(0, 0, W, 64, COL.deep);
+  text("404tui", 28, 42, COL.amber, 30, true);
+  text("REPLAY", 150, 42, COL.text, 26, true);
+  if (TITLE) {
+    text(fit(TITLE, 34), 300, 44, COL.text, 30, true);
+    if (STYLE.subtitle) { // the subtitle only where there is room before the tempo (x 980)
+      g.font = FONT(30, true); const x = 300 + g.measureText(fit(TITLE, 34)).width + 24; g.font = FONT(22, false);
+      let sub = STYLE.subtitle; while (sub.length > 3 && x + g.measureText(sub).width > 960) sub = sub.slice(0, -2);
+      if (x + g.measureText(sub).width <= 960 && sub.length > 2) text(sub === STYLE.subtitle ? sub : sub + "~", x, 42, COL.dim, 22);
+    }
+  }
+  else text(fit(PROJ.name || "", 24) + "   " + fit(FILE, 40), 300, 42, COL.dim, 22);
+  text(bpmText, 1000, 44, tp.src === "project" ? COL.dim : COL.amber, 34, true);
+  text(pos ? "BAR " + bar + "  BEAT " + beat : "no clock", 1240, 42, pos ? COL.text : COL.dim, 22);
+  text(run ? "PLAY" : "STOP", 1560, 42, run ? COL.good : COL.dim, 26, true);
+  text(mmss(outTime(A)) + " / " + mmss(outDur()), W - 28, 42, COL.text, 24, false, "right");
+}
+function drawPads(T) {
+  const [x0, y0, w, h] = L.pads;
+  panel(x0, y0, w, h);
+  const bank = bankInView(T), b = bank.charCodeAt(0) - 65;
+  const gap = 12, tw = (w - 40 - 3 * gap) / 4, th = (h - 18 - 56 - 3 * gap) / 4, gx = x0 + 20, gy = y0 + 18;
+  const cur = patternAt(T), inPat = cur ? cur.p.pads : null; // the pads of the pattern that plays are outlined
+  const ppos = cur && running(T) ? playPosition(T) : null, plen = cur ? cur.p.length / 480 : 0;
+  // a pad that the pattern plays flashes, very softly, for a moment: 1 right at its note, 0 after 0.35 s
+  const patFlash = n => {
+    if (!ppos || !plen) return 0;
+    let f = 0;
+    for (const nt of cur.p.notes) {
+      if (nt[1] !== n) continue;
+      const d = (((ppos.q % plen) - nt[0] / 480) % plen + plen) % plen, sec = d * 60 / ppos.bpm;
+      f = Math.max(f, clamp(1 - sec / 0.35, 0, 1) * (0.5 + 0.5 * nt[2] / 127));
+    }
+    return f;
+  };
+  // hit reactions: a pad that is hit pops up (a quick rise, a soft fall; harder hits pop more), glows, sends a ring out and a few sparks.
+  // Everything is a function of the time since the hit, so a render shows what the page shows. The pads that pop are drawn last, on top.
+  const hitS = clamp(STYLE.hits === undefined ? 0.25 : +STYLE.hits, 0, 1);
+  const popOf = i => {
+    const s0 = hitS > 0 ? padState(bank, i + 1, T) : null; if (!s0 || s0.hitAt === undefined || s0.hitAt < 0) return { pop: 0, age: -1 };
+    const age = T - s0.hitAt, vv = (s0.v || 100) / 127; if (age < 0) return { pop: 0, age: -1 };
+    const k = s0.held ? 0.55 : age < 0.5 ? (age < 0.05 ? age / 0.05 : Math.exp(-(age - 0.05) * 9)) : 0;
+    return { pop: hitS * vv * k, age, vv };
+  };
+  for (let ord = 0; ord < 32; ord++) {
+    const i = ord % 16, pr = popOf(i), top = ord >= 16;
+    if (top !== (pr.pop > 0.004 || (pr.age >= 0 && pr.age < 0.55 && hitS > 0))) continue;
+    const n = b * 16 + i, row = Math.floor(i / 4), col = i % 4;
+    const x = gx + col * (tw + gap), y = gy + row * (th + gap);
+    const info = padInfo.get(n), st = padState(bank, i + 1, T);
+    g.save();
+    if (pr.pop > 0) { // up to 14 % bigger around its middle, with a glow in the pad's colour
+      const sc = 1 + 0.14 * pr.pop, cx = x + tw / 2, cy = y + th / 2, col2 = BUSCOL[info && info.bus] || COL.amber;
+      g.translate(cx, cy); g.scale(sc, sc); g.translate(-cx, -cy);
+      g.shadowColor = col2; g.shadowBlur = 40 * pr.pop;
+    }
+    g.globalAlpha = PANEL_A; rrect(x, y, tw, th, 10, info ? COL.tile : COL.tile2); g.globalAlpha = 1;
+    let glow = 0;
+    if (st) { const age = T - st.hitAt; glow = st.held ? 1 : clamp(1 - age / 0.45, 0, 1); glow *= 0.35 + 0.65 * (st.v || 100) / 127; }
+    if (glow > 0) { g.globalAlpha = glow * 0.85; rrect(x, y, tw, th, 10, COL.amber); g.globalAlpha = 1; }
+    if (st && st.held) { g.strokeStyle = "#fff"; g.lineWidth = 3; g.beginPath(); g.roundRect(x + 1.5, y + 1.5, tw - 3, th - 3, 9); g.stroke(); }
+    const pf = patFlash(n);
+    if (pf > 0 && !(muteEv.size && (at(muteEv.get(bank + (i + 1)) || [], T) || {}).on)) { g.globalAlpha = 0.16 * pf; rrect(x, y, tw, th, 10, COL.amber); g.globalAlpha = 1; }
+    if (st && st.hitAt >= 0) { // how hard the last hit was, fading: a bar at the right edge and a ring
+      const age = T - st.hitAt;
+      if (age >= 0 && age < 1.4) { g.globalAlpha = 1 - age / 1.4; rect(x + tw - 14, y + th - 10 - (th - 20) * (st.v || 100) / 127, 6, (th - 20) * (st.v || 100) / 127, COL.amber); g.strokeStyle = COL.amber; g.lineWidth = 3; g.beginPath(); g.roundRect(x + 1.5, y + 1.5, tw - 3, th - 3, 9); g.stroke(); g.globalAlpha = 1; }
+    }
+    const me = muteEv.size ? at(muteEv.get(bank + (i + 1)) || [], T) : null;
+    if (me && me.on) { g.globalAlpha = 0.55; rrect(x, y, tw, th, 10, "#000"); g.globalAlpha = 1; text("MUTE", x + tw - 14, y + th - 12, COL.bad, 18, true, "right"); }
+    const iso = isoAt(T), lab = bank + (i + 1);
+    if (iso && iso.keep.has(lab)) { g.strokeStyle = BUSCOL[info && info.bus] || COL.blue; g.lineWidth = 5; g.beginPath(); g.roundRect(x + 2.5, y + 2.5, tw - 5, th - 5, 8); g.stroke(); text("ISO", x + 80, y + 28, BUSCOL[info && info.bus] || COL.blue, 20, true); }
+    else if (iso && iso.dry.has(lab)) { g.globalAlpha = 0.45; rrect(x, y, tw, th, 10, "#000"); g.globalAlpha = 1; text("DRY", x + 80, y + 28, COL.dim, 18, true); }
+    const hl = hitTimes.get(bank + (i + 1)), hc = hl ? atIndex(hl, T) + 1 : 0;
+    // how the pad plays: G gate, L loop, 1 one shot, R reverse or ping-pong; small chips at the top right, with the hit count left of them
+    const mi = info && info.info ? info.info : {};
+    const flags = [mi.Gate === "on" ? "G" : "", mi.Loop === "on" ? "L" : "", mi["One shot"] === "on" ? "1" : "", mi.Mode && mi.Mode !== "forward" ? "R" : ""].filter(Boolean);
+    let rx = x + tw - 12;
+    for (let k = flags.length - 1; k >= 0; k--) {
+      const cw = VERT ? 26 : 22;
+      rrect(rx - cw, y + 10, cw, cw, 5, glow > 0.5 ? "rgba(0,0,0,0.35)" : COL.deep);
+      text(flags[k], rx - cw / 2, y + 10 + cw * 0.76, glow > 0.5 ? "#111" : COL.amber, 15, true, "center");
+      rx -= cw + 4;
+    }
+    if (hc > 0) text("x" + hc, rx - 4, y + 28, glow > 0.5 ? "#111" : COL.dim, 18, false, "right");
+    if (inPat && inPat.has(n)) { g.strokeStyle = COL.amberD; g.lineWidth = 2; g.beginPath(); g.roundRect(x + 1, y + 1, tw - 2, th - 2, 9); g.stroke(); }
+    if (info && info.bus) rect(x + 2, y + 10, 6, th - 20, BUSCOL[info.bus]);
+    const dark = glow > 0.5;
+    text(String.fromCharCode(65 + b) + (i + 1), x + 20, y + 28, dark ? "#111" : COL.amber, 24, true);
+    if (info) {
+      text(fit(info.name, Math.floor((tw - 30) / (VERT ? 14.2 : 11.5))), x + 20, y + 54, dark ? "#111" : COL.text, 19);
+      const pk = info.peaks || [];
+      for (let k = 0; k < pk.length; k++) {
+        const bh = Math.max(2, pk[k] / 100 * (th - 78));
+        rect(x + 20 + k * (tw - 40) / pk.length, y + th - 10 - bh, Math.max((tw - 40) / pk.length * 0.7, 2), bh, dark ? COL.amberDD : mix("#444444", COL.amber, 0.35));
+      }
+    } else text("empty", x + 20, y + 54, COL.dim, 19);
+    g.restore();
+    if (hitS > 0 && pr.age >= 0 && pr.age < 0.55 && st) { // the ring and the sparks leave the pad
+      const col2 = BUSCOL[info && info.bus] || COL.amber, u = pr.age / 0.55, ex = 4 + 44 * easeOut(u) * (0.5 + 0.5 * hitS);
+      g.save(); g.globalAlpha = (1 - u) * 0.85 * (0.4 + 0.6 * pr.vv) * Math.min(hitS * 1.6, 1); g.strokeStyle = col2; g.lineWidth = 1.5 + 4 * (1 - u);
+      g.beginPath(); g.roundRect(x - ex, y - ex, tw + 2 * ex, th + 2 * ex, 10 + ex); g.stroke(); g.restore();
+      if (pr.age < 0.5 && hitS >= 0.5) { // sparks only when the reactions are turned up
+        const cnt = Math.round(3 + 6 * hitS), uu = pr.age / 0.5, seed = Math.round(st.hitAt * 1000);
+        g.save(); g.fillStyle = col2; g.globalAlpha = (1 - uu) * Math.min(hitS * 1.6, 1);
+        for (let j = 0; j < cnt; j++) {
+          const ang = (bgHash(seed, 10 + j) + 1) * Math.PI, dist = (16 + 44 * (bgHash(seed, 40 + j) + 1) / 2) * easeOut(uu) + 6, rr = Math.max(1, 4 * (1 - uu) * (0.6 + 0.4 * pr.vv));
+          const ox = Math.cos(ang) * (tw / 2 + dist), oy = Math.sin(ang) * (th / 2 + dist);
+          g.beginPath(); g.arc(x + tw / 2 + Math.max(-tw / 2 - dist, Math.min(tw / 2 + dist, ox)), y + th / 2 + Math.max(-th / 2 - dist, Math.min(th / 2 + dist, oy)), rr, 0, 6.2832); g.fill();
+        }
+        g.restore();
+      }
+    }
+  }
+  for (let k = 0; k < 10; k++) {
+    const sp = (w - 40) / 10, x = gx + k * sp, y = y0 + h - 48;
+    const letter = String.fromCharCode(65 + k);
+    let act = 0; for (let i = 1; i <= 16; i++) { const st = padState(letter, i, T); if (st && (st.held || T - st.hitAt < 0.4)) act = 1; }
+    rect(x, y, sp - 8, 32, k === b ? COL.amber : mix("#2b2b2b", COL.amberD, act));
+    text(letter, x + (sp - 8) / 2, y + 23, k === b ? "#111" : COL.dim, 20, true, "center");
+  }
+}
+
+// has a pad been heard in the last pass of the pattern, while others were? (the unit does not say that a track is muted: this is a guess)
+// a mute that was made from the program (the level of the pad set to 0) is in the log: then it is known, not guessed
+const muteEv = new Map(), isoEv = [];
+// what is isolated at T: the pads that keep their bus, the pads that were set dry, the buses (the isolation is in the log when it was made from the program)
+function isoAt(T) { const e = at(isoEv, T); return e && (e.keep.size || e.dry.size) ? e : null; }
+const padLabel = n => String.fromCharCode(65 + Math.floor(n / 16)) + (n % 16 + 1);
+function mutedGuess(pad, p, T) {
+  if (muteEv.size) { const e = at(muteEv.get(padLabel(pad)) || [], T); return !!(e && e.on); }
+  const pos = playPosition(T); if (!pos) return false;
+  const lenS = (p.length / 480) * 60 / pos.bpm;
+  if (T - lenS < 0) return false;
+  let others = 0, mine = 0;
+  for (const [k, l] of padEv) {
+    const n = (k.charCodeAt(0) - 65) * 16 + parseInt(k.slice(1), 10) - 1;
+    if (!p.pads.has(n)) continue;
+    const i = atIndex(l, T);
+    for (let j = i; j >= 0 && l[j].t >= T - lenS; j--) if (l[j].on) { if (n === pad) mine++; else others++; }
+  }
+  return mine === 0 && others > 3;
+}
+
+function drawPattern(T) {
+  const [x0, y0, w, h] = L.pattern;
+  panel(x0, y0, w, h);
+  const r = patternAt(T);
+  const ev = at(patEv, T);
+  if (!r && !ev && patEv.length) { // before the first change: the pattern that was already playing is not known; the ones to come are
+    text("PATTERN", x0 + 16, y0 + 30, COL.dim, 20, true);
+    drawPatternStrip(x0 + 16, y0 + 44, w - 32, T);
+    text("before the first change (" + patEv[0].now + " at " + mmss(patEv[0].t - OFFSET) + "): the pattern that was playing", x0 + 16, y0 + 112, COL.dim, 20);
+    text("is not known. Go to 0:00 and choose it with \"pattern from here...\".", x0 + 16, y0 + 142, COL.dim, 20);
+    return;
+  }
+  if (!r && ev && ev.now) { // the log names the pattern but has no project: no notes to show
+    text("PATTERN " + ev.now, x0 + 16, y0 + 30, COL.amber, 20, true);
+    drawPatternStrip(x0 + 16, y0 + 44, w - 32, T);
+    text("the notes of this pattern are not in the log", x0 + 16, y0 + 112, COL.dim, 20);
+    text("(it was recorded without the project)", x0 + 16, y0 + 142, COL.dim, 18);
+    return;
+  }
+  if (!r) { text("PATTERN", x0 + 16, y0 + 30, COL.dim, 20, true); text("not known: the unit did not say.", x0 + 16, y0 + 80, COL.dim, 22); text("Pick it in the bar below where it starts.", x0 + 16, y0 + 112, COL.dim, 22); return; }
+  const p = r.p, steps = Math.max(Math.round(p.length / 120), 16);
+  text("PATTERN " + p.label + "   " + p.bars + " bars" + (r.how === "guess" ? "   (guessed from the pads)" : r.how === "chosen" ? "   (chosen)" : r.how === "cue" ? "   (set by hand)" : ""), x0 + 16, y0 + 30, COL.amber, 20, true);
+  const pads = [...p.pads].sort((a, b) => a - b).slice(0, 10);
+  drawPatternStrip(x0 + 16, y0 + 44, w - 32, T);
+  const rows = Math.max(pads.length, 1), rh = Math.min(32, (h - 118) / rows);
+  const ix = x0 + 12, iw = 330;           // the pads of the pattern: their settings
+  const gx = x0 + iw + 20, gw = w - iw - 40;
+  const pos = playPosition(T), lenQ = p.length / 480;
+  const phase = pos ? (pos.q % lenQ) : -1;
+  const visible = Math.min(steps, 32), first = phase < 0 ? 0 : clamp(Math.floor(phase * 4 / visible) * visible, 0, steps - visible);
+  const cw = gw / visible;
+  pads.forEach((n, ri) => {
+    const y = y0 + 96 + ri * rh;
+    const info = padInfo.get(n), mi = info && info.info ? info.info : {};
+    const muted = mutedGuess(n, p, T);
+    g.globalAlpha = muted ? 0.4 : 1;
+    rect(ix, y + 2, 6, rh - 5, info && info.bus ? BUSCOL[info.bus] : "#444");
+    text(String.fromCharCode(65 + Math.floor(n / 16)) + (n % 16 + 1), ix + 14, y + rh * 0.68, COL.text, 17, true);
+    const flags = [mi.Gate === "on" ? "G" : "", mi.Loop === "on" ? "L" : "", mi["One shot"] === "on" ? "O" : "", mi.Mode && mi.Mode !== "forward" ? "R" : ""].join("");
+    text((mi.Bus && mi.Bus !== "off" ? mi.Bus.replace("BUS ", "B") : "-") + " L" + (mi.Level || "?") + " " + (mi.Pan || "") + " " + flags, ix + 76, y + rh * 0.68, COL.text, 16);
+    const iso = isoAt(T), plab = padLabel(n);
+    if (iso && iso.keep.has(plab)) text("isolated", ix + 250, y + rh * 0.68, COL.blue, 15, true);
+    else if (iso && iso.dry.has(plab)) text("dry", ix + 250, y + rh * 0.68, COL.dim, 15, true);
+    if (muted) text(muteEv.size ? "muted" : "muted?", ix + 250, y + rh * 0.68, COL.bad, 15, true);
+    for (let s = 0; s < visible; s++) rect(gx + s * cw + 1, y + 1, cw - 2, rh - 3, (first + s) % 4 === 0 ? "#303030" : "#262626");
+    for (const nt of p.notes) {
+      if (nt[1] !== n) continue;
+      const s = nt[0] / 120 - first; if (s < -0.01 || s >= visible) continue;
+      const hgt = Math.max(5, (rh - 5) * nt[2] / 127);
+      let c = COL.amber;
+      if (phase >= 0) { const d = (phase * 4 - (nt[0] / 120)); if (d >= 0 && d < 1.5) c = mix(COL.amber, "#ffffff", 1 - d / 1.5); }
+      rect(gx + s * cw + 1, y + rh - 3 - hgt, Math.max(cw * 0.9, 5), hgt, c);
+    }
+    g.globalAlpha = 1;
+  });
+  if (phase >= 0) { const s = phase * 4 - first; if (s >= 0 && s <= visible) rect(gx + s * cw - 1, y0 + 90, 3, rows * rh + 8, COL.good); }
+  if (steps > visible) text("steps " + (first + 1) + "-" + (first + visible) + " of " + steps, x0 + w - 16, y0 + 30, COL.dim, 18, false, "right");
+  if (pads.length < p.pads.size) text("+" + (p.pads.size - pads.length) + " more pads", ix, y0 + h - 10, COL.dim, 16);
+}
+
+// the patterns in turn: the ones before, the one that plays, the ones to come (the cues are known) and when the next one starts
+function drawPatternStrip(x, y, w, T) {
+  const list = []; for (const e of patEv) if (e.now && (!list.length || list[list.length - 1].now !== e.now)) list.push(e);
+  let cur = -1; for (let i = 0; i < list.length; i++) if (list[i].t <= T) cur = i;
+  if (!list.length) return;
+  const from = Math.max(cur - 2, 0), shown = list.slice(from, from + 7);
+  let cx = x;
+  shown.forEach((e, k) => {
+    const on = from + k === cur, w2 = 70;
+    rrect(cx, y, w2, 34, 8, on ? COL.amber : COL.tile);
+    text(e.now, cx + w2 / 2, y + 24, on ? "#111" : (from + k < cur ? COL.dim : COL.text), 20, true, "center");
+    cx += w2 + 10;
+    if (k < shown.length - 1) text(">", cx - 8, y + 24, COL.dim, 18, false, "center");
+  });
+  const nx = list[cur + 1];
+  if (nx) {
+    const bpm = tempoAt(T).bpm || 120, beats = (nx.t - T) * bpm / 60;
+    const when = beats >= 8 ? "in " + (beats / 4).toFixed(1) + " bars" : beats > 1 ? "in " + Math.ceil(beats) + " beats" : "now";
+    text("NEXT " + nx.now + " " + when, x + w, y + 24, COL.amber, 22, true, "right");
+  }
+}
+
+function knob(cx, cy, r, v, label, c, hist, T) {
+  const k = r / 40, a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
+  g.lineWidth = 9 * k; g.lineCap = "round";
+  g.strokeStyle = "#2b2b2b"; g.beginPath(); g.arc(cx, cy, r, a0, a1); g.stroke();
+  if (v !== null) {
+    g.strokeStyle = c; g.beginPath(); g.arc(cx, cy, r, a0, a0 + (a1 - a0) * v / 127); g.stroke();
+    const a = a0 + (a1 - a0) * v / 127;
+    g.strokeStyle = "#fff"; g.lineWidth = 4 * k; g.beginPath(); g.moveTo(cx + Math.cos(a) * (r - 22 * k), cy + Math.sin(a) * (r - 22 * k)); g.lineTo(cx + Math.cos(a) * (r + 3 * k), cy + Math.sin(a) * (r + 3 * k)); g.stroke();
+  }
+  g.lineCap = "butt";
+  text(v === null ? "-" : String(v), cx, cy + 9 * k, v === null ? COL.dim : COL.text, 24 * k, true, "center");
+  text(fit(label, k < 0.8 ? 9 : 12), cx, cy + r + 28 * k, COL.dim, Math.max(13, 16 * k), false, "center");
+  const sw = 104 * k, sh = 26 * k, sx = cx - sw / 2, sy = cy + r + 36 * k;
+  rect(sx, sy, sw, sh, "#222");
+  if (hist.length) {
+    g.strokeStyle = c; g.lineWidth = 2; g.beginPath();
+    const span = 6;
+    let pv = hist[0].v;
+    const pt = (t, val) => [sx + clamp((t - (T - span)) / span, 0, 1) * sw, sy + sh - 2 - (sh - 4) * val / 127];
+    const [x1, y1] = pt(Math.max(hist[0].t, T - span), pv); g.moveTo(x1, y1);
+    for (const e of hist) { const [x, y] = pt(e.t, pv); g.lineTo(x, y); const [x2, y2] = pt(e.t, e.v); g.lineTo(x2, y2); pv = e.v; }
+    const [xe, ye] = pt(T, pv); g.lineTo(xe, ye); g.stroke();
+  }
+}
+
+// the four buses side by side, in one row
+function drawFx(T) {
+  const [x0, y0, w, h] = L.fx;
+  panel(x0, y0, w, h);
+  const bw = w / 4;
+  for (let bus = 1; bus <= 4; bus++) {
+    const x = x0 + (bus - 1) * bw, c = BUSCOL[bus];
+    rect(x + 12, y0 + 14, 5, 50, c);
+    text("BUS " + bus, x + 26, y0 + 38, c, 22, true);
+    const name = fxName(bus, T), on = at(fxOn.get(bus) || [], T);
+    const note = busNoteAt(bus, T_audio); // what the bus is used for at this time: the latest "bus change", else the one from the start
+    // your description says what the bus is where the unit only says "Direct FX n" or nothing; a real effect name stays
+    const shown = note && (!name || /^Direct FX/i.test(name)) ? note : name || note;
+    text(shown ? fit(shown, 19) : "effect unknown", x + 26, y0 + 62, shown ? COL.text : COL.dim, 17);
+    if (on) { rect(x + bw - 62, y0 + 16, 50, 26, on.v ? COL.good : "#2b2b2b"); text(on.v ? "ON" : "OFF", x + bw - 37, y0 + 36, on.v ? "#111" : COL.dim, 17, true, "center"); }
+    const defs = ((window.SP404_FX || {}).params || {})[name] || [];
+    for (let i = 0; i < 3; i++) {
+      const cx = x + bw * (0.17 + 0.33 * i), cy = y0 + 124;
+      const v = ccValue(bus, 16 + i, T);
+      const label = defs[i] && defs[i].n ? defs[i].n : "CTRL " + (i + 1);
+      knob(cx, cy, 27, v, label, c, ccHistory(bus, 16 + i, T, 6), T);
+    }
+    const iso = isoAt(T);
+    if (iso && iso.buses.includes(bus)) { rrect(x + 12, y0 + h - 34, bw - 24, 24, 6, c); text("ISOLATE " + [...iso.keep].join(" "), x + bw / 2, y0 + h - 16, "#111", 16, true, "center"); }
+    if (bus > 1) rect(x, y0 + 14, 1, h - 28, "#2b2b2b");
+  }
+}
+
+function levelDb(v) { return v <= 0 ? -Infinity : 20 * Math.log10(v); }
+function drawMeter(T) {
+  const [x0, y0, w, h] = L.meter;
+  panel(x0, y0, w, h, "LEVEL");
+  if (!peak) { text("no analysis of the audio", x0 + 16, y0 + 80, COL.dim, 22); return; }
+  const f = clamp(Math.floor(T_audio * AN.fps), 0, AN.frames - 1);
+  const bw = w - 190, bx = x0 + 60;
+  let clip = false;
+  for (let c = 0; c < 2; c++) {
+    let lvl = -Infinity;
+    for (let k = 0; k < 8; k++) { const ff = f - k; if (ff < 0) break; const v = peak[ff * 2 + c] / 65535; lvl = Math.max(lvl, levelDb(v) - k * 1.5); }
+    const fr = lvl === -Infinity ? 0 : clamp((lvl + 60) / 60, 0, 1);
+    const y = y0 + 46 + c * 40;
+    text(c ? "R" : "L", x0 + 24, y + 24, COL.dim, 22, true);
+    rect(bx, y, bw, 30, "#2b2b2b");
+    rect(bx, y, bw * clamp(fr, 0, 0.8), 30, COL.good);
+    if (fr > 0.8) rect(bx + bw * 0.8, y, bw * (clamp(fr, 0, 0.95) - 0.8), 30, "#e8d44a");
+    if (fr > 0.95) rect(bx + bw * 0.95, y, bw * (fr - 0.95), 30, COL.bad);
+    text(lvl === -Infinity ? "-inf" : lvl.toFixed(1), x0 + w - 20, y + 24, COL.dim, 20, false, "right");
+    for (let k = 0; k < 6; k++) if (peak[Math.max(f - k, 0) * 2 + c] > 65535 * 0.966) clip = true;
+  }
+  if (clip) { rect(x0 + w - 110, y0 + 10, 90, 28, COL.bad); text("CLIP", x0 + w - 65, y0 + 32, "#111", 20, true, "center"); }
+  const sx = x0 + 24, sy = y0 + 134, sw = w - 48, sh = Math.max(h - 134 - 34 - (VERT ? 12 : 66), 40), nb = AN.bands;
+  g.globalAlpha = PANEL_A; rect(sx, sy, sw, sh, COL.deep); g.globalAlpha = 1;
+  const bwid = sw / nb;
+  for (let i = 0; i < nb; i++) {
+    let v = 0;
+    for (let k = 0; k < 5; k++) { const ff = f - k; if (ff < 0) break; v = Math.max(v, spec[ff * nb + i] / 255 - k * 0.04); }
+    const bh = clamp(v, 0, 1) * (sh - 8);
+    rect(sx + i * bwid + 1, sy + sh - 4 - bh, bwid - 2, Math.max(bh, 2), mix(COL.amber, "#ff5f5f", clamp(v - 0.6, 0, 0.4) / 0.4));
+  }
+  text("30 Hz", sx + 4, sy + sh + 18, COL.dim, 14); text("18 kHz", sx + sw, sy + sh + 18, COL.dim, 14, false, "right");
+  if (!VERT) drawTempo(x0 + 24, y0 + h - 68, w - 48, 54, T);
+}
+
+// the tempo over the whole take: the tempo of the bank of each pattern in turn (the clock where no pattern is known)
+function tempoSteps() {
+  const d = AN.duration, pts = [], list = [];
+  for (const e of patEv) if (e.now && patByLabel.has(e.now)) list.push({ t: e.t - OFFSET, bpm: bankTempo(patternBank(patByLabel.get(e.now))) });
+  if (list.length && list.every(e => e.bpm)) {
+    pts.push({ t: 0, bpm: list[0].bpm });
+    for (const e of list) { pts.push({ t: e.t, bpm: pts[pts.length - 1].bpm }); pts.push({ t: e.t, bpm: e.bpm }); }
+    pts.push({ t: d, bpm: pts[pts.length - 1].bpm });
+    return pts;
+  }
+  return tempoSeries.map(e => ({ t: e.t - OFFSET, bpm: e.bpm }));
+}
+function drawTempo(sx, sy, sw, sh, T) {
+  text("TEMPO", sx, sy + 14, COL.dim, 16, true);
+  const d = AN.duration, pts = tempoSteps();
+  if (!pts.length || !d) { text("no clock in the take", sx + 90, sy + 14, COL.dim, 16); return; }
+  let lo = Infinity, hi = -Infinity; for (const e of pts) { lo = Math.min(lo, e.bpm); hi = Math.max(hi, e.bpm); }
+  const mid = (lo + hi) / 2, half = Math.max((hi - lo) / 2, 2) * 1.2;
+  const gx = sx + 90, gw = sw - 190, gy = sy + 2, gh = sh - 4;
+  g.globalAlpha = PANEL_A; rect(gx, gy, gw, gh, COL.deep); g.globalAlpha = 1;
+  g.strokeStyle = COL.amber; g.lineWidth = 2; g.beginPath();
+  pts.forEach((e, i) => { const x = gx + clamp(e.t / d, 0, 1) * gw, y = gy + gh / 2 - (e.bpm - mid) / half * gh / 2; i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.stroke();
+  rect(gx + clamp(T_audio / d, 0, 1) * gw - 1, gy, 3, gh, COL.good);
+  const bpm = tempoAt(T).bpm;
+  text(bpm ? (Number.isInteger(bpm) ? bpm : bpm.toFixed(1)) : "", sx + sw, sy + 40, COL.amber, 28, true, "right");
+  text(lo === hi ? "steady" : lo + " - " + hi, sx + sw, sy + 12, COL.dim, 14, false, "right");
+}
+
+// ---- the look: a palette, an accent colour, a background, a logo and a handle. Kept by the server beside the log ({style}), set from the
+// "style" button in the bar, and also by the URL (?preset=midnight&accent=%23ff3b30&handle=@name&subtitle=...) for one viewing.
+const PRESETS = {
+  "404 dark": { accent: "#ffb000", bg: "#121214", deep: "#161616", panel: "#1b1b1e", tile: "#2c2c30", tile2: "#1d1d20", text: "#ececf0", dim: "#9a9aa4" },
+  "midnight": { accent: "#5fd0ff", bg: "#0b1020", deep: "#0e1428", panel: "#121a30", tile: "#1c2744", tile2: "#141d36", text: "#e8eeff", dim: "#8d9bc4" },
+  "neon":     { accent: "#ff4fd8", bg: "#0a0a12", deep: "#0d0d18", panel: "#14121f", tile: "#221d38", tile2: "#181428", text: "#f4f0ff", dim: "#a79cc8" },
+  "forest":   { accent: "#7bd88f", bg: "#0d1511", deep: "#101a15", panel: "#14201a", tile: "#203329", tile2: "#182820", text: "#e9f5ec", dim: "#8fb09a" },
+  "mono":     { accent: "#f2f2f2", bg: "#0d0d0d", deep: "#111111", panel: "#181818", tile: "#262626", tile2: "#1c1c1c", text: "#f2f2f2", dim: "#8c8c8c" },
+};
+const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, chapCards: 0, chapCardLen: 1.2, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
+let STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)), logoImg = null, bgImg = null;
+const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const hexMix = (a, b, t) => "#" + hexRgb(a).map((v, i) => Math.round(v + (hexRgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
+const validHex = h => typeof h === "string" && /^#[0-9a-fA-F]{6}$/.test(h);
+function loadImg(src) { if (!src) return null; const i = new Image(); i.src = src; return i; }
+function applyStyle() {
+  const pal = PRESETS[STYLE.preset] || PRESETS["404 dark"];
+  Object.assign(COL, pal);
+  COL.amber = validHex(STYLE.accent) ? STYLE.accent : pal.accent;
+  COL.amberD = hexMix(COL.amber, "#000000", 0.5); COL.amberDD = hexMix(COL.amber, "#000000", 0.65);
+  const b = STYLE.bg || {};
+  if (b.kind === "solid" && validHex(b.color)) COL.bg = b.color;
+  PANEL_A = clamp(b.panels !== undefined ? +b.panels : (b.kind === "gradient" || (b.kind === "image" && b.image) ? 0.9 : 1), 0, 1); // how solid the panels are, over any background
+  if (loadedKeys.logo !== STYLE.logo) { loadedKeys.logo = STYLE.logo; logoImg = loadImg(STYLE.logo); }
+  if (loadedKeys.bg !== b.image) { loadedKeys.bg = b.image; bgImg = loadImg(b.image); }
+  document.documentElement.style.setProperty("--amber", COL.amber);
+}
+const loadedKeys = {};
+let bgLayer = null, bgKey = "";
+// the picture of the background in the way the style says: fill (cropped to the picture), fit (all of it), stretch, tile or centre; with a
+// position, a zoom, a blur and a dimming. It is made once and drawn from the layer, so that a frame costs nothing.
+function bgPicture() {
+  const b = STYLE.bg || {}, im = bgImg;
+  if (!(im && im.complete && im.naturalWidth)) return null;
+  const M = bgMoves() ? BG_OVER : 1, LW = Math.round(W * M), LH = Math.round(H * M); // with movement the layer is larger than the video, so that there is room to move
+  const key = [im.src.length, im.naturalWidth, b.fit, b.px, b.py, b.zoom, b.blur, b.dim, COL.bg, LW, LH].join("|");
+  if (bgLayer && key === bgKey) return bgLayer;
+  const c = document.createElement("canvas"); c.width = LW; c.height = LH; const x = c.getContext("2d");
+  const iw = im.naturalWidth, ih = im.naturalHeight, z = clamp(+b.zoom || 1, 0.2, 4), px = clamp(b.px === undefined ? 0.5 : +b.px, 0, 1), py = clamp(b.py === undefined ? 0.5 : +b.py, 0, 1), fit = b.fit || "cover";
+  x.fillStyle = COL.bg; x.fillRect(0, 0, LW, LH);
+  const blur = clamp(+b.blur || 0, 0, 40); if (blur > 0) x.filter = "blur(" + blur + "px)";
+  const put = (w, h) => x.drawImage(im, (LW - w) * px, (LH - h) * py, w, h);
+  if (fit === "stretch") { const w = LW * z, h = LH * z; put(w, h); }
+  else if (fit === "tile") { const pat = x.createPattern(im, "repeat"); x.save(); x.translate(-(LW * (px - 0.5)) * (z - 1) , 0); x.scale(z, z); x.fillStyle = pat; x.fillRect(-LW, -LH, LW * 3 / z, LH * 3 / z); x.restore(); }
+  else if (fit === "center") put(iw * z, ih * z);
+  else if (fit === "contain") { const k = Math.min(LW / iw, LH / ih) * z; put(iw * k, ih * k); }
+  else { const k = Math.max(LW / iw, LH / ih) * z; put(iw * k, ih * k); }
+  x.filter = "none";
+  x.globalAlpha = clamp(b.dim === undefined ? 0.6 : b.dim, 0, 0.95); x.fillStyle = "#000"; x.fillRect(0, 0, LW, LH);
+  bgLayer = c; bgKey = key; return c;
+}
+function drawBackground() {
+  const b = STYLE.bg || {};
+  rect(0, 0, W, H, COL.bg);
+  if (b.kind === "gradient" && validHex(b.color) && validHex(b.color2)) {
+    const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, b.color); gr.addColorStop(1, b.color2); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  } else if (b.kind === "image") {
+    const c = bgPicture(); if (!c) return;
+    if (c.width === W) { g.drawImage(c, 0, 0); return; }
+    // slowly moving: a window of the larger layer, drifting from side to side and breathing in and out; a pure function of the time
+    const P = clamp(+b.mvPeriod || 12, 8, 300), d = clamp(+b.mvDrift || 0, 0, 1), z = clamp(+b.mvZoom || 0, 0, 1), u = T_audio / P;
+    // random but repeatable: smooth noise (a new random target every P seconds, eased between), one stream for each of x, y and zoom
+    const zm = 1 + BG_ZOOM * z * (0.5 + 0.5 * bgNoise(u, 3)), vw = W / zm, vh = H / zm;
+    const ox = d * (c.width - vw) / 2 * bgNoise(u, 1), oy = d * (c.height - vh) / 2 * bgNoise(u, 2);
+    g.drawImage(c, (c.width - vw) / 2 + ox, (c.height - vh) / 2 + oy, vw, vh, 0, 0, W, H);
+  }
+}
+const BG_OVER = 1.3, BG_ZOOM = 0.25;
+const bgHash = (i, k) => { let h = Math.imul(i * 374761393 + k * 668265263, 1274126177); h ^= h >>> 13; h = Math.imul(h, 1103515245); return ((h ^ (h >>> 16)) >>> 0) / 4294967295 * 2 - 1; };
+function bgNoise(u, k) { const i = Math.floor(u), f = u - i, s = f * f * (3 - 2 * f); return bgHash(i, k) * (1 - s) + bgHash(i + 1, k) * s; }
+const bgMoves = () => { const b = STYLE.bg || {}; return b.kind === "image" && (b.mvDrift === undefined ? 0 : +b.mvDrift) + (b.mvZoom === undefined ? 0 : +b.mvZoom) > 0; };
+// the logo and the handle: wide, in the strip under the panels at the right; vertical, centred in the strip under the feed
+function drawBrand() {
+  const has = logoImg && logoImg.complete && logoImg.naturalWidth, handle = STYLE.handle || "", sub = VERT ? (STYLE.subtitle || "") : "";
+  if (!has && !handle && !sub) return;
+  const lh = VERT ? 64 : 26, lw = has ? lh * logoImg.naturalWidth / logoImg.naturalHeight : 0;
+  const px = VERT ? 34 : 20; g.font = FONT(px * (VERT ? 1.22 : 1), true);
+  const tw = handle ? g.measureText(handle).width : 0, gap = has && handle ? 16 : 0, total = lw + gap + tw;
+  const y = VERT ? 1722 : 1050, x = VERT ? (W - total) / 2 : W - 28 - total;
+  if (has) g.drawImage(logoImg, x, y, lw, lh);
+  if (handle) text(handle, x + lw + gap, y + lh / 2 + px * 0.35, COL.dim, px, true);
+  if (sub) text(fit(sub, 44), W / 2, y + lh + 34, COL.dim, 24, false, "center");
+}
+
+// what a bus is used for at a time of the audio: the latest change before it, else what the look says for the start
+function busNoteAt(bus, A) {
+  let best = null;
+  for (const n of BUSN) if (n.bus === bus && n.t <= A + 0.001 && (!best || n.t >= best.t)) best = n;
+  return String(best ? best.text : ((STYLE.busNotes || [])[bus - 1] || "")).trim();
+}
+// the choices for what a bus is used for: kinds, the unit's effects, or your own text
+function fillBusSelect(sl) {
+  sl.textContent = ""; let into = sl;
+  const allFx = [...new Set([...((window.SP404_FX || {}).fx12 || []), ...((window.SP404_FX || {}).fx34 || [])])];
+  const group = t => { into = document.createElement("optgroup"); into.label = t; sl.appendChild(into); };
+  const add = (v, t) => { const o = document.createElement("option"); o.value = v; o.textContent = t; into.appendChild(o); };
+  add("", "not set");
+  group("kinds"); for (const k of ["Direct FX 1-5", "Reverb", "Delay", "Filter", "Drive / distortion", "Lo-fi", "Modulation", "Looper / scatter", "Resample"]) add(k, k);
+  group("the unit's effects"); for (const n of allFx) if (n && n !== "(OFF)") add(n, n);
+  group("other"); add("__custom__", "my own text...");
+}
+
+// ---- the sidebar: captions, chapters, camera and the look are panes of it (the button of a pane opens it, again closes it)
+function showPane(box) {
+  for (const p of document.querySelectorAll("#side .pane")) p.classList.toggle("open", p === box);
+  const side = document.getElementById("side"); side.classList.add("on");
+  for (const b of document.querySelectorAll("#sidetabs button[data-p]")) b.classList.toggle("act", b.dataset.p === box.id);
+  const cb = document.getElementById("cambox"); if (window.camEditSet) window.camEditSet(box === cb);
+}
+function togglePane(box) {
+  if (box.classList.contains("open") && document.getElementById("side").classList.contains("on")) { closeSide(); return; }
+  showPane(box);
+}
+function closeSide() {
+  for (const p of document.querySelectorAll("#side .pane")) p.classList.remove("open");
+  document.getElementById("side").classList.remove("on"); if (window.camEditSet) window.camEditSet(false);
+}
+
+// ---- the zoom of the timeline: the lanes get wider inside a box that scrolls (so everything on them keeps its place), the slider stays the whole take
+let ZOOM = 1;
+function setZoom(z, anchorFrac) {
+  const sc = document.getElementById("lanes"), inn = document.getElementById("lanesin"), f = anchorFrac !== undefined ? anchorFrac : (sc.scrollLeft + sc.clientWidth / 2) / Math.max(inn.clientWidth, 1);
+  const before = f * inn.clientWidth - sc.scrollLeft;
+  ZOOM = clamp(z, 1, 60); inn.style.width = ZOOM * 100 + "%";
+  sc.scrollLeft = f * inn.clientWidth - (anchorFrac !== undefined ? before : sc.clientWidth / 2);
+  document.getElementById("zlev").textContent = (ZOOM >= 10 ? ZOOM.toFixed(0) : ZOOM.toFixed(1).replace(".0", "")) + "x";
+  showWindow();
+}
+function showWindow() {
+  const sc = document.getElementById("lanes"), inn = document.getElementById("lanesin"), w = document.getElementById("vwin"), sk = document.getElementById("seek");
+  if (ZOOM <= 1.001) { w.style.display = "none"; return; }
+  const k = sk.clientWidth - 16; w.style.display = "block";
+  w.style.left = 8 + sc.scrollLeft / inn.clientWidth * k + "px"; w.style.width = Math.max(sc.clientWidth / inn.clientWidth * k, 6) + "px";
+}
+let lastFollowT = -1;
+function followPlayhead(frac, playing) { // the lanes keep the playhead in view while it plays, and when the time jumps
+  const moved = Math.abs(frac - lastFollowT) > 1e-6; lastFollowT = frac;
+  if (ZOOM <= 1.001 || !(playing || moved)) return;
+  const sc = document.getElementById("lanes"), inn = document.getElementById("lanesin"), x = frac * inn.clientWidth;
+  if (x < sc.scrollLeft + 30 || x > sc.scrollLeft + sc.clientWidth - 60) { sc.scrollLeft = x - sc.clientWidth * 0.25; showWindow(); }
+}
+
+// ---- undo and redo: the patterns, the captions, the chapters and the title (not the look). A step is a whole picture of them, taken
+// after every change; typing in one text counts as one step.
+let CHAPS = [], BUSN = [], CUTS = [];
+const HIST = { undo: [], redo: [], last: null, kind: "", at: 0 };
+const histState = () => JSON.stringify({ cues, adopted, caps: CAPS, chaps: CHAPS, busn: BUSN, cuts: CUTS, cam: CAM, title: TITLE });
+function histButtons() {
+  const u = document.getElementById("undo"), r = document.getElementById("redo");
+  if (u) { u.disabled = !HIST.undo.length; u.style.opacity = HIST.undo.length ? 1 : 0.4; }
+  if (r) { r.disabled = !HIST.redo.length; r.style.opacity = HIST.redo.length ? 1 : 0.4; }
+}
+function histInit() { HIST.last = histState(); histButtons(); }
+function histChanged(kind) {
+  if (HIST.last === null) return;
+  const now = histState(); if (now === HIST.last) return;
+  const t = Date.now();
+  if (!(kind === "text" && HIST.kind === "text" && t - HIST.at < 1000)) { HIST.undo.push(HIST.last); if (HIST.undo.length > 100) HIST.undo.shift(); }
+  HIST.redo = []; HIST.last = now; HIST.kind = kind || ""; HIST.at = t; histButtons();
+}
+function histApply(str) {
+  const st = JSON.parse(str), post = (u, b) => fetch(u, { method: "POST", body: JSON.stringify(b) }).catch(() => {});
+  cues = st.cues; adopted = st.adopted; CAPS = st.caps; CHAPS = st.chaps; BUSN = st.busn || []; CUTS = st.cuts || []; CAM = st.cam || CAM; TITLE = st.title;
+  document.getElementById("title").value = TITLE;
+  for (const id of ["cuepop", "chpop", "bpop", "campop", "cutpop"]) document.getElementById(id).classList.remove("open");
+  rebuildCues(); if (window.refreshCapLane) window.refreshCapLane(); if (window.refreshChapters) window.refreshChapters(); if (window.refreshBusNotes) window.refreshBusNotes(); if (window.refreshCamera) window.refreshCamera(); if (window.refreshCuts) window.refreshCuts(); if (window.refreshCapList) window.refreshCapList();
+  post("/cues", { cues, adopted }); post("/captions", CAPS); post("/chapters", CHAPS); post("/busnotes", BUSN); post("/cuts", CUTS); post("/camera", CAM); post("/title", { title: TITLE });
+}
+function undo() { if (!HIST.undo.length) return; HIST.redo.push(HIST.last); HIST.last = HIST.undo.pop(); HIST.kind = ""; histApply(HIST.last); histButtons(); }
+function redo() { if (!HIST.redo.length) return; HIST.undo.push(HIST.last); HIST.last = HIST.redo.pop(); HIST.kind = ""; histApply(HIST.last); histButtons(); }
+
+// ---- captions: a line of text for a stretch of the take (to say why something was done), always in the same place of a format
+let CAPS = [];
+function wrapText(str, maxW, px) {
+  g.font = FONT(px * (VERT ? 1.22 : 1) * 1, false);
+  const words = String(str).split(/\s+/), lines = []; let cur = "";
+  for (const w of words) { const t = cur ? cur + " " + w : w; if (g.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; }
+  if (cur) lines.push(cur);
+  return lines;
+}
+// the place of a spotlight target on the picture: [x, y, w, h]
+function focusRect(f, T) {
+  if (!f) return null;
+  if (f === "pads") return L.pads;
+  if (f === "pattern") return L.pattern;
+  if (f === "buses") return L.fx;
+  if (f === "events") return L.feed;
+  if (f === "level") return L.meter;
+  if (f === "tempo") return VERT ? L.meter : [L.meter[0] + 24, L.meter[1] + L.meter[3] - 68, L.meter[2] - 48, 54];
+  if (f.startsWith("bus:")) { const n = Math.max(1, Math.min(4, +f.slice(4) || 1)), [x, y, w, h] = L.fx; return [x + (n - 1) * w / 4, y, w / 4, h]; }
+  if (f.startsWith("pad:")) { // a pad of the bank on show (else the pads)
+    const lab = f.slice(4).toUpperCase(), idx = parseInt(lab.slice(1), 10) - 1;
+    if (!(idx >= 0 && idx < 16) || bankInView(T) !== lab[0]) return L.pads;
+    const [x0, y0, w, h] = L.pads, gap = 12, tw = (w - 40 - 3 * gap) / 4, th = (h - 18 - 56 - 3 * gap) / 4;
+    return [x0 + 20 + (idx % 4) * (tw + gap), y0 + 18 + Math.floor(idx / 4) * (th + gap), tw, th];
+  }
+  return null;
+}
+// the chapter that is running, as a small label at the bottom left (a bit brighter in the first seconds)
+function drawChapter(A) {
+  if (!CHAPS.length) return;
+  const cs = CHAPS.slice().sort((a, b) => a.t - b.t); let i = -1;
+  for (let k = 0; k < cs.length; k++) if (cs[k].t <= A + 0.001) i = k;
+  if (i < 0 || !cs[i].title) return;
+  const fresh = A - cs[i].t < 3, x = VERT ? 72 : 44, y = VERT ? 1727 : 1069; // vertical: just above the handle and the logo
+  rect(x, y - 14, 8, 8, COL.amber);
+  text(cs[i].title, x + 18, y, fresh ? COL.text : COL.dim, 22, fresh);
+  text((i + 1) + " / " + cs.length, x + 18 + (function () { g.font = FONT(22 * (VERT ? 1.22 : 1), fresh); return g.measureText(cs[i].title).width; })() + 16, y, COL.dim, 18);
+}
+// the chapter card: about a second at the start of each chapter, over the running video (the music goes on): the number, the title, the time in the
+// video and a dot for each chapter. It fades in and out; a chapter inside a cut gets none.
+function drawChapterCard(A) {
+  if (!STYLE.chapCards || !CHAPS.length) return;
+  const len = clamp(+STYLE.chapCardLen || 1.2, 0.5, 4), cs = CHAPS.slice().sort((a, b) => a.t - b.t);
+  const i = cs.findIndex(c => A >= c.t && A < c.t + len); if (i < 0 || cutAt(cs[i].t)) return;
+  const c = cs[i], u = A - c.t, a = easeOut(clamp(Math.min(u / 0.25, (len - u) / 0.35), 0, 1)), cx = W / 2, cy = H / 2, k = VERT ? 1.22 : 1;
+  g.save(); g.globalAlpha = 0.78 * a; rect(0, 0, W, H, "#000"); g.globalAlpha = a;
+  g.translate(0, (1 - a) * 14);
+  text(String(i + 1), cx, cy - 120 * k, COL.amber, 56, true, "center");
+  rect(cx - 40, cy - 100 * k, 80, 4, COL.amber);
+  let px = 96; g.font = FONT(px * k, true); const maxW = W - 160, w0 = g.measureText(c.title || "").width; if (w0 > maxW) px = Math.max(40, Math.floor(px * maxW / w0));
+  text(c.title || "", cx, cy + 20 * k, COL.text, px, true, "center");
+  text(mmss(outTime(c.t)), cx, cy + 80 * k, COL.dim, 26, false, "center");
+  const n = cs.length, gap = 40, x0 = cx - (n - 1) * gap / 2;
+  for (let j = 0; j < n; j++) { g.fillStyle = j === i ? COL.amber : "#3a3a40"; g.beginPath(); g.arc(x0 + j * gap, cy + 150 * k, j === i ? 9 : 6, 0, 6.2832); g.fill(); }
+  g.restore();
+}
+let blurLayer = null;
+const easeOut = u => 1 - Math.pow(1 - u, 3);
+// the caption is in front of the picture, in the middle of it (the same place in both formats), and the picture behind it is blurred and
+// dimmed. It fades in and out (the time is one setting for all captions: "caption fade" in the style panel): the card rises and grows
+// a little as it comes, and the blur and the dimming come and go with it.
+function drawCaption(A) {
+  const c = CAPS.find(c => (c.text || c.focus) && A >= c.from && A < c.to); if (!c) return;
+  const fd = clamp(+STYLE.capFade || 0, 0, 3), span = Math.max(Math.min(fd, (c.to - c.from) / 2), 0.0001);
+  const fade = fd === 0 ? 1 : easeOut(clamp(Math.min(A - c.from, c.to - A) / span, 0, 1));
+  if (!blurLayer || blurLayer.width !== W || blurLayer.height !== H) { blurLayer = document.createElement("canvas"); blurLayer.width = W; blurLayer.height = H; }
+  const bx = blurLayer.getContext("2d");
+  bx.clearRect(0, 0, W, H); bx.drawImage(cv, 0, 0);
+  g.save(); const blurPx = clamp(STYLE.capBlur === undefined ? 3 : +STYLE.capBlur, 0, 20), dimA = clamp(STYLE.capDim === undefined ? 0.28 : +STYLE.capDim, 0, 0.9);
+  const fr = focusRect(c.focus, A + OFFSET + NUDGE / 1000);
+  g.save();
+  if (fr) { g.beginPath(); g.rect(0, 0, W, H); g.roundRect(fr[0] - 4, fr[1] - 4, fr[2] + 8, fr[3] + 8, 14); g.clip("evenodd"); } // the target stays sharp
+  if (blurPx > 0) { g.save(); g.filter = "blur(" + (blurPx * fade).toFixed(1) + "px)"; g.drawImage(blurLayer, 0, 0); g.restore(); }
+  g.globalAlpha = (fr ? Math.max(dimA, 0.35) : dimA) * fade; rect(0, 0, W, H, "#000"); g.globalAlpha = 1;
+  g.restore();
+  if (fr) { g.save(); g.globalAlpha = fade; g.strokeStyle = COL.amber; g.lineWidth = 4; g.shadowColor = COL.amber; g.shadowBlur = 24; g.beginPath(); g.roundRect(fr[0] - 4, fr[1] - 4, fr[2] + 8, fr[3] + 8, 14); g.stroke(); g.restore(); }
+  if (!c.text) return;
+  const px = 34, k = VERT ? 1.22 : 1, bwMax = Math.min(W - 80, VERT ? 860 : 1260);
+  const words = capWords(c.text), lines = wrapText(words.map(x => x.w).join(" "), bwMax - 96, px).slice(0, 5), lh = px * k * 1.32, bh = lines.length * lh + 52;
+  g.font = FONT(px * k, false); // the card is as wide as its longest line (a short caption gets a small card)
+  const bw = clamp(Math.max(...lines.map(l => g.measureText(l).width)) + 104, 360, bwMax);
+  const x0 = (W - bw) / 2; let y0 = (H - bh) / 2;
+  if (fr && fr[0] < x0 + bw && fr[0] + fr[2] > x0 && fr[1] < y0 + bh && fr[1] + fr[3] > y0) { // the card does not cover what is spotlighted: above or below it
+    y0 = fr[1] + fr[3] / 2 < H / 2 ? fr[1] + fr[3] + 28 : fr[1] - bh - 28;
+    y0 = clamp(y0, 20, H - bh - 20);
+  }
+  g.save(); g.globalAlpha = fade;
+  g.translate(W / 2, H / 2 + (1 - fade) * 24); g.scale(0.96 + 0.04 * fade, 0.96 + 0.04 * fade); g.translate(-W / 2, -H / 2); // rises and grows as it comes
+  g.shadowColor = "rgba(0,0,0,0.5)"; g.shadowBlur = 30; rrect(x0, y0, bw, bh, 18, COL.panel); g.shadowBlur = 0;
+  rect(x0 + 22, y0 + 22, 6, bh - 44, COL.amber);
+  let y = y0 + 26 + px * k * 0.95;
+  capText(lines, words, c, A, x0 + 52, y, px, k, lh);
+  g.restore();
+}
+// the words of a caption; one between *stars* (or several) is shown in the accent colour
+function capWords(str) {
+  const out = []; let st = false;
+  for (const raw of String(str).split(/\s+/)) {
+    if (!raw) continue;
+    const stars = (raw.match(/\*/g) || []).length, w = raw.replace(/\*/g, "");
+    if (stars % 2 === 1 && !st) { st = true; if (w) out.push({ w, em: true }); continue; }
+    if (stars % 2 === 1 && st) { st = false; if (w) out.push({ w, em: true }); continue; }
+    if (w) out.push({ w, em: st || stars > 0 });
+  }
+  return out;
+}
+const easeBack = u => 1 + 2.70158 * Math.pow(u - 1, 3) + 1.70158 * Math.pow(u - 1, 2);
+// the lines of the card: whole ("card"), a word after the other popping in ("words") or a letter after the other ("type")
+function capText(lines, words, c, A, x, y, px, k, lh) {
+  const mode = STYLE.capAnim || "card", N = words.length, dur = c.to - c.from;
+  const step = Math.min(0.2, Math.min(1.4, dur * 0.4) / Math.max(N, 1)), cps = 30, shown = Math.floor((A - c.from - 0.1) * cps);
+  let wi = 0, chars = 0;
+  for (const l of lines) {
+    let xx = x; g.font = FONT(px * k, false); const sp = g.measureText(" ").width;
+    for (const part of l.split(" ")) {
+      const wd = words[wi] || { w: part, em: false }, w = g.measureText(part).width, col = wd.em ? COL.amber : COL.text;
+      let alpha = 1, sc = 1, dy = 0, str = part;
+      if (mode === "words") { const u = clamp((A - c.from - 0.1 - wi * step) / 0.3, 0, 1); alpha = Math.min(u * 2, 1); sc = 0.6 + 0.4 * easeBack(u); dy = (1 - easeOut(u)) * 16; }
+      else if (mode === "type") { const n = clamp(shown - chars, 0, part.length); str = part.slice(0, n); if (n === 0) alpha = 0; }
+      if (wd.em && mode !== "card") { const u = clamp((A - c.from - 0.1 - wi * step) / 0.5, 0, 1); sc *= 1 + 0.12 * Math.sin(u * Math.PI); } // an emphasised word swells for a moment
+      if (alpha > 0) {
+        g.save(); g.globalAlpha *= alpha; g.translate(xx + w / 2, y - px * k * 0.3 + dy); g.scale(sc, sc); g.translate(-(xx + w / 2), -(y - px * k * 0.3));
+        if (wd.em) { g.shadowColor = COL.amber; g.shadowBlur = 14; }
+        g.fillStyle = col; g.font = FONT(px * k, !!wd.em); g.textAlign = "left"; g.textBaseline = "alphabetic"; g.fillText(str, xx, y); g.restore();
+      }
+      xx += w + sp; chars += part.length + 1; wi++;
+    }
+    y += lh;
+  }
+}
+
+let T_audio = 0;
+function draw(audioTime) {
+  T_audio = audioTime;
+  const T = audioTime + OFFSET + NUDGE / 1000;
+  drawBackground();
+  camVideoKeep(audioTime);
+  applyLayout(audioTime);
+  if (CAM.layer === "behind") drawCamera(audioTime);
+  drawHeader(T, audioTime);
+  for (const [id, fn] of [["pads", drawPads], ["pattern", drawPattern], ["fx", drawFx], ["meter", drawMeter], ["feed", drawFeed]]) {
+    const a = panelAlpha(id, audioTime); if (a <= 0.001) continue;
+    fn(T); panelVeil(id, a);
+  }
+  if (CAM.layer !== "behind") drawCamera(audioTime);
+  drawCaption(audioTime);
+  drawChapter(audioTime);
+  drawChapterCard(audioTime);
+  drawBrand();
+}
+
+// ---- the page: the audio drives the time
+const audio = document.getElementById("audio"), play = document.getElementById("play"), seek = document.getElementById("seek");
+let seeking = false;
+const ph = document.getElementById("ph");
+const timeEl = document.getElementById("time"), nudgeEl = document.getElementById("nudge"), speed = document.getElementById("speed");
+let manual = null; // a program that sets the time itself (a render)
+function now() { return manual !== null ? manual : audio.currentTime; }
+function frame() {
+  const t = now();
+  if (manual === null && !audio.paused && !audio.seeking && CUTS.length) { const c = cutAt(t); if (c) audio.currentTime = c.to; } // playing: a cut is skipped
+  draw(t);
+  const d = AN ? AN.duration : audio.duration || 0;
+  if (!seeking && d) seek.value = String(Math.round(t / d * 1000)); // it follows the time, except while it is being dragged
+  if (d) { // the playhead through the lanes: the same x as the lanes' times
+    const inn = document.getElementById("lanesin"), ln = document.getElementById("cues"), cp = document.getElementById("cutlane"), camL = document.getElementById("camlane");
+    ph.style.left = (ln.offsetLeft + clamp(t / d, 0, 1) * ln.offsetWidth - 1) + "px"; ph.style.top = camL.offsetTop + "px"; ph.style.height = (cp.offsetTop + cp.offsetHeight - camL.offsetTop) + "px";
+    followPlayhead(t / d, !audio.paused);
+  }
+  timeEl.textContent = CUTS.length ? mmss(outTime(t)) + " / " + mmss(outDur()) + "  (take " + mmss(t) + ")" : mmss(t) + " / " + mmss(d);
+  play.textContent = audio.paused ? "play" : "pause";
+  requestAnimationFrame(frame);
+}
+play.onclick = () => (audio.paused ? audio.play() : audio.pause());
+seek.addEventListener("pointerdown", () => { seeking = true; });
+addEventListener("pointerup", () => { seeking = false; });
+seek.oninput = () => { const d = AN ? AN.duration : audio.duration; audio.currentTime = seek.value / 1000 * d; };
+speed.onchange = () => { audio.playbackRate = parseFloat(speed.value); };
+document.getElementById("zin").onclick = () => setZoom(ZOOM * 1.6);
+document.getElementById("zout").onclick = () => setZoom(ZOOM / 1.6);
+document.getElementById("zfit").onclick = () => setZoom(1);
+document.getElementById("lanes").addEventListener("scroll", showWindow);
+document.getElementById("lanes").addEventListener("wheel", e => { // Ctrl (or Cmd) + wheel zooms around the pointer
+  if (!(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault(); const sc = document.getElementById("lanes"), inn = document.getElementById("lanesin"), r = sc.getBoundingClientRect();
+  setZoom(ZOOM * (e.deltaY < 0 ? 1.25 : 0.8), (sc.scrollLeft + (e.clientX - r.left)) / Math.max(inn.clientWidth, 1));
+}, { passive: false });
+document.getElementById("sideclose").onclick = () => closeSide();
+for (const b of document.querySelectorAll("#sidetabs button[data-p]")) b.onclick = () => showPane(document.getElementById(b.dataset.p));
+document.getElementById("undo").onclick = () => undo();
+document.getElementById("redo").onclick = () => redo();
+document.getElementById("full").onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+addEventListener("keydown", e => {
+  if (e.target.tagName === "SELECT" || (e.target.tagName === "INPUT" && e.target.type !== "range")) return; // typing in a field is not a key for the player
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
+  if ((e.key === "+" || e.key === "=") && !e.ctrlKey && !e.metaKey) { setZoom(ZOOM * 1.6); return; }
+  if (e.key === "-" && !e.ctrlKey && !e.metaKey) { setZoom(ZOOM / 1.6); return; }
+  if (e.code === "Space") { e.preventDefault(); play.onclick(); }
+  else if (e.key === "ArrowLeft") audio.currentTime = Math.max(audio.currentTime - (e.shiftKey ? 30 : 5), 0);
+  else if (e.key === "ArrowRight") audio.currentTime += e.shiftKey ? 30 : 5;
+  else if (e.key === "[") { NUDGE -= 10; nudgeEl.textContent = "sync " + (NUDGE >= 0 ? "+" : "") + NUDGE + " ms"; }
+  else if (e.key === "]") { NUDGE += 10; nudgeEl.textContent = "sync " + (NUDGE >= 0 ? "+" : "") + NUDGE + " ms"; }
+  else if (e.key === "f") document.getElementById("full").onclick();
+  else if (e.key === "i" || e.key === "o") window.cutKey && window.cutKey(e.key);
+});
+
+// the controls of the captions: a row for each (from, to, the text); "add" puts one at the time the page is at
+function initCaptions() {
+  const box = document.getElementById("capbox"), list = document.getElementById("caplist");
+  let timer = null;
+  const save = kind => { clearTimeout(timer); timer = setTimeout(() => fetch("/captions", { method: "POST", body: JSON.stringify(CAPS) }).catch(() => {}), 400); if (window.refreshCapLane) window.refreshCapLane(); histChanged(kind); };
+  const FOCUS = [["", "no spotlight"], ["pads", "the pads"], ["pad", "one pad..."], ["pattern", "the pattern"], ["buses", "the four buses"], ["bus:1", "bus 1"], ["bus:2", "bus 2"], ["bus:3", "bus 3"], ["bus:4", "bus 4"], ["level", "level and spectrum"], ["tempo", "the tempo"], ["events", "the events"]];
+  const num = v => { const m = String(v).match(/^(\d+):(\d+(?:\.\d+)?)$/); return m ? +m[1] * 60 + +m[2] : parseFloat(v) || 0; };
+  const render = () => {
+    list.textContent = "";
+    CAPS.sort((a, b) => a.from - b.from);
+    if (!CAPS.length) { const d = document.createElement("div"); d.style.color = "var(--dim)"; d.textContent = "no captions: add one where you want the text to appear"; list.appendChild(d); }
+    CAPS.forEach((c, i) => {
+      const crow = document.createElement("div"); crow.className = "crow";
+      const r1 = document.createElement("div"), r2 = document.createElement("div"), r3 = document.createElement("div"); r1.className = r2.className = r3.className = "row";
+      const f = document.createElement("input"), t = document.createElement("input"), x = document.createElement("input"), del = document.createElement("button");
+      const fs = document.createElement("select"), pi = document.createElement("input"), lab = document.createElement("span");
+      f.className = t.className = "t"; x.className = "x";
+      f.value = mmss(c.from); t.value = mmss(c.to); x.value = c.text; x.placeholder = "the text"; del.textContent = "x"; del.title = "remove";
+      f.title = "from (m:ss.s)"; t.title = "to (m:ss.s)";
+      f.onchange = () => { c.from = num(f.value); save(); render(); };
+      t.onchange = () => { c.to = num(t.value); save(); };
+      x.oninput = () => { c.text = x.value; save("text"); };
+      f.onfocus = () => { audio.currentTime = c.from; };
+      del.onclick = () => { CAPS.splice(i, 1); save(); render(); };
+      // the spotlight: what the picture is turned to while the caption shows (the rest is blurred and dimmed)
+      lab.textContent = "look at"; lab.style.color = "var(--dim)";
+      for (const [v, n] of FOCUS) { const o = document.createElement("option"); o.value = v; o.textContent = n; fs.appendChild(o); }
+      const kind = (c.focus || "").startsWith("pad:") ? "pad" : (c.focus || "");
+      fs.value = kind; pi.className = "t"; pi.placeholder = "A3"; pi.size = 4; pi.value = kind === "pad" ? c.focus.slice(4) : ""; pi.hidden = kind !== "pad";
+      fs.onchange = () => { pi.hidden = fs.value !== "pad"; c.focus = fs.value === "pad" ? "pad:" + (pi.value || "A1").toUpperCase() : fs.value; if (fs.value === "pad") { pi.value = pi.value || "A1"; pi.focus(); } save(); };
+      pi.oninput = () => { c.focus = "pad:" + pi.value.trim().toUpperCase(); save("text"); };
+      r1.append(f, t, del); r2.append(x); r3.append(lab, fs, pi); crow.append(r1, r2, r3); list.appendChild(crow);
+    });
+  };
+  window.refreshCapList = render;
+  const fadeIn = document.getElementById("c_fade"), lenIn = document.getElementById("c_len");
+  const blurIn = document.getElementById("c_blur"), dimIn = document.getElementById("c_dim");
+  const showSettings = () => {
+    fadeIn.value = STYLE.capFade; lenIn.value = STYLE.capLength; blurIn.value = STYLE.capBlur; dimIn.value = Math.round(STYLE.capDim * 100);
+    document.getElementById("c_blurv").textContent = (+blurIn.value).toFixed(1) + " px"; document.getElementById("c_dimv").textContent = dimIn.value + " %";
+    document.getElementById("c_anim").value = STYLE.capAnim || "card";
+  };
+  const keepSettings = () => {
+    STYLE.capFade = Math.max(0, Math.min(3, parseFloat(fadeIn.value) || 0)); STYLE.capLength = Math.max(1, parseFloat(lenIn.value) || 5);
+    STYLE.capBlur = parseFloat(blurIn.value) || 0; STYLE.capDim = (parseFloat(dimIn.value) || 0) / 100; STYLE.capAnim = document.getElementById("c_anim").value;
+    document.getElementById("c_blurv").textContent = STYLE.capBlur.toFixed(1) + " px"; document.getElementById("c_dimv").textContent = Math.round(STYLE.capDim * 100) + " %";
+    window.styleChanged && window.styleChanged();
+  };
+  fadeIn.oninput = lenIn.oninput = blurIn.oninput = dimIn.oninput = keepSettings; document.getElementById("c_anim").onchange = keepSettings;
+  window.refreshCapList = render;
+  const lane = () => { // the captions as blocks under the patterns: click one to edit it
+    const el = document.getElementById("capslane"); el.textContent = ""; const d = AN ? AN.duration : 0; if (!d) return;
+    const place = (b, c) => { const x0 = clamp(c.from / d, 0, 1), x1 = clamp(c.to / d, 0, 1); b.style.left = x0 * 100 + "%"; b.style.width = Math.max(x1 - x0, 0.004) * 100 + "%"; };
+    // a block moves by its body and is made longer or shorter by its edges; a time near a loop start snaps to it
+    const drag = (ev, b, mode, c) => {
+      ev.preventDefault(); ev.stopPropagation(); try { b.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+      const w = el.getBoundingClientRect().width, x0 = ev.clientX, f0 = c.from, t0 = c.to; let moved = false;
+      const snap = t => { let best = t, bd = 0.2; for (const l of loopStarts) { const dd = Math.abs(l - OFFSET - t); if (dd < bd) { bd = dd; best = l - OFFSET; } } return +best.toFixed(2); };
+      b.onpointermove = e => {
+        if (!moved && Math.abs(e.clientX - x0) < 3) return;
+        moved = true; b._moved = true;
+        const dt = (e.clientX - x0) / w * d;
+        if (mode === "move") { const len = t0 - f0, nf = clamp(snap(f0 + dt), 0, d - len); c.from = nf; c.to = +(nf + len).toFixed(2); }
+        else if (mode === "l") c.from = clamp(snap(f0 + dt), 0, c.to - 0.3);
+        else c.to = clamp(snap(t0 + dt), c.from + 0.3, d);
+        place(b, c);
+      };
+      b.onpointerup = () => { b.onpointermove = b.onpointerup = null; if (moved) { save(); render(); lane(); } };
+    };
+    CAPS.slice().sort((a, b) => a.from - b.from).forEach((c, i) => {
+      const b = document.createElement("div"), hl = document.createElement("span"), hr = document.createElement("span");
+      b.className = "cap"; b.textContent = c.text || "(empty)"; b.title = mmss(c.from) + " - " + mmss(c.to) + ": " + c.text + " (drag to move, the edges change the length, click to edit)";
+      hl.className = "hd l"; hr.className = "hd r"; b.append(hl, hr);
+      place(b, c);
+      hl.onpointerdown = ev => drag(ev, b, "l", c); hr.onpointerdown = ev => drag(ev, b, "r", c); b.onpointerdown = ev => { if (ev.target === b) drag(ev, b, "move", c); };
+      b.onclick = () => {
+        if (b._moved) { b._moved = false; return; }
+        showSettings(); box.classList.add("open"); render(); const rows = list.querySelectorAll("input.x"); if (rows[i]) { rows[i].focus(); rows[i].scrollIntoView({ block: "nearest" }); } audio.currentTime = c.from;
+      };
+      el.appendChild(b);
+    });
+  };
+  window.refreshCapLane = lane;
+  document.getElementById("capbtn").onclick = () => { showSettings(); togglePane(box); render(); };
+  document.getElementById("capadd").onclick = () => {
+    const a = now(), d = AN ? AN.duration : a + 5;
+    CAPS.push({ from: +a.toFixed(1), to: +Math.min(a + (+STYLE.capLength || 5), d).toFixed(1), text: "" }); save(); render();
+    const inputs = list.querySelectorAll("input.x"); if (inputs.length) inputs[inputs.length - 1].focus();
+  };
+  render(); lane();
+}
+
+// the changes of a bus: tags on a lane, a pop-up for the bus, what it is, and the time
+function initBusNotes() {
+  const lane = document.getElementById("buslane"), pop = document.getElementById("bpop");
+  const save = kind => { fetch("/busnotes", { method: "POST", body: JSON.stringify(BUSN) }).catch(() => {}); refresh(); histChanged(kind); };
+  const num = v => { const m = String(v).match(/^(\d+):(\d+(?:\.\d+)?)$/); return m ? +m[1] * 60 + +m[2] : parseFloat(v) || 0; };
+  const snap = t => { let best = t, bd = 0.25; for (const l of loopStarts) { const dd = Math.abs(l - OFFSET - t); if (dd < bd) { bd = dd; best = l - OFFSET; } } return +best.toFixed(2); };
+  function edit(n) {
+    pop.textContent = ""; pop.classList.add("open");
+    const bs = document.createElement("select"), sl = document.createElement("select"), ci = document.createElement("input"), tm = document.createElement("input");
+    for (let b = 1; b <= 4; b++) { const o = document.createElement("option"); o.value = b; o.textContent = "bus " + b; bs.appendChild(o); }
+    bs.value = n.bus; fillBusSelect(sl);
+    const known = [...sl.options].some(o => o.value === n.text && o.value !== "__custom__");
+    sl.value = !n.text ? "" : known ? n.text : "__custom__"; ci.hidden = sl.value !== "__custom__"; ci.value = known ? "" : n.text; ci.placeholder = "your own text"; ci.size = 16;
+    tm.value = mmss(n.t); tm.size = 7;
+    bs.onchange = () => { n.bus = +bs.value; save(); };
+    sl.onchange = () => { ci.hidden = sl.value !== "__custom__"; n.text = sl.value === "__custom__" ? ci.value : sl.value; if (!ci.hidden) ci.focus(); save(); };
+    ci.oninput = () => { n.text = ci.value; save("text"); };
+    tm.onchange = () => { n.t = Math.max(0, +num(tm.value).toFixed(2)); save(); };
+    const mk = (t, title, fn) => { const b = document.createElement("button"); b.textContent = t; b.title = title; b.onclick = fn; return b; };
+    pop.append(bs, sl, ci, tm, mk("go", "play from here", () => { audio.currentTime = n.t; }), mk("delete", "remove this change", () => { BUSN = BUSN.filter(x => x !== n); pop.classList.remove("open"); save(); }), mk("x", "close", () => pop.classList.remove("open")));
+    const r = lane.getBoundingClientRect(), d = AN ? AN.duration : 1; pop.style.left = Math.max(8, Math.min(innerWidth - 560, r.left + n.t / d * r.width - 120)) + "px";
+  }
+  function build() {
+    lane.textContent = ""; const d = AN ? AN.duration : 0; if (!d) return;
+    for (const n of BUSN.slice().sort((a, b) => a.t - b.t)) {
+      const b = document.createElement("div"), h = document.createElement("span");
+      b.className = "bn"; b.style.setProperty("--bc", BUSCOL[n.bus] || "#888"); b.textContent = n.bus + ": " + (n.text || "(not set)");
+      b.title = "bus " + n.bus + " from " + mmss(n.t) + ": " + (n.text || "not set") + " (click to edit, drag the left edge to move)"; b.style.left = clamp(n.t / d, 0, 1) * 100 + "%"; h.className = "hd";
+      h.onpointerdown = ev => {
+        ev.preventDefault(); ev.stopPropagation(); try { h.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+        const r = lane.getBoundingClientRect(); let moved = false;
+        h.onpointermove = e2 => { moved = true; n.t = clamp(snap((e2.clientX - r.left) / r.width * d), 0, d); b.style.left = n.t / d * 100 + "%"; };
+        h.onpointerup = () => { h.onpointermove = h.onpointerup = null; if (moved) save(); };
+      };
+      b.onclick = ev => { if (ev.target !== h) edit(n); };
+      b.appendChild(h); lane.appendChild(b);
+    }
+  }
+  const refresh = () => build();
+  window.refreshBusNotes = refresh;
+  document.getElementById("bnbtn").onclick = () => { const n = { bus: 1, t: +Math.max(now(), 0).toFixed(1), text: "" }; BUSN.push(n); save(); edit(n); };
+  refresh();
+}
+
+// ---- cuts: parts of the take that the video leaves out. Everything keeps the time of the take (the lanes show the whole take, a cut is a hatched
+// block); playing skips a cut, the clock shows the time of the video (what is cut before it taken off), and the render leaves the cuts out.
+const cutsNorm = cs => {
+  const c = cs.filter(x => x.to - x.from >= 0.01).map(x => ({ from: Math.max(x.from, 0), to: x.to })).sort((a, b) => a.from - b.from), out = [];
+  for (const x of c) { const l = out[out.length - 1]; if (l && x.from <= l.to + 0.0005) l.to = Math.max(l.to, x.to); else out.push(x); }
+  return out;
+};
+const cutAt = t => CUTS.find(c => t >= c.from - 0.003 && t < c.to);
+function outTime(t) { let off = 0; for (const c of CUTS) { if (c.from >= t) break; off += Math.min(c.to, t) - c.from; } return t - off; }
+const outDur = () => (AN ? AN.duration : 0) - CUTS.reduce((a, c) => a + Math.min(c.to, AN ? AN.duration : c.to) - c.from, 0);
+function initCuts() {
+  const lane = document.getElementById("cutlane"), pop = document.getElementById("cutpop"), sel = document.getElementById("cutsel");
+  let cutIn = null;
+  const d = () => (AN ? AN.duration : 0);
+  const post = () => fetch("/cuts", { method: "POST", body: JSON.stringify(CUTS) }).catch(() => {});
+  const save = () => { CUTS = cutsNorm(CUTS); post(); build(); histChanged(); };
+  const add = (from, to) => { if (Math.abs(to - from) < 0.05) return; CUTS.push({ from: +Math.min(from, to).toFixed(2), to: +Math.max(from, to).toFixed(2) }); pop.classList.remove("open"); save(); };
+  const snap = t => { let best = t, bd = 0.2; for (const l of loopStarts) { const dd = Math.abs(l - OFFSET - t); if (dd < bd) { bd = dd; best = l - OFFSET; } } return +best.toFixed(2); };
+  function edit(c) {
+    pop.textContent = ""; pop.classList.add("open");
+    const mk = (n, t, fn) => { const b = document.createElement("button"); b.textContent = n; b.title = t; b.onclick = fn; return b; };
+    const f = document.createElement("input"), tt = document.createElement("input"), ln = document.createElement("span");
+    f.value = mmss(c.from); tt.value = mmss(c.to); f.size = tt.size = 7; ln.textContent = (c.to - c.from).toFixed(1) + " s cut";
+    f.onchange = () => { c.from = clamp(+parseTime(f.value).toFixed(2), 0, c.to - 0.05); save(); pop.classList.remove("open"); };
+    tt.onchange = () => { c.to = clamp(+parseTime(tt.value).toFixed(2), c.from + 0.05, d()); save(); pop.classList.remove("open"); };
+    pop.append("from", f, "to", tt, ln,
+      mk("play around", "hear how the join sounds: 2 s before the cut, then what follows it", () => { audio.currentTime = Math.max(c.from - 2, 0); audio.play(); }),
+      mk("restore", "take the cut away: this part is in the video again", () => { CUTS = CUTS.filter(x => x !== c); pop.classList.remove("open"); save(); }),
+      mk("x", "close", () => pop.classList.remove("open")));
+    const r = lane.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(innerWidth - 560, r.left + c.from / d() * r.width - 60)) + "px";
+  }
+  function build() {
+    lane.textContent = ""; const D = d(); if (!D) return;
+    for (const c of CUTS) {
+      const b = document.createElement("div"), hl = document.createElement("span"), hr = document.createElement("span"), x0 = clamp(c.from / D, 0, 1), x1 = clamp(c.to / D, 0, 1);
+      b.className = "cutb"; b.textContent = "-" + (c.to - c.from).toFixed(1) + " s"; b.title = "cut " + mmss(c.from) + " to " + mmss(c.to) + ": click to edit, drag the edges to change it";
+      b.style.left = x0 * 100 + "%"; b.style.width = Math.max(x1 - x0, 0.002) * 100 + "%"; hl.className = "hd l"; hr.className = "hd r"; b.append(hl, hr);
+      const drag = (ev, side) => {
+        ev.preventDefault(); ev.stopPropagation(); try { b.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+        const w = lane.getBoundingClientRect().width, x = ev.clientX, f0 = c.from, t0 = c.to; let moved = false;
+        b.onpointermove = e => {
+          if (!moved && Math.abs(e.clientX - x) < 3) return; moved = true; b._moved = true;
+          const dt = (e.clientX - x) / w * D;
+          if (side === "l") c.from = clamp(snap(f0 + dt), 0, c.to - 0.05); else c.to = clamp(snap(t0 + dt), c.from + 0.05, D);
+          b.style.left = c.from / D * 100 + "%"; b.style.width = (c.to - c.from) / D * 100 + "%"; b.textContent = "-" + (c.to - c.from).toFixed(1) + " s"; b.append(hl, hr);
+        };
+        b.onpointerup = () => { b.onpointermove = b.onpointerup = null; if (moved) save(); };
+      };
+      hl.onpointerdown = ev => drag(ev, "l"); hr.onpointerdown = ev => drag(ev, "r");
+      b.onclick = () => { if (b._moved) { b._moved = false; return; } edit(c); };
+      lane.appendChild(b);
+    }
+    if (cutIn !== null) { const m = document.createElement("div"); m.className = "cutin"; m.style.left = cutIn / D * 100 + "%"; m.title = "the cut starts here: press o (or choose \"end the cut here\") where it ends"; lane.appendChild(m); }
+  }
+  // drag over the empty lane to cut that part
+  lane.onpointerdown = ev => {
+    if (ev.target !== lane) return;
+    ev.preventDefault(); try { lane.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+    const r = lane.getBoundingClientRect(), D = d(), x0 = ev.clientX, t0 = snap(clamp((x0 - r.left) / r.width, 0, 1) * D), draft = document.createElement("div"); draft.className = "cutdraft"; let moved = false, t1 = t0;
+    lane.onpointermove = e => { if (Math.abs(e.clientX - x0) < 4) return; moved = true; t1 = snap(clamp((e.clientX - r.left) / r.width, 0, 1) * D); draft.style.left = Math.min(t0, t1) / D * 100 + "%"; draft.style.width = Math.abs(t1 - t0) / D * 100 + "%"; if (!draft.parentNode) lane.appendChild(draft); };
+    lane.onpointerup = () => { lane.onpointermove = lane.onpointerup = null; draft.remove(); if (moved) add(t0, t1); };
+  };
+  const run = what => {
+    const t = +now().toFixed(2), D = d();
+    if (what === "in") { cutIn = t; build(); }
+    else if (what === "out") { if (cutIn === null) { cutIn = t; build(); return; } add(cutIn, t); cutIn = null; }
+    else if (what === "before") add(0, t);
+    else if (what === "after") add(t, D);
+    else if (what === "none") { CUTS = []; pop.classList.remove("open"); save(); }
+  };
+  sel.onchange = () => { const v = sel.value; sel.value = ""; if (v) run(v); };
+  window.cutKey = k => run(k === "i" ? "in" : "out");
+  window.refreshCuts = build;
+  build();
+}
+
+// the chapters: blocks on a lane of their own, a pop-up for the title and time, and the list for YouTube
+function initChapters() {
+  const lane = document.getElementById("chaplane"), pop = document.getElementById("chpop"), box = document.getElementById("chbox"), txt = document.getElementById("chtext"), hint = document.getElementById("chhint");
+  const post = () => fetch("/chapters", { method: "POST", body: JSON.stringify(CHAPS) }).catch(() => {});
+  const save = kind => { post(); refresh(); histChanged(kind); };
+  const text = () => { // as YouTube wants it: "0:00 Title" a line each
+    const c = CHAPS.slice().sort((a, b) => a.t - b.t); if (!c.length) return "";
+    return (c[0].t > 0.5 ? [{ t: 0, title: "Intro" }, ...c] : c).map(ch => { const t = Math.floor(outTime(ch.t) + 0.0001), h = Math.floor(t / 3600);
+      return (h ? h + ":" + String(Math.floor(t / 60) % 60).padStart(2, "0") : String(Math.floor(t / 60))) + ":" + String(t % 60).padStart(2, "0") + " " + (ch.title || "").trim(); }).join("\n") + "\n";
+  };
+  const hints = () => { // what YouTube wants of the list
+    const c = CHAPS.slice().sort((a, b) => a.t - b.t), d = AN ? AN.duration : 0, out = [];
+    if (!c.length) return "YouTube needs a chapter at 0:00, at least three chapters and at least 10 seconds for each.";
+    if (c[0].t > 0.5) out.push("no chapter at 0:00: \"Intro\" is put there in the list");
+    const n = c.length + (c[0].t > 0.5 ? 1 : 0); if (n < 3) out.push("YouTube wants at least 3 chapters (there are " + n + ")");
+    for (let i = 0; i < c.length; i++) { const end = i + 1 < c.length ? c[i + 1].t : d; if (end - c[i].t < 10) out.push("\"" + (c[i].title || "chapter") + "\" is shorter than 10 s"); }
+    return out.length ? out.join("; ") : "the list is fine for YouTube";
+  };
+  const refresh = () => { build(); txt.value = text(); hint.textContent = hints(); };
+  const num = v => { const m = String(v).match(/^(\d+):(\d+(?:\.\d+)?)$/); return m ? +m[1] * 60 + +m[2] : parseFloat(v) || 0; };
+  const snap = t => { let best = t, bd = 0.25; for (const l of loopStarts) { const dd = Math.abs(l - OFFSET - t); if (dd < bd) { bd = dd; best = l - OFFSET; } } return +best.toFixed(2); };
+  function edit(c, at) {
+    pop.textContent = ""; pop.classList.add("open");
+    const ti = document.createElement("input"), tm = document.createElement("input"), mk = (n, t, fn) => { const b = document.createElement("button"); b.textContent = n; b.title = t; b.onclick = fn; return b; };
+    ti.value = c.title; ti.size = 22; ti.placeholder = "the title of the chapter"; tm.value = mmss(c.t); tm.size = 7;
+    ti.oninput = () => { c.title = ti.value; save("text"); };
+    tm.onchange = () => { c.t = Math.max(0, +num(tm.value).toFixed(2)); save(); };
+    pop.append(ti, tm, mk("go", "play from here", () => { audio.currentTime = c.t; }), mk("delete", "remove this chapter", () => { CHAPS = CHAPS.filter(x => x !== c); pop.classList.remove("open"); save(); }), mk("x", "close", () => pop.classList.remove("open")));
+    const r = lane.getBoundingClientRect(), d = AN ? AN.duration : 1; pop.style.left = Math.max(8, Math.min(innerWidth - 480, r.left + c.t / d * r.width - 120)) + "px";
+    if (at) ti.focus();
+  }
+  function build() {
+    lane.textContent = ""; const d = AN ? AN.duration : 0; if (!d) return;
+    const cs = CHAPS.slice().sort((a, b) => a.t - b.t);
+    cs.forEach((c, i) => {
+      const end = i + 1 < cs.length ? cs[i + 1].t : d, x0 = clamp(c.t / d, 0, 1), x1 = clamp(end / d, 0, 1), b = document.createElement("div"), h = document.createElement("span");
+      b.className = "ch"; b.textContent = (i + 1) + ". " + (c.title || "(no title)"); b.title = (c.title || "chapter") + " from " + mmss(c.t) + ": click to edit, drag the left edge to move";
+      b.style.left = x0 * 100 + "%"; b.style.width = Math.max(x1 - x0, 0.003) * 100 + "%"; h.className = "hd";
+      h.onpointerdown = ev => {
+        ev.preventDefault(); ev.stopPropagation(); try { h.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+        const r = lane.getBoundingClientRect(); let moved = false;
+        h.onpointermove = e2 => { moved = true; c.t = clamp(snap((e2.clientX - r.left) / r.width * d), 0, d); b.style.left = c.t / d * 100 + "%"; };
+        h.onpointerup = () => { h.onpointermove = h.onpointerup = null; if (moved) save(); };
+      };
+      b.onclick = ev => { if (ev.target !== h) edit(c, false); };
+      b.appendChild(h); lane.appendChild(b);
+    });
+  }
+  const cardOn = document.getElementById("ch_cards"), cardLen = document.getElementById("ch_cardlen");
+  const showCards = () => { cardOn.checked = !!STYLE.chapCards; cardLen.value = STYLE.chapCardLen || 1.2; };
+  cardOn.onchange = cardLen.oninput = () => { STYLE.chapCards = cardOn.checked ? 1 : 0; STYLE.chapCardLen = clamp(parseFloat(cardLen.value) || 1.2, 0.5, 4); window.styleChanged && window.styleChanged(); };
+  showCards();
+  window.refreshChapters = () => { refresh(); showCards(); };
+  document.getElementById("chbtn").onclick = () => { refresh(); togglePane(box); };
+  document.getElementById("chadd").onclick = () => { const c = { t: +Math.max(now(), 0).toFixed(1), title: CHAPS.length ? "New chapter" : "Intro" }; CHAPS.push(c); save(); edit(c, true); };
+  document.getElementById("chcopy").onclick = () => { const t = text(); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { hint.textContent = "copied"; }, () => { txt.select(); hint.textContent = "select the text and copy it"; }); };
+  refresh();
+}
+
+// ---- the camera: a video of you playing, in a box on the picture. The box has a place and a size for every scene (a scene is a point of the
+// timeline: from there on the box is where it says, the panels that are shown are the ones it says); the box is dragged on the picture.
+// The camera has no sound, so the sync is made by eye: one pad hit of the log is matched with the frame in which it is played.
+const CAM_DEFAULT = { sync: 0, zoom: 1, cx: 0.5, cy: 0.5, round: 18, mirror: false, layer: "front", scenes: [] };
+let CAM = JSON.parse(JSON.stringify(CAM_DEFAULT)), CAMFILE = "";
+const PANELS = [["pads", "pads"], ["pattern", "pattern"], ["fx", "buses"], ["meter", "level"], ["feed", "events"]];
+const camKey = () => (VERT ? "vertical" : "wide");
+// ---- layout presets: where the camera and the panels are in a scene. A preset moves and resizes the panels around the camera (the panels
+// glide with the scene's transition, like the box). cam: the box, rects: the panels that are not where the default layout has them, off: panels left out.
+const LAYOUT_NAMES = [["", "custom (place the box, choose the panels)"], ["panels", "panels only"], ["left", "camera left"], ["right", "camera right"], ["corner", "camera in a corner"], ["top", "camera top"], ["bottom", "camera bottom"], ["full", "camera, the whole picture"]];
+const PRESETS_LAYOUT = {
+  wide: {
+    panels: { cam: null, rects: {}, off: [] },
+    left: { cam: [40, 74, 540, 976], rects: { pads: [596, 80, 560, 500], pattern: [596, 596, 560, 454], fx: [1172, 80, 708, 236], meter: [1172, 332, 708, 380], feed: [1172, 728, 708, 322] }, off: [] },
+    right: { cam: [1340, 74, 540, 976], rects: { pads: [40, 80, 560, 500], pattern: [40, 596, 560, 454], fx: [616, 80, 708, 236], meter: [616, 332, 708, 380], feed: [616, 728, 708, 322] }, off: [] },
+    corner: { cam: [1320, 640, 560, 400], rects: {}, off: ["feed"] },
+    full: { cam: [0, 0, 1920, 1080], rects: {}, off: PANEL_IDS },
+  },
+  vertical: {
+    panels: { cam: null, rects: {}, off: [] },
+    top: { cam: [72, 108, 936, 720], rects: { pads: [72, 840, 936, 420], pattern: [72, 1272, 936, 290], fx: [72, 1574, 936, 210] }, off: ["meter", "feed"] },
+    bottom: { cam: [72, 1180, 936, 520], rects: { pads: [72, 108, 936, 540], pattern: [72, 660, 936, 250], fx: [72, 922, 936, 246] }, off: ["meter", "feed"] },
+    corner: { cam: [508, 1254, 500, 450], rects: {}, off: ["feed"] },
+    full: { cam: [0, 100, 1080, 1720], rects: {}, off: PANEL_IDS },
+  },
+};
+// a preset that the format has no version of falls back to a close one
+const LAYOUT_ALIAS = { wide: { top: "left", bottom: "right" }, vertical: { left: "top", right: "bottom" } };
+function layoutPreset(id) { const f = camKey(), t = PRESETS_LAYOUT[f]; return id ? t[id] || t[(LAYOUT_ALIAS[f] || {})[id]] || null : null; }
+// the panels of a scene: their places (the preset's over the default ones) and which are left out
+// a preset needs a camera: without one the panels keep their own places
+function sceneRects(sc) { const p = sc && sc.layout && CAMFILE ? layoutPreset(sc.layout) : null; const o = {}; for (const id of PANEL_IDS) o[id] = (p && p.rects[id]) || L0[id]; return o; }
+function sceneOff(sc) { const p = sc && sc.layout && CAMFILE ? layoutPreset(sc.layout) : null; return [...new Set([...(p ? p.off : []), ...((sc && sc.off) || [])])]; }
+// the places of the panels at a time: from the scene before to the one that runs, by the same progress as the box
+function applyLayout(A) {
+  const p = camProgress(A);
+  if (!p) { for (const id of PANEL_IDS) L[id] = L0[id].slice(); return; }
+  const cur = sceneRects(p.c.s), prev = p.c.i > 0 ? sceneRects(p.c.sc[p.c.i - 1]) : cur, k = p.raw >= 1 || p.tr === "cut" ? 1 : p.e;
+  for (const id of PANEL_IDS) L[id] = cur[id].map((v, i) => prev[id][i] + (v - prev[id][i]) * k);
+}
+const camDefaultRect = () => (VERT ? [72, 108, 936, 640] : [40, 74, 560, 976]);
+const camScenes = () => CAM.scenes.slice().sort((a, b) => a.t - b.t);
+function camSceneAt(A) { let i = -1; const sc = camScenes(); for (let k = 0; k < sc.length; k++) if (sc[k].t <= A + 0.001) i = k; return i < 0 ? null : { sc, i, s: sc[i] }; }
+const panelOn = (id, A) => { const c = camSceneAt(A); return !(c && sceneOff(c.s).includes(id)); };
+const easeBy = (name, u) => {
+  if (name === "inout") return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+  if (name === "spring") { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2); }
+  return 1 - Math.pow(1 - u, 3);
+};
+// where a box comes in from: outside the picture, at the edge it is nearest to
+function slideFrom(r) {
+  const [x, y, w, h] = r, d = [x, W - (x + w), y, H - (y + h)], m = Math.min(...d), i = d.indexOf(m);
+  return i === 0 ? [-w, y, w, h] : i === 1 ? [W, y, w, h] : i === 2 ? [x, -h, w, h] : [x, H, w, h];
+}
+// the progress of the scene that runs: 0 to 1 over its "moves in" time, and the scene before it
+function camProgress(A) {
+  const c = camSceneAt(A); if (!c) return null;
+  const mv = +c.s.move || 0, raw = mv > 0 ? clamp((A - c.s.t) / mv, 0, 1) : 1;
+  return { c, raw, e: easeBy(c.s.ease || "out", raw), tr: c.s.fx || "move" };
+}
+// the boxes at a time, each [x, y, w, h] with an alpha (and a scale): how the change from the scene before to this one looks depends on the
+// scene's transition: move (the box glides), fade (cross-fade), pop (grows in), slide (comes in from the edge), cut
+function camLayers(A) {
+  if (!CAMFILE) return [];
+  const p = camProgress(A); if (!p) return [];
+  const { c, raw, e, tr } = p, key = camKey(), cur = c.s[key] || null, prev = c.i > 0 ? c.sc[c.i - 1][key] || null : null;
+  if (raw >= 1 || tr === "cut" || c.i === 0) return cur ? [{ r: cur, a: 1 }] : [];
+  if (cur && prev) {
+    if (tr === "fade") return [{ r: prev, a: 1 - raw }, { r: cur, a: e }];
+    if (tr === "pop") return [{ r: prev, a: 1 - raw }, { r: cur, a: e, k: 0.85 + 0.15 * e }];
+    if (tr === "slide") { const o = slideFrom(cur); return [{ r: prev, a: 1 - raw }, { r: cur.map((v, k) => v + (o[k] - v) * (1 - e)), a: Math.min(1, e * 2.5) }]; }
+    return [{ r: cur.map((v, k) => v + (prev[k] - v) * (1 - e)), a: 1 }];
+  }
+  if (cur) return [{ r: tr === "slide" ? cur.map((v, k) => v + (slideFrom(cur)[k] - v) * (1 - e)) : cur, a: tr === "slide" ? Math.min(1, e * 2.5) : e, k: tr === "pop" ? 0.85 + 0.15 * e : 1 }];
+  if (prev) return [{ r: prev, a: 1 - e }];
+  return [];
+}
+// how much of a panel shows: a panel that the scene turns on or off fades over the scene's time (1 = all, 0 = none)
+function panelAlpha(id, A) {
+  const p = camProgress(A); if (!p) return 1;
+  const { c, raw, e, tr } = p, off = sceneOff(c.s).includes(id), was = c.i > 0 ? sceneOff(c.sc[c.i - 1]).includes(id) : off;
+  if (off === was || raw >= 1 || tr === "cut") return off ? 0 : 1;
+  const u = tr === "move" || tr === "slide" || tr === "pop" ? e : raw;
+  return off ? 1 - u : u;
+}
+const PANEL_RECT = id => ({ pads: L.pads, pattern: L.pattern, fx: L.fx, meter: L.meter, feed: L.feed })[id];
+// a panel that is partly there: the background is laid over it again
+function panelVeil(id, a) {
+  if (a >= 0.999 || a <= 0.001) return;
+  const [x, y, w, h] = PANEL_RECT(id); g.save(); g.beginPath(); g.rect(x - 2, y - 2, w + 4, h + 4); g.clip(); g.globalAlpha = 1 - a; drawBackground(); g.restore();
+}
+// the picture of the camera at a time: the picture a render has put there, else the video (kept at the time of the audio plus the sync)
+function camSource(A) {
+  const R = window.replay;
+  if (R && R._renderCam) return R._camImg || null;
+  const v = document.getElementById("cam"), want = A + CAM.sync;
+  if (!v || !v.videoWidth || want < 0 || want > v.duration + 0.05) return null;
+  return v;
+}
+function camVideoKeep(A) { // in the page: the video follows the audio
+  if (window.replay && window.replay._renderCam) return; // a render brings the pictures itself
+  const v = document.getElementById("cam"); if (!v || !CAMFILE || !v.videoWidth) return;
+  const want = A + CAM.sync;
+  if (want < 0 || want > v.duration) { if (!v.paused) v.pause(); return; }
+  if (audio.paused || manual !== null) { if (!v.paused) v.pause(); if (Math.abs(v.currentTime - want) > 0.02 && !v.seeking) v.currentTime = want; return; }
+  v.playbackRate = audio.playbackRate || 1;
+  if (v.paused) v.play().catch(() => {});
+  if (Math.abs(v.currentTime - want) > 0.15 && !v.seeking) v.currentTime = want;
+}
+let camEdit = false;
+window.camEditSet = on => { camEdit = on && !!CAMFILE; };
+function drawCamBox(box, al, k, A, last) {
+  let [x, y, w, h] = box; if (al <= 0.001 || w < 4 || h < 4) return;
+  if (k && k !== 1) { const cx = x + w / 2, cy = y + h / 2; w *= k; h *= k; x = cx - w / 2; y = cy - h / 2; }
+  const src = camSource(A), rad = clamp(+CAM.round || 0, 0, Math.min(w, h) / 2);
+  g.save(); g.globalAlpha = al;
+  g.beginPath(); g.roundRect(x, y, w, h, rad); g.clip();
+  if (src) {
+    const sw = src.videoWidth || src.naturalWidth, sh = src.videoHeight || src.naturalHeight, z = Math.max(+CAM.zoom || 1, 1);
+    let rw = sw, rh = sh; if (sw / sh > w / h) rw = sh * w / h; else rh = sw * h / w; rw /= z; rh /= z;
+    const sx = clamp(CAM.cx * sw - rw / 2, 0, sw - rw), sy = clamp(CAM.cy * sh - rh / 2, 0, sh - rh);
+    if (CAM.mirror) { g.translate(x + w / 2, 0); g.scale(-1, 1); g.drawImage(src, sx, sy, rw, rh, -w / 2, y, w, h); }
+    else g.drawImage(src, sx, sy, rw, rh, x, y, w, h);
+  } else { rect(x, y, w, h, "#0b0b0c"); text("camera: no picture here", x + w / 2, y + h / 2, COL.dim, 22, false, "center"); }
+  g.restore();
+  if (last && camEdit && !(window.replay && window.replay._renderCam)) { // the handles of the box
+    g.save(); g.strokeStyle = COL.amber; g.lineWidth = 3; g.beginPath(); g.roundRect(x, y, w, h, rad); g.stroke();
+    for (const [hx, hy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) { rect(hx - 9, hy - 9, 18, 18, COL.amber); }
+    g.restore();
+  }
+}
+function drawCamera(A) {
+  const layers = camLayers(A);
+  layers.forEach((l, i) => drawCamBox(l.r, l.a, l.k, A, i === layers.length - 1));
+}
+// pointer on the canvas -> the picture's own coordinates
+function toPicture(e) { const r = cv.getBoundingClientRect(), k = Math.min(r.width / W, r.height / H), ox = (r.width - W * k) / 2, oy = (r.height - H * k) / 2; return [(e.clientX - r.left - ox) / k, (e.clientY - r.top - oy) / k, k]; }
+function initCamera(saved, file) {
+  CAMFILE = file || "";
+  CAM = Object.assign(JSON.parse(JSON.stringify(CAM_DEFAULT)), saved && typeof saved === "object" ? saved : {});
+  CAM.scenes = (CAM.scenes || []).map(s => ({ t: +s.t || 0, wide: s.wide || null, vertical: s.vertical || null, move: +s.move || 0, off: s.off || [], fx: s.fx || "move", ease: s.ease || "out", layout: s.layout || "" }));
+  const $ = id => document.getElementById(id), box = $("cambox"), lane = $("camlane"), pop = $("campop"), vid = $("cam"), prev = $("cam_prev");
+  const post = () => fetch("/camera", { method: "POST", body: JSON.stringify(CAM) }).catch(() => {});
+  let timer = null;
+  const save = kind => { clearTimeout(timer); timer = setTimeout(post, 300); buildLane(); histChanged(kind); };
+  const loadVideo = () => { if (CAMFILE) { for (const v of [vid, prev]) if (!v.src || !v.src.includes("/camera")) { v.src = "/camera?v=" + encodeURIComponent(CAMFILE); } } else for (const v of [vid, prev]) { v.removeAttribute("src"); v.load(); } };
+  const ensureScene = () => { // a camera with no scene gets one at the start
+    if (CAMFILE && !CAM.scenes.length) CAM.scenes.push({ t: 0, wide: camDefaultRectFor("wide"), vertical: camDefaultRectFor("vertical"), move: 0.6, off: [] });
+  };
+  function camDefaultRectFor(k) { return k === "vertical" ? [72, 108, 936, 640] : [40, 74, 560, 976]; }
+  const status = () => { $("cam_status").textContent = CAMFILE ? "video: " + CAMFILE + (vid.duration ? "  (" + mmss(vid.duration) + ")" : "") : "no video yet: type the path of the file and press use"; };
+  // ---- the lane of the scenes
+  function buildLane() {
+    lane.textContent = ""; const d = AN ? AN.duration : 0; if (!d || !CAMFILE) return;
+    camScenes().forEach((sc, i) => {
+      const b = document.createElement("div"), h = document.createElement("span"), hidden = !sc[camKey()];
+      const ln = (LAYOUT_NAMES.find(x => x[0] === sc.layout) || [])[1]; b.className = "cs"; b.textContent = (i + 1) + ": " + (sc.layout ? ln : hidden ? "no camera" : "camera"); b.title = "scene " + (i + 1) + " from " + mmss(sc.t) + " (click to edit, drag the left edge to move)";
+      b.style.left = clamp(sc.t / d, 0, 1) * 100 + "%"; h.className = "hd";
+      h.onpointerdown = ev => {
+        ev.preventDefault(); ev.stopPropagation(); try { h.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+        const r = lane.getBoundingClientRect(); let moved = false;
+        h.onpointermove = e2 => { moved = true; sc.t = clamp(+((e2.clientX - r.left) / r.width * d).toFixed(2), 0, d); b.style.left = sc.t / d * 100 + "%"; };
+        h.onpointerup = () => { h.onpointermove = h.onpointerup = null; if (moved) save(); };
+      };
+      b.onclick = ev => { if (ev.target !== h) editScene(sc); };
+      b.appendChild(h); lane.appendChild(b);
+    });
+  }
+  function editScene(sc) { // time, move, visible in this format, the panels
+    pop.textContent = ""; pop.classList.add("open");
+    const mk = (tag, o) => Object.assign(document.createElement(tag), o), row = () => { const d = document.createElement("div"); d.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%"; return d; };
+    const r1 = row(), tm = mk("input", { value: mmss(sc.t), size: 7, title: "from (m:ss.s)" }), mv = mk("input", { type: "number", value: sc.move, step: 0.1, min: 0 });
+    mv.style.width = "64px"; mv.title = "how long the box takes to get here (0 = a cut)";
+    tm.onchange = () => { const m = tm.value.match(/^(\d+):(\d+(?:\.\d+)?)$/); sc.t = Math.max(0, m ? +m[1] * 60 + +m[2] : parseFloat(tm.value) || 0); save(); };
+    mv.oninput = () => { sc.move = Math.max(0, parseFloat(mv.value) || 0); save(); };
+    const tr = mk("select", { title: "how the change to this scene looks" }), ez = mk("select", { title: "how the movement speeds up and slows down" });
+    for (const [v, n] of [["move", "glide"], ["fade", "cross-fade"], ["pop", "pop in"], ["slide", "slide in"], ["cut", "cut"]]) tr.appendChild(mk("option", { value: v, textContent: n }));
+    for (const [v, n] of [["out", "smooth"], ["inout", "slow start and end"], ["spring", "springy"]]) ez.appendChild(mk("option", { value: v, textContent: n }));
+    tr.value = sc.fx || "move"; ez.value = sc.ease || "out";
+    tr.onchange = () => { sc.fx = tr.value; save(); }; ez.onchange = () => { sc.ease = ez.value; save(); };
+    r1.append(mk("span", { textContent: "from", style: "color:var(--dim)" }), tm, mk("span", { textContent: "moves in", style: "color:var(--dim)" }), mv, mk("span", { textContent: "s", style: "color:var(--dim)" }));
+    const r1b = row(); r1b.append(mk("span", { textContent: "change:", style: "color:var(--dim)" }), tr, ez);
+    const lay = mk("select", { title: "where the camera and the panels are in this scene" }); lay.style.flex = "1";
+    for (const [v, n] of LAYOUT_NAMES) lay.appendChild(mk("option", { value: v, textContent: n }));
+    lay.value = sc.layout || "";
+    lay.onchange = () => { // a preset puts the box where it belongs in both formats and arranges the panels around it
+      sc.layout = lay.value;
+      if (sc.layout) for (const f of ["wide", "vertical"]) { const q = PRESETS_LAYOUT[f][sc.layout] || PRESETS_LAYOUT[f][(LAYOUT_ALIAS[f] || {})[sc.layout]]; sc[f] = q && q.cam ? q.cam.slice() : null; }
+      save(); editScene(sc);
+    };
+    const r0 = row(); r0.append(mk("span", { textContent: "layout:", style: "color:var(--dim)" }), lay);
+    const r2 = row(), vis = mk("input", { type: "checkbox", checked: !!sc[camKey()] });
+    vis.onchange = () => { sc[camKey()] = vis.checked ? (camSceneRectNear(sc) || camDefaultRectFor(camKey())) : null; save(); };
+    r2.append(vis, mk("span", { textContent: "the camera is shown in this scene (" + camKey() + " video)", style: "color:var(--dim)" }));
+    const r3 = row(); r3.append(mk("span", { textContent: "panels shown:", style: "color:var(--dim)" }));
+    for (const [id, name] of PANELS) {
+      const lab = mk("label", { style: "display:flex;gap:4px;align-items:center" }), c = mk("input", { type: "checkbox", checked: !(sc.off || []).includes(id) });
+      c.onchange = () => { sc.off = (sc.off || []).filter(x => x !== id); if (!c.checked) sc.off.push(id); save(); };
+      lab.append(c, name); r3.appendChild(lab);
+    }
+    const r4 = row();
+    r4.append(mk("button", { textContent: "go", title: "play from here", onclick: () => { audio.currentTime = sc.t; } }),
+      mk("button", { textContent: "delete the scene", onclick: () => { CAM.scenes = CAM.scenes.filter(x => x !== sc); pop.classList.remove("open"); save(); } }),
+      mk("button", { textContent: "close", onclick: () => pop.classList.remove("open") }));
+    pop.append(r0, r1, r1b, r2, r3, r4);
+    const rr = lane.getBoundingClientRect(), d = AN ? AN.duration : 1; pop.style.left = Math.max(8, Math.min(innerWidth - 660, rr.left + sc.t / d * rr.width - 120)) + "px";
+  }
+  const camSceneRectNear = sc => { const o = camScenes().find(x => x[camKey()]); return o ? o[camKey()].slice() : null; };
+  // ---- the box is dragged on the picture (it belongs to the scene that runs at the time)
+  let drag = null;
+  const hit = (e) => {
+    const A = now(), c = camSceneAt(A); if (!c || !c.s[camKey()]) return null;
+    const [px, py, k] = toPicture(e), [x, y, w, h] = c.s[camKey()], hs = 14 / Math.max(k, 0.1) + 4;
+    for (const [mode, cx0, cy0] of [["nw", x, y], ["ne", x + w, y], ["sw", x, y + h], ["se", x + w, y + h]]) if (Math.abs(px - cx0) < hs && Math.abs(py - cy0) < hs) return { mode, c, px, py };
+    if (px >= x && px <= x + w && py >= y && py <= y + h) return { mode: "move", c, px, py };
+    return null;
+  };
+  cv.addEventListener("pointerdown", e => {
+    if (!camEdit || document.body.classList.contains("nohud")) return;
+    const h = hit(e); if (!h) return;
+    e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) { /* a pointer that is gone */ }
+    drag = { mode: h.mode, s: h.c.s, r0: h.c.s[camKey()].slice(), p0: [h.px, h.py], moved: false };
+  });
+  cv.addEventListener("pointermove", e => {
+    if (!camEdit) return;
+    if (!drag) { const h = hit(e); cv.style.cursor = !h ? "" : h.mode === "move" ? "move" : h.mode === "nw" || h.mode === "se" ? "nwse-resize" : "nesw-resize"; return; }
+    const [px, py] = toPicture(e), dx = px - drag.p0[0], dy = py - drag.p0[1]; let [x, y, w, h] = drag.r0; drag.moved = true;
+    if (drag.mode === "move") { x += dx; y += dy; }
+    else { // the corners: the box keeps its shape unless Shift is held
+      const asp = drag.r0[2] / drag.r0[3], free = e.shiftKey, sx = drag.mode.includes("e") ? 1 : -1, sy = drag.mode.includes("s") ? 1 : -1;
+      let nw = Math.max(80, w + sx * dx), nh = free ? Math.max(60, h + sy * dy) : nw / asp;
+      if (sx < 0) x = drag.r0[0] + w - nw; if (sy < 0) y = drag.r0[1] + h - nh; w = nw; h = nh;
+    }
+    drag.s[camKey()] = [Math.round(x), Math.round(y), Math.round(w), Math.round(h)];
+  });
+  const end = () => { if (drag && drag.moved) save(); drag = null; };
+  cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
+  // ---- the box with the file, the sync, the picture
+  $("cam_use").onclick = async () => {
+    const path = $("cam_path").value.trim(); if (!path) return;
+    try {
+      const r = await fetch("/camera/file", { method: "POST", body: JSON.stringify({ path }) });
+      if (!r.ok) { $("cam_status").textContent = (await r.text()).trim(); return; }
+      CAMFILE = (await r.json()).camera_file; ensureScene(); loadVideo(); save(); camEdit = true; fillHits();
+    } catch (e) { $("cam_status").textContent = "could not reach the server"; }
+  };
+  $("cam_off").onclick = async () => { await fetch("/camera/file", { method: "POST", body: JSON.stringify({ path: "" }) }); CAMFILE = ""; loadVideo(); camEdit = false; buildLane(); status(); };
+  const hits = []; // the pad hits of the log, to match one of them with the camera
+  const fillHits = () => {
+    const sel = $("cam_hit"); sel.textContent = ""; hits.length = 0;
+    for (const [k, l] of padEv) for (const e of l) if (e.on) hits.push({ t: e.t - OFFSET, k });
+    hits.sort((a, b) => a.t - b.t);
+    hits.slice(0, 60).forEach((h, i) => { const o = document.createElement("option"); o.value = i; o.textContent = mmss(h.t) + "  " + h.k; sel.appendChild(o); });
+    if (!hits.length) { const o = document.createElement("option"); o.textContent = "no pad hits in the log"; sel.appendChild(o); }
+  };
+  $("cam_gohit").onclick = () => { const h = hits[+$("cam_hit").value]; if (h) { audio.pause(); audio.currentTime = Math.max(h.t, 0); } };
+  const frame = d => () => { prev.pause(); prev.currentTime = Math.max(0, prev.currentTime + d / 30); };
+  $("cam_fm").onclick = frame(-1); $("cam_fp").onclick = frame(1);
+  const showSync = () => { $("cam_sync").value = (+CAM.sync).toFixed(3); };
+  $("cam_set").onclick = () => { const h = hits[+$("cam_hit").value]; if (!h) return; CAM.sync = +(prev.currentTime - h.t).toFixed(3); showSync(); save(); };
+  $("cam_sync").onchange = () => { CAM.sync = parseFloat($("cam_sync").value) || 0; save(); };
+  for (const b of box.querySelectorAll("button[data-n]")) b.onclick = () => { CAM.sync = +((+CAM.sync) + parseFloat(b.dataset.n)).toFixed(3); showSync(); save(); };
+  const bind = (id, key, conv) => { const el = $(id); el.oninput = () => { CAM[key] = conv(el); if (id === "cam_zoom") $("cam_zoomv").textContent = (+CAM.zoom).toFixed(2) + "x"; save("text"); }; };
+  bind("cam_zoom", "zoom", e => +e.value); bind("cam_cx", "cx", e => +e.value); bind("cam_cy", "cy", e => +e.value); bind("cam_round", "round", e => +e.value);
+  $("cam_mirror").onchange = () => { CAM.mirror = $("cam_mirror").checked; save(); };
+  $("cam_layer").onchange = () => { CAM.layer = $("cam_layer").value; save(); };
+  const showAll = () => { showSync(); $("cam_zoom").value = CAM.zoom; $("cam_zoomv").textContent = (+CAM.zoom).toFixed(2) + "x"; $("cam_cx").value = CAM.cx; $("cam_cy").value = CAM.cy; $("cam_round").value = CAM.round; $("cam_mirror").checked = !!CAM.mirror; $("cam_layer").value = CAM.layer; $("cam_path").value = CAMFILE ? CAMFILE : $("cam_path").value; status(); };
+  $("cam_scene").onclick = () => { if (!CAMFILE) return; const c = camSceneAt(now()), t = +now().toFixed(1); const base = c ? c.s : null; CAM.scenes.push({ t, wide: base && base.wide ? base.wide.slice() : camDefaultRectFor("wide"), vertical: base && base.vertical ? base.vertical.slice() : camDefaultRectFor("vertical"), move: 0.8, off: base ? (base.off || []).slice() : [], fx: base ? base.fx || "move" : "move", ease: base ? base.ease || "out" : "out", layout: base ? base.layout || "" : "" }); save(); };
+  $("cam_hide").onclick = () => { if (!CAMFILE) return; const c = camSceneAt(now()); CAM.scenes.push({ t: +now().toFixed(1), wide: null, vertical: null, move: 0.6, off: c ? (c.s.off || []).slice() : [], fx: "fade", ease: "out", layout: "" }); save(); };
+  $("cambtn").onclick = () => { togglePane(box); showAll(); fillHits(); };
+  vid.addEventListener("loadedmetadata", () => { status(); buildLane(); }); prev.addEventListener("loadedmetadata", status);
+  window.refreshCamera = () => { showAll(); buildLane(); };
+  ensureScene(); loadVideo(); showAll(); buildLane();
+}
+
+// ---- templates: a setup (the look, the style of the captions, the camera, the scenes, the chapters, the bus descriptions) that is kept in a
+// folder of the user and can be laid over any take. The times of the scenes and chapters are kept as a part of the length of the take.
+const TPL_PARTS = [["look", "the look (colours, background, logo, handle, subtitle)"], ["captions", "the style of the captions (fade, blur, dim, length)"], ["camera", "the camera (box style, crop, layer)"],
+  ["scenes", "the scenes and layouts"], ["chapters", "the chapters"], ["bus", "what the buses are used for"]];
+function tplBuild(parts) {
+  const d = Math.max(AN ? AN.duration : 1, 1), rel = t => +(t / d).toFixed(4), out = { version: 1, created: new Date().toISOString(), parts: {} };
+  if (parts.look) { const o = JSON.parse(JSON.stringify(STYLE)); for (const k of ["busNotes", "capFade", "capLength", "capBlur", "capDim", "capAnim", "chapCards", "chapCardLen"]) delete o[k]; out.parts.look = o; }
+  if (parts.captions) out.parts.captions = { capFade: STYLE.capFade, capLength: STYLE.capLength, capBlur: STYLE.capBlur, capDim: STYLE.capDim, capAnim: STYLE.capAnim };
+  if (parts.camera) out.parts.camera = { layer: CAM.layer, round: CAM.round, mirror: CAM.mirror, zoom: CAM.zoom, cx: CAM.cx, cy: CAM.cy };
+  if (parts.scenes && CAM.scenes.length) out.parts.scenes = camScenes().map(sc => ({ rel: rel(sc.t), wide: sc.wide, vertical: sc.vertical, move: sc.move, off: sc.off, fx: sc.fx, ease: sc.ease, layout: sc.layout }));
+  if (parts.chapters && CHAPS.length) out.parts.chapters = CHAPS.map(c => ({ rel: rel(c.t), title: c.title }));
+  if (parts.chapters) out.parts.chapcards = { on: STYLE.chapCards ? 1 : 0, len: STYLE.chapCardLen };
+  if (parts.bus) out.parts.bus = { notes: (STYLE.busNotes || []).slice(), changes: BUSN.map(n => ({ rel: rel(n.t), bus: n.bus, text: n.text })) };
+  return JSON.parse(JSON.stringify(out));
+}
+// a template laid over this take (the parts that are asked for and that it has)
+function tplApply(t, parts) {
+  const p = (t && t.parts) || {}, d = Math.max(AN ? AN.duration : 1, 1), at = r => +(Math.min(Math.max(+r || 0, 0), 1) * d).toFixed(1), done = [];
+  const keep = { busNotes: STYLE.busNotes, capFade: STYLE.capFade, capLength: STYLE.capLength, capBlur: STYLE.capBlur, capDim: STYLE.capDim, capAnim: STYLE.capAnim, chapCards: STYLE.chapCards, chapCardLen: STYLE.chapCardLen };
+  if (parts.look && p.look) { STYLE = Object.assign(mergeStyle(p.look), keep); done.push("look"); }
+  if (parts.captions && p.captions) { Object.assign(STYLE, p.captions); done.push("captions"); }
+  if (parts.bus && p.bus) { STYLE.busNotes = [0, 1, 2, 3].map(i => String((p.bus.notes || [])[i] || "")); BUSN = (p.bus.changes || []).map(n => ({ bus: +n.bus || 1, t: at(n.rel), text: String(n.text || "") })); done.push("bus"); }
+  if (parts.camera && p.camera) { Object.assign(CAM, p.camera); done.push("camera"); }
+  if (parts.scenes && p.scenes) {
+    CAM.scenes = p.scenes.map(sc => ({ t: at(sc.rel), wide: sc.wide || null, vertical: sc.vertical || null, move: +sc.move || 0, off: sc.off || [], fx: sc.fx || "move", ease: sc.ease || "out", layout: sc.layout || "" })); done.push("scenes");
+  }
+  if (parts.chapters && p.chapcards) { STYLE.chapCards = p.chapcards.on ? 1 : 0; STYLE.chapCardLen = +p.chapcards.len || 1.2; }
+  if (parts.chapters && p.chapters) { CHAPS = p.chapters.map(c => ({ t: at(c.rel), title: String(c.title || "") })); done.push("chapters"); }
+  applyStyle();
+  const post = (u, b) => fetch(u, { method: "POST", body: JSON.stringify(b) }).catch(() => {});
+  post("/style", STYLE); post("/camera", CAM); post("/chapters", CHAPS); post("/busnotes", BUSN);
+  for (const f of ["refreshStyle", "refreshCamera", "refreshChapters", "refreshBusNotes", "refreshCapLane"]) if (window[f]) window[f]();
+  return done;
+}
+function initTemplates() {
+  const $ = id => document.getElementById(id), list = $("tpl_list"), msg = $("tpl_msg");
+  const checks = (el, avail) => {
+    el.textContent = "";
+    for (const [k, n] of TPL_PARTS) { const lab = document.createElement("label"), c = document.createElement("input"); c.type = "checkbox"; c.dataset.k = k; c.checked = !avail || avail.includes(k); c.disabled = !!avail && !avail.includes(k); lab.append(c, n); el.appendChild(lab); }
+  };
+  const picked = el => { const o = {}; for (const c of el.querySelectorAll("input[type=checkbox]")) o[c.dataset.k] = c.checked && !c.disabled; return o; };
+  checks($("tpl_parts")); checks($("tpl_apply_parts"));
+  const say = t => { msg.textContent = t; };
+  async function refresh() {
+    let l = []; try { l = await (await fetch("/templates")).json(); } catch (e) { say("could not reach the server"); return; }
+    list.textContent = "";
+    if (!l.length) { const d = document.createElement("div"); d.className = "h"; d.textContent = "none yet: set the take up the way you like it and save it"; list.appendChild(d); return; }
+    for (const t of l) {
+      const row = document.createElement("div"); row.className = "trow";
+      const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = t.name;
+      const mk = (txt, title, fn) => { const b = document.createElement("button"); b.textContent = txt; b.title = title; b.onclick = fn; return b; };
+      const star = mk(t.default ? "\u2605" : "\u2606", t.default ? "new takes start with this one (click to stop)" : "make it the template that new takes start with", async () => {
+        await fetch("/templates/default", { method: "POST", body: JSON.stringify({ name: t.default ? "" : t.name }) }); refresh(); });
+      star.className = "star";
+      const apply = mk("apply", "lay it over this take (the parts below)", async () => {
+        const tpl = await (await fetch("/templates/" + encodeURIComponent(t.name))).json(), parts = picked($("tpl_apply_parts"));
+        const done = tplApply(tpl, parts); histChanged(); say(done.length ? "applied: " + done.join(", ") + " (undo takes it back)" : "nothing to apply with these parts");
+      });
+      const del = mk("delete", "remove this template", async () => { await fetch("/templates/" + encodeURIComponent(t.name), { method: "DELETE" }); refresh(); });
+      const pt = document.createElement("div"); pt.className = "pt"; pt.textContent = (t.parts || []).join(", ") || "(empty)";
+      row.append(nm, star, apply, del, pt); list.appendChild(row);
+    }
+  }
+  $("tpl_save").onclick = async () => {
+    const name = $("tpl_name").value.trim(); if (!name) { say("give it a name"); return; }
+    const t = tplBuild(picked($("tpl_parts"))); t.name = name;
+    const r = await fetch("/templates/" + encodeURIComponent(name), { method: "POST", body: JSON.stringify(t) });
+    if (!r.ok) { say((await r.text()).trim()); return; }
+    say("saved: " + Object.keys(t.parts).join(", ")); refresh();
+  };
+  window.refreshTemplates = refresh; refresh();
+}
+
+// the controls of the look
+function mergeStyle(saved) {
+  const st = JSON.parse(JSON.stringify(STYLE_DEFAULT));
+  if (saved && Array.isArray(saved.busNotes)) saved.busNotes = [0, 1, 2, 3].map(i => String(saved.busNotes[i] || ""));
+  if (saved && typeof saved === "object") { Object.assign(st, saved); st.bg = Object.assign({}, STYLE_DEFAULT.bg, saved.bg || {}); }
+  return st;
+}
+function initStyle(saved) {
+  STYLE = mergeStyle(saved);
+  const q = params.get("preset"); if (q && PRESETS[q]) STYLE.preset = q;
+  if (validHex(params.get("accent"))) STYLE.accent = params.get("accent");
+  if (params.get("handle")) STYLE.handle = params.get("handle");
+  if (params.get("subtitle")) STYLE.subtitle = params.get("subtitle");
+  if (validHex(params.get("bgcolor"))) STYLE.bg = Object.assign({}, STYLE.bg, { kind: "solid", color: params.get("bgcolor") });
+  applyStyle();
+  const $ = id => document.getElementById(id), box = $("stylebox"), sel = $("s_preset");
+  for (const k of Object.keys(PRESETS)) { const o = document.createElement("option"); o.value = k; o.textContent = k; sel.appendChild(o); }
+  const show = window.refreshStyle = () => {
+    sel.value = STYLE.preset; $("s_accent").value = validHex(STYLE.accent) ? STYLE.accent : (PRESETS[STYLE.preset] || PRESETS["404 dark"]).accent;
+    $("s_bgkind").value = STYLE.bg.kind; $("s_bg1").value = validHex(STYLE.bg.color) ? STYLE.bg.color : "#000000"; $("s_bg2").value = validHex(STYLE.bg.color2) ? STYLE.bg.color2 : "#1b1b2e";
+    for (let i = 0; i < 4; i++) {
+      const note = (STYLE.busNotes || [])[i] || "", sl = $("s_bussel" + i), inp = $("s_bus" + i), known = [...sl.options].some(o => o.value === note && o.value !== "__custom__");
+      sl.value = !note ? "" : known ? note : "__custom__"; inp.hidden = sl.value !== "__custom__"; inp.value = known ? "" : note;
+    }
+    const bg = STYLE.bg; $("s_bgfit").value = bg.fit || "cover"; $("s_bgpx").value = Math.round((bg.px === undefined ? 0.5 : bg.px) * 100); $("s_bgpy").value = Math.round((bg.py === undefined ? 0.5 : bg.py) * 100);
+    $("s_bgzoom").value = Math.round((bg.zoom || 1) * 100); $("s_bgblur").value = bg.blur || 0; $("s_bgpanels").value = Math.round((bg.panels !== undefined ? bg.panels : (bg.kind === "gradient" || (bg.kind === "image" && bg.image) ? 0.9 : 1)) * 100); $("s_bgpanelsv").textContent = $("s_bgpanels").value + " %";
+    $("s_bgdrift").value = Math.round((bg.mvDrift || 0) * 100); $("s_bgdriftv").textContent = $("s_bgdrift").value + " %"; $("s_bgbreath").value = Math.round((bg.mvZoom || 0) * 100); $("s_bgbreathv").textContent = $("s_bgbreath").value + " %"; $("s_bgper").value = bg.mvPeriod || 12; $("s_bgperv").textContent = $("s_bgper").value + " s";
+    $("s_hits").value = Math.round((STYLE.hits === undefined ? 0.25 : STYLE.hits) * 100); $("s_hitsv").textContent = $("s_hits").value + " %";
+    $("s_bgdim").value = Math.round((STYLE.bg.dim === undefined ? 0.6 : STYLE.bg.dim) * 100); $("s_handle").value = STYLE.handle || ""; $("s_sub").value = STYLE.subtitle || "";
+  };
+  show();
+  let timer = null;
+  const changed = window.styleChanged = () => { applyStyle(); clearTimeout(timer); timer = setTimeout(() => fetch("/style", { method: "POST", body: JSON.stringify(STYLE) }).catch(() => {}), 500); };
+  $("stylebtn").onclick = () => togglePane(box);
+  document.getElementById("tplbtn").onclick = () => togglePane(document.getElementById("tplbox"));
+  sel.onchange = () => { STYLE.preset = sel.value; STYLE.accent = ""; show(); changed(); };
+  $("s_accent").oninput = () => { STYLE.accent = $("s_accent").value; changed(); };
+  $("s_accent_auto").onclick = () => { STYLE.accent = ""; show(); changed(); };
+  $("s_bgkind").onchange = () => { STYLE.bg.kind = $("s_bgkind").value; changed(); };
+  $("s_bg1").oninput = () => { STYLE.bg.color = $("s_bg1").value; if (STYLE.bg.kind === "preset") STYLE.bg.kind = "solid"; show(); changed(); };
+  $("s_bg2").oninput = () => { STYLE.bg.color2 = $("s_bg2").value; STYLE.bg.kind = "gradient"; show(); changed(); };
+  $("s_bgdim").oninput = () => { STYLE.bg.dim = $("s_bgdim").value / 100; changed(); };
+  $("s_bgfit").onchange = () => { STYLE.bg.fit = $("s_bgfit").value; changed(); };
+  $("s_bgpx").oninput = () => { STYLE.bg.px = $("s_bgpx").value / 100; changed(); }; $("s_bgpy").oninput = () => { STYLE.bg.py = $("s_bgpy").value / 100; changed(); };
+  $("s_bgzoom").oninput = () => { STYLE.bg.zoom = $("s_bgzoom").value / 100; changed(); }; $("s_bgblur").oninput = () => { STYLE.bg.blur = +$("s_bgblur").value; changed(); };
+  $("s_bgdrift").oninput = () => { STYLE.bg.mvDrift = $("s_bgdrift").value / 100; $("s_bgdriftv").textContent = $("s_bgdrift").value + " %"; changed(); };
+  $("s_bgbreath").oninput = () => { STYLE.bg.mvZoom = $("s_bgbreath").value / 100; $("s_bgbreathv").textContent = $("s_bgbreath").value + " %"; changed(); };
+  $("s_bgper").oninput = () => { STYLE.bg.mvPeriod = +$("s_bgper").value; $("s_bgperv").textContent = $("s_bgper").value + " s"; changed(); };
+  $("s_hits").oninput = () => { STYLE.hits = $("s_hits").value / 100; $("s_hitsv").textContent = $("s_hits").value + " %"; changed(); };
+  $("s_bgpanels").oninput = () => { STYLE.bg.panels = $("s_bgpanels").value / 100; $("s_bgpanelsv").textContent = $("s_bgpanels").value + " %"; changed(); };
+  // what each bus is used for: one of the unit's effects, or your own text
+  const setNotes = () => { STYLE.busNotes = [0, 1, 2, 3].map(k => { const v = $("s_bussel" + k).value; return v === "__custom__" ? $("s_bus" + k).value : v; }); changed(); };
+  for (let i = 0; i < 4; i++) {
+    const sl = $("s_bussel" + i);
+    fillBusSelect(sl);
+    sl.onchange = () => { $("s_bus" + i).hidden = sl.value !== "__custom__"; if (!$("s_bus" + i).hidden) $("s_bus" + i).focus(); setNotes(); };
+    $("s_bus" + i).oninput = setNotes;
+  }
+  show();
+  $("s_handle").oninput = () => { STYLE.handle = $("s_handle").value; changed(); };
+  $("s_sub").oninput = () => { STYLE.subtitle = $("s_sub").value; changed(); };
+  // pictures are made small before they are kept (a logo 480 px wide, a background 1920 px), so that the file beside the log stays small
+  const picture = (file, maxW, type, done) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => { const k = Math.min(1, maxW / img.naturalWidth), c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); done(c.toDataURL(type, 0.84)); };
+    img.src = url;
+  };
+  $("s_logo").onchange = e => { const f = e.target.files[0]; if (f) picture(f, 480, "image/png", d => { STYLE.logo = d; changed(); }); };
+  $("s_logo_clear").onclick = () => { STYLE.logo = ""; changed(); };
+  $("s_bgimg").onchange = e => { const f = e.target.files[0]; if (f) picture(f, 1920, "image/jpeg", d => { STYLE.bg.image = d; STYLE.bg.kind = "image"; show(); changed(); }); };
+  $("s_reset").onclick = () => { STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)); show(); changed(); };
+}
+
+async function start() {
+  const msg = document.getElementById("msg");
+  try {
+    const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
+    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || ""), focus: String(c.focus || "") })); CHAPS = (ev.chapters || []).map(c => ({ t: +c.t || 0, title: String(c.title || "") })); CUTS = cutsNorm((ev.cuts || []).map(c => ({ from: +c.from || 0, to: +c.to || 0 }))); BUSN = (ev.busnotes || []).map(n => ({ bus: +n.bus || 1, t: +n.t || 0, text: String(n.text || "") })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
+    initChapters(); initCuts(); initBusNotes(); initCamera(ev.camera, ev.camera_file); initTemplates();
+    if (ev.default_template) { const all = {}; for (const [k] of TPL_PARTS) all[k] = true; tplApply(ev.default_template, all); } // a new take starts with the default template
+    if (window.refreshCapLane) window.refreshCapLane(); // the lanes need the length of the take, which prepare has just read
+    histInit();
+  } catch (e) { msg.textContent = "could not load the replay: " + e; msg.style.display = "block"; return; }
+  const t0 = parseFloat(params.get("t") || "0");
+  if (t0) audio.currentTime = t0;
+  // for a render: window.replay.setTime(t) draws the frame of that time and nothing moves by itself
+  window.replay = { duration: AN.duration, fps: AN.fps, offset: OFFSET, setTime(t) { manual = t; draw(t); return true; }, release() { manual = null; }, draw,
+    // for a render: the pictures of the look have loaded, and the picture of a time (a PNG as a data URL)
+    ready() { return (!logoImg || logoImg.complete) && (!bgImg || bgImg.complete); },
+    frame(t) { manual = t; draw(t); return cv.toDataURL("image/png"); },
+    // for a render: the picture of the camera for this frame comes from the program (a JPEG as a data URL, or nothing)
+    async frameWithCamera(t, cam) { this._renderCam = true; if (cam) { const im = new Image(); im.src = cam; await im.decode(); this._camImg = im; } else this._camImg = null; manual = t; draw(t); return cv.toDataURL("image/png"); } };
+  window.replayReady = true;
+  if (params.get("t") !== null && params.get("play") === null) manual = t0;
+  frame();
+}
+{ // the pop-ups sit above the bar, whatever its height
+  const bar = document.getElementById("bar"), set = () => document.documentElement.style.setProperty("--barh", bar.offsetHeight + "px");
+  set(); if (window.ResizeObserver) new ResizeObserver(set).observe(bar); addEventListener("resize", set);
+}
+start();
+</script>
+</body>
+</html>

@@ -1,69 +1,52 @@
-# Sequencer (tab 5) and patterns
+# SEQ (screen 2)
 
-A bank has 16 pattern slots. They are a panel under the pads (Pads tab, `Tab` moves between the two,
-the highlighted pattern is previewed on the right) and are edited in the **Sequencer** tab: `5`, then
-`a` chooses the pattern to edit and `N` makes a new one. `Esc` leaves the pattern.
+The pattern in front as the unit's step grid: a track for each pad that has notes, sixteenth-note steps, two bars side by side when the window is wide enough. The pattern is the unit's own format, so a pattern made here is a pattern of the project.
 
-## Opening, making and moving patterns
+![SEQ](img/pc-seq.png)
 
-| Key | What |
+## What is on the screen
+
+- **The grid:** each row is a pad (A3, A9, A10...), each box a step; a step with a note is lit, and the note is drawn as a bar as tall as its velocity. The steps are numbered through (1 to 32 for two bars). The cursor is one box.
+- **The panel** tells about the note under the cursor (bar and step, velocity, length, timing, pitch), about the track (the pad, its sample, playing or muted or solo, the number of notes) and about the pattern (slot, length, tracks, tempo).
+- `Space` plays the pattern in view and `Space` again stops it (`PLAY` / `STOP`). Changing bank or pattern while it plays leaves what plays alone.
+
+## What you do here
+
+- **Put and take notes.** `a` puts a note on an empty step (velocity 100) and takes it off again. `e` then `h j k l` edit while held: velocity, length, timing and pitch. `x` hears the note without starting the pattern.
+- **The note panel** (`Enter` or `b`): velocity 1 to 127, length (from 15 ticks to the end of the pattern), timing (early or late, in ticks) and pitch (-12 to +12 semitones; plain when unchanged). `a` sets a value back to its default, `Esc` closes.
+
+![A note's settings](img/pc-note-panel.png)
+
+- **Move around.** `h j k l` pad and step, `[ ]` bank, `{ }` a bar on, `z` one bar or as many as fit, `f` freezes the view on the bar in focus so that it loops only that bar (`FROZEN`).
+- **Pick a pattern.** `y b` opens the pattern dialog (bank, then pattern; `[ ]` for another bank), `y j k` steps through the patterns. A new one comes from a template or the audible tracks (below).
+- **Tracks.** `y x` adds a track (choose a pad), `m` mutes the track, `s` solos it.
+- **The tools** (`t`): the pattern's menu has pages for the *pattern* (choose, new from a template, copy and move, delete, bounce to a pad, tempo of the bank), *timing* (swing, humanize, quantize, shift, reverse), *length* (double, halve),
+  *notes* (what writes and changes notes) and *tracks* (dispatch over the marked pads, copy to a pad, swap with a pad, clear, add a track).
+
+![The pattern tools](img/pc-pattern-tools.png)
+
+- **Write notes with a tool.** The notes tools open a dialog with its settings, and the result is already in the pattern as a trial while the dialog is open: `Esc` throws it away, *Keep it* commits it as one undo step (`u` takes it back, `R` redoes).
+  Fill (a rhythm, with velocity, gate, decay per hit and pitch), Euclid, Evolve over the bars, Echo, Ratchet, Accents and ghosts, LFO and ENV on the notes, Chance, Randomize velocity, Shape (gate, decay), Cycle, Nudge, Pitch (transpose, random, runs), Invert.
+
+![The Fill tool, with its trial in the pattern](img/pc-fill.png)
+
+- **Start from a template.** *New pattern from a template...* lists rhythms from House to Footwork with their tempo and length; the one you pick becomes a new pattern in the next free slot, with named tracks.
+
+| The templates | A template as a pattern |
 | --- | --- |
-| `a` | choose a pattern (in the editor: another one); arrows / `[ ]` bank, `Enter` open |
-| `Enter` | open the pattern (from the panel) |
-| `N` | **new pattern**: pick a template (see below) |
-| `c` / `x` | pick a pattern up to copy / move, `p` puts it in a slot of any bank (twice replaces) |
-| `v` / `d` | mark / delete |
-| `b` | retarget the open pattern's pads to another bank |
-| `P`, `Space` | play it **on this computer** in a loop, with a playhead (`s` stops) |
+| ![](img/pc-templates.png) | ![](img/pc-template-pattern.png) |
 
-### New pattern (`N`)
+- **Swap two tracks.** *Swap with a pad...* (page Tracks) asks for a pad with the same dialog that adds a track, and swaps the notes of the two tracks, with their mute and solo, as one undo step: the snare plays where the maracas were. In a frozen bar only that bar is swapped.
 
-A list in columns (name, length, tempo, voices) with the cursor spanning the row, and under it a
-two-bar preview of the groove under the cursor. Templates: *All pads held* (every sample of the bank on
-beat 1), *Blank*, and genre grooves (house, techno, DnB, jungle, dubstep, trance, UK garage, breakbeat,
-trap, amapiano, reggaeton, disco, footwork and more). `j k`, `g G` move (the list scrolls on a small
-screen), `Enter` / `Space` choose, `Esc` / `N` / `q` back. A groove asks how long (`h l` fewer / more
-bars, `1`–`8` that many, `Enter` make it, `Esc` back).
+![Choosing the pad to swap with](img/pc-swap-picker.png)
 
-## The step editor
+- **Tempo.** The tempo of the bank is set in the pattern tools (60 to 240 BPM); *Tempo select* chooses between each bank's own tempo and the project's.
 
-Notes are blocks as tall as their velocity and as wide as they last. Pages of up to two bars: `{ }`
-turn the page, `v` shows, edits and loops only some bars.
+## Keys
 
-| Group | Keys |
-| --- | --- |
-| move | `h j k l` move · `Tab` / `Enter` open the track (a big 16-step lane; `Tab` folds it) · `x` (`Enter` in the lane) note on/off · `V` select notes · `D` clear the track here · `t` tools for this pad · `T` tools for the whole pattern · `Space` `P` play · `a` other pattern · `Esc` close |
-| velocity | `, .` by 1 · `< >` by 10 · `*` the pad's own level (127) |
-| length | `+ -` a step longer / shorter |
-| timing | `H L` nudge 5 ticks · `( )` 1 tick · `0` back to one step long on the grid |
-| pad | `m` mute · `s` solo · `S` save as heard · `B` bounce to a pad |
-| trig | `c C` condition (forward / back) · `y` roll the dice again |
-| history | `u` undo · `R` redo · `b` retarget bank |
+**On a computer:** `a` note on/off · `e h j k l` edit (hold) · `Space` play / stop · `Enter` or `b` note settings · `x` hear note · `h j k l` pad, step · `[ ]` bank · `{ }` bar · `t` tools · `m` mute track · `s` solo track · `f` freeze view · `z` one bar / more ·
+`y x` add track · `y b` pick pattern · `y j k` pattern +- · `u` undo, `R` redo.
 
-### Modes
+**On the handheld:** `A` note on/off · `A` + D-pad edit (hold) · `X` play · `B` note settings · `L2` hear note · `R2` mute/solo · D-pad pad, step · `L1 R1` bar · `Y+X` add track · `Y+B` pick pattern · `Sel+B` tools · `Y+^v` pattern +-.
 
-- **Expanded track** (`Tab` / `Enter`): `h l` step, `j k` other track, `Enter` / `x` note on/off, `Tab` folds.
-- **Substep mode** (`e`, again to leave): the step at the cursor is divided like the unit's SUBSTEP.
-  `h l` go through the parts, `x` / `Enter` switch a part on/off, `i` changes the split 2 → 3 → 4 → one
-  note → 2. The detail line shows a box per part (filled plays, dotted silent). A split step keeps its
-  mark with the number of parts after it.
-- **Select notes** (`V`): `h j k l` move, `x` / `Enter` choose or let go, `a` every note of the track,
-  `A` of every track. Then `, .` `< >` `*` velocity, `+ -` length, `H L ( ) 0` timing, `c C` condition,
-  `d` take them out, `m s` mute / solo the track, `B` bounce. `Esc` / `V` leaves.
-- **Tools** (`t` this pad, `T` the whole pattern): menu `j k` choose a tool, `h l` (or `- +`) change the
-  amount, `e` eighth / sixteenth grid, `Enter` apply, `Esc` close. Tools: SWING, QUANT (quantize with a
-  strength), SHIFT, REVERSE, HUMANIZE, DOUBLE (bars × 2, played again), EXTEND (bars × 2, new half
-  empty), HALF (first half kept).
-- **Conditions** (`c` / `C`): every loop, `1:2` … `8:8`, then chances (90, 75, 50, 25, 10 %). The unit's
-  pattern files have no place for them, so they are kept on this computer (`conditions.json`), drawn
-  `◐`, and apply to playback here and to a bounce. The pattern then runs as a cycle (the least common
-  multiple of the conditions; with a chance at least 4 loops, rolled from a seed, `y` rolls again).
-
-## Mute, solo, save and bounce
-
-`m` mutes and `s` solos a pad (in Pads and in the editor); that only changes what this computer plays
-(red `MUTE`, green `SOLO`, silent pads greyed). `S` saves the pattern **as you hear it** into a slot
-you choose, without the muted pads (or with only the soloed ones), so the unit plays that version
-too. `B` bounces the mix that plays here (as long as the pattern or the chosen bars) to one sample on a
-pad you choose; solo a track to print only that one. The unit's envelope, effects and time stretch are
-not in it.
+Every tool and setting with its values: [tools.md](tools.md#seq).

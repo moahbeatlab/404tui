@@ -51,6 +51,16 @@ func (m Model) ptnCommand(act string, i int) (tea.Model, tea.Cmd) {
 		}
 		lp.ptSet, lp.ptBank = true, (i%proto.Banks+proto.Banks)%proto.Banks
 		return m, m.wanted()
+	case "ptnmark":
+		// Tells the page which pattern the unit plays (started on the unit), without sending anything.
+		rows := m.patterns[bank]
+		if i < 0 || i > 15 || i >= len(rows) || !rows[i].Exists {
+			return m, nil
+		}
+		slot := rows[i].Slot
+		m.perfNow, m.perfNext, m.perfAuto = &slot, nil, false
+		m.message = fmt.Sprintf("pattern %s is the one that plays", slotText(m.perfNow))
+		return m, m.wanted()
 	case "ptn":
 		rows := m.patterns[bank]
 		if i < 0 || i > 15 || i >= len(rows) || !rows[i].Exists {
@@ -70,9 +80,8 @@ func (m Model) ptnCommand(act string, i int) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		slot := rows[i].Slot
-		m.perfNext = &slot
+		m = m.patternRequested(slot)
 		lp.ptFallback = m.ptnDue()
-		m.logCue()
 		m.message = fmt.Sprintf("pattern %s is sent: the unit plays it next (the unit needs PC Rx on)", slot)
 		return m, m.wanted()
 	}
@@ -148,8 +157,8 @@ func (m Model) ptnConfirm() Model {
 	if m.perfNext == nil || m.clock == nil {
 		return m
 	}
-	hits := m.ptnHits(ticksPerBar)
-	if len(hits) < 3 {
+	hits := m.ptnHits(ticksPerBar / 2) // the last half bar: the evidence is there sooner after the switch
+	if len(hits) < 2 {
 		return m
 	}
 	next, _, ok := m.ptnFit(*m.perfNext, hits)
@@ -195,8 +204,8 @@ func (m Model) ptnTick() Model {
 	return m
 }
 
-// ptnDue is the clock tick after which a pattern that was sent is taken for the one that plays, whatever is heard: one pattern
-// length after the pattern that plays was due to end. 0 when that is not known.
+// ptnDue is the clock tick after which a pattern that was sent is taken for the one that plays, whatever is heard: a bar after the
+// loop of the pattern that plays ends. 0 when that is not known.
 func (m Model) ptnDue() int {
 	if m.perfNow == nil || m.clock == nil || !m.clockRuns() {
 		return 0
@@ -206,7 +215,9 @@ func (m Model) ptnDue() int {
 		return 0
 	}
 	length := d.Bars() * ticksPerBar
-	return m.clock.ticks + 2*length
+	// The unit switches where the loop of the pattern that plays ends (the clock counts from the unit's Start, which begins the pattern): that is
+	// the next multiple of its length; a bar later a pattern that no pad tells apart is taken for the one that plays.
+	return (m.clock.ticks/length+1)*length + ticksPerBar
 }
 
 // webPtn is the Patterns page.

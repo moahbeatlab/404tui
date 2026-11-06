@@ -1,4 +1,4 @@
-# An ArkOS-like arm64 userspace to run the launcher and sp404h-arm64 in, on any machine.
+# An ArkOS-like arm64 userspace to run the launcher and sp404tui-arm64 in, on any machine.
 # ArkOS 2.0 is Ubuntu 19.10 (eoan): same glibc and package versions as the R36S.
 # If eoan cannot be pulled any more, build with:  docker compose build --build-arg BASE=ubuntu:20.04
 ARG BASE=ubuntu:eoan

@@ -106,6 +106,9 @@ func (d *Device) command(payload []byte, expect byte, what string) error {
 	return nil
 }
 
+// RawStatus is the payload of the status poll as the unit sends it, for logging what it holds.
+func (d *Device) RawStatus() ([]byte, error) { return d.statusPoll() }
+
 func (d *Device) statusPoll() ([]byte, error) {
 	return d.controlCall(short(proto.StatusRequest()), "status", startsWith(proto.ReplyStatus, 1))
 }
@@ -590,6 +593,27 @@ func (d *Device) restore(project uint8, files []File, progress func(i int, name 
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	_, err := d.wait("project reload", 15*time.Second, func(m *proto.Message) bool {
+		return isControl(m) && startsWith(proto.RestoreReloaded, 1)(m.Payload())
+	})
+	return err
+}
+
+// ReloadProject makes the unit read project (0-based) from its card again, as the official app does at the end of "Import to MKII":
+// what is in the files (patterns written to them) shows on the unit, the sound stops, and whatever the unit holds in memory only is
+// replaced. It returns when the unit says it has reloaded.
+func (d *Device) ReloadProject(project uint8) error {
+	m, err := d.transact(short(proto.RestoreReload(project)), "reload project", 15*time.Second, func(m *proto.Message) bool {
+		return isControl(m) && startsWith(proto.RestoreReloadReply, 1)(m.Payload())
+	})
+	if err != nil {
+		return err
+	}
+	if p := m.Payload(); len(p) > 1 && p[1] != 0 {
+		return refused("reload project", p[1])
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	_, err = d.wait("project reload", 15*time.Second, func(m *proto.Message) bool {
 		return isControl(m) && startsWith(proto.RestoreReloaded, 1)(m.Payload())
 	})
 	return err

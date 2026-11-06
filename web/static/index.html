@@ -33,6 +33,7 @@
     <button id="startLive" class="big on">Connect the SP-404MKII</button>
     <button id="startDemo" class="big">Try the demo</button>
     <p id="startErr" class="err"></p>
+    <p><a href="../" id="backHome" hidden>◂ back to the overview</a></p>
     <small>Plug the unit in with USB. Needs Web MIDI: Chrome or Edge on a computer, or the MIDIWeb Browser app on an iPhone or iPad. The unit sends its MIDI clock when its sequencer runs: Motion and the LFOs follow it. Pattern switching needs PC Rx on and MIDI mode B.</small>
   </div>
 </div>
@@ -45,7 +46,7 @@
       <div id="beats"><i></i><i></i><i></i><i></i></div>
       <div id="bar">–</div>
     </div>
-    <button id="viewBtn" class="viewbtn">LOOPER</button>
+    <button id="viewBtn" class="viewbtn">PATTERNS</button>
     <div id="conn" class="conn"><i></i><b id="connText">…</b></div>
   </header>
 
@@ -78,7 +79,7 @@
 
   <section id="looper" class="panel" data-lp="loop">
     <div class="lpctl">
-      <div class="seg lpsw"><button data-lp="loop" class="on">LOOP</button><button data-lp="slice">SLICER</button></div>
+      <div class="seg lpsw" hidden><button data-lp="loop">LOOP</button><button data-lp="slice" class="on">SLICER</button></div>
       <div id="lpMain" class="lpgroup">
         <button id="lpPat" class="big"><span>MAKE PATTERN</span><small id="lpPatS">…</small></button>
         <button id="lpDel" class="big"><span id="lpDelT">DELETE</span><small id="lpDelS">tap a pad first</small></button>
@@ -122,15 +123,18 @@
 
   <section id="patterns" class="panel">
     <div id="ptnInfo" class="lpinfo">Tap a pattern: the unit plays it next.</div>
+    <button id="ptnMark" type="button" class="chip">PLAYING ON THE UNIT: TAP ITS NUMBER</button>
     <div id="ptnGrid"></div>
   </section>
 
+  <section id="tools" class="panel"><iframe id="toolsFrame" title="Tools" allow="autoplay"></iframe></section>
+
   <nav id="tabs">
     <button data-tab="pads" class="on">PADS</button>
-    <button data-tab="motion">MOTION</button>
-    <button data-tab="rail">STAGE</button>
-    <button data-tab="looper">LOOPER</button>
     <button data-tab="patterns">PATTERNS</button>
+    <button data-tab="motion">MOTION</button>
+    <button data-tab="tools">TOOLS</button>
+    <button data-tab="rail">STAGE</button>
   </nav>
   <div id="toast"></div>
   <div id="lvPop" hidden><small id="lvPopN"></small><b id="lvPopV"></b></div>

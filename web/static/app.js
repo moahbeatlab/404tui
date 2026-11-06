@@ -442,7 +442,7 @@
   // tabs (portrait), and the switch between Perform and the Looper (the tab in portrait, the button in the top bar)
   const app = $('app');
   app.dataset.tab = store.get('tab') === 'looper' ? 'pads' : (store.get('tab') || 'pads');
-  app.dataset.view = ['looper', 'patterns'].includes(store.get('view')) && !(LOCAL && store.get('view') === 'looper') ? store.get('view') : 'perform';
+  app.dataset.view = ['patterns', 'tools'].includes(store.get('view')) && !(LOCAL && store.get('view') === 'tools') ? store.get('view') : 'perform';
   if (LOCAL) {
     app.classList.add('local');
     const hint = document.querySelector('#rail .hint');
@@ -452,10 +452,19 @@
   function syncTabs() {
     tabBtns.forEach((x) => x.classList.toggle('on', app.dataset.view !== 'perform' ? x.dataset.tab === app.dataset.view : x.dataset.tab === app.dataset.tab));
     // The button in the top bar (landscape) names the view it goes to: Perform, Looper, Patterns, and round.
-    $('viewBtn').textContent = { perform: LOCAL ? 'PATTERNS' : 'LOOPER', looper: 'PATTERNS', patterns: 'PERFORM' }[app.dataset.view];
+    $('viewBtn').textContent = { perform: 'PATTERNS', patterns: LOCAL ? 'PERFORM' : 'TOOLS', tools: 'PERFORM' }[app.dataset.view];
+    if (app.dataset.view === 'tools') showTools();
     $('viewBtn').classList.toggle('on', app.dataset.view !== 'perform');
   }
-  function setView(v) { app.dataset.view = v; store.set('view', v); syncTabs(); send({ a: 'view', name: v }); try { if (state) render(); } catch (e) { /* before the first state */ } }
+  // The Tools tab is the tools page (the program's pattern, slicer and pad tools) in a frame; it is loaded the first time it is shown, with the same key.
+  function showTools() {
+    const f = $('toolsFrame');
+    if (f.getAttribute('src')) return;
+    const k = new URLSearchParams(location.search).get('key') || store.get('key') || '';
+    f.src = 'tools.html?embed=1' + (k ? '&key=' + encodeURIComponent(k) : '');
+    f.addEventListener('load', () => { toolsBank = -1; if (state && state.bank) tellTools(state.bank.charCodeAt(0) - 65); });
+  }
+  function setView(v) { if (state && state.bank && v !== 'perform' && !(v === 'patterns' && app.dataset.view === 'patterns')) { const i = state.bank.charCodeAt(0) - 65; if (i >= 0 && i < 10) { send({ a: 'ptnbankset', i }); send({ a: 'slbankset', i }); tellTools(i); } } app.dataset.view = v; store.set('view', v); syncTabs(); send({ a: 'view', name: v }); try { if (state) render(); } catch (e) { /* before the first state */ } }
   // A double tap on the Patterns button (the tab, or the button at the top) shows the bank of the pattern that plays.
   let ptnTapAt = 0;
   function ptnDouble() {
@@ -467,14 +476,14 @@
   tabBtns.forEach((b) => b.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     if (b.dataset.tab === 'patterns' && ptnDouble()) return;
-    if (b.dataset.tab === 'looper' || b.dataset.tab === 'patterns') return setView(b.dataset.tab);
+    if (b.dataset.tab === 'patterns' || b.dataset.tab === 'tools') return setView(b.dataset.tab);
     app.dataset.tab = b.dataset.tab; store.set('tab', b.dataset.tab); setView('perform');
   }));
   $('viewBtn').addEventListener('pointerdown', (e) => {
     e.preventDefault();
     // Tapped twice quickly where it said PATTERNS: stay on the Patterns page, and show the bank of the pattern that plays.
     if (app.dataset.view === 'patterns' && performance.now() - ptnTapAt < 450) { ptnTapAt = performance.now(); send({ a: 'ptnfollow' }); return; }
-    const to = { perform: LOCAL ? 'patterns' : 'looper', looper: 'patterns', patterns: 'perform' }[app.dataset.view];
+    const to = { perform: 'patterns', patterns: LOCAL ? 'perform' : 'tools', tools: 'perform' }[app.dataset.view];
     if (to === 'patterns') ptnTapAt = performance.now();
     setView(to);
   });
@@ -558,7 +567,7 @@
   const lpSw = document.querySelectorAll('.lpsw button');
   function setLp(v) { $('looper').dataset.lp = v; lpSw.forEach((b) => b.classList.toggle('on', b.dataset.lp === v)); store.set('lp', v); try { render(); } catch (e) { /* before the first state */ } }
   lpSw.forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); setLp(b.dataset.lp); }));
-  setLp(store.get('lp') === 'slice' ? 'slice' : 'loop');
+  setLp('slice');
   const PHASE = { idle: 'READY', starting: 'STARTING…', armed: 'ARMED', recording: 'REC', saving: 'SAVING…' };
   // The level meters (there is one on the stage panel and one on each page of the Looper): -60 dB to 0 dB.
   const meters = [...document.querySelectorAll('[data-meter]')].map((el) => ({ el, bars: [...el.querySelectorAll('.mbar')].map((b) => ({ i: b.querySelector('i'), u: b.querySelector('u') })), clip: el.querySelector('em'), txt: el.querySelector('b') }));
@@ -635,10 +644,12 @@
 
   // ---- the Patterns page ----
   const ptnBtns = [];
+  let ptnMark = false; // the next tap says which pattern the unit plays, and sends nothing
+  $('ptnMark').addEventListener('click', () => { ptnMark = !ptnMark; cls($('ptnMark'), 'on', ptnMark); });
   for (let i = 0; i < 16; i++) {
     const b = document.createElement('button');
     b.innerHTML = '<span>' + (i + 1) + '</span><small></small>';
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!b.disabled) send({ a: 'ptn', i }); });
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); if (b.disabled) return; if (ptnMark) { ptnMark = false; cls($('ptnMark'), 'on', false); send({ a: 'ptnmark', i }); } else send({ a: 'ptn', i }); });
     $('ptnGrid').appendChild(b);
     ptnBtns.push({ b, s: b.querySelector('small') });
   }
@@ -705,9 +716,26 @@
   for (let i = 0; i < 10; i++) {
     const b = document.createElement('button');
     b.innerHTML = String.fromCharCode(65 + i) + '<small></small>';
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); send({ a: BANKS[bankKind].cmd, i }); $('bankPick').hidden = true; });
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); chooseBank(bankKind, i); $('bankPick').hidden = true; });
     bankGrid.appendChild(b);
   }
+  // One bank for the whole page: choosing it in Pads, Patterns, the Slicer or Tools shows the same bank in all of them. (The bank the slices go to is its own.)
+  function chooseBank(kind, i) {
+    if (kind === 'to') return send({ a: BANKS.to.cmd, i });
+    send({ a: 'bank', i }); send({ a: 'ptnbankset', i }); send({ a: 'slbankset', i });
+    if (!LOCAL) send({ a: 'lpbankset', i });
+    tellTools(i);
+  }
+  let toolsBank = -1;
+  function tellTools(i) {
+    const f = $('toolsFrame');
+    if (f && f.contentWindow && i !== toolsBank) { toolsBank = i; try { f.contentWindow.postMessage({ t: 'bank', i }, location.origin); } catch (e) { /* not loaded yet */ } }
+  }
+  window.addEventListener('message', (e) => {
+    if (e.origin === location.origin && e.data && e.data.t === 'openBank') return openBanks('unit');
+    if (e.origin !== location.origin || !e.data || e.data.t !== 'bank' || !(e.data.i >= 0 && e.data.i < 10)) return;
+    toolsBank = e.data.i; chooseBank('unit', e.data.i);
+  });
   function drawBanks() {
     if ($('bankPick').hidden || !state) return;
     const cur = BANKS[bankKind].cur(state);
@@ -784,12 +812,14 @@
         cls(d, 'empty', !p.has); cls(d, 'b1', p.has && p.bus === 1); cls(d, 'b2', p.has && p.bus === 2);
       }
       cls(d, 'heard', p.heard); cls(d, 'inPat', p.inPat); cls(d, 'sel', p.sel); cls(d, 'keep', p.keep); cls(d, 'dry', p.dry); cls(d, 'muted', p.muted);
+      e.sg = p.glow; e.hits = p.hits; e.muted = p.muted;
       d.style.setProperty('--glow', (p.glow * 0.6).toFixed(2));
       const w = (p.level / 127 * 100).toFixed(1) + '%';
       if (e.lvi.style.width !== w) e.lvi.style.width = w;
       d.dataset.lv = p.level;
     });
 
+    steps = s.steps ? { len: s.steps.len, pos: s.steps.pos, ms: s.steps.tickMs, at: performance.now() } : null;
     [...barsEl.children].forEach((b) => cls(b, 'on', +b.dataset.n === s.motion.bars));
     cls($('bDub'), 'hot', s.motion.overdub);
     s.motion.bus.forEach((mb, bus) => {
@@ -821,6 +851,28 @@
   }
 
   // Keep the screen on: on stage nobody touches the phone for minutes.
+  // The pads flash at the notes of the pattern that plays: the unit sends no notes for it, so the page keeps the place in the
+  // loop itself between two states and lights a pad as its note goes by.
+  let steps = null;
+  const FLASH = 7; // clock ticks a flash takes to fade
+  function flash() {
+    requestAnimationFrame(flash);
+    if (!padEls.length) return;
+    const t = steps ? (steps.pos + (performance.now() - steps.at) / steps.ms) % steps.len : -1;
+    padEls.forEach((e) => {
+      if (!e || !e.d) return;
+      let g = e.sg || 0;
+      if (steps && e.hits && !e.muted) {
+        for (const h of e.hits) {
+          const age = (t - h + steps.len) % steps.len;
+          if (age < FLASH) g = Math.max(g, 0.85 * (1 - age / FLASH));
+        }
+      }
+      const v = (Math.round(g * 0.6 * 20) / 20).toFixed(2);
+      if (e.fv !== v) { e.fv = v; e.d.style.setProperty('--glow', v); }
+    });
+  }
+  requestAnimationFrame(flash);
   async function wake() { try { if (navigator.wakeLock && document.visibilityState === 'visible') await navigator.wakeLock.request('screen'); } catch (e) {} }
   document.addEventListener('visibilitychange', () => { wake(); if (document.visibilityState === 'visible' && !ws) { retry = 0; open(); } });
   document.addEventListener('pointerdown', wake, { once: true });
@@ -833,6 +885,9 @@
     $('startLive').addEventListener('click', () => startEngine(false));
     $('startDemo').addEventListener('click', () => startEngine(true));
     // Back to the unit when it was used last time (the browser remembers the permission).
-    if (store.get('mode') === 'live' && SP404Local.supported()) startEngine(false); else showStart('');
+    if ($('backHome')) $('backHome').hidden = false;
+    document.querySelectorAll('[data-tab="tools"]').forEach((b) => { b.hidden = true; }); // the tools need the program (sp404 serve)
+    if (location.hash === '#demo') startEngine(true);
+    else if (store.get('mode') === 'live' && SP404Local.supported()) startEngine(false); else showStart('');
   } else open();
 })();

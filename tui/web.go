@@ -65,10 +65,20 @@ type webState struct {
 	Looper   webLooper    `json:"looper"`
 	Slicer   webSlicer    `json:"slicer"`
 	Ptn      webPtn       `json:"ptn"`
+	// Steps is where the pattern that plays is now, for the pads to flash at their notes; nil when nothing plays.
+	Steps *webSteps `json:"steps,omitempty"`
 	// Level is how loud the sound is that is recorded (or, outside a recording, that the unit sends); nil until read.
 	Level *webLevel `json:"level"`
 	// LevelNote says why there is none: no recorder, or what the listening program said.
 	LevelNote string `json:"levelNote"`
+}
+
+// webSteps is the loop of the pattern that plays: its length and the place now in clock ticks (24 to a beat), and how long
+// a tick lasts, so the page can move on by itself between two states.
+type webSteps struct {
+	Len    int     `json:"len"`
+	Pos    int     `json:"pos"`
+	TickMs float64 `json:"tickMs"`
 }
 
 // webLevel is the level meter: the peak of each channel and the held one, in dB below full scale (-60 is the floor).
@@ -104,13 +114,15 @@ type webLoopPad struct {
 }
 
 type webPad struct {
-	N     int     `json:"n"` // 1 to 16
-	Name  string  `json:"name"`
-	Has   bool    `json:"has"`
-	Bus   int     `json:"bus"`
-	Level int     `json:"level"`
-	Muted bool    `json:"muted"` // silent in the mix on this computer or by the pattern on the unit
-	Heard bool    `json:"heard"` // in the pattern that plays, and heard lately
+	N     int    `json:"n"` // 1 to 16
+	Name  string `json:"name"`
+	Has   bool   `json:"has"`
+	Bus   int    `json:"bus"`
+	Level int    `json:"level"`
+	Muted bool   `json:"muted"` // silent in the mix on this computer or by the pattern on the unit
+	Heard bool   `json:"heard"` // in the pattern that plays, and heard lately
+	// Hits are the places of this pad's notes in the pattern that plays, in clock ticks from its start.
+	Hits  []int   `json:"hits,omitempty"`
 	InPat bool    `json:"inPat"` // in the pattern that plays, not heard yet
 	Glow  float64 `json:"glow"`  // 0 to 1, how lately it was hit
 	Sel   bool    `json:"sel"`   // the pad the unit has selected
@@ -201,8 +213,8 @@ func (m Model) webSnapshot() webState {
 	now := time.Now()
 	for i, row := range m.snap.Bank(bank) {
 		p := webPad{N: i + 1, Name: row.Name, Has: row.HasSample, Bus: int(m.busOf(row.Pad)), Level: int(row.Level),
-			Muted: m.padMuted(row.Pad) || m.lvlWas[row.Pad] > 0, Sel: m.hasSelected && m.selected == row.Pad,
-			Bars: m.padBars(row, 20)}
+			Muted: m.muted[row.Pad] || m.lvlWas[row.Pad] > 0, // only what the page muted, never a guess from the unit Sel: m.hasSelected && m.selected == row.Pad,
+			Bars:  m.padBars(row, 20)}
 		p.Heard, p.InPat = m.padUsed(row.Pad)
 		if m.iso != nil {
 			_, p.Keep = m.iso.pads[row.Pad]
@@ -214,6 +226,20 @@ func (m Model) webSnapshot() webState {
 			p.Glow = math.Round(m.mon.glow(bank, int(row.Pad.Pad()), now)*5) / 5
 		}
 		s.Pads = append(s.Pads, p)
+	}
+	if s.Running && m.perfNow != nil {
+		if notes, length, ok := m.ptnNotes(*m.perfNow); ok {
+			bpm := s.BPM
+			if m.mon != nil && m.mon.bpm > 0 {
+				bpm = m.mon.bpm
+			}
+			if bpm > 0 {
+				s.Steps = &webSteps{Len: length, Pos: m.clock.ticks % length, TickMs: 60000 / bpm / 24}
+				for i := range s.Pads {
+					s.Pads[i].Hits = notes[bank*16+i]
+				}
+			}
+		}
 	}
 	if m.iso != nil {
 		s.Focus = webFocus{On: true, Multi: m.iso.multi, Dry: len(m.iso.was)}
@@ -390,7 +416,7 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 	case "view":
 		m.webView = c.Name
 		return m, m.wanted()
-	case "ptn", "ptnbank", "ptnbankset", "ptnfollow":
+	case "ptn", "ptnmark", "ptnbank", "ptnbankset", "ptnfollow":
 		return m.ptnCommand(c.A, c.I)
 	case "slbank", "slpad", "sltbank", "slslices", "slcut", "slorder", "sldiv", "slswing", "slgo", "slagain", "slcancel", "slbankset", "sltbankset", "slmute", "slmang", "slprev", "slreorder":
 		i := c.I
@@ -479,22 +505,24 @@ func (m Model) webCommand(raw WebCommand) (tea.Model, tea.Cmd) {
 		cmd := m.switchBank(c.I - m.bank)
 		return m, cmd
 	case "cue":
-		// A pattern of the bank on show is the one that plays (n 1) or the next (n 2).
+		// A pattern of the bank on show: n 1 plays it at once, n 2 makes it the next one (it is sent when the unit's loop ends).
 		rows := m.patterns[m.perfBank()]
 		if c.I < 0 || c.I >= len(rows) || !rows[c.I].Exists || (c.N != 1 && c.N != 2) {
 			return m, nil
 		}
-		slot := rows[c.I].Slot
-		if c.N == 1 {
-			m.perfNow, m.perfAuto = &slot, false
-		} else {
-			m.perfNext = &slot
-		}
-		m.logCue()
+		m = m.patternCue(rows[c.I].Slot, c.N == 1)
 		return m, m.wanted()
 	case "nextnow":
+		if m.sc != nil && m.sc.pcNext != nil { // the pattern that waits for the loop to end is sent now
+			slot := *m.sc.pcNext
+			m.sc.pcNext = nil
+			return m.patternSend(slot), m.wanted()
+		}
 		return m.perfKey(" ")
 	case "clearnext":
+		if m.sc != nil {
+			m.sc.pcNext = nil
+		}
 		return m.perfKey("x")
 	}
 	return m, nil

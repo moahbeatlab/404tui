@@ -128,6 +128,9 @@ type PatternArgs struct {
 	Delete   bool    `json:"delete"`
 	Notes    []PadAt `json:"notes"` // notes chosen by pad and start tick
 	Tighten  []int   `json:"tighten"`
+	// SetPitch gives the chosen notes the pitch Semitones above their pad's (-12..12; 0 is a plain note).
+	SetPitch  bool `json:"set_pitch"`
+	Semitones int  `json:"semitones"`
 }
 
 // PadAt names a note by its pad and tick.
@@ -197,7 +200,7 @@ func (l *Lab) PatternOp(n int, op string, args []byte) error {
 			set[formats.PadTick{Pad: p, Tick: x.Tick}] = true
 		}
 		out, _, err = formats.EditNoteSet(b, set, formats.NoteEdit{Velocity: a.Velocity, SetVelocity: a.Vel, Length: 0,
-			SetLength: a.Len, Move: a.Move, Snap: a.Grid, Delete: a.Delete})
+			SetLength: a.Len, Move: a.Move, Snap: a.Grid, Delete: a.Delete, SetPitch: a.SetPitch, Semitones: a.Semitones})
 	case "clearPad":
 		p, e := padOf(a.Pad)
 		if e != nil {

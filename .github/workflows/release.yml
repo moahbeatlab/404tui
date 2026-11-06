@@ -62,7 +62,7 @@ jobs:
       - name: Build
         run: |
           mkdir -p out
-          ldflags="-s -w -X ${MOD}/version.Version=${VERSION}"
+          ldflags="-s -w -X ${MOD}/version.Version=${VERSION} -X ${MOD}/version.Date=$(date -u +%Y-%m-%d)"
           tags=""; [ "${{ matrix.midi }}" = true ] && tags="-tags midi"
           ext=""; [ "${{ matrix.goos }}" = windows ] && ext=".exe"
           if [ "${{ matrix.goos }}" = darwin ]; then

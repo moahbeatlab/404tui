@@ -991,3 +991,50 @@ func TestAssignGivesAFirstSampleFullLevel(t *testing.T) {
 		t.Errorf("a replaced sample keeps the level, got %d", v)
 	}
 }
+
+func TestRemoteSamplesAreFetchedWhenNeeded(t *testing.T) {
+	l := New()
+	l.NewProject("remote")
+	id := put(l, tone(440, 0.5))
+	ok(t, l.Assign(3, id, "Tone"))
+	smp := append([]byte(nil), l.files[padFile(3)]...)
+	// the sample goes back to being on the unit: only its header is here
+	delete(l.files, padFile(3))
+	l.SetRemote(3, smp[:512])
+	fetched := 0
+	l.SetFetcher(func(n int) ([]byte, error) { fetched++; return smp, nil })
+	in := jsonOf[Info](l.Info())
+	if p := in.Pads[3]; !p.File || p.Frames != 24000 {
+		t.Fatalf("a remote pad is a pad with a sample, with its length from the header: %+v", p)
+	}
+	pre := l.Snapshot()
+	if _, err := l.PadSample(3); err != nil || fetched != 1 {
+		t.Fatalf("a sample that is used is fetched once: %v %d", err, fetched)
+	}
+	if l.IsRemote(3) || l.RemoteCount() != 0 {
+		t.Fatal("it is local now")
+	}
+	if l.Changed(pre) {
+		t.Fatal("fetching a sample is not a change of the project")
+	}
+	if _, err := l.PadSample(3); err != nil || fetched != 1 {
+		t.Fatalf("it is not fetched again: %d", fetched)
+	}
+	// undo goes back to the sample on the unit, and a clear is a change
+	l.Restore(pre)
+	if !l.IsRemote(3) {
+		t.Fatal("the snapshot had it on the unit")
+	}
+	pre = l.Snapshot()
+	ok(t, l.ClearPad(3))
+	if !l.Changed(pre) || l.IsRemote(3) {
+		t.Fatal("clearing a remote pad is a change and takes the sample off")
+	}
+	// exporting fetches what is left
+	l.Restore(pre)
+	var names []string
+	ok(t, l.ExportEach(func(name string, data []byte) error { names = append(names, name); return nil }))
+	if fetched != 2 || len(names) != 2 {
+		t.Fatalf("an export has every sample: fetched %d, %v", fetched, names)
+	}
+}

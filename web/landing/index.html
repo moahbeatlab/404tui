@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>404tui — pads, patterns and slicing for the SP-404MKII</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="404tui: a sample, slice and pattern workshop for the Roland SP-404MKII, in a terminal and in a browser. Try the web app against a demo unit.">
+<meta name="theme-color" content="#121214">
+<link rel="icon" href="app/icon.svg" type="image/svg+xml">
+<style>
+  :root { --bg: #121214; --panel: #1b1b1e; --tile: #2c2c30; --line: #34343a; --text: #ececf0; --dim: #9a9aa4; --accent: #ffb000; --ink: #161618; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right)); }
+  header.hero { padding: 56px 0 32px; text-align: center; }
+  h1 { font-size: clamp(44px, 9vw, 84px); line-height: 1; margin: 0 0 12px; letter-spacing: -.03em; }
+  h1 span { color: var(--accent); }
+  .tag { max-width: 40em; margin: 0 auto 28px; color: var(--dim); font-size: clamp(16px, 2.4vw, 20px); text-wrap: balance; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 22px; border-radius: 12px; font-weight: 700; text-decoration: none; background: var(--tile); color: var(--text); border: 1px solid var(--line); }
+  .btn.main { background: var(--accent); color: var(--ink); border-color: var(--accent); font-size: 18px; }
+  .btn:hover { filter: brightness(1.12); }
+  .ver { margin-top: 14px; color: var(--dim); font-size: 14px; }
+  .ver b { color: var(--text); }
+  h2 { font-size: clamp(24px, 4vw, 32px); margin: 56px 0 8px; letter-spacing: -.01em; }
+  .sub { color: var(--dim); margin: 0 0 20px; max-width: 46em; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 14px; }
+  .gallery figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; cursor: zoom-in; display: flex; flex-direction: column; }
+  .gallery img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; display: block; background: #000; }
+  .gallery figcaption { padding: 10px 12px 12px; font-size: 14px; color: var(--dim); }
+  .gallery figcaption b { display: block; color: var(--text); font-size: 15px; }
+  .gallery .phone img { object-fit: contain; background: #0b0b0c; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--dim); font-size: 15px; }
+  .demo { margin-top: 56px; padding: 28px; border-radius: 18px; background: linear-gradient(135deg, #25201a, var(--panel)); border: 1px solid #4a3b18; text-align: center; }
+  .demo h2 { margin-top: 0; }
+  .demo p { color: var(--dim); max-width: 40em; margin: 0 auto 18px; }
+  footer { margin-top: 64px; padding: 28px 0 calc(32px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); text-align: center; color: var(--dim); font-size: 15px; }
+  footer .links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; margin-bottom: 14px; }
+  footer .links a { text-decoration: none; font-weight: 600; }
+  footer .links a:hover { text-decoration: underline; }
+  footer small { display: block; margin-top: 6px; color: var(--dim); opacity: .75; }
+  #lb { position: fixed; inset: 0; background: rgba(0,0,0,.88); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10; cursor: zoom-out; }
+  #lb.on { display: flex; }
+  #lb img { max-width: 100%; max-height: 100%; border-radius: 10px; }
+  #lb p { position: absolute; bottom: calc(14px + env(safe-area-inset-bottom)); left: 0; right: 0; margin: 0; text-align: center; color: #ddd; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1>404<span>tui</span></h1>
+    <p class="tag">Pads, patterns and slicing for the Roland SP-404MKII. In a terminal, on a phone, on a laptop — live on the unit's own project.</p>
+    <div class="cta">
+      <a class="btn main" href="app/#demo">▶ Launch the web app (demo unit)</a>
+      <a class="btn" id="dl" href="https://github.com/moahbeatlab/404tui/releases">⬇ Download</a>
+      <a class="btn" href="https://github.com/moahbeatlab/404tui">GitHub</a>
+    </div>
+    <p class="ver">Release <b id="ver">__VERSION__</b> · free software, not affiliated with Roland</p>
+  </header>
+
+  <h2>What it looks like</h2>
+  <p class="sub">Tap a picture to see it large. The phone pictures are the web page (<code>sp404 serve</code>); the others are the terminal program and the replay editor.</p>
+  <section class="gallery" id="gallery">
+    <figure class="phone"><img loading="lazy" src="img/serve-tools-pattern.png" alt="The pattern tools on a phone"><figcaption><b>Pattern tools on the phone</b>Pick a track, open a tool, hear the trial, keep it.</figcaption></figure>
+    <figure class="phone"><img loading="lazy" src="img/serve-tools-slicer.png" alt="The slicer on a phone"><figcaption><b>Slicer with a real waveform</b>Slide a finger for the cursor, cut, join, shuffle the order.</figcaption></figure>
+    <figure class="phone"><img loading="lazy" src="img/serve-pads.png" alt="The pads page on a phone"><figcaption><b>Pads</b>Tap to mute, hold to isolate, swipe for the level.</figcaption></figure>
+    <figure class="phone"><img loading="lazy" src="img/serve-patterns.png" alt="The patterns page on a phone"><figcaption><b>Patterns</b>Switch the pattern that plays next.</figcaption></figure>
+    <figure><img loading="lazy" src="img/serve-tools-laptop.png" alt="The tools on a laptop"><figcaption><b>On a laptop</b>The same page, wide.</figcaption></figure>
+    <figure class="phone"><img loading="lazy" src="img/serve-motion.png" alt="Motion on a phone"><figcaption><b>Motion, Punch, Morph, LFOs</b>Knob moves recorded and played back with the unit's clock.</figcaption></figure>
+    <figure><img loading="lazy" src="img/pc-pads.png" alt="The pads in the terminal"><figcaption><b>The terminal program</b>Pads, samples and their settings.</figcaption></figure>
+    <figure><img loading="lazy" src="img/pc-seq.png" alt="The sequencer"><figcaption><b>Sequencer</b>The unit's step grid with velocity, length and pitch.</figcaption></figure>
+    <figure><img loading="lazy" src="img/pc-pattern-tools.png" alt="Pattern tools in the terminal"><figcaption><b>Pattern tools</b>Fill, Euclid, echo, ratchet, accents, LFO, chance and more.</figcaption></figure>
+    <figure><img loading="lazy" src="img/pc-slicer.png" alt="The slicer in the terminal"><figcaption><b>Slicer</b>Cut by hand, at onsets, on the grid; slices to pads with a pattern.</figcaption></figure>
+    <figure><img loading="lazy" src="img/replay-editor.png" alt="The replay editor"><figcaption><b>Replay and video</b>Turn a recorded set into a captioned video.</figcaption></figure>
+    <figure><img loading="lazy" src="img/handheld-pads.png" alt="On the R36S handheld"><figcaption><b>Handheld</b>The same program on an R36S.</figcaption></figure>
+  </section>
+
+  <h2>What it does</h2>
+  <div class="cols">
+    <div class="card"><h3>Edit the unit live</h3><p>The web app follows the project that is loaded on the unit. A tool you keep is written to the unit, which then reads the project again.</p></div>
+    <div class="card"><h3>Pattern and pad tools</h3><p>Fill, Euclid, echo, cycle, nudge, pitch and more, each with a trial you hear before you keep it, and one undo step.</p></div>
+    <div class="card"><h3>Slice samples</h3><p>Cut, reorder, roll and shuffle; slices go to pads with a pattern under them.</p></div>
+    <div class="card"><h3>Record and replay</h3><p>Record the unit's audio with an event log, replay it as a picture of the unit, and render a video.</p></div>
+  </div>
+
+  <section class="demo">
+    <h2>Try it now</h2>
+    <p>The demo runs entirely in your browser against a pretend SP-404MKII: pads, patterns, Motion, Punch and Morph. The Tools (pattern, slicer, pad) need the program itself: <code>sp404 serve</code> on your computer.</p>
+    <a class="btn main" href="app/#demo">▶ Launch the web app (demo unit)</a>
+  </section>
+
+  <footer>
+    <div class="links">
+      <a href="https://github.com/moahbeatlab/404tui">GitHub</a>
+      <a href="https://github.com/moahbeatlab/404tui/releases" id="rel">Release <span id="ver2">__VERSION__</span></a>
+      <a href="https://www.youtube.com/channel/UCqbL2iy-KpqfGs3T0JU4Egg">YouTube</a>
+      <a href="https://www.instagram.com/moahbeatlab/">Instagram</a>
+    </div>
+    Made with ❤️ in Berlin 😎
+    <small>moahbeatlab</small>
+  </footer>
+</div>
+
+<div id="lb" role="dialog" aria-label="Picture"><img alt=""><p></p></div>
+<script>
+  // The newest release (a pre-release too) from GitHub; the version that was built in stays when that cannot be asked.
+  fetch('https://api.github.com/repos/moahbeatlab/404tui/releases?per_page=1').then((r) => r.ok ? r.json() : Promise.reject()).then((l) => {
+    const r = l && l[0]; if (!r) return;
+    document.getElementById('ver').textContent = r.tag_name; document.getElementById('ver2').textContent = r.tag_name;
+    document.getElementById('dl').href = r.html_url; document.getElementById('rel').href = r.html_url;
+  }).catch(() => {});
+  const lb = document.getElementById('lb'), img = lb.querySelector('img'), cap = lb.querySelector('p');
+  document.querySelectorAll('#gallery figure').forEach((f) => f.addEventListener('click', () => { const i = f.querySelector('img'); img.src = i.src; img.alt = i.alt; cap.textContent = f.querySelector('figcaption').innerText.replace('\n', ' — '); lb.classList.add('on'); }));
+  lb.addEventListener('click', () => lb.classList.remove('on'));
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') lb.classList.remove('on'); });
+</script>
+</body>
+</html>

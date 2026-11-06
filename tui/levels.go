@@ -2,10 +2,12 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/perflog"
 	"github.com/moahbeatlab/404tui/proto"
 )
 
@@ -55,6 +57,7 @@ func (m Model) levelMutePad(pad proto.PadIndex) (Model, tea.Cmd) {
 	}
 	if was, muted := m.lvlWas[pad]; muted {
 		delete(m.lvlWas, pad)
+		m.logMute(pad, false)
 		return m.levelSet(pad, was)
 	}
 	cur := m.snap.Pads[pad.Index()].Level
@@ -62,7 +65,13 @@ func (m Model) levelMutePad(pad proto.PadIndex) (Model, tea.Cmd) {
 		return m, nil
 	}
 	m.lvlWas[pad] = cur
+	m.logMute(pad, true)
 	return m.levelSet(pad, 0)
+}
+
+// logMute writes a mute (the pad's level is 0 until it is brought back) to the event log.
+func (m Model) logMute(pad proto.PadIndex, on bool) {
+	m.perfLog.Add(time.Now(), "mute", perflog.P("bank", string(rune('A'+pad.Bank()))), perflog.P("pad", int(pad.Pad())+1), perflog.P("on", on))
 }
 
 // muteNewPad puts a pad that just got a sample at level 0, on the unit, for the Slicer's results: they start silent, and a

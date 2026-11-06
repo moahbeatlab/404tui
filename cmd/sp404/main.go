@@ -34,8 +34,16 @@ import (
 const usage = `usage: sp404 [flags] <command>
 
 commands:
-  menu           full-screen terminal UI (the default when no command is given)
+  menu           the full-screen terminal UI (the default when no command is given): pads, sequencer, files, slicer,
+                 save and unit, with the same screens, layout, menus and features as the handheld version
   serve          run without a screen and serve Perform to a browser on this network (phone, tablet)
+  replay <wav> [events.jsonl]
+                 show a recorded performance in the browser: the sound with what the unit did (pads, pattern, effects,
+                 level, spectrum); the event log is the file beside the WAV (name.events.jsonl) unless one is given
+  replay render <wav> [events.jsonl] -o video.mp4
+                 render the replay as a video (wide or -format vertical for shorts and reels); sp404 replay -h lists everything
+  probe pad|pc|watch   try what the unit does when it is told: press a pad over USB (probe pad A1), or send a Program Change at once
+                 or at the next loop start and print what comes back (probe pc A 2 loop); see sp404 probe
   midimap        print the map of the Faderfox EC4 for 404tui (one group of 16 pushes)
   check          check this installation: the computer, the program on a simulated unit, a plugged-in unit
   doctor         read-only checks of this program against the unit; run it first
@@ -61,6 +69,11 @@ type options struct {
 	audio string
 	// offline is a folder of projects on this computer to work on without the unit.
 	offline string
+	// project, samples and out are for the full-screen UI: a project folder to open, the folder the file browser starts
+	// in, and where the card folder is written.
+	project, samples, out string
+	// basicGlyphs draws with block characters only.
+	basicGlyphs bool
 	// webAddr is where to serve the web page of Perform ("" for not at all; serve uses :8404), webKey
 	// the key a browser has to give (kept for the user when empty).
 	webAddr, webKey string
@@ -74,7 +87,12 @@ func main() {
 	flag.BoolVar(&o.verbose, "v", false, "write a debug log: every transaction with its timing, port discovery, connects and UI actions")
 	flag.BoolVar(&o.trace, "trace", false, "also log every message on the wire, as hex (implies -v)")
 	flag.StringVar(&o.logPath, "log", "", "debug log file (default: the user cache folder for the UI, standard error otherwise)")
-	flag.StringVar(&o.audio, "audio", "", "how files are played on this computer: oto (default) or afplay (macOS's own player)")
+	flag.StringVar(&o.audio, "audio", "", "how files are played on this computer: oto (default), afplay (macOS's own player) or silent (nothing is played, the program acts as if it were: for tests)")
+	home, _ := os.UserHomeDir()
+	flag.StringVar(&o.project, "project", "", "the full-screen UI: a project folder (with a PADCONF.BIN) to open")
+	flag.StringVar(&o.samples, "samples", filepath.Join(home, "404tui", "samples"), "the full-screen UI: the folder the file browser starts in")
+	flag.StringVar(&o.out, "out", filepath.Join(home, "404tui", "out"), "the full-screen UI: where projects are written (the card folder is made in it; settings and autosaves go beside it)")
+	flag.BoolVar(&o.basicGlyphs, "basic-glyphs", false, "the full-screen UI: draw with block characters only (no braille), for a terminal font that has little")
 	flag.StringVar(&o.webAddr, "web", "", "serve the Perform web page on this address, e.g. :8404 (the serve command does it by itself)")
 	flag.StringVar(&o.webKey, "web-key", "", "key a browser must give to connect (default: one kept for you; \"none\" lets everyone on the network in)")
 	showVersion := flag.Bool("version", false, "print the version and stop")
@@ -84,7 +102,7 @@ func main() {
 	}
 	flag.Parse()
 	if *showVersion {
-		fmt.Println("404tui " + version.Version)
+		fmt.Println("404tui " + version.Full())
 		return
 	}
 	args := flag.Args()
@@ -173,7 +191,7 @@ func (l logging) banner(o options) {
 }
 
 func run(args []string, o options) error {
-	forUI := args[0] == "menu"
+	forUI := args[0] == "menu" || args[0] == "lab"
 	l, err := newLogging(o, forUI)
 	if err != nil {
 		return err
@@ -203,11 +221,22 @@ func run(args []string, o options) error {
 		}
 		return audioTest(args[1], o.audio)
 	case "menu":
-		return runUI(o, l, false)
+		return runUnified(o)
+	case "lab": // the name it had for a while
+		return runUnified(o)
 	case "serve":
 		return runUI(o, l, true)
+	case "replay":
+		return runReplay(args[1:], o)
+	case "probe":
+		return runProbe(args[1:], o, l.Logger)
 	}
 
+	switch args[0] {
+	case "doctor", "status", "pads", "ls": // the commands that talk to the unit
+	default:
+		return fmt.Errorf("unknown command %q (sp404 -h lists the commands)", args[0])
+	}
 	dev, err := open(o, l.Logger)
 	if err != nil {
 		l.Error("could not open the unit", "err", err)
@@ -247,7 +276,8 @@ func runUI(o options, l logging, headless bool) error {
 	} else {
 		l.Warn("no audio output", "err", audioErr)
 	}
-	model := tui.NewConnecting(connector(o, l.Logger), player, tui.DefaultStore()).WithAudio(player, audioErr).WithRecorder(record.Default()).WithMIDI(midiin.Default()).
+	shared := &sharedUnit{}
+	model := tui.NewConnecting(shared.remembering(connector(o, l.Logger)), player, tui.DefaultStore()).WithAudio(player, audioErr).WithRecorder(record.Default()).WithMIDI(midiin.Default()).
 		WithOffline(offlineOpener(l.Logger), unitPresent(o), o.offline)
 	if l.path != "" {
 		model = model.WithLogger(l.Logger, l.path)
@@ -260,6 +290,12 @@ func runUI(o options, l logging, headless bool) error {
 			o.webAddr = ":8404"
 		}
 		srv = &web.Server{Key: webKey(o.webKey)}
+		// The tools of the program (SEQ's pattern tools, the slicer) for the page, in this process beside the old part.
+		remote := newToolsApp(o, shared, player)
+		stopTools := make(chan struct{})
+		go remote.Loop(stopTools)
+		defer close(stopTools)
+		srv.Mount("/tools/api", toolsAPI{remote})
 		listener, err := srv.Listen(o.webAddr)
 		if err != nil {
 			return fmt.Errorf("web page: %w", err)

@@ -305,6 +305,7 @@ func TestAPatternIsChosenFromTheBrowserForNowAndNext(t *testing.T) {
 	if len(st.Patterns) != 16 || !st.Patterns[1].Exists || !st.Patterns[2].Exists || st.Patterns[0].Exists {
 		t.Fatalf("patterns of bank A: %+v", st.Patterns)
 	}
+	r.feed(midiinMarker())           // the unit sends its loop marker, so a next pattern waits for it
 	r.web(`{"a":"cue","i":0,"n":2}`) // an empty slot: nothing
 	if w.last(t).Next != "—" {
 		t.Error("an empty pattern slot was taken")
@@ -799,12 +800,12 @@ func TestAPatternSentThatSoundsTheSameTakesOverAfterAWholePattern(t *testing.T) 
 	m.patPreview[slotA], _ = app.OpenPattern(m.unit, slotA)
 	r.s.model = m
 	r.web(`{"a":"ptn","i":3}`)
-	r.tick(2*192 - 2)
+	r.tick(192 + 96 - 10 - 2) // the loop (2 bars) ends at tick 192 and a bar later the wait is over, at 288; the Start was 10 ticks ago
 	r.s.press("r")
 	if p := w.last(t).Ptn; p.Next != 3 {
 		t.Fatalf("took over before the last resort: %+v", p)
 	}
-	r.tick(10 + 2)
+	r.tick(4)
 	r.s.press("r")
 	if p := w.last(t).Ptn; p.Now != 3 || p.Next != -1 {
 		t.Errorf("now %d next %d, want 3 and -1", p.Now, p.Next)
@@ -1308,5 +1309,97 @@ func TestSlicerPreviewLoopsTheSlicesFromMemoryOnBeat1AndSwapsInNewOnes(t *testin
 	r.web(`{"a":"slcancel"}`)
 	if player.stopped == 0 || r.s.m().webSlicer().Prev {
 		t.Error("DISCARD did not stop the preview")
+	}
+}
+
+// The unit sends no notes for a pattern, so the page is given where the notes of the pattern that plays are and where the loop is.
+func TestThePadsOfThePatternThatPlaysAreGivenTheirNotesAndTheLoopPlace(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	bank := m.snap.Bank(0)
+	slot := bank[2].Pad
+	if err := app.WriteStartPattern(m.unit, slot, []proto.PadIndex{bank[0].Pad, bank[1].Pad}, 2); err != nil {
+		t.Fatal(err)
+	}
+	m.patterns = map[int][]app.PatternRow{}
+	r.s.model = m
+	r.s.run(m.loadPatternsQuietly(0))
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.tick(30)
+	m = r.s.m()
+	m.perfNow = &slot
+	m.patPreview[slot], _ = app.OpenPattern(m.unit, slot)
+	r.s.model = m
+	r.s.press("r")
+	s := w.last(t)
+	if s.Steps == nil || s.Steps.Len != 192 || s.Steps.Pos != 30 || s.Steps.TickMs <= 0 {
+		t.Fatalf("steps %+v", s.Steps)
+	}
+	n := 0
+	for _, p := range s.Pads {
+		n += len(p.Hits)
+	}
+	if n == 0 {
+		t.Errorf("no pad has notes: %+v", s.Pads)
+	}
+}
+
+func TestAPatternMarkedAsPlayingSendsNothingAndIsTheOneThatPlays(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	bank := m.snap.Bank(0)
+	if err := app.WriteStartPattern(m.unit, bank[2].Pad, []proto.PadIndex{bank[0].Pad}, 2); err != nil {
+		t.Fatal(err)
+	}
+	m.patterns = map[int][]app.PatternRow{}
+	r.s.model = m
+	r.s.run(m.loadPatternsQuietly(0))
+	r.web(`{"a":"ptnmark","i":2}`)
+	r.s.press("r")
+	if p := w.last(t).Ptn; p.Now != 2 || p.Next != -1 {
+		t.Errorf("now %d next %d, want 2 and -1", p.Now, p.Next)
+	}
+}
+
+// A pad recorded into the pattern on the unit shows in the page once the pattern is read again.
+func TestThePatternThatPlaysIsReadAgainForNewPads(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	bank := m.snap.Bank(0)
+	slot := bank[2].Pad
+	if err := app.WriteStartPattern(m.unit, slot, []proto.PadIndex{bank[0].Pad}, 2); err != nil {
+		t.Fatal(err)
+	}
+	m.patterns = map[int][]app.PatternRow{}
+	r.s.model = m
+	r.s.run(m.loadPatternsQuietly(0))
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.tick(5)
+	m = r.s.m()
+	m.perfNow = &slot
+	m.patPreview[slot], _ = app.OpenPattern(m.unit, slot)
+	r.s.model = m
+	r.s.press("r")
+	count := func() int {
+		n := 0
+		for _, p := range w.last(t).Pads {
+			n += len(p.Hits)
+		}
+		return n
+	}
+	before := count()
+	if err := app.WriteStartPattern(m.unit, slot, []proto.PadIndex{bank[0].Pad, bank[1].Pad}, 2); err != nil {
+		t.Fatal(err)
+	}
+	mm := r.s.m()
+	mm.patReadAt = time.Time{}
+	r.s.model = mm
+	r.tick(2)
+	r.s.press("r")
+	if after := count(); after <= before {
+		t.Errorf("notes %d before, %d after the unit got a pad", before, after)
 	}
 }

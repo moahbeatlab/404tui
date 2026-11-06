@@ -77,7 +77,7 @@ func (l *Lab) PadSample(n int) ([]byte, error) {
 	if n < 0 || n > 159 {
 		return nil, fmt.Errorf("no pad %d", n)
 	}
-	f, ok := l.files[padFile(n)]
+	f, ok := l.PadData(n)
 	if !ok {
 		return nil, fmt.Errorf("pad %s has no sample file", padLabel(n))
 	}
@@ -123,7 +123,8 @@ func (l *Lab) Assign(n, id int, name string) error {
 	if err != nil {
 		return err
 	}
-	wasEmpty := len(l.files[padFile(n)]) == 0
+	_, wasRemote := l.remote[n]
+	wasEmpty := len(l.files[padFile(n)]) == 0 && !wasRemote
 	blk.AssignSample(uint32(len(smp)), clean(name, 23))
 	// a pad that gets its first sample plays at full level (127), whatever the empty pad held; a sample that replaces
 	// another keeps the level the pad had
@@ -131,6 +132,7 @@ func (l *Lab) Assign(n, id int, name string) error {
 		blk.SetField(0x69-0x66, 127)
 	}
 	l.files[padFile(n)] = smp
+	delete(l.remote, n)
 	l.pad.Blocks[n] = blk.Raw()
 	return nil
 }
@@ -144,6 +146,7 @@ func (l *Lab) ClearPad(n int) error {
 		return fmt.Errorf("no pad %d", n)
 	}
 	delete(l.files, padFile(n))
+	delete(l.remote, n)
 	l.pad.Blocks[n] = formats.EmptyPadBlock(uint16(n))
 	return nil
 }
@@ -176,6 +179,8 @@ func (l *Lab) MovePad(from, to int) error {
 	if from == to {
 		return nil
 	}
+	l.PadData(from) // a sample that is still on the unit comes first
+	l.PadData(to)
 	fb, tb := append([]byte(nil), l.pad.Blocks[from]...), append([]byte(nil), l.pad.Blocks[to]...)
 	setPad := func(b []byte, n int) []byte { b[1], b[2] = byte(n), byte(n>>8); return b }
 	l.pad.Blocks[to], l.pad.Blocks[from] = setPad(fb, to), setPad(tb, from)
@@ -318,4 +323,70 @@ func absInt(v int) int {
 		return -v
 	}
 	return v
+}
+
+// PadFile is the SMP file of a pad's sample as the project holds it, false for a pad without one.
+func (l *Lab) PadFile(n int) ([]byte, bool) {
+	if n < 0 || n > 159 {
+		return nil, false
+	}
+	f, ok := l.files[padFile(n)]
+	return f, ok
+}
+
+// ---- samples that are still on the unit
+
+// SetFetcher sets how a sample is fetched from the unit when something needs it and it was not loaded.
+func (l *Lab) SetFetcher(f func(n int) ([]byte, error)) { l.fetch = f }
+
+// SetRemote says that the sample of pad n is on the unit and not here; header is the first 512 bytes of its file.
+func (l *Lab) SetRemote(n int, header []byte) {
+	if l.remote == nil {
+		l.remote = map[int][]byte{}
+	}
+	l.remote[n] = append([]byte(nil), header...)
+}
+
+// IsRemote says whether the sample of pad n is on the unit and not loaded yet.
+func (l *Lab) IsRemote(n int) bool { _, ok := l.remote[n]; return ok }
+
+// RemoteCount is how many samples are still on the unit.
+func (l *Lab) RemoteCount() int { return len(l.remote) }
+
+// PutLoaded gives the lab the sample file of a remote pad (fetched in the background); a pad that is not remote any more is left alone.
+func (l *Lab) PutLoaded(n int, data []byte) {
+	if _, ok := l.remote[n]; ok && len(data) > 0 {
+		l.files[padFile(n)] = data
+		delete(l.remote, n)
+	}
+}
+
+// PadData is the sample file of a pad, fetched from the unit first when it is still there.
+func (l *Lab) PadData(n int) ([]byte, bool) {
+	if n < 0 || n > 159 {
+		return nil, false
+	}
+	if f, ok := l.files[padFile(n)]; ok {
+		return f, true
+	}
+	if _, ok := l.remote[n]; ok && l.fetch != nil {
+		if f, err := l.fetch(n); err == nil && len(f) > 0 {
+			l.PutLoaded(n, f)
+			return f, true
+		}
+	}
+	return nil, false
+}
+
+// LoadAll fetches every sample that is still on the unit.
+func (l *Lab) LoadAll() error {
+	for n := 0; n < 160; n++ {
+		if _, ok := l.remote[n]; !ok {
+			continue
+		}
+		if _, ok := l.PadData(n); !ok {
+			return fmt.Errorf("pad %s: its sample could not be fetched from the unit", padLabel(n))
+		}
+	}
+	return nil
 }

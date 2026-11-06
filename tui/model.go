@@ -326,6 +326,7 @@ type Model struct {
 	midiOpening bool
 	midiErr     string
 	midiPadAt   time.Time
+	patReadAt   time.Time // when the pattern that plays was last read for the page
 	clock       *clockState
 	// mon is what the MIDI input said lately; perfLog the event log of the recording that runs.
 	mon     *monitor
@@ -1594,6 +1595,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.log.Info("event log started", "path", l.Path)
 				m.message += " · events to " + display(l.Path)
+				return m, tea.Batch(waitRecording(msg.session), m.projectLogCmd(l, msg.session.Started))
 			}
 		}
 		return m, waitRecording(msg.session)
@@ -1653,7 +1655,7 @@ func (m Model) polled(msg pollMsg) (tea.Model, tea.Cmd) {
 	var codeCmd tea.Cmd
 	if msg.have {
 		a := msg.activity
-		if m.padHit(m.hasSelected, a) && time.Since(m.midiPadAt) > 10*time.Second {
+		if m.web == nil && m.padHit(m.hasSelected, a) && time.Since(m.midiPadAt) > 10*time.Second {
 			m, codeCmd = m.codeHit(int(a.Selected.Pad()) + 1)
 		}
 		if a.Playing != m.playing || a.Playing && a.Selected != m.playingPad {
@@ -1774,8 +1776,12 @@ func (m Model) lose() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// patPollEvery is how often the page reads the pattern that plays again.
+const patPollEvery = 4 * time.Second
+
 // wanted starts whatever the section in front needs and is not in hand yet: the patterns of
 // a bank, the file listing, a waveform.
+
 func (m *Model) wanted() tea.Cmd {
 	if m.busy != "" || m.snap == nil {
 		return nil
@@ -1834,6 +1840,12 @@ func (m *Model) wanted() tea.Cmd {
 				return m.loadPreview(*slot)
 			}
 		}
+	}
+	if m.web != nil && m.perfNow != nil && !m.previewBusy && m.clock != nil && m.clock.running && time.Since(m.patReadAt) > patPollEvery {
+		// The pattern that plays is read again now and then: pads recorded into it on the unit show (as notes, flashes, rows).
+		m.patReadAt = time.Now()
+		m.previewBusy = true
+		return m.loadPreview(*m.perfNow)
 	}
 	if a := m.addAsk; a != nil && a.patterns != nil && !m.previewBusy {
 		// The pattern the Sequencer's chooser is on is read to be shown under the slots.

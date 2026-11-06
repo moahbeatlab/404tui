@@ -241,6 +241,7 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 			at = m.clock.at
 		}
 		m = m.ptnTick()
+		m = m.patternWaitTick()
 		cmd := m.looperJobsTick()
 		if m.vc != nil && m.clock.ticks%6 != 0 {
 			m.vc.keep = true
@@ -264,6 +265,9 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 		return m, next
 	}
 	m.logMIDI(e)
+	if loopMarker(e) {
+		m = m.patternLoopStart()
+	}
 	m.motionIn(e)
 	m = m.fxEvent(e)
 	ctl := m.midiChan()
@@ -314,6 +318,9 @@ func (m Model) midiEvent(msg midiMsg) (tea.Model, tea.Cmd) {
 					return nm, tea.Batch(nm.wanted(), next)
 				}
 				return nm, next
+			}
+			if m.web != nil {
+				return m, next // a pad hit on the unit changes nothing in the page's world
 			}
 			nm, cmd := m.codeHit(pad)
 			return nm, tea.Batch(cmd, next)
