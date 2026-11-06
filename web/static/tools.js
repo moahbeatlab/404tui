@@ -265,7 +265,9 @@
     if (st.project !== lastProject) { lastProject = st.project; pads = null; } // another project: its pads
     if (st.screen === 'slicer') mode = 'slicer';
     const sl = st.screen === 'slicer';
-    $('patview').hidden = sl; $('sliceview').hidden = !sl;
+    // the pattern, the unit's project and its patterns belong to the pattern tools only: the slicer and the pad tools show just what they work on
+    const patMode = mode === 'pattern' && !sl;
+    $('patview').hidden = !patMode; $('sliceview').hidden = !sl;
     for (const [id, m] of [['mPattern', 'pattern'], ['mSlicer', 'slicer'], ['mPad', 'pad']]) $(id).classList.toggle('on', mode === m);
     $('other').hidden = !st.other; if (st.other) $('otherText').textContent = 'The program has opened ' + st.other + '. It is made for the terminal; close it here.';
     $('idPattern').hidden = mode !== 'pattern'; $('idSlicer').hidden = !(mode === 'slicer' && sl);
@@ -276,6 +278,9 @@
     }
     $('idle').hidden = !!st.menu ? true : false;
     renderGrid(p); renderMenu(st.menu); renderUnit(); renderStrip(p); renderChooser(); renderModal();
+    for (const id of ['unitbar', 'ptnStrip']) $(id).hidden = !patMode;
+    if (!patMode) $('ubWarn').hidden = true;
+    $('left').hidden = !(patMode || sl || st.msg || st.liveErr || st.sending);
   }
 
   call({ op: 'state' });

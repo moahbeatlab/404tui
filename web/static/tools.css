@@ -89,3 +89,4 @@ body.embed .strip .btn small { font-size: 10px; font-weight: 600; letter-spacing
 
 /* on a phone the tools come first: under the mode bar, above the pattern, the pads and the unit */
 @media (max-width: 860px) { #right { order: -1; } }
+[hidden] { display: none !important; }
