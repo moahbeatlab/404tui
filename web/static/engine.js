@@ -102,12 +102,59 @@
   function realtime(st) { return { kind: st === 0xF8 ? 'clock' : st === 0xFA ? 'start' : st === 0xFB ? 'continue' : st === 0xFC ? 'stop' : 'other' }; }
 
   // ---- a unit that is not there, for a try: a clock, four buses that have said what they have, and a click for a pad ----
-  // The demo unit: a kit on the pads (name, bus, in the pattern that plays) and how many pads each pattern uses.
-  const DEMO_KIT = [['KICK', 1, true], ['SNARE', 1, true], ['CLAP', 0, false], ['HAT', 2, true], ['OPEN HAT', 2, true], ['RIM', 0, false], ['TOM LO', 0, false], ['TOM HI', 0, false],
-    ['BASS', 0, true], ['STAB', 1, false], ['CHORD', 1, false], ['PERC', 0, true], ['SHAKER', 2, false], ['FX', 2, false], ['VOX', 0, false], ['NOISE', 2, false]];
-  const DEMO_PATTERNS = [6, 5, 4, 7, 3, 8, 5, 6];
+  // The demo unit: four banks of different kits (name, bus, voice, pitch) and the patterns of each (a row of 16 steps for every pad).
+  const DEMO_BANKS = [
+    [['KICK', 1, 'kick', 0], ['SNARE', 1, 'snare', 0], ['CLAP', 0, 'clap', 0], ['HAT', 2, 'hat', 0], ['OPEN HAT', 2, 'ohat', 0], ['RIM', 0, 'rim', 0], ['TOM LO', 0, 'tom', 110], ['TOM HI', 0, 'tom', 190],
+      ['BASS', 0, 'bass', 55], ['STAB', 1, 'stab', 330], ['CHORD', 1, 'chord', 262], ['PERC', 0, 'perc', 520], ['SHAKER', 2, 'shaker', 0], ['FX', 2, 'zap', 0], ['VOX', 0, 'vox', 300], ['NOISE', 2, 'riser', 0]],
+    [['CONGA LO', 0, 'conga', 190], ['CONGA HI', 0, 'conga', 270], ['BONGO LO', 0, 'conga', 340], ['BONGO HI', 0, 'conga', 460], ['CLAVE', 0, 'clave', 0], ['COWBELL', 1, 'cowbell', 0], ['GUIRO', 2, 'guiro', 0], ['AGOGO', 1, 'cowbell', 1],
+      ['MARACAS', 2, 'shaker', 0], ['TAMBOURINE', 2, 'hat', 0], ['CABASA', 2, 'guiro', 1], ['TRIANGLE', 1, 'bell', 1500], ['WOODBLOCK', 0, 'clave', 1], ['SNAP', 0, 'clap', 0], ['SHAKER', 2, 'shaker', 0], ['VIBRASLAP', 1, 'guiro', 2]],
+    [['SUB', 0, 'bass', 41], ['ACID', 1, 'acid', 110], ['PLUCK', 1, 'pluck', 330], ['WARM PAD', 1, 'chord', 220], ['STAB', 1, 'stab', 392], ['MINOR CHORD', 1, 'chord', 196], ['ARP', 2, 'arp', 440], ['LEAD', 1, 'lead', 523],
+      ['RISER', 2, 'riser', 0], ['IMPACT', 0, 'impact', 0], ['ZAP', 2, 'zap', 0], ['NOISE', 2, 'riser', 1], ['VOX CHOP', 0, 'vox', 260], ['BELL', 1, 'bell', 880], ['ORGAN', 1, 'chord', 330], ['FX HIT', 2, 'impact', 1]],
+    [['KICK 2', 1, 'kick', 1], ['SNARE 2', 1, 'snare', 1], ['GHOST', 1, 'snare', 2], ['HAT 2', 2, 'hat', 0], ['CRASH', 2, 'ohat', 1], ['RIDE', 2, 'bell', 3200], ['TOM', 0, 'tom', 150], ['BREAK', 0, 'perc', 400],
+      ['RIM 2', 0, 'rim', 0], ['CLAP 2', 0, 'clap', 0], ['SHAKER 2', 2, 'shaker', 0], ['SCRATCH', 0, 'zap', 1], ['VOX', 0, 'vox', 340], ['BASS 2', 0, 'bass', 49], ['STAB 2', 1, 'stab', 294], ['FX', 2, 'riser', 0]],
+  ];
+  const R = (steps) => steps.replace(/\s+/g, '');
+  const DEMO_PTNS = [
+    [ // A: drums
+      { 0: R('x...x...x...x...'), 1: R('....x.......x...'), 3: R('..x...x...x...x.'), 4: R('..............x.'), 8: R('x..x..x...x.....'), 11: R('.......x.......x') },
+      { 0: R('x...x...x...x...'), 3: R('x.x.x.x.x.x.x.x.'), 2: R('....x.......x...'), 8: R('x.......x.......') },
+      { 0: R('x.......x.x.....'), 1: R('....x.......x...'), 3: R('x.x.x.x.x.x.x.x.'), 5: R('.......x.......x') },
+      { 0: R('x.....x...x.....'), 1: R('....x..x....x...'), 3: R('x.x.x.x.x.x.x.xx'), 4: R('......x.......x.'), 6: R('..............x.') },
+      { 0: R('x..x..x...x..x..'), 2: R('....x.......x...'), 4: R('..x...x...x...x.'), 12: R('x.x.x.x.x.x.x.x.') },
+      { 0: R('x...x...x...x...'), 1: R('................'), 2: R('....x.......x...'), 3: R('.x.x.x.x.x.x.x.x'), 11: R('..x...x...x...x.'), 8: R('x...........x...') },
+      { 0: R('x.......x.......'), 1: R('....x.......x..x'), 3: R('x...x...x...x...'), 7: R('..........x.x...') },
+      { 0: R('x..x.x..x..x.x..'), 1: R('....x.......x...'), 3: R('..x...x...x...x.'), 6: R('.............x.x'), 9: R('x.....x.........') },
+    ],
+    [ // B: latin
+      { 0: R('x..x..x...x...x.'), 1: R('..x...x.x.....x.'), 2: R('....x.......x...'), 4: R('x..x..x...x..x..'), 8: R('x.x.x.x.x.x.x.x.') },
+      { 0: R('x.......x.......'), 1: R('..x...x...x...x.'), 5: R('x..x..x.x..x..x.'), 6: R('....x.......x.x.') },
+      { 2: R('x.xx.x.xx.xx.x.x'), 3: R('.x..x..x.x..x..x'), 11: R('x.......x.......'), 12: R('..x...x...x...x.') },
+      { 0: R('x..x..x.....x...'), 1: R('......x...x.....'), 4: R('x..x..x...x...x.'), 5: R('..x.....x.....x.'), 7: R('x.......x.......'), 14: R('x.x.x.x.x.x.x.x.') },
+      { 9: R('x.x.x.x.x.x.x.x.'), 10: R('.x..x..x.x..x..x'), 13: R('....x.......x...'), 0: R('x...x...x...x...') },
+      { 2: R('x..x..x...x...x.'), 3: R('..x...x...x...x.'), 5: R('x.......x.......'), 15: R('......x.......x.') },
+    ],
+    [ // C: synths and bass
+      { 0: R('x.......x.......'), 1: R('..x...x...x...x.'), 4: R('....x.......x...') },
+      { 0: R('x..x..x...x..x..'), 6: R('x.x.x.x.x.x.x.x.'), 13: R('x...............') },
+      { 0: R('x...x...x...x...'), 2: R('..x..x..x..x..x.'), 8: R('x...............'), 9: R('............x...') },
+      { 3: R('x...............'), 5: R('........x.......'), 7: R('..x...x...x.x...'), 12: R('....x.......x...') },
+      { 0: R('x.x...x.x.x...x.'), 1: R('.x...x...x...x..'), 10: R('x...............'), 14: R('....x.......x...') },
+    ],
+    [ // D: breaks
+      { 0: R('x.....x...x.....'), 1: R('....x.......x...'), 2: R('.......x...x..x.'), 3: R('x.x.x.x.x.x.x.x.'), 4: R('..............x.') },
+      { 0: R('x..x......x.....'), 1: R('....x..x....x..x'), 3: R('x.xxx.x.x.xxx.x.'), 5: R('x...............') },
+      { 0: R('x.x.....x.x.....'), 1: R('....x.......x...'), 3: R('x...x...x...x...'), 7: R('..x.....x.....x.') },
+      { 0: R('x......x..x.....'), 1: R('....x.......x...'), 2: R('.....x.....x...x'), 3: R('x.x.x.x.x.x.x.x.'), 11: R('...........x....') },
+      { 0: R('x.x.......x.....'), 1: R('....x.......x...'), 3: R('.x.x.x.x.x.x.x.x'), 6: R('..............x.'), 13: R('x.......x.......') },
+      { 0: R('x...x...x...x...'), 1: R('..........x.....'), 3: R('x.x.x.x.x.x.x.x.'), 8: R('....x.......x...') },
+    ],
+  ];
+  const demoKit = (bank, i) => (DEMO_BANKS[bank] || [])[i] || null;
+  const demoPtn = (bank, i) => (DEMO_PTNS[bank] || [])[i] || null;
   class Demo {
-    constructor(onEvent, onChange) { this.onEvent = onEvent; this.onChange = onChange; this.ok = true; this.name = 'demo'; this.error = ''; this.ctx = null; }
+    constructor(onEvent, onChange) { this.onEvent = onEvent; this.onChange = onChange; this.ok = true; this.name = 'demo'; this.error = ''; this.ctx = null; this.running = true; this.where = () => ({ bank: 0, i: 0 }); }
+    // The play and stop of the demo's clock (a real unit is started on the unit).
+    toggle() { this.running = !this.running; this.onEvent({ kind: this.running ? 'start' : 'stop' }); if (!this.running) this.timeNow = 0; return this.running; }
     async connect() {
       this.onChange();
       setTimeout(() => {
@@ -118,8 +165,6 @@
           [16, 17, 18, 80, 81, 82].forEach((cc, i) => set(ch, cc, clamp(k + i * 13, 0, 127)));
         });
       }, 400);
-      // a pattern on the first pads, so there is something to hear and see (pad flashes) from the start
-      const steps = { 0: [0, 4, 8, 12], 1: [4, 12], 3: [2, 6, 10, 14], 4: [14], 8: [0, 3, 6, 10], 11: [7, 15] };
       this.unlockOnce = () => this.unlock();
       ['pointerdown', 'touchend', 'click', 'keydown'].forEach((t) => document.addEventListener(t, this.unlockOnce)); // iOS counts touchend and click, not pointerdown
       if (!this.hint) {
@@ -131,18 +176,20 @@
       this.onEvent({ kind: 'start' });
       this.timer = setInterval(() => {
         const per = 60000 / 125 / 24, now = performance.now();
+        if (!this.running) { t = now; return; }
         while (t + per <= now) {
           t += per; this.onEvent({ kind: 'clock' }); n++;
           if (n % 6 === 1) {
-            const step = ((n - 1) / 6) % 16;
-            for (const k in steps) if (steps[k].includes(step)) { this.voice(+k); this.onEvent({ kind: 'on', ch: 1, d1: 36 + PAD_OFFSET[+k], d2: 100 }); }
+            // the pattern that plays: its pads hit on their steps (the unit sends no notes for a pattern, the demo lets the pads flash)
+            const w = this.where(), pat = demoPtn(w.bank, w.i), step = ((n - 1) / 6) % 16;
+            if (pat) for (const k in pat) if (pat[k][step] === 'x') { this.voice(w.bank, +k); this.onEvent({ kind: 'on', ch: w.bank + 1, d1: 36 + PAD_OFFSET[+k], d2: 100 }); }
           }
         }
       }, 10);
       return true;
     }
     send(bytes) {
-      if ((bytes[0] & 0xF0) === 0x90 && bytes[2] > 0) { const p = padOfNote(bytes[1]); if (p) this.voice(p - 1); else this.blip(bytes[1]); }
+      if ((bytes[0] & 0xF0) === 0x90 && bytes[2] > 0) { const p = padOfNote(bytes[1]); if (p) this.voice(bytes[0] & 15, p - 1); else this.blip(bytes[1]); }
       return true;
     }
     // The sound is on after the first touch (a browser keeps a page silent until then).
@@ -157,17 +204,17 @@
           if (this.ctx.state === 'running') {
             if (this.hint) { this.hint.remove(); this.hint = null; }
             ['pointerdown', 'touchend', 'click', 'keydown'].forEach((t) => document.removeEventListener(t, this.unlockOnce));
-            this.voice(0); // a first sound, so that it is clear it works
+            this.voice(0, 0); // a first sound, so that it is clear it works
           } else if (this.hint) this.hint.textContent = 'No sound yet: tap again (and switch the ringer on)';
         };
         if (this.ctx.state !== 'running') this.ctx.resume().then(done, done); else done();
       } catch (e) { /* no audio: the demo is silent */ }
     }
     // A pad of the demo kit, made of oscillators and noise: a kick, a snare, hats and so on.
-    voice(i) {
-      const ctx = this.ctx; if (!ctx || ctx.state !== 'running') return;
-      const t = ctx.currentTime, name = (DEMO_KIT[i] || [''])[0];
-      const out = ctx.createGain(); out.connect(ctx.destination);
+    voice(bank, i) {
+      const ctx = this.ctx, kit = demoKit(bank, i); if (!ctx || ctx.state !== 'running' || !kit) return;
+      const t = ctx.currentTime, [, , v, hz] = kit;
+      const out = ctx.createGain(); out.gain.value = 0.9; out.connect(ctx.destination);
       const env = (g, peak, len) => { g.gain.setValueAtTime(peak, t); g.gain.exponentialRampToValueAtTime(0.0008, t + len); };
       const osc = (type, f0, f1, len, peak) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + len); env(g, peak, len); o.connect(g); g.connect(out); o.start(t); o.stop(t + len + 0.05); };
       const noise = (len, peak, hp, bp) => {
@@ -176,34 +223,34 @@
         const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
         s.buffer = buf; f.type = bp ? 'bandpass' : 'highpass'; f.frequency.value = bp || hp; env(g, peak, len); s.connect(f); f.connect(g); g.connect(out); s.start(t);
       };
-      out.gain.value = 0.9;
-      switch (name) {
-        case 'KICK': osc('sine', 160, 45, 0.35, 0.9); break;
-        case 'SNARE': osc('triangle', 220, 160, 0.14, 0.4); noise(0.2, 0.5, 1500); break;
-        case 'CLAP': noise(0.18, 0.6, 0, 1400); break;
-        case 'HAT': noise(0.06, 0.3, 7000); break;
-        case 'OPEN HAT': noise(0.3, 0.25, 6000); break;
-        case 'RIM': osc('square', 900, 700, 0.04, 0.25); break;
-        case 'TOM LO': osc('sine', 130, 80, 0.3, 0.6); break;
-        case 'TOM HI': osc('sine', 220, 140, 0.25, 0.6); break;
-        case 'BASS': osc('sawtooth', 55, 0, 0.3, 0.35); break;
-        case 'STAB': osc('sawtooth', 330, 0, 0.18, 0.2); osc('sawtooth', 415, 0, 0.18, 0.2); break;
-        case 'CHORD': [262, 330, 392].forEach((f) => osc('triangle', f, 0, 0.6, 0.15)); break;
-        case 'PERC': osc('square', 520, 300, 0.08, 0.25); break;
-        case 'SHAKER': noise(0.09, 0.2, 5000); break;
-        case 'FX': osc('sawtooth', 200, 1600, 0.5, 0.15); break;
-        case 'VOX': osc('triangle', 300, 260, 0.35, 0.3); break;
+      switch (v) {
+        case 'kick': osc('sine', hz ? 120 : 160, hz ? 38 : 45, hz ? 0.5 : 0.35, 0.9); break;
+        case 'snare': osc('triangle', hz === 2 ? 300 : 220, 160, 0.14, hz === 2 ? 0.15 : 0.4); noise(hz === 2 ? 0.1 : 0.2, hz === 2 ? 0.25 : 0.5, 1500); break;
+        case 'clap': noise(0.18, 0.6, 0, 1400); break;
+        case 'hat': noise(0.06, 0.3, 7000); break;
+        case 'ohat': noise(hz ? 0.7 : 0.3, 0.25, 6000); break;
+        case 'rim': osc('square', 900, 700, 0.04, 0.25); break;
+        case 'tom': osc('sine', hz, hz * 0.6, 0.3, 0.6); break;
+        case 'bass': osc('sawtooth', hz, 0, 0.3, 0.35); osc('sine', hz, 0, 0.45, 0.4); break;
+        case 'stab': osc('sawtooth', hz, 0, 0.18, 0.2); osc('sawtooth', hz * 1.26, 0, 0.18, 0.2); break;
+        case 'chord': [1, 1.26, 1.5].forEach((m) => osc('triangle', hz * m, 0, 0.7, 0.15)); break;
+        case 'perc': osc('square', hz, hz * 0.6, 0.08, 0.25); break;
+        case 'shaker': noise(0.09, 0.2, 5000); break;
+        case 'zap': osc('sawtooth', hz ? 1800 : 200, hz ? 100 : 1600, hz ? 0.15 : 0.5, 0.15); break;
+        case 'vox': osc('triangle', hz, hz * 0.85, 0.35, 0.3); osc('triangle', hz * 2, hz * 1.7, 0.3, 0.1); break;
+        case 'riser': noise(hz ? 0.35 : 0.8, 0.2, hz ? 2500 : 900); break;
+        case 'conga': osc('sine', hz, hz * 0.75, 0.2, 0.7); noise(0.02, 0.2, 2000); break;
+        case 'clave': osc('sine', hz ? 1700 : 2400, 0, 0.06, 0.4); break;
+        case 'cowbell': osc('square', hz ? 800 : 560, 0, 0.25, 0.15); osc('square', hz ? 1190 : 845, 0, 0.25, 0.15); break;
+        case 'guiro': noise(hz === 2 ? 0.25 : 0.12, 0.25, 0, hz === 1 ? 5000 : 3000); break;
+        case 'bell': osc('sine', hz, 0, 0.9, 0.25); osc('sine', hz * 2.76, 0, 0.6, 0.12); break;
+        case 'pluck': osc('sawtooth', hz, 0, 0.2, 0.25); break;
+        case 'acid': osc('sawtooth', hz, hz * 0.9, 0.22, 0.3); break;
+        case 'arp': osc('square', hz, 0, 0.1, 0.15); break;
+        case 'lead': osc('square', hz, 0, 0.3, 0.15); osc('square', hz * 1.005, 0, 0.3, 0.1); break;
+        case 'impact': osc('sine', hz ? 160 : 70, hz ? 60 : 35, 0.6, 0.8); noise(0.3, 0.3, 300); break;
         default: noise(0.3, 0.2, 800);
       }
-    }
-    blip(note) {
-      try {
-        this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)();
-        const o = this.ctx.createOscillator(), g = this.ctx.createGain();
-        o.frequency.value = 110 * Math.pow(2, (note - 36) / 12); o.type = 'triangle';
-        g.gain.setValueAtTime(0.15, this.ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.25);
-        o.connect(g); g.connect(this.ctx.destination); o.start(); o.stop(this.ctx.currentTime + 0.3);
-      } catch (e) { /* no audio: the demo is silent */ }
     }
   }
 
@@ -223,9 +270,10 @@
       this.sc = { bars: 2, overdub: false, bus: [0, 1].map(() => ({ sel: 0, mo: [0, 1, 2, 3].map(() => newMotion()) })),
         punch: { held: 0, was: emptySnap(), arm: false, sel: 0, edit: false, morph: false, active: 0, mix: 0, from: emptySnap(), sent: emptySnap() },
         lfo: [0, 1, 2, 3].map(() => newLfoRun()), lastSent: '' };
-      this.ptn = { now: -1, next: -1, bank: -1, dueTick: 0 };
+      this.ptn = { now: this.demo ? 0 : -1, nowBank: this.demo ? 0 : -1, next: -1, bank: -1, dueTick: 0 };
       this.dirty = false;
       this.midi = this.demo ? new Demo((e) => this.input(e), () => this.changed()) : new Midi((e) => this.input(e), () => this.changed());
+      if (this.demo) this.midi.where = () => ({ bank: Math.max(this.ptn.nowBank, 0), i: Math.max(this.ptn.now, 0) });
     }
     async start() {
       const ok = await this.midi.connect();
@@ -684,8 +732,8 @@
       };
       for (let i = 0; i < 16; i++) {
         const at = this.lastHit.get(bank * 16 + i), age = at ? now - at : 1e9;
-        const kit = this.demo ? DEMO_KIT[i] : null;
-        s.pads.push({ n: i + 1, name: kit ? kit[0] : '', has: !this.demo || !!kit, bus: kit ? kit[1] : 0, level: 127, muted: false, heard: age < 250, inPat: !!kit && kit[2],
+        const kit = this.demo ? demoKit(bank, i) : null, playing = this.demo && this.ptn.nowBank === bank ? demoPtn(bank, this.ptn.now) : null;
+        s.pads.push({ n: i + 1, name: kit ? kit[0] : '', has: !this.demo || !!kit, bus: kit ? kit[1] : 0, level: 127, muted: false, heard: age < 250, inPat: !!(playing && playing[i]),
           glow: Math.round(clamp(1 - age / 1500, 0, 1) * 5) / 5, sel: false, keep: false, bars: '', dry: false });
       }
       sc.bus.forEach((bs, b) => {
@@ -707,7 +755,7 @@
         const set = this.lfoSetting(i), run = sc.lfo[i];
         s.lfo.push({ bus: set.bus, knob: set.knob, shape: set.shape, rate: set.rate, depth: set.depth, shift: set.shift, on: run.on, value: run.value });
       }
-      for (let i = 0; i < 16; i++) s.patterns.push({ n: i + 1, exists: !this.demo || i < DEMO_PATTERNS.length, pads: this.demo ? DEMO_PATTERNS[i] || 0 : 0, now: this.demo && i === 0, next: false });
+      for (let i = 0; i < 16; i++) { const d = this.demo ? demoPtn(bank, i) : null; s.patterns.push({ n: i + 1, exists: !this.demo || !!d, pads: d ? Object.keys(d).length : 0, now: this.demo && this.ptn.nowBank === bank && this.ptn.now === i, next: false }); }
       return s;
     }
     webPunch() {
@@ -730,8 +778,8 @@
     }
     webPtn() {
       const bank = this.ptnBank(), p = this.ptn;
-      return { bank: String.fromCharCode(65 + bank), known: true, now: p.now >= 0 && p.nowBank === bank ? p.now : (this.demo && bank === 0 && p.now < 0 ? 0 : -1), next: p.next >= 0 && p.nextBank === bank ? p.next : -1,
-        slots: Array.from({ length: 16 }, (_, i) => ({ n: i + 1, exists: !this.demo || (bank === 0 && i < DEMO_PATTERNS.length), pads: this.demo && bank === 0 ? DEMO_PATTERNS[i] || 0 : 0 })) };
+      return { bank: String.fromCharCode(65 + bank), known: true, now: p.now >= 0 && p.nowBank === bank ? p.now : -1, next: p.next >= 0 && p.nextBank === bank ? p.next : -1,
+        slots: Array.from({ length: 16 }, (_, i) => { const d = this.demo ? demoPtn(bank, i) : null; return { n: i + 1, exists: !this.demo || !!d, pads: d ? Object.keys(d).length : 0 }; }) };
     }
   }
 

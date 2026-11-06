@@ -93,6 +93,7 @@
     if (!demo && e.midi.error) { $('startErr').textContent = e.midi.error; return; }
     eng = window.__eng = e; store.set('mode', demo ? 'demo' : 'live');
     document.querySelectorAll('[data-tab="tools"]').forEach((b) => { b.hidden = !demo; }); // the tools of the demo run in the browser (demo.wasm)
+    $('demoPlay').hidden = !demo;
     if (demo) loadDemoTools();
     $('start').hidden = true; $('app').hidden = false; open();
   }
@@ -520,6 +521,7 @@
     if (b.dataset.tab === 'patterns' || b.dataset.tab === 'tools') return setView(b.dataset.tab);
     app.dataset.tab = b.dataset.tab; store.set('tab', b.dataset.tab); setView('perform');
   }));
+  $('demoPlay').addEventListener('pointerdown', (e) => { e.preventDefault(); if (eng && eng.midi && eng.midi.toggle) { eng.midi.toggle(); eng.changed(); } });
   $('viewBtn').addEventListener('pointerdown', (e) => {
     e.preventDefault();
     // Tapped twice quickly where it said PATTERNS: stay on the Patterns page, and show the bank of the pattern that plays.
@@ -840,6 +842,7 @@
     const beats = $('beats').children;
     for (let i = 0; i < 4; i++) cls(beats[i], 'on', s.beat === i && s.running);
     cls($('beats'), 'stopped', !s.running);
+    set($('demoPlay'), 'textContent', s.running ? '■' : '▶');
     cls($('bRec'), 'hot', s.rec); set($('bRecT'), 'textContent', s.rec ? 'STOP REC' : 'RECORD');
 
     s.pads.forEach((p, i) => {
