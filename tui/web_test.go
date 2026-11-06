@@ -1311,3 +1311,36 @@ func TestSlicerPreviewLoopsTheSlicesFromMemoryOnBeat1AndSwapsInNewOnes(t *testin
 		t.Error("DISCARD did not stop the preview")
 	}
 }
+
+// The unit sends no notes for a pattern, so the page is given where the notes of the pattern that plays are and where the loop is.
+func TestThePadsOfThePatternThatPlaysAreGivenTheirNotesAndTheLoopPlace(t *testing.T) {
+	r, w := webRig(t)
+	r.s.press("r")
+	m := r.s.m()
+	bank := m.snap.Bank(0)
+	slot := bank[2].Pad
+	if err := app.WriteStartPattern(m.unit, slot, []proto.PadIndex{bank[0].Pad, bank[1].Pad}, 2); err != nil {
+		t.Fatal(err)
+	}
+	m.patterns = map[int][]app.PatternRow{}
+	r.s.model = m
+	r.s.run(m.loadPatternsQuietly(0))
+	r.feed(midiin.Event{Kind: midiin.Start})
+	r.tick(30)
+	m = r.s.m()
+	m.perfNow = &slot
+	m.patPreview[slot], _ = app.OpenPattern(m.unit, slot)
+	r.s.model = m
+	r.s.press("r")
+	s := w.last(t)
+	if s.Steps == nil || s.Steps.Len != 192 || s.Steps.Pos != 30 || s.Steps.TickMs <= 0 {
+		t.Fatalf("steps %+v", s.Steps)
+	}
+	n := 0
+	for _, p := range s.Pads {
+		n += len(p.Hits)
+	}
+	if n == 0 {
+		t.Errorf("no pad has notes: %+v", s.Pads)
+	}
+}

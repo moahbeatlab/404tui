@@ -810,12 +810,14 @@
         cls(d, 'empty', !p.has); cls(d, 'b1', p.has && p.bus === 1); cls(d, 'b2', p.has && p.bus === 2);
       }
       cls(d, 'heard', p.heard); cls(d, 'inPat', p.inPat); cls(d, 'sel', p.sel); cls(d, 'keep', p.keep); cls(d, 'dry', p.dry); cls(d, 'muted', p.muted);
+      e.sg = p.glow; e.hits = p.hits; e.muted = p.muted;
       d.style.setProperty('--glow', (p.glow * 0.6).toFixed(2));
       const w = (p.level / 127 * 100).toFixed(1) + '%';
       if (e.lvi.style.width !== w) e.lvi.style.width = w;
       d.dataset.lv = p.level;
     });
 
+    steps = s.steps ? { len: s.steps.len, pos: s.steps.pos, ms: s.steps.tickMs, at: performance.now() } : null;
     [...barsEl.children].forEach((b) => cls(b, 'on', +b.dataset.n === s.motion.bars));
     cls($('bDub'), 'hot', s.motion.overdub);
     s.motion.bus.forEach((mb, bus) => {
@@ -847,6 +849,28 @@
   }
 
   // Keep the screen on: on stage nobody touches the phone for minutes.
+  // The pads flash at the notes of the pattern that plays: the unit sends no notes for it, so the page keeps the place in the
+  // loop itself between two states and lights a pad as its note goes by.
+  let steps = null;
+  const FLASH = 7; // clock ticks a flash takes to fade
+  function flash() {
+    requestAnimationFrame(flash);
+    if (!padEls.length) return;
+    const t = steps ? (steps.pos + (performance.now() - steps.at) / steps.ms) % steps.len : -1;
+    padEls.forEach((e) => {
+      if (!e || !e.d) return;
+      let g = e.sg || 0;
+      if (steps && e.hits && !e.muted) {
+        for (const h of e.hits) {
+          const age = (t - h + steps.len) % steps.len;
+          if (age < FLASH) g = Math.max(g, 0.85 * (1 - age / FLASH));
+        }
+      }
+      const v = (Math.round(g * 0.6 * 20) / 20).toFixed(2);
+      if (e.fv !== v) { e.fv = v; e.d.style.setProperty('--glow', v); }
+    });
+  }
+  requestAnimationFrame(flash);
   async function wake() { try { if (navigator.wakeLock && document.visibilityState === 'visible') await navigator.wakeLock.request('screen'); } catch (e) {} }
   document.addEventListener('visibilitychange', () => { wake(); if (document.visibilityState === 'visible' && !ws) { retry = 0; open(); } });
   document.addEventListener('pointerdown', wake, { once: true });

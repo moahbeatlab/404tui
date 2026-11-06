@@ -65,10 +65,20 @@ type webState struct {
 	Looper   webLooper    `json:"looper"`
 	Slicer   webSlicer    `json:"slicer"`
 	Ptn      webPtn       `json:"ptn"`
+	// Steps is where the pattern that plays is now, for the pads to flash at their notes; nil when nothing plays.
+	Steps *webSteps `json:"steps,omitempty"`
 	// Level is how loud the sound is that is recorded (or, outside a recording, that the unit sends); nil until read.
 	Level *webLevel `json:"level"`
 	// LevelNote says why there is none: no recorder, or what the listening program said.
 	LevelNote string `json:"levelNote"`
+}
+
+// webSteps is the loop of the pattern that plays: its length and the place now in clock ticks (24 to a beat), and how long
+// a tick lasts, so the page can move on by itself between two states.
+type webSteps struct {
+	Len    int     `json:"len"`
+	Pos    int     `json:"pos"`
+	TickMs float64 `json:"tickMs"`
 }
 
 // webLevel is the level meter: the peak of each channel and the held one, in dB below full scale (-60 is the floor).
@@ -104,13 +114,15 @@ type webLoopPad struct {
 }
 
 type webPad struct {
-	N     int     `json:"n"` // 1 to 16
-	Name  string  `json:"name"`
-	Has   bool    `json:"has"`
-	Bus   int     `json:"bus"`
-	Level int     `json:"level"`
-	Muted bool    `json:"muted"` // silent in the mix on this computer or by the pattern on the unit
-	Heard bool    `json:"heard"` // in the pattern that plays, and heard lately
+	N     int    `json:"n"` // 1 to 16
+	Name  string `json:"name"`
+	Has   bool   `json:"has"`
+	Bus   int    `json:"bus"`
+	Level int    `json:"level"`
+	Muted bool   `json:"muted"` // silent in the mix on this computer or by the pattern on the unit
+	Heard bool   `json:"heard"` // in the pattern that plays, and heard lately
+	// Hits are the places of this pad's notes in the pattern that plays, in clock ticks from its start.
+	Hits  []int   `json:"hits,omitempty"`
 	InPat bool    `json:"inPat"` // in the pattern that plays, not heard yet
 	Glow  float64 `json:"glow"`  // 0 to 1, how lately it was hit
 	Sel   bool    `json:"sel"`   // the pad the unit has selected
@@ -214,6 +226,20 @@ func (m Model) webSnapshot() webState {
 			p.Glow = math.Round(m.mon.glow(bank, int(row.Pad.Pad()), now)*5) / 5
 		}
 		s.Pads = append(s.Pads, p)
+	}
+	if s.Running && m.perfNow != nil {
+		if notes, length, ok := m.ptnNotes(*m.perfNow); ok {
+			bpm := s.BPM
+			if m.mon != nil && m.mon.bpm > 0 {
+				bpm = m.mon.bpm
+			}
+			if bpm > 0 {
+				s.Steps = &webSteps{Len: length, Pos: m.clock.ticks % length, TickMs: 60000 / bpm / 24}
+				for i := range s.Pads {
+					s.Pads[i].Hits = notes[bank*16+i]
+				}
+			}
+		}
 	}
 	if m.iso != nil {
 		s.Focus = webFocus{On: true, Multi: m.iso.multi, Dry: len(m.iso.was)}
