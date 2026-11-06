@@ -269,7 +269,7 @@ if (params.get("hud") === "0") document.body.classList.add("nohud");
 
 let TITLE = "", EV = [], AN = null, PROJ = { pads: [], patterns: [] }, FILE = "", OFFSET = 0, NUDGE = 0;
 const padInfo = new Map(), patBySlot = new Map(), patByLabel = new Map();
-const otherNotes = [], padEv = new Map(), ccEv = new Map(), fxNum = new Map(), fxOn = new Map(), beats = [], transport = [], patEv = [];
+const selEv = [], otherNotes = [], padEv = new Map(), ccEv = new Map(), fxNum = new Map(), fxOn = new Map(), beats = [], transport = [], patEv = [];
 let peak = null, spec = null, lastHit = [];
 const loopStarts = []; // the unit marks every loop of the pattern with a note (channel 13, note 48)
 let cues = [];         // the patterns set by hand: { t (time of the log), label }, kept by the server beside the event log
@@ -392,6 +392,7 @@ function prepare(events, analysis, cuesIn, adoptedIn) {
       case "beat": beats.push({ t: e.t, n: e.n, bpm: e.bpm }); break;
       case "start": case "stop": case "continue": transport.push({ t: e.t, k: e.k }); break;
       case "pattern": patRaw.push(e); break;
+      case "select": if (e.bank) selEv.push({ t: e.t, bank: e.bank }); break;
       case "mute": push(muteEv, e.bank + e.pad, { t: e.t, on: e.on }); break;
       case "isolate": isoEv.push({ t: e.t, keep: new Set(e.keep || []), dry: new Set(e.dry || []), buses: e.buses || [] }); break;
     }
@@ -501,9 +502,13 @@ const fxName = (bus, T) => {
   return list[e.v] || ("effect " + e.v);
 };
 function bankInView(T) {
+  // The bank you are on is the one of the last pad you hit or the last bank you went to (the unit's selected pad carries its bank,
+  // so a jump to another bank to play bongos over a pattern shows); a few seconds after that the pads show the bank of the pattern again.
   let best = -1, bank = "A";
   for (const [k, l] of padEv) { const e = at(l, T); if (e && e.t > best) { best = e.t; bank = k[0]; } }
-  if (best < 0 || T - best > 3) { // no pad was touched lately: the bank of the pattern that plays
+  const s = at(selEv, T);
+  if (s && s.t > best) { best = s.t; bank = s.bank; }
+  if (best < 0 || T - best > 8) { // nothing touched lately: the bank of the pattern that plays
     const r = patternAt(T);
     if (r && r.p.pads.size) {
       bank = patternBank(r.p) || bank;

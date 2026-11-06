@@ -264,7 +264,7 @@ func (m Model) logMIDI(e midiin.Event) {
 			f = append(f, perflog.P("bank", string(rune('A'+bank))), perflog.P("pad", pad+1))
 		}
 		kind := "on"
-		if e.Kind == midiin.NoteOff {
+		if e.Kind == midiin.NoteOff || e.Data2 == 0 {
 			kind = "off"
 		}
 		m.perfLog.Add(at, kind, f...)
