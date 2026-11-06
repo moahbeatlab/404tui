@@ -44,3 +44,19 @@ func TestParsePatternSeesAllTheNotes(t *testing.T) {
 	recs, _ := formats.NoteRecords(b)
 	t.Logf("records %d", len(recs))
 }
+
+func TestBankBHoldsTheSon(t *testing.T) {
+	dev := New()
+	p, _ := proto.NewPadIndex(16 + 4)
+	d, err := app.OpenPattern(dev, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pads := map[proto.PadIndex]bool{}
+	for _, n := range d.Notes {
+		pads[n.Pad] = true
+	}
+	if len(pads) < 6 {
+		t.Errorf("B5 plays %d pads, want the bongos and the conga tones", len(pads))
+	}
+}
