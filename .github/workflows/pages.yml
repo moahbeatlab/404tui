@@ -4,7 +4,7 @@ name: pages
 on:
   push:
     branches: [main]
-    paths: ['web/static/**', 'web/landing/**', 'docs/img/**', 'version/version.go', 'Makefile', '.github/workflows/pages.yml']
+    paths: ['web/static/**', 'cmd/demowasm/**', 'toolsapi/**', 'core/**', 'app/**', 'formats/**', 'sim/**', 'web/landing/**', 'docs/img/**', 'version/version.go', 'Makefile', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -24,6 +24,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
       - run: make site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

@@ -133,6 +133,8 @@ site:
 	rm -rf $(DIST)/site && mkdir -p $(DIST)/site/app $(DIST)/site/img && cp web/static/* $(DIST)/site/app/
 	echo "window.SP404_LOCAL = true; // the unit is reached by Web MIDI, there is no server" > $(DIST)/site/app/mode.js
 	for i in $(SITE_IMG); do cp docs/img/$$i.png $(DIST)/site/img/; done
+	GOOS=js GOARCH=wasm go build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/site/app/demo.wasm ./cmd/demowasm
+	cp -f "$$(go env GOROOT)/lib/wasm/wasm_exec.js" $(DIST)/site/app/wasm_exec.js && chmod u+w $(DIST)/site/app/wasm_exec.js
 	v=$$(sed -n 's/^var Version = "\(.*\)"$$/\1/p' version/version.go); sed "s/__VERSION__/v$$v/g" web/landing/index.html > $(DIST)/site/index.html
 	touch $(DIST)/site/.nojekyll
 

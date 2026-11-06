@@ -10,12 +10,19 @@
   $('back').href = './' + (key ? '?key=' + encodeURIComponent(key) : '');
   let padsAt = 0, loadingPads = false, lastProject = 0, st = null, busy = false, editing = 0, mode = 'pattern', pads = null, cbank = 0, win = null, armed = -1, armTimer = 0;
 
-  async function call(body) {
+  // On the hosted demo (GitHub Pages) the tools run in the browser (demo.wasm, started by the page around this one); else they are asked of the program.
+  const local = () => { try { return window.parent !== window && window.parent.SP404Tools; } catch (e) { return null; } };
+  const request = async (body) => {
+    const l = local();
+    if (l) { const r = await l(JSON.stringify(body)); if (r.code) throw new Error(r.msg || 'error ' + r.code); return r.body; }
     const url = '/tools/api' + (key ? '?key=' + encodeURIComponent(key) : '');
+    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(r.status === 403 ? 'wrong key' : 'error ' + r.status);
+    return r.json();
+  };
+  async function call(body) {
     try {
-      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || { op: 'state' }) });
-      if (!r.ok) throw new Error(r.status === 403 ? 'wrong key' : 'error ' + r.status);
-      st = await r.json();
+      st = await request(body || { op: 'state' });
       render();
     } catch (e) {
       $('status').textContent = String(e.message || e); $('status').className = 'status bad';
@@ -54,7 +61,7 @@
   $('otherClose').onclick = () => act({ op: 'escape' });
   // the pad chooser uses the bank of the whole page (its dialog is the page's own, when this is a tab of it; else the pattern's bank select)
   $('cbankOpen').onclick = () => { if (window.parent !== window) window.parent.postMessage({ t: 'openBank' }, location.origin); else { $('bank').focus(); } };
-  const loadPads = () => fetch('/tools/api' + (key ? '?key=' + encodeURIComponent(key) : ''), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'pads' }) }).then((r) => r.json()).then((p) => { pads = p; padsAt = Date.now(); renderChooser(); }).catch(() => {});
+  const loadPads = () => request({ op: 'pads' }).then((p) => { pads = p; padsAt = Date.now(); renderChooser(); }).catch(() => {});
 
   // the pad chooser: a bank of 16, a pad with a sample for the slicer, any pad for the tools
   function renderChooser() {

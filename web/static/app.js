@@ -47,12 +47,50 @@
     ws.onerror = () => {};
   }
   // The start screen of the hosted page: the unit by Web MIDI, or the demo.
+  // The tools of the demo: the program's own tools (demo.wasm: Go, with a simulated unit) running in this page. SP404Tools(json) answers
+  // {code, body | msg} like the program's /tools/api; SP404Audio plays what the tools play (the slicer, the pattern).
+  let toolsLoading = null;
+  function loadDemoTools() {
+    if (toolsLoading) return toolsLoading;
+    const script = (src) => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error(src)); document.head.appendChild(s); });
+    let ctx = null, src = null;
+    const unlock = () => { try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state !== 'running') ctx.resume(); } catch (e) {} };
+    ['pointerdown', 'keydown'].forEach((t) => document.addEventListener(t, unlock, { passive: true }));
+    let started = 0, dur = 0, pv = null;
+    const make = (bytes, rate, channels) => {
+      const n = bytes.length >> 1, frames = Math.floor(n / channels), buf = ctx.createBuffer(channels, frames, rate), v = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
+      for (let c = 0; c < channels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < frames; i++) d[i] = v.getInt16((i * channels + c) * 2, true) / 32768; }
+      return buf;
+    };
+    const start = (buf, loop, offset) => { const s = ctx.createBufferSource(); s.buffer = buf; s.loop = loop; s.connect(ctx.destination); s.start(0, offset || 0); return s; };
+    const halt = () => { try { if (src) src.stop(); } catch (e) {} src = null; };
+    window.SP404Audio = {
+      play(bytes, rate, channels, loop) { unlock(); if (!ctx) return; halt(); const buf = make(bytes, rate, channels); src = start(buf, !!loop); started = ctx.currentTime; dur = buf.duration; },
+      // a new loop takes over where the old one is, so a change is heard in the beat
+      replace(bytes, rate, channels) { unlock(); if (!ctx) return; const buf = make(bytes, rate, channels), at = dur ? ((ctx.currentTime - started) % dur) % buf.duration : 0; halt(); src = start(buf, true, at); started = ctx.currentTime - at; dur = buf.duration; },
+      stop() { halt(); },
+      preview(bytes, rate, channels) { unlock(); if (!ctx) return; this.stopPreview(); pv = start(make(bytes, rate, channels), false); },
+      stopPreview() { try { if (pv) pv.stop(); } catch (e) {} pv = null; },
+    };
+    let ready = null;
+    toolsLoading = (async () => {
+      await script('memfs.js'); await script('wasm_exec.js');
+      const go = new Go();
+      const wasm = await WebAssembly.instantiateStreaming(fetch('demo.wasm'), go.importObject).catch(async () => WebAssembly.instantiate(await (await fetch('demo.wasm')).arrayBuffer(), go.importObject));
+      go.run(wasm.instance);
+      await new Promise((ok) => { const t = setInterval(() => { if (window.sp404ToolsReady) { clearInterval(t); ok(); } }, 100); });
+    })();
+    window.SP404Tools = async (text) => { await toolsLoading; return JSON.parse(window.sp404Tools(text)); };
+    return toolsLoading;
+  }
   async function startEngine(demo) {
     $('startErr').textContent = '';
     if (!demo && !SP404Local.supported()) { $('startErr').textContent = 'This browser has no Web MIDI. Use Chrome or Edge on a computer, or the MIDIWeb Browser app on an iPhone or iPad.'; return; }
     const e = await SP404Local.start({ demo });
     if (!demo && e.midi.error) { $('startErr').textContent = e.midi.error; return; }
     eng = window.__eng = e; store.set('mode', demo ? 'demo' : 'live');
+    document.querySelectorAll('[data-tab="tools"]').forEach((b) => { b.hidden = !demo; }); // the tools of the demo run in the browser (demo.wasm)
+    if (demo) loadDemoTools();
     $('start').hidden = true; $('app').hidden = false; open();
   }
   function showStart(err) {
@@ -884,7 +922,7 @@
     $('startDemo').addEventListener('click', () => startEngine(true));
     // Back to the unit when it was used last time (the browser remembers the permission).
     if ($('backHome')) $('backHome').hidden = false;
-    document.querySelectorAll('[data-tab="tools"]').forEach((b) => { b.hidden = true; }); // the tools need the program (sp404 serve)
+    document.querySelectorAll('[data-tab="tools"]').forEach((b) => { b.hidden = true; }); // until the demo is chosen
     if (location.hash === '#demo') startEngine(true);
     else if (store.get('mode') === 'live' && SP404Local.supported()) startEngine(false); else showStart('');
   } else open();
