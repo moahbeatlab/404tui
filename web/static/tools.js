@@ -215,10 +215,12 @@
     if (armed !== 1) { armed = 1; clearTimeout(armTimer); armTimer = setTimeout(() => { armed = -1; renderUnit(); }, 5000); renderUnit(); return; }
     armed = -1; clearTimeout(armTimer); act({ op: 'send', i: st.project - 1 });
   };
+  $('ubReload').onclick = () => act({ op: 'reload' });
   function renderUnit() {
     const live = st.mode === 'live', has = !!st.project;
     $('ubTitle').textContent = has ? 'Unit project ' + st.project + (st.name ? ' · ' + st.name : '') : st.unit ? 'loading the unit\'s project…' : 'no unit';
     $('ubMode').hidden = !has; $('ubMode').textContent = live ? 'LIVE' : 'COPY'; $('ubMode').classList.toggle('on', live);
+    $('ubReload').hidden = !has || !live;
     $('ubSend').hidden = !has || live; $('ubSend').textContent = armed === 1 ? 'SURE? REPLACES ' + st.project : 'SEND TO UNIT'; $('ubSend').classList.toggle('go', armed === 1);
     const w = $('ubWarn'); w.hidden = !has;
     w.textContent = live ? 'Live: every change you keep goes to the unit. Back the project up first. The unit shows changed patterns only after it reloads the project, which stops the sound.' : 'Copy: the unit is not changed. LIVE writes each kept change to it; SEND writes the whole project over it.';

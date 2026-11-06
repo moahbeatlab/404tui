@@ -154,6 +154,8 @@ func (t toolsAPI) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		t.r.PromptSet(in.Text, in.Done, in.On)
 	case "escape":
 		t.r.Escape()
+	case "reload":
+		t.r.ReloadUnit()
 	case "live":
 		t.r.SetLive(in.On)
 	case "send":

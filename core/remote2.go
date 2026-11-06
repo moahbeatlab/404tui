@@ -401,6 +401,8 @@ type follow struct {
 	loaded   int  // the project in the editor (0 based), -1 for none
 	liveMode bool // the mode it was loaded in
 	tried    time.Time
+	polled   time.Time
+	holding  bool // the unit plays: the reload waits for its Stop
 	reload   bool // something was kept: when it has all been sent the unit is told to read the project again
 }
 
@@ -492,6 +494,28 @@ func (r *Remote) reloadTick() {
 		r.fl.reload = false // what was kept did not get there: the message says so
 		return
 	}
-	r.fl.reload = false
+	// The unit does not read the project again while it plays: that stops it, and holds the serial line for a while. It waits for the unit's Stop.
+	if dev, ok := a.unitDevice(); ok {
+		if time.Since(r.fl.polled) < time.Second {
+			return
+		}
+		r.fl.polled = time.Now()
+		if raw, err := dev.RawStatus(); err == nil && len(raw) > 12 && raw[12] != 0 {
+			if !r.fl.holding {
+				a.say("the unit is playing: the pattern is written; it shows when the unit has stopped and reads the project again (RELOAD UNIT)", false)
+			}
+			r.fl.holding = true
+			return
+		}
+	}
+	r.fl.reload, r.fl.holding = false, false
 	a.reloadLive()
+}
+
+// ReloadUnit makes the unit read the project that is edited live again now (patterns written to it show; the sound stops).
+func (r *Remote) ReloadUnit() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.fl.reload, r.fl.holding = false, false
+	r.a.reloadLive()
 }
