@@ -6740,7 +6740,7 @@ func TestTheTemplateListScrollsToKeepTheCursorInViewOnASmallScreen(t *testing.T)
 	s := open(t)
 	s.send(tea.WindowSizeMsg{Width: 150, Height: 30})
 	s.press("N", "G")
-	s.shows("Footwork · bars 1-2", "Footwork")
+	s.shows("Son (martillo + tumbao) · bars 1-2", "Son (martillo + tumbao)")
 }
 
 func TestAPatternEditedOnTheUnitIsReadAgainWhenTheUnitSaysSo(t *testing.T) {

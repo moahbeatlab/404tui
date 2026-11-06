@@ -33,6 +33,12 @@ const (
 	LaneShaker
 	LaneRim
 	LaneTom
+	LaneBongoHi
+	LaneBongoLo
+	LaneCongaBass
+	LaneCongaTip
+	LaneCongaSlap
+	LaneCongaOpen
 )
 
 // LaneName is the lane's name for the confirm dialog.
@@ -58,6 +64,18 @@ func (l Lane) LaneName() string {
 		return "Rim"
 	case LaneTom:
 		return "Tom"
+	case LaneBongoHi:
+		return "Bongo high"
+	case LaneBongoLo:
+		return "Bongo low"
+	case LaneCongaBass:
+		return "Conga bass"
+	case LaneCongaTip:
+		return "Conga tip"
+	case LaneCongaSlap:
+		return "Conga slap"
+	case LaneCongaOpen:
+		return "Conga open"
 	}
 	return "?"
 }
@@ -320,6 +338,17 @@ var grooveTemplates = []GrooveTemplate{
 		laneSpec{lane: LaneClap, hits: "......x.......x. | ....x.x.....x.x."},
 		laneSpec{lane: LaneClosedHat, hits: "x.x.x.x.x.x.x.x.", gate: 60},
 		laneSpec{lane: LaneTom, hits: "................ | ............oxox"},
+	),
+	// Son: the bongo martillo (steady 8ths, the small drum on the beats, the large drum on the
+	// "ands", accented on the "and" of 2 and 4) over the conga tumbao (heel on 1 and 2 of each
+	// two-beat cell, tips around a slap, two open tones on the "and"). 90-110 BPM.
+	groove("Son (martillo + tumbao)", "90–110 BPM",
+		laneSpec{lane: LaneBongoHi, hits: "x...x...x...x..."},
+		laneSpec{lane: LaneBongoLo, hits: "..o...X...o...X."},
+		laneSpec{lane: LaneCongaBass, hits: "x...x...x...x..."},
+		laneSpec{lane: LaneCongaTip, hits: ".o.o.o...o.o.o.."},
+		laneSpec{lane: LaneCongaSlap, hits: "..X.......X....."},
+		laneSpec{lane: LaneCongaOpen, hits: "......xx......xx"},
 	),
 }
 

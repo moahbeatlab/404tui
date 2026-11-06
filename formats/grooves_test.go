@@ -25,7 +25,7 @@ func TestGrooveTemplatesAreTheGenres(t *testing.T) {
 	got := formats.GrooveTemplates()
 	want := []string{"House", "Deep house", "Tech house", "Techno", "Hypnotic techno", "Hip-hop",
 		"Drum and bass", "Jungle", "Dubstep", "Trance", "Psytrance", "Hard techno", "UK garage", "Breakbeat",
-		"Electro", "Trap", "Amapiano", "Reggaeton", "Disco", "Footwork"}
+		"Electro", "Trap", "Amapiano", "Reggaeton", "Disco", "Footwork", "Son (martillo + tumbao)"}
 	if len(got) != len(want) {
 		t.Fatalf("got %d templates, want %d", len(got), len(want))
 	}

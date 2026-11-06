@@ -27,6 +27,12 @@ var roleKeywords = []struct {
 	{formats.LaneRide, []string{"ride", "cymbal"}},
 	{formats.LaneShaker, []string{"shaker", "shkr", "shake", "tamb", "maraca"}},
 	{formats.LaneTom, []string{"tom"}},
+	{formats.LaneBongoLo, []string{"bongo lo", "bongo low", "low bongo", "hembra"}},
+	{formats.LaneBongoHi, []string{"bongo hi", "bongo high", "high bongo", "macho"}},
+	{formats.LaneCongaSlap, []string{"conga slap", "slap"}},
+	{formats.LaneCongaOpen, []string{"conga open", "conga hi", "conga high", "open tone"}},
+	{formats.LaneCongaTip, []string{"conga tip", "conga mute", "conga heel"}},
+	{formats.LaneCongaBass, []string{"conga bass", "conga lo", "conga low"}},
 	{formats.LanePerc, []string{"perc", "conga", "bongo", "tabla", "crash", "cowbell", "clave", "block"}},
 	{formats.LaneClosedHat, []string{"chat", "closed hat", "closedhat", "chh", "ch_", "_ch", "hat", "hh", "hihat", "hi-hat"}},
 }

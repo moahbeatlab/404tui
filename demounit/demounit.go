@@ -139,7 +139,7 @@ func kits(rng *rand.Rand) [][]voice {
 			{"CONGA LO", tone(190, 140, 0.25, 14)}, {"CONGA HI", tone(270, 200, 0.22, 16)}, {"BONGO LO", tone(340, 260, 0.18, 20)}, {"BONGO HI", tone(460, 360, 0.15, 22)},
 			{"CLAVE", tone(2400, 2300, 0.08, 50)}, {"COWBELL", two(560, 845, 0.3, 12)}, {"GUIRO", hat(rng, 18, 0.2)}, {"AGOGO", two(800, 1190, 0.3, 12)},
 			{"MARACAS", hat(rng, 35, 0.1)}, {"TAMBOURINE", hat(rng, 22, 0.15)}, {"CABASA", hat(rng, 28, 0.12)}, {"TRIANGLE", two(1500, 4140, 0.9, 4)},
-			{"WOODBLOCK", tone(1700, 1600, 0.07, 45)}, {"SNAP", hat(rng, 45, 0.06)}, {"SHAKER", hat(rng, 25, 0.12)}, {"VIBRASLAP", hat(rng, 8, 0.4)},
+			{"WOODBLOCK", tone(1700, 1600, 0.07, 45)}, {"CONGA SLAP", hat(rng, 30, 0.1)}, {"SHAKER", hat(rng, 25, 0.12)}, {"CONGA TIP", tone(420, 340, 0.08, 40)},
 		},
 		{ // C: bass and synths
 			{"SUB", saw(41, 0.7, 3)}, {"ACID", saw(110, 0.25, 10)}, {"PLUCK", saw(330, 0.2, 14)}, {"WARM PAD", chord(220, 1.2)},
@@ -180,13 +180,13 @@ func New() *device.Device {
 	}
 	laneMaps := []map[formats.Lane]int{
 		{formats.LaneKick: 0, formats.LaneSnare: 1, formats.LaneClap: 2, formats.LaneClosedHat: 3, formats.LaneOpenHat: 4, formats.LaneRim: 5, formats.LaneTom: 6, formats.LanePerc: 11, formats.LaneShaker: 12},
-		{formats.LaneKick: 0, formats.LaneSnare: 1, formats.LaneClap: 13, formats.LaneClosedHat: 8, formats.LaneOpenHat: 7, formats.LaneRim: 4, formats.LaneTom: 3, formats.LanePerc: 5, formats.LaneShaker: 10, formats.LaneRide: 11},
+		{formats.LaneKick: 0, formats.LaneSnare: 1, formats.LaneClap: 13, formats.LaneClosedHat: 8, formats.LaneBongoHi: 3, formats.LaneBongoLo: 2, formats.LaneCongaBass: 0, formats.LaneCongaOpen: 1, formats.LaneCongaSlap: 13, formats.LaneCongaTip: 15, formats.LaneOpenHat: 7, formats.LaneRim: 4, formats.LaneTom: 3, formats.LanePerc: 5, formats.LaneShaker: 10, formats.LaneRide: 11},
 		{formats.LaneKick: 0, formats.LaneSnare: 4, formats.LaneClap: 2, formats.LaneClosedHat: 6, formats.LaneOpenHat: 13, formats.LanePerc: 10, formats.LaneRide: 3, formats.LaneRim: 1},
 		{formats.LaneKick: 0, formats.LaneSnare: 1, formats.LaneClap: 9, formats.LaneClosedHat: 3, formats.LaneOpenHat: 4, formats.LaneRide: 5, formats.LaneTom: 6, formats.LaneShaker: 10, formats.LaneRim: 8},
 	}
 	names := [][]string{
 		{"House", "Techno", "Hip-hop", "Breakbeat", "Electro", "Disco"},
-		{"Reggaeton", "Amapiano", "Afro", "Footwork"},
+		{"Reggaeton", "Amapiano", "Afro", "Footwork", "Son (martillo + tumbao)"},
 		{"Trance", "Psytrance", "Dubstep"},
 		{"Drum and bass", "Jungle", "UK garage", "Trap"},
 	}
