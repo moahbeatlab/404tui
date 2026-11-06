@@ -71,6 +71,9 @@ type Sim struct {
 	// SilentProjectSwitch makes selecting a project send the acknowledgement but no change
 	// notification, as a slow load can look to the host.
 	SilentProjectSwitch bool
+	// KeepOnReload makes a reload of the project keep the pads as they are now (else they are read again from what the project's folder
+	// holds): for a demo, where nothing on a card describes the pads.
+	KeepOnReload bool
 	// PreviewStarts and PreviewStops are the pads asked to start and stop previews, in order.
 	PreviewStarts, PreviewStops []uint16
 
@@ -439,6 +442,9 @@ func (s *Sim) handleControl(p []byte) {
 		s.init(u16(1), u16(3), u16(5))
 	case 0xB1:
 		s.control([]byte{proto.RestoreReloadReply, 0})
+		if s.KeepOnReload {
+			s.saveProject() // the pads as they are now are what the project holds
+		}
 		s.loadProject()
 		s.control([]byte{proto.RestoreReloaded, 0, 0, 0, 0})
 	case 0xB7:
