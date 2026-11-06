@@ -6,7 +6,7 @@
   const qs = new URLSearchParams(location.search);
   const store = { get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } } };
   const key = qs.get('key') || store.get('key');
-  if (qs.get('embed')) document.body.classList.add('embed');
+  if (qs.get('embed')) { document.body.classList.add('embed'); $('bankOpen').hidden = false; }
   $('back').href = './' + (key ? '?key=' + encodeURIComponent(key) : '');
   let st = null, busy = false, editing = 0, mode = 'pattern', pads = null, cbank = 0, win = null, armed = -1, armTimer = 0;
 
@@ -27,6 +27,7 @@
   for (let i = 0; i < 10; i++) { const o = document.createElement('option'); o.value = i; o.textContent = bankNames[i]; $('bank').appendChild(o); }
   for (let i = 0; i < 16; i++) { const o = document.createElement('option'); o.value = i; o.textContent = i + 1; $('pat').appendChild(o); }
   const slot = () => (+$('bank').value) * 16 + (+$('pat').value) + 1;
+  $('bankOpen').onclick = () => window.parent.postMessage({ t: 'openBank' }, location.origin); // the page's own bank dialog
   $('bank').onchange = () => { act({ op: 'pattern', slot: slot() }); if (window.parent !== window) window.parent.postMessage({ t: 'bank', i: +$('bank').value }, location.origin); };
   $('pat').onchange = () => act({ op: 'pattern', slot: slot() });
   window.addEventListener('message', (e) => { // the page around this one has another bank chosen
@@ -166,17 +167,29 @@
   }
 
   function renderMenu(m) {
+    const wasOpen = !$('menu').hidden;
     $('idle').hidden = !!m; $('menu').hidden = !m;
     if (!m) return;
+    if (!wasOpen) $('right').scrollIntoView({ block: 'start' }); // on a phone the menu is under the pattern: bring it up
     $('mtitle').textContent = m.title; $('mback').textContent = m.depth > 1 ? '◂ BACK' : '✕ CLOSE';
     const tabs = $('tabs'); tabs.textContent = '';
     (m.tabs || []).forEach((name, i) => { const b = document.createElement('button'); b.className = 'btn' + (i === m.tab ? ' on' : ''); b.textContent = name; b.onclick = () => act({ op: 'tab', tab: i }); tabs.appendChild(b); });
     const box = $('items'); if (editing && document.activeElement && box.contains(document.activeElement)) return; // do not replace a control while it is in the hand
     box.textContent = '';
+    let tiles = null; // consecutive actions are drawn as tiles side by side: a tool is a tile, a tap opens its options
     for (const it of m.items) {
+      if (it.kind === 'action') {
+        if (!tiles) { tiles = document.createElement('div'); tiles.className = 'tiles'; box.appendChild(tiles); }
+        const b = document.createElement('button');
+        b.className = 'tile' + (/^keep it/i.test(it.label) ? ' go wide' : '') + (it.opens ? ' opens' : '');
+        b.textContent = it.label.replace(/\.\.\.$/, '').replace(/\s*\([^)]*\)\s*$/, ''); b.title = it.label;
+        b.onclick = () => act({ op: 'run', i: it.i }); tiles.appendChild(b);
+        continue;
+      }
+      tiles = null;
       const d = document.createElement('div');
       if (it.kind === 'head') { d.className = 'item head'; d.textContent = it.label; }
-      else if (it.kind === 'choice') {
+      else {
         d.className = 'item choice';
         const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = it.label;
         const ctl = document.createElement('div'); ctl.className = 'ctl';
@@ -191,9 +204,6 @@
         ctl.append(prev, sel, next);
         if (it.runs) { const go = document.createElement('button'); go.className = 'btn go'; go.textContent = 'DO IT'; go.title = 'Do it with the value chosen'; go.onclick = () => act({ op: 'run', i: it.i }); ctl.appendChild(go); }
         d.append(lab, ctl);
-      } else {
-        d.className = 'item action';
-        const b = document.createElement('button'); b.className = 'btn' + (/^keep it/i.test(it.label) ? ' go' : ''); b.textContent = it.label; b.onclick = () => act({ op: 'run', i: it.i }); d.appendChild(b);
       }
       box.appendChild(d);
     }
@@ -217,14 +227,15 @@
     const box = $('ptnStrip'); box.textContent = '';
     (st.patterns || []).forEach((c, i) => {
       const bank = Math.floor((p.slot - 1) / 16), b = document.createElement('button');
-      b.className = 'btn' + (c.used ? ' used' : '') + (p.slot - 1 === bank * 16 + i ? ' on' : ''); b.textContent = i + 1; b.title = c.used ? c.info : 'empty';
+      b.className = 'btn' + (c.used ? ' used' : '') + (p.slot - 1 === bank * 16 + i ? ' on' : ''); b.title = c.used ? c.info : 'empty';
+      const n = document.createElement('span'); n.textContent = i + 1; const sm = document.createElement('small'); sm.textContent = c.used ? c.info : ''; b.append(n, sm);
       b.onclick = () => act({ op: 'pattern', slot: bank * 16 + i + 1 }); box.appendChild(b);
     });
   }
 
   function render() {
     const p = st.pattern;
-    $('bank').value = Math.floor((p.slot - 1) / 16); $('pat').value = (p.slot - 1) % 16;
+    $('bank').value = Math.floor((p.slot - 1) / 16); $('bankOpenL').textContent = bankNames[Math.floor((p.slot - 1) / 16)]; $('pat').value = (p.slot - 1) % 16;
     $('patinfo').textContent = 'Pattern ' + p.label + (p.exists ? ' · ' + p.bars + ' bars · ' + Math.round(p.tempo) + ' BPM' : ' · empty');
     $('play').textContent = st.playing ? '■ STOP' : '▶ PLAY HERE'; $('play').classList.toggle('on', !!st.playing);
     const u = $('unit'); u.className = 'unit' + (st.live ? ' live' : st.unit ? ' on' : '');

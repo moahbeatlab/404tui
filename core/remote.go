@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -208,7 +209,12 @@ func (r *Remote) Run(index int) *RMenu {
 	defer r.mu.Unlock()
 	if m := r.a.menu; m != nil {
 		if it := m.find(index); it != nil {
+			keep := strings.HasPrefix(it.label, "Keep it")
 			r.a.remoteKey(A)
+			// "Keep it" commits the trial (and, on a unit that is edited live, sends it); on a page that is the end of the tool: back to the menu it came from
+			if keep && r.a.menu == m && strings.HasPrefix(r.a.msg, "kept") {
+				r.a.remoteKey(B)
+			}
 		}
 	}
 	return r.a.remoteMenu()

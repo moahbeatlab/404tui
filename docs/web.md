@@ -234,7 +234,7 @@ The bank chip at the top (BANK) is global: a bank chosen on Patterns, Pads, the 
 
 ## The project is the unit's
 
-The Tools tab always shows the project that is loaded on the unit, with its pads and patterns (a row of the 16 patterns of the bank, the used ones lit): there is no list of projects to choose from. When the unit's project is changed, the page loads the new one within a few seconds. It is held as a **COPY** (the unit is not changed) until you switch it to **LIVE**; in a copy, **SEND TO UNIT** writes the editor's project over the unit's (asks twice). Changing the unit's project discards the changes of a copy.
+The Tools tab always shows the project that is loaded on the unit, with its pads and patterns (a row of the 16 patterns of the bank, the used ones lit): there is no list of projects to choose from. When the unit's project is changed, the page loads the new one within a few seconds. It is edited **LIVE**: a tool that is kept (**Keep it**, which also goes back one menu) is written to the unit. Switch to **COPY** to keep the unit unchanged; in a copy, **SEND TO UNIT** writes the editor's project over the unit's (asks twice). Changing the unit's project discards the changes of a copy.
 
 ## Slicer (the former Looper page)
 

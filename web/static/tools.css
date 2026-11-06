@@ -62,4 +62,16 @@ body.embed #bar { margin-bottom: 6px; }
 
 .unitbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; } .unitbar b { margin-right: auto; font-size: 13px; overflow-wrap: anywhere; }
 .strip { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 3px; margin-top: 8px; } .strip .btn { padding: 4px 0; min-height: 34px; font-size: 11px; text-align: center; opacity: .55; } .strip .btn.used { opacity: 1; border-color: var(--accent); } .strip .btn.on { background: var(--accent); color: var(--ink); opacity: 1; }
-@media (max-width: 520px) { .strip { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+@media (max-width: 520px) { body:not(.embed) .strip { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+
+body.embed #patbar label { display: none; }
+body.embed .strip { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+body.embed .strip .btn { min-height: 58px; font-size: 20px; display: grid; place-content: center; gap: 1px; opacity: .6; }
+body.embed .strip .btn small { font-size: 10px; font-weight: 600; letter-spacing: 0; color: var(--dim); } body.embed .strip .btn.on small { color: var(--ink); }
+.bankchip2 b { color: var(--accent); font-size: 14px; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 6px; padding: 6px 0; }
+.tile { font: inherit; font-weight: 800; font-size: 12px; letter-spacing: .02em; text-align: left; min-height: 52px; padding: 8px 10px; border-radius: 10px; background: var(--tile); color: var(--text); border: 1px solid var(--line); cursor: pointer; overflow-wrap: anywhere; line-height: 1.2; }
+.tile.opens::after { content: ' ▸'; color: var(--accent); }
+.tile.go { background: var(--accent); color: var(--ink); border-color: var(--accent); } .tile.wide { grid-column: 1 / -1; text-align: center; }
+.tile:active { filter: brightness(1.25); }

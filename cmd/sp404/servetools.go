@@ -65,7 +65,7 @@ func newToolsApp(o options, shared *sharedUnit, player app.Player) *core.Remote 
 		return nil, io.ErrClosedPipe
 	}
 	r := core.NewRemote(a)
-	r.Follow(true, false) // the page shows the project that is on the unit, as a copy until it is told to write to the unit
+	r.Follow(true, true) // the page shows the project that is on the unit and edits it live: what is kept goes to the unit (COPY on the page keeps it off)
 	return r
 }
 

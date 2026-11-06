@@ -167,3 +167,39 @@ func TestARemoteFollowsTheUnitsCurrentProject(t *testing.T) {
 	}
 	t.Fatal("the unit's current project was not loaded")
 }
+
+func TestKeepItKeepsTheTrialAndGoesBack(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.addTrack(0)
+	a.toggle(0, 0)
+	r := NewRemote(a)
+	r.SetPattern(1)
+	m := r.OpenPatternTools()
+	notes := 0
+	for i, n := range m.Tabs {
+		if n == "NOTES" || n == "Notes" {
+			notes = i
+		}
+	}
+	m = r.Tab(notes)
+	d := r.Run(findItem(m, "Fill"))
+	if d == nil || findItem(d, "Keep it") < 0 {
+		t.Fatalf("Fill's dialog: %+v", d)
+	}
+	title := d.Title
+	n := len(r.Pattern().Tracks[0].Notes)
+	back := r.Run(findItem(d, "Keep it"))
+	if back == nil || back.Title == title {
+		t.Fatalf("after Keep it the menu is the one before: %+v", back)
+	}
+	if got := len(r.Pattern().Tracks[0].Notes); got != n {
+		t.Fatalf("the kept notes stay: %d, was %d", got, n)
+	}
+	r.Undo()
+	if got := len(r.Pattern().Tracks[0].Notes); got >= n {
+		t.Fatalf("one undo takes the tool back: %d, was %d", got, n)
+	}
+}

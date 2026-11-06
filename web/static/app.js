@@ -730,6 +730,7 @@
     if (f && f.contentWindow && i !== toolsBank) { toolsBank = i; try { f.contentWindow.postMessage({ t: 'bank', i }, location.origin); } catch (e) { /* not loaded yet */ } }
   }
   window.addEventListener('message', (e) => {
+    if (e.origin === location.origin && e.data && e.data.t === 'openBank') return openBanks('unit');
     if (e.origin !== location.origin || !e.data || e.data.t !== 'bank' || !(e.data.i >= 0 && e.data.i < 10)) return;
     toolsBank = e.data.i; chooseBank('unit', e.data.i);
   });

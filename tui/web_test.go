@@ -800,12 +800,12 @@ func TestAPatternSentThatSoundsTheSameTakesOverAfterAWholePattern(t *testing.T) 
 	m.patPreview[slotA], _ = app.OpenPattern(m.unit, slotA)
 	r.s.model = m
 	r.web(`{"a":"ptn","i":3}`)
-	r.tick(2*192 - 2)
+	r.tick(192 + 96 - 10 - 2) // the loop (2 bars) ends at tick 192 and a bar later the wait is over, at 288; the Start was 10 ticks ago
 	r.s.press("r")
 	if p := w.last(t).Ptn; p.Next != 3 {
 		t.Fatalf("took over before the last resort: %+v", p)
 	}
-	r.tick(10 + 2)
+	r.tick(4)
 	r.s.press("r")
 	if p := w.last(t).Ptn; p.Now != 3 || p.Next != -1 {
 		t.Errorf("now %d next %d, want 3 and -1", p.Now, p.Next)
