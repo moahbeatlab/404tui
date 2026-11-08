@@ -267,7 +267,8 @@ const COL = { bg:"#121214", deep:"#161616", panel:"#1b1b1e", tile:"#2c2c30", til
               good:"#87d787", bad:"#ff5f5f", blue:"#5fafff", red:"#ff3b30", green:"#3ddc84", gold:"#ffb300", purple:"#c792ea" };
 const BUSCOL = { 1: COL.blue, 2: COL.red, 3: COL.green, 4: COL.gold };
 const FONT = (px, bold) => (bold ? "bold " : "") + px + "px ui-monospace, Menlo, Consolas, monospace";
-const cv = document.getElementById("c"), g = cv.getContext("2d");
+const cv = document.getElementById("c"), g0 = cv.getContext("2d");
+let g = g0, cvNow = cv; // while a view change fades, the new picture is drawn on a canvas of its own
 const params = new URLSearchParams(location.search);
 // ?format=vertical (shorts, reels: 1080x1920) lays the same panels one under the other
 const VERT = ["vertical", "shorts", "reels", "9x16"].includes(params.get("format") || "");
@@ -1091,7 +1092,9 @@ function followPlayhead(frac, playing) { // the lanes keep the playhead in view 
 // after every change; typing in one text counts as one step.
 let CHAPS = [], BUSN = [], CUTS = [], VIEWM = [];
 // the view at a time of the audio: the latest view change before it, else the one of the style (the start of the take)
+let VIEW_OVR = null; // while the picture before a view change is drawn for the cross-fade
 function viewAt(A) {
+  if (VIEW_OVR) return VIEW_OVR;
   let best = null; for (const m of VIEWM) if (m.t <= A + 0.001 && (!best || m.t >= best.t)) best = m;
   return best ? { view: best.view, mode: best.mode || "pads", layout: best.layout || STYLE.layout || "classic", pad: best.pad || STYLE.chroma || "", look: best.look || STYLE.arpLook || "columns", mark: best } : { view: STYLE.view, mode: STYLE.rmode || "pads", layout: STYLE.layout || "classic", pad: STYLE.chroma || "", look: STYLE.arpLook || "columns", mark: null };
 }
@@ -1188,7 +1191,7 @@ function drawCaption(A) {
   const fade = fd === 0 ? 1 : easeOut(clamp(Math.min(A - c.from, c.to - A) / span, 0, 1));
   if (!blurLayer || blurLayer.width !== W || blurLayer.height !== H) { blurLayer = document.createElement("canvas"); blurLayer.width = W; blurLayer.height = H; }
   const bx = blurLayer.getContext("2d");
-  bx.clearRect(0, 0, W, H); bx.drawImage(cv, 0, 0);
+  bx.clearRect(0, 0, W, H); bx.drawImage(cvNow, 0, 0);
   g.save(); const blurPx = clamp(STYLE.capBlur === undefined ? 3 : +STYLE.capBlur, 0, 20), dimA = clamp(STYLE.capDim === undefined ? 0.28 : +STYLE.capDim, 0, 0.9);
   const fr = focusRect(c.focus, A + OFFSET + NUDGE / 1000);
   g.save();
@@ -1551,13 +1554,24 @@ function drawSplit(T, A) {
 }
 
 let T_audio = 0;
+const VIEW_FADE = 0.5; // seconds a view change takes
+const viewKey = v => v.view + v.mode + v.layout + v.pad + v.look;
 function draw(audioTime) {
   T_audio = audioTime;
-  { const v = viewAt(audioTime); if (lastViewKey !== v.view + v.mode + v.layout + v.pad + v.look && window.syncViewBtn) window.syncViewBtn(); }
-  const T = audioTime + OFFSET + NUDGE / 1000;
-  drawBackground();
+  { const v = viewAt(audioTime); if (lastViewKey !== viewKey(v) && window.syncViewBtn) window.syncViewBtn(); }
   camVideoKeep(audioTime);
   applyLayout(audioTime);
+  let m = null; for (const x of VIEWM) if (x.t > 0.01 && x.t <= audioTime + 0.001 && audioTime < x.t + VIEW_FADE && (!m || x.t >= m.t)) m = x;
+  const prev = m ? viewAt(m.t - 0.002) : null;
+  if (m && viewKey(prev) !== viewKey(viewAt(audioTime))) { // a view change dips: the picture before fades out, the new one fades in (the header stays)
+    const u = clamp((audioTime - m.t) / VIEW_FADE, 0, 1), top = VERT ? 100 : 72;
+    if (u < 0.5) { VIEW_OVR = prev; try { drawFrame(audioTime); } finally { VIEW_OVR = null; } } else drawFrame(audioTime);
+    g.save(); g.globalAlpha = easeOut(u < 0.5 ? u * 2 : (1 - u) * 2); rect(0, top, W, H - top, COL.bg); g.restore();
+  } else drawFrame(audioTime);
+}
+function drawFrame(audioTime) {
+  const T = audioTime + OFFSET + NUDGE / 1000;
+  drawBackground();
   if (CAM.layer === "behind") drawCamera(audioTime);
   drawHeader(T, audioTime);
   if (splitOn()) { drawSplit(T, audioTime); drawChapter(audioTime); drawChapterCard(audioTime); drawBrand(); return; }
