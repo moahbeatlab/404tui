@@ -156,10 +156,10 @@
   <div class="h2">camera <span class="h">(the video of you playing; drag the box on the picture, its corners change the size)</span></div>
   <div class="row"><input id="cam_path" placeholder="path of the video, e.g. ~/Movies/take.mov" style="flex:1"><button id="cam_browse">choose file…</button><button id="cam_use">use</button></div>
   <div id="cam_status" class="h"></div>
-  <div class="h2 sub">sync <span class="h">(the camera has no sound: match one pad hit by eye)</span></div>
-  <div class="row"><select id="cam_hit" style="flex:1"></select><button id="cam_gohit" title="show this hit in the replay">go to the hit</button></div>
+  <div class="h2 sub">sync <span class="h">(the camera has no sound: pick a moment in the recording and match it to a frame of the video)</span></div>
+  <div class="row"><select id="cam_hit" style="flex:1"></select><button id="cam_gohit" title="show this moment in the replay">go there</button></div>
   <video id="cam_prev" controls muted playsinline preload="auto"></video>
-  <div class="row"><button id="cam_fm" title="a frame back">&lt; frame</button><button id="cam_fp" title="a frame on">frame &gt;</button><button id="cam_set" style="flex:1">this camera frame = that hit</button></div>
+  <div class="row"><button id="cam_fm" title="a frame back">&lt; frame</button><button id="cam_fp" title="a frame on">frame &gt;</button><button id="cam_set" style="flex:1">this camera frame = that moment</button></div>
   <div class="row"><span class="h">offset</span><input id="cam_sync" type="number" step="0.001" style="width:96px"><span class="h">s</span>
     <button data-n="-1">-1 s</button><button data-n="-0.1">-0.1</button><button data-n="-0.0333">-1 f</button><button data-n="0.0333">+1 f</button><button data-n="0.1">+0.1</button><button data-n="1">+1 s</button></div>
   <div class="h2 sub">picture</div>
@@ -2206,17 +2206,22 @@ function initCamera(saved, file) {
   $("cam_off").onclick = async () => { await fetch("/camera/file", { method: "POST", body: JSON.stringify({ path: "" }) }); CAMFILE = ""; loadVideo(); camEdit = false; buildLane(); status(); };
   const hits = []; // the pad hits of the log, to match one of them with the camera
   const fillHits = () => {
-    const sel = $("cam_hit"); sel.textContent = ""; hits.length = 0;
-    for (const [k, l] of padEv) for (const e of l) if (e.on) hits.push({ t: e.t - OFFSET, k });
-    hits.sort((a, b) => a.t - b.t);
-    hits.slice(0, 60).forEach((h, i) => { const o = document.createElement("option"); o.value = i; o.textContent = mmss(h.t) + "  " + h.k; sel.appendChild(o); });
-    if (!hits.length) { const o = document.createElement("option"); o.textContent = "no pad hits in the log"; sel.appendChild(o); }
+    const sel = $("cam_hit"), keep = sel.value; sel.textContent = ""; hits.length = 0;
+    const add = (h, label) => { hits.push(h); const o = document.createElement("option"); o.value = hits.length - 1; o.textContent = label; sel.appendChild(o); };
+    add({ now: true }, "where the replay is now (the playhead)");
+    for (const e of patEv) if (!e.cue && e.now) add({ t: Math.max(e.t - OFFSET, 0) }, mmss(Math.max(e.t - OFFSET, 0)) + "  pattern " + e.now + " starts");
+    const pads = [];
+    for (const [k, l] of padEv) for (const e of l) if (e.on) pads.push({ t: e.t - OFFSET, k });
+    pads.sort((x, y) => x.t - y.t);
+    pads.slice(0, 60).forEach(h => add(h, mmss(h.t) + "  pad " + h.k + " hit"));
+    if (keep && sel.querySelector('option[value="' + keep + '"]')) sel.value = keep;
   };
-  $("cam_gohit").onclick = () => { const h = hits[+$("cam_hit").value]; if (h) { audio.pause(); audio.currentTime = Math.max(h.t, 0); } };
+  const hitTime = () => { const h = hits[+$("cam_hit").value]; return h ? (h.now ? audio.currentTime : h.t) : null; };
+  $("cam_gohit").onclick = () => { const h = hits[+$("cam_hit").value]; if (h && !h.now) { audio.pause(); audio.currentTime = Math.max(h.t, 0); } };
   const frame = d => () => { prev.pause(); prev.currentTime = Math.max(0, prev.currentTime + d / 30); };
   $("cam_fm").onclick = frame(-1); $("cam_fp").onclick = frame(1);
   const showSync = () => { $("cam_sync").value = (+CAM.sync).toFixed(3); };
-  $("cam_set").onclick = () => { const h = hits[+$("cam_hit").value]; if (!h) return; CAM.sync = +(prev.currentTime - h.t).toFixed(3); showSync(); save(); };
+  $("cam_set").onclick = () => { const t = hitTime(); if (t === null) return; CAM.sync = +(prev.currentTime - t).toFixed(3); showSync(); save(); };
   $("cam_sync").onchange = () => { CAM.sync = parseFloat($("cam_sync").value) || 0; save(); };
   for (const b of box.querySelectorAll("button[data-n]")) b.onclick = () => { CAM.sync = +((+CAM.sync) + parseFloat(b.dataset.n)).toFixed(3); showSync(); save(); };
   const bind = (id, key, conv) => { const el = $(id); el.oninput = () => { CAM[key] = conv(el); if (id === "cam_zoom") $("cam_zoomv").textContent = (+CAM.zoom).toFixed(2) + "x"; save("text"); }; };
