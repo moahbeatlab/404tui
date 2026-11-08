@@ -1299,7 +1299,7 @@ function drawArp(T, area) {
   const lab = STYLE.chroma && STYLE.chroma[0] === bank ? STYLE.chroma : bank + "1", info = padInfo.get((bank.charCodeAt(0) - 65) * 16 + parseInt(lab.slice(1), 10) - 1);
   text("ARP", x0 + 24, y0 + 40, COL.amber, 26, true);
   const ons = []; // every hit of the bank, in the order of the time
-  for (let i = 0; i < 16; i++) { const l = padEv.get(bank + (i + 1)); if (!l) continue; for (let k = Math.max(atIndex(l, T) - 40, 0); k <= atIndex(l, T); k++) if (l[k].on) ons.push({ t: l[k].t, i, v: l[k].v || 100 }); }
+  for (let i = 0; i < 16; i++) { const l = padEv.get(bank + (i + 1)); if (!l) continue; for (let k = Math.max(atIndex(l, T) - 40, 0); k <= atIndex(l, T); k++) if (l[k].on) { let end = -1; for (let q = k + 1; q < l.length && l[q].t <= T; q++) if (!l[q].on) { end = l[q].t; break; } ons.push({ t: l[k].t, i, v: l[k].v || 100, len: end >= 0 ? end - l[k].t : T - l[k].t, open: end < 0 }); } }
   ons.sort((a, b) => a.t - b.t);
   const rec = ons.filter(o => o.t > T - 12).slice(-64), last = rec.length ? rec[rec.length - 1] : null;
   const gaps = []; for (let k = Math.max(1, ons.length - 9); k < ons.length; k++) { const d = ons[k].t - ons[k - 1].t; if (d > 0.02 && d < 1.2) gaps.push(d); }
@@ -1313,7 +1313,7 @@ function drawArp(T, area) {
   const pk = info && info.peaks ? info.peaks : [];
   for (let k = 0; k < pk.length; k++) { const bh = Math.max(2, pk[k] / 100 * (gh - 120)); rect(sx + 14 + k * (sw - 28) / pk.length, gy0 + gh - 18 - bh, Math.max((sw - 28) / pk.length * 0.7, 2), bh, mix("#444444", COL.amber, 0.4)); }
   // the pitch grid: a line for every octave, the rows of the semitones
-  const yOf = i => gy0 + gh - 56 - (gh - 56 - 30) * i / TOP;
+  const yOf = i => gy0 + gh - 96 - (gh - 96 - 30) * i / TOP;
   for (let st = 0; st <= TOP; st += 1) { g.globalAlpha = st % 12 === 0 ? 0.5 : st % 4 === 0 ? 0.18 : 0.07; rect(gx, yOf(st), gw, 2, COL.dim); g.globalAlpha = 1; }
   text("+12", gx - 8, yOf(12) + 5, COL.dim, 15, false, "right"); text("+0", gx - 8, yOf(0) + 5, COL.dim, 15, false, "right");
   // an arpeggio comes round again and again: find the length of its loop (the notes repeat after p steps), start the loop where the run of notes starts and
@@ -1324,6 +1324,8 @@ function drawArp(T, area) {
   let per = 0; for (let p = 2; p <= 12 && !per; p++) { if (seq.length < p + 3) break; let ok = 0, n = 0; for (let k = p; k < seq.length; k++) { n++; if (seq[k] === seq[k - p]) ok++; } if ((n >= p && ok / n >= 0.85) || ok === n) per = p; }
   const cyc = per || Math.min(seq.length, N), steps = per ? seq.slice(0, per) : seq.slice(-cyc), cur = per ? (seq.length - 1) % per : seq.length - 1, rounds = per ? Math.floor((seq.length - 1) / per) + 1 : 0;
   const cw = gw / Math.max(cyc, 4);
+  const lens = rec.slice(rec.length - run).filter(o => !o.open).map(o => o.len / (med || 0.25)); const gate = lens.length ? Math.round(100 * lens.reduce((a, b) => a + b, 0) / lens.length) : 0;
+  text("GATE", gx - 8, yOf(0) + 62 + 4, COL.blue, 14, true, "right"); if (gate) text("gate " + gate + "%", x0 + 110 + (VERT ? 500 : 470), y0 + 40, COL.blue, 22, true);
   if (per) { text("loop of " + per + " steps  x" + rounds, x0 + w - 24, y0 + 40 + 30, COL.amber, 20, true, "right"); }
   g.save(); g.strokeStyle = COL.amberD; g.lineWidth = 3; g.beginPath();
   steps.forEach((i, k) => { const cx = gx + (k + 0.5) * cw, cy = yOf(i); if (k) g.lineTo(cx, cy); else g.moveTo(cx, cy); }); g.stroke(); g.restore();
@@ -1336,10 +1338,12 @@ function drawArp(T, area) {
     text("+" + i, cx, top - 10, now ? COL.amber : COL.text, 17, now, "center");
     text(NOTE_NAMES[i % 12] + (i >= 12 ? "+1" : ""), cx, bot + 22, COL.dim, 14, false, "center");
     text(String(k + 1), cx, bot + 38, now ? COL.amber : COL.dim, 13, now, "center"); // the step number
+    const o2 = rec[rec.length - run + k]; // the gate: how long the note sounds, as a part of the step (a full bar is a step; the pad held or tied reaches the next one)
+    if (o2 && !o2.open) { const gt = clamp(o2.len / (med || 0.25), 0, 1.25); g.save(); g.globalAlpha = now ? 1 : done ? 0.7 : 0.35; rect(cx - cw / 2 + 4, bot + 48, cw - 8, 10, "#2a2a30"); rect(cx - cw / 2 + 4, bot + 48, (cw - 8) * Math.min(gt, 1), 10, gt >= 1 ? COL.good : COL.blue); g.restore(); }
   });
   if (per) { // the way back to the start: an arrow under the steps that runs from the last to the first
     g.save(); g.strokeStyle = COL.amberD; g.lineWidth = 2; g.setLineDash([6, 6]); g.beginPath();
-    const ax = gx + 0.5 * cw, bx = gx + (per - 0.5) * cw, ay = yOf(0) + 58; g.moveTo(bx, ay - 6); g.lineTo(bx, ay); g.lineTo(ax, ay); g.lineTo(ax, ay - 8); g.stroke(); g.setLineDash([]);
+    const ax = gx + 0.5 * cw, bx = gx + (per - 0.5) * cw, ay = yOf(0) + 84; g.moveTo(bx, ay - 6); g.lineTo(bx, ay); g.lineTo(ax, ay); g.lineTo(ax, ay - 8); g.stroke(); g.setLineDash([]);
     g.fillStyle = COL.amberD; g.beginPath(); g.moveTo(ax - 6, ay - 8); g.lineTo(ax + 6, ay - 8); g.lineTo(ax, ay - 16); g.fill(); g.restore();
   }
   text("one sample: each step is n semitones above its pitch (pad 1 = +0)", x0 + 24, y0 + h - 12, COL.dim, 16);

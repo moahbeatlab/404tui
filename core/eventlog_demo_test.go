@@ -166,16 +166,17 @@ func TestWriteReplayArpDemo(t *testing.T) {
 	// the loops: a pad of the bank is a semitone above the sample's own pitch (the chromatic mode), a step comes every `step` quarter notes
 	type loop struct {
 		from, to, step float64
+		gate           float64 // how long a note sounds, as a part of the step
 		semis          []int
 	}
 	loops := []loop{
-		{3, 12, 0.25, []int{0, 4, 7, 12, 7, 4}},          // a major triad up and down, in 16ths
-		{13, 22, 0.5, []int{0, 3, 7, 10, 12, 10, 7, 3}},  // a minor seventh up and down, in 8ths
-		{23, 32, 0.25, []int{0, 2, 4, 5, 7, 9, 11, 12}},  // a scale up, in 16ths
-		{33, 43, 0.25, []int{0, 7, 12, 7, 3, 7, 12, 15}}, // wider, ending on the minor third
+		{3, 12, 0.25, 0.5, []int{0, 4, 7, 12, 7, 4}},          // a major triad up and down, in 16ths
+		{13, 22, 0.5, 0.9, []int{0, 3, 7, 10, 12, 10, 7, 3}},  // a minor seventh up and down, in 8ths
+		{23, 32, 0.25, 0.25, []int{0, 2, 4, 5, 7, 9, 11, 12}}, // a scale up, in 16ths
+		{33, 43, 0.25, 1.0, []int{0, 7, 12, 7, 3, 7, 12, 15}}, // wider, ending on the minor third
 	}
 	type hit struct {
-		t    float64
+		t, d float64
 		semi int
 		v    int
 	}
@@ -187,14 +188,14 @@ func TestWriteReplayArpDemo(t *testing.T) {
 			if k%len(l.semis) == 0 {
 				v = 122 // the first step of a round is accented
 			}
-			hits = append(hits, hit{tt, l.semis[k%len(l.semis)], v})
+			hits = append(hits, hit{tt, l.gate * l.step * beat, l.semis[k%len(l.semis)], v})
 			k++
 		}
 	}
 	for _, h := range hits {
 		note := []int{48, 49, 50, 51, 44, 45, 46, 47, 40, 41, 42, 43, 36, 37, 38, 39}[h.semi]
 		a.midiEvent(midiin.Event{Kind: midiin.NoteOn, Channel: 1, Data1: note, Data2: h.v, At: at(h.t)})
-		a.midiEvent(midiin.Event{Kind: midiin.NoteOff, Channel: 1, Data1: note, At: at(h.t + 0.09)})
+		a.midiEvent(midiin.Event{Kind: midiin.NoteOff, Channel: 1, Data1: note, At: at(h.t + h.d)})
 	}
 	a.midiEvent(midiin.Event{Kind: midiin.Stop, At: at(secs - 0.5)})
 	a.stopEventLog()
@@ -205,7 +206,7 @@ func TestWriteReplayArpDemo(t *testing.T) {
 		start, f := int(h.t*rate), 196*math.Pow(2, float64(h.semi)/12)
 		for i := 0; i < rate/3 && start+i < n; i++ {
 			x := float64(i) / rate
-			env := math.Exp(-x * 14)
+			env := math.Exp(-x*14) * math.Min(1, math.Max(0, (h.d+0.012-x)/0.012)) // the gate cuts the note short
 			v := float32(float64(h.v) / 127 * 0.35 * env * (math.Sin(2*math.Pi*f*x) + 0.4*math.Sin(4*math.Pi*f*x) + 0.2*math.Sin(6*math.Pi*f*x)))
 			pcm[(start+i)*2] += v
 			pcm[(start+i)*2+1] += v
@@ -221,9 +222,9 @@ func TestWriteReplayArpDemo(t *testing.T) {
 	// the captions and chapters, and the view: the split view with the arp
 	meta := `{"title":"One sample, many pitches","patterns_adopted":true,"cues":[],
  "captions":[{"from":3.5,"to":9.5,"text":"One *sample* on pad A3, played at different pitches"},
-  {"from":13.5,"to":19.5,"text":"The same *loop* comes round again and again"},
-  {"from":23.5,"to":29.5,"text":"A *scale* up, step by step"},
-  {"from":33.5,"to":40,"text":"Wider *steps*, the accent on the first of every round"}],
+  {"from":13.5,"to":19.5,"text":"The same *loop* comes round again and again, a long *gate*"},
+  {"from":23.5,"to":29.5,"text":"A *scale* up, step by step, short *gate*"},
+  {"from":33.5,"to":40,"text":"Wider *steps*, tied: the *gate* is open all the way"}],
  "chapters":[{"t":1,"title":"Triad"},{"t":13,"title":"Minor seventh"},{"t":23,"title":"Scale"},{"t":33,"title":"Wide"}],
  "style":{"view":"split","rmode":"arp","chroma":"A3"}}`
 	if err := os.WriteFile(filepath.Join(out, "arp.events.cues.json"), []byte(meta), 0o644); err != nil {
