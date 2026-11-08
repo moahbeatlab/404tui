@@ -226,6 +226,7 @@
       <button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
       <button id="chbtn" title="the chapters, and the list for YouTube">chapters</button>
       <button id="capbtn" title="text shown at times of the take">captions</button>
+      <button id="viewbtn" title="v: the split view (camera, keys, captions) or the normal view with all the panels">split view</button>
       <button id="stylebtn" title="colours, background, logo, handle">style</button>
       <button id="full" title="f">full screen</button></span>
   </div>
@@ -938,7 +939,7 @@ const PRESETS = {
   "forest":   { accent: "#7bd88f", bg: "#0d1511", deep: "#101a15", panel: "#14201a", tile: "#203329", tile2: "#182820", text: "#e9f5ec", dim: "#8fb09a" },
   "mono":     { accent: "#f2f2f2", bg: "#0d0d0d", deep: "#111111", panel: "#181818", tile: "#262626", tile2: "#1c1c1c", text: "#f2f2f2", dim: "#8c8c8c" },
 };
-const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, chapCards: 0, chapCardLen: 1.2, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
+const STYLE_DEFAULT = { view: "split", chroma: "", capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, chapCards: 0, chapCardLen: 1.2, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
 let STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)), logoImg = null, bgImg = null;
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const hexMix = (a, b, t) => "#" + hexRgb(a).map((v, i) => Math.round(v + (hexRgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
@@ -1231,6 +1232,70 @@ function capText(lines, words, c, A, x, y, px, k, lh) {
   }
 }
 
+// ---- the split view: the picture in areas for a video of you playing. The camera at the left, the pads or (in the chromatic mode) the keys at the
+// right, the captions in an area of their own below, and a REC mark. The normal view (all the panels) is one click away: the button or the key v.
+const splitOn = () => !VERT && STYLE.view === "split";
+const SPLIT = { cam: [40, 80, 1000, 600], keys: [1060, 80, 820, 600], caps: [40, 696, 1840, 354] };
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+function drawRec(x, y, A) { // the mark of a take that is recorded: a red dot that breathes, REC and the time of the take
+  const u = 0.5 + 0.5 * Math.sin(A * Math.PI * 1.6), ready = !(window.replay && window.replay._render);
+  g.save(); g.globalAlpha = 0.72; rrect(x, y, 196, 46, 23, "#000"); g.globalAlpha = 1;
+  g.shadowColor = COL.red; g.shadowBlur = 8 + 14 * u; g.fillStyle = COL.red; g.globalAlpha = 0.65 + 0.35 * u; g.beginPath(); g.arc(x + 26, y + 23, 10, 0, 6.2832); g.fill(); g.restore();
+  text("REC", x + 48, y + 32, "#fff", 24, true); text(mmss(outTime(A)), x + 188, y + 32, "#ddd", 22, false, "right");
+}
+function drawKeys(T, area) { // the pads as the unit plays them in its chromatic mode: 16 pads, 16 semitones up from the pad's own pitch
+  const [x0, y0, w, h] = area, lab = STYLE.chroma, bank = lab ? lab[0] : bankInView(T), b = bank.charCodeAt(0) - 65;
+  panel(x0, y0, w, h);
+  const info = lab ? padInfo.get(b * 16 + (parseInt(lab.slice(1), 10) - 1)) : null;
+  text("CHROMATIC", x0 + 24, y0 + 40, COL.amber, 26, true);
+  text(lab ? lab + (info && info.name ? "   " + fit(info.name, 30) : "") : "choose a pad", x0 + 200, y0 + 40, COL.text, 24);
+  const root = 0; // C: the pad's own pitch
+  const kx = x0 + 24, kw = w - 48, ky = y0 + 76, kh = h - 76 - 28, nWhite = 10, ww = kw / nWhite;
+  const white = []; // the 16 semitones from the root: the white ones in a row, the black ones between them
+  const isBlack = m => [1, 3, 6, 8, 10].includes(m % 12);
+  let wi = 0; const place = [];
+  for (let i = 0; i < 16; i++) { const m = (root + i) % 12; if (isBlack(m)) place.push({ i, m, black: true, at: wi }); else { place.push({ i, m, black: false, at: wi }); wi++; } }
+  const lit = i => { const st = padState(bank, i + 1, T); if (!st) return 0; const age = T - st.hitAt; const gl = st.held ? 1 : clamp(1 - age / 0.5, 0, 1); return gl * (0.4 + 0.6 * (st.v || 100) / 127); };
+  const drawKey = k => {
+    const gl = lit(k.i), blk = k.black, bw = blk ? ww * 0.6 : ww - 4, bh = blk ? kh * 0.6 : kh;
+    const x = blk ? kx + k.at * ww - bw / 2 : kx + k.at * ww + 2, y = ky;
+    g.save();
+    if (gl > 0) { g.shadowColor = COL.amber; g.shadowBlur = 30 * gl; }
+    rrect(x, y, bw, bh, 8, blk ? "#101012" : "#e9e9ee");
+    if (gl > 0) { g.globalAlpha = gl * 0.95; rrect(x, y, bw, bh, 8, COL.amber); g.globalAlpha = 1; }
+    g.restore();
+    const dark = !blk && gl < 0.5, fg = blk ? (gl > 0.5 ? "#111" : COL.amber) : "#222";
+    text(bank + (k.i + 1), x + bw / 2, y + bh - (blk ? 14 : 58), blk ? fg : (gl > 0.5 ? "#111" : COL.amberD), blk ? 17 : 22, true, "center");
+    text(NOTE_NAMES[k.m] + (k.i >= 12 - root ? "+1" : ""), x + bw / 2, y + bh - (blk ? 38 : 24), blk ? (gl > 0.5 ? "#111" : COL.dim) : "#555", blk ? 16 : 19, false, "center");
+  };
+  for (const k of place) if (!k.black) drawKey(k);
+  for (const k of place) if (k.black) drawKey(k);
+  text("pad " + bank + "1 is the pad's own pitch, each pad one semitone up", x0 + 24, y0 + h - 8, COL.dim, 16);
+}
+function drawCapArea(T, A, area) { // the captions have an area of their own: nothing is blurred or covered
+  const [x0, y0, w, h] = area; panel(x0, y0, w, h);
+  const c = CAPS.find(c => c.text && A >= c.from && A < c.to);
+  if (!c) { const tp = tempoAt(T); text(TITLE || PROJ.name || "", x0 + w / 2, y0 + h / 2 + 8, COL.dim, 34, true, "center"); return; }
+  const fd = clamp(+STYLE.capFade || 0, 0, 3), span = Math.max(Math.min(fd, (c.to - c.from) / 2), 0.0001);
+  const fade = fd === 0 ? 1 : easeOut(clamp(Math.min(A - c.from, c.to - A) / span, 0, 1));
+  const words = capWords(c.text), plain = words.map(x => x.w).join(" ");
+  let px = 64; let lines = wrapText(plain, w - 160, px);
+  while (lines.length > 3 && px > 34) { px -= 4; lines = wrapText(plain, w - 160, px); }
+  const lh = px * 1.3, top = y0 + (h - lines.length * lh) / 2 + px * 0.95;
+  rect(x0 + 40, y0 + 40, 8, h - 80, COL.amber);
+  g.save(); g.globalAlpha = fade; capText(lines, words, c, A, x0 + 90, top + (1 - fade) * 14, px, 1, lh); g.restore();
+}
+function drawSplit(T, A) {
+  drawHeader(T, A);
+  const cam = SPLIT.cam;
+  if (CAMFILE) { const src = camSource(A); if (src) { const sv = CAM.layer; drawCamBox(cam, 1, 1, A, false); } else drawCamBox(cam, 1, 1, A, false); }
+  else { panel(cam[0], cam[1], cam[2], cam[3]); text("your camera video goes here", cam[0] + cam[2] / 2, cam[1] + cam[3] / 2, COL.dim, 26, false, "center"); }
+  drawRec(cam[0] + 18, cam[1] + 18, A);
+  if (STYLE.chroma) drawKeys(T, SPLIT.keys);
+  else { const sv = L.pads; L.pads = SPLIT.keys.slice(); panel(...SPLIT.keys); drawPads(T); L.pads = sv; }
+  drawCapArea(T, A, SPLIT.caps);
+}
+
 let T_audio = 0;
 function draw(audioTime) {
   T_audio = audioTime;
@@ -1240,6 +1305,7 @@ function draw(audioTime) {
   applyLayout(audioTime);
   if (CAM.layer === "behind") drawCamera(audioTime);
   drawHeader(T, audioTime);
+  if (splitOn()) { drawSplit(T, audioTime); drawChapter(audioTime); drawChapterCard(audioTime); drawBrand(); return; }
   for (const [id, fn] of [["pads", drawPads], ["pattern", drawPattern], ["fx", drawFx], ["meter", drawMeter], ["feed", drawFeed]]) {
     const a = panelAlpha(id, audioTime); if (a <= 0.001) continue;
     fn(T); panelVeil(id, a);
@@ -1291,6 +1357,10 @@ document.getElementById("sideclose").onclick = () => closeSide();
 for (const b of document.querySelectorAll("#sidetabs button[data-p]")) b.onclick = () => showPane(document.getElementById(b.dataset.p));
 document.getElementById("undo").onclick = () => undo();
 document.getElementById("redo").onclick = () => redo();
+const viewBtn = document.getElementById("viewbtn");
+function setView(v) { STYLE.view = v; viewBtn.textContent = v === "split" ? "normal view" : "split view"; viewBtn.classList.toggle("on", v === "split"); window.styleChanged && window.styleChanged(); }
+window.syncViewBtn = () => { viewBtn.textContent = STYLE.view === "split" ? "normal view" : "split view"; viewBtn.classList.toggle("on", STYLE.view === "split"); };
+viewBtn.onclick = () => setView(STYLE.view === "split" ? "normal" : "split");
 document.getElementById("full").onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
 addEventListener("keydown", e => {
   if (e.target.tagName === "SELECT" || (e.target.tagName === "INPUT" && e.target.type !== "range")) return; // typing in a field is not a key for the player
@@ -1304,6 +1374,8 @@ addEventListener("keydown", e => {
   else if (e.key === "[") { NUDGE -= 10; nudgeEl.textContent = "sync " + (NUDGE >= 0 ? "+" : "") + NUDGE + " ms"; }
   else if (e.key === "]") { NUDGE += 10; nudgeEl.textContent = "sync " + (NUDGE >= 0 ? "+" : "") + NUDGE + " ms"; }
   else if (e.key === "f") document.getElementById("full").onclick();
+  else if (e.key === "v") viewBtn.onclick();
+  else if (e.key === "c" && !e.ctrlKey && !e.metaKey) { STYLE.chroma = STYLE.chroma ? "" : bankInView(now() + OFFSET) + "1"; window.styleChanged && window.styleChanged(); }
   else if (e.key === "i" || e.key === "o") window.cutKey && window.cutKey(e.key);
 });
 
@@ -1935,6 +2007,7 @@ function mergeStyle(saved) {
 }
 function initStyle(saved) {
   STYLE = mergeStyle(saved);
+  if (window.syncViewBtn) window.syncViewBtn();
   const q = params.get("preset"); if (q && PRESETS[q]) STYLE.preset = q;
   if (validHex(params.get("accent"))) STYLE.accent = params.get("accent");
   if (params.get("handle")) STYLE.handle = params.get("handle");
