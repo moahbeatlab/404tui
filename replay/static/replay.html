@@ -1290,45 +1290,59 @@ function drawCapArea(T, A, area) { // the captions have an area of their own: no
   g.save(); g.globalAlpha = fade; capText(lines, words, c, A, x0 + (VERT ? 64 : 90), top + (1 - fade) * 14, px, kk, lh); g.restore();
 }
 
-// the arp view: the notes that were played, scrolling to the left (the last 4 seconds), one row for each pad of the bank as a semitone, the beats as lines.
-// It is made of the pad hits of the log, so it shows an arpeggio (the unit's or one played by hand) as the steps it makes, with the rate it runs at.
+// the arp view: one sample played at different pitches. In the chromatic mode every pad of the bank is the same sample, one semitone higher than the one before,
+// so the notes that were played are steps of a pitch: the last 16 of them as columns (their height is how far above the sample's own pitch), the newest lit,
+// a line through the tops, and the rate the notes come at. It is made of the pad hits of the log.
 function drawArp(T, area) {
-  const [x0, y0, w, h] = area, bank = bankInView(T), WIN = 4, tp = tempoAt(T), bpm = tp.bpm || 120, beat = 60 / bpm;
+  const [x0, y0, w, h] = area, bank = bankInView(T), tp = tempoAt(T), bpm = tp.bpm || 120, beat = 60 / bpm, N = 16, TOP = 15;
   panel(x0, y0, w, h);
+  const lab = STYLE.chroma && STYLE.chroma[0] === bank ? STYLE.chroma : bank + "1", info = padInfo.get((bank.charCodeAt(0) - 65) * 16 + parseInt(lab.slice(1), 10) - 1);
   text("ARP", x0 + 24, y0 + 40, COL.amber, 26, true);
-  const lx = x0 + 70, px0 = x0 + 24 + 56, pw = w - 48 - 56, py0 = y0 + 64, ph = h - 64 - 40, rh = ph / 16;
-  const tx = t => px0 + (t - (T - WIN)) / WIN * pw;
-  for (let i = 0; i < 16; i++) { // the rows, the lowest pad at the bottom
-    const y = py0 + (15 - i) * rh, m = i % 12, blk = [1, 3, 6, 8, 10].includes(m);
-    g.globalAlpha = blk ? 0.55 : 0.25; rect(px0, y + 1, pw, rh - 2, blk ? "#0c0c0e" : COL.tile2); g.globalAlpha = 1;
-    text(NOTE_NAMES[m] + (i >= 12 ? "+1" : ""), x0 + 24, y + rh * 0.72, blk ? COL.dim : COL.text, 15);
-  }
-  const b0 = Math.ceil((T - WIN) / beat) * beat; // a line at every beat of the clock, a brighter one at the bar
-  for (let t = b0; t < T; t += beat) { const n = Math.round(t / beat); g.globalAlpha = n % 4 === 0 ? 0.35 : 0.14; rect(tx(t), py0, 2, ph, COL.dim); g.globalAlpha = 1; }
-  const ons = []; let held = 0;
-  for (let i = 0; i < 16; i++) {
-    const l = padEv.get(bank + (i + 1)); if (!l) continue;
-    const e = atIndex(l, T), y = py0 + (15 - i) * rh;
-    let k = e; while (k > 0 && l[k - 1].t >= T - WIN - 2) k--; if (k < 0) k = 0;
-    for (let j = Math.max(k, 0); j <= e; j++) {
-      if (!l[j].on) continue;
-      let end = T, open = true; for (let q = j + 1; q <= e; q++) if (!l[q].on) { end = l[q].t; open = false; break; }
-      if (end < T - WIN) continue;
-      if (open) held++;
-      ons.push(l[j].t);
-      const a = Math.max(l[j].t, T - WIN), x = tx(a), wd = Math.max(tx(end) - x, 8), age = T - l[j].t, glow = open ? 1 : clamp(1 - age / 0.4, 0, 1);
-      g.save(); if (glow > 0) { g.shadowColor = COL.amber; g.shadowBlur = 18 * glow; }
-      g.globalAlpha = 0.45 + 0.55 * (l[j].v || 100) / 127; rrect(x, y + 3, wd, rh - 6, 5, glow > 0.1 ? COL.amber : mix("#555555", COL.amber, 0.55)); g.restore();
-    }
-  }
-  const nowX = tx(T); g.save(); g.shadowColor = COL.amber; g.shadowBlur = 14; rect(nowX - 2, py0 - 6, 4, ph + 12, COL.amber); g.restore();
-  ons.sort((a, b) => a - b); const gaps = [];
-  for (let i = Math.max(1, ons.length - 9); i < ons.length; i++) { const d = ons[i] - ons[i - 1]; if (d > 0.02 && d < 1.2) gaps.push(d); }
-  let rate = "";
-  if (gaps.length >= 3) { gaps.sort((a, b) => a - b); const q = gaps[gaps.length >> 1] / beat, names = [[1, "1/4"], [0.5, "1/8"], [1 / 3, "1/8T"], [0.25, "1/16"], [1 / 6, "1/16T"], [0.125, "1/32"]]; let best = names[0]; for (const n of names) if (Math.abs(n[0] - q) < Math.abs(best[0] - q)) best = n; rate = "rate " + best[1]; }
-  text(bank + "   " + (rate || "no arpeggio yet") + (held ? "   " + held + " held" : ""), x0 + 150, y0 + 40, COL.text, 22);
+  const ons = []; // every hit of the bank, in the order of the time
+  for (let i = 0; i < 16; i++) { const l = padEv.get(bank + (i + 1)); if (!l) continue; for (let k = Math.max(atIndex(l, T) - 40, 0); k <= atIndex(l, T); k++) if (l[k].on) ons.push({ t: l[k].t, i, v: l[k].v || 100 }); }
+  ons.sort((a, b) => a.t - b.t);
+  const rec = ons.filter(o => o.t > T - 12).slice(-64), last = rec.length ? rec[rec.length - 1] : null;
+  const gaps = []; for (let k = Math.max(1, ons.length - 9); k < ons.length; k++) { const d = ons[k].t - ons[k - 1].t; if (d > 0.02 && d < 1.2) gaps.push(d); }
+  let rate = ""; if (gaps.length >= 3) { gaps.sort((a, b) => a - b); const q = gaps[gaps.length >> 1] / beat, names = [[1, "1/4"], [0.5, "1/8"], [1 / 3, "1/8T"], [0.25, "1/16"], [1 / 6, "1/16T"], [0.125, "1/32"]]; let best = names[0]; for (const n of names) if (Math.abs(n[0] - q) < Math.abs(best[0] - q)) best = n; rate = "rate " + best[1]; }
+  text((info && info.name ? fit(info.name, 24) + "   " : "") + (rate || "no arpeggio yet"), x0 + 110, y0 + 40, COL.text, 22);
   text(Math.round(bpm) + " BPM", x0 + w - 24, y0 + 40, COL.dim, 22, false, "right");
-  text("the last " + WIN + " seconds, one row for each pad of the bank", x0 + 24, y0 + h - 12, COL.dim, 16);
+  // the sample, once, at the left: it is the same one for every step
+  const sx = x0 + 24, sw = 150, gy0 = y0 + 76, gh = h - 76 - 58, gx = sx + sw + 28, gw = w - (gx - x0) - 24, col = gw / N;
+  rrect(sx, gy0, sw, gh, 10, COL.tile2);
+  text(lab, sx + 14, gy0 + 34, COL.amber, 24, true); text("one sample", sx + 14, gy0 + 60, COL.dim, 16);
+  const pk = info && info.peaks ? info.peaks : [];
+  for (let k = 0; k < pk.length; k++) { const bh = Math.max(2, pk[k] / 100 * (gh - 120)); rect(sx + 14 + k * (sw - 28) / pk.length, gy0 + gh - 18 - bh, Math.max((sw - 28) / pk.length * 0.7, 2), bh, mix("#444444", COL.amber, 0.4)); }
+  // the pitch grid: a line for every octave, the rows of the semitones
+  const yOf = i => gy0 + gh - 56 - (gh - 56 - 30) * i / TOP;
+  for (let st = 0; st <= TOP; st += 1) { g.globalAlpha = st % 12 === 0 ? 0.5 : st % 4 === 0 ? 0.18 : 0.07; rect(gx, yOf(st), gw, 2, COL.dim); g.globalAlpha = 1; }
+  text("+12", gx - 8, yOf(12) + 5, COL.dim, 15, false, "right"); text("+0", gx - 8, yOf(0) + 5, COL.dim, 15, false, "right");
+  // an arpeggio comes round again and again: find the length of its loop (the notes repeat after p steps), start the loop where the run of notes starts and
+  // show the loop once. The step that sounds now is lit and the loop counter counts the rounds. Without a loop yet the last notes are shown as they came.
+  const med = gaps.length ? gaps[gaps.length >> 1] : 0.25;
+  let run = rec.length; for (let k = rec.length - 1; k > 0; k--) { if (rec[k].t - rec[k - 1].t > Math.max(med * 2.2, 0.12)) { run = rec.length - k; break; } }
+  const seq = rec.slice(rec.length - run).map(o => o.i);
+  let per = 0; for (let p = 2; p <= 12 && !per; p++) { if (seq.length < p + 3) break; let ok = 0, n = 0; for (let k = p; k < seq.length; k++) { n++; if (seq[k] === seq[k - p]) ok++; } if ((n >= p && ok / n >= 0.85) || ok === n) per = p; }
+  const cyc = per || Math.min(seq.length, N), steps = per ? seq.slice(0, per) : seq.slice(-cyc), cur = per ? (seq.length - 1) % per : seq.length - 1, rounds = per ? Math.floor((seq.length - 1) / per) + 1 : 0;
+  const cw = gw / Math.max(cyc, 4);
+  if (per) { text("loop of " + per + " steps  x" + rounds, x0 + w - 24, y0 + 40 + 30, COL.amber, 20, true, "right"); }
+  g.save(); g.strokeStyle = COL.amberD; g.lineWidth = 3; g.beginPath();
+  steps.forEach((i, k) => { const cx = gx + (k + 0.5) * cw, cy = yOf(i); if (k) g.lineTo(cx, cy); else g.moveTo(cx, cy); }); g.stroke(); g.restore();
+  steps.forEach((i, k) => {
+    const cx = gx + (k + 0.5) * cw, bw = Math.min(cw - 8, 54), top = yOf(i), bot = yOf(0) + 4, now = per ? k === cur : k === cur, done = per ? k < cur : true, age = T - (last ? last.t : T);
+    const glow = now ? clamp(1 - age / (med * 1.4 || 0.4), 0.3, 1) : 0, velo = rec[rec.length - run + k] ? rec[rec.length - run + k].v : 100;
+    g.save(); g.globalAlpha = (now ? 1 : done ? 0.75 : 0.4) * (0.6 + 0.4 * velo / 127);
+    if (now) { g.shadowColor = COL.amber; g.shadowBlur = 28 * glow; }
+    rrect(cx - bw / 2, top, bw, bot - top, 6, now ? COL.amber : mix("#555555", COL.amber, done ? 0.55 : 0.25)); g.restore();
+    text("+" + i, cx, top - 10, now ? COL.amber : COL.text, 17, now, "center");
+    text(NOTE_NAMES[i % 12] + (i >= 12 ? "+1" : ""), cx, bot + 22, COL.dim, 14, false, "center");
+    text(String(k + 1), cx, bot + 38, now ? COL.amber : COL.dim, 13, now, "center"); // the step number
+  });
+  if (per) { // the way back to the start: an arrow under the steps that runs from the last to the first
+    g.save(); g.strokeStyle = COL.amberD; g.lineWidth = 2; g.setLineDash([6, 6]); g.beginPath();
+    const ax = gx + 0.5 * cw, bx = gx + (per - 0.5) * cw, ay = yOf(0) + 58; g.moveTo(bx, ay - 6); g.lineTo(bx, ay); g.lineTo(ax, ay); g.lineTo(ax, ay - 8); g.stroke(); g.setLineDash([]);
+    g.fillStyle = COL.amberD; g.beginPath(); g.moveTo(ax - 6, ay - 8); g.lineTo(ax + 6, ay - 8); g.lineTo(ax, ay - 16); g.fill(); g.restore();
+  }
+  text("one sample: each step is n semitones above its pitch (pad 1 = +0)", x0 + 24, y0 + h - 12, COL.dim, 16);
 }
 function drawSplit(T, A) {
   drawHeader(T, A);
@@ -1407,7 +1421,7 @@ const viewBtn = document.getElementById("viewbtn");
 function setView(v) { STYLE.view = v; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
 const MODES = ["pads", "chroma", "arp"], MODE_NAMES = { pads: "pads", chroma: "chromatic", arp: "arp" };
 const modeBtn = document.getElementById("modebtn");
-function setMode(m) { STYLE.rmode = m; if (m === "chroma") STYLE.chroma = bankInView(now() + OFFSET) + "1"; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
+function setMode(m) { STYLE.rmode = m; if (m === "chroma" || m === "arp") STYLE.chroma = bankInView(now() + OFFSET) + "1"; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
 modeBtn.onclick = () => setMode(MODES[(MODES.indexOf(STYLE.rmode) + 1) % 3]);
 window.syncViewBtn = () => { modeBtn.textContent = MODE_NAMES[STYLE.rmode] || "pads"; modeBtn.classList.toggle("on", STYLE.rmode !== "pads"); modeBtn.style.display = STYLE.view === "split" ? "" : "none";  viewBtn.textContent = STYLE.view === "split" ? "normal view" : "split view"; viewBtn.classList.toggle("on", STYLE.view === "split"); };
 viewBtn.onclick = () => setView(STYLE.view === "split" ? "normal" : "split");

@@ -130,3 +130,103 @@ func demoHeader(data int) []byte {
 	binary.LittleEndian.PutUint32(h[40:], uint32(data))
 	return h
 }
+
+// TestWriteReplayArpDemo writes a made-up take of an arpeggio (REPLAY_ARP_DEMO=folder REPLAY_PROJECT=project folder): one sample (pad A3) played at different
+// pitches, in loops that come round again and again, with the sound, the captions and the chapters. It is the take to open to see the ARP view of the replay
+// (`sp404 replay arp.wav`). It does nothing unless REPLAY_ARP_DEMO is set.
+func TestWriteReplayArpDemo(t *testing.T) {
+	out := os.Getenv("REPLAY_ARP_DEMO")
+	proj := os.Getenv("REPLAY_PROJECT")
+	if out == "" || proj == "" {
+		t.Skip("REPLAY_ARP_DEMO and REPLAY_PROJECT are not set")
+	}
+	termOn(t)
+	a, _ := newApp(t)
+	if err := a.OpenProject(proj); err != nil {
+		t.Fatal(err)
+	}
+	os.MkdirAll(out, 0o755)
+	const rate = 48000
+	secs := 44.0
+	bpm := 124.0
+	started := time.Now()
+	s := &record.Session{Path: filepath.Join(out, "arp.wav"), Started: started, Tool: "the program itself"}
+	a.startEventLog(s)
+	at := func(sec float64) time.Time { return started.Add(time.Duration(sec * float64(time.Second))) }
+	a.evlog.log.Add(at(0.02), "audio_start")
+	t0 := 1.0
+	beat := 60 / bpm
+	a.midiEvent(midiin.Event{Kind: midiin.Start, At: at(t0)})
+	a.eventLogTick()
+	for q := 0; float64(q)*beat+t0 < secs-0.5; q++ {
+		for k := 0; k < 24; k++ {
+			a.midiEvent(midiin.Event{Kind: midiin.Clock, At: at(t0 + float64(q)*beat + float64(k)*beat/24)})
+		}
+	}
+	// the loops: a pad of the bank is a semitone above the sample's own pitch (the chromatic mode), a step comes every `step` quarter notes
+	type loop struct {
+		from, to, step float64
+		semis          []int
+	}
+	loops := []loop{
+		{3, 12, 0.25, []int{0, 4, 7, 12, 7, 4}},          // a major triad up and down, in 16ths
+		{13, 22, 0.5, []int{0, 3, 7, 10, 12, 10, 7, 3}},  // a minor seventh up and down, in 8ths
+		{23, 32, 0.25, []int{0, 2, 4, 5, 7, 9, 11, 12}},  // a scale up, in 16ths
+		{33, 43, 0.25, []int{0, 7, 12, 7, 3, 7, 12, 15}}, // wider, ending on the minor third
+	}
+	type hit struct {
+		t    float64
+		semi int
+		v    int
+	}
+	var hits []hit
+	for _, l := range loops {
+		k := 0
+		for tt := l.from; tt < l.to; tt += l.step * beat {
+			v := 96
+			if k%len(l.semis) == 0 {
+				v = 122 // the first step of a round is accented
+			}
+			hits = append(hits, hit{tt, l.semis[k%len(l.semis)], v})
+			k++
+		}
+	}
+	for _, h := range hits {
+		note := []int{48, 49, 50, 51, 44, 45, 46, 47, 40, 41, 42, 43, 36, 37, 38, 39}[h.semi]
+		a.midiEvent(midiin.Event{Kind: midiin.NoteOn, Channel: 1, Data1: note, Data2: h.v, At: at(h.t)})
+		a.midiEvent(midiin.Event{Kind: midiin.NoteOff, Channel: 1, Data1: note, At: at(h.t + 0.09)})
+	}
+	a.midiEvent(midiin.Event{Kind: midiin.Stop, At: at(secs - 0.5)})
+	a.stopEventLog()
+	// the sound: one pluck, played at the pitch of each step (2^(n/12) above 196 Hz)
+	n := int(secs * rate)
+	pcm := make([]float32, n*2)
+	for _, h := range hits {
+		start, f := int(h.t*rate), 196*math.Pow(2, float64(h.semi)/12)
+		for i := 0; i < rate/3 && start+i < n; i++ {
+			x := float64(i) / rate
+			env := math.Exp(-x * 14)
+			v := float32(float64(h.v) / 127 * 0.35 * env * (math.Sin(2*math.Pi*f*x) + 0.4*math.Sin(4*math.Pi*f*x) + 0.2*math.Sin(6*math.Pi*f*x)))
+			pcm[(start+i)*2] += v
+			pcm[(start+i)*2+1] += v
+		}
+	}
+	f, _ := os.Create(s.Path)
+	defer f.Close()
+	f.Write(demoHeader(n * 2 * 3))
+	for _, v := range pcm {
+		x := int32(math.Max(-1, math.Min(1, float64(v))) * 8388607)
+		f.Write([]byte{byte(x), byte(x >> 8), byte(x >> 16)})
+	}
+	// the captions and chapters, and the view: the split view with the arp
+	meta := `{"title":"One sample, many pitches","patterns_adopted":true,"cues":[],
+ "captions":[{"from":3.5,"to":9.5,"text":"One *sample* on pad A3, played at different pitches"},
+  {"from":13.5,"to":19.5,"text":"The same *loop* comes round again and again"},
+  {"from":23.5,"to":29.5,"text":"A *scale* up, step by step"},
+  {"from":33.5,"to":40,"text":"Wider *steps*, the accent on the first of every round"}],
+ "chapters":[{"t":1,"title":"Triad"},{"t":13,"title":"Minor seventh"},{"t":23,"title":"Scale"},{"t":33,"title":"Wide"}],
+ "style":{"view":"split","rmode":"arp","chroma":"A3"}}`
+	if err := os.WriteFile(filepath.Join(out, "arp.events.cues.json"), []byte(meta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
