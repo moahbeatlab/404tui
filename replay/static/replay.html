@@ -1263,7 +1263,38 @@ function drawRec(x, y, A) { // the mark of a take that is recorded: a red dot th
   g.shadowColor = COL.red; g.shadowBlur = 8 + 14 * u; g.fillStyle = COL.red; g.globalAlpha = 0.65 + 0.35 * u; g.beginPath(); g.arc(x + 26 * sc, y + 23 * sc, 10 * sc, 0, 6.2832); g.fill(); g.restore();
   text("REC", x + 48 * sc, y + 32 * sc, "#fff", 24, true); text(mmss(outTime(A)), x + bw - 10, y + 32 * sc, "#ddd", 22, false, "right");
 }
+// the keys of a MIDI channel: a real keyboard over the notes that channel plays in the whole take, the keys that sound lit (the notes of the arpeggiator, a keyboard)
+const midiRanges = new Map();
+function midiRange(ch) {
+  if (!midiRanges.has(ch)) { let lo = 127, hi = 0; for (const e of midiEv) if (e.ch === ch && e.on) { lo = Math.min(lo, e.n); hi = Math.max(hi, e.n); } if (lo > hi) { lo = 48; hi = 71; } lo = Math.floor(lo / 12) * 12; hi = Math.max(Math.ceil((hi + 1) / 12) * 12 - 1, lo + 23); midiRanges.set(ch, [lo, Math.min(hi, lo + 59)]); }
+  return midiRanges.get(ch);
+}
+function drawMidiKeys(T, area, ch) {
+  const [x0, y0, w, h] = area; panel(x0, y0, w, h);
+  text("KEYS", x0 + 24, y0 + 40, COL.amber, 26, true); text("MIDI channel " + ch, x0 + (VERT ? 150 : 130), y0 + 40, COL.text, 24);
+  const [lo, hi] = midiRange(ch), isBlack = n => [1, 3, 6, 8, 10].includes(n % 12);
+  const st = new Map(); for (let k = Math.max(atIndex(midiEv, T) - 300, 0); k <= atIndex(midiEv, T); k++) { const e = midiEv[k]; if (!e || e.ch !== ch) continue; if (e.on) st.set(e.n, { on: true, t: e.t, v: e.v || 100 }); else { const o = st.get(e.n); st.set(e.n, { on: false, t: e.t, v: o ? o.v : 100 }); } }
+  const lit = n => { const o = st.get(n); if (!o) return 0; const gl = o.on ? 1 : clamp(1 - (T - o.t) / 0.35, 0, 1); return gl * (0.45 + 0.55 * o.v / 127); };
+  let nw = 0; for (let n = lo; n <= hi; n++) if (!isBlack(n)) nw++;
+  const kx = x0 + 24, kw = w - 48, ky = y0 + 76, kh = h - 76 - 30, ww = kw / nw; let wi = 0;
+  const keys = []; for (let n = lo; n <= hi; n++) { if (isBlack(n)) keys.push({ n, black: true, at: wi }); else { keys.push({ n, black: false, at: wi }); wi++; } }
+  const draw = k => {
+    const gl = lit(k.n), bw = k.black ? ww * 0.62 : ww - 2, bh = k.black ? kh * 0.6 : kh, x = k.black ? kx + k.at * ww - bw / 2 : kx + k.at * ww + 1;
+    g.save(); if (gl > 0) { g.shadowColor = COL.amber; g.shadowBlur = 26 * gl; }
+    rrect(x, ky, bw, bh, 5, k.black ? "#101012" : "#e9e9ee");
+    if (gl > 0) { g.globalAlpha = gl * 0.95; rrect(x, ky, bw, bh, 5, COL.amber); g.globalAlpha = 1; }
+    g.restore();
+    if (!k.black && k.n % 12 === 0) text(mnote(k.n), x + bw / 2, ky + bh - 14, gl > 0.5 ? "#111" : "#555", 17, true, "center");
+  };
+  for (const k of keys) if (!k.black) draw(k);
+  for (const k of keys) if (k.black) draw(k);
+  text("the notes of MIDI channel " + ch + " (" + mnote(lo) + " to " + mnote(hi) + "); a lit key sounds", x0 + 24, y0 + h - 8, COL.dim, 16);
+}
+const bankPlayed = (bank, T) => { for (let i = 1; i <= 16; i++) { const l = padEv.get(bank + i); if (!l) continue; for (let k = atIndex(l, T); k >= 0 && k > atIndex(l, T) - 40; k--) if (l[k] && l[k].on && l[k].t > T - 12) return true; } return false; };
 function drawKeys(T, area) { // the pads as the unit plays them in its chromatic mode: 16 pads, 16 semitones up from the pad's own pitch
+  { const pd = viewAt(T_audio).pad; let mch = midiChan(pd); // a MIDI channel is chosen, or the bank has played nothing and the MIDI notes have: the keys of that channel
+    if (!mch && !bankPlayed(pd ? pd[0] : bankInView(T), T)) { const m = midiNotes(T, 0); if (m.ch) mch = m.ch; }
+    if (mch) return drawMidiKeys(T, area, mch); }
   const [x0, y0, w, h] = area, lab = midiChan(viewAt(T_audio).pad) ? "" : viewAt(T_audio).pad, bank = lab ? lab[0] : bankInView(T), b = bank.charCodeAt(0) - 65;
   panel(x0, y0, w, h);
   const info = lab ? padInfo.get(b * 16 + (parseInt(lab.slice(1), 10) - 1)) : null;
