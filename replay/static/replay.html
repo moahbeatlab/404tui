@@ -41,8 +41,11 @@
   #seekrow { position:relative; }
   #vwin { position:absolute; top:50%; height:8px; transform:translateY(-50%); background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35); border-radius:4px; pointer-events:none; display:none; }
   #tl .lbl { color:var(--dim); font-size:11px; text-align:right; }
-  #camlane, #buslane, #chaplane, #cues, #capslane { position:relative; height:22px; margin:0 8px; flex:none; background:#1d1d20; border-radius:4px; }
-  #capslane, #chaplane, #buslane, #camlane, #cues { height:22px; }
+  #camlane, #buslane, #vwlane, #chaplane, #cues, #capslane { position:relative; height:22px; margin:0 8px; flex:none; background:#1d1d20; border-radius:4px; }
+  #capslane, #chaplane, #buslane, #vwlane, #camlane, #cues { height:22px; }
+  #vwlane .vm { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(255,176,0,.16); border-left:3px solid var(--bc, #ffb000); border-radius:3px; color:var(--text); font-size:11px; padding:2px 6px 0 10px; white-space:nowrap; cursor:pointer; touch-action:none; overflow:hidden; text-overflow:ellipsis; }
+  #vwlane .vm.nrm { background:rgba(255,255,255,.08); --bc:#888; }
+  #vwlane .vm .hd { position:absolute; left:-5px; top:0; bottom:0; width:12px; cursor:ew-resize; }
   #camlane .cs { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(199,146,234,.22); border-left:3px solid #c792ea; border-radius:3px; color:var(--text); font-size:11px; padding:2px 6px 0 10px; white-space:nowrap; cursor:pointer; touch-action:none; overflow:hidden; text-overflow:ellipsis; }
   #camlane .cs .hd { position:absolute; left:-5px; top:0; bottom:0; width:12px; cursor:ew-resize; }
   #buslane .bn { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(255,255,255,.1); border-left:3px solid var(--bc, #888); border-radius:3px; color:var(--text); font-size:11px; padding:2px 6px 0 10px; white-space:nowrap; cursor:pointer; touch-action:none; max-width:30%; overflow:hidden; text-overflow:ellipsis; }
@@ -151,12 +154,17 @@
 </div>
 <div id="cambox" class="pane">
   <div class="h2">camera <span class="h">(the video of you playing; drag the box on the picture, its corners change the size)</span></div>
-  <div class="row"><input id="cam_path" placeholder="path of the video, e.g. ~/Movies/take.mov" style="flex:1"><button id="cam_use">use</button></div>
+  <div class="row"><input id="cam_path" placeholder="path of the video, e.g. ~/Movies/take.mov" style="flex:1"><button id="cam_browse">choose file…</button><button id="cam_use">use</button></div>
   <div id="cam_status" class="h"></div>
-  <div class="h2 sub">sync <span class="h">(the camera has no sound: match one pad hit by eye)</span></div>
-  <div class="row"><select id="cam_hit" style="flex:1"></select><button id="cam_gohit" title="show this hit in the replay">go to the hit</button></div>
+  <div class="h2 sub">sync <span class="h">(the camera has no sound, so you tell it which frame belongs to which moment)</span></div>
+  <div class="h"><b>1</b> the moment in the recording: move the playhead there (click the timeline) or choose one:</div>
+  <div class="row"><select id="cam_hit" style="flex:1"></select><button id="cam_gohit" title="show this moment in the replay">go there</button></div>
+  <div class="h"><b>2</b> the same moment in the video: find the frame where you press that pad (or the play button):</div>
   <video id="cam_prev" controls muted playsinline preload="auto"></video>
-  <div class="row"><button id="cam_fm" title="a frame back">&lt; frame</button><button id="cam_fp" title="a frame on">frame &gt;</button><button id="cam_set" style="flex:1">this camera frame = that hit</button></div>
+  <div class="row"><button data-v="-5">-5 s</button><button data-v="-1">-1 s</button><button data-v="-0.1">-0.1</button><button id="cam_fm" title="a frame back">&lt; frame</button><button id="cam_fp" title="a frame on">frame &gt;</button><button data-v="0.1">+0.1</button><button data-v="1">+1 s</button><button data-v="5">+5 s</button></div>
+  <div class="h" id="cam_live"></div>
+  <div class="h"><b>3</b> tie the two together:</div>
+  <div class="row"><button id="cam_set" style="flex:1">this video frame = that moment</button></div>
   <div class="row"><span class="h">offset</span><input id="cam_sync" type="number" step="0.001" style="width:96px"><span class="h">s</span>
     <button data-n="-1">-1 s</button><button data-n="-0.1">-0.1</button><button data-n="-0.0333">-1 f</button><button data-n="0.0333">+1 f</button><button data-n="0.1">+0.1</button><button data-n="1">+1 s</button></div>
   <div class="h2 sub">picture</div>
@@ -181,6 +189,7 @@
   <label>picture drifts <input id="s_bgdrift" type="range" min="0" max="100" title="moves slowly from side to side"> <span id="s_bgdriftv" class="h"></span></label>
   <label>picture breathes <input id="s_bgbreath" type="range" min="0" max="100" title="zooms in and out a little"> <span id="s_bgbreathv" class="h"></span></label>
   <label>a new direction every <input id="s_bgper" type="range" min="4" max="60"> <span id="s_bgperv" class="h"></span></label>
+  <label><input id="s_rec" type="checkbox"> a REC mark on the video (split view; off: the time is in the header)</label>
   <label>hit reactions <input id="s_hits" type="range" min="0" max="100" title="a pad that is hit pops up and glows a little (25 %); more adds a ring, over 50 % sparks; 0 = off"> <span id="s_hitsv" class="h"></span></label>
   <label>panel opacity <input id="s_bgpanels" type="range" min="0" max="100"> <span id="s_bgpanelsv" class="h"></span></label>
   <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
@@ -198,13 +207,14 @@
 </div>
 <div id="bar">
   <div id="tl">
-    <div id="lbls"><span class="lbl">camera</span><span class="lbl">chapters</span><span class="lbl">patterns</span><span class="lbl">bus fx</span><span class="lbl">captions</span><span class="lbl">cuts</span></div>
+    <div id="lbls"><span class="lbl">camera</span><span class="lbl">chapters</span><span class="lbl">patterns</span><span class="lbl">bus fx</span><span class="lbl">view</span><span class="lbl">captions</span><span class="lbl">cuts</span></div>
     <div id="lanes" title="Ctrl + wheel zooms, the wheel or a drag of the bar below moves along">
       <div id="lanesin">
         <div id="camlane" title="the camera scenes: click one to edit it, drag its left edge to move it"></div>
         <div id="chaplane" title="the chapters of the video: click one to edit it, drag its left edge to move it"></div>
         <div id="cues" title="the patterns: click one to edit it, drag its left edge to move it"></div>
         <div id="buslane" title="what a bus is used for, from a time on: click one to edit it, drag its left edge to move it"></div>
+        <div id="vwlane" title="the view from a time on (split view with a mode, or the normal view): click one to edit it, drag its left edge to move it"></div>
         <div id="capslane" title="the captions: click one to edit it"></div>
         <div id="cutlane" title="the parts the video leaves out: drag over the lane to cut a part, click a cut to edit it, drag its edges to change it"></div>
         <div id="ph"></div>
@@ -223,9 +233,15 @@
       <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span></span>
     <span class="grp right"><button id="tplbtn" title="save a setup as a template, use one on this take">templates</button>
       <button id="cambtn" title="the video of you playing">camera</button>
+      <button id="vmbtn" title="the view changes from here on: the split view with a mode, or back to the normal view">view change</button>
       <button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
       <button id="chbtn" title="the chapters, and the list for YouTube">chapters</button>
       <button id="capbtn" title="text shown at times of the take">captions</button>
+      <select id="padsel" title="the sample (pad) of the chromatic keys and the arp: its bank is the keyboard" style="display:none"></select>
+      <button id="modebtn" title="p: the pads, c: the chromatic keys, a: the arp view, m: the MIDI notes">pads</button>
+      <button id="lookbtn" title="s: how the arp is drawn (columns, step grid, ring)" style="display:none">columns</button>
+      <button id="laybtn" title="l: the layout of the split view (video, mode and captions; video and mode side by side; one above the other; video with a sidebar of buses, level and logs)">layout</button>
+      <button id="viewbtn" title="v: the split view (camera, keys, captions) or the normal view with all the panels">split view</button>
       <button id="stylebtn" title="colours, background, logo, handle">style</button>
       <button id="full" title="f">full screen</button></span>
   </div>
@@ -252,7 +268,8 @@ const COL = { bg:"#121214", deep:"#161616", panel:"#1b1b1e", tile:"#2c2c30", til
               good:"#87d787", bad:"#ff5f5f", blue:"#5fafff", red:"#ff3b30", green:"#3ddc84", gold:"#ffb300", purple:"#c792ea" };
 const BUSCOL = { 1: COL.blue, 2: COL.red, 3: COL.green, 4: COL.gold };
 const FONT = (px, bold) => (bold ? "bold " : "") + px + "px ui-monospace, Menlo, Consolas, monospace";
-const cv = document.getElementById("c"), g = cv.getContext("2d");
+const cv = document.getElementById("c"), g0 = cv.getContext("2d");
+let g = g0, cvNow = cv; // while a view change fades, the new picture is drawn on a canvas of its own
 const params = new URLSearchParams(location.search);
 // ?format=vertical (shorts, reels: 1080x1920) lays the same panels one under the other
 const VERT = ["vertical", "shorts", "reels", "9x16"].includes(params.get("format") || "");
@@ -386,7 +403,7 @@ function prepare(events, analysis, cuesIn, adoptedIn) {
   OFFSET = a ? a.t : 0;
   for (const e of timed) {
     switch (e.k) {
-      case "on": case "off": if (e.bank) push(padEv, e.bank + e.pad, { t: e.t, on: e.k === "on", v: e.v || 0 }); else if (e.k === "on") otherNotes.push({ t: e.t, ch: e.ch, n: e.n, v: e.v }); break;
+      case "on": case "off": if (e.bank) push(padEv, e.bank + e.pad, { t: e.t, on: e.k === "on", v: e.v || 0 }); else { if (e.k === "on") otherNotes.push({ t: e.t, ch: e.ch, n: e.n, v: e.v }); midiEv.push({ t: e.t, ch: e.ch, n: e.n, on: e.k === "on", v: e.v || 0 }); } break;
       case "cc": push(ccEv, e.ch + ":" + e.n, { t: e.t, v: e.v }); break;
       case "fx": if (e.fx !== undefined) push(fxNum, e.bus, { t: e.t, v: e.fx }); else push(fxOn, e.bus, { t: e.t, v: e.on }); break;
       case "beat": beats.push({ t: e.t, n: e.n, bpm: e.bpm }); break;
@@ -850,7 +867,8 @@ function drawFx(T) {
     const note = busNoteAt(bus, T_audio); // what the bus is used for at this time: the latest "bus change", else the one from the start
     // your description says what the bus is where the unit only says "Direct FX n" or nothing; a real effect name stays
     const shown = note && (!name || /^Direct FX/i.test(name)) ? note : name || note;
-    text(shown ? fit(shown, 19) : "effect unknown", x + 26, y0 + 62, shown ? COL.text : COL.dim, 17);
+    const nch = clamp(Math.floor((bw - 36) / 10), 7, 19);
+    text(shown ? fit(shown, nch) : nch < 14 ? "unknown" : "effect unknown", x + 26, y0 + 62, shown ? COL.text : COL.dim, 17);
     if (on) { rect(x + bw - 62, y0 + 16, 50, 26, on.v ? COL.good : "#2b2b2b"); text(on.v ? "ON" : "OFF", x + bw - 37, y0 + 36, on.v ? "#111" : COL.dim, 17, true, "center"); }
     const defs = ((window.SP404_FX || {}).params || {})[name] || [];
     for (let i = 0; i < 3; i++) {
@@ -938,7 +956,7 @@ const PRESETS = {
   "forest":   { accent: "#7bd88f", bg: "#0d1511", deep: "#101a15", panel: "#14201a", tile: "#203329", tile2: "#182820", text: "#e9f5ec", dim: "#8fb09a" },
   "mono":     { accent: "#f2f2f2", bg: "#0d0d0d", deep: "#111111", panel: "#181818", tile: "#262626", tile2: "#1c1c1c", text: "#f2f2f2", dim: "#8c8c8c" },
 };
-const STYLE_DEFAULT = { capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, chapCards: 0, chapCardLen: 1.2, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
+const STYLE_DEFAULT = { view: "split", rmode: "pads", chroma: "", capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, layout: "classic", arpLook: "columns", rec: 0, chapCards: 0, chapCardLen: 1.2, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
 let STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)), logoImg = null, bgImg = null;
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const hexMix = (a, b, t) => "#" + hexRgb(a).map((v, i) => Math.round(v + (hexRgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
@@ -1073,9 +1091,16 @@ function followPlayhead(frac, playing) { // the lanes keep the playhead in view 
 
 // ---- undo and redo: the patterns, the captions, the chapters and the title (not the look). A step is a whole picture of them, taken
 // after every change; typing in one text counts as one step.
-let CHAPS = [], BUSN = [], CUTS = [];
+let CHAPS = [], BUSN = [], CUTS = [], VIEWM = [];
+// the view at a time of the audio: the latest view change before it, else the one of the style (the start of the take)
+let VIEW_OVR = null; // while the picture before a view change is drawn for the cross-fade
+function viewAt(A) {
+  if (VIEW_OVR) return VIEW_OVR;
+  let best = null; for (const m of VIEWM) if (m.t <= A + 0.001 && (!best || m.t >= best.t)) best = m;
+  return best ? { view: best.view, mode: best.mode || "pads", layout: best.layout || STYLE.layout || "classic", pad: best.pad || STYLE.chroma || "", look: best.look || STYLE.arpLook || "columns", mark: best } : { view: STYLE.view, mode: STYLE.rmode || "pads", layout: STYLE.layout || "classic", pad: STYLE.chroma || "", look: STYLE.arpLook || "columns", mark: null };
+}
 const HIST = { undo: [], redo: [], last: null, kind: "", at: 0 };
-const histState = () => JSON.stringify({ cues, adopted, caps: CAPS, chaps: CHAPS, busn: BUSN, cuts: CUTS, cam: CAM, title: TITLE });
+const histState = () => JSON.stringify({ cues, adopted, caps: CAPS, chaps: CHAPS, busn: BUSN, views: VIEWM, cuts: CUTS, cam: CAM, title: TITLE });
 function histButtons() {
   const u = document.getElementById("undo"), r = document.getElementById("redo");
   if (u) { u.disabled = !HIST.undo.length; u.style.opacity = HIST.undo.length ? 1 : 0.4; }
@@ -1091,11 +1116,11 @@ function histChanged(kind) {
 }
 function histApply(str) {
   const st = JSON.parse(str), post = (u, b) => fetch(u, { method: "POST", body: JSON.stringify(b) }).catch(() => {});
-  cues = st.cues; adopted = st.adopted; CAPS = st.caps; CHAPS = st.chaps; BUSN = st.busn || []; CUTS = st.cuts || []; CAM = st.cam || CAM; TITLE = st.title;
+  cues = st.cues; adopted = st.adopted; CAPS = st.caps; CHAPS = st.chaps; BUSN = st.busn || []; VIEWM = st.views || []; CUTS = st.cuts || []; CAM = st.cam || CAM; TITLE = st.title;
   document.getElementById("title").value = TITLE;
   for (const id of ["cuepop", "chpop", "bpop", "campop", "cutpop"]) document.getElementById(id).classList.remove("open");
-  rebuildCues(); if (window.refreshCapLane) window.refreshCapLane(); if (window.refreshChapters) window.refreshChapters(); if (window.refreshBusNotes) window.refreshBusNotes(); if (window.refreshCamera) window.refreshCamera(); if (window.refreshCuts) window.refreshCuts(); if (window.refreshCapList) window.refreshCapList();
-  post("/cues", { cues, adopted }); post("/captions", CAPS); post("/chapters", CHAPS); post("/busnotes", BUSN); post("/cuts", CUTS); post("/camera", CAM); post("/title", { title: TITLE });
+  rebuildCues(); if (window.refreshCapLane) window.refreshCapLane(); if (window.refreshChapters) window.refreshChapters(); if (window.refreshBusNotes) window.refreshBusNotes(); if (window.refreshViews) window.refreshViews(); if (window.refreshCamera) window.refreshCamera(); if (window.refreshCuts) window.refreshCuts(); if (window.refreshCapList) window.refreshCapList();
+  post("/cues", { cues, adopted }); post("/captions", CAPS); post("/chapters", CHAPS); post("/busnotes", BUSN); post("/viewmarks", VIEWM); post("/cuts", CUTS); post("/camera", CAM); post("/title", { title: TITLE });
 }
 function undo() { if (!HIST.undo.length) return; HIST.redo.push(HIST.last); HIST.last = HIST.undo.pop(); HIST.kind = ""; histApply(HIST.last); histButtons(); }
 function redo() { if (!HIST.redo.length) return; HIST.undo.push(HIST.last); HIST.last = HIST.redo.pop(); HIST.kind = ""; histApply(HIST.last); histButtons(); }
@@ -1167,7 +1192,7 @@ function drawCaption(A) {
   const fade = fd === 0 ? 1 : easeOut(clamp(Math.min(A - c.from, c.to - A) / span, 0, 1));
   if (!blurLayer || blurLayer.width !== W || blurLayer.height !== H) { blurLayer = document.createElement("canvas"); blurLayer.width = W; blurLayer.height = H; }
   const bx = blurLayer.getContext("2d");
-  bx.clearRect(0, 0, W, H); bx.drawImage(cv, 0, 0);
+  bx.clearRect(0, 0, W, H); bx.drawImage(cvNow, 0, 0);
   g.save(); const blurPx = clamp(STYLE.capBlur === undefined ? 3 : +STYLE.capBlur, 0, 20), dimA = clamp(STYLE.capDim === undefined ? 0.28 : +STYLE.capDim, 0, 0.9);
   const fr = focusRect(c.focus, A + OFFSET + NUDGE / 1000);
   g.save();
@@ -1231,15 +1256,326 @@ function capText(lines, words, c, A, x, y, px, k, lh) {
   }
 }
 
+// ---- the split view: the picture in areas for a video of you playing. The camera at the left, the pads or (in the chromatic mode) the keys at the
+// right, the captions in an area of their own below, and a REC mark. The normal view (all the panels) is one click away: the button or the key v.
+const splitOn = () => viewAt(T_audio).view === "split";
+// wide: the camera and the keys side by side, the captions under them; vertical: one under the other, inside the margins that the platforms leave free
+// layouts: "classic" has the captions area, "side" is only the video and the mode view next to each other, "stack" one above the other (no captions area in those two)
+const SPLIT_LAYOUTS = ["classic", "side", "stack", "info"], SPLIT_LAYOUT_NAMES = { classic: "video, mode, captions", side: "video + mode side by side", stack: "video over mode", info: "video + sidebar (buses, level, logs)" };
+const SPLITS = VERT
+  ? { classic: { cam: [72, 108, 936, 620], keys: [72, 742, 936, 570], caps: [72, 1328, 936, 376] }, side: null, stack: { cam: [72, 108, 936, 760], keys: [72, 892, 936, 820], caps: null }, info: { cam: [72, 108, 936, 880], keys: null, caps: null, bar: { fx: [72, 1040, 936, 200], meter: [72, 1256, 936, 270], feed: [72, 1542, 936, 162] } } }
+  : { classic: { cam: [40, 80, 1000, 690], keys: [1060, 80, 820, 690], caps: [40, 786, 1840, 264] }, side: { cam: [40, 80, 1000, 950], keys: [1060, 80, 820, 950], caps: null }, stack: { cam: [40, 80, 1840, 560], keys: [40, 656, 1840, 374], caps: null }, info: { cam: [40, 80, 1180, 950], keys: null, caps: null, bar: { fx: [1240, 80, 640, 200], meter: [1240, 296, 640, 420], feed: [1240, 732, 640, 298] } } };
+if (!SPLITS.side) SPLITS.side = SPLITS.stack; // vertical: there is no room for two side by side
+// How much the caption area is there at A (0..1): the classic layout has it only while a caption is on; the video and the pads use the room otherwise.
+const capPresence = A => { let f = 0; for (const c of CAPS) if (c.text) f = Math.max(f, clamp(Math.min(A - (c.from - 0.3), c.to + 0.3 - A) / 0.3, 0, 1)); return easeOut(f); };
+const lerpRect = (a, b, f) => a.map((v, i) => v + (b[i] - v) * f);
+function splitRects(A) {
+  const lay = viewAt(A).layout, R = SPLITS[lay] || SPLITS.classic;
+  if (lay !== "classic" || !R.caps) return R;
+  const f = capPresence(A), full = SPLITS.side;
+  if (f >= 1) return R;
+  return { cam: lerpRect(full.cam, R.cam, f), keys: lerpRect(full.keys, R.keys, f), caps: f > 0.01 ? [R.caps[0], R.caps[1] + (full.cam[1] + full.cam[3] + 16 - R.caps[1]) * (1 - f), R.caps[2], R.caps[3]] : null, capsAlpha: f };
+}
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+function drawRec(x, y, A) { // the mark of a take that is recorded: a red dot that breathes, REC and the time of the take
+  const u = 0.5 + 0.5 * Math.sin(A * Math.PI * 1.6), ready = !(window.replay && window.replay._render);
+  g.save(); const bw = VERT ? 244 : 196, sc = VERT ? 1.22 : 1; g.globalAlpha = 0.72; rrect(x, y, bw, 46 * sc, 23 * sc, "#000"); g.globalAlpha = 1;
+  g.shadowColor = COL.red; g.shadowBlur = 8 + 14 * u; g.fillStyle = COL.red; g.globalAlpha = 0.65 + 0.35 * u; g.beginPath(); g.arc(x + 26 * sc, y + 23 * sc, 10 * sc, 0, 6.2832); g.fill(); g.restore();
+  text("REC", x + 48 * sc, y + 32 * sc, "#fff", 24, true); text(mmss(outTime(A)), x + bw - 10, y + 32 * sc, "#ddd", 22, false, "right");
+}
+// the keys of a MIDI channel: a real keyboard over the notes that channel plays in the whole take, the keys that sound lit (the notes of the arpeggiator, a keyboard)
+const midiRanges = new Map();
+function midiRange(ch) {
+  if (!midiRanges.has(ch)) { let lo = 127, hi = 0; for (const e of midiEv) if (e.ch === ch && e.on) { lo = Math.min(lo, e.n); hi = Math.max(hi, e.n); } if (lo > hi) { lo = 48; hi = 71; } lo = Math.floor(lo / 12) * 12; hi = Math.max(Math.ceil((hi + 1) / 12) * 12 - 1, lo + 23); midiRanges.set(ch, [lo, Math.min(hi, lo + 59)]); }
+  return midiRanges.get(ch);
+}
+function drawMidiKeys(T, area, ch) {
+  const [x0, y0, w, h] = area; panel(x0, y0, w, h);
+  text("KEYS", x0 + 24, y0 + 40, COL.amber, 26, true); text("MIDI channel " + ch, x0 + (VERT ? 150 : 130), y0 + 40, COL.text, 24);
+  const [lo, hi] = midiRange(ch), isBlack = n => [1, 3, 6, 8, 10].includes(n % 12);
+  const st = new Map(); for (let k = Math.max(atIndex(midiEv, T) - 300, 0); k <= atIndex(midiEv, T); k++) { const e = midiEv[k]; if (!e || e.ch !== ch) continue; if (e.on) st.set(e.n, { on: true, t: e.t, v: e.v || 100 }); else { const o = st.get(e.n); st.set(e.n, { on: false, t: e.t, v: o ? o.v : 100 }); } }
+  const lit = n => { const o = st.get(n); if (!o) return 0; const gl = o.on ? 1 : clamp(1 - (T - o.t) / 0.35, 0, 1); return gl * (0.45 + 0.55 * o.v / 127); };
+  let nw = 0; for (let n = lo; n <= hi; n++) if (!isBlack(n)) nw++;
+  const kx = x0 + 24, kw = w - 48, ky = y0 + 76, kh = h - 76 - 30, ww = kw / nw; let wi = 0;
+  const keys = []; for (let n = lo; n <= hi; n++) { if (isBlack(n)) keys.push({ n, black: true, at: wi }); else { keys.push({ n, black: false, at: wi }); wi++; } }
+  const draw = k => {
+    const gl = lit(k.n), bw = k.black ? ww * 0.62 : ww - 2, bh = k.black ? kh * 0.6 : kh, x = k.black ? kx + k.at * ww - bw / 2 : kx + k.at * ww + 1;
+    g.save(); if (gl > 0) { g.shadowColor = COL.amber; g.shadowBlur = 26 * gl; }
+    rrect(x, ky, bw, bh, 5, k.black ? "#101012" : "#e9e9ee");
+    if (gl > 0) { g.globalAlpha = gl * 0.95; rrect(x, ky, bw, bh, 5, COL.amber); g.globalAlpha = 1; }
+    g.restore();
+    if (!k.black && k.n % 12 === 0) text(mnote(k.n), x + bw / 2, ky + bh - 14, gl > 0.5 ? "#111" : "#555", 17, true, "center");
+  };
+  for (const k of keys) if (!k.black) draw(k);
+  for (const k of keys) if (k.black) draw(k);
+  text("the notes of MIDI channel " + ch + " (" + mnote(lo) + " to " + mnote(hi) + "); a lit key sounds", x0 + 24, y0 + h - 8, COL.dim, 16);
+}
+const bankPlayed = (bank, T) => { for (let i = 1; i <= 16; i++) { const l = padEv.get(bank + i); if (!l) continue; for (let k = atIndex(l, T); k >= 0 && k > atIndex(l, T) - 40; k--) if (l[k] && l[k].on && l[k].t > T - 12) return true; } return false; };
+function drawKeys(T, area) { // the pads as the unit plays them in its chromatic mode: 16 pads, 16 semitones up from the pad's own pitch
+  { const pd = viewAt(T_audio).pad; let mch = midiChan(pd); // a MIDI channel is chosen, or the bank has played nothing and the MIDI notes have: the keys of that channel
+    if (!mch && !bankPlayed(pd ? pd[0] : bankInView(T), T)) { const m = midiNotes(T, 0); if (m.ch) mch = m.ch; }
+    if (mch) return drawMidiKeys(T, area, mch); }
+  const [x0, y0, w, h] = area, lab = midiChan(viewAt(T_audio).pad) ? "" : viewAt(T_audio).pad, bank = lab ? lab[0] : bankInView(T), b = bank.charCodeAt(0) - 65;
+  panel(x0, y0, w, h);
+  const info = lab ? padInfo.get(b * 16 + (parseInt(lab.slice(1), 10) - 1)) : null;
+  text("CHROMATIC", x0 + 24, y0 + 40, COL.amber, 26, true);
+  text(lab ? lab + (info && info.name ? "   " + fit(info.name, 30) : "") : "choose a pad", x0 + (VERT ? 270 : 200), y0 + 40, COL.text, 24);
+  const root = 0; // C: the pad's own pitch
+  const kx = x0 + 24, kw = w - 48, ky = y0 + 76, kh = h - 76 - (VERT ? 52 : 28), nWhite = 9.6, ww = kw / nWhite;
+  const white = []; // the 16 semitones from the root: the white ones in a row, the black ones between them
+  const isBlack = m => [1, 3, 6, 8, 10].includes(m % 12);
+  let wi = 0; const place = [];
+  for (let i = 0; i < 16; i++) { const m = (root + i) % 12; if (isBlack(m)) place.push({ i, m, black: true, at: wi }); else { place.push({ i, m, black: false, at: wi }); wi++; } }
+  const lit = i => { const st = padState(bank, i + 1, T); if (!st) return 0; const age = T - st.hitAt; const gl = st.held ? 1 : clamp(1 - age / 0.5, 0, 1); return gl * (0.4 + 0.6 * (st.v || 100) / 127); };
+  const drawKey = k => {
+    const gl = lit(k.i), blk = k.black, bw = blk ? ww * 0.6 : ww - 4, bh = blk ? kh * 0.6 : kh;
+    const x = blk ? kx + k.at * ww - bw / 2 : kx + k.at * ww + 2, y = ky;
+    g.save();
+    if (gl > 0) { g.shadowColor = COL.amber; g.shadowBlur = 30 * gl; }
+    rrect(x, y, bw, bh, 8, blk ? "#101012" : "#e9e9ee");
+    if (gl > 0) { g.globalAlpha = gl * 0.95; rrect(x, y, bw, bh, 8, COL.amber); g.globalAlpha = 1; }
+    g.restore();
+    const dark = !blk && gl < 0.5, fg = blk ? (gl > 0.5 ? "#111" : COL.amber) : "#222";
+    text(bank + (k.i + 1), x + bw / 2, y + bh - (blk ? 14 : 58), blk ? fg : (gl > 0.5 ? "#111" : COL.amberD), blk ? 17 : 22, true, "center");
+    text(NOTE_NAMES[k.m] + (k.i >= 12 - root ? "+1" : ""), x + bw / 2, y + bh - (blk ? 38 : 24), blk ? (gl > 0.5 ? "#111" : COL.dim) : "#555", blk ? 16 : 19, false, "center");
+  };
+  for (const k of place) if (!k.black) drawKey(k);
+  for (const k of place) if (k.black) drawKey(k);
+  text("pad " + bank + "1 is the pad's own pitch, each pad one semitone up", x0 + 24, y0 + h - 8, COL.dim, 16);
+}
+function drawCapArea(T, A, area) { // the captions have an area of their own: nothing is blurred or covered
+  const [x0, y0, w, h] = area;
+  const c = CAPS.find(c => c.text && A >= c.from && A < c.to);
+  if (!c) return; // the area is only there while a caption is on (the video and the mode view move in a little before and after)
+  panel(x0, y0, w, h);
+  const fd = clamp(+STYLE.capFade || 0, 0, 3), span = Math.max(Math.min(fd, (c.to - c.from) / 2), 0.0001);
+  const fade = fd === 0 ? 1 : easeOut(clamp(Math.min(A - c.from, c.to - A) / span, 0, 1));
+  const words = capWords(c.text), plain = words.map(x => x.w).join(" ");
+  const side = VERT ? 110 : 160, maxLines = VERT ? 5 : 3;
+  let px = VERT ? 46 : 48; let lines = wrapText(plain, w - side, px);
+  while (lines.length > maxLines && px > 30) { px -= 4; lines = wrapText(plain, w - side, px); }
+  const kk = VERT ? 1.22 : 1, lh = px * kk * 1.3, top = y0 + (h - lines.length * lh) / 2 + px * kk * 0.95;
+  rect(x0 + (VERT ? 28 : 40), y0 + 40, 8, h - 80, COL.amber);
+  g.save(); g.globalAlpha = fade; capText(lines, words, c, A, x0 + (VERT ? 64 : 90), top + (1 - fade) * 14, px, kk, lh); g.restore();
+}
+
+// ---- what an arpeggio is, found from the notes that were played: the loop (the same steps come round again), the mode (up, down, up-down, down-up, random), the
+// octaves it covers, the rate, the gate (how long a note sounds as a part of the step) and the swing (the off-beat steps late: 50 % is straight).
+// A note is { t, p (the pitch), v, len, open }; for the pads of a bank p is the semitone of the pad (a sample played chromatically), for MIDI the note number.
+function arpAnalyse(notes, beat) {
+  const rec = notes.slice(-64), gaps = [];
+  for (let k = Math.max(1, rec.length - 9); k < rec.length; k++) { const d = rec[k].t - rec[k - 1].t; if (d > 0.02 && d < 1.2) gaps.push(d); }
+  gaps.sort((a, b) => a - b);
+  const med0 = gaps.length ? gaps[gaps.length >> 1] : 0, near = gaps.filter(d => d < med0 * 1.8), med = near.length ? near.reduce((a, b) => a + b, 0) / near.length : med0; // the step: the mean, so that a swing does not change it
+  let run = rec.length; for (let k = rec.length - 1; k > 0; k--) { if (rec[k].t - rec[k - 1].t > Math.max((med || 0.25) * 2.2, 0.12)) { run = rec.length - k; break; } }
+  const rn = rec.slice(rec.length - run), seq = rn.map(o => o.p);
+  let per = 0; for (let q = 2; q <= 16 && !per; q++) { if (seq.length < q + 3) break; let ok = 0, n = 0; for (let k = q; k < seq.length; k++) { n++; if (seq[k] === seq[k - q]) ok++; } if ((n >= q && ok / n >= 0.85) || ok === n) per = q; }
+  const steps = per ? seq.slice(0, per) : seq.slice(-Math.min(seq.length, 16));
+  // the mode, from the shape of one round
+  let mode = rn.length < 4 ? "" : per ? "pattern" : "random";
+  if (per && steps.length >= 3) {
+    const d = steps.slice(1).map((v, k) => Math.sign(v - steps[k])), top = steps.indexOf(Math.max(...steps)), bot = steps.indexOf(Math.min(...steps));
+    const up = d.every(x => x >= 0), down = d.every(x => x <= 0);
+    if (up) mode = "up"; else if (down) mode = "down";
+    else if (top > 0 && top < steps.length - 1 && d.slice(0, top).every(x => x >= 0) && d.slice(top).every(x => x <= 0)) mode = "up-down";
+    else if (bot > 0 && bot < steps.length - 1 && d.slice(0, bot).every(x => x <= 0) && d.slice(bot).every(x => x >= 0)) mode = "down-up";
+  }
+  const lo = steps.length ? Math.min(...steps) : 0, hi = steps.length ? Math.max(...steps) : 0;
+  const names = [[1, "1/4"], [0.5, "1/8"], [1 / 3, "1/8T"], [0.25, "1/16"], [1 / 6, "1/16T"], [0.125, "1/32"]];
+  let rate = ""; if (gaps.length >= 3 && beat) { const q = med / beat; let best = names[0]; for (const n of names) if (Math.abs(n[0] - q) < Math.abs(best[0] - q)) best = n; rate = best[1]; }
+  const lens = rn.filter(o => !o.open && med).map(o => o.len / med), gate = lens.length ? Math.round(100 * lens.reduce((a, b) => a + b, 0) / lens.length) : 0;
+  let sw = 0, sn = 0; for (let k = 0; k + 2 < rn.length; k += 2) { const x = rn[k + 1].t - rn[k].t, y = rn[k + 2].t - rn[k + 1].t; if (x > 0.02 && y > 0.02 && x + y < 2.4) { sw += x / (x + y); sn++; } }
+  const swing = sn >= 3 ? Math.round(100 * sw / sn) : 50;
+  return { rn, rec, seq, per, steps, mode, lo, hi, octaves: Math.max(1, Math.ceil((hi - lo) / 12)), rate, gate, swing, med, rounds: per ? Math.floor((seq.length - 1) / per) + 1 : 0, cur: per ? (seq.length - 1) % per : seq.length - 1, run };
+}
+// the line of facts under the title of both views: only what says something (a direction, more than one octave, the rate, a swing)
+function arpFacts(A) { return [["up", "down", "up-down", "down-up"].includes(A.mode) ? A.mode : "", A.octaves > 1 ? A.octaves + " octaves" : "", A.rate ? "rate " + A.rate : "", A.per && Math.abs(A.swing - 50) >= 3 ? "swing " + A.swing + "%" : ""].filter(Boolean).join("  ·  "); }
+
+// two other looks of the arp view. "grid": a step sequencer, a column for each step, a row for each pitch that is used, a cell as wide as the gate, the step that
+// sounds lit. "ring": the twelve notes around a clock (C at the top), an octave for each ring, the last notes joined by a trail that fades, the newest one glowing.
+const ARP_LOOKS = ["columns", "grid", "ring"], ARP_LOOK_NAMES = { columns: "columns", grid: "step grid", ring: "ring" };
+function arpStepsOf(A) { // what the grid and the ring draw: the loop when there is one, else the last notes
+  if (A.per) return { notes: A.steps.map((p, k) => ({ p, o: A.rn[k] })), cur: A.cur, loop: true };
+  const r = A.rec.slice(-16); return { notes: r.map(o => ({ p: o.p, o })), cur: r.length - 1, loop: false };
+}
+function arpGrid(T, area, A, nm) {
+  const [x0, y0, w, h] = area, { notes, cur } = arpStepsOf(A); if (!notes.length) return;
+  const rows = [...new Set(notes.map(n => n.p))].sort((a, b) => b - a), nr = Math.max(rows.length, 4), gx = x0 + 96, gw = w - 96 - 28, gy = y0 + 86, gh = h - 86 - 44;
+  const rh = Math.min(gh / nr, 56), cw = gw / Math.max(notes.length, 8), med = A.med || 0.25, rowY = p => gy + rows.indexOf(p) * rh;
+  rows.forEach((p, i) => { g.globalAlpha = i % 2 ? 0.05 : 0.12; rect(gx, gy + i * rh, gw, rh - 2, COL.dim); g.globalAlpha = 1; text(nm(p), gx - 12, gy + i * rh + rh / 2 + 6, COL.dim, 17, false, "right"); });
+  for (let k = 0; k <= notes.length; k++) { g.globalAlpha = k % 4 === 0 ? 0.3 : 0.1; rect(gx + k * cw, gy, 1, rows.length * rh, COL.dim); g.globalAlpha = 1; }
+  g.save(); g.strokeStyle = COL.amberD; g.globalAlpha = 0.5; g.lineWidth = 2; g.beginPath();
+  notes.forEach((n, k) => { const cx = gx + (k + 0.5) * cw, cy = rowY(n.p) + rh / 2 - 1; if (k) g.lineTo(cx, cy); else g.moveTo(cx, cy); }); g.stroke(); g.restore();
+  notes.forEach((n, k) => {
+    const now = k === cur, gt = n.o && !n.o.open ? clamp(n.o.len / med, 0.15, 1) : 1, velo = n.o ? n.o.v : 100, bw = Math.max((cw - 6) * gt, 6), x = gx + k * cw + 3, y = rowY(n.p) + 3, bh = rh - 8;
+    g.save(); g.globalAlpha = (now ? 1 : 0.55 + 0.3 * (k <= cur ? 1 : 0)) * (0.55 + 0.45 * velo / 127); if (now) { g.shadowColor = COL.amber; g.shadowBlur = 24; }
+    rrect(x, y, bw, bh, 5, now ? COL.amber : mix("#555555", COL.amber, k <= cur ? 0.6 : 0.3)); g.restore();
+  });
+  text("step grid: a column for each step, a row for each note, a cell as wide as the gate", x0 + 24, y0 + h - 12, COL.dim, 16);
+}
+function arpRing(T, area, A, nm, base, midi) {
+  const [x0, y0, w, h] = area, { notes, cur } = arpStepsOf(A); if (!notes.length) return;
+  const top = y0 + 84, cx = x0 + w / 2, cy = top + (h - 84 - 30) / 2, R = Math.min(w / 2 - 70, (h - 84 - 30) / 2 - 40), octs = Math.max(1, ...notes.map(n => Math.floor(n.p / 12) + 1)), r0 = R * 0.38, dr = octs > 1 ? (R - r0) / (octs - 1) : 0;
+  const pc = p => ((midi ? base : 0) + p) % 12, ang = c => -Math.PI / 2 + c / 12 * Math.PI * 2, pos = p => { const o = Math.floor(p / 12), r = octs > 1 ? r0 + dr * o : (r0 + R) / 2; return [cx + Math.cos(ang(pc(p))) * r, cy + Math.sin(ang(pc(p))) * r, r]; };
+  for (let o = 0; o < octs; o++) { const r = octs > 1 ? r0 + dr * o : (r0 + R) / 2; g.globalAlpha = 0.25; g.strokeStyle = COL.dim; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, r, 0, 6.2832); g.stroke(); g.globalAlpha = 1; }
+  for (let c = 0; c < 12; c++) { const a = ang(c), lx = cx + Math.cos(a) * (R + 30), ly = cy + Math.sin(a) * (R + 30); g.globalAlpha = 0.2; g.strokeStyle = COL.dim; g.lineWidth = 1; g.beginPath(); g.moveTo(cx + Math.cos(a) * r0 * 0.6, cy + Math.sin(a) * r0 * 0.6); g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); g.stroke(); g.globalAlpha = 1; text(midi ? NOTE_NAMES[c] : "+" + c, lx, ly + 6, COL.dim, 16, false, "center"); }
+  const n = notes.length, med = A.med || 0.25;
+  for (let k = 1; k < n; k++) { const a = pos(notes[k - 1].p), b = pos(notes[k].p), age = (k <= cur ? cur - k : n) ; g.save(); g.globalAlpha = k <= cur ? clamp(1 - age / Math.max(n, 6), 0.1, 0.8) : 0.12; g.strokeStyle = COL.amber; g.lineWidth = 3; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); g.restore(); }
+  notes.forEach((nt, k) => {
+    const [px, py] = pos(nt.p), now = k === cur, gt = nt.o && !nt.o.open ? clamp(nt.o.len / med, 0.2, 1) : 1, velo = nt.o ? nt.o.v : 100, age = k <= cur ? cur - k : n;
+    g.save(); g.globalAlpha = (now ? 1 : clamp(1 - age / Math.max(n, 6), 0.15, 0.85)) * (0.6 + 0.4 * velo / 127); if (now) { g.shadowColor = COL.amber; g.shadowBlur = 30; }
+    g.fillStyle = now ? COL.amber : mix("#666666", COL.amber, 0.55); g.beginPath(); g.arc(px, py, (now ? 15 : 9) * (0.6 + 0.4 * gt), 0, 6.2832); g.fill(); g.restore();
+    if (now) { const [qx, qy] = [px, py]; text(nm(nt.p), qx, qy - 26, COL.amber, 20, true, "center"); }
+  });
+  text("ring: C at the top, a ring for each octave, the trail is the way of the last notes", x0 + 24, y0 + h - 12, COL.dim, 16);
+}
+// the arp view: one sample played at different pitches. In the chromatic mode every pad of the bank is the same sample, one semitone higher than the one before,
+// so the notes that were played are steps of a pitch. The loop of the arpeggio is shown once, a column for each step (as high as its pitch), the step that sounds
+// lit, a bar under it for its gate, and the rounds counted.
+function drawArp(T, area) {
+  const sel = viewAt(T_audio).pad, [x0, y0, w, h] = area, bank = sel ? sel[0] : bankInView(T), tp = tempoAt(T), bpm = tp.bpm || 120, beat = 60 / bpm;
+  panel(x0, y0, w, h);
+  const lab = sel || bank + "1", info = midiChan(sel) ? null : padInfo.get((bank.charCodeAt(0) - 65) * 16 + parseInt(lab.slice(1), 10) - 1);
+  text("ARP", x0 + 24, y0 + 40, COL.amber, 26, true);
+  const ons = []; // every hit of the bank, in the order of the time
+  for (let i = 0; i < 16; i++) { const l = padEv.get(bank + (i + 1)); if (!l) continue; for (let k = Math.max(atIndex(l, T) - 40, 0); k <= atIndex(l, T); k++) if (l[k].on) { let end = -1; for (let q = k + 1; q < l.length && l[q].t <= T; q++) if (!l[q].on) { end = l[q].t; break; } ons.push({ t: l[k].t, p: i, v: l[k].v || 100, len: end >= 0 ? end - l[k].t : T - l[k].t, open: end < 0 }); } }
+  ons.sort((a, b) => a.t - b.t);
+  let src = null, base = 0, list = ons.filter(o => o.t > T - 12); // the notes come from a MIDI channel when it is chosen, or when the bank has played nothing
+  if (midiChan(sel)) src = midiNotes(T, midiChan(sel)); else if (!list.length) { const m = midiNotes(T, 0); if (m.ch) src = m; }
+  if (src) { list = src.notes; base = list.length ? Math.min(...list.map(o => o.p)) : 0; list = list.map(o => ({ ...o, p: o.p - base })); }
+  const A = arpAnalyse(list, beat), { steps, per, cur, rounds } = A, last = A.rec.length ? A.rec[A.rec.length - 1] : null;
+  text((src ? "MIDI ch " + src.ch + "   " : info && info.name ? fit(info.name, 20) + "   " : "") + (per ? "loop of " + per + "  x" + rounds : A.rn.length > 3 ? "" : "no arpeggio yet"), x0 + 110, y0 + 40, COL.text, 22);
+  text(Math.round(bpm) + " BPM", x0 + w - 24, y0 + 40, COL.dim, 22, false, "right");
+  const facts = arpFacts(A); if (facts) text(facts, x0 + 110, y0 + 66, COL.blue, 19, true);
+  const look = viewAt(T_audio).look, nmf = p => src ? mnote(base + p) : "+" + p; // the other looks draw here, instead of the columns
+  if (look === "grid") return arpGrid(T, area, A, nmf);
+  if (look === "ring") return arpRing(T, area, A, nmf, base, !!src);
+  const sx = x0 + 24, sw = 150, gy0 = y0 + 84, gh = h - 84 - 58, gx = sx + sw + 28, gw = w - (gx - x0) - 24, TOP = Math.max(15, Math.ceil(Math.max(...steps, 0) / 12) * 12);
+  rrect(sx, gy0, sw, gh, 10, COL.tile2);
+  text(src ? "ch " + src.ch : lab, sx + 14, gy0 + 34, COL.amber, 24, true); text(src ? "MIDI notes" : "one sample", sx + 14, gy0 + 60, COL.dim, 16);
+  const pk = !src && info && info.peaks ? info.peaks : [];
+  for (let k = 0; k < pk.length; k++) { const bh = Math.max(2, pk[k] / 100 * (gh - 120)); rect(sx + 14 + k * (sw - 28) / pk.length, gy0 + gh - 18 - bh, Math.max((sw - 28) / pk.length * 0.7, 2), bh, mix("#444444", COL.amber, 0.4)); }
+  const yOf = i => gy0 + gh - 96 - (gh - 96 - 30) * i / TOP;
+  for (let st = 0; st <= TOP; st++) { g.globalAlpha = st % 12 === 0 ? 0.5 : st % 4 === 0 ? 0.18 : 0.07; rect(gx, yOf(st), gw, 2, COL.dim); g.globalAlpha = 1; }
+  for (let o = 0; o * 12 <= TOP; o++) text(o ? "+" + o * 12 + (h < 450 || w < 1000 ? "" : " (oct " + o + ")") : "+0", gx - 8, yOf(o * 12) + 5, COL.dim, 15, false, "right");
+  const cw = gw / Math.max(steps.length, 4), med = A.med || 0.25;
+  text("GATE", gx - 8, yOf(0) + 66, COL.blue, 14, true, "right");
+  g.save(); g.strokeStyle = COL.amberD; g.lineWidth = 3; g.beginPath();
+  steps.forEach((i, k) => { const cx = gx + (k + 0.5) * cw, cy = yOf(i); if (k) g.lineTo(cx, cy); else g.moveTo(cx, cy); }); g.stroke(); g.restore();
+  steps.forEach((i, k) => {
+    const cx = gx + (k + 0.5) * cw, bw = Math.min(cw - 8, 54), top = yOf(i), bot = yOf(0) + 4, now = k === cur, done = per ? k < cur : true, age = T - (last ? last.t : T);
+    const glow = now ? clamp(1 - age / (med * 1.4 || 0.4), 0.3, 1) : 0, o2 = A.rn[k], velo = o2 ? o2.v : 100;
+    g.save(); g.globalAlpha = (now ? 1 : done ? 0.75 : 0.4) * (0.6 + 0.4 * velo / 127);
+    if (now) { g.shadowColor = COL.amber; g.shadowBlur = 28 * glow; }
+    rrect(cx - bw / 2, top, bw, bot - top, 6, now ? COL.amber : mix("#555555", COL.amber, done ? 0.55 : 0.25)); g.restore();
+    text("+" + i, cx, top - 10, now ? COL.amber : COL.text, 17, now, "center");
+    text(src ? mnote(base + i) : NOTE_NAMES[i % 12] + (i >= 12 ? "+" + Math.floor(i / 12) : ""), cx, bot + 22, COL.dim, 14, false, "center");
+    text(String(k + 1), cx, bot + 38, now ? COL.amber : COL.dim, 13, now, "center");
+    if (o2 && !o2.open) { const gt = clamp(o2.len / med, 0, 1.25); g.save(); g.globalAlpha = now ? 1 : done ? 0.7 : 0.35; rect(cx - cw / 2 + 4, bot + 48, cw - 8, 10, "#2a2a30"); rect(cx - cw / 2 + 4, bot + 48, (cw - 8) * Math.min(gt, 1), 10, gt >= 1 ? COL.good : COL.blue); g.restore(); }
+  });
+  if (per) {
+    g.save(); g.strokeStyle = COL.amberD; g.lineWidth = 2; g.setLineDash([6, 6]); g.beginPath();
+    const ax = gx + 0.5 * cw, bx = gx + (per - 0.5) * cw, ay = yOf(0) + 84; g.moveTo(bx, ay - 6); g.lineTo(bx, ay); g.lineTo(ax, ay); g.lineTo(ax, ay - 8); g.stroke(); g.setLineDash([]);
+    g.fillStyle = COL.amberD; g.beginPath(); g.moveTo(ax - 6, ay - 8); g.lineTo(ax + 6, ay - 8); g.lineTo(ax, ay - 16); g.fill(); g.restore();
+  }
+  text(src ? "MIDI: each step is n semitones above the lowest note (" + mnote(base) + " = +0)" : "one sample: each step is n semitones above its pitch (pad 1 = +0)", x0 + 24, y0 + h - 12, COL.dim, 16);
+}
+
+// the MIDI view: the notes that the unit sends out (the arpeggiator playing another instrument, an MC-101 say). They are not pads: any channel, any note
+// number. A piano roll of the last seconds scrolls to the left, the length of a bar is the gate, the beats are lines, the keyboard at the left lights the
+// notes that sound; under the title are the mode, octaves, rate, gate and swing found from the notes. The channel with the most notes is the one shown.
+const midiEv = []; // every note on and off that is not a pad: { t, ch, n, on, v }
+function midiNotes(T, want) { // the notes of the last 12 seconds of one channel (the one asked for, else the one with the most notes)
+  const from = T - 12, evs = []; for (let k = Math.max(atIndex(midiEv, T) - 400, 0); k <= atIndex(midiEv, T); k++) if (midiEv[k] && midiEv[k].t >= from) evs.push(midiEv[k]);
+  const cnt = new Map(); for (const e of evs) if (e.on) cnt.set(e.ch, (cnt.get(e.ch) || 0) + 1);
+  let ch = want || 0, best = 0; if (!want) for (const [c, n] of cnt) if (n > best) { best = n; ch = c; }
+  const notes = [];
+  for (let k = 0; k < evs.length; k++) { const e = evs[k]; if (!e.on || e.ch !== ch) continue; let end = -1; for (let q = k + 1; q < evs.length; q++) if (!evs[q].on && evs[q].ch === ch && evs[q].n === e.n) { end = evs[q].t; break; } notes.push({ t: e.t, p: e.n, v: e.v || 100, len: end >= 0 ? end - e.t : T - e.t, open: end < 0 }); }
+  return { ch, notes };
+}
+const midiChan = pad => { const m = /^ch(\d+)$/.exec(pad || ""); return m ? +m[1] : 0; };
+const mnote = n => NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 1);
+function drawMidi(T, area) {
+  const [x0, y0, w, h] = area, WIN = 4, tp = tempoAt(T), bpm = tp.bpm || 120, beat = 60 / bpm;
+  panel(x0, y0, w, h);
+  text("MIDI", x0 + 24, y0 + 40, COL.amber, 26, true);
+  const { ch, notes } = midiNotes(T, midiChan(viewAt(T_audio).pad));
+  const A = arpAnalyse(notes, beat);
+  text((ch ? "channel " + ch : "no MIDI notes yet") + (A.per ? "   loop of " + A.per + "  x" + A.rounds : ""), x0 + 110, y0 + 40, COL.text, 22);
+  text(Math.round(bpm) + " BPM", x0 + w - 24, y0 + 40, COL.dim, 22, false, "right");
+  const facts = arpFacts(A); if (facts) text(facts, x0 + 24, y0 + 70, COL.blue, 19, true);
+  const shown = notes.filter(o => o.t > T - WIN - 1), lo0 = shown.length ? Math.min(...shown.map(o => o.p)) : 60, hi0 = shown.length ? Math.max(...shown.map(o => o.p)) : 72;
+  const lo = Math.floor((lo0 - 1) / 12) * 12, hi = Math.max(lo + 12, Math.ceil((hi0 + 1) / 12) * 12), rows = hi - lo;
+  const kx = x0 + 24, kw = 74, px0 = kx + kw + 6, pw = w - 48 - kw - 6, py0 = y0 + 88, ph = h - 88 - 40, rh = ph / rows;
+  const rowY = n => py0 + (hi - 1 - n) * rh;
+  const tx = t => px0 + (t - (T - WIN)) / WIN * pw;
+  const isBlack = n => [1, 3, 6, 8, 10].includes(n % 12);
+  const sounding = new Set(notes.filter(o => o.open).map(o => o.p));
+  for (let n = lo; n < hi; n++) { // the rows and the keyboard
+    const y = rowY(n), blk = isBlack(n), on = sounding.has(n);
+    g.globalAlpha = blk ? 0.55 : 0.22; rect(px0, y + 0.5, pw, Math.max(rh - 1, 1), blk ? "#0c0c0e" : COL.tile2); g.globalAlpha = 1;
+    rect(kx, y + 0.5, kw, Math.max(rh - 1, 1), on ? COL.amber : blk ? "#101012" : "#e9e9ee");
+    if (n % 12 === 0) { text("C" + (n / 12 - 1), kx + kw - 6, y + rh, on ? "#111" : "#333", 14, true, "right"); g.globalAlpha = 0.45; rect(px0, y + rh - 1, pw, 2, COL.dim); g.globalAlpha = 1; }
+  }
+  const b0 = Math.ceil((T - WIN) / beat) * beat;
+  for (let t = b0; t < T; t += beat) { const n = Math.round(t / beat); g.globalAlpha = n % 4 === 0 ? 0.35 : 0.14; rect(tx(t), py0, 2, ph, COL.dim); g.globalAlpha = 1; }
+  for (const o of notes) {
+    const end = o.open ? T : o.t + o.len; if (end < T - WIN) continue;
+    const x = tx(Math.max(o.t, T - WIN)), wd = Math.max(tx(end) - x, 6), y = rowY(o.p), age = T - o.t, glow = o.open ? 1 : clamp(1 - age / 0.4, 0, 1);
+    g.save(); if (glow > 0) { g.shadowColor = COL.amber; g.shadowBlur = 16 * glow; }
+    g.globalAlpha = 0.45 + 0.55 * o.v / 127; rrect(x, y + 1, wd, Math.max(rh - 2, 3), 4, glow > 0.1 ? COL.amber : mix("#555555", COL.amber, 0.55)); g.restore();
+  }
+  const nowX = tx(T); g.save(); g.shadowColor = COL.amber; g.shadowBlur = 14; rect(nowX - 2, py0 - 6, 4, ph + 12, COL.amber); g.restore();
+  text("the last " + WIN + " seconds; a bar is as long as the gate", x0 + 24, y0 + h - 12, COL.dim, 16);
+}
+function drawBusLevel(T, area) { // the buses with their knobs and the level with the spectrum, in the room of the mode view
+  const [x, y, w, h] = area, gap = 16, sv = { fx: L.fx, meter: L.meter };
+  if (w > h * 1.8) { const fw = Math.round((w - gap) * 0.55); L.fx = [x, y, fw, h]; L.meter = [x + fw + gap, y, w - fw - gap, h]; }
+  else { const fh = Math.min(236, Math.round(h * 0.34)); L.fx = [x, y, w, fh]; L.meter = [x, y + fh + gap, w, h - fh - gap]; }
+  drawFx(T); drawMeter(T); Object.assign(L, sv);
+}
+function drawSplit(T, A) {
+  drawHeader(T, A);
+  const R = splitRects(A), cam = R.cam;
+  if (CAMFILE) { const src = camSource(A); if (src) { const sv = CAM.layer; drawCamBox(cam, 1, 1, A, false); } else drawCamBox(cam, 1, 1, A, false); }
+  else { panel(cam[0], cam[1], cam[2], cam[3]); text("your camera video goes here", cam[0] + cam[2] / 2, cam[1] + cam[3] / 2, COL.dim, 26, false, "center"); }
+  if (STYLE.rec) drawRec(cam[0] + 18, cam[1] + 18, A);
+  const vmode = viewAt(A).mode;
+  if (!R.keys) { /* video and sidebar only */ }
+  else if (vmode === "chroma") drawKeys(T, R.keys);
+  else if (vmode === "arp") drawArp(T, R.keys);
+  else if (vmode === "midi") drawMidi(T, R.keys);
+  else if (vmode === "buses") drawBusLevel(T, R.keys);
+  else { const sv = L.pads; L.pads = R.keys.slice(); panel(...R.keys); drawPads(T); L.pads = sv; }
+  if (R.bar) { // the sidebar: the buses, the level and the events, as in the normal view
+    const sv = { fx: L.fx, meter: L.meter, feed: L.feed }; L.fx = R.bar.fx.slice(); L.meter = R.bar.meter.slice(); L.feed = R.bar.feed.slice();
+    drawFx(T); drawMeter(T); drawFeed(T); Object.assign(L, sv);
+  }
+  if (R.caps) { g.save(); g.globalAlpha = R.capsAlpha === undefined ? 1 : R.capsAlpha; drawCapArea(T, A, R.caps); g.restore(); }
+}
+
 let T_audio = 0;
+const VIEW_FADE = 0.5; // seconds a view change takes
+const viewKey = v => v.view + v.mode + v.layout + v.pad + v.look;
 function draw(audioTime) {
   T_audio = audioTime;
-  const T = audioTime + OFFSET + NUDGE / 1000;
-  drawBackground();
+  { const v = viewAt(audioTime); if (lastViewKey !== viewKey(v) && window.syncViewBtn) window.syncViewBtn(); }
   camVideoKeep(audioTime);
   applyLayout(audioTime);
+  let m = null; for (const x of VIEWM) if (x.t > 0.01 && x.t <= audioTime + 0.001 && audioTime < x.t + VIEW_FADE && (!m || x.t >= m.t)) m = x;
+  const prev = m ? viewAt(m.t - 0.002) : null;
+  if (m && viewKey(prev) !== viewKey(viewAt(audioTime))) { // a view change dips: the picture before fades out, the new one fades in (the header stays)
+    const u = clamp((audioTime - m.t) / VIEW_FADE, 0, 1), top = VERT ? 100 : 72;
+    if (u < 0.5) { VIEW_OVR = prev; try { drawFrame(audioTime); } finally { VIEW_OVR = null; } } else drawFrame(audioTime);
+    g.save(); g.globalAlpha = easeOut(u < 0.5 ? u * 2 : (1 - u) * 2); rect(0, top, W, H - top, COL.bg); g.restore();
+  } else drawFrame(audioTime);
+}
+function drawFrame(audioTime) {
+  const T = audioTime + OFFSET + NUDGE / 1000;
+  drawBackground();
   if (CAM.layer === "behind") drawCamera(audioTime);
   drawHeader(T, audioTime);
+  if (splitOn()) { drawSplit(T, audioTime); drawChapter(audioTime); drawChapterCard(audioTime); drawBrand(); return; }
   for (const [id, fn] of [["pads", drawPads], ["pattern", drawPattern], ["fx", drawFx], ["meter", drawMeter], ["feed", drawFeed]]) {
     const a = panelAlpha(id, audioTime); if (a <= 0.001) continue;
     fn(T); panelVeil(id, a);
@@ -1291,6 +1627,28 @@ document.getElementById("sideclose").onclick = () => closeSide();
 for (const b of document.querySelectorAll("#sidetabs button[data-p]")) b.onclick = () => showPane(document.getElementById(b.dataset.p));
 document.getElementById("undo").onclick = () => undo();
 document.getElementById("redo").onclick = () => redo();
+const viewBtn = document.getElementById("viewbtn");
+function setView(v) { const m = viewAt(now()).mark; if (m) { m.view = v; if (v === "split" && !m.mode) m.mode = "pads"; saveViews(); } else { STYLE.view = v; window.styleChanged && window.styleChanged(); } window.syncViewBtn(); }
+const MODES = ["pads", "chroma", "arp", "midi", "buses"], MODE_NAMES = { pads: "pads", chroma: "chromatic", arp: "arp", midi: "midi", buses: "buses + level" };
+const modeBtn = document.getElementById("modebtn"), laybtn = document.getElementById("laybtn"), lookbtn = document.getElementById("lookbtn");
+function setLook(l) { const k = viewAt(now()).mark; if (k) { k.look = l; saveViews(); } else STYLE.arpLook = l; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
+lookbtn.onclick = () => setLook(ARP_LOOKS[(ARP_LOOKS.indexOf(viewAt(now()).look) + 1) % ARP_LOOKS.length]);
+function setPad(lab) { const k = viewAt(now()).mark; if (k) { k.pad = lab; saveViews(); } else { STYLE.chroma = lab; window.styleChanged && window.styleChanged(); } window.syncViewBtn(); }
+function fillPadSelect(sel, cur) { // the pads of the project that hold a sample: "A3 KEYS"
+  sel.textContent = "";
+  for (const p of PROJ.pads || []) { if (!p.name && !p.frames) continue; const o = document.createElement("option"); o.value = p.label; o.textContent = p.label + " " + (p.name || ""); sel.appendChild(o); }
+  const chs = [...new Set(midiEv.map(e => e.ch))].sort((a, b) => a - b); for (const c of chs) { const o = document.createElement("option"); o.value = "ch" + c; o.textContent = "MIDI channel " + c; sel.appendChild(o); }
+  if (cur && ![...sel.options].some(o => o.value === cur)) { const o = document.createElement("option"); o.value = cur; o.textContent = cur; sel.appendChild(o); }
+  sel.value = cur || (sel.options[0] && sel.options[0].value) || "";
+}
+const padSel = document.getElementById("padsel"); padSel.onchange = () => setPad(padSel.value);
+function setLayout(l) { const k = viewAt(now()).mark; if (k) { k.layout = l; saveViews(); } else STYLE.layout = l; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
+laybtn.onclick = () => setLayout(SPLIT_LAYOUTS[(SPLIT_LAYOUTS.indexOf(viewAt(now()).layout) + 1) % SPLIT_LAYOUTS.length]);
+function setMode(m) { if ((m === "chroma" || m === "arp") && !viewAt(now()).pad) setPad(bankInView(now() + OFFSET) + "1"); const k = viewAt(now()).mark; if (k) { k.mode = m; saveViews(); } else STYLE.rmode = m; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
+modeBtn.onclick = () => setMode(MODES[(MODES.indexOf(viewAt(now()).mode) + 1) % MODES.length]);
+window.syncViewBtn = () => { const v = viewAt(now()); modeBtn.textContent = MODE_NAMES[v.mode] || "pads"; modeBtn.classList.toggle("on", v.mode !== "pads"); const nm = v.view === "split" && v.layout !== "info"; modeBtn.style.display = nm ? "" : "none"; viewBtn.textContent = v.view === "split" ? "normal view" : "split view"; viewBtn.classList.toggle("on", v.view === "split"); laybtn.style.display = v.view === "split" ? "" : "none"; lookbtn.style.display = nm && v.mode === "arp" ? "" : "none"; lookbtn.textContent = "arp: " + (ARP_LOOK_NAMES[v.look] || "columns"); const ch = nm && (v.mode === "chroma" || v.mode === "arp" || v.mode === "midi"); padSel.style.display = ch ? "" : "none"; if (ch && (padSel.dataset.cur !== v.pad || !padSel.options.length)) { fillPadSelect(padSel, v.pad); padSel.dataset.cur = v.pad; } laybtn.textContent = "layout: " + v.layout; laybtn.classList.toggle("on", v.layout !== "classic"); lastViewKey = v.view + v.mode + v.layout + v.pad + v.look; };
+let lastViewKey = "";
+viewBtn.onclick = () => setView(viewAt(now()).view === "split" ? "normal" : "split");
 document.getElementById("full").onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
 addEventListener("keydown", e => {
   if (e.target.tagName === "SELECT" || (e.target.tagName === "INPUT" && e.target.type !== "range")) return; // typing in a field is not a key for the player
@@ -1304,6 +1662,10 @@ addEventListener("keydown", e => {
   else if (e.key === "[") { NUDGE -= 10; nudgeEl.textContent = "sync " + (NUDGE >= 0 ? "+" : "") + NUDGE + " ms"; }
   else if (e.key === "]") { NUDGE += 10; nudgeEl.textContent = "sync " + (NUDGE >= 0 ? "+" : "") + NUDGE + " ms"; }
   else if (e.key === "f") document.getElementById("full").onclick();
+  else if (e.key === "v") viewBtn.onclick();
+  else if (!e.ctrlKey && !e.metaKey && (e.key === "l")) laybtn.click();
+  else if (!e.ctrlKey && !e.metaKey && e.key === "s") lookbtn.click();
+  else if (!e.ctrlKey && !e.metaKey && (e.key === "c" || e.key === "a" || e.key === "p" || e.key === "m" || e.key === "b")) { const m = { c: "chroma", a: "arp", p: "pads", m: "midi", b: "buses" }[e.key]; setMode(viewAt(now()).mode === m && m !== "pads" ? "pads" : m); }
   else if (e.key === "i" || e.key === "o") window.cutKey && window.cutKey(e.key);
 });
 
@@ -1397,6 +1759,57 @@ function initCaptions() {
     const inputs = list.querySelectorAll("input.x"); if (inputs.length) inputs[inputs.length - 1].focus();
   };
   render(); lane();
+}
+
+// the changes of the view: blocks on a lane (from a mark to the next one), a pop-up for the view, its mode and the time
+function saveViews(kind) { VIEWM.sort((a, b) => a.t - b.t); fetch("/viewmarks", { method: "POST", body: JSON.stringify(VIEWM) }).catch(() => {}); if (window.refreshViews) window.refreshViews(); if (window.syncViewBtn) window.syncViewBtn(); histChanged(kind); }
+function initViews() {
+  const lane = document.getElementById("vwlane"), pop = document.getElementById("bpop");
+  const num = v => { const m = String(v).match(/^(\d+):(\d+(?:\.\d+)?)$/); return m ? +m[1] * 60 + +m[2] : parseFloat(v) || 0; };
+  const label = m => m.view === "split" ? "split · " + (MODE_NAMES[m.mode || "pads"] || "pads") + ((m.mode === "chroma" || m.mode === "arp" || m.mode === "midi") && m.pad ? " " + m.pad : "") + ((m.layout || STYLE.layout) && (m.layout || STYLE.layout) !== "classic" ? " · " + (m.layout || STYLE.layout) : "") : "normal view";
+  function edit(m) {
+    pop.textContent = ""; pop.classList.add("open");
+    const vs = document.createElement("select"), ms = document.createElement("select"), ls = document.createElement("select"), ks = document.createElement("select"), ps = document.createElement("select"), tm = document.createElement("input");
+    for (const [v, t] of [["split", "split view"], ["normal", "normal view"]]) { const o = document.createElement("option"); o.value = v; o.textContent = t; vs.appendChild(o); }
+    for (const k of MODES) { const o = document.createElement("option"); o.value = k; o.textContent = MODE_NAMES[k]; ms.appendChild(o); }
+    for (const k of SPLIT_LAYOUTS) { const o = document.createElement("option"); o.value = k; o.textContent = SPLIT_LAYOUT_NAMES[k]; ls.appendChild(o); }
+    for (const k of ARP_LOOKS) { const o = document.createElement("option"); o.value = k; o.textContent = "arp: " + ARP_LOOK_NAMES[k]; ks.appendChild(o); }
+    ks.value = m.look || STYLE.arpLook || "columns";
+    vs.value = m.view; ms.value = m.mode || "pads"; ls.value = m.layout || STYLE.layout || "classic"; ms.hidden = ls.hidden = m.view !== "split"; fillPadSelect(ps, m.pad || viewAt(m.t).pad); const showPad = () => { ks.hidden = !(m.view === "split" && m.mode === "arp"); ps.hidden = !(m.view === "split" && (m.mode === "chroma" || m.mode === "arp" || m.mode === "midi")); }; showPad(); tm.value = mmss(m.t); tm.size = 7;
+    vs.onchange = () => { m.view = vs.value; ms.hidden = ls.hidden = m.view !== "split"; if (m.view === "split" && !m.mode) m.mode = "pads"; showPad(); saveViews(); };
+    ms.onchange = () => { m.mode = ms.value; if ((m.mode === "chroma" || m.mode === "arp") && !m.pad) { m.pad = viewAt(m.t).pad || bankInView(m.t + OFFSET) + "1"; fillPadSelect(ps, m.pad); } showPad(); saveViews(); };
+    ps.onchange = () => { m.pad = ps.value; saveViews(); };
+    ls.onchange = () => { m.layout = ls.value; saveViews(); };
+    ks.onchange = () => { m.look = ks.value; saveViews(); };
+    tm.onchange = () => { m.t = Math.max(0, +num(tm.value).toFixed(2)); saveViews(); };
+    const mk = (t, title, fn) => { const b = document.createElement("button"); b.textContent = t; b.title = title; b.onclick = fn; return b; };
+    vs.title = "the view from this time on"; ms.title = "what the split view shows"; ps.title = "the sample of the chromatic keys and the arp, or the MIDI channel"; ls.title = "the layout of the split view"; tm.title = "the time of this change";
+    pop.append(vs, ms, ps, ks, ls, tm, mk("go", "play from here", () => { audio.currentTime = m.t; }), mk("delete", "remove this change", () => { VIEWM = VIEWM.filter(x => x !== m); pop.classList.remove("open"); saveViews(); }), mk("x", "close", () => pop.classList.remove("open")));
+    const r = lane.getBoundingClientRect(), d = AN ? AN.duration : 1; pop.style.left = Math.max(8, Math.min(innerWidth - pop.offsetWidth - 8, r.left + m.t / d * r.width - 120)) + "px";
+  }
+  function build() {
+    lane.textContent = ""; const d = AN ? AN.duration : 0; if (!d) return;
+    const all = VIEWM.slice().sort((a, b) => a.t - b.t);
+    all.forEach((m, i) => {
+      const end = i + 1 < all.length ? all[i + 1].t : d, b = document.createElement("div"), h = document.createElement("span");
+      b.className = "vm" + (m.view === "split" ? "" : " nrm"); b.textContent = label(m);
+      b.title = label(m) + " from " + mmss(m.t) + " (click to edit, drag the left edge to move)"; b.style.left = clamp(m.t / d, 0, 1) * 100 + "%"; b.style.width = Math.max(0.5, (end - m.t) / d * 100) + "%"; h.className = "hd";
+      h.onpointerdown = ev => {
+        ev.preventDefault(); ev.stopPropagation(); try { h.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+        const r = lane.getBoundingClientRect(); let moved = false;
+        h.onpointermove = e2 => { moved = true; m.t = clamp(+((e2.clientX - r.left) / r.width * d).toFixed(2), 0, d); b.style.left = m.t / d * 100 + "%"; };
+        h.onpointerup = () => { h.onpointermove = h.onpointerup = null; if (moved) saveViews(); };
+      };
+      b.onclick = ev => { if (ev.target !== h) edit(m); };
+      b.appendChild(h); lane.appendChild(b);
+    });
+  }
+  window.refreshViews = build;
+  document.getElementById("vmbtn").onclick = () => { // a new mark starts as the split view with what is shown now; the pop-up opens to choose view, mode, sample and layout
+    const v = viewAt(now()), m = { t: +Math.max(now(), 0).toFixed(1), view: "split", mode: v.mode, layout: v.layout, pad: v.pad, look: v.look };
+    VIEWM.push(m); saveViews(); edit(m);
+  };
+  build();
 }
 
 // the changes of a bus: tags on a lane, a pop-up for the bus, what it is, and the time
@@ -1696,7 +2109,7 @@ function drawCamBox(box, al, k, A, last) {
   g.save(); g.globalAlpha = al;
   g.beginPath(); g.roundRect(x, y, w, h, rad); g.clip();
   if (src) {
-    const sw = src.videoWidth || src.naturalWidth, sh = src.videoHeight || src.naturalHeight, z = Math.max(+CAM.zoom || 1, 1);
+    const sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height, z = Math.max(+CAM.zoom || 1, 1);
     let rw = sw, rh = sh; if (sw / sh > w / h) rw = sh * w / h; else rh = sw * h / w; rw /= z; rh /= z;
     const sx = clamp(CAM.cx * sw - rw / 2, 0, sw - rw), sy = clamp(CAM.cy * sh - rh / 2, 0, sh - rh);
     if (CAM.mirror) { g.translate(x + w / 2, 0); g.scale(-1, 1); g.drawImage(src, sx, sy, rw, rh, -w / 2, y, w, h); }
@@ -1816,6 +2229,15 @@ function initCamera(saved, file) {
   const end = () => { if (drag && drag.moved) save(); drag = null; };
   cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
   // ---- the box with the file, the sync, the picture
+  $("cam_browse").onclick = async () => {
+    $("cam_status").textContent = "choose the video in the dialog (it may be behind this window)...";
+    try {
+      const r = await fetch("/camera/pick", { method: "POST" });
+      if (!r.ok) { $("cam_status").textContent = (await r.text()).trim(); return; }
+      const path = (await r.json()).path; $("cam_status").textContent = "";
+      if (path) { $("cam_path").value = path; $("cam_use").click(); }
+    } catch (e) { $("cam_status").textContent = "could not reach the server"; }
+  };
   $("cam_use").onclick = async () => {
     const path = $("cam_path").value.trim(); if (!path) return;
     try {
@@ -1827,17 +2249,25 @@ function initCamera(saved, file) {
   $("cam_off").onclick = async () => { await fetch("/camera/file", { method: "POST", body: JSON.stringify({ path: "" }) }); CAMFILE = ""; loadVideo(); camEdit = false; buildLane(); status(); };
   const hits = []; // the pad hits of the log, to match one of them with the camera
   const fillHits = () => {
-    const sel = $("cam_hit"); sel.textContent = ""; hits.length = 0;
-    for (const [k, l] of padEv) for (const e of l) if (e.on) hits.push({ t: e.t - OFFSET, k });
-    hits.sort((a, b) => a.t - b.t);
-    hits.slice(0, 60).forEach((h, i) => { const o = document.createElement("option"); o.value = i; o.textContent = mmss(h.t) + "  " + h.k; sel.appendChild(o); });
-    if (!hits.length) { const o = document.createElement("option"); o.textContent = "no pad hits in the log"; sel.appendChild(o); }
+    const sel = $("cam_hit"), keep = sel.value; sel.textContent = ""; hits.length = 0;
+    const add = (h, label) => { hits.push(h); const o = document.createElement("option"); o.value = hits.length - 1; o.textContent = label; sel.appendChild(o); };
+    add({ now: true }, "where the replay is now (the playhead)");
+    for (const e of patEv) if (!e.cue && e.now) add({ t: Math.max(e.t - OFFSET, 0) }, mmss(Math.max(e.t - OFFSET, 0)) + "  pattern " + e.now + " starts");
+    const pads = [];
+    for (const [k, l] of padEv) for (const e of l) if (e.on) pads.push({ t: e.t - OFFSET, k });
+    pads.sort((x, y) => x.t - y.t);
+    pads.slice(0, 60).forEach(h => add(h, mmss(h.t) + "  pad " + h.k + " hit"));
+    if (keep && sel.querySelector('option[value="' + keep + '"]')) sel.value = keep;
   };
-  $("cam_gohit").onclick = () => { const h = hits[+$("cam_hit").value]; if (h) { audio.pause(); audio.currentTime = Math.max(h.t, 0); } };
+  const hitTime = () => { const h = hits[+$("cam_hit").value]; return h ? (h.now ? audio.currentTime : h.t) : null; };
+  $("cam_gohit").onclick = () => { const h = hits[+$("cam_hit").value]; if (h && !h.now) { audio.pause(); audio.currentTime = Math.max(h.t, 0); } };
   const frame = d => () => { prev.pause(); prev.currentTime = Math.max(0, prev.currentTime + d / 30); };
   $("cam_fm").onclick = frame(-1); $("cam_fp").onclick = frame(1);
+  for (const b of box.querySelectorAll("button[data-v]")) b.onclick = () => { prev.pause(); prev.currentTime = Math.max(0, prev.currentTime + parseFloat(b.dataset.v)); };
+  const live = () => { const h = hits[+$("cam_hit").value], t = h ? (h.now ? audio.currentTime : h.t) : audio.currentTime; $("cam_live").textContent = "video at " + mmss(prev.currentTime) + "   |   recording at " + mmss(t) + (CAMFILE ? "   |   offset " + (+CAM.sync).toFixed(3) + " s" : ""); };
+  prev.addEventListener("timeupdate", live); prev.addEventListener("seeked", live); audio.addEventListener("seeked", live); audio.addEventListener("timeupdate", live); $("cam_hit").addEventListener("change", live);
   const showSync = () => { $("cam_sync").value = (+CAM.sync).toFixed(3); };
-  $("cam_set").onclick = () => { const h = hits[+$("cam_hit").value]; if (!h) return; CAM.sync = +(prev.currentTime - h.t).toFixed(3); showSync(); save(); };
+  $("cam_set").onclick = () => { const t = hitTime(); if (t === null) return; CAM.sync = +(prev.currentTime - t).toFixed(3); showSync(); live(); save(); };
   $("cam_sync").onchange = () => { CAM.sync = parseFloat($("cam_sync").value) || 0; save(); };
   for (const b of box.querySelectorAll("button[data-n]")) b.onclick = () => { CAM.sync = +((+CAM.sync) + parseFloat(b.dataset.n)).toFixed(3); showSync(); save(); };
   const bind = (id, key, conv) => { const el = $(id); el.oninput = () => { CAM[key] = conv(el); if (id === "cam_zoom") $("cam_zoomv").textContent = (+CAM.zoom).toFixed(2) + "x"; save("text"); }; };
@@ -1884,7 +2314,7 @@ function tplApply(t, parts) {
   applyStyle();
   const post = (u, b) => fetch(u, { method: "POST", body: JSON.stringify(b) }).catch(() => {});
   post("/style", STYLE); post("/camera", CAM); post("/chapters", CHAPS); post("/busnotes", BUSN);
-  for (const f of ["refreshStyle", "refreshCamera", "refreshChapters", "refreshBusNotes", "refreshCapLane"]) if (window[f]) window[f]();
+  for (const f of ["refreshStyle", "refreshCamera", "refreshChapters", "refreshBusNotes", "refreshViews", "refreshCapLane"]) if (window[f]) window[f]();
   return done;
 }
 function initTemplates() {
@@ -1935,6 +2365,7 @@ function mergeStyle(saved) {
 }
 function initStyle(saved) {
   STYLE = mergeStyle(saved);
+  if (window.syncViewBtn) window.syncViewBtn();
   const q = params.get("preset"); if (q && PRESETS[q]) STYLE.preset = q;
   if (validHex(params.get("accent"))) STYLE.accent = params.get("accent");
   if (params.get("handle")) STYLE.handle = params.get("handle");
@@ -1953,7 +2384,7 @@ function initStyle(saved) {
     const bg = STYLE.bg; $("s_bgfit").value = bg.fit || "cover"; $("s_bgpx").value = Math.round((bg.px === undefined ? 0.5 : bg.px) * 100); $("s_bgpy").value = Math.round((bg.py === undefined ? 0.5 : bg.py) * 100);
     $("s_bgzoom").value = Math.round((bg.zoom || 1) * 100); $("s_bgblur").value = bg.blur || 0; $("s_bgpanels").value = Math.round((bg.panels !== undefined ? bg.panels : (bg.kind === "gradient" || (bg.kind === "image" && bg.image) ? 0.9 : 1)) * 100); $("s_bgpanelsv").textContent = $("s_bgpanels").value + " %";
     $("s_bgdrift").value = Math.round((bg.mvDrift || 0) * 100); $("s_bgdriftv").textContent = $("s_bgdrift").value + " %"; $("s_bgbreath").value = Math.round((bg.mvZoom || 0) * 100); $("s_bgbreathv").textContent = $("s_bgbreath").value + " %"; $("s_bgper").value = bg.mvPeriod || 12; $("s_bgperv").textContent = $("s_bgper").value + " s";
-    $("s_hits").value = Math.round((STYLE.hits === undefined ? 0.25 : STYLE.hits) * 100); $("s_hitsv").textContent = $("s_hits").value + " %";
+    $("s_rec").checked = !!STYLE.rec; $("s_hits").value = Math.round((STYLE.hits === undefined ? 0.25 : STYLE.hits) * 100); $("s_hitsv").textContent = $("s_hits").value + " %";
     $("s_bgdim").value = Math.round((STYLE.bg.dim === undefined ? 0.6 : STYLE.bg.dim) * 100); $("s_handle").value = STYLE.handle || ""; $("s_sub").value = STYLE.subtitle || "";
   };
   show();
@@ -1974,6 +2405,7 @@ function initStyle(saved) {
   $("s_bgdrift").oninput = () => { STYLE.bg.mvDrift = $("s_bgdrift").value / 100; $("s_bgdriftv").textContent = $("s_bgdrift").value + " %"; changed(); };
   $("s_bgbreath").oninput = () => { STYLE.bg.mvZoom = $("s_bgbreath").value / 100; $("s_bgbreathv").textContent = $("s_bgbreath").value + " %"; changed(); };
   $("s_bgper").oninput = () => { STYLE.bg.mvPeriod = +$("s_bgper").value; $("s_bgperv").textContent = $("s_bgper").value + " s"; changed(); };
+  $("s_rec").onchange = () => { STYLE.rec = $("s_rec").checked ? 1 : 0; changed(); };
   $("s_hits").oninput = () => { STYLE.hits = $("s_hits").value / 100; $("s_hitsv").textContent = $("s_hits").value + " %"; changed(); };
   $("s_bgpanels").oninput = () => { STYLE.bg.panels = $("s_bgpanels").value / 100; $("s_bgpanelsv").textContent = $("s_bgpanels").value + " %"; changed(); };
   // what each bus is used for: one of the unit's effects, or your own text
@@ -2003,8 +2435,8 @@ async function start() {
   const msg = document.getElementById("msg");
   try {
     const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
-    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || ""), focus: String(c.focus || "") })); CHAPS = (ev.chapters || []).map(c => ({ t: +c.t || 0, title: String(c.title || "") })); CUTS = cutsNorm((ev.cuts || []).map(c => ({ from: +c.from || 0, to: +c.to || 0 }))); BUSN = (ev.busnotes || []).map(n => ({ bus: +n.bus || 1, t: +n.t || 0, text: String(n.text || "") })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
-    initChapters(); initCuts(); initBusNotes(); initCamera(ev.camera, ev.camera_file); initTemplates();
+    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || ""), focus: String(c.focus || "") })); CHAPS = (ev.chapters || []).map(c => ({ t: +c.t || 0, title: String(c.title || "") })); CUTS = cutsNorm((ev.cuts || []).map(c => ({ from: +c.from || 0, to: +c.to || 0 }))); BUSN = (ev.busnotes || []).map(n => ({ bus: +n.bus || 1, t: +n.t || 0, text: String(n.text || "") })); VIEWM = (ev.viewmarks || []).map(m => ({ t: +m.t || 0, view: m.view === "normal" ? "normal" : "split", mode: MODES.includes(m.mode) ? m.mode : "pads", layout: SPLIT_LAYOUTS.includes(m.layout) ? m.layout : "", look: ARP_LOOKS.includes(m.look) ? m.look : "", pad: /^([A-J](1[0-6]|[1-9])|ch(1[0-6]|[1-9]))$/.test(m.pad || "") ? m.pad : "" })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
+    initChapters(); initCuts(); initBusNotes(); initViews(); initCamera(ev.camera, ev.camera_file); initTemplates();
     if (ev.default_template) { const all = {}; for (const [k] of TPL_PARTS) all[k] = true; tplApply(ev.default_template, all); } // a new take starts with the default template
     if (window.refreshCapLane) window.refreshCapLane(); // the lanes need the length of the take, which prepare has just read
     histInit();
@@ -2017,7 +2449,19 @@ async function start() {
     ready() { return (!logoImg || logoImg.complete) && (!bgImg || bgImg.complete); },
     frame(t) { manual = t; draw(t); return cv.toDataURL("image/png"); },
     // for a render: the picture of the camera for this frame comes from the program (a JPEG as a data URL, or nothing)
-    async frameWithCamera(t, cam) { this._renderCam = true; if (cam) { const im = new Image(); im.src = cam; await im.decode(); this._camImg = im; } else this._camImg = null; manual = t; draw(t); return cv.toDataURL("image/png"); } };
+    // the picture of the camera is made into a bitmap (Image.decode() can wait for ever in a page that is not shown); a picture that is too slow is tried again, then left out
+    async frameWithCamera(t, cam) {
+      this._renderCam = true;
+      if (this._camImg && this._camImg.close) this._camImg.close();
+      this._camImg = null;
+      if (cam) {
+        const bin = atob(cam.slice(cam.indexOf(",") + 1)), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        for (let tries = 0; tries < 3 && !this._camImg; tries++) {
+          try { this._camImg = await Promise.race([createImageBitmap(new Blob([bytes], { type: "image/jpeg" })), new Promise((_, no) => setTimeout(() => no(new Error("slow")), 8000))]); } catch (e) { this._camImg = null; }
+        }
+      }
+      manual = t; draw(t); return cv.toDataURL("image/png");
+    } };
   window.replayReady = true;
   if (params.get("t") !== null && params.get("play") === null) manual = t0;
   frame();

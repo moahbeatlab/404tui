@@ -41,6 +41,7 @@ type Replay struct {
 	chapters              []Chapter
 	cuts                  []Cut
 	busNotes              []BusNote
+	viewMarks             []ViewMark
 	cameraFile            string
 	camera                json.RawMessage
 	adopted               bool
@@ -62,6 +63,17 @@ type BusNote struct {
 	Bus  int     `json:"bus"` // 1 to 4
 	T    float64 `json:"t"`
 	Text string  `json:"text"`
+}
+
+// ViewMark sets the picture from a time of the audio on (seconds): the split view with one of its modes, or the normal view with all the panels.
+// The next mark changes it again; before the first one the style's view and mode apply.
+type ViewMark struct {
+	T      float64 `json:"t"`
+	View   string  `json:"view"`             // "split" or "normal"
+	Mode   string  `json:"mode,omitempty"`   // of the split view: "pads", "chroma", "arp", "midi" or "buses"
+	Layout string  `json:"layout,omitempty"` // of the split view: "classic", "side", "stack" or "info"; empty for the style's
+	Pad    string  `json:"pad,omitempty"`    // of the chromatic and the arp view: the sample, "A3"; empty for the style's
+	Look   string  `json:"look,omitempty"`   // of the arp view: "columns", "grid" or "ring"; empty for the style's
 }
 
 // Chapter starts a part of the video at a time of the audio (seconds): the chapters of the video on YouTube, and the label on the picture.
@@ -101,11 +113,12 @@ type meta struct {
 	Title string `json:"title,omitempty"`
 	Cues  []Cue  `json:"cues"`
 	// PatternsAdopted says the patterns of the event log were taken over as cues, to be edited: then the cues are the whole list.
-	PatternsAdopted bool      `json:"patterns_adopted,omitempty"`
-	Captions        []Caption `json:"captions,omitempty"`
-	Chapters        []Chapter `json:"chapters,omitempty"`
-	BusNotes        []BusNote `json:"bus_notes,omitempty"`
-	Cuts            []Cut     `json:"cuts,omitempty"`
+	PatternsAdopted bool       `json:"patterns_adopted,omitempty"`
+	Captions        []Caption  `json:"captions,omitempty"`
+	Chapters        []Chapter  `json:"chapters,omitempty"`
+	BusNotes        []BusNote  `json:"bus_notes,omitempty"`
+	ViewMarks       []ViewMark `json:"view_marks,omitempty"`
+	Cuts            []Cut      `json:"cuts,omitempty"`
 	// CameraFile is the video of the player (a path, relative to this file when it is beside it); Camera is the page's own object about it
 	// (the sync, the crop, the scenes, the box on the picture), kept as it is.
 	CameraFile string          `json:"camera_file,omitempty"`
@@ -286,6 +299,21 @@ func (r *Replay) BusNotes() []BusNote {
 	return append([]BusNote{}, r.busNotes...)
 }
 
+// ViewMarks are the changes of the view.
+func (r *Replay) ViewMarks() []ViewMark {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]ViewMark{}, r.viewMarks...)
+}
+
+// SetViewMarks replaces the view marks and keeps them in the file.
+func (r *Replay) SetViewMarks(m []ViewMark) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.viewMarks = append([]ViewMark{}, m...)
+	return r.save()
+}
+
 // SetBusNotes replaces the bus notes and keeps them in the file.
 func (r *Replay) SetBusNotes(n []BusNote) error {
 	r.mu.Lock()
@@ -352,13 +380,13 @@ func (r *Replay) SetStyle(b []byte) error {
 
 func (r *Replay) save() error {
 	r.fresh = false
-	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 && len(r.captions) == 0 && len(r.chapters) == 0 && len(r.cuts) == 0 && len(r.busNotes) == 0 && r.cameraFile == "" && len(r.camera) == 0 && !r.adopted {
+	if r.title == "" && len(r.cues) == 0 && len(r.style) == 0 && len(r.captions) == 0 && len(r.chapters) == 0 && len(r.cuts) == 0 && len(r.busNotes) == 0 && len(r.viewMarks) == 0 && r.cameraFile == "" && len(r.camera) == 0 && !r.adopted {
 		if err := os.Remove(r.CuesPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 		return nil
 	}
-	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues, PatternsAdopted: r.adopted, Captions: r.captions, Chapters: r.chapters, BusNotes: r.busNotes, Cuts: r.cuts, CameraFile: r.cameraFile, Camera: r.camera, Style: r.style}, "", " ")
+	b, _ := json.MarshalIndent(meta{Title: r.title, Cues: r.cues, PatternsAdopted: r.adopted, Captions: r.captions, Chapters: r.chapters, BusNotes: r.busNotes, ViewMarks: r.viewMarks, Cuts: r.cuts, CameraFile: r.cameraFile, Camera: r.camera, Style: r.style}, "", " ")
 	return os.WriteFile(r.CuesPath, b, 0o644)
 }
 
@@ -386,7 +414,7 @@ func Load(audioPath, eventsPath string) (*Replay, error) {
 		var m meta
 		if json.Unmarshal(b, &m) == nil {
 			r.title, r.cues, r.style, r.captions, r.chapters, r.busNotes, r.adopted = m.Title, m.Cues, m.Style, m.Captions, m.Chapters, m.BusNotes, m.PatternsAdopted
-			r.cuts = m.Cuts
+			r.cuts, r.viewMarks = m.Cuts, m.ViewMarks
 			r.cameraFile, r.camera = m.CameraFile, m.Camera
 		} else {
 			json.Unmarshal(b, &r.cues) // the first form of the file: the list of cues
@@ -420,7 +448,7 @@ func (r *Replay) Handler() http.Handler {
 	})
 	mux.HandleFunc("/events.json", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style(), "captions": r.Captions(), "chapters": r.Chapters(), "cuts": r.Cuts(), "busnotes": r.BusNotes(), "adopted": r.Adopted(), "camera": r.Camera(), "camera_file": r.CameraName(), "default_template": r.freshTemplate()})
+		json.NewEncoder(w).Encode(map[string]any{"file": filepath.Base(r.AudioPath), "events": r.Events, "cues": r.Cues(), "title": r.Title(), "style": r.Style(), "captions": r.Captions(), "chapters": r.Chapters(), "cuts": r.Cuts(), "busnotes": r.BusNotes(), "viewmarks": r.ViewMarks(), "adopted": r.Adopted(), "camera": r.Camera(), "camera_file": r.CameraName(), "default_template": r.freshTemplate()})
 	})
 	mux.HandleFunc("/captions", func(w http.ResponseWriter, req *http.Request) {
 		var c []Caption
@@ -460,6 +488,18 @@ func (r *Replay) Handler() http.Handler {
 	})
 	mux.HandleFunc("/templates", r.templateHandler)
 	mux.HandleFunc("/templates/", r.templateHandler)
+	mux.HandleFunc("/camera/pick", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "POST", http.StatusMethodNotAllowed)
+			return
+		}
+		path, err := pickFile()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotImplemented)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"path": path})
+	})
 	mux.HandleFunc("/camera/file", func(w http.ResponseWriter, req *http.Request) {
 		var f struct {
 			Path string `json:"path"`
@@ -504,6 +544,18 @@ func (r *Replay) Handler() http.Handler {
 			return
 		}
 		if err := r.SetBusNotes(n); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/viewmarks", func(w http.ResponseWriter, req *http.Request) {
+		var m []ViewMark
+		if req.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<20)).Decode(&m) != nil {
+			http.Error(w, "POST the view marks", http.StatusBadRequest)
+			return
+		}
+		if err := r.SetViewMarks(m); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

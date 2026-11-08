@@ -1,5 +1,15 @@
 # Changes
 
+## 0.1.1 (2026-11-08)
+
+Replay and render.
+
+- **Split view** for the replay (the default; the normal view is one click or `v` away), wide and vertical: the camera, a mode view and an area for the captions, which is there only while a caption is on. Layouts: video + mode + captions, side by side, over, and **video + sidebar** (buses, level, events). Modes: pads, chromatic keys, **arp** (rate, gate, octaves, swing; step grid and ring looks), **MIDI** (the notes the unit sends out) and **buses + level**. View change marks on the timeline, with a fade between views.
+- **Camera:** choose the video in the computer's file dialog; sync in three steps (a moment of the take, the frame that shows it, set) with jump buttons and a live time line; the anchor can be the playhead, a pattern start or a pad hit.
+- The REC mark on the video is off by default (an option in the style tab); no empty caption panel between captions, smaller caption text.
+- **Render:** camera pictures are sent as bitmaps and a frame that gets no answer from the browser is tried again; an error names the frame, its time and whether it had a camera picture. `-q "title=..."` changes the title for one render.
+- Docs: [docs/replay.md](docs/replay.md).
+
 ## 0.1 (2026-11-06)
 
 Since `v0.1-alpha`.
