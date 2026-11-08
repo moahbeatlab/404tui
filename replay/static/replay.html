@@ -1261,7 +1261,16 @@ const SPLITS = VERT
   ? { classic: { cam: [72, 108, 936, 620], keys: [72, 742, 936, 500], caps: [72, 1256, 936, 448] }, side: null, stack: { cam: [72, 108, 936, 760], keys: [72, 892, 936, 820], caps: null } }
   : { classic: { cam: [40, 80, 1000, 600], keys: [1060, 80, 820, 600], caps: [40, 696, 1840, 354] }, side: { cam: [40, 80, 1000, 950], keys: [1060, 80, 820, 950], caps: null }, stack: { cam: [40, 80, 1840, 560], keys: [40, 656, 1840, 374], caps: null } };
 if (!SPLITS.side) SPLITS.side = SPLITS.stack; // vertical: there is no room for two side by side
-const splitRects = A => SPLITS[viewAt(A).layout] || SPLITS.classic;
+// How much the caption area is there at A (0..1): the classic layout has it only while a caption is on; the video and the pads use the room otherwise.
+const capPresence = A => { let f = 0; for (const c of CAPS) if (c.text) f = Math.max(f, clamp(Math.min(A - (c.from - 0.3), c.to + 0.3 - A) / 0.3, 0, 1)); return easeOut(f); };
+const lerpRect = (a, b, f) => a.map((v, i) => v + (b[i] - v) * f);
+function splitRects(A) {
+  const lay = viewAt(A).layout, R = SPLITS[lay] || SPLITS.classic;
+  if (lay !== "classic" || !R.caps) return R;
+  const f = capPresence(A), full = SPLITS.side;
+  if (f >= 1) return R;
+  return { cam: lerpRect(full.cam, R.cam, f), keys: lerpRect(full.keys, R.keys, f), caps: f > 0.01 ? R.caps : null, capsAlpha: f };
+}
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 function drawRec(x, y, A) { // the mark of a take that is recorded: a red dot that breathes, REC and the time of the take
   const u = 0.5 + 0.5 * Math.sin(A * Math.PI * 1.6), ready = !(window.replay && window.replay._render);
@@ -1524,7 +1533,7 @@ function drawSplit(T, A) {
   else if (vmode === "arp") drawArp(T, R.keys);
   else if (vmode === "midi") drawMidi(T, R.keys);
   else { const sv = L.pads; L.pads = R.keys.slice(); panel(...R.keys); drawPads(T); L.pads = sv; }
-  if (R.caps) drawCapArea(T, A, R.caps);
+  if (R.caps) { g.save(); g.globalAlpha = R.capsAlpha === undefined ? 1 : R.capsAlpha; drawCapArea(T, A, R.caps); g.restore(); }
 }
 
 let T_audio = 0;
