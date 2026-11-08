@@ -233,6 +233,7 @@
       <button id="capbtn" title="text shown at times of the take">captions</button>
       <select id="padsel" title="the sample (pad) of the chromatic keys and the arp: its bank is the keyboard" style="display:none"></select>
       <button id="modebtn" title="p: the pads, c: the chromatic keys, a: the arp view, m: the MIDI notes">pads</button>
+      <button id="lookbtn" title="s: how the arp is drawn (columns, step grid, ring)" style="display:none">columns</button>
       <button id="laybtn" title="l: the layout of the split view (video, mode and captions; video and mode side by side; one above the other)">layout</button>
       <button id="viewbtn" title="v: the split view (camera, keys, captions) or the normal view with all the panels">split view</button>
       <button id="stylebtn" title="colours, background, logo, handle">style</button>
@@ -947,7 +948,7 @@ const PRESETS = {
   "forest":   { accent: "#7bd88f", bg: "#0d1511", deep: "#101a15", panel: "#14201a", tile: "#203329", tile2: "#182820", text: "#e9f5ec", dim: "#8fb09a" },
   "mono":     { accent: "#f2f2f2", bg: "#0d0d0d", deep: "#111111", panel: "#181818", tile: "#262626", tile2: "#1c1c1c", text: "#f2f2f2", dim: "#8c8c8c" },
 };
-const STYLE_DEFAULT = { view: "split", rmode: "pads", chroma: "", capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, layout: "classic", chapCards: 0, chapCardLen: 1.2, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
+const STYLE_DEFAULT = { view: "split", rmode: "pads", chroma: "", capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, layout: "classic", arpLook: "columns", chapCards: 0, chapCardLen: 1.2, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
 let STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)), logoImg = null, bgImg = null;
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const hexMix = (a, b, t) => "#" + hexRgb(a).map((v, i) => Math.round(v + (hexRgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
@@ -1086,7 +1087,7 @@ let CHAPS = [], BUSN = [], CUTS = [], VIEWM = [];
 // the view at a time of the audio: the latest view change before it, else the one of the style (the start of the take)
 function viewAt(A) {
   let best = null; for (const m of VIEWM) if (m.t <= A + 0.001 && (!best || m.t >= best.t)) best = m;
-  return best ? { view: best.view, mode: best.mode || "pads", layout: best.layout || STYLE.layout || "classic", pad: best.pad || STYLE.chroma || "", mark: best } : { view: STYLE.view, mode: STYLE.rmode || "pads", layout: STYLE.layout || "classic", pad: STYLE.chroma || "", mark: null };
+  return best ? { view: best.view, mode: best.mode || "pads", layout: best.layout || STYLE.layout || "classic", pad: best.pad || STYLE.chroma || "", look: best.look || STYLE.arpLook || "columns", mark: best } : { view: STYLE.view, mode: STYLE.rmode || "pads", layout: STYLE.layout || "classic", pad: STYLE.chroma || "", look: STYLE.arpLook || "columns", mark: null };
 }
 const HIST = { undo: [], redo: [], last: null, kind: "", at: 0 };
 const histState = () => JSON.stringify({ cues, adopted, caps: CAPS, chaps: CHAPS, busn: BUSN, views: VIEWM, cuts: CUTS, cam: CAM, title: TITLE });
@@ -1370,6 +1371,44 @@ function arpAnalyse(notes, beat) {
 // the line of facts under the title of both views: mode, octaves, rate, gate, swing
 function arpFacts(A) { return [A.mode, A.octaves > 1 ? A.octaves + " octaves" : A.per ? "1 octave" : "", A.rate ? "rate " + A.rate : "", A.gate ? "gate " + A.gate + "%" : "", A.per && Math.abs(A.swing - 50) >= 3 ? "swing " + A.swing + "%" : A.per ? "straight" : ""].filter(Boolean).join("  ·  "); }
 
+// two other looks of the arp view. "grid": a step sequencer, a column for each step, a row for each pitch that is used, a cell as wide as the gate, the step that
+// sounds lit. "ring": the twelve notes around a clock (C at the top), an octave for each ring, the last notes joined by a trail that fades, the newest one glowing.
+const ARP_LOOKS = ["columns", "grid", "ring"], ARP_LOOK_NAMES = { columns: "columns", grid: "step grid", ring: "ring" };
+function arpStepsOf(A) { // what the grid and the ring draw: the loop when there is one, else the last notes
+  if (A.per) return { notes: A.steps.map((p, k) => ({ p, o: A.rn[k] })), cur: A.cur, loop: true };
+  const r = A.rec.slice(-16); return { notes: r.map(o => ({ p: o.p, o })), cur: r.length - 1, loop: false };
+}
+function arpGrid(T, area, A, nm) {
+  const [x0, y0, w, h] = area, { notes, cur } = arpStepsOf(A); if (!notes.length) return;
+  const rows = [...new Set(notes.map(n => n.p))].sort((a, b) => b - a), nr = Math.max(rows.length, 4), gx = x0 + 96, gw = w - 96 - 28, gy = y0 + 86, gh = h - 86 - 44;
+  const rh = Math.min(gh / nr, 56), cw = gw / Math.max(notes.length, 8), med = A.med || 0.25, rowY = p => gy + rows.indexOf(p) * rh;
+  rows.forEach((p, i) => { g.globalAlpha = i % 2 ? 0.05 : 0.12; rect(gx, gy + i * rh, gw, rh - 2, COL.dim); g.globalAlpha = 1; text(nm(p), gx - 12, gy + i * rh + rh / 2 + 6, COL.dim, 17, false, "right"); });
+  for (let k = 0; k <= notes.length; k++) { g.globalAlpha = k % 4 === 0 ? 0.3 : 0.1; rect(gx + k * cw, gy, 1, rows.length * rh, COL.dim); g.globalAlpha = 1; }
+  g.save(); g.strokeStyle = COL.amberD; g.globalAlpha = 0.5; g.lineWidth = 2; g.beginPath();
+  notes.forEach((n, k) => { const cx = gx + (k + 0.5) * cw, cy = rowY(n.p) + rh / 2 - 1; if (k) g.lineTo(cx, cy); else g.moveTo(cx, cy); }); g.stroke(); g.restore();
+  notes.forEach((n, k) => {
+    const now = k === cur, gt = n.o && !n.o.open ? clamp(n.o.len / med, 0.15, 1) : 1, velo = n.o ? n.o.v : 100, bw = Math.max((cw - 6) * gt, 6), x = gx + k * cw + 3, y = rowY(n.p) + 3, bh = rh - 8;
+    g.save(); g.globalAlpha = (now ? 1 : 0.55 + 0.3 * (k <= cur ? 1 : 0)) * (0.55 + 0.45 * velo / 127); if (now) { g.shadowColor = COL.amber; g.shadowBlur = 24; }
+    rrect(x, y, bw, bh, 5, now ? COL.amber : mix("#555555", COL.amber, k <= cur ? 0.6 : 0.3)); g.restore();
+  });
+  text("step grid: a column for each step, a row for each note, a cell as wide as the gate", x0 + 24, y0 + h - 12, COL.dim, 16);
+}
+function arpRing(T, area, A, nm, base, midi) {
+  const [x0, y0, w, h] = area, { notes, cur } = arpStepsOf(A); if (!notes.length) return;
+  const top = y0 + 84, cx = x0 + w / 2, cy = top + (h - 84 - 30) / 2, R = Math.min(w / 2 - 70, (h - 84 - 30) / 2 - 40), octs = Math.max(1, ...notes.map(n => Math.floor(n.p / 12) + 1)), r0 = R * 0.38, dr = octs > 1 ? (R - r0) / (octs - 1) : 0;
+  const pc = p => ((midi ? base : 0) + p) % 12, ang = c => -Math.PI / 2 + c / 12 * Math.PI * 2, pos = p => { const o = Math.floor(p / 12), r = octs > 1 ? r0 + dr * o : (r0 + R) / 2; return [cx + Math.cos(ang(pc(p))) * r, cy + Math.sin(ang(pc(p))) * r, r]; };
+  for (let o = 0; o < octs; o++) { const r = octs > 1 ? r0 + dr * o : (r0 + R) / 2; g.globalAlpha = 0.25; g.strokeStyle = COL.dim; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, r, 0, 6.2832); g.stroke(); g.globalAlpha = 1; }
+  for (let c = 0; c < 12; c++) { const a = ang(c), lx = cx + Math.cos(a) * (R + 30), ly = cy + Math.sin(a) * (R + 30); g.globalAlpha = 0.2; g.strokeStyle = COL.dim; g.lineWidth = 1; g.beginPath(); g.moveTo(cx + Math.cos(a) * r0 * 0.6, cy + Math.sin(a) * r0 * 0.6); g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); g.stroke(); g.globalAlpha = 1; text(midi ? NOTE_NAMES[c] : "+" + c, lx, ly + 6, COL.dim, 16, false, "center"); }
+  const n = notes.length, med = A.med || 0.25;
+  for (let k = 1; k < n; k++) { const a = pos(notes[k - 1].p), b = pos(notes[k].p), age = (k <= cur ? cur - k : n) ; g.save(); g.globalAlpha = k <= cur ? clamp(1 - age / Math.max(n, 6), 0.1, 0.8) : 0.12; g.strokeStyle = COL.amber; g.lineWidth = 3; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); g.restore(); }
+  notes.forEach((nt, k) => {
+    const [px, py] = pos(nt.p), now = k === cur, gt = nt.o && !nt.o.open ? clamp(nt.o.len / med, 0.2, 1) : 1, velo = nt.o ? nt.o.v : 100, age = k <= cur ? cur - k : n;
+    g.save(); g.globalAlpha = (now ? 1 : clamp(1 - age / Math.max(n, 6), 0.15, 0.85)) * (0.6 + 0.4 * velo / 127); if (now) { g.shadowColor = COL.amber; g.shadowBlur = 30; }
+    g.fillStyle = now ? COL.amber : mix("#666666", COL.amber, 0.55); g.beginPath(); g.arc(px, py, (now ? 15 : 9) * (0.6 + 0.4 * gt), 0, 6.2832); g.fill(); g.restore();
+    if (now) { const [qx, qy] = [px, py]; text(nm(nt.p), qx, qy - 26, COL.amber, 20, true, "center"); }
+  });
+  text("ring: C at the top, a ring for each octave, the trail is the way of the last notes", x0 + 24, y0 + h - 12, COL.dim, 16);
+}
 // the arp view: one sample played at different pitches. In the chromatic mode every pad of the bank is the same sample, one semitone higher than the one before,
 // so the notes that were played are steps of a pitch. The loop of the arpeggio is shown once, a column for each step (as high as its pitch), the step that sounds
 // lit, a bar under it for its gate, and the rounds counted.
@@ -1388,6 +1427,9 @@ function drawArp(T, area) {
   text((src ? "MIDI ch " + src.ch + "   " : info && info.name ? fit(info.name, 20) + "   " : "") + (per ? "loop of " + per + "  x" + rounds : A.rn.length > 3 ? "" : "no arpeggio yet"), x0 + 110, y0 + 40, COL.text, 22);
   text(Math.round(bpm) + " BPM", x0 + w - 24, y0 + 40, COL.dim, 22, false, "right");
   const facts = arpFacts(A); if (facts) text(facts, x0 + 110, y0 + 66, COL.blue, 19, true);
+  const look = viewAt(T_audio).look, nmf = p => src ? mnote(base + p) : "+" + p; // the other looks draw here, instead of the columns
+  if (look === "grid") return arpGrid(T, area, A, nmf);
+  if (look === "ring") return arpRing(T, area, A, nmf, base, !!src);
   const sx = x0 + 24, sw = 150, gy0 = y0 + 84, gh = h - 84 - 58, gx = sx + sw + 28, gw = w - (gx - x0) - 24, TOP = Math.max(15, Math.ceil(Math.max(...steps, 0) / 12) * 12);
   rrect(sx, gy0, sw, gh, 10, COL.tile2);
   text(src ? "ch " + src.ch : lab, sx + 14, gy0 + 34, COL.amber, 24, true); text(src ? "MIDI notes" : "one sample", sx + 14, gy0 + 60, COL.dim, 16);
@@ -1483,7 +1525,7 @@ function drawSplit(T, A) {
 let T_audio = 0;
 function draw(audioTime) {
   T_audio = audioTime;
-  { const v = viewAt(audioTime); if (lastViewKey !== v.view + v.mode + v.layout + v.pad && window.syncViewBtn) window.syncViewBtn(); }
+  { const v = viewAt(audioTime); if (lastViewKey !== v.view + v.mode + v.layout + v.pad + v.look && window.syncViewBtn) window.syncViewBtn(); }
   const T = audioTime + OFFSET + NUDGE / 1000;
   drawBackground();
   camVideoKeep(audioTime);
@@ -1545,7 +1587,9 @@ document.getElementById("redo").onclick = () => redo();
 const viewBtn = document.getElementById("viewbtn");
 function setView(v) { const m = viewAt(now()).mark; if (m) { m.view = v; if (v === "split" && !m.mode) m.mode = "pads"; saveViews(); } else { STYLE.view = v; window.styleChanged && window.styleChanged(); } window.syncViewBtn(); }
 const MODES = ["pads", "chroma", "arp", "midi"], MODE_NAMES = { pads: "pads", chroma: "chromatic", arp: "arp", midi: "midi" };
-const modeBtn = document.getElementById("modebtn"), laybtn = document.getElementById("laybtn");
+const modeBtn = document.getElementById("modebtn"), laybtn = document.getElementById("laybtn"), lookbtn = document.getElementById("lookbtn");
+function setLook(l) { const k = viewAt(now()).mark; if (k) { k.look = l; saveViews(); } else STYLE.arpLook = l; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
+lookbtn.onclick = () => setLook(ARP_LOOKS[(ARP_LOOKS.indexOf(viewAt(now()).look) + 1) % ARP_LOOKS.length]);
 function setPad(lab) { const k = viewAt(now()).mark; if (k) { k.pad = lab; saveViews(); } else { STYLE.chroma = lab; window.styleChanged && window.styleChanged(); } window.syncViewBtn(); }
 function fillPadSelect(sel, cur) { // the pads of the project that hold a sample: "A3 KEYS"
   sel.textContent = "";
@@ -1559,7 +1603,7 @@ function setLayout(l) { const k = viewAt(now()).mark; if (k) { k.layout = l; sav
 laybtn.onclick = () => setLayout(SPLIT_LAYOUTS[(SPLIT_LAYOUTS.indexOf(viewAt(now()).layout) + 1) % SPLIT_LAYOUTS.length]);
 function setMode(m) { if ((m === "chroma" || m === "arp") && !viewAt(now()).pad) setPad(bankInView(now() + OFFSET) + "1"); const k = viewAt(now()).mark; if (k) { k.mode = m; saveViews(); } else STYLE.rmode = m; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
 modeBtn.onclick = () => setMode(MODES[(MODES.indexOf(viewAt(now()).mode) + 1) % MODES.length]);
-window.syncViewBtn = () => { const v = viewAt(now()); modeBtn.textContent = MODE_NAMES[v.mode] || "pads"; modeBtn.classList.toggle("on", v.mode !== "pads"); modeBtn.style.display = v.view === "split" ? "" : "none"; viewBtn.textContent = v.view === "split" ? "normal view" : "split view"; viewBtn.classList.toggle("on", v.view === "split"); laybtn.style.display = v.view === "split" ? "" : "none"; const ch = v.view === "split" && (v.mode === "chroma" || v.mode === "arp" || v.mode === "midi"); padSel.style.display = ch ? "" : "none"; if (ch && (padSel.dataset.cur !== v.pad || !padSel.options.length)) { fillPadSelect(padSel, v.pad); padSel.dataset.cur = v.pad; } laybtn.textContent = "layout: " + v.layout; laybtn.classList.toggle("on", v.layout !== "classic"); lastViewKey = v.view + v.mode + v.layout + v.pad; };
+window.syncViewBtn = () => { const v = viewAt(now()); modeBtn.textContent = MODE_NAMES[v.mode] || "pads"; modeBtn.classList.toggle("on", v.mode !== "pads"); modeBtn.style.display = v.view === "split" ? "" : "none"; viewBtn.textContent = v.view === "split" ? "normal view" : "split view"; viewBtn.classList.toggle("on", v.view === "split"); laybtn.style.display = v.view === "split" ? "" : "none"; lookbtn.style.display = v.view === "split" && v.mode === "arp" ? "" : "none"; lookbtn.textContent = "arp: " + (ARP_LOOK_NAMES[v.look] || "columns"); const ch = v.view === "split" && (v.mode === "chroma" || v.mode === "arp" || v.mode === "midi"); padSel.style.display = ch ? "" : "none"; if (ch && (padSel.dataset.cur !== v.pad || !padSel.options.length)) { fillPadSelect(padSel, v.pad); padSel.dataset.cur = v.pad; } laybtn.textContent = "layout: " + v.layout; laybtn.classList.toggle("on", v.layout !== "classic"); lastViewKey = v.view + v.mode + v.layout + v.pad + v.look; };
 let lastViewKey = "";
 viewBtn.onclick = () => setView(viewAt(now()).view === "split" ? "normal" : "split");
 document.getElementById("full").onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
@@ -1577,6 +1621,7 @@ addEventListener("keydown", e => {
   else if (e.key === "f") document.getElementById("full").onclick();
   else if (e.key === "v") viewBtn.onclick();
   else if (!e.ctrlKey && !e.metaKey && (e.key === "l")) laybtn.click();
+  else if (!e.ctrlKey && !e.metaKey && e.key === "s") lookbtn.click();
   else if (!e.ctrlKey && !e.metaKey && (e.key === "c" || e.key === "a" || e.key === "p" || e.key === "m")) { const m = { c: "chroma", a: "arp", p: "pads", m: "midi" }[e.key]; setMode(viewAt(now()).mode === m && m !== "pads" ? "pads" : m); }
   else if (e.key === "i" || e.key === "o") window.cutKey && window.cutKey(e.key);
 });
@@ -1681,19 +1726,22 @@ function initViews() {
   const label = m => m.view === "split" ? "split · " + (MODE_NAMES[m.mode || "pads"] || "pads") + ((m.mode === "chroma" || m.mode === "arp" || m.mode === "midi") && m.pad ? " " + m.pad : "") + ((m.layout || STYLE.layout) && (m.layout || STYLE.layout) !== "classic" ? " · " + (m.layout || STYLE.layout) : "") : "normal view";
   function edit(m) {
     pop.textContent = ""; pop.classList.add("open");
-    const vs = document.createElement("select"), ms = document.createElement("select"), ls = document.createElement("select"), ps = document.createElement("select"), tm = document.createElement("input");
+    const vs = document.createElement("select"), ms = document.createElement("select"), ls = document.createElement("select"), ks = document.createElement("select"), ps = document.createElement("select"), tm = document.createElement("input");
     for (const [v, t] of [["split", "split view"], ["normal", "normal view"]]) { const o = document.createElement("option"); o.value = v; o.textContent = t; vs.appendChild(o); }
     for (const k of MODES) { const o = document.createElement("option"); o.value = k; o.textContent = MODE_NAMES[k]; ms.appendChild(o); }
     for (const k of SPLIT_LAYOUTS) { const o = document.createElement("option"); o.value = k; o.textContent = SPLIT_LAYOUT_NAMES[k]; ls.appendChild(o); }
-    vs.value = m.view; ms.value = m.mode || "pads"; ls.value = m.layout || STYLE.layout || "classic"; ms.hidden = ls.hidden = m.view !== "split"; fillPadSelect(ps, m.pad || viewAt(m.t).pad); const showPad = () => { ps.hidden = !(m.view === "split" && (m.mode === "chroma" || m.mode === "arp" || m.mode === "midi")); }; showPad(); tm.value = mmss(m.t); tm.size = 7;
+    for (const k of ARP_LOOKS) { const o = document.createElement("option"); o.value = k; o.textContent = "arp: " + ARP_LOOK_NAMES[k]; ks.appendChild(o); }
+    ks.value = m.look || STYLE.arpLook || "columns";
+    vs.value = m.view; ms.value = m.mode || "pads"; ls.value = m.layout || STYLE.layout || "classic"; ms.hidden = ls.hidden = m.view !== "split"; fillPadSelect(ps, m.pad || viewAt(m.t).pad); const showPad = () => { ks.hidden = !(m.view === "split" && m.mode === "arp"); ps.hidden = !(m.view === "split" && (m.mode === "chroma" || m.mode === "arp" || m.mode === "midi")); }; showPad(); tm.value = mmss(m.t); tm.size = 7;
     vs.onchange = () => { m.view = vs.value; ms.hidden = ls.hidden = m.view !== "split"; if (m.view === "split" && !m.mode) m.mode = "pads"; showPad(); saveViews(); };
     ms.onchange = () => { m.mode = ms.value; if ((m.mode === "chroma" || m.mode === "arp") && !m.pad) { m.pad = viewAt(m.t).pad || bankInView(m.t + OFFSET) + "1"; fillPadSelect(ps, m.pad); } showPad(); saveViews(); };
     ps.onchange = () => { m.pad = ps.value; saveViews(); };
     ls.onchange = () => { m.layout = ls.value; saveViews(); };
+    ks.onchange = () => { m.look = ks.value; saveViews(); };
     tm.onchange = () => { m.t = Math.max(0, +num(tm.value).toFixed(2)); saveViews(); };
     const mk = (t, title, fn) => { const b = document.createElement("button"); b.textContent = t; b.title = title; b.onclick = fn; return b; };
     vs.title = "the view from this time on"; ms.title = "what the split view shows"; ps.title = "the sample of the chromatic keys and the arp, or the MIDI channel"; ls.title = "the layout of the split view"; tm.title = "the time of this change";
-    pop.append(vs, ms, ps, ls, tm, mk("go", "play from here", () => { audio.currentTime = m.t; }), mk("delete", "remove this change", () => { VIEWM = VIEWM.filter(x => x !== m); pop.classList.remove("open"); saveViews(); }), mk("x", "close", () => pop.classList.remove("open")));
+    pop.append(vs, ms, ps, ks, ls, tm, mk("go", "play from here", () => { audio.currentTime = m.t; }), mk("delete", "remove this change", () => { VIEWM = VIEWM.filter(x => x !== m); pop.classList.remove("open"); saveViews(); }), mk("x", "close", () => pop.classList.remove("open")));
     const r = lane.getBoundingClientRect(), d = AN ? AN.duration : 1; pop.style.left = Math.max(8, Math.min(innerWidth - pop.offsetWidth - 8, r.left + m.t / d * r.width - 120)) + "px";
   }
   function build() {
@@ -1715,7 +1763,7 @@ function initViews() {
   }
   window.refreshViews = build;
   document.getElementById("vmbtn").onclick = () => { // a new mark starts as the split view with what is shown now; the pop-up opens to choose view, mode, sample and layout
-    const v = viewAt(now()), m = { t: +Math.max(now(), 0).toFixed(1), view: "split", mode: v.mode, layout: v.layout, pad: v.pad };
+    const v = viewAt(now()), m = { t: +Math.max(now(), 0).toFixed(1), view: "split", mode: v.mode, layout: v.layout, pad: v.pad, look: v.look };
     VIEWM.push(m); saveViews(); edit(m);
   };
   build();
@@ -2326,7 +2374,7 @@ async function start() {
   const msg = document.getElementById("msg");
   try {
     const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
-    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || ""), focus: String(c.focus || "") })); CHAPS = (ev.chapters || []).map(c => ({ t: +c.t || 0, title: String(c.title || "") })); CUTS = cutsNorm((ev.cuts || []).map(c => ({ from: +c.from || 0, to: +c.to || 0 }))); BUSN = (ev.busnotes || []).map(n => ({ bus: +n.bus || 1, t: +n.t || 0, text: String(n.text || "") })); VIEWM = (ev.viewmarks || []).map(m => ({ t: +m.t || 0, view: m.view === "normal" ? "normal" : "split", mode: MODES.includes(m.mode) ? m.mode : "pads", layout: SPLIT_LAYOUTS.includes(m.layout) ? m.layout : "", pad: /^([A-J](1[0-6]|[1-9])|ch(1[0-6]|[1-9]))$/.test(m.pad || "") ? m.pad : "" })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
+    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || ""), focus: String(c.focus || "") })); CHAPS = (ev.chapters || []).map(c => ({ t: +c.t || 0, title: String(c.title || "") })); CUTS = cutsNorm((ev.cuts || []).map(c => ({ from: +c.from || 0, to: +c.to || 0 }))); BUSN = (ev.busnotes || []).map(n => ({ bus: +n.bus || 1, t: +n.t || 0, text: String(n.text || "") })); VIEWM = (ev.viewmarks || []).map(m => ({ t: +m.t || 0, view: m.view === "normal" ? "normal" : "split", mode: MODES.includes(m.mode) ? m.mode : "pads", layout: SPLIT_LAYOUTS.includes(m.layout) ? m.layout : "", look: ARP_LOOKS.includes(m.look) ? m.look : "", pad: /^([A-J](1[0-6]|[1-9])|ch(1[0-6]|[1-9]))$/.test(m.pad || "") ? m.pad : "" })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
     initChapters(); initCuts(); initBusNotes(); initViews(); initCamera(ev.camera, ev.camera_file); initTemplates();
     if (ev.default_template) { const all = {}; for (const [k] of TPL_PARTS) all[k] = true; tplApply(ev.default_template, all); } // a new take starts with the default template
     if (window.refreshCapLane) window.refreshCapLane(); // the lanes need the length of the take, which prepare has just read

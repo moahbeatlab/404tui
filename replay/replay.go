@@ -73,6 +73,7 @@ type ViewMark struct {
 	Mode   string  `json:"mode,omitempty"`   // of the split view: "pads", "chroma", "arp" or "midi"
 	Layout string  `json:"layout,omitempty"` // of the split view: "classic", "side" or "stack"; empty for the style's
 	Pad    string  `json:"pad,omitempty"`    // of the chromatic and the arp view: the sample, "A3"; empty for the style's
+	Look   string  `json:"look,omitempty"`   // of the arp view: "columns", "grid" or "ring"; empty for the style's
 }
 
 // Chapter starts a part of the video at a time of the audio (seconds): the chapters of the video on YouTube, and the label on the picture.
