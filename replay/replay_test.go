@@ -276,6 +276,17 @@ func TestBusNotesAreKept(t *testing.T) {
 	}
 }
 
+func TestViewMarksAreKept(t *testing.T) {
+	r := &Replay{CuesPath: filepath.Join(t.TempDir(), "x.cues.json")}
+	if err := r.SetViewMarks([]ViewMark{{T: 4, View: "split", Mode: "arp", Layout: "side", Pad: "A3"}, {T: 60, View: "normal"}}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(r.CuesPath)
+	if !strings.Contains(string(b), "view_marks") || !strings.Contains(string(b), `"pad": "A3"`) || len(r.ViewMarks()) != 2 {
+		t.Fatalf("not kept: %s", b)
+	}
+}
+
 func TestTheCameraVideoIsServedAndKept(t *testing.T) {
 	dir := t.TempDir()
 	vid := filepath.Join(dir, "cam.mp4")

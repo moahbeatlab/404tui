@@ -41,8 +41,11 @@
   #seekrow { position:relative; }
   #vwin { position:absolute; top:50%; height:8px; transform:translateY(-50%); background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35); border-radius:4px; pointer-events:none; display:none; }
   #tl .lbl { color:var(--dim); font-size:11px; text-align:right; }
-  #camlane, #buslane, #chaplane, #cues, #capslane { position:relative; height:22px; margin:0 8px; flex:none; background:#1d1d20; border-radius:4px; }
-  #capslane, #chaplane, #buslane, #camlane, #cues { height:22px; }
+  #camlane, #buslane, #vwlane, #chaplane, #cues, #capslane { position:relative; height:22px; margin:0 8px; flex:none; background:#1d1d20; border-radius:4px; }
+  #capslane, #chaplane, #buslane, #vwlane, #camlane, #cues { height:22px; }
+  #vwlane .vm { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(255,176,0,.16); border-left:3px solid var(--bc, #ffb000); border-radius:3px; color:var(--text); font-size:11px; padding:2px 6px 0 10px; white-space:nowrap; cursor:pointer; touch-action:none; overflow:hidden; text-overflow:ellipsis; }
+  #vwlane .vm.nrm { background:rgba(255,255,255,.08); --bc:#888; }
+  #vwlane .vm .hd { position:absolute; left:-5px; top:0; bottom:0; width:12px; cursor:ew-resize; }
   #camlane .cs { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(199,146,234,.22); border-left:3px solid #c792ea; border-radius:3px; color:var(--text); font-size:11px; padding:2px 6px 0 10px; white-space:nowrap; cursor:pointer; touch-action:none; overflow:hidden; text-overflow:ellipsis; }
   #camlane .cs .hd { position:absolute; left:-5px; top:0; bottom:0; width:12px; cursor:ew-resize; }
   #buslane .bn { position:absolute; top:2px; bottom:2px; box-sizing:border-box; background:rgba(255,255,255,.1); border-left:3px solid var(--bc, #888); border-radius:3px; color:var(--text); font-size:11px; padding:2px 6px 0 10px; white-space:nowrap; cursor:pointer; touch-action:none; max-width:30%; overflow:hidden; text-overflow:ellipsis; }
@@ -198,13 +201,14 @@
 </div>
 <div id="bar">
   <div id="tl">
-    <div id="lbls"><span class="lbl">camera</span><span class="lbl">chapters</span><span class="lbl">patterns</span><span class="lbl">bus fx</span><span class="lbl">captions</span><span class="lbl">cuts</span></div>
+    <div id="lbls"><span class="lbl">camera</span><span class="lbl">chapters</span><span class="lbl">patterns</span><span class="lbl">bus fx</span><span class="lbl">view</span><span class="lbl">captions</span><span class="lbl">cuts</span></div>
     <div id="lanes" title="Ctrl + wheel zooms, the wheel or a drag of the bar below moves along">
       <div id="lanesin">
         <div id="camlane" title="the camera scenes: click one to edit it, drag its left edge to move it"></div>
         <div id="chaplane" title="the chapters of the video: click one to edit it, drag its left edge to move it"></div>
         <div id="cues" title="the patterns: click one to edit it, drag its left edge to move it"></div>
         <div id="buslane" title="what a bus is used for, from a time on: click one to edit it, drag its left edge to move it"></div>
+        <div id="vwlane" title="the view from a time on (split view with a mode, or the normal view): click one to edit it, drag its left edge to move it"></div>
         <div id="capslane" title="the captions: click one to edit it"></div>
         <div id="cutlane" title="the parts the video leaves out: drag over the lane to cut a part, click a cut to edit it, drag its edges to change it"></div>
         <div id="ph"></div>
@@ -223,10 +227,13 @@
       <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span></span>
     <span class="grp right"><button id="tplbtn" title="save a setup as a template, use one on this take">templates</button>
       <button id="cambtn" title="the video of you playing">camera</button>
+      <button id="vmbtn" title="the view changes from here on: the split view with a mode, or back to the normal view">view change</button>
       <button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
       <button id="chbtn" title="the chapters, and the list for YouTube">chapters</button>
       <button id="capbtn" title="text shown at times of the take">captions</button>
+      <select id="padsel" title="the sample (pad) of the chromatic keys and the arp: its bank is the keyboard" style="display:none"></select>
       <button id="modebtn" title="p: the pads, c: the chromatic keys, a: the arp view, m: the MIDI notes">pads</button>
+      <button id="laybtn" title="l: the layout of the split view (video, mode and captions; video and mode side by side; one above the other)">layout</button>
       <button id="viewbtn" title="v: the split view (camera, keys, captions) or the normal view with all the panels">split view</button>
       <button id="stylebtn" title="colours, background, logo, handle">style</button>
       <button id="full" title="f">full screen</button></span>
@@ -940,7 +947,7 @@ const PRESETS = {
   "forest":   { accent: "#7bd88f", bg: "#0d1511", deep: "#101a15", panel: "#14201a", tile: "#203329", tile2: "#182820", text: "#e9f5ec", dim: "#8fb09a" },
   "mono":     { accent: "#f2f2f2", bg: "#0d0d0d", deep: "#111111", panel: "#181818", tile: "#262626", tile2: "#1c1c1c", text: "#f2f2f2", dim: "#8c8c8c" },
 };
-const STYLE_DEFAULT = { view: "split", rmode: "pads", chroma: "", capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, chapCards: 0, chapCardLen: 1.2, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
+const STYLE_DEFAULT = { view: "split", rmode: "pads", chroma: "", capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, layout: "classic", chapCards: 0, chapCardLen: 1.2, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
 let STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)), logoImg = null, bgImg = null;
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const hexMix = (a, b, t) => "#" + hexRgb(a).map((v, i) => Math.round(v + (hexRgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
@@ -1075,9 +1082,14 @@ function followPlayhead(frac, playing) { // the lanes keep the playhead in view 
 
 // ---- undo and redo: the patterns, the captions, the chapters and the title (not the look). A step is a whole picture of them, taken
 // after every change; typing in one text counts as one step.
-let CHAPS = [], BUSN = [], CUTS = [];
+let CHAPS = [], BUSN = [], CUTS = [], VIEWM = [];
+// the view at a time of the audio: the latest view change before it, else the one of the style (the start of the take)
+function viewAt(A) {
+  let best = null; for (const m of VIEWM) if (m.t <= A + 0.001 && (!best || m.t >= best.t)) best = m;
+  return best ? { view: best.view, mode: best.mode || "pads", layout: best.layout || STYLE.layout || "classic", pad: best.pad || STYLE.chroma || "", mark: best } : { view: STYLE.view, mode: STYLE.rmode || "pads", layout: STYLE.layout || "classic", pad: STYLE.chroma || "", mark: null };
+}
 const HIST = { undo: [], redo: [], last: null, kind: "", at: 0 };
-const histState = () => JSON.stringify({ cues, adopted, caps: CAPS, chaps: CHAPS, busn: BUSN, cuts: CUTS, cam: CAM, title: TITLE });
+const histState = () => JSON.stringify({ cues, adopted, caps: CAPS, chaps: CHAPS, busn: BUSN, views: VIEWM, cuts: CUTS, cam: CAM, title: TITLE });
 function histButtons() {
   const u = document.getElementById("undo"), r = document.getElementById("redo");
   if (u) { u.disabled = !HIST.undo.length; u.style.opacity = HIST.undo.length ? 1 : 0.4; }
@@ -1093,11 +1105,11 @@ function histChanged(kind) {
 }
 function histApply(str) {
   const st = JSON.parse(str), post = (u, b) => fetch(u, { method: "POST", body: JSON.stringify(b) }).catch(() => {});
-  cues = st.cues; adopted = st.adopted; CAPS = st.caps; CHAPS = st.chaps; BUSN = st.busn || []; CUTS = st.cuts || []; CAM = st.cam || CAM; TITLE = st.title;
+  cues = st.cues; adopted = st.adopted; CAPS = st.caps; CHAPS = st.chaps; BUSN = st.busn || []; VIEWM = st.views || []; CUTS = st.cuts || []; CAM = st.cam || CAM; TITLE = st.title;
   document.getElementById("title").value = TITLE;
   for (const id of ["cuepop", "chpop", "bpop", "campop", "cutpop"]) document.getElementById(id).classList.remove("open");
-  rebuildCues(); if (window.refreshCapLane) window.refreshCapLane(); if (window.refreshChapters) window.refreshChapters(); if (window.refreshBusNotes) window.refreshBusNotes(); if (window.refreshCamera) window.refreshCamera(); if (window.refreshCuts) window.refreshCuts(); if (window.refreshCapList) window.refreshCapList();
-  post("/cues", { cues, adopted }); post("/captions", CAPS); post("/chapters", CHAPS); post("/busnotes", BUSN); post("/cuts", CUTS); post("/camera", CAM); post("/title", { title: TITLE });
+  rebuildCues(); if (window.refreshCapLane) window.refreshCapLane(); if (window.refreshChapters) window.refreshChapters(); if (window.refreshBusNotes) window.refreshBusNotes(); if (window.refreshViews) window.refreshViews(); if (window.refreshCamera) window.refreshCamera(); if (window.refreshCuts) window.refreshCuts(); if (window.refreshCapList) window.refreshCapList();
+  post("/cues", { cues, adopted }); post("/captions", CAPS); post("/chapters", CHAPS); post("/busnotes", BUSN); post("/viewmarks", VIEWM); post("/cuts", CUTS); post("/camera", CAM); post("/title", { title: TITLE });
 }
 function undo() { if (!HIST.undo.length) return; HIST.redo.push(HIST.last); HIST.last = HIST.undo.pop(); HIST.kind = ""; histApply(HIST.last); histButtons(); }
 function redo() { if (!HIST.redo.length) return; HIST.undo.push(HIST.last); HIST.last = HIST.redo.pop(); HIST.kind = ""; histApply(HIST.last); histButtons(); }
@@ -1235,10 +1247,15 @@ function capText(lines, words, c, A, x, y, px, k, lh) {
 
 // ---- the split view: the picture in areas for a video of you playing. The camera at the left, the pads or (in the chromatic mode) the keys at the
 // right, the captions in an area of their own below, and a REC mark. The normal view (all the panels) is one click away: the button or the key v.
-const splitOn = () => STYLE.view === "split";
+const splitOn = () => viewAt(T_audio).view === "split";
 // wide: the camera and the keys side by side, the captions under them; vertical: one under the other, inside the margins that the platforms leave free
-const SPLIT = VERT ? { cam: [72, 108, 936, 620], keys: [72, 742, 936, 500], caps: [72, 1256, 936, 448] }
-                   : { cam: [40, 80, 1000, 600], keys: [1060, 80, 820, 600], caps: [40, 696, 1840, 354] };
+// layouts: "classic" has the captions area, "side" is only the video and the mode view next to each other, "stack" one above the other (no captions area in those two)
+const SPLIT_LAYOUTS = ["classic", "side", "stack"], SPLIT_LAYOUT_NAMES = { classic: "video, mode, captions", side: "video + mode side by side", stack: "video over mode" };
+const SPLITS = VERT
+  ? { classic: { cam: [72, 108, 936, 620], keys: [72, 742, 936, 500], caps: [72, 1256, 936, 448] }, side: null, stack: { cam: [72, 108, 936, 760], keys: [72, 892, 936, 820], caps: null } }
+  : { classic: { cam: [40, 80, 1000, 600], keys: [1060, 80, 820, 600], caps: [40, 696, 1840, 354] }, side: { cam: [40, 80, 1000, 950], keys: [1060, 80, 820, 950], caps: null }, stack: { cam: [40, 80, 1840, 560], keys: [40, 656, 1840, 374], caps: null } };
+if (!SPLITS.side) SPLITS.side = SPLITS.stack; // vertical: there is no room for two side by side
+const splitRects = A => SPLITS[viewAt(A).layout] || SPLITS.classic;
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 function drawRec(x, y, A) { // the mark of a take that is recorded: a red dot that breathes, REC and the time of the take
   const u = 0.5 + 0.5 * Math.sin(A * Math.PI * 1.6), ready = !(window.replay && window.replay._render);
@@ -1247,7 +1264,7 @@ function drawRec(x, y, A) { // the mark of a take that is recorded: a red dot th
   text("REC", x + 48 * sc, y + 32 * sc, "#fff", 24, true); text(mmss(outTime(A)), x + bw - 10, y + 32 * sc, "#ddd", 22, false, "right");
 }
 function drawKeys(T, area) { // the pads as the unit plays them in its chromatic mode: 16 pads, 16 semitones up from the pad's own pitch
-  const [x0, y0, w, h] = area, lab = STYLE.chroma, bank = lab ? lab[0] : bankInView(T), b = bank.charCodeAt(0) - 65;
+  const [x0, y0, w, h] = area, lab = viewAt(T_audio).pad, bank = lab ? lab[0] : bankInView(T), b = bank.charCodeAt(0) - 65;
   panel(x0, y0, w, h);
   const info = lab ? padInfo.get(b * 16 + (parseInt(lab.slice(1), 10) - 1)) : null;
   text("CHROMATIC", x0 + 24, y0 + 40, COL.amber, 26, true);
@@ -1326,9 +1343,9 @@ function arpFacts(A) { return [A.mode, A.octaves > 1 ? A.octaves + " octaves" : 
 // so the notes that were played are steps of a pitch. The loop of the arpeggio is shown once, a column for each step (as high as its pitch), the step that sounds
 // lit, a bar under it for its gate, and the rounds counted.
 function drawArp(T, area) {
-  const [x0, y0, w, h] = area, bank = bankInView(T), tp = tempoAt(T), bpm = tp.bpm || 120, beat = 60 / bpm;
+  const sel = viewAt(T_audio).pad, [x0, y0, w, h] = area, bank = sel ? sel[0] : bankInView(T), tp = tempoAt(T), bpm = tp.bpm || 120, beat = 60 / bpm;
   panel(x0, y0, w, h);
-  const lab = STYLE.chroma && STYLE.chroma[0] === bank ? STYLE.chroma : bank + "1", info = padInfo.get((bank.charCodeAt(0) - 65) * 16 + parseInt(lab.slice(1), 10) - 1);
+  const lab = sel || bank + "1", info = padInfo.get((bank.charCodeAt(0) - 65) * 16 + parseInt(lab.slice(1), 10) - 1);
   text("ARP", x0 + 24, y0 + 40, COL.amber, 26, true);
   const ons = []; // every hit of the bank, in the order of the time
   for (let i = 0; i < 16; i++) { const l = padEv.get(bank + (i + 1)); if (!l) continue; for (let k = Math.max(atIndex(l, T) - 40, 0); k <= atIndex(l, T); k++) if (l[k].on) { let end = -1; for (let q = k + 1; q < l.length && l[q].t <= T; q++) if (!l[q].on) { end = l[q].t; break; } ons.push({ t: l[k].t, p: i, v: l[k].v || 100, len: end >= 0 ? end - l[k].t : T - l[k].t, open: end < 0 }); } }
@@ -1344,7 +1361,7 @@ function drawArp(T, area) {
   for (let k = 0; k < pk.length; k++) { const bh = Math.max(2, pk[k] / 100 * (gh - 120)); rect(sx + 14 + k * (sw - 28) / pk.length, gy0 + gh - 18 - bh, Math.max((sw - 28) / pk.length * 0.7, 2), bh, mix("#444444", COL.amber, 0.4)); }
   const yOf = i => gy0 + gh - 96 - (gh - 96 - 30) * i / TOP;
   for (let st = 0; st <= TOP; st++) { g.globalAlpha = st % 12 === 0 ? 0.5 : st % 4 === 0 ? 0.18 : 0.07; rect(gx, yOf(st), gw, 2, COL.dim); g.globalAlpha = 1; }
-  for (let o = 0; o * 12 <= TOP; o++) text(o ? "+" + o * 12 + " (oct " + o + ")" : "+0", gx - 8, yOf(o * 12) + 5, COL.dim, 15, false, "right");
+  for (let o = 0; o * 12 <= TOP; o++) text(o ? "+" + o * 12 + (h < 450 ? "" : " (oct " + o + ")") : "+0", gx - 8, yOf(o * 12) + 5, COL.dim, 15, false, "right");
   const cw = gw / Math.max(steps.length, 4), med = A.med || 0.25;
   text("GATE", gx - 8, yOf(0) + 66, COL.blue, 14, true, "right");
   g.save(); g.strokeStyle = COL.amberD; g.lineWidth = 3; g.beginPath();
@@ -1411,20 +1428,22 @@ function drawMidi(T, area) {
 }
 function drawSplit(T, A) {
   drawHeader(T, A);
-  const cam = SPLIT.cam;
+  const R = splitRects(A), cam = R.cam;
   if (CAMFILE) { const src = camSource(A); if (src) { const sv = CAM.layer; drawCamBox(cam, 1, 1, A, false); } else drawCamBox(cam, 1, 1, A, false); }
   else { panel(cam[0], cam[1], cam[2], cam[3]); text("your camera video goes here", cam[0] + cam[2] / 2, cam[1] + cam[3] / 2, COL.dim, 26, false, "center"); }
   drawRec(cam[0] + 18, cam[1] + 18, A);
-  if (STYLE.rmode === "chroma") drawKeys(T, SPLIT.keys);
-  else if (STYLE.rmode === "arp") drawArp(T, SPLIT.keys);
-  else if (STYLE.rmode === "midi") drawMidi(T, SPLIT.keys);
-  else { const sv = L.pads; L.pads = SPLIT.keys.slice(); panel(...SPLIT.keys); drawPads(T); L.pads = sv; }
-  drawCapArea(T, A, SPLIT.caps);
+  const vmode = viewAt(A).mode;
+  if (vmode === "chroma") drawKeys(T, R.keys);
+  else if (vmode === "arp") drawArp(T, R.keys);
+  else if (vmode === "midi") drawMidi(T, R.keys);
+  else { const sv = L.pads; L.pads = R.keys.slice(); panel(...R.keys); drawPads(T); L.pads = sv; }
+  if (R.caps) drawCapArea(T, A, R.caps);
 }
 
 let T_audio = 0;
 function draw(audioTime) {
   T_audio = audioTime;
+  { const v = viewAt(audioTime); if (lastViewKey !== v.view + v.mode + v.layout + v.pad && window.syncViewBtn) window.syncViewBtn(); }
   const T = audioTime + OFFSET + NUDGE / 1000;
   drawBackground();
   camVideoKeep(audioTime);
@@ -1484,13 +1503,24 @@ for (const b of document.querySelectorAll("#sidetabs button[data-p]")) b.onclick
 document.getElementById("undo").onclick = () => undo();
 document.getElementById("redo").onclick = () => redo();
 const viewBtn = document.getElementById("viewbtn");
-function setView(v) { STYLE.view = v; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
+function setView(v) { const m = viewAt(now()).mark; if (m) { m.view = v; if (v === "split" && !m.mode) m.mode = "pads"; saveViews(); } else { STYLE.view = v; window.styleChanged && window.styleChanged(); } window.syncViewBtn(); }
 const MODES = ["pads", "chroma", "arp", "midi"], MODE_NAMES = { pads: "pads", chroma: "chromatic", arp: "arp", midi: "midi" };
-const modeBtn = document.getElementById("modebtn");
-function setMode(m) { STYLE.rmode = m; if (m === "chroma" || m === "arp") STYLE.chroma = bankInView(now() + OFFSET) + "1"; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
-modeBtn.onclick = () => setMode(MODES[(MODES.indexOf(STYLE.rmode) + 1) % MODES.length]);
-window.syncViewBtn = () => { modeBtn.textContent = MODE_NAMES[STYLE.rmode] || "pads"; modeBtn.classList.toggle("on", STYLE.rmode !== "pads"); modeBtn.style.display = STYLE.view === "split" ? "" : "none";  viewBtn.textContent = STYLE.view === "split" ? "normal view" : "split view"; viewBtn.classList.toggle("on", STYLE.view === "split"); };
-viewBtn.onclick = () => setView(STYLE.view === "split" ? "normal" : "split");
+const modeBtn = document.getElementById("modebtn"), laybtn = document.getElementById("laybtn");
+function setPad(lab) { const k = viewAt(now()).mark; if (k) { k.pad = lab; saveViews(); } else { STYLE.chroma = lab; window.styleChanged && window.styleChanged(); } window.syncViewBtn(); }
+function fillPadSelect(sel, cur) { // the pads of the project that hold a sample: "A3 KEYS"
+  sel.textContent = "";
+  for (const p of PROJ.pads || []) { if (!p.name && !p.frames) continue; const o = document.createElement("option"); o.value = p.label; o.textContent = p.label + " " + (p.name || ""); sel.appendChild(o); }
+  if (cur && ![...sel.options].some(o => o.value === cur)) { const o = document.createElement("option"); o.value = cur; o.textContent = cur; sel.appendChild(o); }
+  sel.value = cur || (sel.options[0] && sel.options[0].value) || "";
+}
+const padSel = document.getElementById("padsel"); padSel.onchange = () => setPad(padSel.value);
+function setLayout(l) { const k = viewAt(now()).mark; if (k) { k.layout = l; saveViews(); } else STYLE.layout = l; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
+laybtn.onclick = () => setLayout(SPLIT_LAYOUTS[(SPLIT_LAYOUTS.indexOf(viewAt(now()).layout) + 1) % SPLIT_LAYOUTS.length]);
+function setMode(m) { if ((m === "chroma" || m === "arp") && !viewAt(now()).pad) setPad(bankInView(now() + OFFSET) + "1"); const k = viewAt(now()).mark; if (k) { k.mode = m; saveViews(); } else STYLE.rmode = m; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
+modeBtn.onclick = () => setMode(MODES[(MODES.indexOf(viewAt(now()).mode) + 1) % MODES.length]);
+window.syncViewBtn = () => { const v = viewAt(now()); modeBtn.textContent = MODE_NAMES[v.mode] || "pads"; modeBtn.classList.toggle("on", v.mode !== "pads"); modeBtn.style.display = v.view === "split" ? "" : "none"; viewBtn.textContent = v.view === "split" ? "normal view" : "split view"; viewBtn.classList.toggle("on", v.view === "split"); laybtn.style.display = v.view === "split" ? "" : "none"; const ch = v.view === "split" && (v.mode === "chroma" || v.mode === "arp"); padSel.style.display = ch ? "" : "none"; if (ch && (padSel.dataset.cur !== v.pad || !padSel.options.length)) { fillPadSelect(padSel, v.pad); padSel.dataset.cur = v.pad; } laybtn.textContent = "layout: " + v.layout; laybtn.classList.toggle("on", v.layout !== "classic"); lastViewKey = v.view + v.mode + v.layout + v.pad; };
+let lastViewKey = "";
+viewBtn.onclick = () => setView(viewAt(now()).view === "split" ? "normal" : "split");
 document.getElementById("full").onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
 addEventListener("keydown", e => {
   if (e.target.tagName === "SELECT" || (e.target.tagName === "INPUT" && e.target.type !== "range")) return; // typing in a field is not a key for the player
@@ -1505,7 +1535,8 @@ addEventListener("keydown", e => {
   else if (e.key === "]") { NUDGE += 10; nudgeEl.textContent = "sync " + (NUDGE >= 0 ? "+" : "") + NUDGE + " ms"; }
   else if (e.key === "f") document.getElementById("full").onclick();
   else if (e.key === "v") viewBtn.onclick();
-  else if (!e.ctrlKey && !e.metaKey && (e.key === "c" || e.key === "a" || e.key === "p" || e.key === "m")) { const m = { c: "chroma", a: "arp", p: "pads", m: "midi" }[e.key]; setMode(STYLE.rmode === m && m !== "pads" ? "pads" : m); }
+  else if (!e.ctrlKey && !e.metaKey && (e.key === "l")) laybtn.click();
+  else if (!e.ctrlKey && !e.metaKey && (e.key === "c" || e.key === "a" || e.key === "p" || e.key === "m")) { const m = { c: "chroma", a: "arp", p: "pads", m: "midi" }[e.key]; setMode(viewAt(now()).mode === m && m !== "pads" ? "pads" : m); }
   else if (e.key === "i" || e.key === "o") window.cutKey && window.cutKey(e.key);
 });
 
@@ -1599,6 +1630,53 @@ function initCaptions() {
     const inputs = list.querySelectorAll("input.x"); if (inputs.length) inputs[inputs.length - 1].focus();
   };
   render(); lane();
+}
+
+// the changes of the view: blocks on a lane (from a mark to the next one), a pop-up for the view, its mode and the time
+function saveViews(kind) { VIEWM.sort((a, b) => a.t - b.t); fetch("/viewmarks", { method: "POST", body: JSON.stringify(VIEWM) }).catch(() => {}); if (window.refreshViews) window.refreshViews(); if (window.syncViewBtn) window.syncViewBtn(); histChanged(kind); }
+function initViews() {
+  const lane = document.getElementById("vwlane"), pop = document.getElementById("bpop");
+  const num = v => { const m = String(v).match(/^(\d+):(\d+(?:\.\d+)?)$/); return m ? +m[1] * 60 + +m[2] : parseFloat(v) || 0; };
+  const label = m => m.view === "split" ? "split · " + (MODE_NAMES[m.mode || "pads"] || "pads") + ((m.mode === "chroma" || m.mode === "arp") && m.pad ? " " + m.pad : "") + ((m.layout || STYLE.layout) && (m.layout || STYLE.layout) !== "classic" ? " · " + (m.layout || STYLE.layout) : "") : "normal view";
+  function edit(m) {
+    pop.textContent = ""; pop.classList.add("open");
+    const vs = document.createElement("select"), ms = document.createElement("select"), ls = document.createElement("select"), ps = document.createElement("select"), tm = document.createElement("input");
+    for (const [v, t] of [["split", "split view"], ["normal", "normal view"]]) { const o = document.createElement("option"); o.value = v; o.textContent = t; vs.appendChild(o); }
+    for (const k of MODES) { const o = document.createElement("option"); o.value = k; o.textContent = MODE_NAMES[k]; ms.appendChild(o); }
+    for (const k of SPLIT_LAYOUTS) { const o = document.createElement("option"); o.value = k; o.textContent = SPLIT_LAYOUT_NAMES[k]; ls.appendChild(o); }
+    vs.value = m.view; ms.value = m.mode || "pads"; ls.value = m.layout || STYLE.layout || "classic"; ms.hidden = ls.hidden = m.view !== "split"; fillPadSelect(ps, m.pad || viewAt(m.t).pad); const showPad = () => { ps.hidden = !(m.view === "split" && (m.mode === "chroma" || m.mode === "arp")); }; showPad(); tm.value = mmss(m.t); tm.size = 7;
+    vs.onchange = () => { m.view = vs.value; ms.hidden = ls.hidden = m.view !== "split"; if (m.view === "split" && !m.mode) m.mode = "pads"; showPad(); saveViews(); };
+    ms.onchange = () => { m.mode = ms.value; if ((m.mode === "chroma" || m.mode === "arp") && !m.pad) { m.pad = viewAt(m.t).pad || bankInView(m.t + OFFSET) + "1"; fillPadSelect(ps, m.pad); } showPad(); saveViews(); };
+    ps.onchange = () => { m.pad = ps.value; saveViews(); };
+    ls.onchange = () => { m.layout = ls.value; saveViews(); };
+    tm.onchange = () => { m.t = Math.max(0, +num(tm.value).toFixed(2)); saveViews(); };
+    const mk = (t, title, fn) => { const b = document.createElement("button"); b.textContent = t; b.title = title; b.onclick = fn; return b; };
+    pop.append(vs, ms, ps, ls, tm, mk("go", "play from here", () => { audio.currentTime = m.t; }), mk("delete", "remove this change", () => { VIEWM = VIEWM.filter(x => x !== m); pop.classList.remove("open"); saveViews(); }), mk("x", "close", () => pop.classList.remove("open")));
+    const r = lane.getBoundingClientRect(), d = AN ? AN.duration : 1; pop.style.left = Math.max(8, Math.min(innerWidth - pop.offsetWidth - 8, r.left + m.t / d * r.width - 120)) + "px";
+  }
+  function build() {
+    lane.textContent = ""; const d = AN ? AN.duration : 0; if (!d) return;
+    const all = VIEWM.slice().sort((a, b) => a.t - b.t);
+    all.forEach((m, i) => {
+      const end = i + 1 < all.length ? all[i + 1].t : d, b = document.createElement("div"), h = document.createElement("span");
+      b.className = "vm" + (m.view === "split" ? "" : " nrm"); b.textContent = label(m);
+      b.title = label(m) + " from " + mmss(m.t) + " (click to edit, drag the left edge to move)"; b.style.left = clamp(m.t / d, 0, 1) * 100 + "%"; b.style.width = Math.max(0.5, (end - m.t) / d * 100) + "%"; h.className = "hd";
+      h.onpointerdown = ev => {
+        ev.preventDefault(); ev.stopPropagation(); try { h.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer that is gone */ }
+        const r = lane.getBoundingClientRect(); let moved = false;
+        h.onpointermove = e2 => { moved = true; m.t = clamp(+((e2.clientX - r.left) / r.width * d).toFixed(2), 0, d); b.style.left = m.t / d * 100 + "%"; };
+        h.onpointerup = () => { h.onpointermove = h.onpointerup = null; if (moved) saveViews(); };
+      };
+      b.onclick = ev => { if (ev.target !== h) edit(m); };
+      b.appendChild(h); lane.appendChild(b);
+    });
+  }
+  window.refreshViews = build;
+  document.getElementById("vmbtn").onclick = () => { // the first change goes to the split view, the next one back to the normal view
+    const v = viewAt(now()); const m = v.view === "split" ? { t: +Math.max(now(), 0).toFixed(1), view: "normal" } : { t: +Math.max(now(), 0).toFixed(1), view: "split", mode: STYLE.rmode && STYLE.rmode !== "pads" ? STYLE.rmode : "pads" };
+    VIEWM.push(m); saveViews(); edit(m);
+  };
+  build();
 }
 
 // the changes of a bus: tags on a lane, a pop-up for the bus, what it is, and the time
@@ -2086,7 +2164,7 @@ function tplApply(t, parts) {
   applyStyle();
   const post = (u, b) => fetch(u, { method: "POST", body: JSON.stringify(b) }).catch(() => {});
   post("/style", STYLE); post("/camera", CAM); post("/chapters", CHAPS); post("/busnotes", BUSN);
-  for (const f of ["refreshStyle", "refreshCamera", "refreshChapters", "refreshBusNotes", "refreshCapLane"]) if (window[f]) window[f]();
+  for (const f of ["refreshStyle", "refreshCamera", "refreshChapters", "refreshBusNotes", "refreshViews", "refreshCapLane"]) if (window[f]) window[f]();
   return done;
 }
 function initTemplates() {
@@ -2206,8 +2284,8 @@ async function start() {
   const msg = document.getElementById("msg");
   try {
     const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
-    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || ""), focus: String(c.focus || "") })); CHAPS = (ev.chapters || []).map(c => ({ t: +c.t || 0, title: String(c.title || "") })); CUTS = cutsNorm((ev.cuts || []).map(c => ({ from: +c.from || 0, to: +c.to || 0 }))); BUSN = (ev.busnotes || []).map(n => ({ bus: +n.bus || 1, t: +n.t || 0, text: String(n.text || "") })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
-    initChapters(); initCuts(); initBusNotes(); initCamera(ev.camera, ev.camera_file); initTemplates();
+    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || ""), focus: String(c.focus || "") })); CHAPS = (ev.chapters || []).map(c => ({ t: +c.t || 0, title: String(c.title || "") })); CUTS = cutsNorm((ev.cuts || []).map(c => ({ from: +c.from || 0, to: +c.to || 0 }))); BUSN = (ev.busnotes || []).map(n => ({ bus: +n.bus || 1, t: +n.t || 0, text: String(n.text || "") })); VIEWM = (ev.viewmarks || []).map(m => ({ t: +m.t || 0, view: m.view === "normal" ? "normal" : "split", mode: MODES.includes(m.mode) ? m.mode : "pads", layout: SPLIT_LAYOUTS.includes(m.layout) ? m.layout : "", pad: /^[A-J](1[0-6]|[1-9])$/.test(m.pad || "") ? m.pad : "" })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
+    initChapters(); initCuts(); initBusNotes(); initViews(); initCamera(ev.camera, ev.camera_file); initTemplates();
     if (ev.default_template) { const all = {}; for (const [k] of TPL_PARTS) all[k] = true; tplApply(ev.default_template, all); } // a new take starts with the default template
     if (window.refreshCapLane) window.refreshCapLane(); // the lanes need the length of the take, which prepare has just read
     histInit();
