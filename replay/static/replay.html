@@ -2109,7 +2109,7 @@ function drawCamBox(box, al, k, A, last) {
   g.save(); g.globalAlpha = al;
   g.beginPath(); g.roundRect(x, y, w, h, rad); g.clip();
   if (src) {
-    const sw = src.videoWidth || src.naturalWidth, sh = src.videoHeight || src.naturalHeight, z = Math.max(+CAM.zoom || 1, 1);
+    const sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height, z = Math.max(+CAM.zoom || 1, 1);
     let rw = sw, rh = sh; if (sw / sh > w / h) rw = sh * w / h; else rh = sw * h / w; rw /= z; rh /= z;
     const sx = clamp(CAM.cx * sw - rw / 2, 0, sw - rw), sy = clamp(CAM.cy * sh - rh / 2, 0, sh - rh);
     if (CAM.mirror) { g.translate(x + w / 2, 0); g.scale(-1, 1); g.drawImage(src, sx, sy, rw, rh, -w / 2, y, w, h); }
@@ -2449,7 +2449,19 @@ async function start() {
     ready() { return (!logoImg || logoImg.complete) && (!bgImg || bgImg.complete); },
     frame(t) { manual = t; draw(t); return cv.toDataURL("image/png"); },
     // for a render: the picture of the camera for this frame comes from the program (a JPEG as a data URL, or nothing)
-    async frameWithCamera(t, cam) { this._renderCam = true; if (cam) { const im = new Image(); im.src = cam; await im.decode(); this._camImg = im; } else this._camImg = null; manual = t; draw(t); return cv.toDataURL("image/png"); } };
+    // the picture of the camera is made into a bitmap (Image.decode() can wait for ever in a page that is not shown); a picture that is too slow is tried again, then left out
+    async frameWithCamera(t, cam) {
+      this._renderCam = true;
+      if (this._camImg && this._camImg.close) this._camImg.close();
+      this._camImg = null;
+      if (cam) {
+        const bin = atob(cam.slice(cam.indexOf(",") + 1)), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        for (let tries = 0; tries < 3 && !this._camImg; tries++) {
+          try { this._camImg = await Promise.race([createImageBitmap(new Blob([bytes], { type: "image/jpeg" })), new Promise((_, no) => setTimeout(() => no(new Error("slow")), 8000))]); } catch (e) { this._camImg = null; }
+        }
+      }
+      manual = t; draw(t); return cv.toDataURL("image/png");
+    } };
   window.replayReady = true;
   if (params.get("t") !== null && params.get("play") === null) manual = t0;
   frame();

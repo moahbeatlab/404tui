@@ -225,10 +225,19 @@ func runRender(args []string, o options) error {
 				}
 				var b []byte
 				var err error
-				if camDir != "" {
-					b, err = br.frameWithCamera(sess, times[i], cam)
-				} else {
-					b, err = br.frame(sess, times[i])
+				for try := 0; try < 2; try++ { // a page that does not answer once gets one more go
+					if camDir != "" {
+						b, err = br.frameWithCamera(sess, times[i], cam)
+					} else {
+						b, err = br.frame(sess, times[i])
+					}
+					if err == nil || !strings.Contains(err.Error(), "no answer") {
+						break
+					}
+					fmt.Fprintf(os.Stderr, "\n  frame %d (%.2f s) got no answer: %v; trying again\n", i+1, times[i], err)
+				}
+				if err != nil {
+					err = fmt.Errorf("frame %d (%.2f s, camera picture: %v): %w", i+1, times[i], len(cam) > 0, err)
 				}
 				mu.Lock()
 				if err != nil && failed == nil {
