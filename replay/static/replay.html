@@ -189,6 +189,7 @@
   <label>picture drifts <input id="s_bgdrift" type="range" min="0" max="100" title="moves slowly from side to side"> <span id="s_bgdriftv" class="h"></span></label>
   <label>picture breathes <input id="s_bgbreath" type="range" min="0" max="100" title="zooms in and out a little"> <span id="s_bgbreathv" class="h"></span></label>
   <label>a new direction every <input id="s_bgper" type="range" min="4" max="60"> <span id="s_bgperv" class="h"></span></label>
+  <label><input id="s_rec" type="checkbox"> a REC mark on the video (split view; off: the time is in the header)</label>
   <label>hit reactions <input id="s_hits" type="range" min="0" max="100" title="a pad that is hit pops up and glows a little (25 %); more adds a ring, over 50 % sparks; 0 = off"> <span id="s_hitsv" class="h"></span></label>
   <label>panel opacity <input id="s_bgpanels" type="range" min="0" max="100"> <span id="s_bgpanelsv" class="h"></span></label>
   <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
@@ -955,7 +956,7 @@ const PRESETS = {
   "forest":   { accent: "#7bd88f", bg: "#0d1511", deep: "#101a15", panel: "#14201a", tile: "#203329", tile2: "#182820", text: "#e9f5ec", dim: "#8fb09a" },
   "mono":     { accent: "#f2f2f2", bg: "#0d0d0d", deep: "#111111", panel: "#181818", tile: "#262626", tile2: "#1c1c1c", text: "#f2f2f2", dim: "#8c8c8c" },
 };
-const STYLE_DEFAULT = { view: "split", rmode: "pads", chroma: "", capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, layout: "classic", arpLook: "columns", chapCards: 0, chapCardLen: 1.2, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
+const STYLE_DEFAULT = { view: "split", rmode: "pads", chroma: "", capFade: 0.45, capLength: 5, capBlur: 3, capDim: 0.28, capAnim: "card", hits: 0.25, layout: "classic", arpLook: "columns", rec: 0, chapCards: 0, chapCardLen: 1.2, busNotes: ["", "", "", ""], preset: "404 dark", accent: "", bg: { kind: "preset", color: "#000000", color2: "#1b1b2e", image: "", dim: 0.6, fit: "cover", px: 0.5, py: 0.5, zoom: 1, blur: 0, panels: 0.9 }, logo: "", handle: "", subtitle: "" };
 let STYLE = JSON.parse(JSON.stringify(STYLE_DEFAULT)), logoImg = null, bgImg = null;
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const hexMix = (a, b, t) => "#" + hexRgb(a).map((v, i) => Math.round(v + (hexRgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("");
@@ -1538,7 +1539,7 @@ function drawSplit(T, A) {
   const R = splitRects(A), cam = R.cam;
   if (CAMFILE) { const src = camSource(A); if (src) { const sv = CAM.layer; drawCamBox(cam, 1, 1, A, false); } else drawCamBox(cam, 1, 1, A, false); }
   else { panel(cam[0], cam[1], cam[2], cam[3]); text("your camera video goes here", cam[0] + cam[2] / 2, cam[1] + cam[3] / 2, COL.dim, 26, false, "center"); }
-  drawRec(cam[0] + 18, cam[1] + 18, A);
+  if (STYLE.rec) drawRec(cam[0] + 18, cam[1] + 18, A);
   const vmode = viewAt(A).mode;
   if (!R.keys) { /* video and sidebar only */ }
   else if (vmode === "chroma") drawKeys(T, R.keys);
@@ -2383,7 +2384,7 @@ function initStyle(saved) {
     const bg = STYLE.bg; $("s_bgfit").value = bg.fit || "cover"; $("s_bgpx").value = Math.round((bg.px === undefined ? 0.5 : bg.px) * 100); $("s_bgpy").value = Math.round((bg.py === undefined ? 0.5 : bg.py) * 100);
     $("s_bgzoom").value = Math.round((bg.zoom || 1) * 100); $("s_bgblur").value = bg.blur || 0; $("s_bgpanels").value = Math.round((bg.panels !== undefined ? bg.panels : (bg.kind === "gradient" || (bg.kind === "image" && bg.image) ? 0.9 : 1)) * 100); $("s_bgpanelsv").textContent = $("s_bgpanels").value + " %";
     $("s_bgdrift").value = Math.round((bg.mvDrift || 0) * 100); $("s_bgdriftv").textContent = $("s_bgdrift").value + " %"; $("s_bgbreath").value = Math.round((bg.mvZoom || 0) * 100); $("s_bgbreathv").textContent = $("s_bgbreath").value + " %"; $("s_bgper").value = bg.mvPeriod || 12; $("s_bgperv").textContent = $("s_bgper").value + " s";
-    $("s_hits").value = Math.round((STYLE.hits === undefined ? 0.25 : STYLE.hits) * 100); $("s_hitsv").textContent = $("s_hits").value + " %";
+    $("s_rec").checked = !!STYLE.rec; $("s_hits").value = Math.round((STYLE.hits === undefined ? 0.25 : STYLE.hits) * 100); $("s_hitsv").textContent = $("s_hits").value + " %";
     $("s_bgdim").value = Math.round((STYLE.bg.dim === undefined ? 0.6 : STYLE.bg.dim) * 100); $("s_handle").value = STYLE.handle || ""; $("s_sub").value = STYLE.subtitle || "";
   };
   show();
@@ -2404,6 +2405,7 @@ function initStyle(saved) {
   $("s_bgdrift").oninput = () => { STYLE.bg.mvDrift = $("s_bgdrift").value / 100; $("s_bgdriftv").textContent = $("s_bgdrift").value + " %"; changed(); };
   $("s_bgbreath").oninput = () => { STYLE.bg.mvZoom = $("s_bgbreath").value / 100; $("s_bgbreathv").textContent = $("s_bgbreath").value + " %"; changed(); };
   $("s_bgper").oninput = () => { STYLE.bg.mvPeriod = +$("s_bgper").value; $("s_bgperv").textContent = $("s_bgper").value + " s"; changed(); };
+  $("s_rec").onchange = () => { STYLE.rec = $("s_rec").checked ? 1 : 0; changed(); };
   $("s_hits").oninput = () => { STYLE.hits = $("s_hits").value / 100; $("s_hitsv").textContent = $("s_hits").value + " %"; changed(); };
   $("s_bgpanels").oninput = () => { STYLE.bg.panels = $("s_bgpanels").value / 100; $("s_bgpanelsv").textContent = $("s_bgpanels").value + " %"; changed(); };
   // what each bus is used for: one of the unit's effects, or your own text
