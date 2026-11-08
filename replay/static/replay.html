@@ -154,7 +154,7 @@
 </div>
 <div id="cambox" class="pane">
   <div class="h2">camera <span class="h">(the video of you playing; drag the box on the picture, its corners change the size)</span></div>
-  <div class="row"><input id="cam_path" placeholder="path of the video, e.g. ~/Movies/take.mov" style="flex:1"><button id="cam_use">use</button></div>
+  <div class="row"><input id="cam_path" placeholder="path of the video, e.g. ~/Movies/take.mov" style="flex:1"><button id="cam_browse">choose file…</button><button id="cam_use">use</button></div>
   <div id="cam_status" class="h"></div>
   <div class="h2 sub">sync <span class="h">(the camera has no sound: match one pad hit by eye)</span></div>
   <div class="row"><select id="cam_hit" style="flex:1"></select><button id="cam_gohit" title="show this hit in the replay">go to the hit</button></div>
@@ -2186,6 +2186,15 @@ function initCamera(saved, file) {
   const end = () => { if (drag && drag.moved) save(); drag = null; };
   cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
   // ---- the box with the file, the sync, the picture
+  $("cam_browse").onclick = async () => {
+    $("cam_status").textContent = "choose the video in the dialog (it may be behind this window)...";
+    try {
+      const r = await fetch("/camera/pick", { method: "POST" });
+      if (!r.ok) { $("cam_status").textContent = (await r.text()).trim(); return; }
+      const path = (await r.json()).path; $("cam_status").textContent = "";
+      if (path) { $("cam_path").value = path; $("cam_use").click(); }
+    } catch (e) { $("cam_status").textContent = "could not reach the server"; }
+  };
   $("cam_use").onclick = async () => {
     const path = $("cam_path").value.trim(); if (!path) return;
     try {

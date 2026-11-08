@@ -488,6 +488,18 @@ func (r *Replay) Handler() http.Handler {
 	})
 	mux.HandleFunc("/templates", r.templateHandler)
 	mux.HandleFunc("/templates/", r.templateHandler)
+	mux.HandleFunc("/camera/pick", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "POST", http.StatusMethodNotAllowed)
+			return
+		}
+		path, err := pickFile()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotImplemented)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"path": path})
+	})
 	mux.HandleFunc("/camera/file", func(w http.ResponseWriter, req *http.Request) {
 		var f struct {
 			Path string `json:"path"`
