@@ -156,10 +156,15 @@
   <div class="h2">camera <span class="h">(the video of you playing; drag the box on the picture, its corners change the size)</span></div>
   <div class="row"><input id="cam_path" placeholder="path of the video, e.g. ~/Movies/take.mov" style="flex:1"><button id="cam_browse">choose file…</button><button id="cam_use">use</button></div>
   <div id="cam_status" class="h"></div>
-  <div class="h2 sub">sync <span class="h">(the camera has no sound: pick a moment in the recording and match it to a frame of the video)</span></div>
+  <div class="h2 sub">sync <span class="h">(the camera has no sound, so you tell it which frame belongs to which moment)</span></div>
+  <div class="h"><b>1</b> the moment in the recording: move the playhead there (click the timeline) or choose one:</div>
   <div class="row"><select id="cam_hit" style="flex:1"></select><button id="cam_gohit" title="show this moment in the replay">go there</button></div>
+  <div class="h"><b>2</b> the same moment in the video: find the frame where you press that pad (or the play button):</div>
   <video id="cam_prev" controls muted playsinline preload="auto"></video>
-  <div class="row"><button id="cam_fm" title="a frame back">&lt; frame</button><button id="cam_fp" title="a frame on">frame &gt;</button><button id="cam_set" style="flex:1">this camera frame = that moment</button></div>
+  <div class="row"><button data-v="-5">-5 s</button><button data-v="-1">-1 s</button><button data-v="-0.1">-0.1</button><button id="cam_fm" title="a frame back">&lt; frame</button><button id="cam_fp" title="a frame on">frame &gt;</button><button data-v="0.1">+0.1</button><button data-v="1">+1 s</button><button data-v="5">+5 s</button></div>
+  <div class="h" id="cam_live"></div>
+  <div class="h"><b>3</b> tie the two together:</div>
+  <div class="row"><button id="cam_set" style="flex:1">this video frame = that moment</button></div>
   <div class="row"><span class="h">offset</span><input id="cam_sync" type="number" step="0.001" style="width:96px"><span class="h">s</span>
     <button data-n="-1">-1 s</button><button data-n="-0.1">-0.1</button><button data-n="-0.0333">-1 f</button><button data-n="0.0333">+1 f</button><button data-n="0.1">+0.1</button><button data-n="1">+1 s</button></div>
   <div class="h2 sub">picture</div>
@@ -2220,8 +2225,11 @@ function initCamera(saved, file) {
   $("cam_gohit").onclick = () => { const h = hits[+$("cam_hit").value]; if (h && !h.now) { audio.pause(); audio.currentTime = Math.max(h.t, 0); } };
   const frame = d => () => { prev.pause(); prev.currentTime = Math.max(0, prev.currentTime + d / 30); };
   $("cam_fm").onclick = frame(-1); $("cam_fp").onclick = frame(1);
+  for (const b of box.querySelectorAll("button[data-v]")) b.onclick = () => { prev.pause(); prev.currentTime = Math.max(0, prev.currentTime + parseFloat(b.dataset.v)); };
+  const live = () => { const h = hits[+$("cam_hit").value], t = h ? (h.now ? audio.currentTime : h.t) : audio.currentTime; $("cam_live").textContent = "video at " + mmss(prev.currentTime) + "   |   recording at " + mmss(t) + (CAMFILE ? "   |   offset " + (+CAM.sync).toFixed(3) + " s" : ""); };
+  prev.addEventListener("timeupdate", live); prev.addEventListener("seeked", live); audio.addEventListener("seeked", live); audio.addEventListener("timeupdate", live); $("cam_hit").addEventListener("change", live);
   const showSync = () => { $("cam_sync").value = (+CAM.sync).toFixed(3); };
-  $("cam_set").onclick = () => { const t = hitTime(); if (t === null) return; CAM.sync = +(prev.currentTime - t).toFixed(3); showSync(); save(); };
+  $("cam_set").onclick = () => { const t = hitTime(); if (t === null) return; CAM.sync = +(prev.currentTime - t).toFixed(3); showSync(); live(); save(); };
   $("cam_sync").onchange = () => { CAM.sync = parseFloat($("cam_sync").value) || 0; save(); };
   for (const b of box.querySelectorAll("button[data-n]")) b.onclick = () => { CAM.sync = +((+CAM.sync) + parseFloat(b.dataset.n)).toFixed(3); showSync(); save(); };
   const bind = (id, key, conv) => { const el = $(id); el.oninput = () => { CAM[key] = conv(el); if (id === "cam_zoom") $("cam_zoomv").textContent = (+CAM.zoom).toFixed(2) + "x"; save("text"); }; };

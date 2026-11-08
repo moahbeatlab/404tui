@@ -120,7 +120,7 @@ playhead: "from here on bus 3 is Filter + Drive". The bus headers on the picture
 
 ![The camera tab](img/replay-camera.png)
 
-**Camera** takes a video of you playing: press *choose file…* to pick it in the computer's own file dialog (macOS, Windows, Linux with `zenity` or `kdialog`), or type its path and press *use*. The camera has no sound, so match it by eye: pick a moment of the take (the playhead, the start of a pattern or a pad hit; *go there*), step the video to the frame that shows it (for a pattern start: the first pad of the pattern is pressed, or the unit's play button) (*frame <* and *frame >*, or the offset buttons) and the
+**Camera** takes a video of you playing: press *choose file…* to pick it in the computer's own file dialog (macOS, Windows, Linux with `zenity` or `kdialog`), or type its path and press *use*. The camera has no sound, so match it by eye: pick a moment of the take (the playhead, the start of a pattern or a pad hit; *go there*), find the frame of the video that shows it (the buttons under the video jump by 5 s, 1 s, 0.1 s or one frame; a line shows both times) and press *this video frame = that moment*; step the video to the frame that shows it (for a pattern start: the first pad of the pattern is pressed, or the unit's play button) (*frame <* and *frame >*, or the offset buttons) and the
 sync is set. The box is dragged on the picture (its corners change the size; the zoom and the position of the cut-out are sliders, and another slider rounds the corners), can be mirrored, and is in front of the
 panels or behind them.
 
