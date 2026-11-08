@@ -1259,8 +1259,8 @@ const splitOn = () => viewAt(T_audio).view === "split";
 // layouts: "classic" has the captions area, "side" is only the video and the mode view next to each other, "stack" one above the other (no captions area in those two)
 const SPLIT_LAYOUTS = ["classic", "side", "stack", "info"], SPLIT_LAYOUT_NAMES = { classic: "video, mode, captions", side: "video + mode side by side", stack: "video over mode", info: "video + sidebar (buses, level, logs)" };
 const SPLITS = VERT
-  ? { classic: { cam: [72, 108, 936, 620], keys: [72, 742, 936, 500], caps: [72, 1256, 936, 448] }, side: null, stack: { cam: [72, 108, 936, 760], keys: [72, 892, 936, 820], caps: null }, info: { cam: [72, 108, 936, 880], keys: null, caps: null, bar: { fx: [72, 1040, 936, 200], meter: [72, 1256, 936, 270], feed: [72, 1542, 936, 162] } } }
-  : { classic: { cam: [40, 80, 1000, 600], keys: [1060, 80, 820, 600], caps: [40, 696, 1840, 354] }, side: { cam: [40, 80, 1000, 950], keys: [1060, 80, 820, 950], caps: null }, stack: { cam: [40, 80, 1840, 560], keys: [40, 656, 1840, 374], caps: null }, info: { cam: [40, 80, 1180, 950], keys: null, caps: null, bar: { fx: [1240, 80, 640, 200], meter: [1240, 296, 640, 420], feed: [1240, 732, 640, 298] } } };
+  ? { classic: { cam: [72, 108, 936, 620], keys: [72, 742, 936, 570], caps: [72, 1328, 936, 376] }, side: null, stack: { cam: [72, 108, 936, 760], keys: [72, 892, 936, 820], caps: null }, info: { cam: [72, 108, 936, 880], keys: null, caps: null, bar: { fx: [72, 1040, 936, 200], meter: [72, 1256, 936, 270], feed: [72, 1542, 936, 162] } } }
+  : { classic: { cam: [40, 80, 1000, 690], keys: [1060, 80, 820, 690], caps: [40, 786, 1840, 264] }, side: { cam: [40, 80, 1000, 950], keys: [1060, 80, 820, 950], caps: null }, stack: { cam: [40, 80, 1840, 560], keys: [40, 656, 1840, 374], caps: null }, info: { cam: [40, 80, 1180, 950], keys: null, caps: null, bar: { fx: [1240, 80, 640, 200], meter: [1240, 296, 640, 420], feed: [1240, 732, 640, 298] } } };
 if (!SPLITS.side) SPLITS.side = SPLITS.stack; // vertical: there is no room for two side by side
 // How much the caption area is there at A (0..1): the classic layout has it only while a caption is on; the video and the pads use the room otherwise.
 const capPresence = A => { let f = 0; for (const c of CAPS) if (c.text) f = Math.max(f, clamp(Math.min(A - (c.from - 0.3), c.to + 0.3 - A) / 0.3, 0, 1)); return easeOut(f); };
@@ -1270,7 +1270,7 @@ function splitRects(A) {
   if (lay !== "classic" || !R.caps) return R;
   const f = capPresence(A), full = SPLITS.side;
   if (f >= 1) return R;
-  return { cam: lerpRect(full.cam, R.cam, f), keys: lerpRect(full.keys, R.keys, f), caps: f > 0.01 ? R.caps : null, capsAlpha: f };
+  return { cam: lerpRect(full.cam, R.cam, f), keys: lerpRect(full.keys, R.keys, f), caps: f > 0.01 ? [R.caps[0], R.caps[1] + (full.cam[1] + full.cam[3] + 16 - R.caps[1]) * (1 - f), R.caps[2], R.caps[3]] : null, capsAlpha: f };
 }
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 function drawRec(x, y, A) { // the mark of a take that is recorded: a red dot that breathes, REC and the time of the take
@@ -1340,14 +1340,15 @@ function drawKeys(T, area) { // the pads as the unit plays them in its chromatic
   text("pad " + bank + "1 is the pad's own pitch, each pad one semitone up", x0 + 24, y0 + h - 8, COL.dim, 16);
 }
 function drawCapArea(T, A, area) { // the captions have an area of their own: nothing is blurred or covered
-  const [x0, y0, w, h] = area; panel(x0, y0, w, h);
+  const [x0, y0, w, h] = area;
   const c = CAPS.find(c => c.text && A >= c.from && A < c.to);
-  if (!c) { const tp = tempoAt(T); text(TITLE || PROJ.name || "", x0 + w / 2, y0 + h / 2 + 8, COL.dim, 34, true, "center"); return; }
+  if (!c) return; // the area is only there while a caption is on (the video and the mode view move in a little before and after)
+  panel(x0, y0, w, h);
   const fd = clamp(+STYLE.capFade || 0, 0, 3), span = Math.max(Math.min(fd, (c.to - c.from) / 2), 0.0001);
   const fade = fd === 0 ? 1 : easeOut(clamp(Math.min(A - c.from, c.to - A) / span, 0, 1));
   const words = capWords(c.text), plain = words.map(x => x.w).join(" ");
   const side = VERT ? 110 : 160, maxLines = VERT ? 5 : 3;
-  let px = VERT ? 54 : 64; let lines = wrapText(plain, w - side, px);
+  let px = VERT ? 46 : 48; let lines = wrapText(plain, w - side, px);
   while (lines.length > maxLines && px > 30) { px -= 4; lines = wrapText(plain, w - side, px); }
   const kk = VERT ? 1.22 : 1, lh = px * kk * 1.3, top = y0 + (h - lines.length * lh) / 2 + px * kk * 0.95;
   rect(x0 + (VERT ? 28 : 40), y0 + 40, 8, h - 80, COL.amber);
