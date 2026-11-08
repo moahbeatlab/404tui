@@ -1264,7 +1264,7 @@ function drawRec(x, y, A) { // the mark of a take that is recorded: a red dot th
   text("REC", x + 48 * sc, y + 32 * sc, "#fff", 24, true); text(mmss(outTime(A)), x + bw - 10, y + 32 * sc, "#ddd", 22, false, "right");
 }
 function drawKeys(T, area) { // the pads as the unit plays them in its chromatic mode: 16 pads, 16 semitones up from the pad's own pitch
-  const [x0, y0, w, h] = area, lab = viewAt(T_audio).pad, bank = lab ? lab[0] : bankInView(T), b = bank.charCodeAt(0) - 65;
+  const [x0, y0, w, h] = area, lab = midiChan(viewAt(T_audio).pad) ? "" : viewAt(T_audio).pad, bank = lab ? lab[0] : bankInView(T), b = bank.charCodeAt(0) - 65;
   panel(x0, y0, w, h);
   const info = lab ? padInfo.get(b * 16 + (parseInt(lab.slice(1), 10) - 1)) : null;
   text("CHROMATIC", x0 + 24, y0 + 40, COL.amber, 26, true);
@@ -1345,23 +1345,26 @@ function arpFacts(A) { return [A.mode, A.octaves > 1 ? A.octaves + " octaves" : 
 function drawArp(T, area) {
   const sel = viewAt(T_audio).pad, [x0, y0, w, h] = area, bank = sel ? sel[0] : bankInView(T), tp = tempoAt(T), bpm = tp.bpm || 120, beat = 60 / bpm;
   panel(x0, y0, w, h);
-  const lab = sel || bank + "1", info = padInfo.get((bank.charCodeAt(0) - 65) * 16 + parseInt(lab.slice(1), 10) - 1);
+  const lab = sel || bank + "1", info = midiChan(sel) ? null : padInfo.get((bank.charCodeAt(0) - 65) * 16 + parseInt(lab.slice(1), 10) - 1);
   text("ARP", x0 + 24, y0 + 40, COL.amber, 26, true);
   const ons = []; // every hit of the bank, in the order of the time
   for (let i = 0; i < 16; i++) { const l = padEv.get(bank + (i + 1)); if (!l) continue; for (let k = Math.max(atIndex(l, T) - 40, 0); k <= atIndex(l, T); k++) if (l[k].on) { let end = -1; for (let q = k + 1; q < l.length && l[q].t <= T; q++) if (!l[q].on) { end = l[q].t; break; } ons.push({ t: l[k].t, p: i, v: l[k].v || 100, len: end >= 0 ? end - l[k].t : T - l[k].t, open: end < 0 }); } }
   ons.sort((a, b) => a.t - b.t);
-  const A = arpAnalyse(ons.filter(o => o.t > T - 12), beat), { steps, per, cur, rounds } = A, last = A.rec.length ? A.rec[A.rec.length - 1] : null;
-  text((info && info.name ? fit(info.name, 20) + "   " : "") + (per ? "loop of " + per + "  x" + rounds : A.rn.length > 3 ? "" : "no arpeggio yet"), x0 + 110, y0 + 40, COL.text, 22);
+  let src = null, base = 0, list = ons.filter(o => o.t > T - 12); // the notes come from a MIDI channel when it is chosen, or when the bank has played nothing
+  if (midiChan(sel)) src = midiNotes(T, midiChan(sel)); else if (!list.length) { const m = midiNotes(T, 0); if (m.ch) src = m; }
+  if (src) { list = src.notes; base = list.length ? Math.min(...list.map(o => o.p)) : 0; list = list.map(o => ({ ...o, p: o.p - base })); }
+  const A = arpAnalyse(list, beat), { steps, per, cur, rounds } = A, last = A.rec.length ? A.rec[A.rec.length - 1] : null;
+  text((src ? "MIDI ch " + src.ch + "   " : info && info.name ? fit(info.name, 20) + "   " : "") + (per ? "loop of " + per + "  x" + rounds : A.rn.length > 3 ? "" : "no arpeggio yet"), x0 + 110, y0 + 40, COL.text, 22);
   text(Math.round(bpm) + " BPM", x0 + w - 24, y0 + 40, COL.dim, 22, false, "right");
   const facts = arpFacts(A); if (facts) text(facts, x0 + 110, y0 + 66, COL.blue, 19, true);
   const sx = x0 + 24, sw = 150, gy0 = y0 + 84, gh = h - 84 - 58, gx = sx + sw + 28, gw = w - (gx - x0) - 24, TOP = Math.max(15, Math.ceil(Math.max(...steps, 0) / 12) * 12);
   rrect(sx, gy0, sw, gh, 10, COL.tile2);
-  text(lab, sx + 14, gy0 + 34, COL.amber, 24, true); text("one sample", sx + 14, gy0 + 60, COL.dim, 16);
-  const pk = info && info.peaks ? info.peaks : [];
+  text(src ? "ch " + src.ch : lab, sx + 14, gy0 + 34, COL.amber, 24, true); text(src ? "MIDI notes" : "one sample", sx + 14, gy0 + 60, COL.dim, 16);
+  const pk = !src && info && info.peaks ? info.peaks : [];
   for (let k = 0; k < pk.length; k++) { const bh = Math.max(2, pk[k] / 100 * (gh - 120)); rect(sx + 14 + k * (sw - 28) / pk.length, gy0 + gh - 18 - bh, Math.max((sw - 28) / pk.length * 0.7, 2), bh, mix("#444444", COL.amber, 0.4)); }
   const yOf = i => gy0 + gh - 96 - (gh - 96 - 30) * i / TOP;
   for (let st = 0; st <= TOP; st++) { g.globalAlpha = st % 12 === 0 ? 0.5 : st % 4 === 0 ? 0.18 : 0.07; rect(gx, yOf(st), gw, 2, COL.dim); g.globalAlpha = 1; }
-  for (let o = 0; o * 12 <= TOP; o++) text(o ? "+" + o * 12 + (h < 450 ? "" : " (oct " + o + ")") : "+0", gx - 8, yOf(o * 12) + 5, COL.dim, 15, false, "right");
+  for (let o = 0; o * 12 <= TOP; o++) text(o ? "+" + o * 12 + (h < 450 || w < 1000 ? "" : " (oct " + o + ")") : "+0", gx - 8, yOf(o * 12) + 5, COL.dim, 15, false, "right");
   const cw = gw / Math.max(steps.length, 4), med = A.med || 0.25;
   text("GATE", gx - 8, yOf(0) + 66, COL.blue, 14, true, "right");
   g.save(); g.strokeStyle = COL.amberD; g.lineWidth = 3; g.beginPath();
@@ -1373,7 +1376,7 @@ function drawArp(T, area) {
     if (now) { g.shadowColor = COL.amber; g.shadowBlur = 28 * glow; }
     rrect(cx - bw / 2, top, bw, bot - top, 6, now ? COL.amber : mix("#555555", COL.amber, done ? 0.55 : 0.25)); g.restore();
     text("+" + i, cx, top - 10, now ? COL.amber : COL.text, 17, now, "center");
-    text(NOTE_NAMES[i % 12] + (i >= 12 ? "+" + Math.floor(i / 12) : ""), cx, bot + 22, COL.dim, 14, false, "center");
+    text(src ? mnote(base + i) : NOTE_NAMES[i % 12] + (i >= 12 ? "+" + Math.floor(i / 12) : ""), cx, bot + 22, COL.dim, 14, false, "center");
     text(String(k + 1), cx, bot + 38, now ? COL.amber : COL.dim, 13, now, "center");
     if (o2 && !o2.open) { const gt = clamp(o2.len / med, 0, 1.25); g.save(); g.globalAlpha = now ? 1 : done ? 0.7 : 0.35; rect(cx - cw / 2 + 4, bot + 48, cw - 8, 10, "#2a2a30"); rect(cx - cw / 2 + 4, bot + 48, (cw - 8) * Math.min(gt, 1), 10, gt >= 1 ? COL.good : COL.blue); g.restore(); }
   });
@@ -1382,22 +1385,28 @@ function drawArp(T, area) {
     const ax = gx + 0.5 * cw, bx = gx + (per - 0.5) * cw, ay = yOf(0) + 84; g.moveTo(bx, ay - 6); g.lineTo(bx, ay); g.lineTo(ax, ay); g.lineTo(ax, ay - 8); g.stroke(); g.setLineDash([]);
     g.fillStyle = COL.amberD; g.beginPath(); g.moveTo(ax - 6, ay - 8); g.lineTo(ax + 6, ay - 8); g.lineTo(ax, ay - 16); g.fill(); g.restore();
   }
-  text("one sample: each step is n semitones above its pitch (pad 1 = +0)", x0 + 24, y0 + h - 12, COL.dim, 16);
+  text(src ? "MIDI: each step is n semitones above the lowest note (" + mnote(base) + " = +0)" : "one sample: each step is n semitones above its pitch (pad 1 = +0)", x0 + 24, y0 + h - 12, COL.dim, 16);
 }
 
 // the MIDI view: the notes that the unit sends out (the arpeggiator playing another instrument, an MC-101 say). They are not pads: any channel, any note
 // number. A piano roll of the last seconds scrolls to the left, the length of a bar is the gate, the beats are lines, the keyboard at the left lights the
 // notes that sound; under the title are the mode, octaves, rate, gate and swing found from the notes. The channel with the most notes is the one shown.
 const midiEv = []; // every note on and off that is not a pad: { t, ch, n, on, v }
+function midiNotes(T, want) { // the notes of the last 12 seconds of one channel (the one asked for, else the one with the most notes)
+  const from = T - 12, evs = []; for (let k = Math.max(atIndex(midiEv, T) - 400, 0); k <= atIndex(midiEv, T); k++) if (midiEv[k] && midiEv[k].t >= from) evs.push(midiEv[k]);
+  const cnt = new Map(); for (const e of evs) if (e.on) cnt.set(e.ch, (cnt.get(e.ch) || 0) + 1);
+  let ch = want || 0, best = 0; if (!want) for (const [c, n] of cnt) if (n > best) { best = n; ch = c; }
+  const notes = [];
+  for (let k = 0; k < evs.length; k++) { const e = evs[k]; if (!e.on || e.ch !== ch) continue; let end = -1; for (let q = k + 1; q < evs.length; q++) if (!evs[q].on && evs[q].ch === ch && evs[q].n === e.n) { end = evs[q].t; break; } notes.push({ t: e.t, p: e.n, v: e.v || 100, len: end >= 0 ? end - e.t : T - e.t, open: end < 0 }); }
+  return { ch, notes };
+}
+const midiChan = pad => { const m = /^ch(\d+)$/.exec(pad || ""); return m ? +m[1] : 0; };
+const mnote = n => NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 1);
 function drawMidi(T, area) {
   const [x0, y0, w, h] = area, WIN = 4, tp = tempoAt(T), bpm = tp.bpm || 120, beat = 60 / bpm;
   panel(x0, y0, w, h);
   text("MIDI", x0 + 24, y0 + 40, COL.amber, 26, true);
-  const from = T - 12, evs = []; for (let k = Math.max(atIndex(midiEv, T) - 400, 0); k <= atIndex(midiEv, T); k++) if (midiEv[k] && midiEv[k].t >= from) evs.push(midiEv[k]);
-  const cnt = new Map(); for (const e of evs) if (e.on) cnt.set(e.ch, (cnt.get(e.ch) || 0) + 1);
-  let ch = 0, best = 0; for (const [c, n] of cnt) if (n > best) { best = n; ch = c; }
-  const notes = [];
-  for (let k = 0; k < evs.length; k++) { const e = evs[k]; if (!e.on || e.ch !== ch) continue; let end = -1; for (let q = k + 1; q < evs.length; q++) if (!evs[q].on && evs[q].ch === ch && evs[q].n === e.n) { end = evs[q].t; break; } notes.push({ t: e.t, p: e.n, v: e.v || 100, len: end >= 0 ? end - e.t : T - e.t, open: end < 0 }); }
+  const { ch, notes } = midiNotes(T, midiChan(viewAt(T_audio).pad));
   const A = arpAnalyse(notes, beat);
   text((ch ? "channel " + ch : "no MIDI notes yet") + (A.per ? "   loop of " + A.per + "  x" + A.rounds : ""), x0 + 110, y0 + 40, COL.text, 22);
   text(Math.round(bpm) + " BPM", x0 + w - 24, y0 + 40, COL.dim, 22, false, "right");
@@ -1510,6 +1519,7 @@ function setPad(lab) { const k = viewAt(now()).mark; if (k) { k.pad = lab; saveV
 function fillPadSelect(sel, cur) { // the pads of the project that hold a sample: "A3 KEYS"
   sel.textContent = "";
   for (const p of PROJ.pads || []) { if (!p.name && !p.frames) continue; const o = document.createElement("option"); o.value = p.label; o.textContent = p.label + " " + (p.name || ""); sel.appendChild(o); }
+  const chs = [...new Set(midiEv.map(e => e.ch))].sort((a, b) => a - b); for (const c of chs) { const o = document.createElement("option"); o.value = "ch" + c; o.textContent = "MIDI channel " + c; sel.appendChild(o); }
   if (cur && ![...sel.options].some(o => o.value === cur)) { const o = document.createElement("option"); o.value = cur; o.textContent = cur; sel.appendChild(o); }
   sel.value = cur || (sel.options[0] && sel.options[0].value) || "";
 }
@@ -1518,7 +1528,7 @@ function setLayout(l) { const k = viewAt(now()).mark; if (k) { k.layout = l; sav
 laybtn.onclick = () => setLayout(SPLIT_LAYOUTS[(SPLIT_LAYOUTS.indexOf(viewAt(now()).layout) + 1) % SPLIT_LAYOUTS.length]);
 function setMode(m) { if ((m === "chroma" || m === "arp") && !viewAt(now()).pad) setPad(bankInView(now() + OFFSET) + "1"); const k = viewAt(now()).mark; if (k) { k.mode = m; saveViews(); } else STYLE.rmode = m; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
 modeBtn.onclick = () => setMode(MODES[(MODES.indexOf(viewAt(now()).mode) + 1) % MODES.length]);
-window.syncViewBtn = () => { const v = viewAt(now()); modeBtn.textContent = MODE_NAMES[v.mode] || "pads"; modeBtn.classList.toggle("on", v.mode !== "pads"); modeBtn.style.display = v.view === "split" ? "" : "none"; viewBtn.textContent = v.view === "split" ? "normal view" : "split view"; viewBtn.classList.toggle("on", v.view === "split"); laybtn.style.display = v.view === "split" ? "" : "none"; const ch = v.view === "split" && (v.mode === "chroma" || v.mode === "arp"); padSel.style.display = ch ? "" : "none"; if (ch && (padSel.dataset.cur !== v.pad || !padSel.options.length)) { fillPadSelect(padSel, v.pad); padSel.dataset.cur = v.pad; } laybtn.textContent = "layout: " + v.layout; laybtn.classList.toggle("on", v.layout !== "classic"); lastViewKey = v.view + v.mode + v.layout + v.pad; };
+window.syncViewBtn = () => { const v = viewAt(now()); modeBtn.textContent = MODE_NAMES[v.mode] || "pads"; modeBtn.classList.toggle("on", v.mode !== "pads"); modeBtn.style.display = v.view === "split" ? "" : "none"; viewBtn.textContent = v.view === "split" ? "normal view" : "split view"; viewBtn.classList.toggle("on", v.view === "split"); laybtn.style.display = v.view === "split" ? "" : "none"; const ch = v.view === "split" && (v.mode === "chroma" || v.mode === "arp" || v.mode === "midi"); padSel.style.display = ch ? "" : "none"; if (ch && (padSel.dataset.cur !== v.pad || !padSel.options.length)) { fillPadSelect(padSel, v.pad); padSel.dataset.cur = v.pad; } laybtn.textContent = "layout: " + v.layout; laybtn.classList.toggle("on", v.layout !== "classic"); lastViewKey = v.view + v.mode + v.layout + v.pad; };
 let lastViewKey = "";
 viewBtn.onclick = () => setView(viewAt(now()).view === "split" ? "normal" : "split");
 document.getElementById("full").onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
@@ -1637,20 +1647,21 @@ function saveViews(kind) { VIEWM.sort((a, b) => a.t - b.t); fetch("/viewmarks", 
 function initViews() {
   const lane = document.getElementById("vwlane"), pop = document.getElementById("bpop");
   const num = v => { const m = String(v).match(/^(\d+):(\d+(?:\.\d+)?)$/); return m ? +m[1] * 60 + +m[2] : parseFloat(v) || 0; };
-  const label = m => m.view === "split" ? "split · " + (MODE_NAMES[m.mode || "pads"] || "pads") + ((m.mode === "chroma" || m.mode === "arp") && m.pad ? " " + m.pad : "") + ((m.layout || STYLE.layout) && (m.layout || STYLE.layout) !== "classic" ? " · " + (m.layout || STYLE.layout) : "") : "normal view";
+  const label = m => m.view === "split" ? "split · " + (MODE_NAMES[m.mode || "pads"] || "pads") + ((m.mode === "chroma" || m.mode === "arp" || m.mode === "midi") && m.pad ? " " + m.pad : "") + ((m.layout || STYLE.layout) && (m.layout || STYLE.layout) !== "classic" ? " · " + (m.layout || STYLE.layout) : "") : "normal view";
   function edit(m) {
     pop.textContent = ""; pop.classList.add("open");
     const vs = document.createElement("select"), ms = document.createElement("select"), ls = document.createElement("select"), ps = document.createElement("select"), tm = document.createElement("input");
     for (const [v, t] of [["split", "split view"], ["normal", "normal view"]]) { const o = document.createElement("option"); o.value = v; o.textContent = t; vs.appendChild(o); }
     for (const k of MODES) { const o = document.createElement("option"); o.value = k; o.textContent = MODE_NAMES[k]; ms.appendChild(o); }
     for (const k of SPLIT_LAYOUTS) { const o = document.createElement("option"); o.value = k; o.textContent = SPLIT_LAYOUT_NAMES[k]; ls.appendChild(o); }
-    vs.value = m.view; ms.value = m.mode || "pads"; ls.value = m.layout || STYLE.layout || "classic"; ms.hidden = ls.hidden = m.view !== "split"; fillPadSelect(ps, m.pad || viewAt(m.t).pad); const showPad = () => { ps.hidden = !(m.view === "split" && (m.mode === "chroma" || m.mode === "arp")); }; showPad(); tm.value = mmss(m.t); tm.size = 7;
+    vs.value = m.view; ms.value = m.mode || "pads"; ls.value = m.layout || STYLE.layout || "classic"; ms.hidden = ls.hidden = m.view !== "split"; fillPadSelect(ps, m.pad || viewAt(m.t).pad); const showPad = () => { ps.hidden = !(m.view === "split" && (m.mode === "chroma" || m.mode === "arp" || m.mode === "midi")); }; showPad(); tm.value = mmss(m.t); tm.size = 7;
     vs.onchange = () => { m.view = vs.value; ms.hidden = ls.hidden = m.view !== "split"; if (m.view === "split" && !m.mode) m.mode = "pads"; showPad(); saveViews(); };
     ms.onchange = () => { m.mode = ms.value; if ((m.mode === "chroma" || m.mode === "arp") && !m.pad) { m.pad = viewAt(m.t).pad || bankInView(m.t + OFFSET) + "1"; fillPadSelect(ps, m.pad); } showPad(); saveViews(); };
     ps.onchange = () => { m.pad = ps.value; saveViews(); };
     ls.onchange = () => { m.layout = ls.value; saveViews(); };
     tm.onchange = () => { m.t = Math.max(0, +num(tm.value).toFixed(2)); saveViews(); };
     const mk = (t, title, fn) => { const b = document.createElement("button"); b.textContent = t; b.title = title; b.onclick = fn; return b; };
+    vs.title = "the view from this time on"; ms.title = "what the split view shows"; ps.title = "the sample of the chromatic keys and the arp, or the MIDI channel"; ls.title = "the layout of the split view"; tm.title = "the time of this change";
     pop.append(vs, ms, ps, ls, tm, mk("go", "play from here", () => { audio.currentTime = m.t; }), mk("delete", "remove this change", () => { VIEWM = VIEWM.filter(x => x !== m); pop.classList.remove("open"); saveViews(); }), mk("x", "close", () => pop.classList.remove("open")));
     const r = lane.getBoundingClientRect(), d = AN ? AN.duration : 1; pop.style.left = Math.max(8, Math.min(innerWidth - pop.offsetWidth - 8, r.left + m.t / d * r.width - 120)) + "px";
   }
@@ -1672,8 +1683,8 @@ function initViews() {
     });
   }
   window.refreshViews = build;
-  document.getElementById("vmbtn").onclick = () => { // the first change goes to the split view, the next one back to the normal view
-    const v = viewAt(now()); const m = v.view === "split" ? { t: +Math.max(now(), 0).toFixed(1), view: "normal" } : { t: +Math.max(now(), 0).toFixed(1), view: "split", mode: STYLE.rmode && STYLE.rmode !== "pads" ? STYLE.rmode : "pads" };
+  document.getElementById("vmbtn").onclick = () => { // a new mark starts as the split view with what is shown now; the pop-up opens to choose view, mode, sample and layout
+    const v = viewAt(now()), m = { t: +Math.max(now(), 0).toFixed(1), view: "split", mode: v.mode, layout: v.layout, pad: v.pad };
     VIEWM.push(m); saveViews(); edit(m);
   };
   build();
@@ -2284,7 +2295,7 @@ async function start() {
   const msg = document.getElementById("msg");
   try {
     const [ev, an] = await Promise.all([fetch("/events.json").then(r => r.json()), fetch("/analysis.json").then(r => r.json())]);
-    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || ""), focus: String(c.focus || "") })); CHAPS = (ev.chapters || []).map(c => ({ t: +c.t || 0, title: String(c.title || "") })); CUTS = cutsNorm((ev.cuts || []).map(c => ({ from: +c.from || 0, to: +c.to || 0 }))); BUSN = (ev.busnotes || []).map(n => ({ bus: +n.bus || 1, t: +n.t || 0, text: String(n.text || "") })); VIEWM = (ev.viewmarks || []).map(m => ({ t: +m.t || 0, view: m.view === "normal" ? "normal" : "split", mode: MODES.includes(m.mode) ? m.mode : "pads", layout: SPLIT_LAYOUTS.includes(m.layout) ? m.layout : "", pad: /^[A-J](1[0-6]|[1-9])$/.test(m.pad || "") ? m.pad : "" })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
+    FILE = ev.file; TITLE = params.get("title") || ev.title || ""; CAPS = (ev.captions || []).map(c => ({ from: +c.from || 0, to: +c.to || 0, text: String(c.text || ""), focus: String(c.focus || "") })); CHAPS = (ev.chapters || []).map(c => ({ t: +c.t || 0, title: String(c.title || "") })); CUTS = cutsNorm((ev.cuts || []).map(c => ({ from: +c.from || 0, to: +c.to || 0 }))); BUSN = (ev.busnotes || []).map(n => ({ bus: +n.bus || 1, t: +n.t || 0, text: String(n.text || "") })); VIEWM = (ev.viewmarks || []).map(m => ({ t: +m.t || 0, view: m.view === "normal" ? "normal" : "split", mode: MODES.includes(m.mode) ? m.mode : "pads", layout: SPLIT_LAYOUTS.includes(m.layout) ? m.layout : "", pad: /^([A-J](1[0-6]|[1-9])|ch(1[0-6]|[1-9]))$/.test(m.pad || "") ? m.pad : "" })); initStyle(ev.style); initCaptions(); prepare(ev.events, an, ev.cues, ev.adopted);
     initChapters(); initCuts(); initBusNotes(); initViews(); initCamera(ev.camera, ev.camera_file); initTemplates();
     if (ev.default_template) { const all = {}; for (const [k] of TPL_PARTS) all[k] = true; tplApply(ev.default_template, all); } // a new take starts with the default template
     if (window.refreshCapLane) window.refreshCapLane(); // the lanes need the length of the take, which prepare has just read
