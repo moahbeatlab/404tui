@@ -1523,6 +1523,12 @@ function drawMidi(T, area) {
   const nowX = tx(T); g.save(); g.shadowColor = COL.amber; g.shadowBlur = 14; rect(nowX - 2, py0 - 6, 4, ph + 12, COL.amber); g.restore();
   text("the last " + WIN + " seconds; a bar is as long as the gate", x0 + 24, y0 + h - 12, COL.dim, 16);
 }
+function drawBusLevel(T, area) { // the buses with their knobs and the level with the spectrum, in the room of the mode view
+  const [x, y, w, h] = area, gap = 16, sv = { fx: L.fx, meter: L.meter };
+  if (w > h * 1.8) { const fw = Math.round((w - gap) * 0.55); L.fx = [x, y, fw, h]; L.meter = [x + fw + gap, y, w - fw - gap, h]; }
+  else { const fh = Math.min(236, Math.round(h * 0.34)); L.fx = [x, y, w, fh]; L.meter = [x, y + fh + gap, w, h - fh - gap]; }
+  drawFx(T); drawMeter(T); Object.assign(L, sv);
+}
 function drawSplit(T, A) {
   drawHeader(T, A);
   const R = splitRects(A), cam = R.cam;
@@ -1534,6 +1540,7 @@ function drawSplit(T, A) {
   else if (vmode === "chroma") drawKeys(T, R.keys);
   else if (vmode === "arp") drawArp(T, R.keys);
   else if (vmode === "midi") drawMidi(T, R.keys);
+  else if (vmode === "buses") drawBusLevel(T, R.keys);
   else { const sv = L.pads; L.pads = R.keys.slice(); panel(...R.keys); drawPads(T); L.pads = sv; }
   if (R.bar) { // the sidebar: the buses, the level and the events, as in the normal view
     const sv = { fx: L.fx, meter: L.meter, feed: L.feed }; L.fx = R.bar.fx.slice(); L.meter = R.bar.meter.slice(); L.feed = R.bar.feed.slice();
@@ -1606,7 +1613,7 @@ document.getElementById("undo").onclick = () => undo();
 document.getElementById("redo").onclick = () => redo();
 const viewBtn = document.getElementById("viewbtn");
 function setView(v) { const m = viewAt(now()).mark; if (m) { m.view = v; if (v === "split" && !m.mode) m.mode = "pads"; saveViews(); } else { STYLE.view = v; window.styleChanged && window.styleChanged(); } window.syncViewBtn(); }
-const MODES = ["pads", "chroma", "arp", "midi"], MODE_NAMES = { pads: "pads", chroma: "chromatic", arp: "arp", midi: "midi" };
+const MODES = ["pads", "chroma", "arp", "midi", "buses"], MODE_NAMES = { pads: "pads", chroma: "chromatic", arp: "arp", midi: "midi", buses: "buses + level" };
 const modeBtn = document.getElementById("modebtn"), laybtn = document.getElementById("laybtn"), lookbtn = document.getElementById("lookbtn");
 function setLook(l) { const k = viewAt(now()).mark; if (k) { k.look = l; saveViews(); } else STYLE.arpLook = l; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
 lookbtn.onclick = () => setLook(ARP_LOOKS[(ARP_LOOKS.indexOf(viewAt(now()).look) + 1) % ARP_LOOKS.length]);
@@ -1642,7 +1649,7 @@ addEventListener("keydown", e => {
   else if (e.key === "v") viewBtn.onclick();
   else if (!e.ctrlKey && !e.metaKey && (e.key === "l")) laybtn.click();
   else if (!e.ctrlKey && !e.metaKey && e.key === "s") lookbtn.click();
-  else if (!e.ctrlKey && !e.metaKey && (e.key === "c" || e.key === "a" || e.key === "p" || e.key === "m")) { const m = { c: "chroma", a: "arp", p: "pads", m: "midi" }[e.key]; setMode(viewAt(now()).mode === m && m !== "pads" ? "pads" : m); }
+  else if (!e.ctrlKey && !e.metaKey && (e.key === "c" || e.key === "a" || e.key === "p" || e.key === "m" || e.key === "b")) { const m = { c: "chroma", a: "arp", p: "pads", m: "midi", b: "buses" }[e.key]; setMode(viewAt(now()).mode === m && m !== "pads" ? "pads" : m); }
   else if (e.key === "i" || e.key === "o") window.cutKey && window.cutKey(e.key);
 });
 

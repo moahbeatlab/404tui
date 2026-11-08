@@ -70,7 +70,7 @@ type BusNote struct {
 type ViewMark struct {
 	T      float64 `json:"t"`
 	View   string  `json:"view"`             // "split" or "normal"
-	Mode   string  `json:"mode,omitempty"`   // of the split view: "pads", "chroma", "arp" or "midi"
+	Mode   string  `json:"mode,omitempty"`   // of the split view: "pads", "chroma", "arp", "midi" or "buses"
 	Layout string  `json:"layout,omitempty"` // of the split view: "classic", "side", "stack" or "info"; empty for the style's
 	Pad    string  `json:"pad,omitempty"`    // of the chromatic and the arp view: the sample, "A3"; empty for the style's
 	Look   string  `json:"look,omitempty"`   // of the arp view: "columns", "grid" or "ring"; empty for the style's
