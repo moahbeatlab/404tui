@@ -40,6 +40,13 @@ Every change can be undone (`Ctrl-Z`) and redone (`Ctrl-Shift-Z`): patterns, cap
 Keys: `Space` plays and stops; `←` `→` move 5 seconds (with `Shift` 30); `+` `-` zoom the timeline; `i` and `o` start and end a cut; `[` and `]` move the events
 against the sound by 10 ms; `f` is full screen.
 
+## The split view
+
+The picture opens in the **split view**, made for a video of you playing: the camera video in one area, the pads (or, in the chromatic mode, a keyboard of 16 keys, one for
+each pad) in another, an area of its own for the captions (nothing is blurred or covered), and a **REC** mark with the time of the take. It is laid out for the wide
+picture (camera and pads side by side) and for the vertical one (one under the other, inside the margins the platforms leave free). The button **normal view** (or the key `v`) goes back to the picture with all the panels; **split view** comes back.
+The key `c` switches the chromatic mode: pad 1 is the pad's own pitch and each pad is one semitone up (the unit does not tell the log that it is in its chromatic mode).
+
 ## Which pattern plays
 
 The unit does not say which pattern plays (it sends no message when you change it; see [unit-messages.md](unit-messages.md)). So the log
