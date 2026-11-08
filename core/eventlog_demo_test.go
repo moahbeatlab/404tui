@@ -231,3 +231,119 @@ func TestWriteReplayArpDemo(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestWriteReplayMidiArpDemo writes a made-up take of the arpeggiator playing another instrument (REPLAY_MIDI_DEMO=folder REPLAY_PROJECT=project folder): MIDI
+// notes on channel 3 in four loops with their own mode, octaves, rate, gate and swing. Open it with `sp404 replay midiarp.wav` and the key m (the MIDI view).
+func TestWriteReplayMidiArpDemo(t *testing.T) {
+	out := os.Getenv("REPLAY_MIDI_DEMO")
+	proj := os.Getenv("REPLAY_PROJECT")
+	if out == "" || proj == "" {
+		t.Skip("REPLAY_MIDI_DEMO and REPLAY_PROJECT are not set")
+	}
+	termOn(t)
+	a, _ := newApp(t)
+	if err := a.OpenProject(proj); err != nil {
+		t.Fatal(err)
+	}
+	os.MkdirAll(out, 0o755)
+	const rate = 48000
+	secs := 52.0
+	bpm := 124.0
+	started := time.Now()
+	s := &record.Session{Path: filepath.Join(out, "midiarp.wav"), Started: started, Tool: "the program itself"}
+	a.startEventLog(s)
+	at := func(sec float64) time.Time { return started.Add(time.Duration(sec * float64(time.Second))) }
+	a.evlog.log.Add(at(0.02), "audio_start")
+	t0, beat := 1.0, 60/bpm
+	a.midiEvent(midiin.Event{Kind: midiin.Start, At: at(t0)})
+	a.eventLogTick()
+	for q := 0; float64(q)*beat+t0 < secs-0.5; q++ {
+		for k := 0; k < 24; k++ {
+			a.midiEvent(midiin.Event{Kind: midiin.Clock, At: at(t0 + float64(q)*beat + float64(k)*beat/24)})
+		}
+	}
+	// a C minor seventh chord (C Eb G Bb) from C4, spread over some octaves, played in a mode
+	chord := func(oct int) []int {
+		var out []int
+		for o := 0; o < oct; o++ {
+			for _, n := range []int{0, 3, 7, 10} {
+				out = append(out, 60+12*o+n)
+			}
+		}
+		return append(out, 60+12*oct)
+	}
+	reverse := func(x []int) []int {
+		r := make([]int, len(x))
+		for i, v := range x {
+			r[len(x)-1-i] = v
+		}
+		return r
+	}
+	upDown := func(x []int) []int { return append(append([]int{}, x...), reverse(x)[1:len(x)-1]...) }
+	type loop struct {
+		from, to, step, gate, swing float64
+		notes                       []int
+	}
+	loops := []loop{
+		{3, 15, 0.25, 0.6, 0.5, chord(1)},                                // up, 1 octave, 1/16, straight
+		{16, 28, 0.25, 0.9, 0.5, upDown(chord(2))},                       // up-down, 2 octaves, long gate
+		{29, 41, 0.5, 0.3, 0.6, reverse(chord(3))},                       // down, 3 octaves, 1/8, short gate, swing 60 %
+		{42, 51, 0.25, 0.5, 0.58, []int{60, 67, 63, 72, 70, 63, 67, 75}}, // a pattern, swing 58 %
+	}
+	type hit struct {
+		t, d float64
+		n, v int
+	}
+	var hits []hit
+	for _, l := range loops {
+		k := 0
+		for tt := l.from; tt < l.to; tt += l.step * beat {
+			tk := tt
+			if k%2 == 1 {
+				tk += (l.swing - 0.5) * 2 * l.step * beat
+			}
+			v := 92
+			if k%len(l.notes) == 0 {
+				v = 120
+			}
+			hits = append(hits, hit{tk, l.gate * l.step * beat, l.notes[k%len(l.notes)], v})
+			k++
+		}
+	}
+	for _, h := range hits {
+		a.midiEvent(midiin.Event{Kind: midiin.NoteOn, Channel: 3, Data1: h.n, Data2: h.v, At: at(h.t)})
+		a.midiEvent(midiin.Event{Kind: midiin.NoteOff, Channel: 3, Data1: h.n, At: at(h.t + h.d)})
+	}
+	a.midiEvent(midiin.Event{Kind: midiin.Stop, At: at(secs - 0.5)})
+	a.stopEventLog()
+	n := int(secs * rate)
+	pcm := make([]float32, n*2)
+	for _, h := range hits {
+		start, f := int(h.t*rate), 440*math.Pow(2, float64(h.n-69)/12)
+		for i := 0; i < rate/2 && start+i < n; i++ {
+			x := float64(i) / rate
+			env := math.Exp(-x*9) * math.Min(1, math.Max(0, (h.d+0.012-x)/0.012))
+			ph := math.Mod(f*x, 1)
+			v := float32(float64(h.v) / 127 * 0.22 * env * (2*ph - 1))
+			pcm[(start+i)*2] += v
+			pcm[(start+i)*2+1] += v
+		}
+	}
+	f, _ := os.Create(s.Path)
+	defer f.Close()
+	f.Write(demoHeader(n * 2 * 3))
+	for _, v := range pcm {
+		x := int32(math.Max(-1, math.Min(1, float64(v))) * 8388607)
+		f.Write([]byte{byte(x), byte(x >> 8), byte(x >> 16)})
+	}
+	meta := `{"title":"The arp sends MIDI","patterns_adopted":true,"cues":[],
+ "captions":[{"from":3.5,"to":9.5,"text":"*Up*, one octave, 16ths"},
+  {"from":16.5,"to":23,"text":"*Up-down* over two octaves, a long *gate*"},
+  {"from":29.5,"to":36,"text":"*Down* over three octaves, 8ths, short *gate* and *swing*"},
+  {"from":42.5,"to":49,"text":"A *pattern* of its own, with swing"}],
+ "chapters":[{"t":1,"title":"Up"},{"t":16,"title":"Up-down"},{"t":29,"title":"Down"},{"t":42,"title":"Pattern"}],
+ "style":{"view":"split","rmode":"midi"}}`
+	if err := os.WriteFile(filepath.Join(out, "midiarp.events.cues.json"), []byte(meta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}

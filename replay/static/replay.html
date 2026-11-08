@@ -226,7 +226,7 @@
       <button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
       <button id="chbtn" title="the chapters, and the list for YouTube">chapters</button>
       <button id="capbtn" title="text shown at times of the take">captions</button>
-      <button id="modebtn" title="c: the chromatic keys, a: the arp view, p: the pads">pads</button>
+      <button id="modebtn" title="p: the pads, c: the chromatic keys, a: the arp view, m: the MIDI notes">pads</button>
       <button id="viewbtn" title="v: the split view (camera, keys, captions) or the normal view with all the panels">split view</button>
       <button id="stylebtn" title="colours, background, logo, handle">style</button>
       <button id="full" title="f">full screen</button></span>
@@ -388,7 +388,7 @@ function prepare(events, analysis, cuesIn, adoptedIn) {
   OFFSET = a ? a.t : 0;
   for (const e of timed) {
     switch (e.k) {
-      case "on": case "off": if (e.bank) push(padEv, e.bank + e.pad, { t: e.t, on: e.k === "on", v: e.v || 0 }); else if (e.k === "on") otherNotes.push({ t: e.t, ch: e.ch, n: e.n, v: e.v }); break;
+      case "on": case "off": if (e.bank) push(padEv, e.bank + e.pad, { t: e.t, on: e.k === "on", v: e.v || 0 }); else { if (e.k === "on") otherNotes.push({ t: e.t, ch: e.ch, n: e.n, v: e.v }); midiEv.push({ t: e.t, ch: e.ch, n: e.n, on: e.k === "on", v: e.v || 0 }); } break;
       case "cc": push(ccEv, e.ch + ":" + e.n, { t: e.t, v: e.v }); break;
       case "fx": if (e.fx !== undefined) push(fxNum, e.bus, { t: e.t, v: e.fx }); else push(fxOn, e.bus, { t: e.t, v: e.on }); break;
       case "beat": beats.push({ t: e.t, n: e.n, bpm: e.bpm }); break;
@@ -1290,63 +1290,124 @@ function drawCapArea(T, A, area) { // the captions have an area of their own: no
   g.save(); g.globalAlpha = fade; capText(lines, words, c, A, x0 + (VERT ? 64 : 90), top + (1 - fade) * 14, px, kk, lh); g.restore();
 }
 
+// ---- what an arpeggio is, found from the notes that were played: the loop (the same steps come round again), the mode (up, down, up-down, down-up, random), the
+// octaves it covers, the rate, the gate (how long a note sounds as a part of the step) and the swing (the off-beat steps late: 50 % is straight).
+// A note is { t, p (the pitch), v, len, open }; for the pads of a bank p is the semitone of the pad (a sample played chromatically), for MIDI the note number.
+function arpAnalyse(notes, beat) {
+  const rec = notes.slice(-64), gaps = [];
+  for (let k = Math.max(1, rec.length - 9); k < rec.length; k++) { const d = rec[k].t - rec[k - 1].t; if (d > 0.02 && d < 1.2) gaps.push(d); }
+  gaps.sort((a, b) => a - b);
+  const med0 = gaps.length ? gaps[gaps.length >> 1] : 0, near = gaps.filter(d => d < med0 * 1.8), med = near.length ? near.reduce((a, b) => a + b, 0) / near.length : med0; // the step: the mean, so that a swing does not change it
+  let run = rec.length; for (let k = rec.length - 1; k > 0; k--) { if (rec[k].t - rec[k - 1].t > Math.max((med || 0.25) * 2.2, 0.12)) { run = rec.length - k; break; } }
+  const rn = rec.slice(rec.length - run), seq = rn.map(o => o.p);
+  let per = 0; for (let q = 2; q <= 16 && !per; q++) { if (seq.length < q + 3) break; let ok = 0, n = 0; for (let k = q; k < seq.length; k++) { n++; if (seq[k] === seq[k - q]) ok++; } if ((n >= q && ok / n >= 0.85) || ok === n) per = q; }
+  const steps = per ? seq.slice(0, per) : seq.slice(-Math.min(seq.length, 16));
+  // the mode, from the shape of one round
+  let mode = rn.length < 4 ? "" : per ? "pattern" : "random";
+  if (per && steps.length >= 3) {
+    const d = steps.slice(1).map((v, k) => Math.sign(v - steps[k])), top = steps.indexOf(Math.max(...steps)), bot = steps.indexOf(Math.min(...steps));
+    const up = d.every(x => x >= 0), down = d.every(x => x <= 0);
+    if (up) mode = "up"; else if (down) mode = "down";
+    else if (top > 0 && top < steps.length - 1 && d.slice(0, top).every(x => x >= 0) && d.slice(top).every(x => x <= 0)) mode = "up-down";
+    else if (bot > 0 && bot < steps.length - 1 && d.slice(0, bot).every(x => x <= 0) && d.slice(bot).every(x => x >= 0)) mode = "down-up";
+  }
+  const lo = steps.length ? Math.min(...steps) : 0, hi = steps.length ? Math.max(...steps) : 0;
+  const names = [[1, "1/4"], [0.5, "1/8"], [1 / 3, "1/8T"], [0.25, "1/16"], [1 / 6, "1/16T"], [0.125, "1/32"]];
+  let rate = ""; if (gaps.length >= 3 && beat) { const q = med / beat; let best = names[0]; for (const n of names) if (Math.abs(n[0] - q) < Math.abs(best[0] - q)) best = n; rate = best[1]; }
+  const lens = rn.filter(o => !o.open && med).map(o => o.len / med), gate = lens.length ? Math.round(100 * lens.reduce((a, b) => a + b, 0) / lens.length) : 0;
+  let sw = 0, sn = 0; for (let k = 0; k + 2 < rn.length; k += 2) { const x = rn[k + 1].t - rn[k].t, y = rn[k + 2].t - rn[k + 1].t; if (x > 0.02 && y > 0.02 && x + y < 2.4) { sw += x / (x + y); sn++; } }
+  const swing = sn >= 3 ? Math.round(100 * sw / sn) : 50;
+  return { rn, rec, seq, per, steps, mode, lo, hi, octaves: Math.max(1, Math.ceil((hi - lo) / 12)), rate, gate, swing, med, rounds: per ? Math.floor((seq.length - 1) / per) + 1 : 0, cur: per ? (seq.length - 1) % per : seq.length - 1, run };
+}
+// the line of facts under the title of both views: mode, octaves, rate, gate, swing
+function arpFacts(A) { return [A.mode, A.octaves > 1 ? A.octaves + " octaves" : A.per ? "1 octave" : "", A.rate ? "rate " + A.rate : "", A.gate ? "gate " + A.gate + "%" : "", A.per && Math.abs(A.swing - 50) >= 3 ? "swing " + A.swing + "%" : A.per ? "straight" : ""].filter(Boolean).join("  ·  "); }
+
 // the arp view: one sample played at different pitches. In the chromatic mode every pad of the bank is the same sample, one semitone higher than the one before,
-// so the notes that were played are steps of a pitch: the last 16 of them as columns (their height is how far above the sample's own pitch), the newest lit,
-// a line through the tops, and the rate the notes come at. It is made of the pad hits of the log.
+// so the notes that were played are steps of a pitch. The loop of the arpeggio is shown once, a column for each step (as high as its pitch), the step that sounds
+// lit, a bar under it for its gate, and the rounds counted.
 function drawArp(T, area) {
-  const [x0, y0, w, h] = area, bank = bankInView(T), tp = tempoAt(T), bpm = tp.bpm || 120, beat = 60 / bpm, N = 16, TOP = 15;
+  const [x0, y0, w, h] = area, bank = bankInView(T), tp = tempoAt(T), bpm = tp.bpm || 120, beat = 60 / bpm;
   panel(x0, y0, w, h);
   const lab = STYLE.chroma && STYLE.chroma[0] === bank ? STYLE.chroma : bank + "1", info = padInfo.get((bank.charCodeAt(0) - 65) * 16 + parseInt(lab.slice(1), 10) - 1);
   text("ARP", x0 + 24, y0 + 40, COL.amber, 26, true);
   const ons = []; // every hit of the bank, in the order of the time
-  for (let i = 0; i < 16; i++) { const l = padEv.get(bank + (i + 1)); if (!l) continue; for (let k = Math.max(atIndex(l, T) - 40, 0); k <= atIndex(l, T); k++) if (l[k].on) { let end = -1; for (let q = k + 1; q < l.length && l[q].t <= T; q++) if (!l[q].on) { end = l[q].t; break; } ons.push({ t: l[k].t, i, v: l[k].v || 100, len: end >= 0 ? end - l[k].t : T - l[k].t, open: end < 0 }); } }
+  for (let i = 0; i < 16; i++) { const l = padEv.get(bank + (i + 1)); if (!l) continue; for (let k = Math.max(atIndex(l, T) - 40, 0); k <= atIndex(l, T); k++) if (l[k].on) { let end = -1; for (let q = k + 1; q < l.length && l[q].t <= T; q++) if (!l[q].on) { end = l[q].t; break; } ons.push({ t: l[k].t, p: i, v: l[k].v || 100, len: end >= 0 ? end - l[k].t : T - l[k].t, open: end < 0 }); } }
   ons.sort((a, b) => a.t - b.t);
-  const rec = ons.filter(o => o.t > T - 12).slice(-64), last = rec.length ? rec[rec.length - 1] : null;
-  const gaps = []; for (let k = Math.max(1, ons.length - 9); k < ons.length; k++) { const d = ons[k].t - ons[k - 1].t; if (d > 0.02 && d < 1.2) gaps.push(d); }
-  let rate = ""; if (gaps.length >= 3) { gaps.sort((a, b) => a - b); const q = gaps[gaps.length >> 1] / beat, names = [[1, "1/4"], [0.5, "1/8"], [1 / 3, "1/8T"], [0.25, "1/16"], [1 / 6, "1/16T"], [0.125, "1/32"]]; let best = names[0]; for (const n of names) if (Math.abs(n[0] - q) < Math.abs(best[0] - q)) best = n; rate = "rate " + best[1]; }
-  text((info && info.name ? fit(info.name, 24) + "   " : "") + (rate || "no arpeggio yet"), x0 + 110, y0 + 40, COL.text, 22);
+  const A = arpAnalyse(ons.filter(o => o.t > T - 12), beat), { steps, per, cur, rounds } = A, last = A.rec.length ? A.rec[A.rec.length - 1] : null;
+  text((info && info.name ? fit(info.name, 20) + "   " : "") + (per ? "loop of " + per + "  x" + rounds : A.rn.length > 3 ? "" : "no arpeggio yet"), x0 + 110, y0 + 40, COL.text, 22);
   text(Math.round(bpm) + " BPM", x0 + w - 24, y0 + 40, COL.dim, 22, false, "right");
-  // the sample, once, at the left: it is the same one for every step
-  const sx = x0 + 24, sw = 150, gy0 = y0 + 76, gh = h - 76 - 58, gx = sx + sw + 28, gw = w - (gx - x0) - 24, col = gw / N;
+  const facts = arpFacts(A); if (facts) text(facts, x0 + 110, y0 + 66, COL.blue, 19, true);
+  const sx = x0 + 24, sw = 150, gy0 = y0 + 84, gh = h - 84 - 58, gx = sx + sw + 28, gw = w - (gx - x0) - 24, TOP = Math.max(15, Math.ceil(Math.max(...steps, 0) / 12) * 12);
   rrect(sx, gy0, sw, gh, 10, COL.tile2);
   text(lab, sx + 14, gy0 + 34, COL.amber, 24, true); text("one sample", sx + 14, gy0 + 60, COL.dim, 16);
   const pk = info && info.peaks ? info.peaks : [];
   for (let k = 0; k < pk.length; k++) { const bh = Math.max(2, pk[k] / 100 * (gh - 120)); rect(sx + 14 + k * (sw - 28) / pk.length, gy0 + gh - 18 - bh, Math.max((sw - 28) / pk.length * 0.7, 2), bh, mix("#444444", COL.amber, 0.4)); }
-  // the pitch grid: a line for every octave, the rows of the semitones
   const yOf = i => gy0 + gh - 96 - (gh - 96 - 30) * i / TOP;
-  for (let st = 0; st <= TOP; st += 1) { g.globalAlpha = st % 12 === 0 ? 0.5 : st % 4 === 0 ? 0.18 : 0.07; rect(gx, yOf(st), gw, 2, COL.dim); g.globalAlpha = 1; }
-  text("+12", gx - 8, yOf(12) + 5, COL.dim, 15, false, "right"); text("+0", gx - 8, yOf(0) + 5, COL.dim, 15, false, "right");
-  // an arpeggio comes round again and again: find the length of its loop (the notes repeat after p steps), start the loop where the run of notes starts and
-  // show the loop once. The step that sounds now is lit and the loop counter counts the rounds. Without a loop yet the last notes are shown as they came.
-  const med = gaps.length ? gaps[gaps.length >> 1] : 0.25;
-  let run = rec.length; for (let k = rec.length - 1; k > 0; k--) { if (rec[k].t - rec[k - 1].t > Math.max(med * 2.2, 0.12)) { run = rec.length - k; break; } }
-  const seq = rec.slice(rec.length - run).map(o => o.i);
-  let per = 0; for (let p = 2; p <= 12 && !per; p++) { if (seq.length < p + 3) break; let ok = 0, n = 0; for (let k = p; k < seq.length; k++) { n++; if (seq[k] === seq[k - p]) ok++; } if ((n >= p && ok / n >= 0.85) || ok === n) per = p; }
-  const cyc = per || Math.min(seq.length, N), steps = per ? seq.slice(0, per) : seq.slice(-cyc), cur = per ? (seq.length - 1) % per : seq.length - 1, rounds = per ? Math.floor((seq.length - 1) / per) + 1 : 0;
-  const cw = gw / Math.max(cyc, 4);
-  const lens = rec.slice(rec.length - run).filter(o => !o.open).map(o => o.len / (med || 0.25)); const gate = lens.length ? Math.round(100 * lens.reduce((a, b) => a + b, 0) / lens.length) : 0;
-  text("GATE", gx - 8, yOf(0) + 62 + 4, COL.blue, 14, true, "right"); if (gate) text("gate " + gate + "%", x0 + 110 + (VERT ? 500 : 470), y0 + 40, COL.blue, 22, true);
-  if (per) { text("loop of " + per + " steps  x" + rounds, x0 + w - 24, y0 + 40 + 30, COL.amber, 20, true, "right"); }
+  for (let st = 0; st <= TOP; st++) { g.globalAlpha = st % 12 === 0 ? 0.5 : st % 4 === 0 ? 0.18 : 0.07; rect(gx, yOf(st), gw, 2, COL.dim); g.globalAlpha = 1; }
+  for (let o = 0; o * 12 <= TOP; o++) text(o ? "+" + o * 12 + " (oct " + o + ")" : "+0", gx - 8, yOf(o * 12) + 5, COL.dim, 15, false, "right");
+  const cw = gw / Math.max(steps.length, 4), med = A.med || 0.25;
+  text("GATE", gx - 8, yOf(0) + 66, COL.blue, 14, true, "right");
   g.save(); g.strokeStyle = COL.amberD; g.lineWidth = 3; g.beginPath();
   steps.forEach((i, k) => { const cx = gx + (k + 0.5) * cw, cy = yOf(i); if (k) g.lineTo(cx, cy); else g.moveTo(cx, cy); }); g.stroke(); g.restore();
   steps.forEach((i, k) => {
-    const cx = gx + (k + 0.5) * cw, bw = Math.min(cw - 8, 54), top = yOf(i), bot = yOf(0) + 4, now = per ? k === cur : k === cur, done = per ? k < cur : true, age = T - (last ? last.t : T);
-    const glow = now ? clamp(1 - age / (med * 1.4 || 0.4), 0.3, 1) : 0, velo = rec[rec.length - run + k] ? rec[rec.length - run + k].v : 100;
+    const cx = gx + (k + 0.5) * cw, bw = Math.min(cw - 8, 54), top = yOf(i), bot = yOf(0) + 4, now = k === cur, done = per ? k < cur : true, age = T - (last ? last.t : T);
+    const glow = now ? clamp(1 - age / (med * 1.4 || 0.4), 0.3, 1) : 0, o2 = A.rn[k], velo = o2 ? o2.v : 100;
     g.save(); g.globalAlpha = (now ? 1 : done ? 0.75 : 0.4) * (0.6 + 0.4 * velo / 127);
     if (now) { g.shadowColor = COL.amber; g.shadowBlur = 28 * glow; }
     rrect(cx - bw / 2, top, bw, bot - top, 6, now ? COL.amber : mix("#555555", COL.amber, done ? 0.55 : 0.25)); g.restore();
     text("+" + i, cx, top - 10, now ? COL.amber : COL.text, 17, now, "center");
-    text(NOTE_NAMES[i % 12] + (i >= 12 ? "+1" : ""), cx, bot + 22, COL.dim, 14, false, "center");
-    text(String(k + 1), cx, bot + 38, now ? COL.amber : COL.dim, 13, now, "center"); // the step number
-    const o2 = rec[rec.length - run + k]; // the gate: how long the note sounds, as a part of the step (a full bar is a step; the pad held or tied reaches the next one)
-    if (o2 && !o2.open) { const gt = clamp(o2.len / (med || 0.25), 0, 1.25); g.save(); g.globalAlpha = now ? 1 : done ? 0.7 : 0.35; rect(cx - cw / 2 + 4, bot + 48, cw - 8, 10, "#2a2a30"); rect(cx - cw / 2 + 4, bot + 48, (cw - 8) * Math.min(gt, 1), 10, gt >= 1 ? COL.good : COL.blue); g.restore(); }
+    text(NOTE_NAMES[i % 12] + (i >= 12 ? "+" + Math.floor(i / 12) : ""), cx, bot + 22, COL.dim, 14, false, "center");
+    text(String(k + 1), cx, bot + 38, now ? COL.amber : COL.dim, 13, now, "center");
+    if (o2 && !o2.open) { const gt = clamp(o2.len / med, 0, 1.25); g.save(); g.globalAlpha = now ? 1 : done ? 0.7 : 0.35; rect(cx - cw / 2 + 4, bot + 48, cw - 8, 10, "#2a2a30"); rect(cx - cw / 2 + 4, bot + 48, (cw - 8) * Math.min(gt, 1), 10, gt >= 1 ? COL.good : COL.blue); g.restore(); }
   });
-  if (per) { // the way back to the start: an arrow under the steps that runs from the last to the first
+  if (per) {
     g.save(); g.strokeStyle = COL.amberD; g.lineWidth = 2; g.setLineDash([6, 6]); g.beginPath();
     const ax = gx + 0.5 * cw, bx = gx + (per - 0.5) * cw, ay = yOf(0) + 84; g.moveTo(bx, ay - 6); g.lineTo(bx, ay); g.lineTo(ax, ay); g.lineTo(ax, ay - 8); g.stroke(); g.setLineDash([]);
     g.fillStyle = COL.amberD; g.beginPath(); g.moveTo(ax - 6, ay - 8); g.lineTo(ax + 6, ay - 8); g.lineTo(ax, ay - 16); g.fill(); g.restore();
   }
   text("one sample: each step is n semitones above its pitch (pad 1 = +0)", x0 + 24, y0 + h - 12, COL.dim, 16);
+}
+
+// the MIDI view: the notes that the unit sends out (the arpeggiator playing another instrument, an MC-101 say). They are not pads: any channel, any note
+// number. A piano roll of the last seconds scrolls to the left, the length of a bar is the gate, the beats are lines, the keyboard at the left lights the
+// notes that sound; under the title are the mode, octaves, rate, gate and swing found from the notes. The channel with the most notes is the one shown.
+const midiEv = []; // every note on and off that is not a pad: { t, ch, n, on, v }
+function drawMidi(T, area) {
+  const [x0, y0, w, h] = area, WIN = 4, tp = tempoAt(T), bpm = tp.bpm || 120, beat = 60 / bpm;
+  panel(x0, y0, w, h);
+  text("MIDI", x0 + 24, y0 + 40, COL.amber, 26, true);
+  const from = T - 12, evs = []; for (let k = Math.max(atIndex(midiEv, T) - 400, 0); k <= atIndex(midiEv, T); k++) if (midiEv[k] && midiEv[k].t >= from) evs.push(midiEv[k]);
+  const cnt = new Map(); for (const e of evs) if (e.on) cnt.set(e.ch, (cnt.get(e.ch) || 0) + 1);
+  let ch = 0, best = 0; for (const [c, n] of cnt) if (n > best) { best = n; ch = c; }
+  const notes = [];
+  for (let k = 0; k < evs.length; k++) { const e = evs[k]; if (!e.on || e.ch !== ch) continue; let end = -1; for (let q = k + 1; q < evs.length; q++) if (!evs[q].on && evs[q].ch === ch && evs[q].n === e.n) { end = evs[q].t; break; } notes.push({ t: e.t, p: e.n, v: e.v || 100, len: end >= 0 ? end - e.t : T - e.t, open: end < 0 }); }
+  const A = arpAnalyse(notes, beat);
+  text((ch ? "channel " + ch : "no MIDI notes yet") + (A.per ? "   loop of " + A.per + "  x" + A.rounds : ""), x0 + 110, y0 + 40, COL.text, 22);
+  text(Math.round(bpm) + " BPM", x0 + w - 24, y0 + 40, COL.dim, 22, false, "right");
+  const facts = arpFacts(A); if (facts) text(facts, x0 + 24, y0 + 70, COL.blue, 19, true);
+  const shown = notes.filter(o => o.t > T - WIN - 1), lo0 = shown.length ? Math.min(...shown.map(o => o.p)) : 60, hi0 = shown.length ? Math.max(...shown.map(o => o.p)) : 72;
+  const lo = Math.floor((lo0 - 1) / 12) * 12, hi = Math.max(lo + 12, Math.ceil((hi0 + 1) / 12) * 12), rows = hi - lo;
+  const kx = x0 + 24, kw = 74, px0 = kx + kw + 6, pw = w - 48 - kw - 6, py0 = y0 + 88, ph = h - 88 - 40, rh = ph / rows;
+  const rowY = n => py0 + (hi - 1 - n) * rh;
+  const tx = t => px0 + (t - (T - WIN)) / WIN * pw;
+  const isBlack = n => [1, 3, 6, 8, 10].includes(n % 12);
+  const sounding = new Set(notes.filter(o => o.open).map(o => o.p));
+  for (let n = lo; n < hi; n++) { // the rows and the keyboard
+    const y = rowY(n), blk = isBlack(n), on = sounding.has(n);
+    g.globalAlpha = blk ? 0.55 : 0.22; rect(px0, y + 0.5, pw, Math.max(rh - 1, 1), blk ? "#0c0c0e" : COL.tile2); g.globalAlpha = 1;
+    rect(kx, y + 0.5, kw, Math.max(rh - 1, 1), on ? COL.amber : blk ? "#101012" : "#e9e9ee");
+    if (n % 12 === 0) { text("C" + (n / 12 - 1), kx + kw - 6, y + rh, on ? "#111" : "#333", 14, true, "right"); g.globalAlpha = 0.45; rect(px0, y + rh - 1, pw, 2, COL.dim); g.globalAlpha = 1; }
+  }
+  const b0 = Math.ceil((T - WIN) / beat) * beat;
+  for (let t = b0; t < T; t += beat) { const n = Math.round(t / beat); g.globalAlpha = n % 4 === 0 ? 0.35 : 0.14; rect(tx(t), py0, 2, ph, COL.dim); g.globalAlpha = 1; }
+  for (const o of notes) {
+    const end = o.open ? T : o.t + o.len; if (end < T - WIN) continue;
+    const x = tx(Math.max(o.t, T - WIN)), wd = Math.max(tx(end) - x, 6), y = rowY(o.p), age = T - o.t, glow = o.open ? 1 : clamp(1 - age / 0.4, 0, 1);
+    g.save(); if (glow > 0) { g.shadowColor = COL.amber; g.shadowBlur = 16 * glow; }
+    g.globalAlpha = 0.45 + 0.55 * o.v / 127; rrect(x, y + 1, wd, Math.max(rh - 2, 3), 4, glow > 0.1 ? COL.amber : mix("#555555", COL.amber, 0.55)); g.restore();
+  }
+  const nowX = tx(T); g.save(); g.shadowColor = COL.amber; g.shadowBlur = 14; rect(nowX - 2, py0 - 6, 4, ph + 12, COL.amber); g.restore();
+  text("the last " + WIN + " seconds; a bar is as long as the gate", x0 + 24, y0 + h - 12, COL.dim, 16);
 }
 function drawSplit(T, A) {
   drawHeader(T, A);
@@ -1356,6 +1417,7 @@ function drawSplit(T, A) {
   drawRec(cam[0] + 18, cam[1] + 18, A);
   if (STYLE.rmode === "chroma") drawKeys(T, SPLIT.keys);
   else if (STYLE.rmode === "arp") drawArp(T, SPLIT.keys);
+  else if (STYLE.rmode === "midi") drawMidi(T, SPLIT.keys);
   else { const sv = L.pads; L.pads = SPLIT.keys.slice(); panel(...SPLIT.keys); drawPads(T); L.pads = sv; }
   drawCapArea(T, A, SPLIT.caps);
 }
@@ -1423,10 +1485,10 @@ document.getElementById("undo").onclick = () => undo();
 document.getElementById("redo").onclick = () => redo();
 const viewBtn = document.getElementById("viewbtn");
 function setView(v) { STYLE.view = v; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
-const MODES = ["pads", "chroma", "arp"], MODE_NAMES = { pads: "pads", chroma: "chromatic", arp: "arp" };
+const MODES = ["pads", "chroma", "arp", "midi"], MODE_NAMES = { pads: "pads", chroma: "chromatic", arp: "arp", midi: "midi" };
 const modeBtn = document.getElementById("modebtn");
 function setMode(m) { STYLE.rmode = m; if (m === "chroma" || m === "arp") STYLE.chroma = bankInView(now() + OFFSET) + "1"; window.syncViewBtn(); window.styleChanged && window.styleChanged(); }
-modeBtn.onclick = () => setMode(MODES[(MODES.indexOf(STYLE.rmode) + 1) % 3]);
+modeBtn.onclick = () => setMode(MODES[(MODES.indexOf(STYLE.rmode) + 1) % MODES.length]);
 window.syncViewBtn = () => { modeBtn.textContent = MODE_NAMES[STYLE.rmode] || "pads"; modeBtn.classList.toggle("on", STYLE.rmode !== "pads"); modeBtn.style.display = STYLE.view === "split" ? "" : "none";  viewBtn.textContent = STYLE.view === "split" ? "normal view" : "split view"; viewBtn.classList.toggle("on", STYLE.view === "split"); };
 viewBtn.onclick = () => setView(STYLE.view === "split" ? "normal" : "split");
 document.getElementById("full").onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
@@ -1443,7 +1505,7 @@ addEventListener("keydown", e => {
   else if (e.key === "]") { NUDGE += 10; nudgeEl.textContent = "sync " + (NUDGE >= 0 ? "+" : "") + NUDGE + " ms"; }
   else if (e.key === "f") document.getElementById("full").onclick();
   else if (e.key === "v") viewBtn.onclick();
-  else if (!e.ctrlKey && !e.metaKey && (e.key === "c" || e.key === "a" || e.key === "p")) { const m = { c: "chroma", a: "arp", p: "pads" }[e.key]; setMode(STYLE.rmode === m && m !== "pads" ? "pads" : m); }
+  else if (!e.ctrlKey && !e.metaKey && (e.key === "c" || e.key === "a" || e.key === "p" || e.key === "m")) { const m = { c: "chroma", a: "arp", p: "pads", m: "midi" }[e.key]; setMode(STYLE.rmode === m && m !== "pads" ? "pads" : m); }
   else if (e.key === "i" || e.key === "o") window.cutKey && window.cutKey(e.key);
 });
 
