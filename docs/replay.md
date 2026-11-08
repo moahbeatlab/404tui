@@ -45,7 +45,7 @@ against the sound by 10 ms; `f` is full screen.
 The picture opens in the **split view**, made for a video of you playing: the camera video in one area, the pads (or, in the chromatic mode, a keyboard of 16 keys, one for
 each pad) in another, an area of its own for the captions (nothing is blurred or covered), and a **REC** mark with the time of the take. It is laid out for the wide
 picture (camera and pads side by side) and for the vertical one (one under the other, inside the margins the platforms leave free). The button **normal view** (or the key `v`) goes back to the picture with all the panels; **split view** comes back.
-The key `c` switches the chromatic mode: pad 1 is the pad's own pitch and each pad is one semitone up (the unit does not tell the log that it is in its chromatic mode).
+The button next to it (**pads**, **chromatic**, **arp**; the keys `p`, `c`, `a`) chooses what the pads area shows. *Chromatic*: pad 1 is the pad's own pitch and each pad is one semitone up (the unit does not tell the log that it is in its chromatic mode). *Arp*: the notes of the last four seconds scrolling to the left, a row for each pad of the bank, the beats as lines, and the rate the notes come at (1/4 to 1/32, from the notes themselves), so an arpeggio shows as the steps it makes.
 
 ## Which pattern plays
 
