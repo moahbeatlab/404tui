@@ -1388,8 +1388,8 @@ function arpAnalyse(notes, beat) {
   const swing = sn >= 3 ? Math.round(100 * sw / sn) : 50;
   return { rn, rec, seq, per, steps, mode, lo, hi, octaves: Math.max(1, Math.ceil((hi - lo) / 12)), rate, gate, swing, med, rounds: per ? Math.floor((seq.length - 1) / per) + 1 : 0, cur: per ? (seq.length - 1) % per : seq.length - 1, run };
 }
-// the line of facts under the title of both views: mode, octaves, rate, gate, swing
-function arpFacts(A) { return [A.mode, A.octaves > 1 ? A.octaves + " octaves" : A.per ? "1 octave" : "", A.rate ? "rate " + A.rate : "", A.gate ? "gate " + A.gate + "%" : "", A.per && Math.abs(A.swing - 50) >= 3 ? "swing " + A.swing + "%" : A.per ? "straight" : ""].filter(Boolean).join("  ·  "); }
+// the line of facts under the title of both views: only what says something (a direction, more than one octave, the rate, a swing)
+function arpFacts(A) { return [["up", "down", "up-down", "down-up"].includes(A.mode) ? A.mode : "", A.octaves > 1 ? A.octaves + " octaves" : "", A.rate ? "rate " + A.rate : "", A.per && Math.abs(A.swing - 50) >= 3 ? "swing " + A.swing + "%" : ""].filter(Boolean).join("  ·  "); }
 
 // two other looks of the arp view. "grid": a step sequencer, a column for each step, a row for each pitch that is used, a cell as wide as the gate, the step that
 // sounds lit. "ring": the twelve notes around a clock (C at the top), an octave for each ring, the last notes joined by a trail that fades, the newest one glowing.
