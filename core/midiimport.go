@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
+	"github.com/moahbeatlab/404tui/lab"
 	"github.com/moahbeatlab/404tui/proto"
 )
 
@@ -33,15 +35,16 @@ func (a *App) importMIDIEntry(e entry) {
 
 // midiForm is what the form of an import holds.
 type midiForm struct {
-	name  string
-	f     formats.MIDIFile
-	part  int
-	drums bool
-	pad   int // 0..159
-	root  int
-	into  int // the pattern, 1..160
-	bars  int // 0: as the file
-	tempo bool
+	name    string
+	f       formats.MIDIFile
+	part    int
+	drums   bool
+	pad     int // 0..159
+	root    int
+	into    int // the pattern, 1..160
+	bars    int // 0: as the file
+	tempo   bool
+	playing bool // the form is playing the pattern it would make
 }
 
 // partLabel is a line of the list of parts: "1  Bass  ch 2  124 notes  C1-G2".
@@ -126,27 +129,104 @@ func (a *App) openMIDIImport(name string, data []byte) {
 		m.items = append(m.items, menuItem{label: "Tempo", vals: []string{"keep " + bpmText(a.tempo()) + " BPM", "set " + bpmText(f.Tempo) + " BPM"}, keepOpen: true,
 			onChange: func(v int) { st.tempo = v == 1 }})
 	}
-	m.items = append(m.items, menuItem{label: "Import the pattern", run: func(int) { a.runMIDIImport(st) }})
+	m.items = append(m.items,
+		menuItem{label: "Play it with the sample", keepOpen: true, run: func(int) {
+			if st.playing {
+				a.stop()
+				st.playing = false
+				return
+			}
+			a.midiListen(st)
+		}},
+		menuItem{label: "Import the pattern", run: func(int) { a.runMIDIImport(st) }})
 	choose()
+	for i := range m.items { // a change of the form is heard at once while it plays
+		if ch := m.items[i].onChange; ch != nil {
+			m.items[i].onChange = func(v int) {
+				ch(v)
+				if st.playing {
+					a.midiListen(st)
+				}
+			}
+		}
+	}
+	m.onClose = func() { a.stop(); st.playing = false }
 	a.menu = m
 	a.say(fmt.Sprintf("%s: %d parts. Left and Right choose, A imports", name, len(f.Parts)), false)
 }
 
-// runMIDIImport writes the pattern the form describes.
-func (a *App) runMIDIImport(st *midiForm) {
+// midiBuild makes the pattern the form describes, and says (in the form of a clause) what pads it uses.
+func (a *App) midiBuild(st *midiForm) (res formats.MIDIResult, said string, err error) {
 	o := formats.MIDIImport{Part: st.part, Bars: st.bars, Pad: padIndex(st.pad), Root: st.root}
-	var said string
 	if st.drums {
 		pads, text := a.drumPads(st.f.Parts[st.part])
 		if len(pads) == 0 {
-			a.say("no pad has a sample: put some on the pads first", true)
-			return
+			return res, "", errors.New("no pad has a sample: put some on the pads first")
 		}
 		o.Drums, said = pads, text
 	} else if st.pad < len(a.info.Pads) && !a.info.Pads[st.pad].File {
 		said = ", but " + a.label(st.pad) + " has no sample"
 	}
-	res, err := formats.BuildFromMIDI(st.f, o)
+	res, err = formats.BuildFromMIDI(st.f, o)
+	return res, said, err
+}
+
+// midiListen plays the pattern the form would make, in a loop, with the samples of the pads (the pattern is not written); again while
+// it plays it takes the changes of the form into the loop.
+func (a *App) midiListen(st *midiForm) {
+	res, _, err := a.midiBuild(st)
+	if err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	p, err := formats.ParsePattern(res.Pattern)
+	if err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	d := lab.PatternDoc{Length: p.Length, Bars: res.Bars, Beats: st.f.Beats, PPQ: formats.PPQ}
+	for _, e := range p.Events {
+		if !e.Control {
+			d.Notes = append(d.Notes, lab.Note{Tick: e.Tick, Pad: int(e.Pad.Index()), Vel: int(e.Velocity), Len: int(e.Length), Pitch: int(e.Pitch)})
+		}
+	}
+	bpm := a.tempo()
+	if st.tempo && st.f.Tempo > 0 {
+		bpm = st.f.Tempo
+	}
+	s := a.mixDoc(d, bpm, 0, int(p.Length), func(int) bool { return true })
+	silent := true
+	for _, v := range s.Samples {
+		if v != 0 {
+			silent = false
+			break
+		}
+	}
+	if silent {
+		a.say("nothing to hear: the pad has no sample", true)
+		return
+	}
+	if r, ok := a.Audio.(replacer); ok && st.playing {
+		r.ReplaceLoop(s)
+		return
+	}
+	lp, ok := a.Audio.(looper)
+	if !ok {
+		a.say("no audio output", true)
+		return
+	}
+	if err := lp.Loop(s); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	st.playing = true
+}
+
+// runMIDIImport writes the pattern the form describes.
+func (a *App) runMIDIImport(st *midiForm) {
+	a.stop()
+	st.playing = false
+	res, said, err := a.midiBuild(st)
 	if err != nil {
 		a.say(err.Error(), true)
 		return

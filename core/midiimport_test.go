@@ -11,7 +11,7 @@ import (
 
 // A drum track and a bass line in one file: the form opens on the bass, the drums are one choice away, and both land in patterns.
 func TestMIDIImportFromFiles(t *testing.T) {
-	a, _ := newApp(t)
+	a, au := newApp(t)
 	keys(t, a, kit) // kick, snare and a closed hat on A1..A3
 	a.go_(Seq)
 	drums := formats.MIDIOut{Name: "drums", Channel: 9}
@@ -53,6 +53,25 @@ func TestMIDIImportFromFiles(t *testing.T) {
 		t.Fatalf("the form starts on part %d as %d", m.items[0].val, m.items[1].val)
 	}
 	into := m.items[4].val + 1
+	// listening comes first: the pad of the melody (A1) has a sample, so the loop plays, the pattern is not written, and a change of the form goes into the loop
+	listen := m.items[len(m.items)-2]
+	if !strings.HasPrefix(listen.label, "Play") {
+		t.Fatalf("the entry before Import is %q", listen.label)
+	}
+	loops := au.Loops
+	listen.run(0)
+	if au.Loops != loops+1 {
+		t.Fatalf("the form did not play: %s", a.msg)
+	}
+	if _, ok := a.lab.Pattern(into); ok == nil {
+		t.Fatal("listening wrote the pattern")
+	}
+	m.items[3].val = (m.items[3].val + 5) % 128
+	m.items[3].onChange(m.items[3].val)
+	if au.Loops != loops+2 {
+		t.Fatal("a change of the form is not heard while it plays")
+	}
+	listen.run(0) // again: it stops
 	m.items[len(m.items)-1].run(0)
 	d, ok := a.doc()
 	if !ok || a.pat != into || len(d.Notes) != 8 || d.Bars != 2 {

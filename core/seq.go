@@ -585,8 +585,6 @@ func (a *App) renderOf(play func(pad int) bool, frozen bool) (formats.Sample, bo
 	if !ok {
 		return formats.Sample{}, false
 	}
-	bpm := a.tempo()
-	perTick := 60 / bpm / formats.PPQ * formats.SampleRate
 	length := int(d.Length)
 	lo, hi := 0, length
 	if frozen { // only the bar in focus
@@ -595,6 +593,12 @@ func (a *App) renderOf(play func(pad int) bool, frozen bool) (formats.Sample, bo
 		hi = min(lo+span*stepTicks, length)
 		a.frozenPage = a.step / span
 	}
+	return a.mixDoc(d, a.tempo(), lo, hi, play), true
+}
+
+// mixDoc plays the notes of a pattern (from tick lo to hi) with the samples of the pads, at bpm, and returns the sound.
+func (a *App) mixDoc(d lab.PatternDoc, bpm float64, lo, hi int, play func(pad int) bool) formats.Sample {
+	perTick := 60 / bpm / formats.PPQ * formats.SampleRate
 	n := int(float64(hi-lo) * perTick)
 	mix := make([]int32, n*2)
 	for _, nt := range d.Notes {
@@ -626,7 +630,7 @@ func (a *App) renderOf(play func(pad int) bool, frozen bool) (formats.Sample, bo
 	for i, v := range mix {
 		out[i] = int16(max(-32767, min(32767, v)))
 	}
-	return formats.Sample{Channels: 2, Samples: out}, true
+	return formats.Sample{Channels: 2, Samples: out}
 }
 
 type looper interface{ Loop(formats.Sample) error }

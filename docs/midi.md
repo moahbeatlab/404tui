@@ -18,6 +18,8 @@ TOOLS, PATTERN, **MIDI FILE IN…**, and choose the file (from the computer, or 
 | **Length in bars** | As the file (its length, rounded up to whole bars, in the time signature of the file), or 1 to 64. |
 | **Tempo** | Keep the tempo of the project (or of the bank), or set the tempo of the file. Only there when the file has one. |
 
+**Play it with the sample** plays the pattern the form would make, in a loop, with the sample of the pad (a melody) or the samples of the kit (drums), without writing anything. While it plays, a change in the form (another part, another pad, another root note, another tempo) goes into the loop at once, so the right root note can be found by ear. Press it again, or go back, to stop. On the page it plays on the speakers of the computer that runs `sp404 serve`, or in the browser in the demo. A pad with no sample is silent, and the line says so.
+
 **Import the pattern** writes it, opens it, and says what it did: `A7: 8 notes, 2 bars on A1`, and if there is something to know, how many
 notes were moved by octaves, left out, or start together on one pad.
 
