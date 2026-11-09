@@ -511,8 +511,13 @@
     if (hint) hint.innerHTML = 'pad: <b>tap</b> plays it on the unit';
   }
   const tabBtns = document.querySelectorAll('#tabs button');
+  // On a wide window the pads, the stage and the motion panel are one page: the bar at the bottom has Perform, Patterns and Tools.
+  const wideBar = window.matchMedia('(orientation: landscape) and (min-width: 760px)');
   function syncTabs() {
-    tabBtns.forEach((x) => x.classList.toggle('on', app.dataset.view !== 'perform' ? x.dataset.tab === app.dataset.view : x.dataset.tab === app.dataset.tab));
+    tabBtns.forEach((x) => {
+      x.classList.toggle('on', app.dataset.view !== 'perform' ? x.dataset.tab === app.dataset.view : wideBar.matches ? x.dataset.tab === 'pads' : x.dataset.tab === app.dataset.tab);
+      if (x.dataset.tab === 'pads') x.textContent = wideBar.matches ? 'PERFORM' : 'PADS';
+    });
     // The button in the top bar (landscape) names the view it goes to: Perform, Looper, Patterns, and round.
     $('viewBtn').textContent = { perform: 'PATTERNS', patterns: noTools() ? 'PERFORM' : 'TOOLS', tools: 'PERFORM' }[app.dataset.view];
     if (app.dataset.view === 'tools') showTools();
@@ -551,6 +556,7 @@
     setView(to);
   });
   syncTabs();
+  if (wideBar.addEventListener) wideBar.addEventListener('change', syncTabs);
 
   // ---- the Looper ----
   const lpGrid = $('lpgrid');
