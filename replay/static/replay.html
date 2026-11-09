@@ -562,7 +562,7 @@ function drawTerminal(T) {
     let x = 0;
     for (const r of ansiRuns(lines[y])) {
       const n = [...r.s].length;
-      if (r.bg) rect(ox + x * cw, oy + y * lh, n * cw + 0.5, lh, r.bg);
+      if (r.bg) { const x0 = Math.round(ox + x * cw), y0 = Math.round(oy + y * lh); rect(x0, y0, Math.round(ox + (x + n) * cw) - x0, Math.round(oy + (y + 1) * lh) - y0, r.bg); } // whole pixels: no seams between the cells
       g.fillStyle = r.fg || "#d4d4d8"; g.globalAlpha = r.dim ? 0.55 : 1; g.font = (r.bold ? "bold " : "") + px + "px " + TERM_FONT;
       let k = 0; for (const ch of r.s) { if (ch !== " ") g.fillText(ch, ox + (x + k) * cw, oy + y * lh + px * 0.92); k++; }
       g.globalAlpha = 1; x += n;

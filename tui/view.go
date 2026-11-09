@@ -72,7 +72,6 @@ func (m Model) View() string {
 			return c.out // a clock tick that changes nothing you can see: the last drawing stands
 		}
 		c.out = m.draw()
-		m.logScreen(c.out)
 		return c.out
 	}
 	return m.draw()

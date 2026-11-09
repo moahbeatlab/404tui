@@ -153,6 +153,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tick()
 	case tea.KeyMsg:
+		m.app.CastKey(msg.String())
 		m.key(msg)
 		if m.app.Quit {
 			return m, tea.Quit
@@ -459,6 +460,7 @@ func (m *Model) View() string {
 	st := time.Now()
 	cells := m.app.RenderCells()
 	out := Render(cells, m.profile, m.glyphs)
+	m.app.CastScreen(out, m.cols)
 	if d := time.Since(st); d > 80*time.Millisecond && dbg.Enabled() {
 		dbg.Logger.Warn("slow frame", "ms", d.Milliseconds(), "screen", m.app.ScreenName(), "cols", m.cols, "rows", m.rows)
 	}
