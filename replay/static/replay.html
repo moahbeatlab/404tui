@@ -190,6 +190,34 @@
   #msg { background:var(--raise); border:1px solid var(--line); border-radius:12px; }
   *::-webkit-scrollbar { width:10px; height:10px; } *::-webkit-scrollbar-thumb { background:#34343c; border-radius:6px; border:2px solid transparent; background-clip:content-box; } *::-webkit-scrollbar-track { background:transparent; }
   @media (max-width:900px) { #side { width:min(420px, 86vw); } .gl { display:none; } #title { width:100%; } .crow .sp { display:none; } }
+
+  /* the tool rail at the right edge: what was the second row of buttons */
+  #rail { flex:none; width:128px; display:flex; flex-direction:column; gap:4px; padding:14px 10px; background:var(--panel); border-left:1px solid var(--line); overflow-y:auto; }
+  #rail .gl { margin:14px 0 4px 6px; } #rail .gl:first-child { margin-top:0; }
+  #rail button, #rail select { width:100%; box-sizing:border-box; text-align:left; background:transparent; border:1px solid transparent; color:#c9c9cf; border-radius:9px; padding:8px 11px; cursor:pointer; }
+  #rail select { background-color:var(--raise); border-color:var(--line); padding-right:26px; text-overflow:ellipsis; }
+  #rail button:hover { background:var(--raise2); color:#fff; }
+  #rail button.on { background:var(--amber-t); color:var(--amber); }
+  body.nohud #rail { display:none !important; }
+  #side { order:2; } #rail { order:3; }
+  @media (max-width:900px) { #rail { width:auto; flex-direction:row; flex-wrap:wrap; position:fixed; left:0; right:0; bottom:calc(var(--barh, 110px)); z-index:4; border-left:0; border-top:1px solid var(--line); padding:6px 10px; } #rail .gl { display:none; } #rail button, #rail select { width:auto; } }
+
+  /* captions: every row the full width, the text in a box of several lines */
+  #capbox .crow { align-items:stretch; gap:8px; }
+  #capbox .crow .row { align-items:center; flex-wrap:nowrap; }
+  #capbox .crow .row:first-child input.t { flex:1 1 0; min-width:0; width:auto; }
+  #capbox textarea.x { width:100%; box-sizing:border-box; min-height:4.6em; resize:vertical; line-height:1.4; font:inherit; }
+  #capbox .crow .row select { flex:1 1 auto; min-width:0; }
+
+  #capbox, #caplist, #capbox .crow, #capbox .crow .row > * { min-width:0; max-width:100%; }
+  #capbox .crow .row > input.t { flex:1 1 0; width:auto; }
+  #capbox .crow .row > button { flex:none; }
+  /* the bar is one row that wraps */
+  #ctl { flex-direction:row; flex-wrap:wrap; align-items:center; gap:10px 14px; }
+  #ctl > .crow { display:contents; }
+  #ctl .sp { order:8; } #ctl #title { order:9; } #ctl > .crow:last-child .sp { display:none; }
+
+  #capbox .crow { flex-wrap:nowrap; }
 </style>
 </head>
 <body>
@@ -277,6 +305,11 @@
 </div>
   </div>
 </div>
+<div id="rail">
+<span class="gl">add</span><button id="tplbtn" title="save a setup as a template, use one on this take">templates</button><button id="cambtn" title="the video of you playing">camera</button><button id="capbtn" title="text shown at times of the take">captions</button><button id="chbtn" title="the chapters, and the list for YouTube">chapters</button><button id="vmbtn" title="the view changes from here on: the split view with a mode, or back to the normal view">view change</button><button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
+<span class="gl">view</span><button id="modebtn" title="p: the pads, c: the chromatic keys, a: the arp view, m: the MIDI notes">pads</button><select id="padsel" title="the sample (pad) of the chromatic keys and the arp: its bank is the keyboard" style="display:none"></select><button id="lookbtn" title="s: how the arp is drawn (columns, step grid, ring)" style="display:none">columns</button><button id="laybtn" title="l: the layout of the split view (video, mode and captions; video and mode side by side; one above the other; video with a sidebar of buses, level and logs)">layout</button><button id="viewbtn" title="v: the split view (camera, keys, captions) or the normal view with all the panels">split view</button>
+<span class="gl">look</span><button id="stylebtn" title="colours, background, logo, handle">style</button><button id="full" title="f">full screen</button>
+</div>
 </div>
 <div id="bar">
   <div id="tl">
@@ -308,21 +341,6 @@
       <span class="grp"><select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button>
       <select id="cutsel" title="leave a part of the take out of the video (keys: i starts a cut here, o ends it)"><option value="">cut...</option><option value="in">start a cut here (i)</option><option value="out">end the cut here (o)</option><option value="before">cut everything before here</option><option value="after">cut everything after here</option><option value="none">restore all cuts</option></select></span>
       <span class="sp"></span>
-      <span class="gl">add</span>
-      <span class="seg"><button id="tplbtn" title="save a setup as a template, use one on this take">templates</button>
-      <button id="cambtn" title="the video of you playing">camera</button>
-      <button id="vmbtn" title="the view changes from here on: the split view with a mode, or back to the normal view">view change</button>
-      <button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
-      <button id="chbtn" title="the chapters, and the list for YouTube">chapters</button>
-      <button id="capbtn" title="text shown at times of the take">captions</button></span>
-      <span class="gl">view</span>
-      <span class="seg"><select id="padsel" title="the sample (pad) of the chromatic keys and the arp: its bank is the keyboard" style="display:none"></select>
-      <button id="modebtn" title="p: the pads, c: the chromatic keys, a: the arp view, m: the MIDI notes">pads</button>
-      <button id="lookbtn" title="s: how the arp is drawn (columns, step grid, ring)" style="display:none">columns</button>
-      <button id="laybtn" title="l: the layout of the split view (video, mode and captions; video and mode side by side; one above the other; video with a sidebar of buses, level and logs)">layout</button>
-      <button id="viewbtn" title="v: the split view (camera, keys, captions) or the normal view with all the panels">split view</button></span>
-      <span class="seg"><button id="stylebtn" title="colours, background, logo, handle">style</button>
-      <button id="full" title="f">full screen</button></span>
     </div>
   </div>
   <div id="cuepop"></div>
@@ -909,17 +927,15 @@ function drawPatternStrip(x, y, w, T) {
   }
 }
 
-function knob(cx, cy, r, v, label, c, hist, T) {
-  const k = r / 40, a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
-  g.lineWidth = 9 * k; g.lineCap = "round";
-  g.strokeStyle = "#2b2b2b"; g.beginPath(); g.arc(cx, cy, r, a0, a1); g.stroke();
+function knob(cx, cy, r, v, label, c, hist, T) { // a control as a vertical bar (the name stayed from when it was a knob)
+  const k = r / 40, bw = 32 * k, bh = 2 * r + 8, bx = cx - bw - 2, by = cy - r - 6;
+  rrect(bx, by, bw, bh, bw / 2, "#2b2b2b");
   if (v !== null) {
-    g.strokeStyle = c; g.beginPath(); g.arc(cx, cy, r, a0, a0 + (a1 - a0) * v / 127); g.stroke();
-    const a = a0 + (a1 - a0) * v / 127;
-    g.strokeStyle = "#fff"; g.lineWidth = 4 * k; g.beginPath(); g.moveTo(cx + Math.cos(a) * (r - 22 * k), cy + Math.sin(a) * (r - 22 * k)); g.lineTo(cx + Math.cos(a) * (r + 3 * k), cy + Math.sin(a) * (r + 3 * k)); g.stroke();
+    const fh = Math.max(bw, bh * v / 127);
+    rrect(bx, by + bh - fh, bw, fh, bw / 2, c);
+    rect(bx - 3 * k, by + bh - fh + (v > 0 ? 0 : bw - 3), bw + 6 * k, 3, "#fff");
   }
-  g.lineCap = "butt";
-  text(v === null ? "-" : String(v), cx, cy + 9 * k, v === null ? COL.dim : COL.text, 24 * k, true, "center");
+  text(v === null ? "-" : String(v), cx + 4, cy + 8, v === null ? COL.dim : COL.text, 26, true, "left");
   text(fit(label, k < 0.8 ? 9 : 12), cx, cy + r + 28 * k, COL.dim, Math.max(13, 16 * k), false, "center");
   const sw = 104 * k, sh = 26 * k, sx = cx - sw / 2, sy = cy + r + 36 * k;
   rect(sx, sy, sw, sh, "#222");
@@ -1763,14 +1779,15 @@ function initCaptions() {
     CAPS.forEach((c, i) => {
       const crow = document.createElement("div"); crow.className = "crow";
       const r1 = document.createElement("div"), r2 = document.createElement("div"), r3 = document.createElement("div"); r1.className = r2.className = r3.className = "row";
-      const f = document.createElement("input"), t = document.createElement("input"), x = document.createElement("input"), del = document.createElement("button");
+      const f = document.createElement("input"), t = document.createElement("input"), x = document.createElement("textarea"), del = document.createElement("button");
       const fs = document.createElement("select"), pi = document.createElement("input"), lab = document.createElement("span");
       f.className = t.className = "t"; x.className = "x";
       f.value = mmss(c.from); t.value = mmss(c.to); x.value = c.text; x.placeholder = "the text"; del.textContent = "x"; del.title = "remove";
       f.title = "from (m:ss.s)"; t.title = "to (m:ss.s)";
       f.onchange = () => { c.from = num(f.value); save(); render(); };
       t.onchange = () => { c.to = num(t.value); save(); };
-      x.oninput = () => { c.text = x.value; save("text"); };
+      x.rows = 3; x.onkeydown = e => { if (e.key === "Enter") e.preventDefault(); };
+      x.oninput = () => { c.text = x.value.replace(/\n/g, " "); save("text"); };
       f.onfocus = () => { audio.currentTime = c.from; };
       del.onclick = () => { CAPS.splice(i, 1); save(); render(); };
       // the spotlight: what the picture is turned to while the caption shows (the rest is blurred and dimmed)
@@ -1826,7 +1843,7 @@ function initCaptions() {
       hl.onpointerdown = ev => drag(ev, b, "l", c); hr.onpointerdown = ev => drag(ev, b, "r", c); b.onpointerdown = ev => { if (ev.target === b) drag(ev, b, "move", c); };
       b.onclick = () => {
         if (b._moved) { b._moved = false; return; }
-        showSettings(); box.classList.add("open"); render(); const rows = list.querySelectorAll("input.x"); if (rows[i]) { rows[i].focus(); rows[i].scrollIntoView({ block: "nearest" }); } audio.currentTime = c.from;
+        showSettings(); box.classList.add("open"); render(); const rows = list.querySelectorAll("textarea.x"); if (rows[i]) { rows[i].focus(); rows[i].scrollIntoView({ block: "nearest" }); } audio.currentTime = c.from;
       };
       el.appendChild(b);
     });
@@ -1836,7 +1853,7 @@ function initCaptions() {
   document.getElementById("capadd").onclick = () => {
     const a = now(), d = AN ? AN.duration : a + 5;
     CAPS.push({ from: +a.toFixed(1), to: +Math.min(a + (+STYLE.capLength || 5), d).toFixed(1), text: "" }); save(); render();
-    const inputs = list.querySelectorAll("input.x"); if (inputs.length) inputs[inputs.length - 1].focus();
+    const inputs = list.querySelectorAll("textarea.x"); if (inputs.length) inputs[inputs.length - 1].focus();
   };
   render(); lane();
 }
