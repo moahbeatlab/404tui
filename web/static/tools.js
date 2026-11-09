@@ -47,6 +47,29 @@
   $('undo').onclick = () => act({ op: 'undo' });
   $('redo').onclick = () => act({ op: 'redo' });
   $('open').onclick = () => act({ op: 'open' });
+  // MIDI files: a file from the computer or phone goes to the form of the program (which part, which pad, which pattern); a pattern
+  // comes back as a file to save.
+  $('midiIn').onclick = () => $('midiFile').click();
+  $('midiFile').onchange = () => {
+    const f = $('midiFile').files[0]; $('midiFile').value = '';
+    if (!f) return;
+    if (f.size > 2e6) { $('status').textContent = 'that file is too big for a MIDI file'; $('status').className = 'status bad'; return; }
+    const rd = new FileReader();
+    rd.onload = () => {
+      let bin = ''; const u = new Uint8Array(rd.result); for (let i = 0; i < u.length; i += 8192) bin += String.fromCharCode.apply(null, u.subarray(i, i + 8192));
+      act({ op: 'midi-open', text: f.name, data: btoa(bin) });
+    };
+    rd.readAsArrayBuffer(f);
+  };
+  $('midiOut').onclick = async () => {
+    try {
+      const r = await request({ op: 'midi-export', slot: slot() });
+      const bin = atob(r.data), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([u], { type: 'audio/midi' })); a.download = r.name;
+      document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      $('status').textContent = 'saved ' + r.name; $('status').className = 'status';
+    } catch (e) { $('status').textContent = String(e.message || e); $('status').className = 'status bad'; }
+  };
   $('mback').onclick = () => act({ op: 'back' });
   $('mdone').onclick = () => act({ op: 'close-menus' });
   $('sheetBack').onclick = () => act({ op: 'close-menus' });

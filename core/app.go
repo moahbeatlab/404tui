@@ -390,7 +390,7 @@ func (a *App) readDir(dir string, projects bool) ([]entry, error) {
 			continue
 		}
 		switch strings.ToLower(pathExt(n)) {
-		case ".wav", ".aif", ".aiff", ".flac", ".mp3", ".smp":
+		case ".wav", ".aif", ".aiff", ".flac", ".mp3", ".smp", ".mid", ".midi":
 			var size int64
 			if local {
 				if fi, err := os.Stat(filepath.Join(dir, n)); err == nil {
@@ -1264,6 +1264,10 @@ func (a *App) filesKey(k Key) {
 		if !ok || e.dir {
 			return
 		}
+		if isMIDIFile(e.name) {
+			a.say("a MIDI file: A makes a pattern of it", false)
+			return
+		}
 		id, err := a.decode(e)
 		if err != nil {
 			a.say(err.Error(), true)
@@ -1281,6 +1285,14 @@ func (a *App) filesKey(k Key) {
 		}
 		if e.dir {
 			a.openEntry()
+			return
+		}
+		if isMIDIFile(e.name) {
+			if a.joinPick {
+				a.say("the slicer needs a sample, not a MIDI file", true)
+				return
+			}
+			a.importMIDIEntry(e)
 			return
 		}
 		id, err := a.decode(e)

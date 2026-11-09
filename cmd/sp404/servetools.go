@@ -76,7 +76,7 @@ type toolsAPI struct{ r *core.Remote }
 func (t toolsAPI) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var in toolsapi.Request
 	if req.Method == http.MethodPost {
-		if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<16)).Decode(&in); err != nil {
+		if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1<<22)).Decode(&in); err != nil {
 			http.Error(w, "POST JSON", http.StatusBadRequest)
 			return
 		}

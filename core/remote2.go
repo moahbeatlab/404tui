@@ -606,3 +606,20 @@ func (a *App) remoteReplay() {
 		a.hearOrder(false)
 	}
 }
+
+// MIDIOpen opens the form of a MIDI file that was sent from the page: which part of it, onto which pad, into which pattern.
+func (r *Remote) MIDIOpen(name string, data []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.a.openMIDIImport(name, data)
+}
+
+// MIDIExport is pattern slot (the one in front when 0) as a MIDI file, with a name for it.
+func (r *Remote) MIDIExport(slot int) (string, []byte, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if slot < 1 || slot > 160 {
+		slot = r.a.pat
+	}
+	return r.a.patternMIDI(slot)
+}

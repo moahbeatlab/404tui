@@ -37,6 +37,11 @@
         <button id="undo" class="btn" title="Undo (a kept tool is one step)">UNDO</button>
         <button id="redo" class="btn">REDO</button>
       </div>
+      <div class="pb-seg pb-midi">
+        <button id="midiIn" class="btn" title="Make a pattern of a track of a MIDI file (.mid)">MIDI FILE IN…</button>
+        <button id="midiOut" class="btn" title="Save this pattern as a MIDI file">MIDI FILE OUT</button>
+        <input id="midiFile" type="file" accept=".mid,.midi,audio/midi,audio/x-midi" hidden>
+      </div>
     </div>
     <div id="patinfo" class="dim"></div>
     <div id="grid" role="grid" aria-label="The pattern"></div>

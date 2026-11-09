@@ -212,6 +212,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Disco  110-125` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
     - `Footwork  155-165` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
     - `Son (martillo + tumbao)  90-110` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
+- `Export this pattern as a MIDI file`
 - `Loop only the bar in focus (Y+A)` — off / on; now off
 - `New pattern from the audible tracks`
 - `Bounce the tracks as you hear them to a pad`
