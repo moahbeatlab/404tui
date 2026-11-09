@@ -144,7 +144,7 @@ func (a *App) openMIDIImport(name string, data []byte) bool {
 	if a.scr != Seq && a.scr != Files {
 		a.go_(Seq)
 	}
-	a.refresh() // the names of the samples, as they are now
+	a.refresh()           // the names of the samples, as they are now
 	if a.midiRun == nil { // a file on its own
 		a.midiRun = &midiBatch{total: 1, used: map[int]bool{}}
 	}
