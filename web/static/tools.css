@@ -122,5 +122,5 @@ main:has(#right[hidden]) { grid-template-columns: minmax(0, 1fr); }
 .ub-btns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; } .ub-btns .btn { min-height: 34px; font-size: 11px; padding: 4px 6px; }
 .ub-btns .btn[hidden] { display: none; }
 
-/* on a wide screen the page keeps a readable width, in the middle */
-@media (min-width: 900px) { main { max-width: 860px; margin: 0 auto; } #modes { max-width: 860px; margin-left: auto; margin-right: auto; } .other { max-width: 860px; margin-left: auto; margin-right: auto; } }
+/* on a wide screen the page grows to 1320 px, in the middle */
+@media (min-width: 900px) { main { max-width: 1320px; margin: 0 auto; } #modes { max-width: 1320px; margin-left: auto; margin-right: auto; } .other { max-width: 1320px; margin-left: auto; margin-right: auto; } }
