@@ -1,5 +1,9 @@
 # Changes
 
+## Unreleased
+
+- The replay page has a new look: the control bar is two grouped rows (transport, zoom, speed and title; pattern and cuts, then Add and View buttons), the sidebar is a tidy form (label left, control right, nothing runs off the edge), with one set of buttons, fields, sliders and popups.
+
 ## 0.1.2 (2026-11-09)
 
 The web page.

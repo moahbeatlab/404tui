@@ -117,6 +117,79 @@
   #stylebox input[type=color] { width:44px; height:26px; padding:0; border:0; background:none; }
   #stylebox input, #stylebox select, #stylebox button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
   #msg { position:fixed; left:50%; top:45%; transform:translateX(-50%); background:#2b2b2b; padding:16px 24px; display:none; }
+
+  /* ---- design layer: one look for the bar, the sidebar and the popups ---- */
+  :root { --bg:#0f0f11; --panel:#17171a; --raise:#202025; --raise2:#2a2a31; --line:#2b2b32; --text:#e7e7ea; --dim:#8d8d96; --amber:#ffb000; --amber-t:rgba(255,176,0,.14); --r:9px;
+          --ui:Inter, "SF Pro Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; --mono:ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  html, body { font:13px/1.35 var(--ui); background:var(--bg); -webkit-font-smoothing:antialiased; }
+  button, select, input, textarea { font-family:var(--ui); font-size:13px; }
+  #bar, #side, #cuepop, #campop, #chpop, #cutpop, #bpop { background:var(--panel); }
+  #bar { gap:12px; padding:12px 18px 14px; border-top:1px solid var(--line); box-shadow:0 -10px 30px rgba(0,0,0,.35); }
+  #bar button, #bar select, #sidetabs button, #side button, #side select, #cuepop button, #cuepop select, #campop button, #campop select, #chpop button, #cutpop button, #bpop button, #bpop select, #camline button {
+    background:var(--raise); color:var(--text); border:1px solid var(--line); border-radius:var(--r); padding:7px 13px; cursor:pointer; transition:background .12s, border-color .12s, color .12s; }
+  #bar button:hover, #bar select:hover, #side button:hover, #side select:hover, #cuepop button:hover, #campop button:hover, #chpop button:hover, #cutpop button:hover, #bpop button:hover { background:var(--raise2); border-color:#3b3b44; }
+  #bar button:active, #side button:active { transform:translateY(1px); }
+  #bar button:disabled, #bar button.dis { opacity:.4; cursor:default; }
+  #bar input, #side input:not([type=range]):not([type=checkbox]):not([type=color]):not([type=file]), #side textarea, #cuepop input, #campop input, #chpop input, #cutpop input, #bpop input {
+    background:#131316; color:var(--text); border:1px solid var(--line); border-radius:var(--r); padding:7px 11px; }
+  #bar input:focus, #side input:focus, #side textarea:focus, #bar select:focus, #side select:focus { outline:none; border-color:var(--amber); box-shadow:0 0 0 3px var(--amber-t); }
+  #bar select, #side select { appearance:none; -webkit-appearance:none; padding-right:30px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238d8d96' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 11px center; }
+  /* the control bar: two rows, grouped */
+  #ctl { display:flex; flex-direction:column; align-items:stretch; gap:10px; }
+  .crow { display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; }
+  .crow .sp { flex:1 1 0; min-width:0; }
+  #ctl .grp { display:flex; align-items:center; gap:8px; }
+  .gl { color:var(--dim); font-size:10px; letter-spacing:.12em; text-transform:uppercase; margin-right:-6px; }
+  .seg { display:inline-flex; align-items:center; gap:2px; padding:3px; background:#131316; border:1px solid var(--line); border-radius:12px; flex-wrap:wrap; }
+  #bar .seg button, #bar .seg select { background:transparent; border-color:transparent; padding:5px 11px; border-radius:9px; color:#c9c9cf; }
+  #bar .seg button:hover, #bar .seg select:hover { background:var(--raise2); border-color:transparent; color:#fff; }
+  #bar .seg button.on { background:var(--amber-t); color:var(--amber); }
+  #bar .seg #zlev { min-width:38px; text-align:center; color:var(--dim); font:12px var(--mono); }
+  #bar button.primary { background:var(--amber); border-color:var(--amber); color:#151100; font-weight:600; padding:8px 18px 8px 14px; min-width:92px; }
+  #bar button.primary:hover { background:#ffc233; border-color:#ffc233; }
+  #bar button.primary::before { content:"\25B6"; font-size:10px; margin-right:8px; }
+  #bar button.primary.playing::before { content:"\275A\275A"; font-size:9px; letter-spacing:-1px; }
+  #time { min-width:118px; text-align:left; color:var(--text); font:15px var(--mono); font-variant-numeric:tabular-nums; }
+  #nudge { color:var(--dim); font:12px var(--mono); min-width:0; }
+  #title { width:clamp(140px, 22vw, 320px); }
+  #bar #seek { accent-color:var(--amber); }
+  #lbls .lbl, #tl .lbl { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:#6f6f78; }
+  #camlane, #buslane, #vwlane, #chaplane, #cues, #capslane, #cutlane { background:#131316; border-radius:6px; }
+  /* the sidebar */
+  #side { width:min(420px, 44vw); border-left:1px solid var(--line); box-shadow:-10px 0 30px rgba(0,0,0,.3); }
+  #sidetabs { flex-wrap:nowrap; gap:2px; padding:10px 12px; border-bottom:1px solid var(--line); align-items:center; }
+  #sidetabs button { background:transparent; border-color:transparent; padding:6px 9px; white-space:nowrap; color:var(--dim); }
+  #sidetabs button:hover { background:var(--raise); color:var(--text); border-color:transparent; }
+  #sidetabs button.act { background:var(--amber-t); color:var(--amber); border-color:transparent; }
+  #sidetabs #sideclose { margin-left:auto; padding:6px 10px; }
+  #sidebody { padding:16px 18px 24px; }
+  #side .pane { gap:12px; }
+  #side .h2 { color:var(--text); font-weight:600; font-size:14px; }
+  #side .h2 .h { font-weight:400; }
+  #side .h2.sub { margin-top:10px; padding-top:14px; border-top:1px solid var(--line); color:var(--dim); font-size:10px; letter-spacing:.12em; text-transform:uppercase; font-weight:600; }
+  #side .h { color:var(--dim); font-size:12px; }
+  #side label { display:grid; grid-template-columns:minmax(96px, 9.5em) minmax(0, 1fr); gap:6px 14px; align-items:center; color:var(--dim); white-space:normal; }
+  #side label .lt { color:#c4c4ca; }
+  #side label .lc { display:flex; align-items:center; gap:8px; min-width:0; flex-wrap:wrap; }
+  #side label .lc > input[type=range], #side label .lc > .two, #side label .lc > select, #side label .lc > .bw { flex:1 1 120px; min-width:0; width:auto !important; }
+  #side label .lc > .bw { display:flex; gap:6px; } #side label .lc > .bw > * { min-width:0; flex:1; }
+  #side label.chk, #side label:not(:has(.lt)) { display:flex; gap:10px; align-items:center; color:#c4c4ca; }
+  #side input[type=range] { accent-color:var(--amber); height:18px; }
+  #side input[type=checkbox] { accent-color:var(--amber); width:16px; height:16px; }
+  #side input[type=color] { width:40px; height:30px; padding:2px; border:1px solid var(--line); border-radius:8px; background:#131316; }
+  #side input[type=file] { background:transparent !important; border:0 !important; padding:0 !important; color:var(--dim); max-width:100%; font-size:12px; }
+  #side input[type=file]::file-selector-button { background:var(--raise); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:5px 11px; margin-right:10px; cursor:pointer; }
+  #side .row { gap:8px; flex-wrap:wrap; }
+  #side .row button { padding:6px 10px; }
+  #side button#s_reset { align-self:flex-start; }
+  #cam_prev { border-radius:10px; }
+  #tplbox .trow { border-bottom:1px solid var(--line); padding:10px 0; }
+  #capbox .crow { border-bottom:1px solid var(--line); }
+  /* small popups over the timeline */
+  #cuepop, #campop, #chpop, #cutpop, #bpop { border:1px solid #3a3a43; border-radius:12px; padding:10px 12px; box-shadow:0 14px 40px rgba(0,0,0,.55); }
+  #msg { background:var(--raise); border:1px solid var(--line); border-radius:12px; }
+  *::-webkit-scrollbar { width:10px; height:10px; } *::-webkit-scrollbar-thumb { background:#34343c; border-radius:6px; border:2px solid transparent; background-clip:content-box; } *::-webkit-scrollbar-track { background:transparent; }
+  @media (max-width:900px) { #side { width:min(420px, 86vw); } .gl { display:none; } #title { width:100%; } .crow .sp { display:none; } }
 </style>
 </head>
 <body>
@@ -138,11 +211,11 @@
 </div>
 <div id="capbox" class="pane">
   <div id="caplist"></div>
-  <label class="g">fade in and out <input id="c_fade" type="number" min="0" max="3" step="0.05" style="width:64px"> s <span class="h">for all captions</span></label>
-  <label class="g">blur behind a caption <input id="c_blur" type="range" min="0" max="12" step="0.5" style="width:130px"> <span id="c_blurv" class="h"></span></label>
-  <label class="g">animation <select id="c_anim"><option value="card">the card appears</option><option value="words">words pop in</option><option value="type">typed letter by letter</option></select> <span class="h">*word* is shown in the accent colour</span></label>
-  <label class="g">dim behind a caption <input id="c_dim" type="range" min="0" max="80" step="1" style="width:130px"> <span id="c_dimv" class="h"></span></label>
-  <label class="g">a new caption lasts <input id="c_len" type="number" min="1" max="60" step="0.5" style="width:64px"> s <span class="h">for all new captions</span></label>
+  <label class="g"><span class="lt">fade in and out</span><span class="lc"><input id="c_fade" type="number" min="0" max="3" step="0.05" style="width:64px"> s <span class="h">for all captions</span></span></label>
+  <label class="g"><span class="lt">blur behind a caption</span><span class="lc"><input id="c_blur" type="range" min="0" max="12" step="0.5" style="width:130px"> <span id="c_blurv" class="h"></span></span></label>
+  <label class="g"><span class="lt">animation</span><span class="lc"><select id="c_anim"><option value="card">the card appears</option><option value="words">words pop in</option><option value="type">typed letter by letter</option></select> <span class="h">*word* is shown in the accent colour</span></span></label>
+  <label class="g"><span class="lt">dim behind a caption</span><span class="lc"><input id="c_dim" type="range" min="0" max="80" step="1" style="width:130px"> <span id="c_dimv" class="h"></span></span></label>
+  <label class="g"><span class="lt">a new caption lasts</span><span class="lc"><input id="c_len" type="number" min="1" max="60" step="0.5" style="width:64px"> s <span class="h">for all new captions</span></span></label>
   <button id="capadd" title="a caption from the time you are at">add a caption here</button>
 </div>
 <div id="chbox" class="pane">
@@ -168,38 +241,38 @@
   <div class="row"><span class="h">offset</span><input id="cam_sync" type="number" step="0.001" style="width:96px"><span class="h">s</span>
     <button data-n="-1">-1 s</button><button data-n="-0.1">-0.1</button><button data-n="-0.0333">-1 f</button><button data-n="0.0333">+1 f</button><button data-n="0.1">+0.1</button><button data-n="1">+1 s</button></div>
   <div class="h2 sub">picture</div>
-  <label class="g">zoom <input id="cam_zoom" type="range" min="1" max="3" step="0.01"> <span id="cam_zoomv" class="h"></span></label>
-  <label class="g">left / right <input id="cam_cx" type="range" min="0" max="1" step="0.005"></label>
-  <label class="g">up / down <input id="cam_cy" type="range" min="0" max="1" step="0.005"></label>
-  <label class="g">corners <input id="cam_round" type="range" min="0" max="60" step="1"> <label class="g" style="margin-left:8px"><input id="cam_mirror" type="checkbox"> mirror</label></label>
-  <label class="g">the box is <select id="cam_layer"><option value="front">in front of the panels</option><option value="behind">behind the panels</option></select></label>
+  <label class="g"><span class="lt">zoom</span><span class="lc"><input id="cam_zoom" type="range" min="1" max="3" step="0.01"> <span id="cam_zoomv" class="h"></span></span></label>
+  <label class="g"><span class="lt">left / right</span><span class="lc"><input id="cam_cx" type="range" min="0" max="1" step="0.005"></span></label>
+  <label class="g"><span class="lt">up / down</span><span class="lc"><input id="cam_cy" type="range" min="0" max="1" step="0.005"></span></label>
+  <label class="g"><span class="lt">corners</span><span class="lc"><input id="cam_round" type="range" min="0" max="60" step="1"> <label class="chk"><input id="cam_mirror" type="checkbox"> mirror</label></span></label>
+  <label class="g"><span class="lt">the box is</span><span class="lc"><select id="cam_layer"><option value="front">in front of the panels</option><option value="behind">behind the panels</option></select></span></label>
   <div class="row"><button id="cam_scene" title="a new scene from here: the box and the panels can differ">new scene here</button><button id="cam_hide" title="a scene without the camera">hide the camera from here</button><button id="cam_off">no camera</button></div>
 </div>
 <div id="stylebox" class="pane">
-  <label>look <select id="s_preset"></select></label>
-  <label>accent <input id="s_accent" type="color" value="#ffb000"> <button id="s_accent_auto" title="the colour of the look">auto</button></label>
-  <label>background <select id="s_bgkind"><option value="preset">the look's</option><option value="solid">colour</option><option value="gradient">gradient</option><option value="image">picture</option></select></label>
-  <label>colours <input id="s_bg1" type="color" value="#000000"> <input id="s_bg2" type="color" value="#1b1b2e"></label>
-  <label>picture <input id="s_bgimg" type="file" accept="image/*"></label>
-  <label>picture dimmed <input id="s_bgdim" type="range" min="0" max="95" value="60"></label>
-  <label>picture fills <select id="s_bgfit"><option value="cover">the video (cropped to fit)</option><option value="contain">the video (all of it)</option><option value="stretch">the video (stretched)</option><option value="tile">as tiles</option><option value="center">centred (its own size)</option></select></label>
-  <label>picture position <span class="two"><input id="s_bgpx" type="range" min="0" max="100"><input id="s_bgpy" type="range" min="0" max="100"></span></label>
-  <label>picture zoom <input id="s_bgzoom" type="range" min="50" max="300"></label>
-  <label>picture blur <input id="s_bgblur" type="range" min="0" max="30"></label>
-  <label>picture drifts <input id="s_bgdrift" type="range" min="0" max="100" title="moves slowly from side to side"> <span id="s_bgdriftv" class="h"></span></label>
-  <label>picture breathes <input id="s_bgbreath" type="range" min="0" max="100" title="zooms in and out a little"> <span id="s_bgbreathv" class="h"></span></label>
-  <label>a new direction every <input id="s_bgper" type="range" min="4" max="60"> <span id="s_bgperv" class="h"></span></label>
+  <label><span class="lt">look</span><span class="lc"><select id="s_preset"></select></span></label>
+  <label><span class="lt">accent</span><span class="lc"><input id="s_accent" type="color" value="#ffb000"> <button id="s_accent_auto" title="the colour of the look">auto</button></span></label>
+  <label><span class="lt">background</span><span class="lc"><select id="s_bgkind"><option value="preset">the look's</option><option value="solid">colour</option><option value="gradient">gradient</option><option value="image">picture</option></select></span></label>
+  <label><span class="lt">colours</span><span class="lc"><input id="s_bg1" type="color" value="#000000"> <input id="s_bg2" type="color" value="#1b1b2e"></span></label>
+  <label><span class="lt">picture</span><span class="lc"><input id="s_bgimg" type="file" accept="image/*"></span></label>
+  <label><span class="lt">picture dimmed</span><span class="lc"><input id="s_bgdim" type="range" min="0" max="95" value="60"></span></label>
+  <label><span class="lt">picture fills</span><span class="lc"><select id="s_bgfit"><option value="cover">the video (cropped to fit)</option><option value="contain">the video (all of it)</option><option value="stretch">the video (stretched)</option><option value="tile">as tiles</option><option value="center">centred (its own size)</option></select></span></label>
+  <label><span class="lt">picture position</span><span class="lc"><span class="two"><input id="s_bgpx" type="range" min="0" max="100"><input id="s_bgpy" type="range" min="0" max="100"></span></span></label>
+  <label><span class="lt">picture zoom</span><span class="lc"><input id="s_bgzoom" type="range" min="50" max="300"></span></label>
+  <label><span class="lt">picture blur</span><span class="lc"><input id="s_bgblur" type="range" min="0" max="30"></span></label>
+  <label><span class="lt">picture drifts</span><span class="lc"><input id="s_bgdrift" type="range" min="0" max="100" title="moves slowly from side to side"> <span id="s_bgdriftv" class="h"></span></span></label>
+  <label><span class="lt">picture breathes</span><span class="lc"><input id="s_bgbreath" type="range" min="0" max="100" title="zooms in and out a little"> <span id="s_bgbreathv" class="h"></span></span></label>
+  <label><span class="lt">a new direction every</span><span class="lc"><input id="s_bgper" type="range" min="4" max="60"> <span id="s_bgperv" class="h"></span></span></label>
   <label><input id="s_rec" type="checkbox"> a REC mark on the video (split view; off: the time is in the header)</label>
-  <label>hit reactions <input id="s_hits" type="range" min="0" max="100" title="a pad that is hit pops up and glows a little (25 %); more adds a ring, over 50 % sparks; 0 = off"> <span id="s_hitsv" class="h"></span></label>
-  <label>panel opacity <input id="s_bgpanels" type="range" min="0" max="100"> <span id="s_bgpanelsv" class="h"></span></label>
-  <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
-  <label>BUS 1 at the start <span class="bw"><select id="s_bussel0"></select> <input id="s_bus0" placeholder="your own text" size="18" hidden></span></label>
-  <label>BUS 2 at the start <span class="bw"><select id="s_bussel1"></select> <input id="s_bus1" placeholder="your own text" size="18" hidden></span></label>
-  <label>BUS 3 at the start <span class="bw"><select id="s_bussel2"></select> <input id="s_bus2" placeholder="your own text" size="18" hidden></span></label>
-  <label>BUS 4 at the start <span class="bw"><select id="s_bussel3"></select> <input id="s_bus3" placeholder="your own text" size="18" hidden></span></label>
+  <label><span class="lt">hit reactions</span><span class="lc"><input id="s_hits" type="range" min="0" max="100" title="a pad that is hit pops up and glows a little (25 %); more adds a ring, over 50 % sparks; 0 = off"> <span id="s_hitsv" class="h"></span></span></label>
+  <label><span class="lt">panel opacity</span><span class="lc"><input id="s_bgpanels" type="range" min="0" max="100"> <span id="s_bgpanelsv" class="h"></span></span></label>
+  <label><span class="lt">logo</span><span class="lc"><input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></span></label>
+  <label><span class="lt">BUS 1 at the start</span><span class="lc"><span class="bw"><select id="s_bussel0"></select> <input id="s_bus0" placeholder="your own text" size="18" hidden></span></span></label>
+  <label><span class="lt">BUS 2 at the start</span><span class="lc"><span class="bw"><select id="s_bussel1"></select> <input id="s_bus1" placeholder="your own text" size="18" hidden></span></span></label>
+  <label><span class="lt">BUS 3 at the start</span><span class="lc"><span class="bw"><select id="s_bussel2"></select> <input id="s_bus2" placeholder="your own text" size="18" hidden></span></span></label>
+  <label><span class="lt">BUS 4 at the start</span><span class="lc"><span class="bw"><select id="s_bussel3"></select> <input id="s_bus3" placeholder="your own text" size="18" hidden></span></span></label>
   <div class="h" style="color:#777;font-size:11px">later in the take: the "bus change" button</div>
-  <label>handle <input id="s_handle" placeholder="@yourname" size="18"></label>
-  <label>subtitle <input id="s_sub" placeholder="under the title" size="22"></label>
+  <label><span class="lt">handle</span><span class="lc"><input id="s_handle" placeholder="@yourname" size="18"></span></label>
+  <label><span class="lt">subtitle</span><span class="lc"><input id="s_sub" placeholder="under the title" size="22"></span></label>
   <button id="s_reset">reset the look</button>
 </div>
   </div>
@@ -223,27 +296,34 @@
     <span class="lbl"></span><div id="seekrow"><input id="seek" type="range" min="0" max="1000" value="0"><div id="vwin"></div></div>
   </div>
   <div id="ctl">
-    <span class="grp"><button id="play" title="Space">play</button><span id="time">0:00.0</span>
-      <button id="undo" title="Ctrl-Z">undo</button><button id="redo" title="Ctrl-Shift-Z">redo</button></span>
-    <span class="grp"><button id="zout" title="show more of the take (Ctrl + wheel, or -)">-</button><span id="zlev" style="min-width:34px;text-align:center;color:var(--dim)">1x</span><button id="zin" title="show less of the take (Ctrl + wheel, or +)">+</button><button id="zfit" title="the whole take">fit</button></span>
-    <span class="grp"><input id="title" placeholder="title" size="18" title="the title shown in the video">
-      <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button>
+    <div class="crow">
+      <span class="grp"><button id="play" class="primary" title="Space">play</button><span id="time">0:00.0</span></span>
+      <span class="seg"><button id="undo" title="Ctrl-Z">undo</button><button id="redo" title="Ctrl-Shift-Z">redo</button></span>
+      <span class="seg"><button id="zout" title="show more of the take (Ctrl + wheel, or -)">-</button><span id="zlev">1x</span><button id="zin" title="show less of the take (Ctrl + wheel, or +)">+</button><button id="zfit" title="the whole take">fit</button></span>
+      <span class="grp"><select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select><span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span></span>
+      <span class="sp"></span>
+      <input id="title" placeholder="title" size="18" title="the title shown in the video">
+    </div>
+    <div class="crow">
+      <span class="grp"><select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button>
       <select id="cutsel" title="leave a part of the take out of the video (keys: i starts a cut here, o ends it)"><option value="">cut...</option><option value="in">start a cut here (i)</option><option value="out">end the cut here (o)</option><option value="before">cut everything before here</option><option value="after">cut everything after here</option><option value="none">restore all cuts</option></select></span>
-    <span class="grp"><select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
-      <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span></span>
-    <span class="grp right"><button id="tplbtn" title="save a setup as a template, use one on this take">templates</button>
+      <span class="sp"></span>
+      <span class="gl">add</span>
+      <span class="seg"><button id="tplbtn" title="save a setup as a template, use one on this take">templates</button>
       <button id="cambtn" title="the video of you playing">camera</button>
       <button id="vmbtn" title="the view changes from here on: the split view with a mode, or back to the normal view">view change</button>
       <button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
       <button id="chbtn" title="the chapters, and the list for YouTube">chapters</button>
-      <button id="capbtn" title="text shown at times of the take">captions</button>
-      <select id="padsel" title="the sample (pad) of the chromatic keys and the arp: its bank is the keyboard" style="display:none"></select>
+      <button id="capbtn" title="text shown at times of the take">captions</button></span>
+      <span class="gl">view</span>
+      <span class="seg"><select id="padsel" title="the sample (pad) of the chromatic keys and the arp: its bank is the keyboard" style="display:none"></select>
       <button id="modebtn" title="p: the pads, c: the chromatic keys, a: the arp view, m: the MIDI notes">pads</button>
       <button id="lookbtn" title="s: how the arp is drawn (columns, step grid, ring)" style="display:none">columns</button>
       <button id="laybtn" title="l: the layout of the split view (video, mode and captions; video and mode side by side; one above the other; video with a sidebar of buses, level and logs)">layout</button>
-      <button id="viewbtn" title="v: the split view (camera, keys, captions) or the normal view with all the panels">split view</button>
-      <button id="stylebtn" title="colours, background, logo, handle">style</button>
+      <button id="viewbtn" title="v: the split view (camera, keys, captions) or the normal view with all the panels">split view</button></span>
+      <span class="seg"><button id="stylebtn" title="colours, background, logo, handle">style</button>
       <button id="full" title="f">full screen</button></span>
+    </div>
   </div>
   <div id="cuepop"></div>
 </div>
@@ -1606,7 +1686,7 @@ function frame() {
     followPlayhead(t / d, !audio.paused);
   }
   timeEl.textContent = CUTS.length ? mmss(outTime(t)) + " / " + mmss(outDur()) + "  (take " + mmss(t) + ")" : mmss(t) + " / " + mmss(d);
-  play.textContent = audio.paused ? "play" : "pause";
+  play.textContent = audio.paused ? "play" : "pause"; play.classList.toggle("playing", !audio.paused);
   requestAnimationFrame(frame);
 }
 play.onclick = () => (audio.paused ? audio.play() : audio.pause());
