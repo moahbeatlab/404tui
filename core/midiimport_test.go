@@ -31,13 +31,13 @@ func TestMIDIImportFromFiles(t *testing.T) {
 		bass.Notes = append(bass.Notes, formats.MIDINote{Tick: uint32(i) * formats.PPQ, Len: 240, Note: n, Vel: 100})
 	}
 	file := formats.WriteMIDI([]formats.MIDIOut{drums, bass}, 124, 4, 8*formats.PPQ)
-	if err := os.WriteFile(filepath.Join(a.dir, "groove.mid"), file, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(a.dir, "Groove.MIDI"), file, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	a.list()
 	found := false
 	for i, e := range a.entries {
-		if e.name == "groove.mid" {
+		if e.name == "Groove.MIDI" {
 			a.fcur, found = i, true
 		}
 	}
