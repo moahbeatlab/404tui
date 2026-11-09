@@ -51,6 +51,14 @@
   // The tools of the demo: the program's own tools (demo.wasm: Go, with a simulated unit) running in this page. SP404Tools(json) answers
   // {code, body | msg} like the program's /tools/api; SP404Audio plays what the tools play (the slicer, the pattern).
   let toolsLoading = null;
+  // What the Tools popup shows while the demo's tools load: a line, and a bar (a moving stripe when the stage has no count).
+  const toolsState = { text: '', frac: 0, wait: false };
+  function toolsProgress(text, frac, wait) {
+    toolsState.text = text; toolsState.frac = frac; toolsState.wait = !!wait;
+    const pop = document.getElementById('toolsLoad'); if (!pop) return;
+    pop.querySelector('span').textContent = text; pop.classList.toggle('wait', !!wait);
+    pop.querySelector('i').style.width = Math.round(frac * 100) + '%';
+  }
   function loadDemoTools() {
     if (toolsLoading) return toolsLoading;
     const script = (src) => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error(src)); document.head.appendChild(s); });
@@ -77,11 +85,31 @@
     let ready = null;
     toolsLoading = (async () => {
       const v = window.SP404_BUILD ? '?v=' + window.SP404_BUILD : '';
+      toolsProgress('Loading the scripts', 0.02);
       await script('memfs.js' + v); await script('wasm_exec.js' + v);
       const go = new Go();
-      const wasm = await WebAssembly.instantiateStreaming(fetch('demo.wasm' + (window.SP404_BUILD ? '?v=' + window.SP404_BUILD : '')), go.importObject).catch(async () => WebAssembly.instantiate(await (await fetch('demo.wasm' + (window.SP404_BUILD ? '?v=' + window.SP404_BUILD : ''))).arrayBuffer(), go.importObject));
+      // the download, counted as it comes (the size is known from the build; a server may send it packed, so the headers do not say)
+      const res = await fetch('demo.wasm' + v);
+      if (!res.ok) throw new Error('demo.wasm: ' + res.status);
+      const total = window.SP404_WASM_BYTES || 9400000, reader = res.body && res.body.getReader ? res.body.getReader() : null;
+      let bytes;
+      if (reader) {
+        const parts = []; let got = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          parts.push(value); got += value.length;
+          toolsProgress('Downloading the tools: ' + (got / 1e6).toFixed(1) + ' of ' + (total / 1e6).toFixed(1) + ' MB', 0.05 + 0.6 * Math.min(1, got / total));
+        }
+        bytes = new Uint8Array(got); let o = 0; for (const p of parts) { bytes.set(p, o); o += p.length; }
+      } else bytes = new Uint8Array(await res.arrayBuffer());
+      toolsProgress('Preparing the tools in the browser (a few seconds)', 0.7, true);
+      await new Promise((ok) => setTimeout(ok, 30)); // so that the line above is drawn before the browser is busy
+      const wasm = await WebAssembly.instantiate(bytes, go.importObject);
+      toolsProgress('Starting the simulated unit', 0.88, true);
       go.run(wasm.instance);
-      await new Promise((ok) => { const t = setInterval(() => { if (window.sp404ToolsReady) { clearInterval(t); ok(); } }, 100); });
+      await new Promise((ok, no) => { const t0 = Date.now(), t = setInterval(() => { if (window.sp404ToolsReady) { clearInterval(t); ok(); } else if (Date.now() - t0 > 60000) { clearInterval(t); no(new Error('the simulated unit did not start within a minute')); } }, 100); });
+      toolsProgress('Ready', 1);
       syncDemoUnit();
     })();
     window.SP404Tools = async (text) => { await toolsLoading; return JSON.parse(window.sp404Tools(text)); };
@@ -530,10 +558,10 @@
     const k = new URLSearchParams(location.search).get('key') || store.get('key') || '';
     // A popup over the page while it loads: the frame, and in the demo the tools themselves (demo.wasm, 9 MB), which can take a few seconds.
     const pop = $('toolsLoad'), msg = pop.querySelector('b'), sub = pop.querySelector('span');
-    msg.textContent = 'Loading the tools…'; sub.textContent = toolsLoading ? 'The first time this takes a few seconds (about 9 MB).' : ''; pop.hidden = false;
+    msg.textContent = 'Loading the tools…'; pop.hidden = false; $('tools').classList.add('loading'); if (toolsLoading) toolsProgress(toolsState.text, toolsState.frac, toolsState.wait); else { sub.textContent = ''; pop.querySelector('i').style.width = '60%'; pop.classList.add('wait'); }
     const framed = new Promise((ok) => f.addEventListener('load', ok, { once: true }));
-    Promise.all([framed, toolsLoading]).then(() => { pop.hidden = true; }, () => {
-      msg.textContent = 'The tools did not load'; sub.textContent = 'Check the connection and reload the page.';
+    Promise.all([framed, toolsLoading]).then(() => { pop.hidden = true; $('tools').classList.remove('loading'); }, (e) => {
+      msg.textContent = 'The tools did not load'; sub.textContent = 'Check the connection and reload the page. (' + ((e && e.message) || e) + ')'; pop.classList.remove('wait');
     });
     f.src = 'tools.html?embed=1' + (k ? '&key=' + encodeURIComponent(k) : '') + (window.SP404_BUILD ? '&v=' + window.SP404_BUILD : '');
     f.addEventListener('load', () => { toolsBank = -1; if (state && state.bank) tellTools(state.bank.charCodeAt(0) - 65); });
