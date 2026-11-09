@@ -1,6 +1,8 @@
 # Changes
 
-## Unreleased
+## 0.1.3 (2026-11-09)
+
+The replay page gets a new look.
 
 - The replay page has a new look: the control bar is two grouped rows (transport, zoom, speed and title; pattern and cuts, then Add and View buttons), the sidebar is a tidy form (label left, control right, nothing runs off the edge), with one set of buttons, fields, sliders and popups.
 - The tool buttons (templates, camera, captions, chapters, view change, bus change, view modes, style, full screen) moved from the bottom bar to a rail at the right edge; the bottom bar is one row.
