@@ -6,7 +6,7 @@ import "runtime/debug"
 
 // Version is the release. It can be set when building: go build -ldflags "-X
 // github.com/moahbeatlab/404tui/version.Version=0.2".
-var Version = "0.1.1"
+var Version = "0.1.2"
 
 // Date is the day the program was built (2006-01-02, UTC). It can be set when building: -X
 // github.com/moahbeatlab/404tui/version.Date=2026-11-04. Without it the day of the commit the program was built from is used.

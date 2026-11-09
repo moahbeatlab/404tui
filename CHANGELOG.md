@@ -1,5 +1,14 @@
 # Changes
 
+## 0.1.2 (2026-11-09)
+
+The web page.
+
+- On a wide window the sections are a bar at the bottom (Perform, Patterns, Tools), as on a phone.
+- A popup with a progress bar while the tools load in the demo (download in MB, preparing, starting), with an error after a minute.
+- The tools page grows to 1320 px on a wide window (it was held to 860).
+- The arp and MIDI views show only what says something under the title (a direction, more than one octave, the rate, a swing).
+
 ## 0.1.1 (2026-11-08)
 
 Replay and render.
