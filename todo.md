@@ -1,5 +1,12 @@
 # TODO
 
+## Remove or refactor the classic Files view
+
+The Files screen has two views: the three-column view (`ranger`, the default) and the older classic tree view (`w` toggles
+it). Remove the classic one, or refactor so there is only one. Many tests turn the three-column view off (`mdl.ranger = false`
+in `connectTo`, `tui/tui_test.go`) and test the tree, so they would move to the three-column view too. The first scripted
+terminal cast (`tui/castdemo_test.go`) showed the classic view because of that.
+
 ## Record a tmux-based session on a real device
 
 Goal: a replayable recording of 404tui driving a real SP-404MKII, to show the workflow

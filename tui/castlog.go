@@ -11,6 +11,9 @@ import (
 // replay can show the terminal and the keys (a "key" line has the key's name; a "screen" line has the lines of the screen that changed,
 // with their colours, and a whole screen every few seconds and when the size changes).
 
+// castClock is the time of the log's lines (a script that makes a take sets its own).
+var castClock = time.Now
+
 const castKeyframe = 4 * time.Second
 
 // castState is what the last logged screen looked like. It lives in the view cache (a pointer), because View has a copy of the model.
@@ -25,7 +28,7 @@ func (m Model) logKey(name string) {
 	if m.perfLog == nil || name == "" {
 		return
 	}
-	m.perfLog.Add(time.Now(), "key", perflog.P("key", name))
+	m.perfLog.Add(castClock(), "key", perflog.P("key", name))
 }
 
 // logScreen writes what changed on the screen since the last one that was logged.
@@ -35,7 +38,7 @@ func (m Model) logScreen(out string) {
 	}
 	c := &m.vc.cast
 	lines := strings.Split(out, "\n")
-	now := time.Now()
+	now := castClock()
 	if len(c.last) == len(lines) && c.w == m.width && now.Sub(c.keyframe) < castKeyframe {
 		diff := map[int]string{}
 		for i, l := range lines {
