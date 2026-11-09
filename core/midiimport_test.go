@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,6 +50,9 @@ func TestMIDIImportFromFiles(t *testing.T) {
 		t.Fatalf("A on a MIDI file opens the form, got %v (%s)", a.menu, a.msg)
 	}
 	m := a.menu
+	if v := m.items[2].vals[0]; !strings.HasPrefix(v, "A1  kick") || !strings.Contains(m.items[2].vals[19], "no sample") {
+		t.Fatalf("Use sample lists the pad with the name of its sample: %q, %q", v, m.items[2].vals[19])
+	}
 	if m.items[0].val != 1 || m.items[1].val != 0 { // the bass is the second part, and a melody
 		t.Fatalf("the form starts on part %d as %d", m.items[0].val, m.items[1].val)
 	}
@@ -71,7 +75,9 @@ func TestMIDIImportFromFiles(t *testing.T) {
 	if au.Loops != loops+2 {
 		t.Fatal("a change of the form is not heard while it plays")
 	}
-	listen.run(0) // again: it stops
+	listen.run(0)       // again: it stops
+	m.items[2].val = 20 // the bass is on pad B5, not on the kick's pad
+	m.items[2].onChange(20)
 	m.items[len(m.items)-1].run(0)
 	d, ok := a.doc()
 	if !ok || a.pat != into || len(d.Notes) != 8 || d.Bars != 2 {
@@ -82,9 +88,24 @@ func TestMIDIImportFromFiles(t *testing.T) {
 			t.Fatal("a melody note has no pitch")
 		}
 	}
-	// the drums: pick the first part, as drums
+	// the drums: the form starts on the pattern of the last import, adding to it
 	a.filesKey(A)
 	m = a.menu
+	if m.items[4].val+1 != into || m.items[5].val != 1 {
+		t.Fatalf("the form should remember pattern %d and add to it: pattern %d, mode %d", into, m.items[4].val+1, m.items[5].val)
+	}
+	if m.items[2].val != 20 {
+		t.Fatalf("the form should remember the sample of the last melody (pad 20), it has %d", m.items[2].val)
+	}
+	m.items[2].run(0) // A on "Use sample" opens the pad dialog
+	if a.picker == nil || !a.picker.pads {
+		t.Fatal("A on Use sample did not open the pad dialog")
+	}
+	a.picker.onPick(1)
+	a.picker = nil
+	if m.items[2].val != 1 {
+		t.Fatalf("the pad that was picked is not in the form: %d", m.items[2].val)
+	}
 	m.items[0].val = 0
 	m.items[0].onChange(0)
 	if m.items[1].val != 1 {
@@ -92,15 +113,15 @@ func TestMIDIImportFromFiles(t *testing.T) {
 	}
 	m.items[len(m.items)-1].run(0)
 	d, ok = a.doc()
-	if !ok || len(d.Notes) != 16 {
-		t.Fatalf("the drums: %d notes (%s)", len(d.Notes), a.msg)
+	if !ok || a.pat != into || len(d.Notes) != 8+16 || d.Bars != 2 {
+		t.Fatalf("the drums added to the bass: %d notes in %d bars (%s)", len(d.Notes), d.Bars, a.msg)
 	}
 	pads := map[int]bool{}
 	for _, n := range d.Notes {
 		pads[n.Pad] = true
 	}
-	if len(pads) != 3 {
-		t.Fatalf("kick, snare and hat go to three pads, got %d (%s)", len(pads), a.msg)
+	if len(pads) != 4 {
+		t.Fatalf("the bass and kick, snare and hat are four pads, got %d (%s)", len(pads), a.msg)
 	}
 	// and back out as a file
 	a.exportMIDI()
@@ -112,7 +133,7 @@ func TestMIDIImportFromFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	g, err := formats.ParseMIDI(out)
-	if err != nil || len(g.Parts) != 3 {
+	if err != nil || len(g.Parts) != 4 {
 		t.Fatalf("exported file: %v, %d parts", err, len(g.Parts))
 	}
 	// a file that is not MIDI says so and opens nothing
@@ -120,5 +141,74 @@ func TestMIDIImportFromFiles(t *testing.T) {
 	a.openMIDIImport("x.mid", []byte("hello"))
 	if a.menu != nil || !a.msgBad {
 		t.Fatal("a text file is not a MIDI file")
+	}
+}
+
+// A song in several files: marked, they are imported one after the other into one pattern, each on a pad of its own, and the pattern
+// gets as long as the longest file while the shorter ones go round again.
+func TestMIDIImportOfSeveralFilesIntoOnePattern(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	write := func(name string, ch uint8, bars int, notes ...uint8) {
+		tr := formats.MIDIOut{Name: name, Channel: ch}
+		for i := 0; i < bars*4; i++ {
+			tr.Notes = append(tr.Notes, formats.MIDINote{Tick: uint32(i) * formats.PPQ, Len: 120, Note: notes[i%len(notes)], Vel: 100})
+		}
+		b := formats.WriteMIDI([]formats.MIDIOut{tr}, 120, 4, uint32(bars*4*formats.PPQ))
+		if err := os.WriteFile(filepath.Join(a.dir, name), b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("song_1_drums.mid", 9, 2, 36, 38)
+	write("song_2_bass.mid", 0, 4, 36, 43, 48)
+	write("song_3_keys.midi", 1, 8, 60, 64, 67)
+	a.list()
+	a.fmarks = map[string]bool{}
+	for i, e := range a.entries {
+		if strings.HasPrefix(e.name, "song_") {
+			a.fmarks[joinPath(a.dir, e.name)] = true
+			a.fcur = i
+		}
+	}
+	a.filesKey(A)
+	if a.menu == nil || !strings.Contains(a.menu.title, "1 of 3") {
+		t.Fatalf("the first form of three: %v (%s)", a.menu, a.msg)
+	}
+	into := a.menu.items[4].val + 1
+	var pads []int
+	for n := 1; n <= 3; n++ {
+		m := a.menu
+		if m == nil || !strings.Contains(m.title, fmt.Sprintf("%d of 3", n)) {
+			t.Fatalf("form %d: %v (%s)", n, m, a.msg)
+		}
+		if n > 1 && (m.items[4].val+1 != into || m.items[5].val != 1) {
+			t.Fatalf("form %d goes into pattern %d added: %d, mode %d", n, into, m.items[4].val+1, m.items[5].val)
+		}
+		if n > 1 {
+			pads = append(pads, m.items[2].val)
+		}
+		m.cur = len(m.items) - 2 // Import the pattern (the last entry is "leave this file out")
+		a.menuKey(A)
+	}
+	if a.menu != nil || a.midiRun != nil {
+		t.Fatal("the run is over after the third file")
+	}
+	d, ok := a.doc()
+	if !ok || a.pat != into || d.Bars != 8 {
+		t.Fatalf("pattern %d, %d bars (%s)", a.pat, d.Bars, a.msg)
+	}
+	// the drums (2 bars, 8 notes) go round four times, the bass (4 bars, 16 notes) twice, the keys (8 bars, 32 notes) once
+	if want := 8*4 + 16*2 + 32; len(d.Notes) != want {
+		t.Fatalf("%d notes, want %d", len(d.Notes), want)
+	}
+	if len(pads) != 2 || pads[0] == pads[1] {
+		t.Fatalf("each melody is on a pad of its own: %v", pads)
+	}
+	// B ends a run
+	a.filesKey(A)
+	a.menuKey(B)
+	if a.midiRun != nil {
+		t.Fatal("B did not end the run")
 	}
 }

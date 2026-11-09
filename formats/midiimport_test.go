@@ -183,3 +183,45 @@ func TestOddMeterTrailer(t *testing.T) {
 		}
 	}
 }
+
+func TestMergePatterns(t *testing.T) {
+	two := func(pad int, bars int, step int) []byte {
+		var recs []patRecord
+		for tick := 0; tick < bars*4*PPQ; tick += step {
+			recs = append(recs, noteRecord(uint32(tick), padAt(t, pad), 100, 240))
+		}
+		return writeRecords(recs, uint32(bars*4*PPQ), startTrailer(bars))
+	}
+	kick := two(0, 2, 480)   // 8 notes in 2 bars
+	melody := two(5, 8, 960) // 16 notes in 8 bars
+	res, err := MergePatterns(kick, melody, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Bars != 8 || res.WasBars != 2 || !res.Repeated || res.Notes != 8*4+16 {
+		t.Fatalf("repeat: %+v", res)
+	}
+	p, err := ParsePattern(res.Pattern)
+	if err != nil || p.Length != 8*4*PPQ || len(p.Events) != 48 {
+		t.Fatalf("pattern: %v, %d ticks, %d events", err, p.Length, len(p.Events))
+	}
+	if p.Trailer[0] != 8 {
+		t.Errorf("the trailer says %d bars", p.Trailer[0])
+	}
+	res, err = MergePatterns(kick, melody, false)
+	if err != nil || res.Notes != 8+16 || res.Bars != 8 {
+		t.Fatalf("once: %+v %v", res, err)
+	}
+	// a part that is longer than the pattern makes it longer; a 3-bar part in 8 bars is cut at the end of the last round
+	three := two(7, 3, 480)
+	res, err = MergePatterns(melody, three, true)
+	if err != nil || res.Bars != 8 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	p, _ = ParsePattern(res.Pattern)
+	for _, e := range p.Events {
+		if uint32(e.Tick) >= p.Length || uint32(e.Tick)+uint32(e.Length) > p.Length+0 && e.Pad.Index() == 7 {
+			t.Errorf("a note reaches past the end: tick %d length %d of %d", e.Tick, e.Length, p.Length)
+		}
+	}
+}

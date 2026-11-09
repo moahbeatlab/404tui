@@ -123,10 +123,13 @@ type entry struct {
 
 // App is the state of the front end.
 type App struct {
-	lab    *lab.Lab
-	Root   string // where the samples are: the file browser cannot go above it
-	OutDir string // where projects are written
-	Audio  Audio
+	midiRun  *midiBatch // the MIDI files that are being imported into one pattern
+	midiInto int        // the pattern the last MIDI file went into: the next form starts on it
+	midiPad  int        // the pad (sample) the last melody of a MIDI file was on, plus one (0: none yet)
+	lab      *lab.Lab
+	Root     string // where the samples are: the file browser cannot go above it
+	OutDir   string // where projects are written
+	Audio    Audio
 	// AudioLate delivers an audio output that opened after the start (opening it can take long or block); Run takes it.
 	AudioLate chan Audio
 

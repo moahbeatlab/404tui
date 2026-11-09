@@ -32,10 +32,11 @@ type MIDIImport struct {
 type MIDIResult struct {
 	Pattern []byte
 	Bars    int
-	Notes   int // notes in the pattern
-	Folded  int // notes moved by octaves to fit the 12 semitones up and down of a pad
-	Left    int // notes left out: no pad for the drum, or after the end of the pattern
-	Chords  int // notes that start together with another one on the same pad (a pad plays one voice)
+	Notes   int          // notes in the pattern
+	Folded  int          // notes moved by octaves to fit the 12 semitones up and down of a pad
+	Left    int          // notes left out: no pad for the drum, or after the end of the pattern
+	Chords  int          // notes that start together with another one on the same pad (a pad plays one voice)
+	Merge   *MergeResult // set by the caller that adds the pattern to one that was there (MergePatterns)
 }
 
 // SuggestRoot is the note to play at a pad's own pitch so that the notes of the part sit in the middle of the 12 up and 12 down.
@@ -276,3 +277,80 @@ func PatternToMIDI(pattern []byte, bpm float64) ([]byte, error) {
 	}
 	return WriteMIDI(out, bpm, p.BeatsPerBar(), p.Length), nil
 }
+
+// MergeResult says what MergePatterns made.
+type MergeResult struct {
+	Pattern  []byte
+	Bars     int
+	WasBars  int // the bars of the pattern that was there
+	Notes    int
+	Repeated bool // a shorter part was repeated to fill the length
+}
+
+// MergePatterns puts the notes of add into the pattern base, so that several files make one pattern. The pattern becomes as long as the
+// longer of the two; with repeat, the shorter one goes round again to fill it (a 2-bar drum loop under an 8-bar melody plays four
+// times, and a last round that does not fit is cut off at the end), without it the shorter one plays once. The trailer (the bars and
+// the beats in a bar) is that of base, with the bars of the new length.
+func MergePatterns(base, add []byte, repeat bool) (MergeResult, error) {
+	var res MergeResult
+	br, bl, bt, err := readRecords(base)
+	if err != nil {
+		return res, err
+	}
+	ar, al, at, err := readRecords(add)
+	if err != nil {
+		return res, err
+	}
+	if bl == 0 || al == 0 {
+		return res, errors.New("a pattern with no length cannot be merged")
+	}
+	length := max(bl, al)
+	round := func(recs []patRecord, own uint32) []patRecord {
+		if !repeat || own >= length {
+			return recs
+		}
+		var out []patRecord
+		for off := uint32(0); off < length; off += own {
+			for _, r := range recs {
+				r.tick += off
+				if r.tick >= length {
+					continue
+				}
+				if r.note && off > 0 { // a note of a later round does not reach past the end
+					gate := uint32(r.bytes[6])<<8 | uint32(r.bytes[5])
+					if r.tick+gate > length {
+						gate = length - r.tick
+						r.bytes[5], r.bytes[6] = byte(gate), byte(gate>>8)
+					}
+				}
+				out = append(out, r)
+			}
+			res.Repeated = true
+		}
+		return out
+	}
+	recs := append(round(br, bl), round(ar, al)...)
+	bars := int((length + uint32(PPQ*4) - 1) / uint32(PPQ*4))
+	trailer := bt
+	if len(trailer) < 8 {
+		trailer = at
+	}
+	if len(trailer) < 8 {
+		trailer = startTrailer(bars)
+	}
+	trailer = append([]byte(nil), trailer...)
+	beats := ParsePatternBeats(trailer)
+	bars = int((length + uint32(beats*PPQ) - 1) / uint32(beats*PPQ))
+	trailer[0] = byte(bars)
+	res.Bars, res.WasBars = bars, int((bl+uint32(beats*PPQ)-1)/uint32(beats*PPQ))
+	for _, r := range recs {
+		if r.note {
+			res.Notes++
+		}
+	}
+	res.Pattern = writeRecords(recs, length, trailer)
+	return res, nil
+}
+
+// ParsePatternBeats is the beats in a bar that a trailer says (see Pattern.BeatsPerBar).
+func ParsePatternBeats(trailer []byte) int { return Pattern{Trailer: trailer}.BeatsPerBar() }

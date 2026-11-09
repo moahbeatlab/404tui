@@ -607,11 +607,16 @@ func (a *App) remoteReplay() {
 	}
 }
 
-// MIDIOpen opens the form of a MIDI file that was sent from the page: which part of it, onto which pad, into which pattern.
-func (r *Remote) MIDIOpen(name string, data []byte) {
+// MIDIOpen takes a MIDI file that was sent from the page: the first of a run (of total files) opens the form (which part, which pad,
+// which pattern), the others of the run wait and come one after the other into the same pattern.
+func (r *Remote) MIDIOpen(name string, data []byte, first bool, total int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.a.openMIDIImport(name, data)
+	if first || r.a.midiRun == nil {
+		r.a.startMIDIBatch([]midiItem{{name: name, data: data}}, total)
+		return
+	}
+	r.a.midiRun.queue = append(r.a.midiRun.queue, midiItem{name: name, data: data})
 }
 
 // MIDIExport is pattern slot (the one in front when 0) as a MIDI file, with a name for it.

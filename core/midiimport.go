@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/moahbeatlab/404tui/app"
@@ -23,14 +24,74 @@ func isMIDIFile(name string) bool {
 	return e == ".mid" || e == ".midi"
 }
 
-// importMIDIEntry is A on a MIDI file of FILES.
+// midiItem is a file that waits for its turn: by its path (on FILES) or with its bytes (sent from the page).
+type midiItem struct {
+	name string
+	path string
+	data []byte
+}
+
+// midiBatch is a run of files that make one pattern: a song in several files, each of them on a pad of its own. The first goes into
+// the pattern that was chosen, the next ones are added to it, and the pattern gets as long as the longest of them.
+type midiBatch struct {
+	queue []midiItem // the files still to come
+	into  int        // the pattern the files go into (0 until the first one is in)
+	used  map[int]bool
+	last  int // the pad of the last melody
+	done  int
+	total int
+}
+
+// importMIDIEntry is A on a MIDI file of FILES: with MIDI files marked, all of them (in the order of their names) one after the other into
+// one pattern; else this one.
 func (a *App) importMIDIEntry(e entry) {
-	b, err := a.fileStore().ReadFile(joinPath(a.dir, e.name))
-	if err != nil {
-		a.say(err.Error(), true)
-		return
+	var items []midiItem
+	if len(a.fmarks) > 0 {
+		var paths []string
+		for p := range a.fmarks {
+			if isMIDIFile(p) {
+				paths = append(paths, p)
+			}
+		}
+		sort.Slice(paths, func(i, j int) bool { return app.NaturalLess(strings.ToLower(paths[i]), strings.ToLower(paths[j])) })
+		for _, p := range paths {
+			items = append(items, midiItem{name: baseName(p), path: p})
+		}
 	}
-	a.openMIDIImport(e.name, b)
+	if len(items) == 0 {
+		items = []midiItem{{name: e.name, path: joinPath(a.dir, e.name)}}
+	}
+	a.startMIDIBatch(items, len(items))
+}
+
+// startMIDIBatch starts a run of files and opens the form of the first.
+func (a *App) startMIDIBatch(items []midiItem, total int) {
+	a.midiRun = &midiBatch{queue: items, total: max(total, len(items)), used: map[int]bool{}}
+	a.nextMIDI()
+}
+
+// nextMIDI opens the form of the next file of the run; with none left the run is over.
+func (a *App) nextMIDI() {
+	b := a.midiRun
+	for b != nil && len(b.queue) > 0 {
+		it := b.queue[0]
+		b.queue = b.queue[1:]
+		data := it.data
+		if data == nil {
+			var err error
+			if data, err = a.fileStore().ReadFile(it.path); err != nil {
+				a.say(it.name+": "+err.Error(), true)
+				continue
+			}
+		}
+		if a.openMIDIImport(it.name, data) {
+			return
+		}
+	}
+	if b != nil && b.done > 0 {
+		a.say(fmt.Sprintf("%d of %d files are in %s", b.done, b.total, a.label(b.into-1)), false)
+	}
+	a.midiRun, a.menu = nil, nil
 }
 
 // midiForm is what the form of an import holds.
@@ -42,6 +103,7 @@ type midiForm struct {
 	pad     int // 0..159
 	root    int
 	into    int // the pattern, 1..160
+	mode    int // 0 replaces the pattern, 1 adds to it (a shorter part goes round again), 2 adds to it (a shorter part plays once)
 	bars    int // 0: as the file
 	tempo   bool
 	playing bool // the form is playing the pattern it would make
@@ -61,17 +123,45 @@ func partLabel(i int, p formats.MIDIPart) string {
 	return fmt.Sprintf("%d  %s  ch %d  %d notes  %s", i+1, fit(name, 16), p.Channel+1, len(p.Notes), what)
 }
 
-// openMIDIImport reads the file and opens the form: which part, as what, onto which pad, into which pattern.
-func (a *App) openMIDIImport(name string, data []byte) {
+// nextMIDIPad is the pad for the next melody of a run: the first one after the last that has a sample and is not used yet.
+func (a *App) nextMIDIPad(b *midiBatch) int {
+	for k := 1; k < 160; k++ {
+		i := (b.last + k) % 160
+		if !b.used[i] && i < len(a.info.Pads) && a.info.Pads[i].File {
+			return i
+		}
+	}
+	return (b.last + 1) % 160
+}
+
+// openMIDIImport reads the file and opens the form: which part, as what, onto which pad, into which pattern. It says whether it did.
+func (a *App) openMIDIImport(name string, data []byte) bool {
 	f, err := formats.ParseMIDI(data)
 	if err != nil {
 		a.say(name+": "+err.Error(), true)
-		return
+		return false
 	}
 	if a.scr != Seq && a.scr != Files {
 		a.go_(Seq)
 	}
+	a.refresh() // the names of the samples, as they are now
+	if a.midiRun == nil { // a file on its own
+		a.midiRun = &midiBatch{total: 1, used: map[int]bool{}}
+	}
+	b := a.midiRun
 	st := &midiForm{name: name, f: f, pad: a.rowPad(), into: max(a.freePattern(), 1)}
+	if a.midiPad > 0 { // the sample of the last melody
+		st.pad = a.midiPad - 1
+	}
+	if b.into > 0 { // the next file of a run: into the pattern of the first, added to it, on the next pad
+		st.into, st.mode, st.pad = b.into, 1, a.nextMIDIPad(b)
+	}
+	if b.into == 0 && a.midiInto > 0 { // the pattern of the last import: the song that is being made. It is added to (nothing is lost) when it has notes
+		st.into = a.midiInto
+		if pb, err := a.lab.PatternBytes(st.into); err == nil && len(pb) > 0 {
+			st.mode = 1
+		}
+	}
 	// the part with the most notes that is not the drums is the one to start with (the drums when that is all there is)
 	best := -1
 	for i, p := range f.Parts {
@@ -80,10 +170,19 @@ func (a *App) openMIDIImport(name string, data []byte) {
 		}
 	}
 	st.part = best
-	m := &menu{title: "MIDI file " + fit(name, 28)}
-	pads := make([]string, 160)
+	title := "MIDI file " + fit(name, 28)
+	if b.total > 1 {
+		title = fmt.Sprintf("MIDI %d of %d: %s", b.done+1, b.total, fit(name, 24))
+	}
+	m := &menu{title: title}
+	pads := make([]string, 160)    // the pads, for the pattern
+	samples := make([]string, 160) // the pads with the name of their sample, for the melody
 	for i := range pads {
 		pads[i] = a.label(i)
+		samples[i] = pads[i] + "  (no sample)"
+		if i < len(a.info.Pads) && a.info.Pads[i].File {
+			samples[i] = pads[i] + "  " + fit(a.info.Pads[i].Name, 22)
+		}
 	}
 	parts := make([]string, len(f.Parts))
 	for i, p := range f.Parts {
@@ -99,8 +198,8 @@ func (a *App) openMIDIImport(name string, data []byte) {
 		iPad
 		iRoot
 		iInto
+		iMode
 		iBars
-		iTempo
 	)
 	barVals := func() []string {
 		v := []string{fmt.Sprintf("as the file: %d", f.MIDIBars(st.part))}
@@ -120,9 +219,20 @@ func (a *App) openMIDIImport(name string, data []byte) {
 	m.items = []menuItem{
 		{label: "Part of the file", vals: parts, val: st.part, keepOpen: true, onChange: func(v int) { st.part = v; choose() }},
 		{label: "Make it", vals: []string{"a melody: keys on one pad", "drums: a pad for each drum"}, keepOpen: true, onChange: func(v int) { st.drums = v == 1 }},
-		{label: "Melody onto pad", vals: pads, val: st.pad, keepOpen: true, onChange: func(v int) { st.pad = v }},
+		{label: "Use sample", vals: samples, val: st.pad, keepOpen: true, onChange: func(v int) { st.pad = v },
+			run: func(int) { // A opens the pad dialog, the same one as everywhere a pad is chosen
+				a.pickPad("use which sample?", st.pad, true, func(pad int) {
+					st.pad = pad
+					m.items[iPad].val = pad
+					if st.playing {
+						a.midiListen(st)
+					}
+				})
+			}},
 		{label: "Pad's own pitch is the note", vals: notes, keepOpen: true, onChange: func(v int) { st.root = v }},
 		{label: "Into pattern", vals: pads, val: st.into - 1, keepOpen: true, onChange: func(v int) { st.into = v + 1 }},
+		{label: "In the pattern", vals: []string{"replace what is there", "add to it; a shorter part goes round again", "add to it; a shorter part plays once"}, val: st.mode, keepOpen: true,
+			onChange: func(v int) { st.mode = v }},
 		{label: "Length in bars", keepOpen: true, vals: []string{"-"}, onChange: func(v int) { st.bars = bars[v] }},
 	}
 	if f.Tempo > 0 {
@@ -139,6 +249,14 @@ func (a *App) openMIDIImport(name string, data []byte) {
 			a.midiListen(st)
 		}},
 		menuItem{label: "Import the pattern", run: func(int) { a.runMIDIImport(st) }})
+	if b.total > 1 {
+		m.items = append(m.items, menuItem{label: "Leave this file out", run: func(int) {
+			a.stop()
+			st.playing = false
+			b.total--
+			a.nextMIDI()
+		}})
+	}
 	choose()
 	for i := range m.items { // a change of the form is heard at once while it plays
 		if ch := m.items[i].onChange; ch != nil {
@@ -150,12 +268,17 @@ func (a *App) openMIDIImport(name string, data []byte) {
 			}
 		}
 	}
-	m.onClose = func() { a.stop(); st.playing = false }
+	m.onClose = func() { a.stop(); st.playing = false; a.midiRun = nil } // B ends the run
 	a.menu = m
-	a.say(fmt.Sprintf("%s: %d parts. Left and Right choose, A imports", name, len(f.Parts)), false)
+	hint := "Left and Right choose, A on Use sample picks a pad, A on Import writes"
+	if b.total > 1 {
+		hint += ", B ends the run"
+	}
+	a.say(fmt.Sprintf("%s: %d parts. %s", name, len(f.Parts), hint), false)
+	return true
 }
 
-// midiBuild makes the pattern the form describes, and says (in the form of a clause) what pads it uses.
+// midiBuild makes the pattern the form describes (added to the one that is there, when the form says so), and says in a clause what pads it uses.
 func (a *App) midiBuild(st *midiForm) (res formats.MIDIResult, said string, err error) {
 	o := formats.MIDIImport{Part: st.part, Bars: st.bars, Pad: padIndex(st.pad), Root: st.root}
 	if st.drums {
@@ -168,7 +291,19 @@ func (a *App) midiBuild(st *midiForm) (res formats.MIDIResult, said string, err 
 		said = ", but " + a.label(st.pad) + " has no sample"
 	}
 	res, err = formats.BuildFromMIDI(st.f, o)
-	return res, said, err
+	if err != nil || st.mode == 0 {
+		return res, said, err
+	}
+	base, perr := a.lab.PatternBytes(st.into)
+	if perr != nil || len(base) == 0 { // nothing there yet: it is the first
+		return res, said, nil
+	}
+	mg, err := formats.MergePatterns(base, res.Pattern, st.mode == 1)
+	if err != nil {
+		return res, said, err
+	}
+	res.Pattern, res.Merge = mg.Pattern, &mg
+	return res, said, nil
 }
 
 // midiListen plays the pattern the form would make, in a loop, with the samples of the pads (the pattern is not written); again while
@@ -222,7 +357,7 @@ func (a *App) midiListen(st *midiForm) {
 	st.playing = true
 }
 
-// runMIDIImport writes the pattern the form describes.
+// runMIDIImport writes the pattern the form describes, and goes on to the next file of the run, if there is one.
 func (a *App) runMIDIImport(st *midiForm) {
 	a.stop()
 	st.playing = false
@@ -248,12 +383,25 @@ func (a *App) runMIDIImport(st *midiForm) {
 		}
 	}
 	a.rowExtra = nil
+	a.midiInto = st.into
+	if !st.drums {
+		a.midiPad = st.pad + 1
+	}
 	a.openPattern(st.into)
 	msg := fmt.Sprintf("%s: %d notes, %d bars", a.label(st.into-1), res.Notes, res.Bars)
+	if mg := res.Merge; mg != nil {
+		msg = fmt.Sprintf("%s: now %d notes in %d bars", a.label(st.into-1), mg.Notes, mg.Bars)
+		if mg.Bars != mg.WasBars {
+			msg += fmt.Sprintf(" (was %d)", mg.WasBars)
+		}
+		if mg.Repeated {
+			msg += ", shorter parts go round again"
+		}
+	}
 	if st.drums {
 		msg += ": " + said
 	} else {
-		msg += " on " + a.label(st.pad) + said
+		msg += " with " + a.label(st.pad) + said
 	}
 	if res.Folded > 0 {
 		msg += fmt.Sprintf("; %d notes moved by octaves to fit", res.Folded)
@@ -265,6 +413,20 @@ func (a *App) runMIDIImport(st *midiForm) {
 		msg += fmt.Sprintf("; %d notes start together on one pad", res.Chords)
 	}
 	a.say(msg, false)
+	if b := a.midiRun; b != nil {
+		b.into, b.last = st.into, st.pad
+		b.used[st.pad] = true
+		b.done++
+		if len(b.queue) > 0 {
+			saved := a.msg
+			a.nextMIDI()
+			if a.midiRun != nil {
+				a.say(saved, false)
+			}
+			return
+		}
+	}
+	a.midiRun = nil
 }
 
 func padIndex(i int) proto.PadIndex {

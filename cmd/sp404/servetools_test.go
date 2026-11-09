@@ -217,3 +217,27 @@ func TestTheToolsPageImportsAndExportsMIDI(t *testing.T) {
 		t.Fatalf("a broken upload gave %d", r2.StatusCode)
 	}
 }
+
+// Several files sent together: the first opens the form, the others wait, and each import goes into the same pattern, added to it.
+func TestTheToolsPageImportsSeveralMIDIFilesIntoOnePattern(t *testing.T) {
+	ts, _ := toolsServer(t, "")
+	one := func(note uint8, bars int) string {
+		var ns []formats.MIDINote
+		for i := 0; i < bars*4; i++ {
+			ns = append(ns, formats.MIDINote{Tick: uint32(i) * formats.PPQ, Len: 120, Note: note, Vel: 100})
+		}
+		return base64.StdEncoding.EncodeToString(formats.WriteMIDI([]formats.MIDIOut{{Name: "x", Notes: ns}}, 120, 4, uint32(bars*4*formats.PPQ)))
+	}
+	st := post(t, ts, "", `{"op":"midi-open","text":"a.mid","i":0,"val":2,"data":"`+one(36, 1)+`"}`)
+	post(t, ts, "", `{"op":"midi-open","text":"b.mid","i":1,"data":"`+one(48, 2)+`"}`)
+	for n := 0; n < 2; n++ {
+		if st.Menu == nil || !strings.Contains(st.Menu.Title, fmt.Sprintf("%d of 2", n+1)) {
+			t.Fatalf("form %d: %+v (%s)", n+1, st.Menu, st.Msg)
+		}
+		imp := st.Menu.Items[len(st.Menu.Items)-2] // Import the pattern; the last one leaves the file out
+		st = post(t, ts, "", fmt.Sprintf(`{"op":"run","i":%d}`, imp.Index))
+	}
+	if st.Menu != nil || !strings.Contains(st.Msg, "now 16 notes in 2 bars") {
+		t.Fatalf("after both: menu %v, %q", st.Menu, st.Msg)
+	}
+}

@@ -50,16 +50,14 @@
   // MIDI files: a file from the computer or phone goes to the form of the program (which part, which pad, which pattern); a pattern
   // comes back as a file to save.
   $('midiIn').onclick = () => $('midiFile').click();
-  $('midiFile').onchange = () => {
-    const f = $('midiFile').files[0]; $('midiFile').value = '';
-    if (!f) return;
-    if (f.size > 2e6) { $('status').textContent = 'that file is too big for a MIDI file'; $('status').className = 'status bad'; return; }
-    const rd = new FileReader();
-    rd.onload = () => {
-      let bin = ''; const u = new Uint8Array(rd.result); for (let i = 0; i < u.length; i += 8192) bin += String.fromCharCode.apply(null, u.subarray(i, i + 8192));
-      act({ op: 'midi-open', text: f.name, data: btoa(bin) });
-    };
-    rd.readAsArrayBuffer(f);
+  $('midiFile').onchange = async () => {
+    const files = [...$('midiFile').files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })); $('midiFile').value = '';
+    for (let n = 0; n < files.length; n++) {
+      const f = files[n];
+      if (f.size > 2e6) { $('status').textContent = f.name + ' is too big for a MIDI file'; $('status').className = 'status bad'; continue; }
+      const u = new Uint8Array(await f.arrayBuffer()); let bin = ''; for (let i = 0; i < u.length; i += 8192) bin += String.fromCharCode.apply(null, u.subarray(i, i + 8192));
+      await act({ op: 'midi-open', text: f.name, data: btoa(bin), i: n, val: files.length }); // the first opens the form, the others wait for their turn (into the same pattern)
+    }
   };
   $('midiOut').onclick = async () => {
     try {

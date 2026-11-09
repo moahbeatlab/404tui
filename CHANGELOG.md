@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **MIDI files in and out:** a track of a `.mid` file becomes a pattern (a melody as chromatic notes on one pad, with the notes moved by octaves into the 12 up and down; drums by the General MIDI drum map onto pads found by the names of the samples), in FILES (`a` on the file), on the phone page and in the demo (TOOLS, PATTERN, MIDI FILE IN…). A pattern is written as a `.mid` file (SEQ menu, or MIDI FILE OUT on the page). → [docs/midi.md](docs/midi.md)
+- **MIDI files in and out:** a track of a `.mid` file becomes a pattern (a melody as chromatic notes on one pad, with the notes moved by octaves into the 12 up and down; drums by the General MIDI drum map onto pads found by the names of the samples), in FILES (`a` on the file), on the phone page and in the demo (TOOLS, PATTERN, MIDI FILE IN…). A song in several files goes into **one pattern** (mark the files, or choose several on the page; each on a pad of its own, the pattern as long as the longest, shorter parts repeated). Play it with the sample before it is written; the form remembers the pattern and the sample. A pattern is written as a `.mid` file (SEQ menu, or MIDI FILE OUT on the page). → [docs/midi.md](docs/midi.md)
 
 ## 0.1.2 (2026-11-09)
 

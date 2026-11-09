@@ -103,7 +103,7 @@ func Do(r *core.Remote, in Request) (v any, code int, msg string) {
 		if err != nil {
 			return nil, 400, "the file did not come across"
 		}
-		r.MIDIOpen(in.Text, b)
+		r.MIDIOpen(in.Text, b, in.I == 0, in.Val) // I: the place of the file in a run of files (0 starts a run), Val: how many files the run has
 	case "midi-export":
 		name, b, err := r.MIDIExport(in.Slot)
 		if err != nil {

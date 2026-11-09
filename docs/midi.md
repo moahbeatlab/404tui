@@ -12,9 +12,10 @@ TOOLS, PATTERN, **MIDI FILE IN…**, and choose the file (from the computer, or 
 | --- | --- |
 | **Part of the file** | A file holds tracks, and a track can hold more than one channel; each is a part: `1  Bassline  ch 1  8 notes  C2-C3`. The form starts on the part with the most notes that is not the drums. |
 | **Make it** | *a melody: keys on one pad* or *drums: a pad for each drum*. A part on channel 10 is drums by itself. |
-| **Melody onto pad** | The pad that plays the melody. It starts on the pad of the track in front on SEQ. |
+| **Use sample** | The pad whose sample plays the melody (the list shows the pad and the name of its sample). Left and Right go through the pads; **A opens the pad dialog**, the same one as everywhere a pad is chosen. The form remembers the last one used. |
 | **Pad's own pitch is the note** | The note of the file that plays the pad's sample as it is. The notes around it play it higher or lower. It starts in the middle of the notes of the part, so that they fit. |
-| **Into pattern** | The pattern that is written: the first free one by default. Choose one that has notes and they are replaced. |
+| **Into pattern** | The pattern that is written. The form remembers the last pattern an import went into; the first time it is the first free one. |
+| **In the pattern** | *replace what is there*, *add to it; a shorter part goes round again* or *add to it; a shorter part plays once*. When the remembered pattern has notes, the form starts on *add*, so nothing is lost by pressing Import. |
 | **Length in bars** | As the file (its length, rounded up to whole bars, in the time signature of the file), or 1 to 64. |
 | **Tempo** | Keep the tempo of the project (or of the bank), or set the tempo of the file. Only there when the file has one. |
 
@@ -22,6 +23,16 @@ TOOLS, PATTERN, **MIDI FILE IN…**, and choose the file (from the computer, or 
 
 **Import the pattern** writes it, opens it, and says what it did: `A7: 8 notes, 2 bars on A1`, and if there is something to know, how many
 notes were moved by octaves, left out, or start together on one pad.
+
+### A song in several files
+
+When a song is split into files (a bass, a piano, the drums), put **all of them into one pattern**, each on a pad of its own:
+
+- On FILES, mark the files (`m`; or `M` for the folder) and press `a`. On the page, choose several files in **MIDI FILE IN…**. They come one after the other, in the order of their names (`song_2` before `song_10`), and the title says where you are: `MIDI 2 of 4: bett_DrmBmaj.mid`.
+- The first file goes into the pattern you choose. The next ones are **added** to it, with **Use sample** on the next pad that has a sample and is not used yet. Pressing `a` on Import, `a` again, `a` again is enough when the suggestions are right.
+- **The pattern gets as long as the longest file.** A shorter part is **repeated** to fill it (a 2-bar drum loop under an 8-bar bass plays four times; a last round that does not fit is cut at the end of the pattern); choose *plays once* instead, to keep it as it is. A part longer than the pattern makes the pattern longer, and the parts that were there are repeated to the new length.
+- **Play it with the sample** plays the whole pattern as it would be, the parts that are in and this one, so a part can be heard in its place before it is added.
+- **Leave this file out** skips a file; `b` ends the run (what is in stays).
 
 ### A melody
 
