@@ -1117,6 +1117,8 @@ type viewCache struct {
 	// hit is where the last drawing of the Perform view put its pads and its ISOLATE panel, for the
 	// mouse (counted from the corner of the view's frame).
 	hit perfHit
+	// cast is what the event log has of the screen (the terminal cast, castlog.go).
+	cast castState
 }
 
 // perfHit is the place of the clickable things of the wide Perform view.
@@ -1133,6 +1135,9 @@ type perfHit struct {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.vc == nil {
 		m.vc = &viewCache{}
+	}
+	if k, ok := msg.(tea.KeyMsg); ok {
+		m.logKey(k.String())
 	}
 	m.vc.keep = false // only a quiet clock tick (midiEvent) says the drawing can stay
 	model, cmd := m.update(msg)
