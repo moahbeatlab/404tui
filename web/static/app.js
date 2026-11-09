@@ -528,6 +528,13 @@
     const f = $('toolsFrame');
     if (f.getAttribute('src')) return;
     const k = new URLSearchParams(location.search).get('key') || store.get('key') || '';
+    // A popup over the page while it loads: the frame, and in the demo the tools themselves (demo.wasm, 9 MB), which can take a few seconds.
+    const pop = $('toolsLoad'), msg = pop.querySelector('b'), sub = pop.querySelector('span');
+    msg.textContent = 'Loading the tools…'; sub.textContent = toolsLoading ? 'The first time this takes a few seconds (about 9 MB).' : ''; pop.hidden = false;
+    const framed = new Promise((ok) => f.addEventListener('load', ok, { once: true }));
+    Promise.all([framed, toolsLoading]).then(() => { pop.hidden = true; }, () => {
+      msg.textContent = 'The tools did not load'; sub.textContent = 'Check the connection and reload the page.';
+    });
     f.src = 'tools.html?embed=1' + (k ? '&key=' + encodeURIComponent(k) : '') + (window.SP404_BUILD ? '&v=' + window.SP404_BUILD : '');
     f.addEventListener('load', () => { toolsBank = -1; if (state && state.bank) tellTools(state.bank.charCodeAt(0) - 65); });
   }
