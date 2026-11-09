@@ -1001,7 +1001,7 @@ function drawMeter(T) {
     for (let k = 0; k < 6; k++) if (peak[Math.max(f - k, 0) * 2 + c] > 65535 * 0.966) clip = true;
   }
   if (clip) { rect(x0 + w - 110, y0 + 10, 90, 28, COL.bad); text("CLIP", x0 + w - 65, y0 + 32, "#111", 20, true, "center"); }
-  const sx = x0 + 24, sy = y0 + 134, sw = w - 48, sh = Math.max(h - 134 - 34 - (VERT ? 12 : 66), 40), nb = AN.bands;
+  const sx = x0 + 24, sy = y0 + 134, sw = w - 48, sh = Math.max(h - 134 - 34 - 12, 40), nb = AN.bands;
   g.globalAlpha = PANEL_A; rect(sx, sy, sw, sh, COL.deep); g.globalAlpha = 1;
   const bwid = sw / nb;
   for (let i = 0; i < nb; i++) {
@@ -1011,7 +1011,6 @@ function drawMeter(T) {
     rect(sx + i * bwid + 1, sy + sh - 4 - bh, bwid - 2, Math.max(bh, 2), mix(COL.amber, "#ff5f5f", clamp(v - 0.6, 0, 0.4) / 0.4));
   }
   text("30 Hz", sx + 4, sy + sh + 18, COL.dim, 14); text("18 kHz", sx + sw, sy + sh + 18, COL.dim, 14, false, "right");
-  if (!VERT) drawTempo(x0 + 24, y0 + h - 68, w - 48, 54, T);
 }
 
 // the tempo over the whole take: the tempo of the bank of each pattern in turn (the clock where no pattern is known)
@@ -1026,23 +1025,6 @@ function tempoSteps() {
   }
   return tempoSeries.map(e => ({ t: e.t - OFFSET, bpm: e.bpm }));
 }
-function drawTempo(sx, sy, sw, sh, T) {
-  text("TEMPO", sx, sy + 14, COL.dim, 16, true);
-  const d = AN.duration, pts = tempoSteps();
-  if (!pts.length || !d) { text("no clock in the take", sx + 90, sy + 14, COL.dim, 16); return; }
-  let lo = Infinity, hi = -Infinity; for (const e of pts) { lo = Math.min(lo, e.bpm); hi = Math.max(hi, e.bpm); }
-  const mid = (lo + hi) / 2, half = Math.max((hi - lo) / 2, 2) * 1.2;
-  const gx = sx + 90, gw = sw - 190, gy = sy + 2, gh = sh - 4;
-  g.globalAlpha = PANEL_A; rect(gx, gy, gw, gh, COL.deep); g.globalAlpha = 1;
-  g.strokeStyle = COL.amber; g.lineWidth = 2; g.beginPath();
-  pts.forEach((e, i) => { const x = gx + clamp(e.t / d, 0, 1) * gw, y = gy + gh / 2 - (e.bpm - mid) / half * gh / 2; i ? g.lineTo(x, y) : g.moveTo(x, y); });
-  g.stroke();
-  rect(gx + clamp(T_audio / d, 0, 1) * gw - 1, gy, 3, gh, COL.good);
-  const bpm = tempoAt(T).bpm;
-  text(bpm ? (Number.isInteger(bpm) ? bpm : bpm.toFixed(1)) : "", sx + sw, sy + 40, COL.amber, 28, true, "right");
-  text(lo === hi ? "steady" : lo + " - " + hi, sx + sw, sy + 12, COL.dim, 14, false, "right");
-}
-
 // ---- the look: a palette, an accent colour, a background, a logo and a handle. Kept by the server beside the log ({style}), set from the
 // "style" button in the bar, and also by the URL (?preset=midnight&accent=%23ff3b30&handle=@name&subtitle=...) for one viewing.
 const PRESETS = {
