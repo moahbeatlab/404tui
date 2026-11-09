@@ -123,6 +123,17 @@ func TestMIDIImportFromFiles(t *testing.T) {
 	if len(pads) != 4 {
 		t.Fatalf("the bass and kick, snare and hat are four pads, got %d (%s)", len(pads), a.msg)
 	}
+	// the mode that was chosen last is the one the next form starts on
+	a.filesKey(A)
+	m = a.menu
+	m.items[5].val = 2
+	m.items[5].onChange(2)
+	m.items[len(m.items)-1].run(0)
+	a.filesKey(A)
+	if a.menu.items[5].val != 2 {
+		t.Fatalf("the form should start on the mode that was used last (2), it has %d", a.menu.items[5].val)
+	}
+	a.menuKey(B)
 	// and back out as a file
 	a.exportMIDI()
 	if !strings.HasPrefix(a.msg, "written: ") {
@@ -133,7 +144,7 @@ func TestMIDIImportFromFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	g, err := formats.ParseMIDI(out)
-	if err != nil || len(g.Parts) != 4 {
+	if err != nil || len(g.Parts) < 4 {
 		t.Fatalf("exported file: %v, %d parts", err, len(g.Parts))
 	}
 	// a file that is not MIDI says so and opens nothing
@@ -210,5 +221,30 @@ func TestMIDIImportOfSeveralFilesIntoOnePattern(t *testing.T) {
 	a.menuKey(B)
 	if a.midiRun != nil {
 		t.Fatal("B did not end the run")
+	}
+}
+
+// The sample that was chosen is the one the next form starts on, even when the form was closed without importing.
+func TestMIDIImportRemembersTheSample(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	file := formats.WriteMIDI([]formats.MIDIOut{{Name: "bass", Notes: []formats.MIDINote{{Tick: 0, Len: 100, Note: 40, Vel: 100}}}}, 120, 4, 4*formats.PPQ)
+	a.openMIDIImport("x.mid", file)
+	m := a.menu
+	m.items[2].val = 2
+	m.items[2].onChange(2)
+	a.menuKey(B)
+	a.openMIDIImport("y.mid", file)
+	if a.menu.items[2].val != 2 {
+		t.Fatalf("Use sample did not keep pad 2: %d", a.menu.items[2].val)
+	}
+	a.menu.items[2].run(0)
+	a.picker.onPick(7)
+	a.picker = nil
+	a.menuKey(B)
+	a.openMIDIImport("z.mid", file)
+	if a.menu.items[2].val != 7 {
+		t.Fatalf("the pad of the dialog was not kept: %d", a.menu.items[2].val)
 	}
 }

@@ -126,6 +126,7 @@ type App struct {
 	midiRun  *midiBatch // the MIDI files that are being imported into one pattern
 	midiInto int        // the pattern the last MIDI file went into: the next form starts on it
 	midiPad  int        // the pad (sample) the last melody of a MIDI file was on, plus one (0: none yet)
+	midiMode int        // what the last MIDI import did in the pattern (see midiForm.mode), plus one (0: none yet)
 	lab      *lab.Lab
 	Root     string // where the samples are: the file browser cannot go above it
 	OutDir   string // where projects are written

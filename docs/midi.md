@@ -15,7 +15,7 @@ TOOLS, PATTERN, **MIDI FILE IN…**, and choose the file (from the computer, or 
 | **Use sample** | The pad whose sample plays the melody (the list shows the pad and the name of its sample). Left and Right go through the pads; **A opens the pad dialog**, the same one as everywhere a pad is chosen. The form remembers the last one used. |
 | **Pad's own pitch is the note** | The note of the file that plays the pad's sample as it is. The notes around it play it higher or lower. It starts in the middle of the notes of the part, so that they fit. |
 | **Into pattern** | The pattern that is written. The form remembers the last pattern an import went into; the first time it is the first free one. |
-| **In the pattern** | *replace what is there*, *add to it; a shorter part goes round again* or *add to it; a shorter part plays once*. When the remembered pattern has notes, the form starts on *add*, so nothing is lost by pressing Import. |
+| **In the pattern** | *replace what is there*, *add to it; a shorter part goes round again* or *add to it; a shorter part plays once*. When the remembered pattern has notes, the form starts on *add*, so nothing is lost by pressing Import; once you have chosen one of the three yourself, the form starts on that one. |
 | **Length in bars** | As the file (its length, rounded up to whole bars, in the time signature of the file), or 1 to 64. |
 | **Tempo** | Keep the tempo of the project (or of the bank), or set the tempo of the file. Only there when the file has one. |
 

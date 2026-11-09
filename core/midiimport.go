@@ -102,9 +102,10 @@ type midiForm struct {
 	drums   bool
 	pad     int // 0..159
 	root    int
-	into    int // the pattern, 1..160
-	mode    int // 0 replaces the pattern, 1 adds to it (a shorter part goes round again), 2 adds to it (a shorter part plays once)
-	bars    int // 0: as the file
+	into    int  // the pattern, 1..160
+	modeSet bool // the user chose it
+	mode    int  // 0 replaces the pattern, 1 adds to it (a shorter part goes round again), 2 adds to it (a shorter part plays once)
+	bars    int  // 0: as the file
 	tempo   bool
 	playing bool // the form is playing the pattern it would make
 }
@@ -155,12 +156,18 @@ func (a *App) openMIDIImport(name string, data []byte) bool {
 	}
 	if b.into > 0 { // the next file of a run: into the pattern of the first, added to it, on the next pad
 		st.into, st.mode, st.pad = b.into, 1, a.nextMIDIPad(b)
+		if a.midiMode > 1 { // the kind of adding that was chosen last
+			st.mode = a.midiMode - 1
+		}
 	}
 	if b.into == 0 && a.midiInto > 0 { // the pattern of the last import: the song that is being made. It is added to (nothing is lost) when it has notes
 		st.into = a.midiInto
 		if pb, err := a.lab.PatternBytes(st.into); err == nil && len(pb) > 0 {
 			st.mode = 1
 		}
+	}
+	if b.into == 0 && a.midiMode > 0 { // what was chosen last: the form does it again
+		st.mode = a.midiMode - 1
 	}
 	// the part with the most notes that is not the drums is the one to start with (the drums when that is all there is)
 	best := -1
@@ -219,10 +226,10 @@ func (a *App) openMIDIImport(name string, data []byte) bool {
 	m.items = []menuItem{
 		{label: "Part of the file", vals: parts, val: st.part, keepOpen: true, onChange: func(v int) { st.part = v; choose() }},
 		{label: "Make it", vals: []string{"a melody: keys on one pad", "drums: a pad for each drum"}, keepOpen: true, onChange: func(v int) { st.drums = v == 1 }},
-		{label: "Use sample", vals: samples, val: st.pad, keepOpen: true, onChange: func(v int) { st.pad = v },
+		{label: "Use sample", vals: samples, val: st.pad, keepOpen: true, onChange: func(v int) { st.pad = v; a.midiPad = v + 1 },
 			run: func(int) { // A opens the pad dialog, the same one as everywhere a pad is chosen
 				a.pickPad("use which sample?", st.pad, true, func(pad int) {
-					st.pad = pad
+					st.pad, a.midiPad = pad, pad+1
 					m.items[iPad].val = pad
 					if st.playing {
 						a.midiListen(st)
@@ -232,7 +239,7 @@ func (a *App) openMIDIImport(name string, data []byte) bool {
 		{label: "Pad's own pitch is the note", vals: notes, keepOpen: true, onChange: func(v int) { st.root = v }},
 		{label: "Into pattern", vals: pads, val: st.into - 1, keepOpen: true, onChange: func(v int) { st.into = v + 1 }},
 		{label: "In the pattern", vals: []string{"replace what is there", "add to it; a shorter part goes round again", "add to it; a shorter part plays once"}, val: st.mode, keepOpen: true,
-			onChange: func(v int) { st.mode = v }},
+			onChange: func(v int) { st.mode, st.modeSet = v, true }},
 		{label: "Length in bars", keepOpen: true, vals: []string{"-"}, onChange: func(v int) { st.bars = bars[v] }},
 	}
 	if f.Tempo > 0 {
@@ -384,6 +391,9 @@ func (a *App) runMIDIImport(st *midiForm) {
 	}
 	a.rowExtra = nil
 	a.midiInto = st.into
+	if st.modeSet { // a choice of the user is kept for the next form; what the form did by itself is not
+		a.midiMode = st.mode + 1
+	}
 	if !st.drums {
 		a.midiPad = st.pad + 1
 	}
