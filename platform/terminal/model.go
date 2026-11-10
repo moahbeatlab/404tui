@@ -283,6 +283,10 @@ func (m *Model) key(msg tea.KeyMsg) {
 		m.disarm()
 		m.app.ExportBank()
 		return
+	case "f10": // the terminal cast: the keys and the screen (and the audio), a recording of its own
+		m.disarm()
+		m.app.ToggleCast()
+		return
 	case "ctrl+r", "f9": // record the unit's audio, as everywhere in the program (F9 too, for a terminal that keeps Ctrl-R for itself)
 		m.disarm()
 		m.app.ToggleRecording()

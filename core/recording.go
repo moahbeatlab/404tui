@@ -14,6 +14,10 @@ func (a *App) recording() bool { return a.rec != nil }
 
 // ToggleRecording starts a recording, or ends the one that runs.
 func (a *App) ToggleRecording() {
+	if a.castRun != nil {
+		a.say("the terminal cast runs: F10 stops it", true)
+		return
+	}
 	if a.rec != nil {
 		s := a.rec
 		a.rec = nil
@@ -46,6 +50,7 @@ type recResult struct {
 
 // recordingTick says what became of a recording that ended, or one that stopped by itself.
 func (a *App) recordingTick() {
+	a.castTick()
 	select {
 	case r := <-a.recDone:
 		if r.err != nil {
@@ -60,6 +65,7 @@ func (a *App) recordingTick() {
 		case <-s.Done():
 			a.rec = nil
 			a.stopEventLog()
+			a.stopCast()
 			err := s.Err()
 			if err == nil {
 				err = fmt.Errorf("the recorder stopped")
@@ -72,6 +78,10 @@ func (a *App) recordingTick() {
 
 // recText is the time of the running recording, for the title bar.
 func (a *App) recText() string {
+	if r := a.castRun; r != nil {
+		d := time.Since(r.started)
+		return fmt.Sprintf("CAST %02d:%02d", int(d.Minutes()), int(d.Seconds())%60)
+	}
 	if a.rec == nil {
 		return ""
 	}

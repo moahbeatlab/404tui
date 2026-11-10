@@ -303,3 +303,21 @@ func (b nativeFirst) StartMeter(device string) (*Meter, error) {
 func (b nativeFirst) StartRing(device string, seconds int) (*Ring, error) {
 	return b.exec.StartRing(device, seconds)
 }
+
+// WriteSilence writes a WAV of the given length with nothing in it (the cast of a terminal without audio plays along with it).
+func WriteSilence(path string, d time.Duration) error {
+	n := int64(d.Seconds()*wavRate) * 2 * wavBytes
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(wavHeader(n)); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Truncate(44 + n); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}

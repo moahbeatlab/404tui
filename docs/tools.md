@@ -813,6 +813,7 @@ The program's settings; on a computer the writing of the project (what SAVE does
 - `Record into folder` — A edits
 - `Input with this in its name` — A edits
 - `Record and meter with` — left right change
+- `Terminal cast (F10) records the audio` — A or left right switch
 - `Recorder` — 
 
 *Pad Codes On The Unit*

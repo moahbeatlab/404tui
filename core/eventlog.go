@@ -45,7 +45,6 @@ func (a *App) startEventLog(s *record.Session) {
 		return
 	}
 	a.evlog = &eventLog{log: l, rec: s, startedAt: s.Started}
-	a.CastTo(l)
 	l.Add(s.Started, "project", perflog.P("data", a.projectSnapshot(false)), perflog.P("source", "editor"))
 	a.snapshotUnitProject()
 	a.logUnitStatus()
@@ -59,7 +58,6 @@ func (a *App) stopEventLog() {
 		return
 	}
 	a.evlog = nil
-	a.CastTo(nil)
 	if e.stopPoll != nil {
 		close(e.stopPoll)
 	}
