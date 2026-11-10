@@ -195,6 +195,7 @@ type App struct {
 	usedCache         map[int]string  // the patterns that use each pad, read once per change
 	peakMax           map[peakKey]int // the loudest value of each sample, for the slicer's scale
 	soundUntil        time.Time       // when the sample that plays ends, for Space (play or stop)
+	patStrip          bool            // SEQ on a terminal: the arrows choose the pattern in the row of 16 boxes (p)
 	seqOneBar         bool            // SEQ on a wide terminal: one bar in view, though the window has the room for more
 	orderOn           bool            // SLICE: the order plays in a loop
 	orderFrames       int             // its length
@@ -1052,6 +1053,7 @@ func (a *App) NextScreen(d int) {
 }
 
 func (a *App) go_(s Screen) {
+	a.patStrip = false
 	if a.arpOn && s != Pads {
 		a.stop()
 	}

@@ -173,7 +173,7 @@ The settings of the pad under the cursor, written into the project at once. With
 
 The step grid of the pattern in front. `Enter` (or `b`) opens the note panel, `t` the pattern's tools and settings.
 
-**Keys on a computer:** `a` note on/off · `e hjkl` edit (hold) · `Space` play / stop · `b` note settings · `x` hear note · `.` mute/solo · `hjkl` pad, step · `[ ]` bank · `{ }` bar · `t` tools · `m` mute track · `s` solo track · `f` freeze view · `z` 1 bar / more · `y x` add track · `y b` pick pattern · `y jk` pattern +-
+**Keys on a computer:** `a` note on/off · `e hjkl` edit (hold) · `Space` play / stop · `b` note settings · `x` hear note · `.` mute/solo · `hjkl` pad, step · `[ ]` bank · `{ }` bar · `t` tools · `m` mute track · `s` solo track · `f` freeze view · `z` 1 bar / more · `y x` add track · `p` pattern row · `y jk` pattern +-
 
 **Keys on the handheld:** `A` note on/off · `A+^<>` edit (hold) · `X` play · `B` note settings · `L2` hear note · `R2` mute/solo · `^v<>` pad, step · `L1 R1` bar · `Y+X` add track · `Y+B` pick pattern · `Sel+B` tools · `Y+^v` pattern +- · `Sel+X` record
 

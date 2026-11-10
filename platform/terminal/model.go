@@ -303,6 +303,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 	case "y", "Y":
 		m.arm(yShift, core.Y)
 		return
+	case "p": // SEQ: the arrows choose the pattern in the row of 16 boxes
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			m.app.SeqStrip()
+		}
+		return
 	case "m", "M": // SEQ: mute the track; FILES and PADS: mark the file or the pad, M marks them all (and unmarks them all again)
 		if m.armed == noShift && !m.aHeld && !m.app.Modal() {
 			switch {
