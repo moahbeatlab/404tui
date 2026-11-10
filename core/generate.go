@@ -1,0 +1,96 @@
+package core
+
+import (
+	"encoding/json"
+	"fmt"
+	"math/rand"
+	"time"
+
+	"github.com/moahbeatlab/404tui/app"
+	"github.com/moahbeatlab/404tui/formats"
+	"github.com/moahbeatlab/404tui/generate"
+	"github.com/moahbeatlab/404tui/lab"
+	"github.com/moahbeatlab/404tui/proto"
+)
+
+// The generator in the editor: the eight patterns of an arc (intro, groove, variation, build, stop, drop, break, outro) are written
+// into the next free slots after the kit's bank, as one step that can be undone. In live mode the editor's patterns go to the unit
+// as they appear, so this is also how the generator puts its patterns on the unit. Each run takes a new seed.
+
+// kitBank is the first bank whose pads, by their names, hold a kick, and the pad of each voice in it.
+func (a *App) kitBank() (int, map[formats.Lane]proto.PadIndex) {
+	for bank := 0; bank < 10; bank++ {
+		var rows []app.PadRow
+		for i := bank * 16; i < bank*16+16; i++ {
+			idx, ok := proto.NewPadIndex(uint16(i))
+			if !ok {
+				continue
+			}
+			rows = append(rows, app.PadRow{Pad: idx, HasSample: a.info.Pads[i].File, Name: a.info.Pads[i].Name})
+		}
+		if pads := app.GuessRoles(rows); len(pads) > 0 {
+			if _, ok := pads[formats.LaneKick]; ok {
+				return bank, pads
+			}
+		}
+	}
+	return -1, nil
+}
+
+func (a *App) generateArc(st generate.Style, bars int) {
+	bank, pads := a.kitBank()
+	if bank < 0 {
+		a.say("no bank has a pad named like a kick: name the pads of the kit (kick, snare, hat...)", true)
+		return
+	}
+	has := func(l formats.Lane) bool { _, ok := pads[l]; return ok }
+	seed := rand.New(rand.NewSource(time.Now().UnixNano())).Int63n(1 << 30)
+	results := generate.Arrange(st, generate.DefaultArc(bars), seed, has)
+
+	var slots []int
+	for n := (bank+1)*16 + 1; n <= 160 && len(slots) < len(results); n++ {
+		if _, ok := a.patternDoc(n); !ok {
+			slots = append(slots, n)
+		}
+	}
+	if len(slots) < len(results) {
+		a.say(fmt.Sprintf("only %d free pattern slots after the kit's bank, %d are needed", len(slots), len(results)), true)
+		return
+	}
+	pre := a.lab.Snapshot()
+	for i, r := range results {
+		b, err := r.Pattern.Bytes(pads)
+		if err == nil {
+			err = a.lab.SetPatternBytes(slots[i], b)
+		}
+		if err != nil {
+			a.say(r.Section.Name+": "+err.Error(), true)
+			return
+		}
+	}
+	bpm := float64(st.BPM)
+	if err := a.lab.SetTempo(bpm); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	seen := map[int]bool{}
+	for _, n := range slots {
+		if bk := (n - 1) / 16; !seen[bk] {
+			seen[bk] = true
+			a.lab.SetBankTempo(bk, bpm)
+		}
+	}
+	a.commitUndo(pre, A, 0)
+	a.openPattern(slots[1]) // the groove
+	a.say(fmt.Sprintf("%s: %s to %s from the kit in bank %c, seed %d, %.0f BPM", st.Name, a.label(slots[0]-1), a.label(slots[len(slots)-1]-1), 'A'+bank, seed, bpm), false)
+}
+
+// patternDoc reads a pattern of the project; ok is false when the slot holds nothing.
+func (a *App) patternDoc(n int) (lab.PatternDoc, bool) {
+	var d lab.PatternDoc
+	b, err := a.lab.Pattern(n)
+	if err != nil || json.Unmarshal(b, &d) != nil {
+		return d, false
+	}
+	return d, true
+}

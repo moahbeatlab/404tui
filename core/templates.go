@@ -7,6 +7,7 @@ import (
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
+	"github.com/moahbeatlab/404tui/generate"
 	"github.com/moahbeatlab/404tui/lab"
 	"github.com/moahbeatlab/404tui/proto"
 )
@@ -20,6 +21,14 @@ var barChoices = []string{"1 bar", "2 bars", "3 bars", "4 bars", "5 bars", "6 ba
 func (a *App) templatesMenu() {
 	m := &menu{title: "new pattern from a template"}
 	m.items = append(m.items, menuItem{label: "Blank pattern", vals: barChoices, val: 3, run: func(v int) { a.blankPattern(v + 1) }})
+	for _, st := range generate.Styles() {
+		st := st
+		m.items = append(m.items, menuItem{
+			label: fmt.Sprintf("Generate %s  8 patterns  %d", st.Name, st.BPM),
+			vals:  barChoices, val: max(st.Bars, 1) - 1,
+			run: func(v int) { a.generateArc(st, v+1) },
+		})
+	}
 	for _, g := range formats.GrooveTemplates() {
 		g := g
 		m.items = append(m.items, menuItem{
