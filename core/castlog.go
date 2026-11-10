@@ -95,15 +95,17 @@ func (a *App) ToggleCast() {
 		return
 	}
 	r := &castRun{started: time.Now()}
+	note := ""
 	if !a.set.CastNoAudio && a.plat.Recorder != nil {
 		s, err := a.plat.Recorder.Start(a.recordDir(), a.recordDevice())
-		if err != nil {
-			a.say(err.Error(), true)
-			return
+		if err == nil {
+			r.sess, r.wav, r.started = s, s.Path, s.Started
+			a.rec = s
+		} else { // offline (no unit, no input): the cast still runs, without the audio
+			note = " (no audio: " + err.Error() + ")"
 		}
-		r.sess, r.wav, r.started = s, s.Path, s.Started
-		a.rec = s
-	} else {
+	}
+	if r.sess == nil {
 		dir := a.recordDir()
 		if dir == "" || os.MkdirAll(dir, 0o755) != nil {
 			a.say("no folder to record into: set one in Config", true)
@@ -123,7 +125,7 @@ func (a *App) ToggleCast() {
 	r.log = l
 	a.castRun = r
 	a.CastTo(l)
-	a.say("casting the terminal to "+short2(r.wav, 40), false)
+	a.say("casting the terminal to "+short2(r.wav, 40)+note, false)
 }
 
 // stopCast ends the terminal cast that runs (and its audio).

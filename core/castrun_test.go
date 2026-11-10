@@ -1,6 +1,8 @@
 package core
 
 import (
+	"errors"
+	"github.com/moahbeatlab/404tui/record"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,5 +48,28 @@ func TestTheTerminalCastIsARecordingOfItsOwn(t *testing.T) {
 	}
 	if st, err := os.Stat(wavs[0]); err != nil || st.Size() < 44 {
 		t.Errorf("the silent WAV: %v", err)
+	}
+}
+
+type noInput struct{}
+
+func (noInput) Start(dir, device string) (*record.Session, error) {
+	return nil, errors.New(`no audio input with that name: "404"`)
+}
+
+// Offline (the unit is not there) the cast still runs, without the audio.
+func TestTheTerminalCastRunsOffline(t *testing.T) {
+	a, _ := newApp(t)
+	dir := filepath.Join(t.TempDir(), "casts")
+	a.set.RecordDir = dir
+	a.plat.Recorder = noInput{}
+	a.ToggleCast()
+	if a.castRun == nil || a.rec != nil {
+		t.Fatal("the cast runs, with no audio recording")
+	}
+	a.CastKey("h")
+	a.ToggleCast()
+	if wavs, _ := filepath.Glob(filepath.Join(dir, "*.wav")); len(wavs) != 1 {
+		t.Fatalf("a silent WAV: %v", wavs)
 	}
 }
