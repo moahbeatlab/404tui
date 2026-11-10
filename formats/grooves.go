@@ -409,6 +409,10 @@ type StepLane struct {
 	Gate         uint16
 	// Gates is the length of each step's note (0: Gate); a shorter list repeats. An open hat that must end where the closed hat starts.
 	Gates []uint16
+	// Ratchet is how many hits a step plays (0 or 1: one): 2 is two 32nds, 3 a triplet of 16ths, 4 four 64ths, each louder than the one before
+	// (a roll). Flam is the ticks before the step at which a quiet grace note plays (0: none). Shorter lists repeat.
+	Ratchet []uint8
+	Flam    []uint8
 }
 
 // ParseHits reads hit marks (X x o g, . for a rest, spaces and | between bars) into the velocity of each step.
@@ -444,7 +448,24 @@ func BuildSteps(lanes []StepLane, pads map[Lane]proto.PadIndex, bars int) ([]byt
 			if i%2 == 1 {
 				tick += swingPush(l.Swing)
 			}
-			recs = append(recs, noteRecord(uint32(clamp(tick, 0, int(length)-1)), pad, min(vel, 127), g))
+			n := 1
+			if len(l.Ratchet) > 0 && l.Ratchet[i%len(l.Ratchet)] > 1 {
+				n = int(l.Ratchet[i%len(l.Ratchet)])
+			}
+			for k := 0; k < n; k++ {
+				v := int(vel)
+				at := tick + k*grooveNoteLength/n
+				gl := g
+				if n > 1 {
+					v = v * (55 + 45*k/(n-1)) / 100 // a roll grows
+					gl = uint16(min(int(g), grooveNoteLength/n))
+				}
+				recs = append(recs, noteRecord(uint32(clamp(at, 0, int(length)-1)), pad, uint8(max(min(v, 127), 1)), gl))
+			}
+			if len(l.Flam) > 0 && l.Flam[i%len(l.Flam)] > 0 {
+				f := int(l.Flam[i%len(l.Flam)])
+				recs = append(recs, noteRecord(uint32(clamp(tick-f, 0, int(length)-1)), pad, uint8(max(int(vel)*55/100, 1)), uint16(min(f, 60))))
+			}
 		}
 	}
 	if len(recs) == 0 {

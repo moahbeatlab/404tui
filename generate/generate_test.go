@@ -68,7 +68,7 @@ func TestTheKickStaysOnTheBeat(t *testing.T) {
 					if beat && v == 0 && !strings.Contains(r.Notes, "stop") {
 						t.Errorf("%s %s seed %d: no kick on step %d\n%s", st.Name, r.Section.Name, seed, i, r.Pattern.Text())
 					}
-					if !beat && v > 0 && !strings.Contains(r.Notes, "kick stutter") {
+					if !beat && v > 0 && !strings.Contains(r.Notes, "kick stutter") && !strings.Contains(r.Notes, "kick roll") {
 						t.Errorf("%s %s seed %d: a kick off the beat on step %d\n%s", st.Name, r.Section.Name, seed, i, r.Pattern.Text())
 					}
 				}

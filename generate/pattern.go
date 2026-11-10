@@ -18,6 +18,8 @@ type Row struct {
 	Steps        []uint8
 	Swing, Nudge int
 	Gate         uint16
+	// Ratchet and Flam are per step like Steps (nil: none): the hits a step plays (a roll) and the ticks of a grace note before it
+	Ratchet, Flam []uint8
 }
 
 // chokeGap is how many ticks before the closed hat an open hat ends.
@@ -55,6 +57,8 @@ func (p Pattern) Clone() Pattern {
 	for _, r := range p.Rows {
 		c := *r
 		c.Steps = append([]uint8(nil), r.Steps...)
+		c.Ratchet = append([]uint8(nil), r.Ratchet...)
+		c.Flam = append([]uint8(nil), r.Flam...)
 		q.Rows = append(q.Rows, &c)
 	}
 	return q
@@ -64,7 +68,7 @@ func (p Pattern) Clone() Pattern {
 func (p Pattern) Lanes() []formats.StepLane {
 	var out []formats.StepLane
 	for _, r := range p.Rows {
-		sl := formats.StepLane{Lane: r.Lane, Steps: r.Steps, Swing: r.Swing, Nudge: r.Nudge, Gate: r.Gate}
+		sl := formats.StepLane{Lane: r.Lane, Steps: r.Steps, Swing: r.Swing, Nudge: r.Nudge, Gate: r.Gate, Ratchet: r.Ratchet, Flam: r.Flam}
 		if r.Lane == formats.LaneOpenHat {
 			sl.Gates = p.choke(r)
 		}
@@ -86,13 +90,39 @@ func (p Pattern) Bytes(pads map[formats.Lane]proto.PadIndex) ([]byte, error) {
 func (p Pattern) Notes() int {
 	n := 0
 	for _, r := range p.Rows {
-		for _, v := range r.Steps {
+		for i, v := range r.Steps {
 			if v > 0 {
-				n++
+				n += max(1, r.ratchet(i))
+				if i < len(r.Flam) && r.Flam[i] > 0 {
+					n++
+				}
 			}
 		}
 	}
 	return n
+}
+
+// ratchet is the hits the step plays.
+func (r *Row) ratchet(i int) int {
+	if i < len(r.Ratchet) {
+		return int(r.Ratchet[i])
+	}
+	return 1
+}
+
+// setRatchet and setFlam make the per-step lists when they are first needed.
+func (r *Row) setRatchet(i, n int) {
+	if r.Ratchet == nil {
+		r.Ratchet = make([]uint8, len(r.Steps))
+	}
+	r.Ratchet[i] = uint8(n)
+}
+
+func (r *Row) setFlam(i, ticks int) {
+	if r.Flam == nil {
+		r.Flam = make([]uint8, len(r.Steps))
+	}
+	r.Flam[i] = uint8(ticks)
 }
 
 // Text draws the pattern as rows of steps (a beat every four steps, a bar between | marks), for reading what was made.
@@ -113,7 +143,14 @@ func (p Pattern) Text() string {
 			} else if i > 0 && i%4 == 0 {
 				b.WriteString(" ")
 			}
-			b.WriteByte(mark(v))
+			switch {
+			case v > 0 && r.ratchet(i) > 1:
+				b.WriteByte(byte('0' + r.ratchet(i))) // a roll: how many hits the step plays
+			case v > 0 && i < len(r.Flam) && r.Flam[i] > 0:
+				b.WriteByte('f') // a flam
+			default:
+				b.WriteByte(mark(v))
+			}
 		}
 		b.WriteString("\n")
 	}

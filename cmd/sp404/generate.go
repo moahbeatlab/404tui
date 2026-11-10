@@ -22,12 +22,14 @@ const generateUsage = `usage: sp404 generate <project folder or zip> [options]
 
 Writes drum patterns into a copy of a project, played with the drum kit on one bank. The project itself is not changed.
 
-  -mode family|random|layers|drift|arc
+  -mode family|random|layers|drift|arc|fills
         family  (default) variations of ONE pattern: slot 1 is the groove, each slot after it changes one thing (ghost notes, the percussion,
                 another hat, a polymeter, an echo, chance, a fill), then a build, a stop, a drop, a break and an outro: 16 patterns
         random  16 different patterns, each rolled on its own
         layers  the groove, then one layer more in each slot, up to the full style: 16 patterns
         drift   each pattern is a small change of the one before: 16 patterns
+        fills   the groove, then the same groove with a different drum fill or roll at its end in each slot (snare rolls that speed up
+                into 32nds, flams, tom and kick rolls, hat triplets, clap stacks): 16 patterns, to choose from
         arc     8 patterns along a tension curve (intro, groove, variation, build, stop, drop, break, outro)
   -style house|tech house|techno|all   the genre (default house); all makes house, tech house and techno, one bank each
   -kit A                           the bank with the drum kit, whose pad names say which pad is the kick, the claps, the hats (default A)

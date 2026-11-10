@@ -12,8 +12,10 @@ import (
 //	random  sixteen patterns that have nothing to do with each other (each has the dice of its own)
 //	layers  the groove, then one layer added to the one before, up to the full style
 //	drift   each pattern is a small change of the one before, so the bank slowly wanders away from the first
+//	fills   the groove, then the same groove with a different drum fill or roll at the end of each pattern (snare rolls that speed up into
+//	        32nds, flams, tom and kick rolls, hat triplets, clap stacks), to choose from
 //	arc     eight patterns along a tension curve: intro, groove, variation, build, stop, drop, break, outro (each with its own dice)
-var Modes = []string{"family", "random", "layers", "drift", "arc"}
+var Modes = []string{"family", "random", "layers", "drift", "arc", "fills"}
 
 // ModeInfo is a line about a mode.
 func ModeInfo(mode string) string {
@@ -28,6 +30,8 @@ func ModeInfo(mode string) string {
 		return "each pattern is a small change of the one before"
 	case "arc":
 		return "8 patterns along a tension curve (intro to outro)"
+	case "fills":
+		return "the groove and 15 drum fills and rolls on it, one in each slot"
 	}
 	return ""
 }
@@ -45,8 +49,10 @@ func Generate(mode string, st Style, bars int, seed int64, has func(formats.Lane
 		return Drift(st, bars, seed, has), nil
 	case "arc":
 		return Arrange(st, DefaultArc(bars), seed, has), nil
+	case "fills":
+		return Fills(st, bars, seed, has), nil
 	}
-	return nil, fmt.Errorf("mode %q: one of family, random, layers, drift, arc", mode)
+	return nil, fmt.Errorf("mode %q: one of family, random, layers, drift, arc, fills", mode)
 }
 
 // Random is sixteen patterns each of its own energy and kind, rolled one by one.
@@ -154,4 +160,48 @@ func (th *theme) thinOne(p *Pattern, c *Ctx) {
 	for i := range r.Steps {
 		r.Steps[i] = 0
 	}
+}
+
+// fillList is what the fills mode puts on the groove, a slot each.
+var fillList = []string{"snare roll", "accelerating roll", "32nd roll", "snare triplets", "flam run", "tom cascade", "tom roll", "kick stutter",
+	"kick roll", "hat roll", "clap roll", "clap stack"}
+
+// Fills is the groove, and then the groove with a fill or a roll at the end of its last bar in each slot, then a roll build, fills in both
+// bars and a roll into a stop.
+func Fills(st Style, bars int, seed int64, has func(formats.Lane) bool) []Result {
+	th := newTheme(st, bars, seed, has)
+	var out []Result
+	add := func(name string, p Pattern, notes string) {
+		out = append(out, Result{Section: Section{Name: name, Kind: "fill", Energy: 0.6, Bars: bars}, Pattern: p, Notes: notes})
+	}
+	add("Groove", th.groove.Clone(), "the theme: hats "+th.hatKind)
+	for i, kind := range fillList {
+		c := NewCtx(seed+int64(i+1)*7919, th.has)
+		p := th.groove.Clone()
+		if !fillNeeds(kind, th.has) {
+			kind = "snare roll"
+		}
+		p.Fill(c, st, kind, bars-1)
+		p.Humanize(c, 0.2)
+		add("Fill: "+kind, p, "fill: "+kind)
+	}
+	c := NewCtx(seed+14*7919, th.has)
+	p := th.groove.Clone()
+	th.withPerc(&p)
+	p.Build(c)
+	p.roll(c, "32nd roll", bars-1)
+	add("Roll build", p, "the backbeat rolls up and ends in 32nds")
+	c = NewCtx(seed+15*7919, th.has)
+	p = th.groove.Clone()
+	if bars > 1 {
+		p.Fill(c, st, "", 0)
+	}
+	p.Fill(c, st, "accelerating roll", bars-1)
+	add("Fills in both bars", p, "a fill halfway and an accelerating roll at the end")
+	c = NewCtx(seed+16*7919, th.has)
+	p = th.groove.Clone()
+	p.Fill(c, st, "snare triplets", bars-1)
+	p.StopAfter(bars-1, 15)
+	add("Roll, then a stop", p, "triplets, and the last step is silent")
+	return out
 }

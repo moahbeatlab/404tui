@@ -249,6 +249,11 @@ func (p *Pattern) Fill(c *Ctx, st Style, kind string, bar int) string {
 				w[k] = 1
 			}
 		}
+		for _, k := range RollKinds { // the rolls come with every style
+			if fillNeeds(k, c.has) {
+				w[k] = 1
+			}
+		}
 		kind = c.pick(w)
 	}
 	set := func(l formats.Lane, step int, v uint8) {
@@ -265,7 +270,7 @@ func (p *Pattern) Fill(c *Ctx, st Style, kind string, bar int) string {
 			}
 		}
 	}
-	snare := p.backbeat(c)
+	snare := p.rollLane(c)
 	switch kind {
 	case "snare roll":
 		clr(8, 16, formats.LaneClosedHat, formats.LaneOpenHat)
@@ -301,6 +306,8 @@ func (p *Pattern) Fill(c *Ctx, st Style, kind string, bar int) string {
 		}
 	case "hat stop":
 		clr(12, 16, formats.LaneClosedHat, formats.LaneOpenHat, formats.LaneShaker)
+	default:
+		p.roll(c, kind, bar)
 	}
 	return kind
 }
@@ -320,6 +327,12 @@ func fillNeeds(kind string, has func(formats.Lane) bool) bool {
 		return h(formats.LaneSnare) || h(formats.LaneClap)
 	case "rim run":
 		return h(formats.LaneRim)
+	case "tom roll":
+		return h(formats.LaneTom)
+	case "clap roll":
+		return h(formats.LaneClap)
+	case "accelerating roll", "32nd roll", "flam run", "snare triplets":
+		return h(formats.LaneSnare) || h(formats.LaneClap)
 	}
 	return true
 }
