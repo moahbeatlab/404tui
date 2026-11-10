@@ -556,7 +556,8 @@ function drawTerminal(T) {
   const lines = TF[i].lines, rows = lines.length, cols = Math.max(80, ...lines.map(l => l.replace(/\x1b\[[0-9;]*[@-~]/g, "").length));
   g.font = "100px " + TERM_FONT; const cw1 = g.measureText("M").width / 100; // the width of a cell for a font of 1 px
   let px = Math.min(aw / (cols * cw1), ah / (rows * 1.22)); px = Math.floor(px * 2) / 2;
-  const cw = cw1 * px, lh = px * 1.22, ox = padx + (aw - cols * cw) / 2, oy = top + (ah - rows * lh) / 2;
+  const cw0 = cw1 * px, lh = px * 1.22, oy = top + (ah - rows * lh) / 2;
+  const cw = Math.max(cw0, aw / cols), sx = cw / cw0, ox = padx + (aw - cols * cw) / 2; // the cells are stretched to the width of the panel (as wide as the header)
   g.textBaseline = "alphabetic"; g.textAlign = "left";
   for (let y = 0; y < rows; y++) {
     let x = 0;
@@ -564,8 +565,9 @@ function drawTerminal(T) {
       const n = [...r.s].length;
       if (r.bg) { const x0 = Math.round(ox + x * cw), y0 = Math.round(oy + y * lh); rect(x0, y0, Math.round(ox + (x + n) * cw) - x0, Math.round(oy + (y + 1) * lh) - y0, r.bg); } // whole pixels: no seams between the cells
       g.fillStyle = r.fg || "#d4d4d8"; g.globalAlpha = r.dim ? 0.55 : 1; g.font = (r.bold ? "bold " : "") + px + "px " + TERM_FONT;
-      let k = 0; for (const ch of r.s) { if (ch !== " ") g.fillText(ch, ox + (x + k) * cw, oy + y * lh + px * 0.92); k++; }
-      g.globalAlpha = 1; x += n;
+      g.save(); g.translate(ox, 0); g.scale(sx, 1);
+      let k = 0; for (const ch of r.s) { if (ch !== " ") g.fillText(ch, (x + k) * cw0, oy + y * lh + px * 0.92); k++; }
+      g.restore(); g.globalAlpha = 1; x += n;
     }
   }
   g.restore();
