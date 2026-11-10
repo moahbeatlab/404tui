@@ -403,3 +403,81 @@ func (p *Pattern) backbeat(c *Ctx) formats.Lane {
 	}
 	return formats.LaneClap
 }
+
+// ---- the effects (after MIDI Conductor's chain: each one takes the pattern as the one before left it)
+
+// Polymeter lays a euclidean line of hits in cycle steps on a lane and repeats it across the pattern. A cycle that does not divide the
+// bar drifts against the kick and comes round again when the pattern does; one that does not divide the pattern is cut where it ends.
+func (p *Pattern) Polymeter(c *Ctx, lane formats.Lane, cycle, hits, rot int) {
+	if !c.has(lane) || !c.open(lane) || cycle < 1 {
+		return
+	}
+	r := p.ensure(lane)
+	line := Euclid(hits, cycle, rot)
+	for i := range r.Steps {
+		r.Steps[i] = 0
+		if line[i%cycle] {
+			r.Steps[i] = []uint8{100, 70, 85, 60}[(i%cycle)%4]
+		}
+	}
+}
+
+// fits are the cycles from 3 to 24 steps that divide the pattern evenly and are not a plain beat, so a polymeter loops with the pattern.
+func (p Pattern) fits() []int {
+	var out []int
+	for n := 3; n <= 24; n++ {
+		if (p.Bars*16)%n == 0 && 16%n != 0 {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// Echo repeats each hit of a lane: repeats times, rate steps apart, each quieter by decay (0..1 of the one before). The repeats go
+// round the end of the pattern to its start, as it loops, and never replace a louder hit.
+func (p *Pattern) Echo(c *Ctx, lane formats.Lane, rate, repeats int, decay float64) {
+	r := p.Row(lane)
+	if r == nil || !c.open(lane) || rate < 1 || repeats < 1 {
+		return
+	}
+	n := len(r.Steps)
+	src := append([]uint8(nil), r.Steps...)
+	for i, v := range src {
+		if v == 0 {
+			continue
+		}
+		vel := float64(v)
+		for k := 1; k <= repeats; k++ {
+			if vel *= decay; vel < 20 {
+				break
+			}
+			j := (i + k*rate) % n
+			if r.Steps[j] < uint8(vel) && src[j] == 0 {
+				r.Steps[j] = uint8(vel)
+			}
+		}
+	}
+}
+
+// Chance drops hits at random: each hit of the lane below accent strength plays with the probability p. The dice are rolled length
+// times and then repeat, so the choices come round again every length hits and the groove settles (MIDI Conductor's LOOP).
+func (p *Pattern) Chance(c *Ctx, lane formats.Lane, prob float64, length int) {
+	r := p.Row(lane)
+	if r == nil || !c.open(lane) || length < 1 {
+		return
+	}
+	keep := make([]bool, length)
+	for i := range keep {
+		keep[i] = c.chance(prob)
+	}
+	n := 0
+	for i, v := range r.Steps {
+		if v == 0 || v >= 110 { // the accents stay
+			continue
+		}
+		if !keep[n%length] {
+			r.Steps[i] = 0
+		}
+		n++
+	}
+}

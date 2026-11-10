@@ -51,6 +51,44 @@ func Make(st Style, s Section, seed int64, has func(formats.Lane) bool) Result {
 	if st.Swing[1] > st.Swing[0] {
 		swing += c.Rng.Intn(st.Swing[1] - st.Swing[0] + 1)
 	}
+	// the effects: a polymeter on the percussion, an echo, a chance on the hats
+	fx := func() {
+		if c.chance(st.Poly) {
+			fits := p.fits()
+			if len(fits) == 0 { // none divides the pattern: a cycle that is cut where the pattern loops
+				fits = []int{5, 6, 7, 9, 10, 12}
+			}
+			{
+				cycle := fits[c.Rng.Intn(len(fits))]
+				l := formats.LanePerc
+				if !c.has(l) {
+					l = formats.LaneRim
+				}
+				hits := max(2, cycle*(3+c.Rng.Intn(3))/10)
+				p.Polymeter(c, l, cycle, hits, c.Rng.Intn(cycle))
+				notes += fmt.Sprintf("polymeter %d in %d; ", hits, cycle)
+			}
+		}
+		if c.chance(st.Echo) {
+			var lanes []formats.Lane
+			for _, l := range []formats.Lane{formats.LaneClap, formats.LaneRim, formats.LanePerc, formats.LaneOpenHat} {
+				if p.Row(l) != nil && c.has(l) {
+					lanes = append(lanes, l)
+				}
+			}
+			if len(lanes) > 0 {
+				l := lanes[c.Rng.Intn(len(lanes))]
+				rate, reps, decay := 1+c.Rng.Intn(4), 1+c.Rng.Intn(3), 0.45+0.25*c.Rng.Float64()
+				p.Echo(c, l, rate, reps, decay)
+				notes += fmt.Sprintf("echo %s x%d every %d; ", l.LaneName(), reps, rate)
+			}
+		}
+		if c.chance(st.Chance) {
+			length, prob := 3+c.Rng.Intn(6), 0.75+0.2*c.Rng.Float64()
+			p.Chance(c, formats.LaneClosedHat, prob, length)
+			notes += fmt.Sprintf("chance %.0f%% over %d; ", prob*100, length)
+		}
+	}
 	switch s.Kind {
 	case "intro", "outro":
 		if c.chance(0.6) {
@@ -70,6 +108,7 @@ func Make(st Style, s Section, seed int64, has func(formats.Lane) bool) Result {
 			p.Percussion(c, max(3, st.PercHits[0]-2), st.PercHits[0])
 		}
 		p.Ghosts(c, st.Ghosts*(0.3+0.6*c.Rng.Float64()))
+		fx()
 		p.Swing(c, swing)
 		p.Humanize(c, 0.3)
 		if c.chance(0.7) {
@@ -81,6 +120,7 @@ func Make(st Style, s Section, seed int64, has func(formats.Lane) bool) Result {
 		notes += "hats: " + kind + "; "
 		p.Percussion(c, st.PercHits[0], st.PercHits[1])
 		p.Ghosts(c, st.Ghosts)
+		fx()
 		p.Swing(c, swing)
 		p.Humanize(c, 0.35)
 		fill()
@@ -103,6 +143,7 @@ func Make(st Style, s Section, seed int64, has func(formats.Lane) bool) Result {
 		notes += "hats: " + kind + "; "
 		p.Percussion(c, st.PercHits[0], st.PercHits[1])
 		p.Ghosts(c, st.Ghosts*0.8)
+		fx()
 		p.Swing(c, swing)
 		p.Humanize(c, 0.35)
 		fill()

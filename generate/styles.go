@@ -34,6 +34,9 @@ type Style struct {
 	Fills    []string       // the fills that suit it
 	Swing    [2]int         // the swing it may be played with, 50 is straight
 	Ghosts   float64        // how many ghost notes it likes (0..1)
+	Poly     float64        // the chance of a polymeter line when the pattern's length has a cycle that fits
+	Echo     float64        // the chance of an echo on the claps, rim, perc or open hat
+	Chance   float64        // the chance that the hats get a chance-with-memory
 }
 
 var styles = []Style{
@@ -50,7 +53,7 @@ var styles = []Style{
 		},
 		HatKinds: map[string]int{"8th": 3, "16th": 4, "euclid": 2},
 		PercHits: [2]int{5, 7}, Fills: []string{"snare roll", "clap stack", "open hat swell", "ghost shuffle", "kick stutter", "hat stop"},
-		Swing: [2]int{50, 58}, Ghosts: 0.3,
+		Swing: [2]int{50, 58}, Ghosts: 0.3, Poly: 0.2, Echo: 0.3, Chance: 0.4,
 	},
 	{
 		Name: "Tech house", Tempo: "124-128 BPM", BPM: 126, Bars: 2,
@@ -67,7 +70,7 @@ var styles = []Style{
 		},
 		HatKinds: map[string]int{"16th": 5, "euclid": 4, "8th": 1},
 		PercHits: [2]int{6, 9}, Fills: []string{"snare roll", "rim run", "tom cascade", "ghost shuffle", "clap stack", "hat stop", "kick stutter"},
-		Swing: [2]int{54, 62}, Ghosts: 0.45,
+		Swing: [2]int{54, 62}, Ghosts: 0.45, Poly: 0.5, Echo: 0.45, Chance: 0.6,
 	},
 	{
 		Name: "Techno", Tempo: "126-135 BPM", BPM: 130, Bars: 2,
@@ -84,7 +87,7 @@ var styles = []Style{
 		},
 		HatKinds: map[string]int{"16th": 4, "euclid": 5, "8th": 1},
 		PercHits: [2]int{5, 8}, Fills: []string{"snare roll", "tom cascade", "rim run", "clap stack", "hat stop", "kick stutter"},
-		Swing: [2]int{50, 54}, Ghosts: 0.2,
+		Swing: [2]int{50, 54}, Ghosts: 0.2, Poly: 0.5, Echo: 0.35, Chance: 0.5,
 	},
 }
 
