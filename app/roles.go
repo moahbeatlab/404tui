@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/moahbeatlab/404tui/formats"
@@ -22,7 +23,7 @@ var roleKeywords = []struct {
 	{formats.LaneKick, []string{"kick", "bassdrum", "bass drum", "bd", "bd_", "_bd"}},
 	{formats.LaneSnare, []string{"snare", "snr", "sd", "sd_", "_sd"}},
 	{formats.LaneClap, []string{"clap", "clp", "hclap", "handclap"}},
-	{formats.LaneOpenHat, []string{"ohat", "open hat", "openhat", "ohh", "oh_", "_oh"}},
+	{formats.LaneOpenHat, []string{"ohat", "open hat", "openhat", "ohh", "oh_", "_oh", "=oh"}},
 	{formats.LaneRim, []string{"rim", "snap", "stick", "click"}},
 	{formats.LaneRide, []string{"ride", "cymbal"}},
 	{formats.LaneShaker, []string{"shaker", "shkr", "shake", "tamb", "maraca"}},
@@ -34,7 +35,7 @@ var roleKeywords = []struct {
 	{formats.LaneCongaTip, []string{"conga tip", "conga mute", "conga heel"}},
 	{formats.LaneCongaBass, []string{"conga bass", "conga lo", "conga low"}},
 	{formats.LanePerc, []string{"perc", "conga", "bongo", "tabla", "crash", "cowbell", "clave", "block"}},
-	{formats.LaneClosedHat, []string{"chat", "closed hat", "closedhat", "chh", "ch_", "_ch", "hat", "hh", "hihat", "hi-hat"}},
+	{formats.LaneClosedHat, []string{"chat", "closed hat", "closedhat", "chh", "ch_", "_ch", "=ch", "hat", "hh", "hihat", "hi-hat"}},
 }
 
 // GuessRoles maps groove lanes to pads by matching the sample names of pads. Only pads with a
@@ -61,7 +62,14 @@ func GuessRoles(pads []PadRow) map[formats.Lane]proto.PadIndex {
 // nameMatches reports whether name (case-insensitively) contains any of the keywords.
 func nameMatches(name string, keywords []string) bool {
 	low := strings.ToLower(name)
+	words := strings.FieldsFunc(low, func(r rune) bool { return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9') })
 	for _, k := range keywords {
+		if w, ok := strings.CutPrefix(k, "="); ok { // a keyword with = is a whole word: "909 CH" is a closed hat, "punch" is not
+			if slices.Contains(words, w) {
+				return true
+			}
+			continue
+		}
 		if strings.Contains(low, k) {
 			return true
 		}
