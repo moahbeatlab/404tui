@@ -90,3 +90,10 @@ use a spare project.
 - [ ] **Patterns page**: Program Change switching (unit: PC Rx on, MIDI mode B) and the blink and takeover of the page.
 - [ ] **Queued PLACE and DELETE on beat 1**, and the import without a Stop: is the gap in the pattern gone?
 - [ ] A pattern file rewritten while it plays (earlier: the write worked, nothing changed audibly).
+
+## Pattern generator (branch pattern-generator)
+
+First version: `sp404 generate <project> -style house|tech house|techno` writes an arrangement (intro, groove, variation, build, stop, drop,
+break, outro) into a copy of a project, played with the kit on one bank (pad names say the roles). Next: a sequencer tool (`t`) for it,
+variations on an existing pattern (fill, ghosts, hat pattern, half-time, per-lane locks), re-rolling one section, drill/trap/DnB styles,
+checking the result by rendering and measuring it.
