@@ -27,6 +27,11 @@ func TestOnSeqPChoosesThePatternInTheRowOfBoxes(t *testing.T) {
 	if !strings.Contains(m.text(), "PATTERN A2") {
 		t.Fatal("h goes back one pattern")
 	}
+	press(m, "j") // a row down: four patterns on
+	if !strings.Contains(m.text(), "PATTERN A6") {
+		t.Fatalf("j goes down a row of four:\n%s", m.text())
+	}
+	press(m, "k")
 	press(m, "]") // the next bank, at the same place
 	if !strings.Contains(m.text(), "PATTERN B2") {
 		t.Fatalf("] is the bank:\n%s", m.text())

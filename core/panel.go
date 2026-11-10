@@ -256,11 +256,11 @@ func (a *App) rawHints() (plain, shift []hint) {
 			play = hint{"X", "stop"}
 		}
 		if a.patStrip { // the arrows are on the row of pattern boxes
-			return []hint{{"<>", "choose the pattern"}, {"L1 R1", "bank"}, play, {"A", "back to the grid"}}, []hint{{"^v", "back to the grid"}}
+			return []hint{{"^v<>", "choose the pattern"}, {"L1 R1", "bank"}, play, {"A", "back to the grid"}}, nil
 		}
 		if Terminal {
 			return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"R2", "mute/solo"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}},
-				[]hint{{"Y+X", "add track"}, {"p", "pattern row"}, {"Sel+B", "tools"}, {"Y+^v", "pattern +-"}, {"Sel+X", "record"}} // (y b, the dialog with every bank, is in the docs)
+				[]hint{{"Y+X", "add track"}, {"p", "pattern tiles"}, {"Sel+B", "tools"}, {"Y+^v", "pattern +-"}, {"Sel+X", "record"}} // (y b, the dialog with every bank, is in the docs)
 		}
 		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"R2", "mute/solo"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}}, // (z: one bar or more, listed below on a keyboard)
 			[]hint{{"Y+X", "add track"}, {"Y+B", "pick pattern"}, {"Sel+B", "tools"}, {"Y+^v", "pattern +-"}, {"Sel+X", "record"}}

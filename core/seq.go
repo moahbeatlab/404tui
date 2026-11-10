@@ -740,13 +740,13 @@ func (a *App) seqRowCells() int {
 	shown := min(len(a.rows)-a.rowTop, maxRows)
 	room := Rows - 2 - 3
 	if Terminal {
-		room -= 2 // the row of pattern boxes and a line of air above it
+		room -= 5 // the 4 by 4 tiles of the bank's patterns, and a line of air above them
 	}
 	return min(max(room/max(shown, 1), 1), 2)
 }
 
-// SeqStrip is p of a keyboard on SEQ: the arrows choose the pattern in the row of 16 boxes at the bottom (the bank's patterns), and the
-// pattern changes as they move; p, A or B go back to the grid, Up and Down too (they move the track).
+// SeqStrip is p of a keyboard on SEQ: the arrows choose the pattern in the 4 by 4 tiles at the bottom (the bank's patterns), and the
+// pattern changes as they move; p, A or B go back to the grid.
 func (a *App) SeqStrip() {
 	if a.scr != Seq || !Terminal || a.Modal() || a.prompt != nil || a.aHeld {
 		return
@@ -754,7 +754,7 @@ func (a *App) SeqStrip() {
 	a.CancelShift()
 	a.patStrip = !a.patStrip
 	if a.patStrip {
-		a.say("patterns: Left and Right choose, [ ] the bank, Space plays, p or A goes back", false)
+		a.say("patterns: the arrows choose, [ ] the bank, Space plays, p or A goes back", false)
 	}
 }
 
@@ -773,38 +773,45 @@ func (a *App) stripKey(k Key) {
 		a.togglePlay()
 	case A, B:
 		a.patStrip = false
-	case Up, Down: // the grid again, on the track above or below
-		a.patStrip = false
-		a.seqKey(k, 0)
+	case Up: // the tile above (the bank is a ring, as in the pattern dialog)
+		a.setPattern((a.pat-1)/16*16 + ((a.pat-1)%16+12)%16 + 1)
+	case Down:
+		a.setPattern((a.pat-1)/16*16 + ((a.pat-1)%16+4)%16 + 1)
 	}
 }
 
-// drawPatternStrip is the 16 patterns of the bank as boxes in a row: the one in front lit, the ones with notes bright, empty ones dim.
+// drawPatternStrip is the 16 patterns of the bank as a grid of tiles, 4 by 4 like the pads on PADS but a line high: the label, the bars
+// and the notes. The one in front is lit (white while the arrows are on the grid), the ones with notes are bright, empty ones dim.
 func (a *App) drawPatternStrip(g Gfx) {
-	y := Rows - 5
+	y0 := Rows - 8
 	avail := contentCols - 2
 	bank := (a.pat - 1) / 16
 	for i := 0; i < 16; i++ {
-		x := 1 + i*avail/16
-		w := 1 + (i+1)*avail/16 - x - 1
+		col, row := i%4, i/4
+		x := 1 + col*avail/4
+		w := 1 + (col+1)*avail/4 - x - 1
+		y := y0 + row
 		slot := bank*16 + i + 1
+		var d lab.PatternDoc
 		used := false
 		if b, err := a.lab.Pattern(slot); err == nil {
-			var d lab.PatternDoc
 			used = json.Unmarshal(b, &d) == nil && len(d.Notes) > 0
 		}
-		col, fg := cPanel, cDim
+		bg, fg := cPanel, cDim
 		switch {
 		case slot == a.pat && a.patStrip:
-			col, fg = cWhite, cBg
+			bg, fg = cWhite, cBg
 		case slot == a.pat:
-			col, fg = cAmber, cBg
+			bg, fg = cAmber, cBg
 		case used:
-			col, fg = cLine, cText
+			bg, fg = cLine, cText
 		}
-		g.Fill(x, y, w, 1, col)
-		lbl := fmt.Sprint(i + 1)
-		g.Text(x+(w-len(lbl))/2, y, lbl, fg, slot == a.pat)
+		g.Fill(x, y, w, 1, bg)
+		txt := a.label(slot-1) + "  empty"
+		if used {
+			txt = fmt.Sprintf("%s  %d bars  %d notes", a.label(slot-1), d.Bars, len(d.Notes))
+		}
+		g.Text(x+1, y, fit(txt, max(w-1, 0)), fg, slot == a.pat)
 	}
 }
 
