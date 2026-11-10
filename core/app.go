@@ -254,7 +254,7 @@ type App struct {
 	evSnapCh          chan unitSnap       // the unit's project, read for the event log
 	evlog             *eventLog           // the log of events beside the recording that runs
 	cast              castState           // what the cast has of the screen (castlog.go)
-	castRun           *castRun            // the terminal cast that runs (F10)
+	castRun           *castRun            // the terminal cast that runs (Ctrl-T)
 	castLog           *perflog.Log        // the log the keys and the screen go to while a recording runs
 	playPat           int                 // the pattern that loops (1..160), 0 when none: the view can be on another pattern
 	trk               map[int]map[int]int // SEQ: pattern -> pad -> mute/solo

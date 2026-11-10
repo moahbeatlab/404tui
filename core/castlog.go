@@ -10,7 +10,7 @@ import (
 	"github.com/moahbeatlab/404tui/record"
 )
 
-// The terminal cast: while it runs (F10), the keys that are pressed and the screen of the terminal program as it changes go into the
+// The terminal cast: while it runs (Ctrl-T), the keys that are pressed and the screen of the terminal program as it changes go into the
 // cast's own log (name.events.jsonl, beside the WAV it plays with), so that the replay can show the terminal and the keys. A "key" line has the key's name; a "screen" line has the lines of the
 // screen that changed (with their colours), and a whole screen every few seconds and when the size changes. The terminal program
 // (platform/terminal) calls CastKey and CastScreen.
@@ -34,7 +34,7 @@ func (a *App) CastTo(l *perflog.Log) {
 
 // CastKey writes a key press (its name as the terminal program calls it: "z", "tab", "ctrl+z", "shift+tab").
 func (a *App) CastKey(name string) {
-	if a.castLog == nil || name == "" || name == "f10" {
+	if a.castLog == nil || name == "" || name == "ctrl+t" || name == "f10" {
 		return
 	}
 	a.castLog.Add(castClock(), "key", perflog.P("key", name))
@@ -73,7 +73,7 @@ func SetCastClock(f func() time.Time) func() time.Time {
 	return prev
 }
 
-// castRun is a terminal cast that runs: F10 starts it and ends it. It is a recording of its own, not the music recording of Ctrl-R:
+// castRun is a terminal cast that runs: Ctrl-T starts it and ends it. It is a recording of its own, not the music recording of Ctrl-R:
 // only the keys and the screen are logged (no MIDI, no patterns), with the unit's audio beside them unless Config says no. Without the
 // audio a silent WAV of the same length is written, so that the replay has something to play along with.
 type castRun struct {

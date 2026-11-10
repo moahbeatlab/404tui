@@ -15,7 +15,7 @@ func (a *App) recording() bool { return a.rec != nil }
 // ToggleRecording starts a recording, or ends the one that runs.
 func (a *App) ToggleRecording() {
 	if a.castRun != nil {
-		a.say("the terminal cast runs: F10 stops it", true)
+		a.say("the terminal cast runs: Ctrl-T stops it", true)
 		return
 	}
 	if a.rec != nil {

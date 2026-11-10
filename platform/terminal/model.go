@@ -283,7 +283,7 @@ func (m *Model) key(msg tea.KeyMsg) {
 		m.disarm()
 		m.app.ExportBank()
 		return
-	case "f10": // the terminal cast: the keys and the screen (and the audio), a recording of its own
+	case "ctrl+t", "f10": // the terminal cast (F10 too): the keys and the screen (and the audio), a recording of its own
 		m.disarm()
 		m.app.ToggleCast()
 		return

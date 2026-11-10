@@ -360,7 +360,7 @@ func (a *App) cfgItems() []cfgItem {
 			}
 			a.say("recording and the level meter use "+map[bool]string{true: "ffmpeg or sox", false: "the program's own capture"}[a.set.NoNative], false)
 		}},
-		{label: "Terminal cast (F10) records the audio", value: func(a *App) string { return onOff(!a.set.CastNoAudio) }, hint: "A or < > switch",
+		{label: "Terminal cast (Ctrl-T) records the audio", value: func(a *App) string { return onOff(!a.set.CastNoAudio) }, hint: "A or < > switch",
 			change: func(a *App, by int) { a.set.CastNoAudio = !a.set.CastNoAudio; a.saveSettings() },
 			edit:   func(a *App) { a.set.CastNoAudio = !a.set.CastNoAudio; a.saveSettings() }},
 		{label: "Recorder", value: func(a *App) string { return a.recorderLine() }, hint: ""},
