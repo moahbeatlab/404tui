@@ -101,7 +101,7 @@ func TestChanceRepeatsItsChoicesAndKeepsAccents(t *testing.T) {
 	if all == 0 && none == 0 {
 		t.Fatal("no hits")
 	}
-	// probability 1 keeps everything, 0 drops everything below accent
+	// probability 1 keeps everything, 0 drops every off-beat 16th below accent (the hits on the beat and the 8ths are not left to chance)
 	a := Pattern{Bars: 1}
 	ar := a.ensure(formats.LaneClosedHat)
 	for i := range ar.Steps {
@@ -112,8 +112,8 @@ func TestChanceRepeatsItsChoicesAndKeepsAccents(t *testing.T) {
 		t.Errorf("chance 1 dropped hits: %d", a.Notes())
 	}
 	a.Chance(NewCtx(1, hasAll), formats.LaneClosedHat, 0, 8)
-	if a.Notes() != 0 {
-		t.Errorf("chance 0 kept hits: %d", a.Notes())
+	if a.Notes() != 8 {
+		t.Errorf("chance 0 kept %d hits, want the 8 on the 8ths", a.Notes())
 	}
 }
 

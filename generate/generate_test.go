@@ -51,6 +51,9 @@ func hasAll(formats.Lane) bool { return true }
 // The core of a style never moves: the kick is four on the floor at every energy, in every pattern of the arc.
 func TestTheKickStaysOnTheBeat(t *testing.T) {
 	for _, st := range Styles() {
+		if st.BrokenKick { // industrial techno breaks the four on the floor on purpose
+			continue
+		}
 		for seed := int64(1); seed <= 20; seed++ {
 			for _, r := range Arrange(st, DefaultArc(2), seed, hasAll) {
 				if r.Section.Kind == "stop" || r.Section.Kind == "break" {

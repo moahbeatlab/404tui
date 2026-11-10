@@ -167,7 +167,7 @@ var famSteps = []famStep{
 			return "no lane to echo"
 		}
 		l := lanes[c.Rng.Intn(len(lanes))]
-		rate, reps, decay := 1+c.Rng.Intn(4), 1+c.Rng.Intn(3), 0.45+0.25*c.Rng.Float64()
+		rate, reps, decay := echoShape(c)
 		p.Echo(c, l, rate, reps, decay)
 		return fmt.Sprintf("echo on the %s, %d repeats every %d steps", l.LaneName(), reps, rate)
 	}},

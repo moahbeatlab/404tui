@@ -34,7 +34,7 @@ var roleKeywords = []struct {
 	{formats.LaneCongaOpen, []string{"conga open", "conga hi", "conga high", "open tone"}},
 	{formats.LaneCongaTip, []string{"conga tip", "conga mute", "conga heel"}},
 	{formats.LaneCongaBass, []string{"conga bass", "conga lo", "conga low"}},
-	{formats.LanePerc, []string{"perc", "conga", "bongo", "tabla", "crash", "cowbell", "clave", "block"}},
+	{formats.LanePerc, []string{"perc", "conga", "bongo", "tabla", "cowbell", "clave", "block", "tom"}},
 	{formats.LaneClosedHat, []string{"chat", "closed hat", "closedhat", "chh", "ch_", "_ch", "=ch", "hat", "hh", "hihat", "hi-hat"}},
 }
 

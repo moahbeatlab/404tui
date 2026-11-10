@@ -95,7 +95,7 @@ func TestGenerateFamilyAndAllStyles(t *testing.T) {
 	if err := json.Unmarshal(raw, &info); err != nil {
 		t.Fatal(err)
 	}
-	if len(info.Patterns) != 48 || info.Patterns[0].N != 17 || info.Patterns[47].N != 64 { // B1..D16
+	if len(info.Patterns) != 9*16 || info.Patterns[0].N != 17 || info.Patterns[9*16-1].N != 160 { // B1..J16: a bank for each of the nine styles
 		t.Fatalf("%d patterns, first %d, last %d", len(info.Patterns), info.Patterns[0].N, info.Patterns[len(info.Patterns)-1].N)
 	}
 	if err := runGenerate([]string{src, "-mode", "nope", "-dry"}); err == nil {

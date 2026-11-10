@@ -369,6 +369,9 @@ func swingPush(amount int) int {
 	return int(math.Round(float64(min(amount, 75)-50) / 100 * float64(2*grooveNoteLength)))
 }
 
+// SwingTicks is how many ticks a swing of amount percent (50 is straight) delays the second 16th of each pair.
+func SwingTicks(amount int) int { return swingPush(amount) }
+
 // BuildGroove writes a PTNnnnnn.BIN of bars bars for the template (bars 0: the groove's own
 // phrase length), each mapped lane playing its phrase over and over. pads maps a lane to the pad
 // that plays it; a lane missing from the map is skipped. A groove with no mapped lane is an
@@ -404,6 +407,8 @@ type StepLane struct {
 	Steps        []uint8
 	Swing, Nudge int
 	Gate         uint16
+	// Gates is the length of each step's note (0: Gate); a shorter list repeats. An open hat that must end where the closed hat starts.
+	Gates []uint16
 }
 
 // ParseHits reads hit marks (X x o g, . for a rest, spaces and | between bars) into the velocity of each step.
@@ -431,11 +436,15 @@ func BuildSteps(lanes []StepLane, pads map[Lane]proto.PadIndex, bars int) ([]byt
 			if vel == 0 {
 				continue
 			}
+			g := gate
+			if len(l.Gates) > 0 && l.Gates[i%len(l.Gates)] > 0 {
+				g = l.Gates[i%len(l.Gates)]
+			}
 			tick := i*grooveNoteLength + l.Nudge
 			if i%2 == 1 {
 				tick += swingPush(l.Swing)
 			}
-			recs = append(recs, noteRecord(uint32(clamp(tick, 0, int(length)-1)), pad, min(vel, 127), gate))
+			recs = append(recs, noteRecord(uint32(clamp(tick, 0, int(length)-1)), pad, min(vel, 127), g))
 		}
 	}
 	if len(recs) == 0 {

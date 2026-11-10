@@ -20,6 +20,9 @@ type Row struct {
 	Gate         uint16
 }
 
+// chokeGap is how many ticks before the closed hat an open hat ends.
+const chokeGap = 8
+
 // Pattern is a drum pattern of Bars bars.
 type Pattern struct {
 	Bars int
@@ -61,7 +64,11 @@ func (p Pattern) Clone() Pattern {
 func (p Pattern) Lanes() []formats.StepLane {
 	var out []formats.StepLane
 	for _, r := range p.Rows {
-		out = append(out, formats.StepLane{Lane: r.Lane, Steps: r.Steps, Swing: r.Swing, Nudge: r.Nudge, Gate: r.Gate})
+		sl := formats.StepLane{Lane: r.Lane, Steps: r.Steps, Swing: r.Swing, Nudge: r.Nudge, Gate: r.Gate}
+		if r.Lane == formats.LaneOpenHat {
+			sl.Gates = p.choke(r)
+		}
+		out = append(out, sl)
 	}
 	return out
 }
@@ -125,4 +132,42 @@ func mark(v uint8) byte {
 		return 'o'
 	}
 	return 'g'
+}
+
+// choke is the length of each open hat note: it ends just before the next closed hat starts (a closed hat cuts an open one on a 909), so
+// the two do not smear into each other. A step with no open hat has 0 (the row's gate).
+func (p *Pattern) choke(open *Row) []uint16 {
+	closed := p.Row(formats.LaneClosedHat)
+	if closed == nil {
+		return nil
+	}
+	const step = formats.PPQ / 4
+	n := len(open.Steps)
+	gates := make([]uint16, n)
+	gate := int(open.Gate)
+	if gate == 0 {
+		gate = step
+	}
+	for i, v := range open.Steps {
+		if v == 0 {
+			continue
+		}
+		g := gate
+		for k := 1; k <= 8 && i+k < n; k++ {
+			if closed.Steps[i+k] > 0 {
+				// where the closed hat starts, counting its swing and nudge against the open hat's own
+				at := k*step + closed.Nudge - open.Nudge
+				if (i+k)%2 == 1 {
+					at += formats.SwingTicks(closed.Swing)
+				}
+				if i%2 == 1 {
+					at -= formats.SwingTicks(open.Swing)
+				}
+				g = min(g, max(at-chokeGap, 20))
+				break
+			}
+		}
+		gates[i] = uint16(g)
+	}
+	return gates
 }

@@ -69,6 +69,9 @@ func Base(st Style, bars int, energy float64) Pattern {
 			r.Gate = sl.Gate
 		}
 	}
+	if r := p.Row(formats.LaneClap); r != nil {
+		r.Nudge = st.ClapNudge
+	}
 	return p
 }
 
@@ -193,16 +196,16 @@ func (p *Pattern) Swing(c *Ctx, amount int) {
 
 // Humanize moves the velocities a little (amount 0..1).
 func (p *Pattern) Humanize(c *Ctx, amount float64) {
-	spread := int(amount * 16)
+	spread := int(amount * 32) // 0.2 is +-6, 0.35 is +-11: the 5 to 12 steps of the off-beat hits
 	if spread < 1 {
 		return
 	}
 	for _, r := range p.Rows {
-		if !c.open(r.Lane) {
+		if !c.open(r.Lane) || r.Lane == formats.LaneKick { // the kick and the hits on the beat stay as they are: they hold the groove
 			continue
 		}
 		for i, v := range r.Steps {
-			if v > 0 {
+			if v > 0 && i%4 != 0 {
 				r.Steps[i] = uint8(max(20, min(127, int(v)+c.Rng.Intn(2*spread+1)-spread)))
 			}
 		}
@@ -472,7 +475,7 @@ func (p *Pattern) Chance(c *Ctx, lane formats.Lane, prob float64, length int) {
 	}
 	n := 0
 	for i, v := range r.Steps {
-		if v == 0 || v >= 110 { // the accents stay
+		if v == 0 || v >= 110 || i%2 == 0 { // the accents stay, and the hits on the beat and the 8ths: only the off-beat 16ths are left to chance
 			continue
 		}
 		if !keep[n%length] {
@@ -480,4 +483,13 @@ func (p *Pattern) Chance(c *Ctx, lane formats.Lane, prob float64, length int) {
 		}
 		n++
 	}
+}
+
+// echoShape is the rate (in steps), the number of repeats and the fade of an echo: mostly the dotted 8th of a dub delay (3 steps, three
+// repeats at about 60%, 35% and 20% of the velocity), else the dice.
+func echoShape(c *Ctx) (rate, repeats int, decay float64) {
+	if c.chance(0.6) {
+		return 3, 3, 0.55 + 0.07*c.Rng.Float64()
+	}
+	return 1 + c.Rng.Intn(4), 1 + c.Rng.Intn(3), 0.45 + 0.25*c.Rng.Float64()
 }

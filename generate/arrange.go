@@ -78,7 +78,7 @@ func Make(st Style, s Section, seed int64, has func(formats.Lane) bool) Result {
 			}
 			if len(lanes) > 0 {
 				l := lanes[c.Rng.Intn(len(lanes))]
-				rate, reps, decay := 1+c.Rng.Intn(4), 1+c.Rng.Intn(3), 0.45+0.25*c.Rng.Float64()
+				rate, reps, decay := echoShape(c)
 				p.Echo(c, l, rate, reps, decay)
 				notes += fmt.Sprintf("echo %s x%d every %d; ", l.LaneName(), reps, rate)
 			}
@@ -150,6 +150,7 @@ func Make(st Style, s Section, seed int64, has func(formats.Lane) bool) Result {
 	case "break":
 		p.HalfTime(c)
 		p.Density(c, -0.3)
+		p.Ghosts(c, st.Ghosts)
 		p.Humanize(c, 0.25)
 		notes += "half-time; "
 	}
