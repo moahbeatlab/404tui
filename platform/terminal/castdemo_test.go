@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -34,7 +35,11 @@ func TestMakeACastTake(t *testing.T) {
 	}
 	tc, full := TrueColor, FullGlyphs
 	m := NewModel(app, Options{Profile: &tc, Glyphs: &full})
-	m.Update(tea.WindowSizeMsg{Width: 150, Height: 44})
+	w, h := 150, 44
+	if _, err := fmt.Sscanf(os.Getenv("CAST_DEMO_SIZE"), "%dx%d", &w, &h); err != nil { // e.g. 80x50: a narrow terminal for the vertical video
+		w, h = 150, 44
+	}
+	m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	press(m, "esc") // the kit's last step leaves a dialog open
 
 	t0 := time.Now()
