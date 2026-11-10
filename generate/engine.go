@@ -321,8 +321,8 @@ func fillNeeds(kind string, has func(formats.Lane) bool) bool {
 	return true
 }
 
-// Build makes a build-up of the whole pattern: the snare (or clap) goes from the beats to 8ths and to 16ths in the last bar, rising in
-// velocity, and the hats get busier.
+// Build makes a build-up of the whole pattern: the snare (or clap) goes from the beats to 8ths and to 16ths, rising in velocity, and the
+// hats get busier. Where it speeds up and whether the hats cut out for the last beat are up to the dice.
 func (p *Pattern) Build(c *Ctx) {
 	l := p.backbeat(c)
 	if !c.has(l) || !c.open(l) {
@@ -333,13 +333,15 @@ func (p *Pattern) Build(c *Ctx) {
 		r.Steps[i] = 0
 	}
 	n := p.Bars * 16
+	t8 := []float64{0.35, 0.5, 0.6}[c.Rng.Intn(3)]
+	t16 := []float64{0.7, 0.75, 0.85}[c.Rng.Intn(3)]
 	for i := 0; i < n; i++ {
 		t := float64(i) / float64(n)
 		gap := 4
 		switch {
-		case t >= 0.75:
+		case t >= t16:
 			gap = 1
-		case t >= 0.5:
+		case t >= t8:
 			gap = 2
 		}
 		if i%gap == 0 {
@@ -347,11 +349,44 @@ func (p *Pattern) Build(c *Ctx) {
 		}
 	}
 	if h := p.Row(formats.LaneClosedHat); h != nil && c.open(formats.LaneClosedHat) {
-		for i := n / 2; i < n; i++ {
+		from := n/2 + c.Rng.Intn(n/4+1)
+		for i := from; i < n; i++ {
 			if h.Steps[i] == 0 {
 				h.Steps[i] = 60
 			}
 		}
+		if c.chance(0.5) { // the hats drop out for the last beat
+			for i := n - 4; i < n; i++ {
+				h.Steps[i] = 0
+			}
+		}
+	}
+}
+
+// Thin leaves only some of the optional lanes of a bare pattern (an intro or an outro): the open hat, the shaker, the rim, the perc.
+func (p *Pattern) Thin(c *Ctx) {
+	for _, r := range p.Rows {
+		if core[r.Lane] || r.Lane == formats.LaneKick || !c.open(r.Lane) {
+			continue
+		}
+		if c.chance(0.35) {
+			for i := range r.Steps {
+				r.Steps[i] = 0
+			}
+		}
+	}
+}
+
+// Pickup puts a short roll on the last steps of the bar, into what comes next.
+func (p *Pattern) Pickup(c *Ctx, bar int) {
+	l := p.backbeat(c)
+	if !c.has(l) || !c.open(l) {
+		return
+	}
+	r := p.ensure(l)
+	steps := [][]int{{14, 15}, {15}, {13, 14, 15}, {12, 14}}[c.Rng.Intn(4)]
+	for i, s := range steps {
+		r.Steps[bar*16+s] = uint8(80 + i*15)
 	}
 }
 

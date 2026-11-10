@@ -53,12 +53,28 @@ func Make(st Style, s Section, seed int64, has func(formats.Lane) bool) Result {
 	}
 	switch s.Kind {
 	case "intro", "outro":
-		p.Humanize(c, 0.2)
+		if c.chance(0.6) {
+			p.HatPattern(c, c.pick(st.HatKinds))
+		}
+		p.Thin(c)
+		if c.chance(0.4) {
+			p.Percussion(c, max(3, st.PercHits[0]-2), st.PercHits[0])
+		}
+		p.Swing(c, swing)
+		p.Humanize(c, 0.25)
 	case "groove":
-		p.Ghosts(c, st.Ghosts*0.6)
+		if c.chance(0.5) {
+			p.HatPattern(c, c.pick(st.HatKinds))
+		}
+		if c.chance(0.5) {
+			p.Percussion(c, max(3, st.PercHits[0]-2), st.PercHits[0])
+		}
+		p.Ghosts(c, st.Ghosts*(0.3+0.6*c.Rng.Float64()))
 		p.Swing(c, swing)
 		p.Humanize(c, 0.3)
-		fill()
+		if c.chance(0.7) {
+			fill()
+		}
 	case "variation":
 		kind := c.pick(st.HatKinds)
 		p.HatPattern(c, kind)
@@ -74,8 +90,13 @@ func Make(st Style, s Section, seed int64, has func(formats.Lane) bool) Result {
 		p.Humanize(c, 0.2)
 		notes += "build; "
 	case "stop":
-		p.StopAfter(0, 4)
-		notes += "stop after the first beat; "
+		at := []int{2, 4, 6, 8}[c.Rng.Intn(4)]
+		p.StopAfter(0, at)
+		notes += fmt.Sprintf("stop after step %d; ", at)
+		if c.chance(0.5) {
+			p.Pickup(c, 0)
+			notes += "pickup; "
+		}
 	case "drop":
 		kind := c.pick(st.HatKinds)
 		p.HatPattern(c, kind)
