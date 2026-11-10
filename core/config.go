@@ -409,7 +409,9 @@ func (a *App) cfgItems() []cfgItem {
 		)
 	}
 	if !Terminal { // the handheld does not record or meter: only a computer has this choice
-		items = slices.DeleteFunc(items, func(it cfgItem) bool { return it.label == "Record and meter with" || strings.HasPrefix(it.label, "Terminal cast") })
+		items = slices.DeleteFunc(items, func(it cfgItem) bool {
+			return it.label == "Record and meter with" || strings.HasPrefix(it.label, "Terminal cast")
+		})
 	}
 	_ = rule
 	if Terminal { // there is no PERF screen on a computer: its pad code has nothing to start

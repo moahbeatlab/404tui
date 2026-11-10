@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/perflog"
 	"github.com/moahbeatlab/404tui/record"
 )
@@ -82,6 +83,8 @@ type castRun struct {
 	wav       string
 	started   time.Time
 	audioDone bool
+	tap       *castTap // offline: what the program plays itself is noted and mixed into the WAV
+	inner     Audio    // the output before it was wrapped
 }
 
 // ToggleCast starts a terminal cast, or ends the one that runs.
@@ -102,7 +105,7 @@ func (a *App) ToggleCast() {
 			r.sess, r.wav, r.started = s, s.Path, s.Started
 			a.rec = s
 		} else { // offline (no unit, no input): the cast still runs, without the audio
-			note = " (no audio: " + err.Error() + ")"
+			note = " (no audio input: " + err.Error() + "; what the program plays is recorded)"
 		}
 	}
 	if r.sess == nil {
@@ -112,12 +115,19 @@ func (a *App) ToggleCast() {
 			return
 		}
 		r.wav = filepath.Join(dir, record.FileName(r.started))
+		if !a.set.CastNoAudio && a.Audio != nil { // what the program plays itself is the sound of the cast
+			r.inner = a.Audio
+			a.Audio, r.tap = tapOf(a.Audio, r.started)
+		}
 	}
 	l, err := perflog.Create(perflog.PathFor(r.wav), r.wav, r.started)
 	if err != nil {
 		if r.sess != nil {
 			a.rec = nil
 			go r.sess.Stop()
+		}
+		if r.tap != nil {
+			a.Audio = r.inner
 		}
 		a.say("no cast log: "+err.Error(), true)
 		return
@@ -148,7 +158,15 @@ func (a *App) stopCast() {
 		}()
 		return
 	}
-	if err := record.WriteSilence(r.wav, time.Since(r.started)); err != nil {
+	d := time.Since(r.started)
+	var err error
+	if r.tap != nil {
+		a.Audio = r.inner
+		err = record.WriteStereo(r.wav, r.tap.mix(int(d.Seconds()*formats.SampleRate)))
+	} else {
+		err = record.WriteSilence(r.wav, d)
+	}
+	if err != nil {
 		a.say("the cast is saved, its silent WAV is not: "+err.Error(), true)
 		return
 	}
