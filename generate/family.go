@@ -214,12 +214,24 @@ var famSteps = []famStep{
 		}
 		p.HalfTime(c)
 		th.withPerc(p)
+		if r := p.Row(formats.LaneShaker); r != nil { // a break has fewer layers: no shaker, the hats in 8ths
+			for i := range r.Steps {
+				r.Steps[i] = 0
+			}
+		}
+		if r := p.Row(formats.LaneClosedHat); r != nil {
+			for i := range r.Steps {
+				if i%2 == 1 {
+					r.Steps[i] = 0
+				}
+			}
+		}
 		if r := p.Row(formats.LaneOpenHat); r != nil && c.chance(0.5) { // the hats and the claps stay, the open hat goes now and then
 			for i := range r.Steps {
 				r.Steps[i] = 0
 			}
 		}
-		return "no kick, the claps in half time, the hats go on"
+		return "no kick, the claps in half time, the hats in 8ths, no shaker"
 	}},
 	{"Outro", "outro", 0.2, func(th *theme, p *Pattern, c *Ctx) string {
 		for _, r := range p.Rows {
