@@ -109,15 +109,28 @@ func Drift(st Style, bars int, seed int64, has func(formats.Lane) bool) []Result
 	out = append(out, Result{Section: Section{Name: "Groove", Kind: "groove", Energy: 0.5, Bars: bars}, Pattern: cur.Clone(), Notes: "the theme: hats " + th.hatKind})
 	for i := 1; i < FamilySize; i++ {
 		var notes string
+		prev := cur.Clone()
 		for k, n := 0, 1+c.Rng.Intn(3); k < n; k++ {
 			// the changes that are small: ghost notes, the percussion, another hat, a polymeter, an echo, chance, a fill, fewer layers
 			fs := famSteps[1+c.Rng.Intn(9)]
-			if c.chance(0.25) {
+			if c.chance(0.4) {
 				th.thinOne(&cur, c)
 				notes += "one layer less; "
 				continue
 			}
 			notes += fs.do(th, &cur, c) + "; "
+		}
+		// a drift must not only grow: too many notes and a layer goes, too few and the percussion comes back
+		for n := cur.Notes(); n > out[0].Pattern.Notes()*3/2; n = cur.Notes() {
+			th.thinOne(&cur, c)
+			notes += "one layer less; "
+		}
+		if cur.Notes() < out[0].Pattern.Notes()*3/4 {
+			th.withPerc(&cur)
+			notes += "the percussion back; "
+		}
+		if cur.Text() == prev.Text() {
+			notes += th.visible(&cur, prev, "variation", c)
 		}
 		p := cur.Clone()
 		p.Humanize(c, 0.2)

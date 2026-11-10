@@ -214,8 +214,12 @@ var famSteps = []famStep{
 		}
 		p.HalfTime(c)
 		th.withPerc(p)
-		p.Thin(c)
-		return "no kick, the claps in half time"
+		if r := p.Row(formats.LaneOpenHat); r != nil && c.chance(0.5) { // the hats and the claps stay, the open hat goes now and then
+			for i := range r.Steps {
+				r.Steps[i] = 0
+			}
+		}
+		return "no kick, the claps in half time, the hats go on"
 	}},
 	{"Outro", "outro", 0.2, func(th *theme, p *Pattern, c *Ctx) string {
 		for _, r := range p.Rows {
