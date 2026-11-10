@@ -37,6 +37,7 @@ Writes drum patterns into a copy of a project, played with the drum kit on one b
   -seed N                          the same seed makes the same patterns; without one a new seed is chosen and printed
   -bars 2                          the bars of each pattern (1 to 8)
   -tempo BPM                       the tempo of the project and of the banks the patterns are in (default: the style's usual one)
+  -keeptempo                       leave the tempo of the project as it is (the banks the patterns are in still get theirs)
   -o folder                        where the copy goes (default: <project>-generated beside it)
   -dry                             only print the patterns, write nothing
 `
@@ -58,6 +59,7 @@ func runGenerate(args []string) error {
 	out := fl.String("o", "", "")
 	dry := fl.Bool("dry", false, "")
 	mode := fl.String("mode", "family", "")
+	keepTempo := fl.Bool("keeptempo", false, "")
 	if err := fl.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -181,7 +183,7 @@ func runGenerate(args []string) error {
 				return err
 			}
 		}
-		if ji == 0 {
+		if ji == 0 && !*keepTempo {
 			if err := l.SetTempo(bpm); err != nil {
 				return err
 			}
