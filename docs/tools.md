@@ -191,9 +191,9 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 - `New pattern from a template...`
   - **new pattern from a template** (a dialog):
     - `Blank pattern` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 4 bars
-    - `Generate House  8 patterns  124` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Generate Tech house  8 patterns  126` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Generate Techno  8 patterns  130` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Generate House  124 BPM` — family / random / layers / drift / arc; now family
+    - `Generate Tech house  126 BPM` — family / random / layers / drift / arc; now family
+    - `Generate Techno  130 BPM` — family / random / layers / drift / arc; now family
     - `House  122-127` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
     - `Deep house  120-125` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
     - `Tech house  122-130` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 4 bars

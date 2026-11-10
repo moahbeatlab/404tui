@@ -20,14 +20,20 @@ import (
 
 const generateUsage = `usage: sp404 generate <project folder or zip> [options]
 
-Writes drum patterns into a copy of a project: a set of patterns that build tension, drop and break (an intro, the groove, a variation,
-a build, a stop, the drop, a break and an outro), played with the drum kit on one bank. The project itself is not changed.
+Writes drum patterns into a copy of a project, played with the drum kit on one bank. The project itself is not changed.
 
-  -style house|tech house|techno   the genre (default house)
+  -mode family|random|layers|drift|arc
+        family  (default) variations of ONE pattern: slot 1 is the groove, each slot after it changes one thing (ghost notes, the percussion,
+                another hat, a polymeter, an echo, chance, a fill), then a build, a stop, a drop, a break and an outro: 16 patterns
+        random  16 different patterns, each rolled on its own
+        layers  the groove, then one layer more in each slot, up to the full style: 16 patterns
+        drift   each pattern is a small change of the one before: 16 patterns
+        arc     8 patterns along a tension curve (intro, groove, variation, build, stop, drop, break, outro)
+  -style house|tech house|techno|all   the genre (default house); all makes house, tech house and techno, one bank each
   -kit A                           the bank with the drum kit, whose pad names say which pad is the kick, the claps, the hats (default A)
   -into B                          the bank the patterns start in; they take the next free slots from its first pad (default: the bank after the kit)
   -seed N                          the same seed makes the same patterns; without one a new seed is chosen and printed
-  -bars 2                          the bars of each pattern (1 to 8; the stop is always one bar)
+  -bars 2                          the bars of each pattern (1 to 8)
   -tempo BPM                       the tempo of the project and of the banks the patterns are in (default: the style's usual one)
   -o folder                        where the copy goes (default: <project>-generated beside it)
   -dry                             only print the patterns, write nothing
@@ -49,12 +55,19 @@ func runGenerate(args []string) error {
 	tempo := fl.Float64("tempo", 0, "")
 	out := fl.String("o", "", "")
 	dry := fl.Bool("dry", false, "")
+	mode := fl.String("mode", "family", "")
 	if err := fl.Parse(args[1:]); err != nil {
 		return err
 	}
-	st, err := generate.StyleByName(*styleName)
-	if err != nil {
-		return err
+	var styles []generate.Style
+	if strings.EqualFold(strings.TrimSpace(*styleName), "all") {
+		styles = generate.Styles()
+	} else {
+		st, err := generate.StyleByName(*styleName)
+		if err != nil {
+			return err
+		}
+		styles = []generate.Style{st}
 	}
 	kitBank, err := bankLetter(*kit)
 	if err != nil {
@@ -110,54 +123,74 @@ func runGenerate(args []string) error {
 	}
 	has := func(l formats.Lane) bool { _, ok := pads[l]; return ok }
 
-	arc := generate.DefaultArc(*bars)
-	results := generate.Arrange(st, arc, *seed, has)
-
-	// the slots: the next free ones from the first pad of the bank
+	// the slots that are taken
 	taken := map[int]bool{}
 	for _, p := range info.Patterns {
 		taken[p.N] = true
 	}
-	var slots []int
-	for n := intoBank*16 + 1; n <= 160 && len(slots) < len(results); n++ {
-		if !taken[n] {
-			slots = append(slots, n)
-		}
+	type job struct {
+		st      generate.Style
+		seed    int64
+		results []generate.Result
+		slots   []int
 	}
-	if len(slots) < len(results) {
-		return fmt.Errorf("only %d free pattern slots from bank %c on, %d are needed", len(slots), 'A'+intoBank, len(results))
+	var jobs []job
+	for k, st := range styles {
+		sd := *seed + int64(k)*1000003
+		results, err := generate.Generate(*mode, st, *bars, sd, has)
+		if err != nil {
+			return err
+		}
+		// the next free slots from the first pad of the bank (each style has a bank of its own)
+		var slots []int
+		for n := (intoBank+k)*16 + 1; n <= 160 && len(slots) < len(results); n++ {
+			if !taken[n] {
+				slots = append(slots, n)
+				taken[n] = true
+			}
+		}
+		if len(slots) < len(results) {
+			return fmt.Errorf("only %d free pattern slots from bank %c on, %d are needed", len(slots), 'A'+intoBank+k, len(results))
+		}
+		jobs = append(jobs, job{st, sd, results, slots})
 	}
 
-	fmt.Printf("\n%s, seed %d (the same seed makes the same patterns)\n", st.Name, *seed)
-	for i, r := range results {
-		fmt.Printf("\n%s: %s\n%s", slotName(slots[i]), r.Describe(), r.Pattern.Text())
+	for _, j := range jobs {
+		fmt.Printf("\n%s, %s, seed %d (the same seed makes the same patterns)\n", j.st.Name, *mode, j.seed)
+		for i, r := range j.results {
+			fmt.Printf("\n%s: %s\n%s", slotName(j.slots[i]), r.Describe(), r.Pattern.Text())
+		}
 	}
 	if *dry {
 		return nil
 	}
 
-	bpm := *tempo
-	if bpm == 0 {
-		bpm = float64(st.BPM)
-	}
-	for i, r := range results {
-		b, err := r.Pattern.Bytes(pads)
-		if err != nil {
-			return fmt.Errorf("%s: %w", r.Section.Name, err)
+	for ji, j := range jobs {
+		bpm := *tempo
+		if bpm == 0 {
+			bpm = float64(j.st.BPM)
 		}
-		if err := l.SetPatternBytes(slots[i], b); err != nil {
-			return err
-		}
-	}
-	if err := l.SetTempo(bpm); err != nil {
-		return err
-	}
-	seen := map[int]bool{}
-	for _, n := range slots {
-		if bk := (n - 1) / 16; !seen[bk] {
-			seen[bk] = true
-			if err := l.SetBankTempo(bk, bpm); err != nil {
+		for i, r := range j.results {
+			b, err := r.Pattern.Bytes(pads)
+			if err != nil {
+				return fmt.Errorf("%s: %w", r.Section.Name, err)
+			}
+			if err := l.SetPatternBytes(j.slots[i], b); err != nil {
 				return err
+			}
+		}
+		if ji == 0 {
+			if err := l.SetTempo(bpm); err != nil {
+				return err
+			}
+		}
+		seen := map[int]bool{}
+		for _, n := range j.slots {
+			if bk := (n - 1) / 16; !seen[bk] {
+				seen[bk] = true
+				if err := l.SetBankTempo(bk, bpm); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -168,7 +201,14 @@ func runGenerate(args []string) error {
 	if err := writeProject(l, dst); err != nil {
 		return err
 	}
-	fmt.Printf("\nwritten to %s: %d patterns in %s to %s, %.0f BPM\n", dst, len(results), slotName(slots[0]), slotName(slots[len(slots)-1]), bpm)
+	fmt.Printf("\nwritten to %s:\n", dst)
+	for _, j := range jobs {
+		bpm := *tempo
+		if bpm == 0 {
+			bpm = float64(j.st.BPM)
+		}
+		fmt.Printf("  %s (%s, seed %d): %d patterns in %s to %s, %.0f BPM\n", j.st.Name, *mode, j.seed, len(j.results), slotName(j.slots[0]), slotName(j.slots[len(j.slots)-1]), bpm)
+	}
 	return nil
 }
 

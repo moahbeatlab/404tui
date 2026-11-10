@@ -15,7 +15,7 @@ func TestGenerateRunsOfflineAndUndoes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a.generateArc(st, 2)
+	a.generateArc(st, "arc", 2)
 	n := 0
 	for slot := 17; slot <= 24; slot++ { // bank B, after the kit's bank A
 		if d, ok := a.patternDoc(slot); ok && len(d.Notes) > 0 {
@@ -28,5 +28,18 @@ func TestGenerateRunsOfflineAndUndoes(t *testing.T) {
 	a.undoStep()
 	if d, ok := a.patternDoc(18); ok && len(d.Notes) > 0 {
 		t.Fatal("undo leaves the generated patterns")
+	}
+}
+
+func TestGenerateFamilyFillsABank(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	st, _ := generate.StyleByName("house")
+	a.generateArc(st, "family", 2)
+	for slot := 17; slot <= 32; slot++ { // B1..B16
+		if d, ok := a.patternDoc(slot); !ok || len(d.Notes) == 0 {
+			t.Fatalf("slot %d is empty", slot)
+		}
 	}
 }

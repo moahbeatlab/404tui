@@ -40,7 +40,7 @@ func kitProject(t *testing.T) string {
 func TestGenerateWritesPatternsIntoACopy(t *testing.T) {
 	src := kitProject(t)
 	out := filepath.Join(t.TempDir(), "copy")
-	if err := runGenerate([]string{src, "-style", "techno", "-seed", "3", "-o", out}); err != nil {
+	if err := runGenerate([]string{src, "-style", "techno", "-mode", "arc", "-seed", "3", "-o", out}); err != nil {
 		t.Fatal(err)
 	}
 	if ents, _ := os.ReadDir(filepath.Join(src, "PTN")); len(ents) != 0 {
@@ -76,5 +76,29 @@ func TestGenerateWritesPatternsIntoACopy(t *testing.T) {
 	}
 	if err := runGenerate([]string{src, "-kit", "C", "-dry"}); err == nil {
 		t.Error("a bank with no kit was accepted")
+	}
+}
+
+// the default is a family: sixteen patterns that are variations of the first; -style all fills three banks, one for each genre
+func TestGenerateFamilyAndAllStyles(t *testing.T) {
+	src := kitProject(t)
+	out := filepath.Join(t.TempDir(), "copy")
+	if err := runGenerate([]string{src, "-style", "all", "-seed", "9", "-o", out}); err != nil {
+		t.Fatal(err)
+	}
+	l, err := loadProject(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var info lab.Info
+	raw, _ := l.Info()
+	if err := json.Unmarshal(raw, &info); err != nil {
+		t.Fatal(err)
+	}
+	if len(info.Patterns) != 48 || info.Patterns[0].N != 17 || info.Patterns[47].N != 64 { // B1..D16
+		t.Fatalf("%d patterns, first %d, last %d", len(info.Patterns), info.Patterns[0].N, info.Patterns[len(info.Patterns)-1].N)
+	}
+	if err := runGenerate([]string{src, "-mode", "nope", "-dry"}); err == nil {
+		t.Error("an unknown mode was accepted")
 	}
 }

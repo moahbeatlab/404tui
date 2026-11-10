@@ -13,7 +13,7 @@ import (
 	"github.com/moahbeatlab/404tui/proto"
 )
 
-// The generator in the editor: the eight patterns of an arc (intro, groove, variation, build, stop, drop, break, outro) are written
+// The generator in the editor: the patterns of a bank (a family of variations of one pattern, random ones, layers, a drift or an arc) are written
 // into the next free slots after the kit's bank, as one step that can be undone. In live mode the editor's patterns go to the unit
 // as they appear, so this is also how the generator puts its patterns on the unit. Each run takes a new seed.
 
@@ -37,7 +37,7 @@ func (a *App) kitBank() (int, map[formats.Lane]proto.PadIndex) {
 	return -1, nil
 }
 
-func (a *App) generateArc(st generate.Style, bars int) {
+func (a *App) generateArc(st generate.Style, mode string, bars int) {
 	bank, pads := a.kitBank()
 	if bank < 0 {
 		a.say("no bank has a pad named like a kick: name the pads of the kit (kick, snare, hat...)", true)
@@ -45,7 +45,11 @@ func (a *App) generateArc(st generate.Style, bars int) {
 	}
 	has := func(l formats.Lane) bool { _, ok := pads[l]; return ok }
 	seed := rand.New(rand.NewSource(time.Now().UnixNano())).Int63n(1 << 30)
-	results := generate.Arrange(st, generate.DefaultArc(bars), seed, has)
+	results, err := generate.Generate(mode, st, bars, seed, has)
+	if err != nil {
+		a.say(err.Error(), true)
+		return
+	}
 
 	var slots []int
 	for n := (bank+1)*16 + 1; n <= 160 && len(slots) < len(results); n++ {
@@ -81,8 +85,8 @@ func (a *App) generateArc(st generate.Style, bars int) {
 		}
 	}
 	a.commitUndo(pre, A, 0)
-	a.openPattern(slots[1]) // the groove
-	a.say(fmt.Sprintf("%s: %s to %s from the kit in bank %c, seed %d, %.0f BPM", st.Name, a.label(slots[0]-1), a.label(slots[len(slots)-1]-1), 'A'+bank, seed, bpm), false)
+	a.openPattern(slots[0]) // the groove (the first of a family)
+	a.say(fmt.Sprintf("%s %s: %s to %s from the kit in bank %c, seed %d, %.0f BPM", st.Name, mode, a.label(slots[0]-1), a.label(slots[len(slots)-1]-1), 'A'+bank, seed, bpm), false)
 }
 
 // patternDoc reads a pattern of the project; ok is false when the slot holds nothing.

@@ -24,9 +24,9 @@ func (a *App) templatesMenu() {
 	for _, st := range generate.Styles() {
 		st := st
 		m.items = append(m.items, menuItem{
-			label: fmt.Sprintf("Generate %s  8 patterns  %d", st.Name, st.BPM),
-			vals:  barChoices, val: max(st.Bars, 1) - 1,
-			run: func(v int) { a.generateArc(st, v+1) },
+			label: fmt.Sprintf("Generate %s  %d BPM", st.Name, st.BPM),
+			vals:  generate.Modes, val: 0, // left and right choose how the bank is filled
+			run: func(v int) { a.generateArc(st, generate.Modes[v], max(st.Bars, 1)) },
 		})
 	}
 	for _, g := range formats.GrooveTemplates() {
