@@ -432,11 +432,11 @@ func (a *App) drawFiles(g Gfx) {
 		}
 		g.Text(2, 8, tk("< goes up    Y+X jumps to the usb drive"), cDim, false)
 	}
-	a.drawFileList(g, 1, contentCols-2, a.entries, a.fcur, true)
+	a.drawFileList(g, a.dir, 1, contentCols-2, a.entries, a.fcur, true)
 }
 
-// drawFileList draws a column of entries from x0, w cells wide; the cursor is shown when focus is set.
-func (a *App) drawFileList(g Gfx, x0, w int, ents []entry, cur int, focus bool) {
+// drawFileList draws a column of the entries of dir from x0, w cells wide; the cursor is shown when focus is set.
+func (a *App) drawFileList(g Gfx, dir string, x0, w int, ents []entry, cur int, focus bool) {
 	rows := a.fileRows()
 	top := max(0, min(cur-rows/2, len(ents)-rows))
 	for i := 0; i < rows && top+i < len(ents); i++ {
@@ -492,6 +492,9 @@ func (a *App) drawFileList(g Gfx, x0, w int, ents []entry, cur int, focus bool) 
 			if room > 6 {
 				g.Text(px, y, fit("‹ "+short2(parent, room-2), room), cDim, false)
 			}
+		}
+		if e.dir && !e.project && w >= 20 && a.isFavourite(joinPath(dir, e.name)) { // a favourite folder: a mark at the right
+			g.Text(x0+w-2, y, "*", cAmber, true)
 		}
 		if !e.dir && w >= 20 {
 			sz := fmt.Sprintf("%dK", (e.size+512)/1024)

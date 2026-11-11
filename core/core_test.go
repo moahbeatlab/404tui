@@ -4181,3 +4181,28 @@ func TestSwapTwoTracks(t *testing.T) {
 		t.Fatal("swapping a pad with itself changed it")
 	}
 }
+
+// a favourite folder has a mark at the right of its name in the lists
+func TestFavouriteFolderHasAMark(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	a.go_(Files)
+	a.cd(a.Root)
+	a.Render()
+	var row string
+	find := func() string {
+		for _, l := range strings.Split(screenStr(a), "\n") {
+			if strings.Contains(l, "drums/") {
+				return l
+			}
+		}
+		return ""
+	}
+	if row = find(); row == "" || strings.Contains(strings.TrimSpace(row), "*") {
+		t.Fatalf("a folder that is not a favourite has no mark: %q", row)
+	}
+	a.toggleFavourite(filepath.Join(a.Root, "drums"))
+	if row = find(); !strings.Contains(row, "*") {
+		t.Fatalf("a favourite folder has a mark: %q", row)
+	}
+}
