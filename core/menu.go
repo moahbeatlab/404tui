@@ -267,7 +267,7 @@ func (a *App) padToolsMenu(n int) *menu {
 	m := &menu{title: "pad " + a.label(n)}
 	add := func(l string, run func(int)) { m.items = append(m.items, menuItem{label: l, run: run}) }
 	m.head("SAMPLE")
-	add("Pick a sample...", func(int) { a.go_(Files) })
+	add("Pick a sample...", func(int) { a.go_(Files); a.assignTo = n + 1 }) // the sample chosen there goes on this pad: no second question
 	if has {
 		add("Slice...", func(int) { a.go_(Slice) })
 		add("Chords & arps...", func(int) { a.openArpMenu(n) })

@@ -1624,3 +1624,38 @@ func TestSearchResultShowsItsFolder(t *testing.T) {
 		t.Fatalf("the folder in the list is not cut at the end:\n%s", txt)
 	}
 }
+
+// "Pick a sample" of a pad: the file chosen goes on that pad, and the pad dialog is not asked again
+func TestPickASampleForAPadDoesNotAskForThePadAgain(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	a.cur = 5
+	pad := a.padN()
+	if a.info.Pads[pad].File {
+		t.Skip("the pad has a sample")
+	}
+	a.openPadMenu()
+	for i, it := range a.menu.items {
+		if it.label == "Pick a sample..." {
+			a.menu.cur = i
+		}
+	}
+	a.menuKey(A)
+	if a.scr != Files {
+		t.Fatalf("the file browser is open, on %s", a.ScreenName())
+	}
+	a.cd(filepath.Join(a.Root, "drums"))
+	for i, e := range a.entries {
+		if !e.dir {
+			a.fcur = i
+			break
+		}
+	}
+	a.filesKey(A)
+	if a.picker != nil {
+		t.Fatal("the pad is known: no pad dialog")
+	}
+	if !a.info.Pads[pad].File || a.scr != Pads {
+		t.Fatalf("the sample is on pad %d, screen %s", pad, a.ScreenName())
+	}
+}

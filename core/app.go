@@ -202,6 +202,7 @@ type App struct {
 	slUndo, slRedo    []string        // the slicing before each change, as text, for undo and redo on the slicer's screen
 	slSkip            bool
 	ltags             *localTags       // your tags on this computer's samples
+	assignTo          int              // FILES, from a pad's "Pick a sample": the pad (1..160) the sample goes on, 0 for none
 	tagSearch         bool             // the search is by tags
 	searchCut         bool             // the search gave up before the end
 	kb                *keyboard        // the on-screen keyboard of the search, when open
@@ -1059,6 +1060,9 @@ func (a *App) NextScreen(d int) {
 
 func (a *App) go_(s Screen) {
 	a.patStrip = false
+	if s != Files {
+		a.assignTo = 0
+	}
 	if a.arpOn && s != Pads {
 		a.stop()
 	}
@@ -1306,6 +1310,12 @@ func (a *App) filesKey(k Key) {
 			return
 		}
 		name := strings.TrimSuffix(filepath.Base(e.name), filepath.Ext(e.name))
+		if a.assignTo > 0 { // came from "Pick a sample" of a pad: it goes on that pad
+			n := a.assignTo - 1
+			a.assignTo = 0
+			a.assignFile(id, name, n)
+			return
+		}
 		if Terminal { // a computer chooses the pad in the pad dialog, as everywhere a pad is chosen
 			a.pickPad("put "+fit(name, 24)+" on a pad", a.padN(), false, func(n int) { a.assignFile(id, name, n) })
 			return
