@@ -1229,11 +1229,19 @@ func TestSampleToolsArpAndKeyboard(t *testing.T) {
 		t.Fatalf("Space plays the chord: %d (%s)", au.Played, a.msg)
 	}
 	before := padsWithSamples(a)
-	chooseMenu(t, a, "Bounce the chord to a new pad")
-	keys(t, a, "A") // the pad dialog: the free pad it starts on
+	chooseMenu(t, a, "Bounce the chord to a new pad") // and A in the pad dialog: the free pad it starts on
 	if padsWithSamples(a) != before+1 {
 		t.Fatalf("the chord goes on a free pad: %s", a.msg)
 	}
+	if a.menu == nil || a.menu.title != "chord from A1" || a.menu.item().label != "Bounce the chord to a new pad" {
+		t.Fatalf("the chord tool is back as it was, to make another: %+v", a.menu)
+	}
+	keys(t, a, "A")
+	keys(t, a, "B") // the pad dialog left: the tool is back too
+	if a.picker != nil || a.menu == nil || a.menu.title != "chord from A1" {
+		t.Fatalf("B in the pad dialog goes back to the chord tool: %+v", a.menu)
+	}
+	a.menu = nil
 	// the keyboard: 5 pitched copies on free pads, a major scale
 	a.menu = nil
 	a.keyboard(0, 5, 0)

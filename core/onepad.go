@@ -218,7 +218,7 @@ func (a *App) openOnePadMenu(n int, chord bool) {
 		}})
 	if chord {
 		m.head("MAKE")
-		m.items = append(m.items, menuItem{label: "Bounce the chord to a new pad", run: func(int) { a.onePadBounce(n, true) }})
+		m.items = append(m.items, menuItem{label: "Bounce the chord to a new pad", run: func(int) { a.onePadBounce(n, true, m) }})
 	} else {
 		m.tabHead("PLAY")
 		set("Type", arpTypes, st.typ, func(v int) { st.typ = v; a.say(arpTypeNotes[v], false) })
@@ -228,7 +228,7 @@ func (a *App) openOnePadMenu(n int, chord bool) {
 		set("Length", names(printBars, func(v int) string { return fmt.Sprintf("%d bar", v) }), near(printBars, st.bars), func(v int) { st.bars = printBars[v] })
 		m.tabHead("MAKE")
 		m.items = append(m.items,
-			menuItem{label: "Bounce the arp to a new pad", run: func(int) { a.onePadBounce(n, false) }},
+			menuItem{label: "Bounce the arp to a new pad", run: func(int) { a.onePadBounce(n, false, m) }},
 			menuItem{label: "Print the arp to the pattern", run: func(int) { a.onePadPattern(n) }},
 		)
 	}
@@ -383,8 +383,9 @@ func chordMix(ss []formats.Sample) formats.Sample {
 	return formats.Sample{Channels: 2, Samples: out}
 }
 
-// onePadBounce keeps the arp, or with chord the notes played together, on the next free pad.
-func (a *App) onePadBounce(n int, chord bool) {
+// onePadBounce keeps the arp, or with chord the notes played together, on the next free pad. Then (or when the pad dialog is left)
+// the tool's menu m is back as it was, to make another one.
+func (a *App) onePadBounce(n int, chord bool, m *menu) {
 	var s formats.Sample
 	var err error
 	name := "arp"
@@ -402,6 +403,7 @@ func (a *App) onePadBounce(n int, chord bool) {
 		return
 	}
 	a.pickFreePad("Put it on a pad", n+1, func(to int) {
+		defer func() { a.menu = m }()
 		mb, err := a.lab.Decode(s.WAV(), "wav")
 		var meta struct{ ID int }
 		if err != nil || json.Unmarshal(mb, &meta) != nil {
@@ -416,8 +418,11 @@ func (a *App) onePadBounce(n int, chord bool) {
 		}
 		delete(a.pcm, to)
 		a.refresh()
-		a.say(fmt.Sprintf("the %s is on %s", name, a.label(to)), false)
+		a.say(fmt.Sprintf("the %s is on %s: change it and bounce again for another", name, a.label(to)), false)
 	})
+	if a.picker != nil {
+		a.picker.onCancel = func() { a.menu = m }
+	}
 }
 
 // onePadPattern puts the pitched copies on free pads (low to high) and writes the arp over them into the pattern.
