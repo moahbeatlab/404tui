@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -69,21 +68,6 @@ func (a *App) SplashText(r string) bool {
 	return false
 }
 
-// countFiles counts the files in a folder (not below it), for the dashboard.
-func countFiles(dir string) int {
-	des, err := os.ReadDir(dir)
-	if err != nil {
-		return 0
-	}
-	n := 0
-	for _, de := range des {
-		if !de.IsDir() {
-			n++
-		}
-	}
-	return n
-}
-
 func (a *App) drawSplash(g Gfx) {
 	s := a.splash
 	dy := max((Rows-MinRows)/2, 0) // a taller screen: everything a little lower
@@ -122,10 +106,9 @@ func (a *App) drawSplash(g Gfx) {
 		}
 	}
 	row(18, "project", fmt.Sprintf("%s   %d pads with samples", a.ProjectName(), used))
-	row(19, "samples", fmt.Sprintf("%s   %d in the folder", short2(a.Root, 30), countFiles(a.Root)))
-	row(20, "card", short2(filepath.Join(a.OutDir, cardFolder), w-15))
-	row(21, "autosave", a.autosaveSetting())
-	next := 22
+	row(19, "folder", short2(filepath.Join(a.OutDir, cardFolder), w-15))
+	row(20, "autosave", a.autosaveSetting())
+	next := 21
 	if Terminal { // the unit: found, or not (it is looked for all the time)
 		g.Text(lx, next+dy, "unit", cDim, false)
 		if a.link != nil {
