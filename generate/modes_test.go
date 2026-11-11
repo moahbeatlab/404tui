@@ -23,8 +23,11 @@ func TestEveryModeMakesValidPatterns(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := FamilySize
-			if mode == "arc" {
+			switch mode {
+			case "arc":
 				want = 8
+			case "single":
+				want = 1
 			}
 			if len(rs) != want {
 				t.Fatalf("%s %s: %d patterns, want %d", st.Name, mode, len(rs), want)

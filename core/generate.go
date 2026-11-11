@@ -52,7 +52,11 @@ func (a *App) generateArc(st generate.Style, mode string, bars int) {
 	}
 
 	var slots []int
-	for n := (bank+1)*16 + 1; n <= 160 && len(slots) < len(results); n++ {
+	from := (bank+1)*16 + 1
+	if mode == "single" { // one pattern: where the cursor is (the pattern in front, when it is empty), else the next free slot
+		from = max(a.pat, 1)
+	}
+	for n := from; n <= 160 && len(slots) < len(results); n++ {
 		if _, ok := a.patternDoc(n); !ok {
 			slots = append(slots, n)
 		}
@@ -71,6 +75,12 @@ func (a *App) generateArc(st generate.Style, mode string, bars int) {
 			a.say(r.Section.Name+": "+err.Error(), true)
 			return
 		}
+	}
+	if mode == "single" { // one pattern leaves the tempo of the project alone
+		a.commitUndo(pre, A, 0)
+		a.openPattern(slots[0])
+		a.say(fmt.Sprintf("%s: a new pattern in %s, seed %d (%d BPM style)", st.Name, a.label(slots[0]-1), seed, st.BPM), false)
+		return
 	}
 	bpm := float64(st.BPM)
 	if err := a.lab.SetTempo(bpm); err != nil {

@@ -8,6 +8,7 @@ import (
 
 // Modes say how a bank is filled.
 //
+//	single  one pattern, in the slot in front (or the next free one)
 //	family  one theme and what is done to it: the groove, then a variation of it in each slot, a build, a stop, a drop, a break, an outro
 //	random  sixteen patterns that have nothing to do with each other (each has the dice of its own)
 //	layers  the groove, then one layer added to the one before, up to the full style
@@ -15,23 +16,46 @@ import (
 //	fills   the groove, then the same groove with a different drum fill or roll at the end of each pattern (snare rolls that speed up into
 //	        32nds, flams, tom and kick rolls, hat triplets, clap stacks), to choose from
 //	arc     eight patterns along a tension curve: intro, groove, variation, build, stop, drop, break, outro (each with its own dice)
-var Modes = []string{"family", "random", "layers", "drift", "arc", "fills"}
+var Modes = []string{"single", "family", "random", "layers", "drift", "arc", "fills"}
+
+// ModeLabel is what a menu says for a mode: how many patterns it makes, and what they are.
+func ModeLabel(mode string) string {
+	switch mode {
+	case "single":
+		return "1 pattern"
+	case "family":
+		return "16 variations of one"
+	case "random":
+		return "16 different ones"
+	case "layers":
+		return "16, one layer more each"
+	case "drift":
+		return "16, each a small change"
+	case "arc":
+		return "8 from intro to outro"
+	case "fills":
+		return "16 drum fills on a groove"
+	}
+	return mode
+}
 
 // ModeInfo is a line about a mode.
 func ModeInfo(mode string) string {
 	switch mode {
+	case "single":
+		return "one new groove of the style, put in the pattern in front (or the next free one). The tempo of the project stays."
 	case "family":
-		return "variations of one pattern (16): the groove, then each slot changes one thing, then build, stop, drop, break, outro"
+		return "16 patterns that belong together: the groove first, then slots that change one thing each, then a build, a stop, a drop, a break and an outro. Fills the next free slots after the kit's bank."
 	case "random":
-		return "16 different patterns, each rolled on its own"
+		return "16 patterns that have nothing to do with each other, each rolled on its own, to pick from."
 	case "layers":
-		return "the groove, then one layer more in each slot, up to the full style"
+		return "the groove, then in each slot one layer more (ghost notes, percussion, hats, an echo...) up to the full style."
 	case "drift":
-		return "each pattern is a small change of the one before"
+		return "each pattern is a small change of the one before, so the bank slowly wanders away from the first."
 	case "arc":
-		return "8 patterns along a tension curve (intro to outro)"
+		return "8 patterns along a tension curve: intro, groove, variation, build, stop, drop, break, outro."
 	case "fills":
-		return "the groove and 15 drum fills and rolls on it, one in each slot"
+		return "the groove and 15 drum fills and rolls on it, one in each slot (snare rolls, flams, tom and kick rolls...)."
 	}
 	return ""
 }
@@ -39,6 +63,9 @@ func ModeInfo(mode string) string {
 // Generate fills a bank in a mode: bars is the length of each pattern, seed makes it (the same seed gives the same patterns).
 func Generate(mode string, st Style, bars int, seed int64, has func(formats.Lane) bool) ([]Result, error) {
 	switch mode {
+	case "single":
+		c := NewCtx(seed, has)
+		return []Result{Make(st, Section{Name: "Pattern", Kind: "groove", Energy: 0.45 + c.Rng.Float64()*0.4, Bars: bars}, seed, has)}, nil
 	case "", "family":
 		return Family(st, bars, seed, has), nil
 	case "random":
@@ -52,7 +79,7 @@ func Generate(mode string, st Style, bars int, seed int64, has func(formats.Lane
 	case "fills":
 		return Fills(st, bars, seed, has), nil
 	}
-	return nil, fmt.Errorf("mode %q: one of family, random, layers, drift, arc, fills", mode)
+	return nil, fmt.Errorf("mode %q: one of single, family, random, layers, drift, arc, fills", mode)
 }
 
 // Random is sixteen patterns each of its own energy and kind, rolled one by one.

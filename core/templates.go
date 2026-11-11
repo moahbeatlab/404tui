@@ -18,18 +18,18 @@ import (
 
 var barChoices = []string{"1 bar", "2 bars", "3 bars", "4 bars", "5 bars", "6 bars", "7 bars", "8 bars"}
 
-func (a *App) templatesMenu() {
-	m := &menu{title: "new pattern from a template"}
-	m.items = append(m.items, menuItem{label: "Blank pattern", vals: barChoices, val: 3, run: func(v int) { a.blankPattern(v + 1) }})
-	m.items = append(m.items, menuItem{label: "Generator kit: which pad plays kick, snare, hats...", run: func(int) { a.genKitMenu() }})
-	for _, st := range generate.Styles() {
-		st := st
-		m.items = append(m.items, menuItem{
-			label: fmt.Sprintf("Generate %s  %d BPM", st.Name, st.BPM),
-			vals:  generate.Modes, val: 0, // left and right choose how the bank is filled
-			run: func(v int) { a.generateArc(st, generate.Modes[v], max(st.Bars, 1)) },
-		})
+func modeLabels() []string {
+	out := make([]string, len(generate.Modes))
+	for i, m := range generate.Modes {
+		out[i] = generate.ModeLabel(m)
 	}
+	return out
+}
+
+func (a *App) templatesMenu() {
+	m := &menu{title: "new pattern"}
+	m.tabHead("TEMPLATES")
+	m.items = append(m.items, menuItem{label: "Blank pattern", vals: barChoices, val: 3, run: func(v int) { a.blankPattern(v + 1) }})
 	for _, g := range formats.GrooveTemplates() {
 		g := g
 		m.items = append(m.items, menuItem{
@@ -37,6 +37,36 @@ func (a *App) templatesMenu() {
 			vals:  barChoices, val: g.Bars() - 1,
 			run: func(v int) { a.fromTemplate(g, v+1) },
 		})
+	}
+	m.tabHead("GENERATOR")
+	m.items = append(m.items, menuItem{label: "Kit: which pad plays kick, snare, hats...", run: func(int) { a.genKitMenu() }})
+	m.head("a style: left and right choose what is made, A makes it")
+	for _, st := range generate.Styles() {
+		st := st
+		m.items = append(m.items, menuItem{
+			label: fmt.Sprintf("%s  %d BPM", st.Name, st.BPM),
+			vals:  modeLabels(), val: 0, // left and right choose what is made: one pattern, or a bank of them
+			run: func(v int) { a.generateArc(st, generate.Modes[v], max(st.Bars, 1)) },
+		})
+	}
+	m.tabify()
+	m.footH = 4 // what the choice at the cursor does, in words
+	m.foot = func(g Gfx, x, y, wc int) {
+		g.HRule(x+1, y, wc-2, cLine)
+		it := m.item()
+		text := "A makes the pattern; left and right choose how many bars"
+		switch {
+		case m.tab == 1 && len(it.vals) > 0:
+			mode := generate.Modes[it.val]
+			text = mode + ": " + generate.ModeInfo(mode)
+		case m.tab == 1:
+			text = "A: choose which pad plays the kick, the snare, the hats... (Enter on a voice picks the pad)"
+		}
+		for i, l := range wrap(text, wc-4) {
+			if i < 3 {
+				g.Text(x+2, y+1+i, l, cText, i == 0 && false)
+			}
+		}
 	}
 	a.menu = m
 }

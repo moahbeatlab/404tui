@@ -189,9 +189,36 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
 - `Choose a pattern (bank, then pattern)...`
 - `New pattern from a template...`
-  - **new pattern from a template** (a dialog):
+  - **new pattern** (a dialog):
+
+    *Page Templates*
+
     - `Blank pattern` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 4 bars
-    - `Generator kit: which pad plays kick, snare, hats...`
+    - `House  122-127` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Deep house  120-125` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Tech house  122-130` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 4 bars
+    - `Techno  128-135` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Hypnotic techno  135-140` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Hip-hop  85-95` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
+    - `Drum and bass  170-175` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Jungle  160-170` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Dubstep  138-142` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Trance  136-142` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
+    - `Psytrance  140-148` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Hard techno  145-160` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `UK garage  130-135` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Breakbeat  120-135` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Electro  120-135` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Trap  130-150` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Amapiano  108-115` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Reggaeton  90-100` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Disco  110-125` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
+    - `Footwork  155-165` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Son (martillo + tumbao)  90-110` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
+
+    *Page Generator*
+
+    - `Kit: which pad plays kick, snare, hats...`
       - **generator kit: which pad plays what** (a dialog):
 
         *Voices (The Pads Of Bank A)*
@@ -222,37 +249,19 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
         **
 
         - `Back to the names of the pads`
-    - `Generate House  124 BPM` — family / random / layers / drift / arc / fills; now family
-    - `Generate Tech house  126 BPM` — family / random / layers / drift / arc / fills; now family
-    - `Generate Techno  130 BPM` — family / random / layers / drift / arc / fills; now family
-    - `Generate Chicago house  122 BPM` — family / random / layers / drift / arc / fills; now family
-    - `Generate Deep house  120 BPM` — family / random / layers / drift / arc / fills; now family
-    - `Generate Minimal tech house  126 BPM` — family / random / layers / drift / arc / fills; now family
-    - `Generate Dub techno  124 BPM` — family / random / layers / drift / arc / fills; now family
-    - `Generate Industrial techno  140 BPM` — family / random / layers / drift / arc / fills; now family
-    - `Generate Acid  130 BPM` — family / random / layers / drift / arc / fills; now family
-    - `Generate 90s house  125 BPM` — family / random / layers / drift / arc / fills; now family
-    - `House  122-127` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Deep house  120-125` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Tech house  122-130` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 4 bars
-    - `Techno  128-135` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Hypnotic techno  135-140` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Hip-hop  85-95` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
-    - `Drum and bass  170-175` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Jungle  160-170` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Dubstep  138-142` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Trance  136-142` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
-    - `Psytrance  140-148` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Hard techno  145-160` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `UK garage  130-135` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Breakbeat  120-135` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Electro  120-135` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Trap  130-150` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Amapiano  108-115` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Reggaeton  90-100` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Disco  110-125` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
-    - `Footwork  155-165` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
-    - `Son (martillo + tumbao)  90-110` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
+
+    *A Style: Left And Right Choose What Is Made, A Makes It*
+
+    - `House  124 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Tech house  126 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Techno  130 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Chicago house  122 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Deep house  120 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Minimal tech house  126 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Dub techno  124 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Industrial techno  140 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Acid  130 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `90s house  125 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
 - `Loop only the bar in focus (Y+A)` — off / on; now off
 - `New pattern from the audible tracks`
 - `Bounce the tracks as you hear them to a pad`

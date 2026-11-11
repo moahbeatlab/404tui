@@ -105,3 +105,60 @@ func TestPadPickerHearsThePad(t *testing.T) {
 		t.Fatalf("X plays the pad and keeps the picker open: %d plays", au.Played)
 	}
 }
+
+// single: one pattern, in the pattern in front when that is empty, and the project's tempo stays
+func TestGenerateSingleMakesOnePattern(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.openPattern(20) // B4
+	tempo := a.tempo()
+	st, _ := generate.StyleByName("house")
+	a.generateArc(st, "single", 2)
+	if d, ok := a.patternDoc(20); !ok || len(d.Notes) == 0 {
+		t.Fatal("B4 has the new pattern")
+	}
+	if _, ok := a.patternDoc(21); ok {
+		t.Fatal("only one pattern is made")
+	}
+	if a.tempo() != tempo {
+		t.Fatal("the tempo of the project is not changed")
+	}
+	a.generateArc(st, "single", 2) // B4 is taken: the next one
+	if _, ok := a.patternDoc(21); !ok {
+		t.Fatal("the next free slot takes the second one")
+	}
+}
+
+// Esc in the kit menu goes back to the menu it was opened from, also after a pad was picked or the picker was cancelled
+func TestGeneratorKitEscGoesBack(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.templatesMenu()
+	tm := a.menu
+	tm.setTab(1)
+	tm.cur = 0 // the kit
+	a.menuKey(A)
+	if a.menu == nil || a.menu.parent != tm {
+		t.Fatal("the kit menu is opened from the templates menu")
+	}
+	a.menuKey(A) // Kick: the picker
+	if a.picker == nil {
+		t.Fatal("the picker is open")
+	}
+	a.pickerKey(B)
+	if a.picker != nil || a.menu == nil || a.menu.parent != tm {
+		t.Fatal("Esc in the picker goes back to the kit menu")
+	}
+	a.menuKey(A)
+	a.picker.onPick(3)
+	if a.menu == nil || a.menu.parent != tm {
+		t.Fatal("a pad picked: the kit menu again, with the templates behind it")
+	}
+	a.menuKey(B)
+	if a.menu != tm {
+		t.Fatal("Esc goes back to the templates")
+	}
+}

@@ -738,8 +738,8 @@ func TestTemplateMakesAPatternFromTheKit(t *testing.T) {
 		t.Fatal("the template list is not open")
 	}
 	keys(t, a, "]")
-	if a.menu.cur != 8 {
-		t.Fatalf("R1 pages the list: cursor %d", a.menu.cur)
+	if a.menu.tab != 1 || a.menu.tabs[1] != "GENERATOR" {
+		t.Fatalf("R1 turns to the next tab, the generator: tab %d", a.menu.tab)
 	}
 	a.Render()
 	a.menu = nil

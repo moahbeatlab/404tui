@@ -133,11 +133,16 @@ func (a *App) genKitMenuAt(cur0 int) {
 		if v, ok := set[l]; ok && v >= 0 {
 			start = v
 		}
+		back := func() { // the menu again, with the menu it came from behind it: Esc always goes one step back
+			a.genKitMenuAt(at)
+			a.menu.parent = m.parent
+		}
 		a.pickPad("the pad for "+name, start, true, func(pad int) {
 			set[l] = pad
 			a.saveSettings()
-			a.genKitMenuAt(at)
+			back()
 		})
+		a.picker.onCancel = back
 	}
 	for _, v := range genVoices {
 		v := v

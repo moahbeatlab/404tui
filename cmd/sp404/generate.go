@@ -22,7 +22,7 @@ const generateUsage = `usage: sp404 generate <project folder or zip> [options]
 
 Writes drum patterns into a copy of a project, played with the drum kit on one bank. The project itself is not changed.
 
-  -mode family|random|layers|drift|arc|fills
+  -mode single|family|random|layers|drift|arc|fills
         family  (default) variations of ONE pattern: slot 1 is the groove, each slot after it changes one thing (ghost notes, the percussion,
                 another hat, a polymeter, an echo, chance, a fill), then a build, a stop, a drop, a break and an outro: 16 patterns
         random  16 different patterns, each rolled on its own
