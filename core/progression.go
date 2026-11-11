@@ -242,3 +242,85 @@ func (a *App) progBounce(n int, m *menu) {
 		a.picker.onCancel = func() { a.menu = m }
 	}
 }
+
+// progMinor says whether progression p is in minor: its tonic chord (the one on 0) is minor.
+func progMinor(p int) bool {
+	for _, s := range progressions[p].steps {
+		if s.semi == 0 {
+			return s.q == 'm'
+		}
+	}
+	return false
+}
+
+// progList is the box of every progression (A or Enter on the Progression row of the chord tool), the minor ones and the major ones,
+// each with its chords in the key. The foot tells the feeling and the numerals of the one under the cursor; X (Space) hears it, A
+// takes it (picked is told), B goes back to the chord tool as it was.
+func (a *App) progList(n int, parent *menu, picked func()) {
+	o := a.notesOf(true)
+	l := &menu{title: "progressions in " + formats.PitchNames[o.key], parent: parent, footH: 3}
+	at := map[int]int{} // menu row -> progression
+	for _, minor := range []bool{true, false} {
+		if minor {
+			l.head("MINOR (ROOT IS THE MINOR KEY)")
+		} else {
+			l.head("MAJOR")
+		}
+		for i, p := range progressions {
+			if progMinor(i) != minor {
+				continue
+			}
+			i := i
+			at[len(l.items)] = i
+			if i == o.prog {
+				l.cur = len(l.items)
+			}
+			l.items = append(l.items, menuItem{label: p.name, vals: []string{strings.Join(progNames(i, o.key, o.color), " ")}, keepOpen: true,
+				run: func(int) {
+					if a.arpOn {
+						a.stop()
+					}
+					o.prog = i
+					a.menu = parent
+					picked()
+					a.say(fmt.Sprintf("%s (%s): %s", p.name, p.mood, strings.Join(progNames(i, o.key, o.color), " ")), false)
+				}})
+		}
+	}
+	l.foot = func(g Gfx, col, row, cols int) {
+		if i, ok := at[l.cur]; ok {
+			p := progressions[i]
+			g.Text(col+2, row+1, fit("Feels: "+p.mood, cols-4), cAmber, true)
+			g.Text(col+2, row+2, fit(p.roman, cols-4), cDim, false)
+		}
+	}
+	heard := -1 // the one that loops
+	l.onX = func() {
+		i, ok := at[l.cur]
+		if !ok {
+			return
+		}
+		if a.arpOn {
+			a.stop()
+			if heard == i { // Space on the one that loops stops it
+				heard = -1
+				return
+			}
+		}
+		was := o.prog
+		o.prog = i
+		a.progHear(n)
+		o.prog = was // only heard: A takes it
+		heard = -1
+		if a.arpOn {
+			heard = i
+		}
+	}
+	l.xHintOf = func() string { return onePadXHint(o.hold, "progression") }
+	l.onClose = func() {
+		if a.arpOn && o.progOn {
+			a.stop()
+		}
+	}
+	a.menu = l
+}

@@ -320,7 +320,9 @@ i VII VI V (dramatic, fateful), Harmonic noir i ii° V i (tense, cinematic), Gos
 I bVII IV I (bright, rocking), Neo soul turn IV III vi v I (smooth, romantic). Keys with sharps are written with sharps (F#m in A
 major). Chords:
 triads, sevenths (maj7, m7, the dominant V7), ninths (maj9, m9, 9) or elevenths (m11, 11, maj9#11: a major chord's eleventh is
-raised, the plain one clashes with the third). The menu shows the chords by name (Epic anthem: Am F C G). "Hear the
+raised, the plain one clashes with the third). The menu shows the chords by name (Epic anthem: Am F C G).
+A (Enter) on the Progression row opens a box of all of them, minor and major apart, with their chords in the key; its foot tells
+the feeling and the numerals of the one under the cursor, Space hears it, A takes it, B goes back as it was. "Hear the
 progression" plays it a chord a bar at the bank's tempo (with Hold it loops); "Bounce the progression to free pads" puts every
 chord on a run of empty pads, one chord a pad, named after the chord (Am_Pad, F_Pad...). Each chord's root stays within a fifth of the tonic, so the
 chords sit close together.

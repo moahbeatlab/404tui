@@ -215,3 +215,46 @@ func TestSpacePlaysTheProgressionOnItsRows(t *testing.T) {
 		t.Fatalf("Hear the progression switches the loop: on %v prog %v", a.arpOn, a.chordp.progOn)
 	}
 }
+
+func TestProgressionBox(t *testing.T) {
+	termOn(t)
+	a, au := newApp(t)
+	keys(t, a, kit)
+	a.go_(Pads)
+	a.openOnePadMenu(0, true)
+	chooseMenu(t, a, "Progression") // A (Enter) on the row
+	if a.menu == nil || !strings.HasPrefix(a.menu.title, "progressions in") {
+		t.Fatalf("the box of progressions: %+v", a.menu)
+	}
+	scr := screenStr(a)
+	for _, want := range []string{"MINOR", "MAJOR", "Epic anthem", "Feels: euphoric"} {
+		if !strings.Contains(scr, want) {
+			t.Fatalf("the box shows %q:\n%s", want, scr)
+		}
+	}
+	seekMenu(t, a, func(l string) bool { return l == "Hypnotic pulse" })
+	au.Played = 0
+	keys(t, a, "X") // Space hears it, without taking it
+	if au.Played != 1 || a.chordp.prog != 0 {
+		t.Fatalf("Space hears it: %d plays, prog %d", au.Played, a.chordp.prog)
+	}
+	keys(t, a, "A")
+	want := -1
+	for i, p := range progressions {
+		if p.name == "Hypnotic pulse" {
+			want = i
+		}
+	}
+	if a.menu == nil || a.menu.title != "chord from A1" || a.chordp.prog != want || menuItemNamed(t, a, "Progression").val != want {
+		t.Fatalf("A takes it and the chord tool is back: prog %d, want %d (%+v)", a.chordp.prog, want, a.menu)
+	}
+	if menuItemNamed(t, a, "Feels").vals[0] != "cold, hypnotic" {
+		t.Fatalf("Feels follows: %v", menuItemNamed(t, a, "Feels").vals)
+	}
+	chooseMenu(t, a, "Progression")
+	seekMenu(t, a, func(l string) bool { return l == "Pop anthem" })
+	keys(t, a, "B")
+	if a.menu == nil || a.menu.title != "chord from A1" || a.chordp.prog != want {
+		t.Fatalf("B goes back as it was: prog %d (%+v)", a.chordp.prog, a.menu)
+	}
+}

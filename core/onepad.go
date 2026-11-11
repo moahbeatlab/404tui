@@ -156,7 +156,7 @@ func (a *App) openOnePadMenu(n int, chord bool) {
 		m.foot = onePadKeyboard(onePadSemis(*o), o.from)
 		if chord {
 			if progI > 0 {
-				m.at(progI).vals = progLabels(o.key, o.color)
+				m.at(progI).vals, m.at(progI).val = progLabels(o.key, o.color), o.prog
 				m.at(moodI).vals = []string{progressions[o.prog].mood}
 			}
 			if a.arpOn {
@@ -231,6 +231,7 @@ func (a *App) openOnePadMenu(n int, chord bool) {
 			pr := progressions[v]
 			a.say(fmt.Sprintf("%s (%s): %s = %s", pr.name, pr.mood, pr.roman, strings.Join(progNames(v, o.key, o.color), " ")), false)
 		})
+		m.items[progI].run = func(int) { a.progList(n, m, redo) } // A (Enter): the box of every progression
 		moodI = len(m.items)
 		m.items = append(m.items, menuItem{label: "Feels", vals: []string{progressions[o.prog].mood}, keepOpen: true})
 		set("Chords", progColors, o.color, func(v int) { o.color = v })
