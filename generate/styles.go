@@ -188,6 +188,23 @@ func init() {
 			PercHits: [2]int{5, 7}, Fills: []string{"snare roll", "tom cascade", "kick stutter", "hat stop", "clap stack"},
 			Swing: [2]int{50, 54}, Ghosts: 0.2, Poly: 0.3, Echo: 0.3, Chance: 0.4, ClapNudge: -6,
 		},
+		Style{
+			Name: "90s house", Tempo: "122-128 BPM", BPM: 125, Bars: 2,
+			Lanes: []SL{
+				{Lane: formats.LaneKick, Hits: "X...X...X...X..."},
+				{Lane: formats.LaneOpenHat, Hits: "..X...X...X...X.", Gate: 170}, // the offbeat open hat of the 909 house records
+				{Lane: formats.LaneClosedHat, Hits: "x.x.x.x.x.x.x.x.", Until: 0.4, Swing: 56, Gate: 60},
+				{Lane: formats.LaneClosedHat, Hits: "xoxoxoxoxoxoxoxo | xoxoxoxoxoxoxoxx", From: 0.4, Swing: 58, Gate: 60},
+				{Lane: formats.LaneClap, Hits: "....X.......X..."},
+				{Lane: formats.LaneSnare, Hits: "....x.......x... | ....x.......x..g", From: 0.35},          // layered under the clap
+				{Lane: formats.LaneShaker, Hits: "o.o.o.o.o.o.o.o.", From: 0.5, Swing: 56, Gate: 60},        // the tambourine
+				{Lane: formats.LanePerc, Hits: "...x..x....x..x. | ..x...x....x...x", From: 0.6, Gate: 100}, // congas
+				{Lane: formats.LaneRide, Hits: "x.......x.......", From: 0.85, Gate: 200},
+			},
+			HatKinds: map[string]int{"8th": 3, "16th": 4, "euclid": 1},
+			PercHits: [2]int{4, 7}, Fills: []string{"snare roll", "clap stack", "ghost shuffle", "kick stutter", "tom cascade", "hat stop"},
+			Swing: [2]int{55, 60}, Ghosts: 0.3, Poly: 0.2, Echo: 0.2, Chance: 0.3, ClapNudge: 3,
+		},
 	)
 }
 

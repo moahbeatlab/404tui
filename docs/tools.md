@@ -231,6 +231,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Generate Dub techno  124 BPM` — family / random / layers / drift / arc / fills; now family
     - `Generate Industrial techno  140 BPM` — family / random / layers / drift / arc / fills; now family
     - `Generate Acid  130 BPM` — family / random / layers / drift / arc / fills; now family
+    - `Generate 90s house  125 BPM` — family / random / layers / drift / arc / fills; now family
     - `House  122-127` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
     - `Deep house  120-125` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
     - `Tech house  122-130` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 4 bars

@@ -83,6 +83,13 @@ func runGenerate(args []string) error {
 			return fmt.Errorf("-into: %w", err)
 		}
 	}
+	if room := 10 - intoBank; len(styles) > room && len(styles) > 1 { // a bank for each style: the styles that do not fit are left for another run
+		if room < 1 {
+			return fmt.Errorf("-into: no bank left from %c on", 'A'+intoBank)
+		}
+		fmt.Printf("%d styles do not fit in the banks from %c on: %s and the ones after it are left out (use -style NAME -into BANK for them)\n", len(styles)-room, 'A'+intoBank, styles[room].Name)
+		styles = styles[:room]
+	}
 	if *bars < 1 || *bars > formats.MaxStartBars {
 		return fmt.Errorf("-bars: 1 to %d", formats.MaxStartBars)
 	}
