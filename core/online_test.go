@@ -1659,3 +1659,28 @@ func TestPickASampleForAPadDoesNotAskForThePadAgain(t *testing.T) {
 		t.Fatalf("the sample is on pad %d, screen %s", pad, a.ScreenName())
 	}
 }
+
+// every slice of the slicer says what is set on it: R reversed, x4 a roll, +3 pitch, g80 gain, c50 chance
+func TestSlicesShowTheirMarkers(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	SetSize(160, 48)
+	keys(t, a, "A A D D R A") // a loop on A1
+	a.go_(Slice)
+	if a.sl == nil {
+		t.Skip("no sample on the pad")
+	}
+	keys(t, a, "Y+A") // auto slices
+	if len(a.sl.Slices) < 3 {
+		t.Skip("too few slices")
+	}
+	sg := &a.sl.Slices[0]
+	sg.Reverse, sg.Roll, sg.Pitch, sg.Gain, sg.Chance = true, 4, 3, 80, 50
+	txt := screenStr(a)
+	if !strings.Contains(txt, "1 R x4 +3") {
+		t.Fatalf("the first slice has its markers (as many as fit):\n%s", txt)
+	}
+	if strings.Contains(strings.Split(txt, "\n")[3], "x1") {
+		t.Fatal("a plain slice has none")
+	}
+}

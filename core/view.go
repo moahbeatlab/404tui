@@ -563,7 +563,38 @@ func (a *App) drawSlice(g Gfx) {
 			continue
 		}
 		g.Mark(2, 2, wc, wr, frac(sg.Start), cAmber)
-		g.Text(2+int(frac(sg.Start)*float64(wc))+1, 2, fmt.Sprint(i+1), cAmber, true)
+		tx := 2 + int(frac(sg.Start)*float64(wc)) + 1
+		num := fmt.Sprint(i + 1)
+		g.Text(tx, 2, num, cAmber, true)
+		// small markers after the number, as many as the slice has room for: R reversed, x4 a roll of 4, +3 pitch, g80 gain, c50 chance, ~ a fade
+		room := 2 + int(min(frac(sg.End), 1)*float64(wc)) - (tx + len(num) + 1)
+		mx := tx + len(num) + 1
+		put := func(tok string, col color.RGBA) {
+			if len(tok) > room {
+				return
+			}
+			g.Text(mx, 2, tok, col, false)
+			mx += len(tok) + 1
+			room -= len(tok) + 1
+		}
+		if sg.Reverse {
+			put("R", cWhite)
+		}
+		if sg.Roll > 1 {
+			put(fmt.Sprintf("x%d", sg.Roll), cGood)
+		}
+		if sg.Pitch != 0 {
+			put(fmt.Sprintf("%+d", sg.Pitch), cBlue)
+		}
+		if sg.Gain != 100 {
+			put(fmt.Sprintf("g%d", sg.Gain), cText)
+		}
+		if sg.Chance != 100 {
+			put(fmt.Sprintf("c%d", sg.Chance), cText)
+		}
+		if sg.Attack > 0 || sg.Release > 0 {
+			put("~", cText)
+		}
 	}
 	g.Mark(2, 2, wc, wr, min(max(frac(a.at), 0), 1), cWhite)
 
