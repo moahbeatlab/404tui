@@ -308,12 +308,17 @@ altered sevenths, elevenths, thirteenths), Octaves, Hold. Space (X) plays it onc
 again, and a change is heard at once. Bounce the chord to a new pad (named after the chord, first: Am7_Pad); after it (or when the pad dialog is left) the tool is back as
 it was, to make the next one.
 
-PROGRESSION: 13 common EDM progressions in the key of Root (the minor ones with Root as the minor tonic), each with a name and the
+PROGRESSION: 24 common EDM progressions in the key of Root (the minor ones with Root as the minor tonic), each with a name and the
 feeling it is known for (the row Feels): Epic anthem i VI III VII (euphoric, uplifting, a bit sad), Rise and fall i VII VI VII
 (driving, restless), Three-step climb i VI VII (hopeful, building up), Trance minor i iv VI V (dramatic, longing), Melodic house
 i iv VII III (wistful, warm), Dark progressive i VI iv v (dark, brooding), Big room minor i III VII VI (heroic, triumphant), Deep
 two-chord i iv (hypnotic, moody), Pop anthem I V vi IV (happy, euphoric), Fifties I vi IV V (nostalgic, sweet), Royal road IV V iii
-vi (bittersweet, emotional), Heartfelt vi IV I V (sad yet hopeful), Deep house jazz ii V I vi (smooth, sophisticated). Chords:
+vi (bittersweet, emotional), Heartfelt vi IV I V (sad yet hopeful), Deep house jazz ii V I vi (smooth, sophisticated), Tension and
+release vi IV V I (powerful, resolving), Wide open IV I vi V (uplifting, open), Sunset chill i VII v VI (chilled, laid-back), Dorian
+groove i IV (funky, soulful), Phrygian menace i bII (menacing, tense), Hypnotic pulse i v (cold, hypnotic), Andalusian descent
+i VII VI V (dramatic, fateful), Harmonic noir i ii° V i (tense, cinematic), Gospel lift I IV (joyful, soulful), Mixolydian anthem
+I bVII IV I (bright, rocking), Neo soul turn IV III vi v I (smooth, romantic). Keys with sharps are written with sharps (F#m in A
+major). Chords:
 triads, sevenths (maj7, m7, the dominant V7), ninths (maj9, m9, 9) or elevenths (m11, 11, maj9#11: a major chord's eleventh is
 raised, the plain one clashes with the third). The menu shows the chords by name (Epic anthem: Am F C G). "Hear the
 progression" plays it a chord a bar at the bank's tempo (with Hold it loops); "Bounce the progression to free pads" puts every

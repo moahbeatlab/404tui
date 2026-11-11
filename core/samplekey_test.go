@@ -118,6 +118,18 @@ func TestChordProgressions(t *testing.T) {
 	if got := progNames(12, 0, 1); fmt.Sprint(got) != "[Dm7 G7 Cmaj7 Am7]" {
 		t.Fatalf("sevenths: %v", got)
 	}
+	if got := progNames(8, 9, 0); fmt.Sprint(got) != "[A E F#m D]" {
+		t.Fatalf("A major is written with sharps: %v", got)
+	}
+	if got := progNames(0, 4, 0); fmt.Sprint(got) != "[Em C G D]" {
+		t.Fatalf("E minor: %v", got)
+	}
+	if got := progNames(0, 6, 0); fmt.Sprint(got) != "[F#m D A E]" {
+		t.Fatalf("F# minor: %v", got)
+	}
+	if got := progNames(0, 0, 0); fmt.Sprint(got) != "[Cm Ab Eb Bb]" {
+		t.Fatalf("C minor keeps flats: %v", got)
+	}
 	if got := progNames(0, 9, 2); fmt.Sprint(got) != "[Am9 Fmaj9 Cmaj9 Gmaj9]" {
 		t.Fatalf("ninths: %v", got)
 	}

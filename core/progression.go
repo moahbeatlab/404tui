@@ -37,6 +37,17 @@ var progressions = []struct {
 	{"Royal road", "bittersweet, emotional", "IV V iii vi", []progStep{{5, 'M'}, {7, 'D'}, {4, 'm'}, {9, 'm'}}},            // future bass, "royal road": F G Em Am
 	{"Heartfelt", "sad yet hopeful", "vi IV I V", []progStep{{9, 'm'}, {5, 'M'}, {0, 'M'}, {7, 'D'}}},                      // Am F C G in C major
 	{"Deep house jazz", "smooth, sophisticated", "ii V I vi", []progStep{{2, 'm'}, {7, 'D'}, {0, 'M'}, {9, 'm'}}},          // deep house with sevenths: Dm7 G7 Cmaj7 Am7
+	{"Tension and release", "powerful, resolving", "vi IV V I", []progStep{{9, 'm'}, {5, 'M'}, {7, 'D'}, {0, 'M'}}},        // festival and big room: Am F G C
+	{"Wide open", "uplifting, open", "IV I vi V", []progStep{{5, 'M'}, {0, 'M'}, {9, 'm'}, {7, 'D'}}},                      // F C Am G
+	{"Sunset chill", "chilled, laid-back", "i VII v VI", []progStep{{0, 'm'}, {10, 'M'}, {7, 'm'}, {8, 'M'}}},              // Am G Em F
+	{"Dorian groove", "funky, soulful", "i IV", []progStep{{0, 'm'}, {5, 'M'}}},                                            // deep and tech house: Am D
+	{"Phrygian menace", "menacing, tense", "i bII", []progStep{{0, 'm'}, {1, 'M'}}},                                        // dark techno: Am Bb
+	{"Hypnotic pulse", "cold, hypnotic", "i v", []progStep{{0, 'm'}, {7, 'm'}}},                                            // techno: Am Em
+	{"Andalusian descent", "dramatic, fateful", "i VII VI V", []progStep{{0, 'm'}, {10, 'M'}, {8, 'M'}, {7, 'D'}}},         // Am G F E
+	{"Harmonic noir", "tense, cinematic", "i ii° V i", []progStep{{0, 'm'}, {2, 'd'}, {7, 'D'}, {0, 'm'}}},                 // Am Bdim E Am
+	{"Gospel lift", "joyful, soulful", "I IV", []progStep{{0, 'M'}, {5, 'M'}}},                                             // classic house piano: C F
+	{"Mixolydian anthem", "bright, rocking", "I bVII IV I", []progStep{{0, 'M'}, {10, 'M'}, {5, 'M'}, {0, 'M'}}},           // C Bb F C
+	{"Neo soul turn", "smooth, romantic", "IV III vi v I", []progStep{{5, 'M'}, {4, 'D'}, {9, 'm'}, {7, 'm'}, {0, 'D'}}},   // future bass and lo-fi: Fmaj7 E7 Am7 Gm7 C7
 }
 
 // progColors are how rich the chords of a progression are. A major chord's eleventh is raised (#11): the plain one clashes with the
@@ -65,12 +76,35 @@ func progChord(q byte, color int) (int, string) {
 
 // progNames is the chords of progression p over the tonic key, as names (Am F C G).
 func progNames(p, key, color int) []string {
+	names := formats.PitchNames
+	if sharpKey(p, key) {
+		names = sharpNames
+	}
 	var out []string
 	for _, s := range progressions[p].steps {
 		_, suf := progChord(s.q, color)
-		out = append(out, formats.PitchNames[(key+s.semi)%12]+suf)
+		out = append(out, names[(key+s.semi)%12]+suf)
 	}
 	return out
+}
+
+// sharpNames are the pitch classes as a key with sharps writes them.
+var sharpNames = []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
+
+// sharpKey says whether the progression's key is written with sharps (G, D, A, E, B, F# major and their minors): A major has F#m,
+// not Gbm. A progression is minor when its tonic chord (the one on 0) is minor.
+func sharpKey(p, key int) bool {
+	major := key
+	for _, s := range progressions[p].steps {
+		if s.semi == 0 && s.q == 'm' {
+			major = (key + 3) % 12 // the relative major
+		}
+	}
+	switch major {
+	case 7, 2, 9, 4, 11, 6:
+		return true
+	}
+	return false
 }
 
 // progLabels are the progressions as the menu shows them, in the key.

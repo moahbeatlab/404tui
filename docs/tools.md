@@ -62,7 +62,7 @@ The settings of the pad under the cursor, written into the project at once. With
 
     *Progression (In The Root'S Key)*
 
-    - `Progression` — Epic anthem: Cm Ab Eb Bb, Rise and fall: Cm Bb Ab Bb, ... Deep house jazz: Dm G C Am (13 values); now Epic anthem: Cm Ab Eb Bb
+    - `Progression` — Epic anthem: Cm Ab Eb Bb, Rise and fall: Cm Bb Ab Bb, ... Neo soul turn: F E Am Gm C (24 values); now Epic anthem: Cm Ab Eb Bb
     - `Feels` — euphoric, uplifting, a bit sad; now euphoric, uplifting, a bit sad
     - `Chords` — triads / sevenths / ninths / elevenths; now triads
     - `Hear the progression (a chord a bar)`
