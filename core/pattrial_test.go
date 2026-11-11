@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"math/rand"
+	"strings"
 	"testing"
 
 	"github.com/moahbeatlab/404tui/formats"
@@ -219,4 +220,59 @@ func TestVariationIsInTheMenus(t *testing.T) {
 	a.templatesMenu()
 	a.menu.setTab(1)
 	menuItemNamed(t, a, variationLabel)
+}
+
+// undo and redo while rolling: the roll before comes back in the same slot, with its groove, and redo goes forward again
+func TestTrialUndoAndRedoGoThroughTheRolls(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.genRand = rand.New(rand.NewSource(4))
+	a.openPattern(20)
+	st, _ := generate.StyleByName("techno")
+	a.generateOne(st, "fill", 2)
+	first, _ := a.lab.PatternBytes(20)
+	menuItemNamed(t, a, "Another roll of the dice").run(0)
+	second, _ := a.lab.PatternBytes(20)
+	if bytes.Equal(first, second) {
+		t.Fatal("two rolls differ")
+	}
+	undo := len(a.undo)
+	keys(t, a, "Y+{")
+	if now, _ := a.lab.PatternBytes(20); !bytes.Equal(now, first) || a.menu == nil {
+		t.Fatalf("undo brings the first roll back and the dialog stays: %s", a.Message())
+	}
+	if len(a.undo) != undo {
+		t.Fatal("undoing a roll is not a step of the project")
+	}
+	keys(t, a, "Y+{")
+	if !strings.Contains(a.Message(), "nothing to undo") {
+		t.Fatalf("before the first roll there is nothing: %s", a.Message())
+	}
+	keys(t, a, "Y+}")
+	if now, _ := a.lab.PatternBytes(20); !bytes.Equal(now, second) {
+		t.Fatal("redo brings the second roll back")
+	}
+	keys(t, a, "Y+{")
+	// the groove of the first roll is back: only another fill keeps its first bar
+	menuItemNamed(t, a, "Only another fill, the groove stays").run(0)
+	_, pads, _ := a.generatorKit()
+	kick := int(pads[formats.LaneKick].Index())
+	a.lab.SetPatternBytes(21, first)
+	firstBar := func(n int) (out []uint32) {
+		for _, tk := range padTicks(a, n, kick) {
+			if tk < 1920 {
+				out = append(out, tk)
+			}
+		}
+		return
+	}
+	if !sameTicks(firstBar(20), firstBar(21)) {
+		t.Fatal("after undo, another fill goes on the groove of the roll that came back")
+	}
+	a.lab.SetPatternBytes(21, nil)
+	a.menuKey(B)
+	if a.trialUndo != nil {
+		t.Fatal("the dialog is closed: undo is the project's again")
+	}
 }

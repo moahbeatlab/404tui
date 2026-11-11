@@ -27,14 +27,26 @@ type patTrial struct {
 	startedLoop bool      // nothing played when the trial began: the dialog started the loop, and stops it
 	played      int       // the pattern the loop played before the trial (0: none)
 	label       string    // what the trial is, for undo
+	// the rolls since the dialog opened or the last keep, for undo and redo inside the dialog: at is the one in the pattern
+	hist      []trialRoll
+	at        int
+	onRestore func(state any) // puts the dialog's own state (the groove, the kind) back to a roll's
+}
+
+// trialRoll is one roll of the dice: the pattern, what it is and the dialog's state that made it.
+type trialRoll struct {
+	b     []byte
+	label string
+	state any
 }
 
 func (a *App) newPatTrial() *patTrial {
-	t := &patTrial{a: a, base: a.lab.Snapshot(), home: max(a.pat, 1)}
+	t := &patTrial{a: a, base: a.lab.Snapshot(), home: max(a.pat, 1), at: -1}
 	if a.seqOn {
 		t.played = a.playPat
 	}
 	a.toolBase = t.base // what the keys do from here on is a trial: the dialog commits it or throws it away
+	a.trialUndo = t.step
 	return t
 }
 
@@ -68,20 +80,68 @@ func (t *patTrial) put(b []byte, what string) bool {
 		}
 		t.slot = n
 	}
+	if !t.show(b, what) {
+		return false
+	}
+	t.hist = append(t.hist[:t.at+1], trialRoll{b: b, label: what})
+	t.at = len(t.hist) - 1
+	if _, ok := a.Audio.(looper); ok && !a.looping() {
+		a.startLoop()
+		t.startedLoop = a.seqOn
+	}
+	return true
+}
+
+// show writes a roll into the trial's pattern and puts it in front; the loop goes on with it.
+func (t *patTrial) show(b []byte, what string) bool {
+	a := t.a
 	if err := a.lab.SetPatternBytes(t.slot, b); err != nil {
 		a.say(err.Error(), true)
 		return false
 	}
 	t.pending, t.label = true, what
 	if a.seqOn {
-		a.playPat = t.slot // the loop goes on with the trial
+		a.playPat = t.slot
 	}
 	a.openPattern(t.slot)
-	if _, ok := a.Audio.(looper); ok && !a.looping() {
-		a.startLoop()
-		t.startedLoop = a.seqOn
-	}
 	return true
+}
+
+// remember keeps the dialog's state with the roll that was just put, so that undo brings both back.
+func (t *patTrial) remember(state any) {
+	if t.at >= 0 {
+		t.hist[t.at].state = state
+	}
+}
+
+// step is undo (or redo) inside the dialog: the roll before (or after) the one in the pattern comes back, with the state that made it.
+func (t *patTrial) step(redo bool) {
+	a := t.a
+	n := t.at - 1
+	if redo {
+		n = t.at + 1
+	}
+	if n < 0 || n >= len(t.hist) {
+		if redo {
+			a.say("nothing to redo: this is the last roll", false)
+		} else {
+			a.say("nothing to undo: this is the first roll (B throws the trial away)", false)
+		}
+		return
+	}
+	r := t.hist[n]
+	if !t.show(r.b, r.label) {
+		return
+	}
+	t.at = n
+	if t.onRestore != nil {
+		t.onRestore(r.state)
+	}
+	word := "undone"
+	if redo {
+		word = "redone"
+	}
+	a.say(fmt.Sprintf("roll %s: %s, roll %d of %d", word, r.label, n+1, len(t.hist)), false)
 }
 
 // keep makes the trial one undo step; the dialog goes on from there.
@@ -97,6 +157,7 @@ func (t *patTrial) keep() {
 	t.base = a.lab.Snapshot()
 	a.toolBase = t.base
 	t.home, t.pending = t.slot, false
+	t.hist, t.at = nil, -1 // what was kept is one undo step of the project; the rolls before it are gone
 	if !t.startedLoop {
 		t.played = t.slot
 	}
@@ -112,6 +173,7 @@ func (t *patTrial) drop() bool {
 		return false
 	}
 	t.pending = false
+	t.hist, t.at = nil, -1
 	if t.startedLoop && a.seqOn {
 		a.stop()
 	}
@@ -138,6 +200,7 @@ func (t *patTrial) close() {
 		a.stop()
 	}
 	a.toolBase = nil
+	a.trialUndo = nil
 }
 
 // ---- the generator's one pattern
@@ -178,8 +241,14 @@ func (a *App) generateOne(st generate.Style, mode string, bars int) {
 			return false
 		}
 		prev = &g
-		a.say(fmt.Sprintf("%s in %s, seed %d: a trial until it is kept", t.label, a.label(t.slot-1), seed), false)
+		t.remember(oneState{prev, seed})
+		a.say(fmt.Sprintf("%s in %s, seed %d: a trial until it is kept (u undoes a roll)", t.label, a.label(t.slot-1), seed), false)
 		return true
+	}
+	t.onRestore = func(s any) {
+		if st, ok := s.(oneState); ok {
+			prev, seed = st.prev, st.seed
+		}
 	}
 	if !roll(true) {
 		t.close()
@@ -202,6 +271,13 @@ func (a *App) generateOne(st generate.Style, mode string, bars int) {
 	}
 	m.onClose = t.close
 	a.menu = m
+}
+
+// oneState is what the generator's dialog needs of a roll to go on from it: the groove (for "only another fill" and the voices that stay)
+// and its seed.
+type oneState struct {
+	prev *generate.Pattern
+	seed int64
 }
 
 // ---- a variation of the pattern in front
@@ -371,7 +447,8 @@ func (a *App) variationMenu() {
 			return
 		}
 		if t.put(b, fmt.Sprintf("%s %s: %s", a.label(s.n-1), generate.VaryLabel(k), what)) {
-			a.say(fmt.Sprintf("%s, in %s: a trial until it is kept", t.label, a.label(t.slot-1)), false)
+			t.remember(kind)
+			a.say(fmt.Sprintf("%s, in %s: a trial until it is kept (u undoes a roll)", t.label, a.label(t.slot-1)), false)
 		}
 	}
 	labels := make([]string, len(generate.Variations))
@@ -390,6 +467,12 @@ func (a *App) variationMenu() {
 			if i < 2 {
 				g.Text(x+2, y+1+i, l, cText, false)
 			}
+		}
+	}
+	t.onRestore = func(s any) { // the kind of the roll that came back is the one shown
+		if k, ok := s.(int); ok {
+			kind = k
+			m.items[1].val = k
 		}
 	}
 	m.onClose = t.close

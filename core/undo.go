@@ -90,7 +90,11 @@ func (a *App) pressProject(k Key, repeat int) {
 		if a.toolBase != nil {
 			if repeat == 0 {
 				a.yUsed = true
-				a.say("a tool is open: Keep it commits, B throws the trial away", true)
+				if a.trialUndo != nil && a.menu != nil { // a dialog that rolls the dice: undo and redo go through its rolls
+					a.trialUndo(k == R2)
+				} else {
+					a.say("a tool is open: Keep it commits, B throws the trial away", true)
+				}
 			}
 			return
 		}
