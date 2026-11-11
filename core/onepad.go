@@ -219,7 +219,6 @@ func (a *App) openOnePadMenu(n int, chord bool) {
 			if !o.hold && a.arpOn {
 				a.stop()
 			}
-			m.xHint = onePadXHint(o.hold, what)
 		}})
 	if chord {
 		m.head("MAKE")
@@ -249,8 +248,21 @@ func (a *App) openOnePadMenu(n int, chord bool) {
 			a.stop()
 		}
 	}
-	m.onX = func() { a.onePadSpace(n, chord) }
-	m.xHint = onePadXHint(o.hold, what)
+	// X (Space) plays what the cursor is on: the progression on its rows, else the chord (or the arp)
+	onProg := func() bool { return chord && progI > 0 && m.cur >= progI-1 }
+	m.onX = func() {
+		if onProg() {
+			a.progHear(n)
+			return
+		}
+		a.onePadSpace(n, chord)
+	}
+	m.xHintOf = func() string {
+		if onProg() {
+			return onePadXHint(o.hold, "progression")
+		}
+		return onePadXHint(o.hold, what)
+	}
 	redo()
 	if !chord {
 		m.tabify()
@@ -284,8 +296,10 @@ func onePadXHint(hold bool, what string) string {
 func (a *App) onePadSpace(n int, chord bool) {
 	if a.arpOn {
 		a.stop()
-		a.say("stopped", false)
-		return
+		if !(chord && a.notesOf(true).progOn) { // the progression looped: the chord takes its place
+			a.say("stopped", false)
+			return
+		}
 	}
 	hold := a.notesOf(chord).hold
 	s, err := a.onePadSound(n, chord, hold)

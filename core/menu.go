@@ -16,7 +16,7 @@ type menu struct {
 	onClose func()                          // what B does besides closing the menu (a tool throws its trial away)
 	parent  *menu                           // the menu this one was opened from: B goes back to it, and B there closes
 	onX     func()                          // what X (Space on a keyboard) does in the menu, nil for nothing
-	xHint   string                          // what the hints call it
+	xHintOf func() string                   // what the hints call it
 	foot    func(g Gfx, col, row, cols int) // drawn under the items (a keyboard), footH rows high
 	footH   int                             // in rows
 	// tabs: the headings split the menu into pages (as the pad panel), L1 and R1 turn them. items is the page in front;

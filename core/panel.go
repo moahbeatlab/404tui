@@ -208,7 +208,11 @@ func (a *App) rawHints() (plain, shift []hint) {
 			if Terminal {
 				x = "Space"
 			}
-			hs = append(hs, hint{x, a.menu.xHint})
+			what := ""
+			if a.menu.xHintOf != nil {
+				what = a.menu.xHintOf()
+			}
+			hs = append(hs, hint{x, what})
 		}
 		if a.menu.tabs != nil {
 			hs = append(hs, hint{"L1 R1", "tab"})

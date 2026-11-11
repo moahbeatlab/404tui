@@ -140,3 +140,40 @@ func TestChordProgressions(t *testing.T) {
 		t.Fatalf("the pads are named after their chords: %d", found)
 	}
 }
+
+func TestSpacePlaysTheProgressionOnItsRows(t *testing.T) {
+	termOn(t)
+	a, au := newApp(t)
+	keys(t, a, kit)
+	a.go_(Pads)
+	a.openOnePadMenu(0, true)
+	hold := menuItemNamed(t, a, "Hold")
+	hold.val = 1
+	hold.onChange(1)
+	keys(t, a, "X") // Space on the chord rows: the chord loops
+	chordLoop := au.Loops
+	if !a.arpOn || a.chordp.progOn {
+		t.Fatalf("the chord loops: %v %v", a.arpOn, a.chordp.progOn)
+	}
+	if !seekMenu(t, a, func(l string) bool { return l == "Progression" }) {
+		t.Fatal("no Progression row")
+	}
+	if !strings.Contains(screenStr(a), "loop progression") {
+		t.Fatal("on the progression rows the hints say Space plays the progression")
+	}
+	keys(t, a, "X") // Space there: the progression takes the chord's place
+	if !a.arpOn || !a.chordp.progOn || au.Loops != chordLoop+1 {
+		t.Fatalf("the progression loops instead: on %v prog %v loops %d", a.arpOn, a.chordp.progOn, au.Loops)
+	}
+	keys(t, a, "X")
+	if a.arpOn {
+		t.Fatal("Space again stops it")
+	}
+	// from the chord loop, "Hear the progression" switches too
+	keys(t, a, "U U U U U U") // back up to the chord rows
+	keys(t, a, "X")
+	chooseMenu(t, a, "Hear the progression")
+	if !a.arpOn || !a.chordp.progOn {
+		t.Fatalf("Hear the progression switches the loop: on %v prog %v", a.arpOn, a.chordp.progOn)
+	}
+}

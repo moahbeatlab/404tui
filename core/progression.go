@@ -122,8 +122,10 @@ func (a *App) progSound(n int) (formats.Sample, error) {
 func (a *App) progHear(n int) {
 	if a.arpOn {
 		a.stop()
-		a.say("stopped", false)
-		return
+		if a.notesOf(true).progOn { // the chord looped: the progression takes its place
+			a.say("stopped", false)
+			return
+		}
 	}
 	s, err := a.progSound(n)
 	if err != nil {
