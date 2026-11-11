@@ -342,7 +342,7 @@ func (a *App) drawPanel(g Gfx) {
 			if cw-1 >= 8 {
 				n = fmt.Sprintf("%d %s", i+1, n)
 			}
-			g.Text(cx+(cw-1-len(n))/2, cy, n, fg, sc == a.scr)
+			g.Text(cx+max(min(2, (cw-1-len(n))/2), 0), cy, n, fg, sc == a.scr) // the names start at the same column in every button
 		}
 	} else {
 		for i, n := range screenNames {
@@ -480,14 +480,18 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 			g.Badge(bx, row(1), sw.ch, on)
 			bx += 2
 		}
-		g.Fill(x, row(2), w, 2, cPanel2)
+		wh := 2 // the shape of the sample: taller on a computer when the panel has the room
+		if Terminal && y1-row(0) >= 24 {
+			wh = 4
+		}
+		g.Fill(x, row(2), w, wh, cPanel2)
 		if id, ok := a.padSampleSoft(n); ok {
-			a.wave(g, id, 0, p.Frames, x, row(2), w, 2, cAmber)
+			a.wave(g, id, 0, p.Frames, x, row(2), w, wh, cAmber)
 		} else if a.live != nil && a.lab.IsRemote(n) {
 			g.Text(x+1, row(2), "fetching from the unit...", cDim, false)
 		}
 		if Terminal { // values, no faders: the numbers say it
-			a.drawPadInfo(g, x, row(5), w, y1, n)
+			a.drawPadInfo(g, x, row(3+wh), w, y1, n)
 			return
 		}
 		get := func(id byte, def int32) int32 { return a.padValue(n, id, def) }
