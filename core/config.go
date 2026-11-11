@@ -360,6 +360,9 @@ func (a *App) cfgItems() []cfgItem {
 			}
 			a.say("recording and the level meter use "+map[bool]string{true: "ffmpeg or sox", false: "the program's own capture"}[a.set.NoNative], false)
 		}},
+		{label: "Terminal cast (Ctrl-T) records the audio", value: func(a *App) string { return onOff(!a.set.CastNoAudio) }, hint: "A or < > switch",
+			change: func(a *App, by int) { a.set.CastNoAudio = !a.set.CastNoAudio; a.saveSettings() },
+			edit:   func(a *App) { a.set.CastNoAudio = !a.set.CastNoAudio; a.saveSettings() }},
 		{label: "Recorder", value: func(a *App) string { return a.recorderLine() }, hint: ""},
 		{head: "PAD CODES ON THE UNIT"},
 		{label: "Live mode (the PERF screen)", value: func(a *App) string { return codeText(a.liveCode()) }, hint: "A edits",
@@ -406,7 +409,9 @@ func (a *App) cfgItems() []cfgItem {
 		)
 	}
 	if !Terminal { // the handheld does not record or meter: only a computer has this choice
-		items = slices.DeleteFunc(items, func(it cfgItem) bool { return it.label == "Record and meter with" })
+		items = slices.DeleteFunc(items, func(it cfgItem) bool {
+			return it.label == "Record and meter with" || strings.HasPrefix(it.label, "Terminal cast")
+		})
 	}
 	_ = rule
 	if Terminal { // there is no PERF screen on a computer: its pad code has nothing to start

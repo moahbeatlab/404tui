@@ -1,5 +1,13 @@
 # TODO
 
+## Remove or refactor the classic program (`tui/`, bubbletea)
+
+The program people use is `platform/terminal` on top of `core` (the same screens as the handheld and the web page). The older
+bubbletea program in `tui/` (Files tree, Perform, Slicer, its own views) is the "classic" one: remove it, or move what is only
+there (and still wanted) into `core`. Look at what `sp404` starts by default, what `-classic` or similar flags still reach it,
+the docs that describe it (`docs/ui.md`, screenshots), and its large test suite (`tui/tui_test.go`, one test already fails
+without a unit: `TestRawMIDIBytesDriveARunningProgram`). The first scripted terminal cast was made against `tui/` by mistake.
+
 ## Record a tmux-based session on a real device
 
 Goal: a replayable recording of 404tui driving a real SP-404MKII, to show the workflow

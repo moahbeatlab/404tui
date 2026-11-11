@@ -32,6 +32,7 @@ type settings struct {
 	Buses         *app.BusRule `json:"buses,omitempty"`
 	RecordDir     string       `json:"record_dir,omitempty"`
 	RecordDevice  string       `json:"record_device,omitempty"`
+	CastNoAudio   bool         `json:"cast_no_audio,omitempty"` // a terminal cast without the unit's audio
 	LiveCode      string       `json:"live_code,omitempty"`
 	RecCode       string       `json:"rec_code,omitempty"`
 	MidiPort      string       `json:"midi_port,omitempty"`

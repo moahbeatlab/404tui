@@ -1,5 +1,10 @@
 # Changes
 
+## Unreleased
+
+- Terminal cast: Ctrl-T (or F10) records the keys and the screen of the terminal program (and the unit's audio, unless Config says no) as a recording of its own, with no MIDI or pattern events; Ctrl-R stays the music recording. `sp404 replay` shows such a take as the terminal with the keys as caps. The title bar shows CAST while it runs.
+- The replay page fits the terminal into the page (the panel is as wide as the terminal; the letters are never stretched by more than 8%).
+
 ## 0.1.3 (2026-11-09)
 
 The replay page gets a new look.

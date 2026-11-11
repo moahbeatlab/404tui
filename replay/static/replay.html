@@ -490,9 +490,115 @@ function atIndex(list, T) {
 }
 const push = (map, key, v) => { if (!map.has(key)) map.set(key, []); map.get(key).push(v); };
 
+
+// ---- the terminal cast: the screen of the terminal program as it was drawn, and the keys that were pressed
+let TF = [], TK = []; // TF: {t, lines} each time the screen changed (every one a whole screen); TK: {t, key}
+function buildTerm(timed) {
+  TF = []; TK = [];
+  let cur = null;
+  for (const e of timed) {
+    if (e.k === "key") TK.push({ t: e.t, key: e.key });
+    else if (e.k === "screen") {
+      if (e.lines) cur = e.lines.slice(); else if (cur && e.d) { cur = cur.slice(); for (const k in e.d) cur[+k] = e.d[k]; } else continue;
+      TF.push({ t: e.t, lines: cur });
+    }
+  }
+}
+const termOn = () => TF.length > 0;
+const ANSI16 = ["#1c1c1c", "#e5534b", "#57d38c", "#f0b429", "#5aa7ff", "#c678dd", "#4fd1c5", "#d4d4d8", "#6b6b73", "#ff7a72", "#7ee6a8", "#ffd166", "#8cc4ff", "#dda0ee", "#7fe8dd", "#ffffff"];
+function ansi256(n) {
+  if (n < 16) return ANSI16[n];
+  if (n >= 232) { const v = 8 + (n - 232) * 10; return "rgb(" + v + "," + v + "," + v + ")"; }
+  n -= 16; const q = [0, 95, 135, 175, 215, 255]; return "rgb(" + q[Math.floor(n / 36)] + "," + q[Math.floor(n / 6) % 6] + "," + q[n % 6] + ")";
+}
+// a line of the screen as runs of one style: [{s, fg, bg, bold, dim}]
+const RUNCACHE = new Map();
+function ansiRuns(line) {
+  let r = RUNCACHE.get(line); if (r) return r;
+  r = []; let st = { fg: null, bg: null, bold: false, dim: false, rev: false }, buf = "", i = 0;
+  const flush = () => { if (buf) { const rv = st.rev; r.push({ s: buf, fg: rv ? st.bg || "#0c0c0e" : st.fg, bg: rv ? st.fg || "#d4d4d8" : st.bg, bold: st.bold, dim: st.dim }); buf = ""; } };
+  while (i < line.length) {
+    const c = line[i];
+    if (c === "\x1b" && line[i + 1] === "[") {
+      let j = i + 2; while (j < line.length && !/[@-~]/.test(line[j])) j++;
+      if (line[j] === "m") {
+        flush(); const p = line.slice(i + 2, j).split(";").map(x => x === "" ? 0 : +x);
+        for (let k = 0; k < p.length; k++) {
+          const v = p[k];
+          if (v === 0) st = { fg: null, bg: null, bold: false, dim: false, rev: false };
+          else if (v === 1) st.bold = true; else if (v === 2) st.dim = true; else if (v === 22) st.bold = st.dim = false; else if (v === 7) st.rev = true; else if (v === 27) st.rev = false;
+          else if (v >= 30 && v <= 37) st.fg = ANSI16[v - 30]; else if (v >= 90 && v <= 97) st.fg = ANSI16[v - 90 + 8]; else if (v === 39) st.fg = null;
+          else if (v >= 40 && v <= 47) st.bg = ANSI16[v - 40]; else if (v >= 100 && v <= 107) st.bg = ANSI16[v - 100 + 8]; else if (v === 49) st.bg = null;
+          else if ((v === 38 || v === 48) && p[k + 1] === 2) { const col = "rgb(" + p[k + 2] + "," + p[k + 3] + "," + p[k + 4] + ")"; if (v === 38) st.fg = col; else st.bg = col; k += 4; }
+          else if ((v === 38 || v === 48) && p[k + 1] === 5) { const col = ansi256(p[k + 2]); if (v === 38) st.fg = col; else st.bg = col; k += 2; }
+        }
+      }
+      i = j + 1; continue;
+    }
+    buf += c; i++;
+  }
+  flush(); if (RUNCACHE.size > 4000) RUNCACHE.clear(); RUNCACHE.set(line, r); return r;
+}
+const KEYNAMES = { " ": "Space", enter: "Enter", tab: "Tab", "shift+tab": "Shift Tab", esc: "Esc", backspace: "Backspace", delete: "Del", up: "↑", down: "↓", left: "←", right: "→", pgup: "PgUp", pgdown: "PgDn", home: "Home", end: "End" };
+function keyLabel(k) {
+  if (KEYNAMES[k]) return KEYNAMES[k];
+  const m = k.match(/^((?:ctrl|alt|shift)\+)+(.+)$/);
+  if (m) return k.split("+").map(x => KEYNAMES[x] || (x.length === 1 ? x.toUpperCase() : x[0].toUpperCase() + x.slice(1))).join(" ");
+  return k.length === 1 ? k : k[0].toUpperCase() + k.slice(1);
+}
+const TERM_BG = "#0c0c0e";
+function drawTerminal(T) {
+  const i = atIndex(TF, T), top = VERT ? 108 : 78, bot = H - (VERT ? 190 : 120), padx = VERT ? 24 : 40;
+  const aw = W - 2 * padx, ah = bot - top;
+  if (i < 0) { panel(padx - 12, top - 8, aw + 24, ah + 16); text("the terminal starts here", W / 2, (top + bot) / 2, COL.dim, 26, false, "center"); return; }
+  const lines = TF[i].lines, rows = lines.length, cols = Math.max(80, ...lines.map(l => l.replace(/\x1b\[[0-9;]*[@-~]/g, "").length));
+  g.font = "100px " + TERM_FONT; const cw1 = g.measureText("M").width / 100; // the width of a cell for a font of 1 px
+  let px = Math.min(aw / (cols * cw1), ah / (rows * 1.22)); px = Math.floor(px * 2) / 2;
+  const cw0 = cw1 * px, lh = px * 1.22, oy = top + (ah - rows * lh) / 2;
+  const cw = Math.min(Math.max(cw0, aw / cols), cw0 * 1.08), sx = cw / cw0; // the cells may be a little wider to fill the width, not more: letters stay letters
+  const tw = cols * cw, ox = padx + (aw - tw) / 2; // the panel is as wide as the terminal
+  panel(ox - 12, oy - 8, tw + 24, rows * lh + 16);
+  g.save(); g.beginPath(); g.roundRect(ox - 12, oy - 8, tw + 24, rows * lh + 16, 12); g.clip(); rect(ox - 12, oy - 8, tw + 24, rows * lh + 16, TERM_BG);
+  g.textBaseline = "alphabetic"; g.textAlign = "left";
+  for (let y = 0; y < rows; y++) {
+    let x = 0;
+    for (const r of ansiRuns(lines[y])) {
+      const n = [...r.s].length;
+      if (r.bg) { const x0 = Math.round(ox + x * cw), y0 = Math.round(oy + y * lh); rect(x0, y0, Math.round(ox + (x + n) * cw) - x0, Math.round(oy + (y + 1) * lh) - y0, r.bg); } // whole pixels: no seams between the cells
+      g.fillStyle = r.fg || "#d4d4d8"; g.globalAlpha = r.dim ? 0.55 : 1; g.font = (r.bold ? "bold " : "") + px + "px " + TERM_FONT;
+      g.save(); g.translate(ox, 0); g.scale(sx, 1);
+      let k = 0; for (const ch of r.s) { if (ch !== " ") g.fillText(ch, (x + k) * cw0, oy + y * lh + px * 0.92); k++; }
+      g.restore(); g.globalAlpha = 1; x += n;
+    }
+  }
+  g.restore();
+  drawKeyCaps(T);
+}
+const TERM_FONT = "ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace";
+const KEY_SPAN = 1.6;
+function drawKeyCaps(T) { // the keys that were pressed lately, as caps at the bottom: the newest pops, they all fade
+  let j = atIndex(TK, T); const show = [];
+  while (j >= 0 && show.length < 7 && T - TK[j].t < KEY_SPAN) show.unshift(TK[j--]);
+  if (!show.length) return;
+  const px = VERT ? 46 : 34, hgt = px * 1.9, gap = 14, y = H - (VERT ? 170 : 104);
+  g.font = FONT(px, true); g.textAlign = "center"; g.textBaseline = "alphabetic";
+  const items = show.map(e => { const s = keyLabel(e.key); return { e, s, w: Math.max(hgt, g.measureText(s).width + px * 1.2) }; });
+  let x = (W - (items.reduce((a, b) => a + b.w, 0) + gap * (items.length - 1))) / 2;
+  items.forEach((it, n) => {
+    const age = T - it.e.t, newest = n === items.length - 1, fade = clamp((KEY_SPAN - age) / 0.5, 0, 1), pop = clamp(age / 0.12, 0, 1), sc = newest ? 0.86 + 0.14 * easeOut(pop) + 0.06 * (1 - pop) : 1;
+    g.save(); g.globalAlpha = fade; g.translate(x + it.w / 2, y + hgt / 2); g.scale(sc, sc);
+    g.shadowColor = "rgba(0,0,0,.5)"; g.shadowBlur = 16; g.shadowOffsetY = 5;
+    rrect(-it.w / 2, -hgt / 2, it.w, hgt, 12, newest ? COL.amber : "#2c2c33"); g.shadowColor = "transparent";
+    if (!newest) { g.strokeStyle = "#47474f"; g.lineWidth = 2; g.beginPath(); g.roundRect(-it.w / 2, -hgt / 2, it.w, hgt, 12); g.stroke(); }
+    g.fillStyle = newest ? "#151100" : COL.text; g.fillText(it.s, 0, px * 0.36); g.restore();
+    x += it.w + gap;
+  });
+}
+
 function prepare(events, analysis, cuesIn, adoptedIn) {
   EV = events; AN = analysis;
   const timed = EV.filter(e => e.t !== undefined);
+  buildTerm(timed);
   const ps = [...timed].reverse().find(e => e.k === "project"); // the last: the unit's own project when it was read
   if (ps) PROJ = ps.data;
   for (const p of PROJ.pads || []) padInfo.set(p.n, p);
@@ -1653,6 +1759,7 @@ function drawFrame(audioTime) {
   drawBackground();
   if (CAM.layer === "behind") drawCamera(audioTime);
   drawHeader(T, audioTime);
+  if (termOn()) { drawTerminal(T); drawCaption(audioTime); drawChapter(audioTime); drawChapterCard(audioTime); drawBrand(); return; }
   if (splitOn()) { drawSplit(T, audioTime); drawChapter(audioTime); drawChapterCard(audioTime); drawBrand(); return; }
   for (const [id, fn] of [["pads", drawPads], ["pattern", drawPattern], ["fx", drawFx], ["meter", drawMeter], ["feed", drawFeed]]) {
     const a = panelAlpha(id, audioTime); if (a <= 0.001) continue;

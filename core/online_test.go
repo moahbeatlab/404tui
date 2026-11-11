@@ -1617,7 +1617,14 @@ func TestSearchResultShowsItsFolder(t *testing.T) {
 	a.openSearch()
 	a.TypeText("c1")
 	txt := screenStr(a)
-	if !strings.Contains(txt, "FOLDER") || !strings.Contains(txt, filepath.FromSlash("/samples/bass")) {
+	// the panel is the right column; a long folder (a temp dir on Windows) wraps there, so its lines are read as one
+	var panel strings.Builder
+	for _, l := range strings.Split(txt, "\n") {
+		if i := strings.LastIndex(l, "│"); i >= 0 {
+			panel.WriteString(strings.TrimSpace(l[i+len("│"):]))
+		}
+	}
+	if !strings.Contains(txt, "FOLDER") || !strings.Contains(panel.String(), filepath.FromSlash("/samples/bass")) {
 		t.Fatalf("the panel names the whole folder:\n%s", txt)
 	}
 	if strings.Contains(txt, "bass~") {

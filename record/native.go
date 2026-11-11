@@ -303,3 +303,41 @@ func (b nativeFirst) StartMeter(device string) (*Meter, error) {
 func (b nativeFirst) StartRing(device string, seconds int) (*Ring, error) {
 	return b.exec.StartRing(device, seconds)
 }
+
+// WriteSilence writes a WAV of the given length with nothing in it (the cast of a terminal without audio plays along with it).
+func WriteSilence(path string, d time.Duration) error {
+	n := int64(d.Seconds()*wavRate) * 2 * wavBytes
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(wavHeader(n)); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Truncate(44 + n); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+// WriteStereo writes interleaved 16-bit stereo frames (at 48 kHz) as a WAV of the same kind the recorder writes.
+func WriteStereo(path string, pcm []int16) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	w := bufio.NewWriterSize(f, 64<<10)
+	w.Write(wavHeader(int64(len(pcm)) * wavBytes))
+	var b [3]byte
+	for _, v := range pcm {
+		b[0], b[1], b[2] = 0, byte(v), byte(v>>8) // 16 bits in the top of 24
+		w.Write(b[:])
+	}
+	if err := w.Flush(); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
