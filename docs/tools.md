@@ -220,6 +220,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
     - `Kit: which pad plays kick, snare, hats...`
       - **generator kit: which pad plays what** (a dialog):
+        - `Bank` — auto: A, bank A, ... bank J (11 values); now auto: A
 
         *Voices (The Pads Of Bank A)*
 

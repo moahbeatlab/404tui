@@ -19,22 +19,31 @@ import (
 
 // kitBank is the first bank whose pads, by their names, hold a kick, and the pad of each voice in it.
 func (a *App) kitBank() (int, map[formats.Lane]proto.PadIndex) {
-	for bank := 0; bank < 10; bank++ {
-		var rows []app.PadRow
-		for i := bank * 16; i < bank*16+16; i++ {
-			idx, ok := proto.NewPadIndex(uint16(i))
-			if !ok {
-				continue
-			}
-			rows = append(rows, app.PadRow{Pad: idx, HasSample: a.info.Pads[i].File, Name: a.info.Pads[i].Name})
+	if b := a.set.GenKit.Bank; b >= 1 && b <= 10 { // the bank chosen in Generator kit: its pads by their names
+		pads := app.GuessRoles(a.padRows(b - 1))
+		if pads == nil {
+			pads = map[formats.Lane]proto.PadIndex{}
 		}
-		if pads := app.GuessRoles(rows); len(pads) > 0 {
+		return b - 1, pads
+	}
+	for bank := 0; bank < 10; bank++ {
+		if pads := app.GuessRoles(a.padRows(bank)); len(pads) > 0 {
 			if _, ok := pads[formats.LaneKick]; ok {
 				return bank, pads
 			}
 		}
 	}
 	return -1, nil
+}
+
+// autoKitBank is the first bank with a pad named like a kick, -1 when there is none.
+func (a *App) autoKitBank() int {
+	for bank := 0; bank < 10; bank++ {
+		if _, ok := app.GuessRoles(a.padRows(bank))[formats.LaneKick]; ok {
+			return bank
+		}
+	}
+	return -1
 }
 
 func (a *App) generateArc(st generate.Style, mode string, bars int) {
