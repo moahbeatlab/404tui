@@ -27,9 +27,12 @@ check() { if wait_for "$2"; then ok "$1"; else bad "$1: expected '$2'"; fi; }
 checkre() { for ((i=0;i<60;i++)); do cap | grep -qE -- "$2" && { ok "$1"; return; }; sleep 0.1; done; bad "$1: expected /$2/"; }
 absent() { if cap | grep -qF -- "$2"; then bad "$1: did not expect '$2'"; else ok "$1"; fi; }
 start() { # start cols rows [extra args]
-  local c=$1 r=$2; shift 2
+  local c=$1 r=$2 i; shift 2
   tm kill-session -t $S 2>/dev/null
-  tm new-session -d -s $S -x $c -y $r "sp404 -audio silent -samples $W/samples -out $W/out $* 2>$W/stderr.txt; echo EXIT=\$? >$W/exit.txt; sleep 60"
+  # the last session gone, the server quits: wait for it, or the new session goes down with it ("server exited unexpectedly")
+  for ((i=0;i<30;i++)); do tm ls >/dev/null 2>&1 || break; sleep 0.1; done
+  local cmd="sp404 -audio silent -samples $W/samples -out $W/out $* 2>$W/stderr.txt; echo EXIT=\$? >$W/exit.txt; sleep 60"
+  tm new-session -d -s $S -x $c -y $r "$cmd" || { sleep 0.5; tm new-session -d -s $S -x $c -y $r "$cmd"; }
   tm set -g status off
   rm -f $W/exit.txt
 }

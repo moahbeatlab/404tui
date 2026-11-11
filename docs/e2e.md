@@ -1,6 +1,6 @@
 # End-to-end tests of the computer's program
 
-`platform/terminal/e2e/run.sh` builds `sp404` for Linux and runs two scripts, `e2e.sh` (UC01-UC13) and `e2e-tools.sh` (the advanced tools, UC14-UC17). It starts the program **as a user would**: in a real terminal (tmux, 150x44), in an Ubuntu
+`platform/terminal/e2e/run.sh` builds `sp404` for Linux and runs three scripts, `e2e.sh` (UC01-UC13 and UC18), `e2e-tools.sh` (the advanced tools, UC14-UC17) and `e2e-new.sh` (the features of 0.2.0, UC19-UC23). It starts the program **as a user would**: in a real terminal (tmux, 150x44), in an Ubuntu
 container, against a copy of the real project *Construction Kits House 01* (71 pads, 98 MB, 124 BPM, two-bar patterns) and its real
 samples. It plays keys, reads what is on the screen and keeps every step as text, as colours and as a picture in
 `platform/terminal/e2e/out/` (the table below names the pictures). The run is `-audio silent`: everything works as if sound were
@@ -32,6 +32,12 @@ Last run (2026-11-03): **205 checks, 205 passed, 0 failed**, 17 use cases (126 i
 | UC15 | Patterns | **Double** makes the pattern four bars and **Halve** two again; the tempo of the bank goes up and down by one; **New pattern from a template** lists the templates with their tempo, House makes a new pattern in the next free slot with named tracks; Copy to the next pattern; Use the pads of another bank offers the banks; **Delete the pattern** empties the slot and `u` brings it back with its tracks | `44`-`46`, `51` |
 | UC16 | Slicer tools | **Cut in equal parts** (8), at random places, on the grid; auto-cut again (16); **Shuffle the order** and back to 1, 2, 3; **Mangle** opens its dialog and `Esc` puts the slices back; **Edit the order lane** shows the lane and `y b` leaves it; **Slices to pads and a pattern under them** puts the slices on pads (their lengths show on the tiles) and a pattern with them in SEQ | `47`-`50`, `52` |
 | UC17 | Slicer undo | the slice settings dialog opens and closes; `b` removes a slice and `u` brings it back, `R` removes it again; a cut in equal parts is taken back by `u`, and `u` goes on back | |
+| UC18 | Typing a name, export, play | Rename on A3 is one typed line (no keyboard of letters), Enter renames and `u` takes it back; `Ctrl-E` exports bank A into `PROJECT_01_bank_A` (samples.json and the WAVs); `Space` plays the pad and `x` stops it | `36`, `37` |
+| UC19 | Chord tool | on A3 the pad tools offer Chord... and Arp...; Chord shows the note the sample is in and the notes of the chord (C E G, minor C Eb G); Hold is off; the progression rows name the progression with its chords and what it feels like; Enter on Progression opens the box of all of them (minor and major apart, the chords in the key, the feeling of the one at the cursor in the foot); Pop anthem is taken; **Bounce the progression to free pads** asks where the run starts and puts C, G, Am and F on pads named after the chord (`C_03_Loop1…`), the tool comes back as it was; `u` takes the bounce back | `60`-`62` |
+| UC20 | Arp tool, auto play | Arp... opens with its pages (NOTES PLAY MAKE), Hold off; in FILES the hint says auto play is off, `Ctrl-A` turns it on (the cursor moves with it on) and off again | `63`, `64` |
+| UC21 | Pattern generator | SEQ, New pattern from a template, the GENERATOR page lists the styles, the kit and the variations; House makes a trial in the next free pattern (A2) with tracks, which can be rolled again in the same slot and voices kept; **Keep it** keeps it; **Variation of this pattern** makes one in A3 and Keep it keeps that; `u` takes the variation back | `65`, `66` |
+| UC22 | MIDI files | Export this pattern as a MIDI file writes `pattern-A1.mid`; in FILES `a` on it opens the import (the part of the file, Play it with the sample, into the free pattern A2); Import the pattern makes it a pattern again, shown in SEQ | `67` |
+| UC23 | Terminal cast | `Ctrl-T` starts a cast and `Ctrl-T` again saves it; its events file is in the recordings folder; `q` quits with nothing on stderr | `68` |
 
 Together 205 checks. A failed check prints the screen it saw.
 

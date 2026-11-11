@@ -102,7 +102,7 @@ absent "Esc closes the menus" "VARIATION OF A2"
 lit u
 checkre "u takes the variation back" "undone"
 sleep 0.3
-checkre "the pattern in front is the kept one again" "PATTERN A2"
+checkre "the variation is gone: A3 is empty again" "PATTERN A3 +empty"
 
 uc UC22 "MIDI files: a pattern goes out as a .mid file and comes back in as a pattern"
 begin 150 44
