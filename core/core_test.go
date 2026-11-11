@@ -3061,34 +3061,74 @@ func TestArpFromOneSample(t *testing.T) {
 	if got := fmt.Sprint(onePadSemis(o)); got != "[-24 -20 -17 -12 -8 -5 0 4 7]" {
 		t.Fatalf("triad -2 octaves: %s", got)
 	}
-	a, au := newApp(t)
+	a, _ := newApp(t)
 	keys(t, a, kit)
 	a.go_(Pads)
 	a.cur = 0
-	a.openOnePadMenu(0)
+	a.openOnePadMenu(0, false)
 	a.Render() // the keyboard is drawn
-	au.Loops = 0
-	chooseMenu(t, a, "Hear it / stop it")
-	if !a.arpOn || au.Loops != 1 {
-		t.Fatalf("one sample loops as an arp: on %v loops %d (%s)", a.arpOn, au.Loops, a.msg)
-	}
-	a.stop()
 	before := padsWithSamples(a)
-	a.openOnePadMenu(0)
 	chooseMenu(t, a, "Bounce the arp to a new pad")
 	if padsWithSamples(a) != before+1 {
 		t.Fatalf("bounced to one pad: %s", a.msg)
 	}
-	a.openOnePadMenu(0)
+	a.openOnePadMenu(0, true)
 	chooseMenu(t, a, "Bounce the chord to a new pad")
 	if padsWithSamples(a) != before+2 {
 		t.Fatalf("the chord on a pad of its own: %s", a.msg)
 	}
 	a.go_(Pads)
-	a.openOnePadMenu(0)
+	a.openOnePadMenu(0, false)
 	chooseMenu(t, a, "Print the arp to the pattern")
 	if d, ok := a.doc(); a.scr != Seq || !ok || len(d.Notes) == 0 {
 		t.Fatalf("keys and notes written: %s", a.msg)
+	}
+}
+
+func TestChordAndArpFromOneSampleSpaceAndHold(t *testing.T) {
+	termOn(t)
+	a, au := newApp(t)
+	keys(t, a, kit)
+	a.go_(Pads)
+	a.cur = 0
+	for _, chord := range []bool{true, false} {
+		what := map[bool]string{true: "chord", false: "arp"}[chord]
+		a.onepad.hold = false
+		a.openOnePadMenu(0, chord)
+		if !strings.Contains(screenStr(a), what+" once") {
+			t.Fatalf("%s: the hints say what Space does", what)
+		}
+		au.Played, au.Loops = 0, 0
+		keys(t, a, "X") // Space
+		if au.Played != 1 || a.arpOn || a.menu == nil {
+			t.Fatalf("%s: Space plays it once: %d plays, loop %v (%s)", what, au.Played, a.arpOn, a.msg)
+		}
+		it := menuItemNamed(t, a, "Hold")
+		it.val = 1
+		it.onChange(1)
+		keys(t, a, "X")
+		if !a.arpOn || au.Loops != 1 {
+			t.Fatalf("%s: with Hold Space loops it: on %v loops %d (%s)", what, a.arpOn, au.Loops, a.msg)
+		}
+		keys(t, a, "X")
+		if a.arpOn {
+			t.Fatalf("%s: Space again stops it", what)
+		}
+		keys(t, a, "X")
+		it = menuItemNamed(t, a, "Hold")
+		it.val = 0
+		it.onChange(0)
+		if a.arpOn {
+			t.Fatalf("%s: Hold off stops the loop", what)
+		}
+		a.menu = nil
+	}
+	// the chord tool has no arp in it
+	a.openOnePadMenu(0, true)
+	for _, it := range a.menu.items {
+		if strings.Contains(it.label, "arp") || it.label == "Rate" {
+			t.Fatalf("the chord tool has %q", it.label)
+		}
 	}
 }
 

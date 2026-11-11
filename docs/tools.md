@@ -70,6 +70,18 @@ The settings of the pad under the cursor, written into the project at once. With
 
     - `Play it`
     - `Put it on a free pad`
+- `Chord from this one sample (scales)...`
+  - **chord from A3** (a dialog):
+    - `Key` — C, Db, ... B (12 values); now C
+    - `Scale` — CHROMATIC (chord types) / MAJ / MIN / MIN-P / MAJ-P / DOR / MIXO / BLUES; now CHROMATIC (chord types)
+    - `On degree (scales)` — 1 / 2 / 3 / 4 / 5 / 6 / 7; now 1
+    - `Chord` — MAJ, MIN, ... 9 (12 values); now MAJ
+    - `Octaves` — -3 / -2 / -1 / +0 / +1 / +2 / +3; now +1
+    - `Hold` — off: once / on: every bar; now off: once
+
+    *Make*
+
+    - `Bounce the chord to a new pad`
 - `Arp from this one sample (scales, chords)...`
   - **arp from A3** (a dialog):
 
@@ -80,6 +92,7 @@ The settings of the pad under the cursor, written into the project at once. With
     - `On degree (scales)` — 1 / 2 / 3 / 4 / 5 / 6 / 7; now 1
     - `Chord` — MAJ, MIN, ... 9 (12 values); now MAJ
     - `Octaves` — -3 / -2 / -1 / +0 / +1 / +2 / +3; now +1
+    - `Hold` — off: one pass / on: loops; now off: one pass
 
     *Page Play*
 
@@ -91,9 +104,7 @@ The settings of the pad under the cursor, written into the project at once. With
 
     *Page Make*
 
-    - `Hear it / stop it`
     - `Bounce the arp to a new pad`
-    - `Bounce the chord to a new pad`
     - `Print the arp to the pattern`
 - `Keyboard from it...`
   - **keyboard from A3** (a dialog):

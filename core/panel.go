@@ -202,10 +202,18 @@ func (a *App) rawHints() (plain, shift []hint) {
 		return []hint{{"^v<>", "choose"}, {"L1 R1", "bank"}, {"A", open}, {"B", "cancel"}}, nil
 	}
 	if a.menu != nil {
-		if a.menu.tabs != nil {
-			return []hint{{"^v", "choose"}, {"<>", "change"}, {"A", "run"}, {"L1 R1", "tab"}, {"B", "close"}}, nil
+		hs := []hint{{"^v", "choose"}, {"<>", "change"}, {"A", "run"}}
+		if a.menu.onX != nil {
+			x := "X"
+			if Terminal {
+				x = "Space"
+			}
+			hs = append(hs, hint{x, a.menu.xHint})
 		}
-		return []hint{{"^v", "choose"}, {"<>", "change"}, {"A", "run"}, {"B", "close"}}, nil
+		if a.menu.tabs != nil {
+			hs = append(hs, hint{"L1 R1", "tab"})
+		}
+		return append(hs, hint{"B", "close"}), nil
 	}
 	switch a.scr {
 	case Pads:

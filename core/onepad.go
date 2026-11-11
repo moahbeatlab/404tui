@@ -28,6 +28,7 @@ var (
 // onePad is the settings of the menu, kept between visits. The playing settings are a.arpp, as for the marked pads.
 type onePad struct {
 	key, scale, stack, chord, degree, oct int
+	hold                                  bool // X (Space) repeats the chord or the arp until it is pressed again; off, it plays once
 	init                                  bool
 }
 
@@ -96,14 +97,20 @@ func onePadKeyboard(semis []int) func(g Gfx, col, row, cols int) {
 	}
 }
 
-func (a *App) openOnePadMenu(n int) {
+// openOnePadMenu is the chord (chord) or the arp from pad n's one sample. The two share the notes (key, scale, chord, octaves): a chord
+// found in one is there in the other. X (Space) plays it once; with Hold it repeats (the chord every bar, the arp as a loop) until X again.
+func (a *App) openOnePadMenu(n int, chord bool) {
 	a.arpPrintDefaults()
 	st := &a.arpp
 	o := &a.onepad
 	if !o.init {
 		*o = onePad{stack: 3, oct: 4, init: true}
 	}
-	m := &menu{title: "arp from " + a.label(n), footH: 4}
+	what := "arp"
+	if chord {
+		what = "chord"
+	}
+	m := &menu{title: what + " from " + a.label(n), footH: 4}
 	scales := []string{"CHROMATIC (chord types)"}
 	for _, s := range formats.ArpScales {
 		scales = append(scales, s.Name)
@@ -141,14 +148,16 @@ func (a *App) openOnePadMenu(n int) {
 		o.degree = min(o.degree, len(m.at(degI).vals)-1)
 		m.at(degI).val = o.degree
 		if a.arpOn {
-			a.onePadReplay(n)
+			a.onePadReplay(n, chord)
 		}
 	}
 	set := func(label string, vals []string, cur int, change func(v int)) int {
 		m.items = append(m.items, menuItem{label: label, vals: vals, val: cur, keepOpen: true, onChange: func(v int) { change(v); redo() }})
 		return len(m.items) - 1
 	}
-	m.tabHead("NOTES")
+	if !chord {
+		m.tabHead("NOTES")
+	}
 	set("Key", formats.PitchNames, o.key, func(v int) { o.key = v })
 	set("Scale", scales, o.scale, func(v int) { o.scale = v })
 	degI = set("On degree (scales)", degrees(), o.degree, func(v int) { o.degree = v })
@@ -160,27 +169,103 @@ func (a *App) openOnePadMenu(n int) {
 		}
 	})
 	set("Octaves", names(onePadOcts, func(v int) string { return fmt.Sprintf("%+d", v) }), o.oct, func(v int) { o.oct = v })
-	m.tabHead("PLAY")
-	set("Type", arpTypes, st.typ, func(v int) { st.typ = v; a.say(arpTypeNotes[v], false) })
-	set("Rate", arpNames(formats.ArpRates, func(r formats.ArpRate) string { return r.Name }), st.rate, func(v int) { st.rate = v })
-	set("Gate", names(printGates, func(v int) string { return fmt.Sprintf("%d%%", v) }), st.gate, func(v int) { st.gate = v })
-	set("Velocity", names(printVels, func(v int) string { return fmt.Sprint(v) }), st.vel, func(v int) { st.vel = v })
-	set("Length", names(printBars, func(v int) string { return fmt.Sprintf("%d bar", v) }), near(printBars, st.bars), func(v int) { st.bars = printBars[v] })
-	m.tabHead("MAKE")
-	m.items = append(m.items,
-		menuItem{label: "Hear it / stop it", keepOpen: true, run: func(int) { a.onePadToggle(n) }},
-		menuItem{label: "Bounce the arp to a new pad", run: func(int) { a.onePadBounce(n, false) }},
-		menuItem{label: "Bounce the chord to a new pad", run: func(int) { a.onePadBounce(n, true) }},
-		menuItem{label: "Print the arp to the pattern", run: func(int) { a.onePadPattern(n) }},
-	)
+	holdVals := []string{"off: one pass", "on: loops"}
+	if chord {
+		holdVals = []string{"off: once", "on: every bar"}
+	}
+	m.items = append(m.items, menuItem{label: "Hold", vals: holdVals, val: btoi(o.hold), keepOpen: true,
+		onChange: func(v int) {
+			o.hold = v == 1
+			if !o.hold && a.arpOn {
+				a.stop()
+			}
+			m.xHint = onePadXHint(o.hold, what)
+		}})
+	if chord {
+		m.head("MAKE")
+		m.items = append(m.items, menuItem{label: "Bounce the chord to a new pad", run: func(int) { a.onePadBounce(n, true) }})
+	} else {
+		m.tabHead("PLAY")
+		set("Type", arpTypes, st.typ, func(v int) { st.typ = v; a.say(arpTypeNotes[v], false) })
+		set("Rate", arpNames(formats.ArpRates, func(r formats.ArpRate) string { return r.Name }), st.rate, func(v int) { st.rate = v })
+		set("Gate", names(printGates, func(v int) string { return fmt.Sprintf("%d%%", v) }), st.gate, func(v int) { st.gate = v })
+		set("Velocity", names(printVels, func(v int) string { return fmt.Sprint(v) }), st.vel, func(v int) { st.vel = v })
+		set("Length", names(printBars, func(v int) string { return fmt.Sprintf("%d bar", v) }), near(printBars, st.bars), func(v int) { st.bars = printBars[v] })
+		m.tabHead("MAKE")
+		m.items = append(m.items,
+			menuItem{label: "Bounce the arp to a new pad", run: func(int) { a.onePadBounce(n, false) }},
+			menuItem{label: "Print the arp to the pattern", run: func(int) { a.onePadPattern(n) }},
+		)
+	}
 	m.onClose = func() {
 		if a.arpOn {
 			a.stop()
 		}
 	}
+	m.onX = func() { a.onePadSpace(n, chord) }
+	m.xHint = onePadXHint(o.hold, what)
 	redo()
-	m.tabify()
+	if !chord {
+		m.tabify()
+	}
 	a.menu = m
+}
+
+func onePadXHint(hold bool, what string) string {
+	if hold {
+		return "loop " + what + " / stop"
+	}
+	return what + " once"
+}
+
+// onePadSpace is X (Space) in the menu: with Hold the chord or the arp repeats until X again, else it plays once. A loop that plays
+// is stopped either way.
+func (a *App) onePadSpace(n int, chord bool) {
+	if a.arpOn {
+		a.stop()
+		a.say("stopped", false)
+		return
+	}
+	s, err := a.onePadSound(n, chord, a.onepad.hold)
+	if err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	if !a.onepad.hold {
+		a.play(s)
+		return
+	}
+	lp, ok := a.Audio.(looper)
+	if a.Audio == nil || !ok {
+		a.say("no audio output", true)
+		return
+	}
+	a.stop()
+	if err := lp.Loop(s); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	a.arpOn = true
+	a.say("it loops: change a setting to hear it at once, Space stops it", false)
+}
+
+// onePadSound is what X plays: the chord (as a loop, one bar at the bank's tempo) or the arp.
+func (a *App) onePadSound(n int, chord, loop bool) (formats.Sample, error) {
+	if !chord {
+		return a.onePadRender(n)
+	}
+	ss, err := a.onePadSamples(n, onePadSemis(a.onepad))
+	if err != nil {
+		return formats.Sample{}, err
+	}
+	s := chordMix(ss)
+	if loop {
+		bar := int(4 * 60 / a.tempoOf(n/16) * formats.SampleRate)
+		out := make([]int16, bar*2)
+		copy(out, s.Samples)
+		s.Samples = out
+	}
+	return s, nil
 }
 
 // onePadSamples is the sample of pad n pitched to each of the semitones.
@@ -215,38 +300,13 @@ func (a *App) onePadRender(n int) (formats.Sample, error) {
 	return a.mixArp(ss, a.tempoOf(n/16))
 }
 
-func (a *App) onePadToggle(n int) {
-	if a.arpOn {
-		a.stop()
-		a.say("arp stopped", false)
-		return
-	}
-	lp, ok := a.Audio.(looper)
-	if a.Audio == nil || !ok {
-		a.say("no audio output", true)
-		return
-	}
-	s, err := a.onePadRender(n)
-	if err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	a.stop()
-	if err := lp.Loop(s); err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	a.arpOn = true
-	a.say("the arp loops: change a setting to hear it at once", false)
-}
-
 // onePadReplay puts a changed setting into the loop that plays.
-func (a *App) onePadReplay(n int) {
+func (a *App) onePadReplay(n int, chord bool) {
 	r, ok := a.Audio.(replacer)
 	if !ok {
 		return
 	}
-	if s, err := a.onePadRender(n); err == nil {
+	if s, err := a.onePadSound(n, chord, true); err == nil {
 		r.ReplaceLoop(s)
 	}
 }
