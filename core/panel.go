@@ -697,7 +697,14 @@ func (a *App) drawKeyboardKeys(g Gfx, x, y, w int) {
 		}
 		return n
 	}
-	viewRows := func() int { return 1 + rowsOf(len(plain)) + rowsOf(len(shift)) }
+	floor := 0
+	if a.scr == Seq && a.patStrip { // p: the arrows are on the tiles and the keys are few; the block keeps the height it has with the grid, so nothing moves
+		a.patStrip = false
+		p2, s2 := a.hints()
+		a.patStrip = true
+		floor = 1 + rowsOf(len(p2)) + rowsOf(len(s2))
+	}
+	viewRows := func() int { return max(1+rowsOf(len(plain))+rowsOf(len(shift)), floor) }
 	globalRows := func() int { return 1 + len(global) }
 	total := func() int { return viewRows() + globalRows() + 2 } // two rules
 	limit := Rows - 3 - (y + 2) - room

@@ -3,6 +3,8 @@ package terminal
 import (
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // SEQ: p puts the arrows on the row of the bank's 16 patterns, so another pattern is chosen without the tools menu
@@ -40,5 +42,30 @@ func TestOnSeqPChoosesThePatternInTheRowOfBoxes(t *testing.T) {
 	press(m, "l")
 	if !strings.Contains(m.text(), "PATTERN B2") || strings.Contains(m.text(), "choose the pattern") {
 		t.Fatal("after p the arrows move the cursor in the grid again")
+	}
+}
+
+// p does not move the tiles: the panel keeps its layout when the keys change
+func TestPatternTilesStayWhereTheyAreWhenPIsPressed(t *testing.T) {
+	m := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 160, Height: 60})
+	press(m, "x")
+	press(m, "y")
+	press(m, "l") // SEQ
+	row := func() int {
+		for i, l := range strings.Split(m.text(), "\n") {
+			if strings.Contains(l, "PATTERNS") {
+				return i
+			}
+		}
+		return -1
+	}
+	before := row()
+	if before < 0 {
+		t.Fatalf("the tiles are not shown:\n%s", m.text())
+	}
+	press(m, "p")
+	if after := row(); after != before {
+		t.Fatalf("the tiles moved from line %d to %d", before, after)
 	}
 }
