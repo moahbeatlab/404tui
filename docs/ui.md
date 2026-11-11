@@ -74,6 +74,7 @@ The look: flat tiles, one amber accent, rounded dialogs, waveforms in braille do
 | `Space` | play and stop, everywhere: the pad's sample on PADS, what is listened to on FILES, the whole pattern on SEQ |
 | `x` | stop what sounds on PADS and FILES; in SEQ it hears the note (Space plays the pattern); in the slicer it stops the sound |
 | `m`, `s` | SEQ: mute or solo the track under the cursor (the same key again plays it) |
+| `Ctrl-A` | FILES: auto play on or off: the file under the cursor plays as soon as it is there, as `Space` would play it (while a pattern loops and the pad has notes in it, in the pattern in place of the pad's sample; `a` keeps it, `Esc` leaves the pad as it was); remembered |
 | `Ctrl-E` | PADS: export the bank (or the marked pads) as WAV files with `samples.json` into a folder you type |
 | `t` | the tools of the screen (the TOOLS page of a pad, the pattern tools, the slice tools); on FILES where the files are loaded from (the computer, the samples, the unit's card, a drive, favourites) and a step on the file tools; on PROJECTS online or offline |
 | `e` | holds A, for editing a note with the arrows in SEQ; `e` again lets go |

@@ -29,7 +29,11 @@ type undoEntry struct {
 // before it is kept when it changed.
 func (a *App) Press(k Key, repeat int) {
 	before, sid, spad := a.slicingNow()
+	scr, dir, fcur := a.scr, a.dir, a.fcur
 	a.pressProject(k, repeat)
+	if a.set.AutoListen && a.scr == Files && scr == Files && (a.dir != dir || a.fcur != fcur) {
+		a.listenHere()
+	}
 	if before != "" && a.scr == Slice && a.sl != nil && a.sid == sid && a.spad == spad && !a.slSkip {
 		if now, _, _ := a.slicingNow(); now != before { // the slicing changed: what it was is kept for undo
 			a.slUndo = append(a.slUndo, before)

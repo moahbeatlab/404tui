@@ -282,6 +282,10 @@ func (m *Model) key(msg tea.KeyMsg) {
 		m.disarm()
 		m.app.ReloadUnit()
 		return
+	case "ctrl+a": // FILES: auto play, the file under the cursor plays at once
+		m.disarm()
+		m.app.ToggleAutoListen()
+		return
 	case "ctrl+e": // PADS: export the bank
 		m.disarm()
 		m.app.ExportBank()

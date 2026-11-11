@@ -26,7 +26,7 @@ The panel names the target pad (`TARGET A3`, the pad the cursor was on in PADS) 
 
 ## Keys
 
-**On a computer:** `a` to a pad... · `Space` listen · `x` stop · `j k` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where / file tools · `m` mark file · `M` mark all · `y x` places · `y a` or `/` search · `#` categories · `y b` favourite.
+**On a computer:** `a` to a pad... · `Space` listen · `x` stop · `j k` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where / file tools · `m` mark file · `M` mark all · `Ctrl-A` auto play (the file under the cursor plays at once, in the pattern while it loops) · `y x` places · `y a` or `/` search · `#` categories · `y b` favourite.
 
 **On the handheld:** `A` to pad · `X` listen · D-pad browse, open and up · `L1 R1` page · `B` pads · `Y+X` places · `Y+A` search · `Y+B` favourite · `Sel+A` mark · `Sel+B` files menu.
 

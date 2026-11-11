@@ -117,7 +117,11 @@ func (a *App) hints() (plain, shift []hint) {
 		plain = append(append([]hint{}, plain...), hint{"o", "open from a folder"}, hint{"t", "project menu"})
 	}
 	if Terminal && a.scr == Files && !a.Modal() && a.prompt == nil && a.kb == nil {
-		plain = append(append([]hint{}, plain...), hint{"m", "mark file"}, hint{"M", "mark all"})
+		auto := "auto play: off"
+		if a.set.AutoListen {
+			auto = "auto play: ON"
+		}
+		plain = append(append([]hint{}, plain...), hint{"m", "mark file"}, hint{"M", "mark all"}, hint{"^A", auto})
 	}
 	if Terminal && a.scr == Files && !a.Modal() && a.prompt == nil && a.kb == nil { // t: load files from where
 		out := make([]hint, 0, len(plain)+1)

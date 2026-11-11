@@ -1447,6 +1447,60 @@ func TestPreviewDoesNotCutThePatternAndAuditionsInIt(t *testing.T) {
 	}
 }
 
+func TestAutoPlayPlaysTheFileUnderTheCursor(t *testing.T) {
+	termOn(t)
+	a, au := newApp(t)
+	keys(t, a, kit) // kick, snare, hat on A1..A3
+	a.go_(Files)
+	a.cd(filepath.Join(a.Root, "drums"))
+	a.fcur = 0
+	au.Played = 0
+	keys(t, a, "D")
+	if au.Played != 0 {
+		t.Fatalf("auto play is off at first: %d plays", au.Played)
+	}
+	a.ToggleAutoListen()
+	if !a.set.AutoListen || au.Played != 1 {
+		t.Fatalf("Ctrl-A plays the file in front at once: on %v, %d plays", a.set.AutoListen, au.Played)
+	}
+	if !strings.Contains(screenStr(a), "auto play: ON") {
+		t.Fatal("the panel shows that auto play is on")
+	}
+	keys(t, a, "D")
+	if au.Played != 2 {
+		t.Fatalf("the next file plays as the cursor gets there: %d plays", au.Played)
+	}
+	// while the pattern loops, a file is heard in it in place of the pad's sample, as with Space
+	a.go_(Seq)
+	a.setRow(0, rowPresets[0].mask)
+	keys(t, a, "X")
+	a.cur, a.bank = 0, 0
+	before := a.info.Pads[0].Name
+	a.go_(Files)
+	a.cd(filepath.Join(a.Root, "drums"))
+	a.fcur = 0
+	keys(t, a, "D")
+	first, in := a.aud[0]
+	if !in || !a.seqOn {
+		t.Fatalf("in the pattern on A1: aud %v, playing %v", a.aud, a.seqOn)
+	}
+	keys(t, a, "D")
+	if a.aud[0] == first {
+		t.Fatalf("the next file takes its place: %v", a.aud)
+	}
+	keys(t, a, "L") // up: the cursor is on a folder, A1 plays its own sample again
+	if a.aud != nil || !a.seqOn {
+		t.Fatalf("on a folder: aud %v, playing %v", a.aud, a.seqOn)
+	}
+	if a.info.Pads[0].Name != before {
+		t.Fatal("auto play writes nothing on the pad")
+	}
+	a.ToggleAutoListen()
+	if a.set.AutoListen {
+		t.Fatal("Ctrl-A again turns it off")
+	}
+}
+
 func TestSearchFavouritesAndMemory(t *testing.T) {
 	a, _ := newApp(t)
 	a.go_(Files)

@@ -836,6 +836,41 @@ func (a *App) PlayStop() bool {
 	return false
 }
 
+// ToggleAutoListen is Ctrl-A of a keyboard on FILES: from now on the file under the cursor plays as soon as it is there, as Space
+// would play it (in the pattern in place of the pad's sample while the pattern loops and the pad has notes in it). It is remembered.
+func (a *App) ToggleAutoListen() {
+	if a.scr != Files || a.Modal() || a.prompt != nil || a.kb != nil {
+		return
+	}
+	a.CancelShift()
+	a.set.AutoListen = !a.set.AutoListen
+	a.saveSettings()
+	if !a.set.AutoListen {
+		a.stopPreview()
+		a.say("auto play off: Space plays a file (Ctrl-A turns it on)", false)
+		return
+	}
+	a.say("auto play on: the file under the cursor plays at once (Ctrl-A turns it off)", false)
+	a.listenHere()
+}
+
+// listenHere plays the file under the cursor for auto play. On a folder (or a file that does not decode) what was heard stops, and the
+// pad that had a file in its place in the pattern plays its own sample again.
+func (a *App) listenHere() {
+	e, ok := a.current()
+	if ok && !e.dir && !e.project && audioExts[strings.ToLower(pathExt(e.name))] {
+		if id, err := a.decode(e); err == nil {
+			a.listen(e, id)
+			return
+		}
+	}
+	a.stopPreview()
+	if a.aud != nil {
+		a.aud = nil
+		a.replay()
+	}
+}
+
 // ExportBank is Ctrl-E of a keyboard on PADS: the pads of the bank (the marked ones) as WAV files in a folder.
 func (a *App) ExportBank() {
 	if a.scr != Pads || a.Modal() || a.prompt != nil || a.carry != nil {
