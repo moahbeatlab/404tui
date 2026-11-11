@@ -48,38 +48,37 @@ The settings of the pad under the cursor, written into the project at once. With
 
 - `Pick a sample...`
 - `Slice...`
-- `Chords & arps...`
-  - **chords & arps  A3** (a dialog):
-
-    *The Notes*
-
-    - `Root` — C, Db, ... B (12 values); now C
-    - `Chord` — MAJ, MIN, ... 9 (12 values); now MAJ
+- `Chord...`
+  - **chord from A3** (a dialog):
     - `Sample is in` — C, Db, ... B (12 values); now C
-    - `Octaves` — 1 / 2 / 3; now 2
+    - `Root` — C, Db, ... B (12 values); now C
+    - `Chord` — major, minor, ... maj13 (29 values); now major
+    - `Octaves` — -3 / -2 / -1 / +0 / +1 / +2 / +3; now +0
+    - `Hold` — off: once / on: every bar; now off: once
 
-    *How It Plays*
+    *Make*
 
-    - `Pattern` — CHORD, UP, ... STABS (11 values); now UP
-    - `Rate` — 1/4 / 1/8 / 1/8T / 1/16 / 1/16T / 1/32; now 1/16
-    - `Gate` — 25% / 50% / 75% / 100% / ring; now 50%
-    - `Swing` — OFF / LIGHT / TRIPLET; now OFF
-    - `Length` — 1 bar / 2 bar / 4 bar / 8 bar; now 1 bar
+    - `Bounce the chord to a new pad`
 
-    *Make It*
+    *Progression (In The Root'S Key)*
 
-    - `Play it`
-    - `Put it on a free pad`
-- `Arp from this one sample (scales, chords)...`
+    - `Progression` — Epic anthem: Cm Ab Eb Bb, Rise and fall: Cm Bb Ab Bb, ... Neo soul turn: F E Am Gm C (24 values); now Epic anthem: Cm Ab Eb Bb
+    - `Feels` — euphoric, uplifting, a bit sad; now euphoric, uplifting, a bit sad
+    - `Chords` — triads / sevenths / ninths / elevenths; now triads
+    - `Hear the progression (a chord a bar)`
+    - `Bounce the progression to free pads`
+- `Arp...`
   - **arp from A3** (a dialog):
 
     *Page Notes*
 
+    - `Sample is in` — C, Db, ... B (12 values); now C
     - `Key` — C, Db, ... B (12 values); now C
     - `Scale` — CHROMATIC (chord types) / MAJ / MIN / MIN-P / MAJ-P / DOR / MIXO / BLUES; now CHROMATIC (chord types)
     - `On degree (scales)` — 1 / 2 / 3 / 4 / 5 / 6 / 7; now 1
-    - `Chord` — MAJ, MIN, ... 9 (12 values); now MAJ
+    - `Chord` — major, minor, ... maj13 (29 values); now major
     - `Octaves` — -3 / -2 / -1 / +0 / +1 / +2 / +3; now +1
+    - `Hold` — off: one pass / on: loops; now off: one pass
 
     *Page Play*
 
@@ -91,9 +90,7 @@ The settings of the pad under the cursor, written into the project at once. With
 
     *Page Make*
 
-    - `Hear it / stop it`
     - `Bounce the arp to a new pad`
-    - `Bounce the chord to a new pad`
     - `Print the arp to the pattern`
 - `Keyboard from it...`
   - **keyboard from A3** (a dialog):
@@ -173,7 +170,7 @@ The settings of the pad under the cursor, written into the project at once. With
 
 The step grid of the pattern in front. `Enter` (or `b`) opens the note panel, `t` the pattern's tools and settings.
 
-**Keys on a computer:** `a` note on/off · `e hjkl` edit (hold) · `Space` play / stop · `b` note settings · `x` hear note · `.` mute/solo · `hjkl` pad, step · `[ ]` bank · `{ }` bar · `t` tools · `m` mute track · `s` solo track · `f` freeze view · `z` 1 bar / more · `y x` add track · `y b` pick pattern · `y jk` pattern +-
+**Keys on a computer:** `a` note on/off · `e hjkl` edit (hold) · `Space` play / stop · `b` note settings · `x` hear note · `.` mute/solo · `hjkl` pad, step · `[ ]` bank · `{ }` bar · `t` tools · `m` mute track · `s` solo track · `f` freeze view · `z` 1 bar / more · `y x` add track · `p` pattern tiles · `y jk` pattern +-
 
 **Keys on the handheld:** `A` note on/off · `A+^<>` edit (hold) · `X` play · `B` note settings · `L2` hear note · `R2` mute/solo · `^v<>` pad, step · `L1 R1` bar · `Y+X` add track · `Y+B` pick pattern · `Sel+B` tools · `Y+^v` pattern +- · `Sel+X` record
 
@@ -189,7 +186,10 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
 - `Choose a pattern (bank, then pattern)...`
 - `New pattern from a template...`
-  - **new pattern from a template** (a dialog):
+  - **new pattern** (a dialog):
+
+    *Page Templates*
+
     - `Blank pattern` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 4 bars
     - `House  122-127` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
     - `Deep house  120-125` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
@@ -212,7 +212,85 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Disco  110-125` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
     - `Footwork  155-165` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
     - `Son (martillo + tumbao)  90-110` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
+
+    *Page Generator*
+
+    - `Kit: which pad plays kick, snare, hats...`
+      - **generator kit: which pad plays what** (a dialog):
+        - `Bank` — auto: A, bank A, ... bank J (11 values); now auto: A
+
+        *Voices (The Pads Of Bank A)*
+
+        - `Kick` — auto A1 kick_808, none, ... A16  (18 values); now auto A1 kick_808
+        - `Snare` — auto A2 snare_tight, none, ... A16  (18 values); now auto A2 snare_tight
+        - `Clap` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Closed hat` — auto A3 hat_closed, none, ... A16  (18 values); now auto A3 hat_closed
+        - `Open hat` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Rim` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Percussion` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Tom` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Shaker` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Ride` — auto: none, none, ... A16  (18 values); now auto: none
+
+        *Second Pads: Take Over Some Hits*
+
+        - `Kick 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Snare 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Clap 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Closed hat 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Open hat 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Percussion 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Tom 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Shaker 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Ride 2` — auto: none, none, ... A16  (18 values); now auto: none
+
+        **
+
+        - `Back to the names of the pads`
+    - `Variation of this pattern (fill, roll, thinner, busier, break)...`
+      - **variation of A1** (a dialog):
+
+        *Trial*
+
+        - `What` — with a fill / with a roll / thinner / busier / break; now with a fill
+        - `Another roll of the dice`
+        - `Keep it (B throws it away)`
+    - `Length of a generated pattern` — 1 bar / 2 bars / 4 bars / 8 bars; now 2 bars
+
+    *A Style: Left And Right Choose What Is Made, A Makes It*
+
+    - `House  124 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Tech house  126 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Techno  130 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Chicago house  122 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Deep house  120 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Minimal tech house  126 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Dub techno  124 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Industrial techno  140 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Acid  130 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `90s house  125 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Big room  128 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Electro house  128 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Progressive house  128 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Future house  125 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Melodic techno  124 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Trance  138 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Hardstyle  150 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Afro house  122 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `UK garage  132 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Breakbeat  130 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Drum and bass  174 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Dubstep  140 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Trap  140 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
 - `Export this pattern as a MIDI file`
+- `Variation of this pattern (fill, roll, thinner, busier, break)...`
+  - **variation of A1** (a dialog):
+
+    *Trial*
+
+    - `What` — with a fill / with a roll / thinner / busier / break; now with a fill
+    - `Another roll of the dice`
+    - `Keep it (B throws it away)`
 - `Loop only the bar in focus (Y+A)` — off / on; now off
 - `New pattern from the audible tracks`
 - `Bounce the tracks as you hear them to a pad`
@@ -490,7 +568,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
 On a computer: the 16 projects of the unit when one is plugged in (online), else those of a folder on this computer (offline). The program looks for the unit all the time, and the start screen offers `u` online and `o` offline (the project open last). `a` opens a project's menu, `t` chooses online or offline and the offline folder. On the handheld this screen is called UNIT.
 
-**Keys on a computer:** `a` project menu · `hjkl` choose · `Esc` back · `o` open from a folder · `t` online / offline · `g hl` screen (1-6) · `s x` record
+**Keys on a computer:** `a` project menu · `hjkl` choose · `Esc` back · `o` open from a folder · `t` project menu · `g hl` screen (1-6) · `s x` record
 
 **Keys on the handheld:** `A` project menu · `X` look again · `^v` choose · `L1 R1` page · `B` back · `Y+<>` screen · `Sel+X` record
 
@@ -511,7 +589,7 @@ On a computer: the 16 projects of the unit when one is plugged in (online), else
     - `Yes, erase it`
     - `No`
 
-### Online or offline (`t`)
+### Online or offline (`t`, then Online or offline...)
 
 
 *Work*
@@ -532,12 +610,27 @@ On a computer: the 16 projects of the unit when one is plugged in (online), else
 - `Open a project from a folder...`
 - `Write the project of the editor here`
 - `Export the project of the editor into a folder...`
+- `Online or offline, and the offline folder...`
+  - **projects: online or offline** (a dialog):
+
+    *Work*
+
+    - `Online: no unit is plugged in (looking for it)`
+    - `Offline: the projects in ~ui-docs/out/ROLAND/SP-404MKII`
+
+    *Other Projects*
+
+    - `Open a project from a folder...`
+
+    *Offline Folder*
+
+    - `Choose the folder of the offline projects...`
 
 ## FILES
 
 The file browser: this computer, the unit's card and its storage. `t` chooses where the files are loaded from (the computer, the samples folder, the unit's SD card, a USB drive, favourites) and leads to the file tools.
 
-**Keys on a computer:** `a` to a pad... · `Space` listen · `x` stop · `jk` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where · `m` mark file · `M` mark all · `g hl` screen (1-6) · `y x` places · `y a` search · `y b` favourite · `s a` mark · `s x` record
+**Keys on a computer:** `a` to a pad... · `Space` listen · `x` stop · `jk` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where · `m` mark file · `M` mark all · `^A` auto play: off · `g hl` screen (1-6) · `y x` places · `y a` search · `y b` favourite · `s a` mark · `s x` record
 
 **Keys on the handheld:** `A` to pad A3 · `X` listen · `^v` browse · `>` open · `<` up · `L1 R1` page · `B` pads · `Y+<>` screen · `Y+X` places · `Y+A` search · `Y+B` favourite · `Sel+A` mark · `Sel+B` files menu · `Sel+X` record
 
@@ -580,6 +673,13 @@ The file browser: this computer, the unit's card and its storage. `t` chooses wh
 *This Folder*
 
 - `New folder...`
+
+*Your Tags (This Computer)*
+
+- `Search by categories (#)`
+- `Tag as (1)` — kick, snare, ... favourite (18 values); now kick
+- `Tag with words...`
+- `Take a tag off...`
 
 ## SLICE
 
@@ -814,6 +914,7 @@ The program's settings; on a computer the writing of the project (what SAVE does
 - `Record into folder` — A edits
 - `Input with this in its name` — A edits
 - `Record and meter with` — left right change
+- `Terminal cast (Ctrl-T) records the audio` — A or left right switch
 - `Recorder` — 
 
 *Pad Codes On The Unit*

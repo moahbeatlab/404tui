@@ -196,7 +196,7 @@ func TestToolsReference(t *testing.T) {
 		}},
 		{Unit, "PROJECTS", "On a computer: the 16 projects of the unit when one is plugged in (online), else those of a folder on this computer (offline). The program looks for the unit all the time, and the start screen offers `u` online and `o` offline (the project open last). `a` opens a project's menu, `t` chooses online or offline and the offline folder. On the handheld this screen is called UNIT.", []docMenu{
 			{"Project menu of the unit (`a`, online)", Unit, func(a *App) { connectUnit(t, a); a.unitMenu() }},
-			{"Online or offline (`t`)", Unit, func(a *App) { a.go_(Unit); a.modeMenu() }},
+			{"Online or offline (`t`, then Online or offline...)", Unit, func(a *App) { a.go_(Unit); a.modeMenu() }},
 			{"Project menu of the offline folder (`a`, offline)", Unit, func(a *App) { a.go_(Unit); a.offlineMenu() }},
 		}},
 		{Files, "FILES", "The file browser: this computer, the unit's card and its storage. `t` chooses where the files are loaded from (the computer, the samples folder, the unit's SD card, a USB drive, favourites) and leads to the file tools.", []docMenu{

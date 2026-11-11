@@ -3,6 +3,17 @@
 ## Unreleased
 
 - **MIDI files in and out:** a track of a `.mid` file becomes a pattern (a melody as chromatic notes on one pad, with the notes moved by octaves into the 12 up and down; drums by the General MIDI drum map onto pads found by the names of the samples), in FILES (`a` on the file), on the phone page and in the demo (TOOLS, PATTERN, MIDI FILE IN…). A song in several files goes into **one pattern** (mark the files, or choose several on the page; each on a pad of its own, the pattern as long as the longest, shorter parts repeated). Play it with the sample before it is written; the form remembers the pattern and the sample. A pattern is written as a `.mid` file (SEQ menu, or MIDI FILE OUT on the page). → [docs/midi.md](docs/midi.md)
+- Terminal cast: Ctrl-T (or F10) records the keys and the screen of the terminal program (and the unit's audio, unless Config says no) as a recording of its own, with no MIDI or pattern events; Ctrl-R stays the music recording. `sp404 replay` shows such a take as the terminal with the keys as caps. The title bar shows CAST while it runs.
+- The replay page fits the terminal into the page (the panel is as wide as the terminal; the letters are never stretched by more than 8%).
+
+## 0.1.3 (2026-11-09)
+
+The replay page gets a new look.
+
+- The replay page has a new look: the control bar is two grouped rows (transport, zoom, speed and title; pattern and cuts, then Add and View buttons), the sidebar is a tidy form (label left, control right, nothing runs off the edge), with one set of buttons, fields, sliders and popups.
+- The tool buttons (templates, camera, captions, chapters, view change, bus change, view modes, style, full screen) moved from the bottom bar to a rail at the right edge; the bottom bar is one row.
+- Captions: every row the full width, the text in a box of three lines.
+- The bus controls are vertical bars instead of knobs; the tempo graph under the level is gone (the tempo is in the header).
 
 ## 0.1.2 (2026-11-09)
 

@@ -475,3 +475,32 @@ func EditNoteSet(b []byte, set map[PadTick]bool, edit NoteEdit) ([]byte, int, er
 	}
 	return writeRecords(out, length, trailer), changed, nil
 }
+
+// ReplaceNotes takes the notes named by drop (a pad and the tick it starts at) out of a pattern and puts in the notes of add, another
+// pattern file (nil: none), at their own ticks. Everything else stays as it was, byte for byte: the other notes with their timing,
+// lengths and pitches, the control events, the length and the trailer. A note of add at or past the end of the pattern is left out.
+func ReplaceNotes(b []byte, drop map[PadTick]bool, add []byte) ([]byte, error) {
+	recs, length, trailer, err := readRecords(b)
+	if err != nil {
+		return nil, err
+	}
+	out := recs[:0:0]
+	for _, r := range recs {
+		if pad, isPad := notePad(append([]byte{0}, r.bytes[:]...)); r.note && isPad && drop[PadTick{pad, r.tick}] {
+			continue
+		}
+		out = append(out, r)
+	}
+	if len(add) > 0 {
+		more, _, _, err := readRecords(add)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range more {
+			if r.note && r.tick < length {
+				out = append(out, r)
+			}
+		}
+	}
+	return writeRecords(out, length, trailer), nil
+}

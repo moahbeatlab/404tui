@@ -143,6 +143,10 @@ func (a *App) seqKey(k Key, repeat int) {
 		a.noteEditKey(k, repeat)
 		return
 	}
+	if a.patStrip {
+		a.stripKey(k)
+		return
+	}
 	jump := 1 + repeat/4 // a held key runs faster
 	switch k {
 	case Left: // the steps run across the screen
@@ -373,6 +377,7 @@ func (a *App) seqMenu() {
 	run("Choose a pattern (bank, then pattern)...", a.openPicker)
 	run("New pattern from a template...", a.templatesMenu)
 	run("Export this pattern as a MIDI file", a.exportMIDI)
+	run(variationLabel, a.variationMenu)
 	set("Loop only the bar in focus (Y+A)", []string{"off", "on"}, b2i(a.freeze), func(v int) {
 		if (v == 1) != a.freeze {
 			a.toggleFreeze()
@@ -739,7 +744,79 @@ func lerp(a, b color.RGBA, t float64) color.RGBA {
 // seqRowCells is the height of a track's row in the step grid: a row of cells, or two when there are few tracks.
 func (a *App) seqRowCells() int {
 	shown := min(len(a.rows)-a.rowTop, maxRows)
-	return min(max((Rows-2-3)/max(shown, 1), 1), 2)
+	room := Rows - 2 - 3
+	return min(max(room/max(shown, 1), 1), 2)
+}
+
+// SeqStrip is p of a keyboard on SEQ: the arrows choose the pattern in the 4 by 4 tiles at the bottom (the bank's patterns), and the
+// pattern changes as they move; p, A or B go back to the grid.
+func (a *App) SeqStrip() {
+	if a.scr != Seq || !Terminal || a.Modal() || a.prompt != nil || a.aHeld {
+		return
+	}
+	a.CancelShift()
+	a.patStrip = !a.patStrip
+	if a.patStrip {
+		a.say("patterns: the arrows choose, [ ] the bank, Space plays, p or A goes back", false)
+	}
+}
+
+// StripFocus says whether the arrows are on the row of pattern boxes.
+func (a *App) StripFocus() bool { return a.patStrip && a.scr == Seq }
+
+func (a *App) stripKey(k Key) {
+	switch k {
+	case Left:
+		a.setPattern(a.pat - 1)
+	case Right:
+		a.setPattern(a.pat + 1)
+	case L1, R1: // the bank, as [ and ]
+		a.SeqBank(map[Key]int{L1: -1, R1: 1}[k])
+	case X:
+		a.togglePlay()
+	case A, B:
+		a.patStrip = false
+	case Up: // the tile above (the bank is a ring, as in the pattern dialog)
+		a.setPattern((a.pat-1)/16*16 + ((a.pat-1)%16+12)%16 + 1)
+	case Down:
+		a.setPattern((a.pat-1)/16*16 + ((a.pat-1)%16+4)%16 + 1)
+	}
+}
+
+// drawPatternStrip is the 16 patterns of the bank as a grid of tiles, 4 by 4 like the pads on PADS but a line high: the label, the bars
+// and the notes. The one in front is lit (white while the arrows are on the grid), the ones with notes are bright, empty ones dim.
+func (a *App) drawPatternStrip(g Gfx, x0, y0, avail int) {
+	bank := (a.pat - 1) / 16
+	for i := 0; i < 16; i++ {
+		col, row := i%4, i/4
+		x := x0 + col*avail/4
+		w := x0 + (col+1)*avail/4 - x - 1
+		y := y0 + row
+		slot := bank*16 + i + 1
+		var d lab.PatternDoc
+		used := false
+		if b, err := a.lab.Pattern(slot); err == nil {
+			used = json.Unmarshal(b, &d) == nil && len(d.Notes) > 0
+		}
+		bg, fg := cPanel, cDim
+		switch {
+		case slot == a.pat && a.patStrip:
+			bg, fg = cWhite, cBg
+		case slot == a.pat:
+			bg, fg = cAmber, cBg
+		case used:
+			bg, fg = cLine, cText
+		}
+		g.Fill(x, y, w, 1, bg)
+		txt := fmt.Sprintf("%-3s empty", a.label(slot-1))
+		if used {
+			txt = fmt.Sprintf("%-3s %d bars %3d notes", a.label(slot-1), d.Bars, len(d.Notes))
+			if w < 22 {
+				txt = fmt.Sprintf("%-3s %3d notes", a.label(slot-1), len(d.Notes))
+			}
+		}
+		g.Text(x+1, y, fit(txt, max(w-1, 0)), fg, slot == a.pat)
+	}
 }
 
 // viewSpan is how many steps the grid shows: a bar, and on a wide terminal two or four bars side by side while their
@@ -898,7 +975,7 @@ func (a *App) drawSeq(g Gfx) {
 			g.Cursor(cursor[0], cursor[1], cursor[2], cursor[3])
 		}
 	}
-	if Terminal { // the banks, as on PADS: the one the pattern is in lit
+	if Terminal { // the banks, as on PADS: the one the pattern is in lit (the bank's 16 patterns are in the panel)
 		a.drawBanks(g, (a.pat-1)/16)
 	}
 	// which bar this is, and where the loop is when it plays

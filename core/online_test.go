@@ -134,8 +134,12 @@ func TestOnlineWhenTheUnitIsThereOfflineWhenChosen(t *testing.T) {
 		t.Fatalf("offline chosen: the screen says so and how to go back:\n%s", screenStr(a))
 	}
 	a.ToolsMenu()
+	if a.menu == nil || !strings.Contains(screenStr(a), "Online or offline") {
+		t.Fatalf("t on PROJECTS is the project menu, with online and offline in it:\n%s", screenStr(a))
+	}
+	a.menu.items[len(a.menu.items)-1].run(0)
 	if a.menu == nil || !strings.Contains(screenStr(a), "Online: the projects of the unit") {
-		t.Fatalf("t on PROJECTS offers online and offline:\n%s", screenStr(a))
+		t.Fatalf("that item offers online and offline:\n%s", screenStr(a))
 	}
 }
 
@@ -534,11 +538,15 @@ func TestSearchShowsTheFolderAndCanLookForFoldersOnly(t *testing.T) {
 	if !a.searchDirs || len(a.entries) != 1 || !a.entries[0].dir || a.entries[0].name != "bass" {
 		t.Fatalf("Tab: folders only: %+v", a.entries)
 	}
-	if txt := screenStr(a); !strings.Contains(txt, "FOLDERS") || !strings.Contains(txt, "Tab files") {
+	if txt := screenStr(a); !strings.Contains(txt, "FOLDERS") || !strings.Contains(txt, "Tab categories") {
 		t.Fatalf("the search line says it looks for folders:\n%s", txt)
 	}
 	a.TypeTab()
-	if a.searchDirs || a.entries[0].dir {
+	if a.searchDirs || !a.tagSearch {
+		t.Fatal("Tab again: categories")
+	}
+	a.TypeTab()
+	if a.searchDirs || a.tagSearch || len(a.entries) == 0 || a.entries[0].dir {
 		t.Fatalf("Tab again: files: %+v", a.entries)
 	}
 }
@@ -1574,5 +1582,112 @@ func TestTheEventLogReadsTheUnitsProjectAndLogsItsStatus(t *testing.T) {
 	}
 	if kinds["status"] == 0 || kinds["select"] == 0 {
 		t.Fatalf("the unit's status is in the log: %v", kinds)
+	}
+}
+
+func TestRenameOfflineProjectMovesIt(t *testing.T) {
+	a, _ := newApp(t)
+	parent := t.TempDir()
+	a.set.OfflineDir = parent
+	for _, n := range []string{"PROJECT_03", "PROJECT_05"} {
+		os.MkdirAll(filepath.Join(parent, n), 0o755)
+		os.WriteFile(filepath.Join(parent, n, "PADCONF.BIN"), []byte{0}, 0o644)
+	}
+	a.renameOffline(2)
+	a.prompt.onDone("5") // taken
+	if _, ok := a.offlineProject(2); !ok {
+		t.Fatal("a taken number leaves the project where it is")
+	}
+	a.renameOffline(2)
+	a.prompt.onDone("project_9")
+	if _, ok := a.offlineProject(8); !ok {
+		t.Fatal("PROJECT_03 is PROJECT_09 now")
+	}
+	if _, ok := a.offlineProject(2); ok {
+		t.Fatal("PROJECT_03 is gone")
+	}
+}
+
+// a search result says its folder: in the list (the end of the path, whole) and in the panel (the whole path)
+func TestSearchResultShowsItsFolder(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	SetSize(160, 48)
+	a.GoScreen(3)
+	a.openSearch()
+	a.TypeText("c1")
+	txt := screenStr(a)
+	// the panel is the right column; a long folder (a temp dir on Windows) wraps there, so its lines are read as one
+	var panel strings.Builder
+	for _, l := range strings.Split(txt, "\n") {
+		if i := strings.LastIndex(l, "│"); i >= 0 {
+			panel.WriteString(strings.TrimSpace(l[i+len("│"):]))
+		}
+	}
+	if !strings.Contains(txt, "FOLDER") || !strings.Contains(panel.String(), filepath.FromSlash("/samples/bass")) {
+		t.Fatalf("the panel names the whole folder:\n%s", txt)
+	}
+	if strings.Contains(txt, "bass~") {
+		t.Fatalf("the folder in the list is not cut at the end:\n%s", txt)
+	}
+}
+
+// "Pick a sample" of a pad: the file chosen goes on that pad, and the pad dialog is not asked again
+func TestPickASampleForAPadDoesNotAskForThePadAgain(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	a.cur = 5
+	pad := a.padN()
+	if a.info.Pads[pad].File {
+		t.Skip("the pad has a sample")
+	}
+	a.openPadMenu()
+	for i, it := range a.menu.items {
+		if it.label == "Pick a sample..." {
+			a.menu.cur = i
+		}
+	}
+	a.menuKey(A)
+	if a.scr != Files {
+		t.Fatalf("the file browser is open, on %s", a.ScreenName())
+	}
+	a.cd(filepath.Join(a.Root, "drums"))
+	for i, e := range a.entries {
+		if !e.dir {
+			a.fcur = i
+			break
+		}
+	}
+	a.filesKey(A)
+	if a.picker != nil {
+		t.Fatal("the pad is known: no pad dialog")
+	}
+	if !a.info.Pads[pad].File || a.scr != Pads {
+		t.Fatalf("the sample is on pad %d, screen %s", pad, a.ScreenName())
+	}
+}
+
+// every slice of the slicer says what is set on it: R reversed, x4 a roll, +3 pitch, g80 gain, c50 chance
+func TestSlicesShowTheirMarkers(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	SetSize(160, 48)
+	keys(t, a, "A A D D R A") // a loop on A1
+	a.go_(Slice)
+	if a.sl == nil {
+		t.Skip("no sample on the pad")
+	}
+	keys(t, a, "Y+A") // auto slices
+	if len(a.sl.Slices) < 3 {
+		t.Skip("too few slices")
+	}
+	sg := &a.sl.Slices[0]
+	sg.Reverse, sg.Roll, sg.Pitch, sg.Gain, sg.Chance = true, 4, 3, 80, 50
+	txt := screenStr(a)
+	if !strings.Contains(txt, "1 R x4 +3") {
+		t.Fatalf("the first slice has its markers (as many as fit):\n%s", txt)
+	}
+	if strings.Contains(strings.Split(txt, "\n")[3], "x1") {
+		t.Fatal("a plain slice has none")
 	}
 }

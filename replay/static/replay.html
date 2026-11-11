@@ -117,6 +117,107 @@
   #stylebox input[type=color] { width:44px; height:26px; padding:0; border:0; background:none; }
   #stylebox input, #stylebox select, #stylebox button { background:#2b2b2b; color:var(--text); border:0; padding:5px 8px; font:inherit; }
   #msg { position:fixed; left:50%; top:45%; transform:translateX(-50%); background:#2b2b2b; padding:16px 24px; display:none; }
+
+  /* ---- design layer: one look for the bar, the sidebar and the popups ---- */
+  :root { --bg:#0f0f11; --panel:#17171a; --raise:#202025; --raise2:#2a2a31; --line:#2b2b32; --text:#e7e7ea; --dim:#8d8d96; --amber:#ffb000; --amber-t:rgba(255,176,0,.14); --r:9px;
+          --ui:Inter, "SF Pro Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; --mono:ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  html, body { font:13px/1.35 var(--ui); background:var(--bg); -webkit-font-smoothing:antialiased; }
+  button, select, input, textarea { font-family:var(--ui); font-size:13px; }
+  #bar, #side, #cuepop, #campop, #chpop, #cutpop, #bpop { background:var(--panel); }
+  #bar { gap:12px; padding:12px 18px 14px; border-top:1px solid var(--line); box-shadow:0 -10px 30px rgba(0,0,0,.35); }
+  #bar button, #bar select, #sidetabs button, #side button, #side select, #cuepop button, #cuepop select, #campop button, #campop select, #chpop button, #cutpop button, #bpop button, #bpop select, #camline button {
+    background:var(--raise); color:var(--text); border:1px solid var(--line); border-radius:var(--r); padding:7px 13px; cursor:pointer; transition:background .12s, border-color .12s, color .12s; }
+  #bar button:hover, #bar select:hover, #side button:hover, #side select:hover, #cuepop button:hover, #campop button:hover, #chpop button:hover, #cutpop button:hover, #bpop button:hover { background:var(--raise2); border-color:#3b3b44; }
+  #bar button:active, #side button:active { transform:translateY(1px); }
+  #bar button:disabled, #bar button.dis { opacity:.4; cursor:default; }
+  #bar input, #side input:not([type=range]):not([type=checkbox]):not([type=color]):not([type=file]), #side textarea, #cuepop input, #campop input, #chpop input, #cutpop input, #bpop input {
+    background:#131316; color:var(--text); border:1px solid var(--line); border-radius:var(--r); padding:7px 11px; }
+  #bar input:focus, #side input:focus, #side textarea:focus, #bar select:focus, #side select:focus { outline:none; border-color:var(--amber); box-shadow:0 0 0 3px var(--amber-t); }
+  #bar select, #side select { appearance:none; -webkit-appearance:none; padding-right:30px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238d8d96' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 11px center; }
+  /* the control bar: two rows, grouped */
+  #ctl { display:flex; flex-direction:column; align-items:stretch; gap:10px; }
+  .crow { display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; }
+  .crow .sp { flex:1 1 0; min-width:0; }
+  #ctl .grp { display:flex; align-items:center; gap:8px; }
+  .gl { color:var(--dim); font-size:10px; letter-spacing:.12em; text-transform:uppercase; margin-right:-6px; }
+  .seg { display:inline-flex; align-items:center; gap:2px; padding:3px; background:#131316; border:1px solid var(--line); border-radius:12px; flex-wrap:wrap; }
+  #bar .seg button, #bar .seg select { background:transparent; border-color:transparent; padding:5px 11px; border-radius:9px; color:#c9c9cf; }
+  #bar .seg button:hover, #bar .seg select:hover { background:var(--raise2); border-color:transparent; color:#fff; }
+  #bar .seg button.on { background:var(--amber-t); color:var(--amber); }
+  #bar .seg #zlev { min-width:38px; text-align:center; color:var(--dim); font:12px var(--mono); }
+  #bar button.primary { background:var(--amber); border-color:var(--amber); color:#151100; font-weight:600; padding:8px 18px 8px 14px; min-width:92px; }
+  #bar button.primary:hover { background:#ffc233; border-color:#ffc233; }
+  #bar button.primary::before { content:"\25B6"; font-size:10px; margin-right:8px; }
+  #bar button.primary.playing::before { content:"\275A\275A"; font-size:9px; letter-spacing:-1px; }
+  #time { min-width:118px; text-align:left; color:var(--text); font:15px var(--mono); font-variant-numeric:tabular-nums; }
+  #nudge { color:var(--dim); font:12px var(--mono); min-width:0; }
+  #title { width:clamp(140px, 22vw, 320px); }
+  #bar #seek { accent-color:var(--amber); }
+  #lbls .lbl, #tl .lbl { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:#6f6f78; }
+  #camlane, #buslane, #vwlane, #chaplane, #cues, #capslane, #cutlane { background:#131316; border-radius:6px; }
+  /* the sidebar */
+  #side { width:min(420px, 44vw); border-left:1px solid var(--line); box-shadow:-10px 0 30px rgba(0,0,0,.3); }
+  #sidetabs { flex-wrap:nowrap; gap:2px; padding:10px 12px; border-bottom:1px solid var(--line); align-items:center; }
+  #sidetabs button { background:transparent; border-color:transparent; padding:6px 9px; white-space:nowrap; color:var(--dim); }
+  #sidetabs button:hover { background:var(--raise); color:var(--text); border-color:transparent; }
+  #sidetabs button.act { background:var(--amber-t); color:var(--amber); border-color:transparent; }
+  #sidetabs #sideclose { margin-left:auto; padding:6px 10px; }
+  #sidebody { padding:16px 18px 24px; }
+  #side .pane { gap:12px; }
+  #side .h2 { color:var(--text); font-weight:600; font-size:14px; }
+  #side .h2 .h { font-weight:400; }
+  #side .h2.sub { margin-top:10px; padding-top:14px; border-top:1px solid var(--line); color:var(--dim); font-size:10px; letter-spacing:.12em; text-transform:uppercase; font-weight:600; }
+  #side .h { color:var(--dim); font-size:12px; }
+  #side label { display:grid; grid-template-columns:minmax(96px, 9.5em) minmax(0, 1fr); gap:6px 14px; align-items:center; color:var(--dim); white-space:normal; }
+  #side label .lt { color:#c4c4ca; }
+  #side label .lc { display:flex; align-items:center; gap:8px; min-width:0; flex-wrap:wrap; }
+  #side label .lc > input[type=range], #side label .lc > .two, #side label .lc > select, #side label .lc > .bw { flex:1 1 120px; min-width:0; width:auto !important; }
+  #side label .lc > .bw { display:flex; gap:6px; } #side label .lc > .bw > * { min-width:0; flex:1; }
+  #side label.chk, #side label:not(:has(.lt)) { display:flex; gap:10px; align-items:center; color:#c4c4ca; }
+  #side input[type=range] { accent-color:var(--amber); height:18px; }
+  #side input[type=checkbox] { accent-color:var(--amber); width:16px; height:16px; }
+  #side input[type=color] { width:40px; height:30px; padding:2px; border:1px solid var(--line); border-radius:8px; background:#131316; }
+  #side input[type=file] { background:transparent !important; border:0 !important; padding:0 !important; color:var(--dim); max-width:100%; font-size:12px; }
+  #side input[type=file]::file-selector-button { background:var(--raise); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:5px 11px; margin-right:10px; cursor:pointer; }
+  #side .row { gap:8px; flex-wrap:wrap; }
+  #side .row button { padding:6px 10px; }
+  #side button#s_reset { align-self:flex-start; }
+  #cam_prev { border-radius:10px; }
+  #tplbox .trow { border-bottom:1px solid var(--line); padding:10px 0; }
+  #capbox .crow { border-bottom:1px solid var(--line); }
+  /* small popups over the timeline */
+  #cuepop, #campop, #chpop, #cutpop, #bpop { border:1px solid #3a3a43; border-radius:12px; padding:10px 12px; box-shadow:0 14px 40px rgba(0,0,0,.55); }
+  #msg { background:var(--raise); border:1px solid var(--line); border-radius:12px; }
+  *::-webkit-scrollbar { width:10px; height:10px; } *::-webkit-scrollbar-thumb { background:#34343c; border-radius:6px; border:2px solid transparent; background-clip:content-box; } *::-webkit-scrollbar-track { background:transparent; }
+  @media (max-width:900px) { #side { width:min(420px, 86vw); } .gl { display:none; } #title { width:100%; } .crow .sp { display:none; } }
+
+  /* the tool rail at the right edge: what was the second row of buttons */
+  #rail { flex:none; width:128px; display:flex; flex-direction:column; gap:4px; padding:14px 10px; background:var(--panel); border-left:1px solid var(--line); overflow-y:auto; }
+  #rail .gl { margin:14px 0 4px 6px; } #rail .gl:first-child { margin-top:0; }
+  #rail button, #rail select { width:100%; box-sizing:border-box; text-align:left; background:transparent; border:1px solid transparent; color:#c9c9cf; border-radius:9px; padding:8px 11px; cursor:pointer; }
+  #rail select { background-color:var(--raise); border-color:var(--line); padding-right:26px; text-overflow:ellipsis; }
+  #rail button:hover { background:var(--raise2); color:#fff; }
+  #rail button.on { background:var(--amber-t); color:var(--amber); }
+  body.nohud #rail { display:none !important; }
+  #side { order:2; } #rail { order:3; }
+  @media (max-width:900px) { #rail { width:auto; flex-direction:row; flex-wrap:wrap; position:fixed; left:0; right:0; bottom:calc(var(--barh, 110px)); z-index:4; border-left:0; border-top:1px solid var(--line); padding:6px 10px; } #rail .gl { display:none; } #rail button, #rail select { width:auto; } }
+
+  /* captions: every row the full width, the text in a box of several lines */
+  #capbox .crow { align-items:stretch; gap:8px; }
+  #capbox .crow .row { align-items:center; flex-wrap:nowrap; }
+  #capbox .crow .row:first-child input.t { flex:1 1 0; min-width:0; width:auto; }
+  #capbox textarea.x { width:100%; box-sizing:border-box; min-height:4.6em; resize:vertical; line-height:1.4; font:inherit; }
+  #capbox .crow .row select { flex:1 1 auto; min-width:0; }
+
+  #capbox, #caplist, #capbox .crow, #capbox .crow .row > * { min-width:0; max-width:100%; }
+  #capbox .crow .row > input.t { flex:1 1 0; width:auto; }
+  #capbox .crow .row > button { flex:none; }
+  /* the bar is one row that wraps */
+  #ctl { flex-direction:row; flex-wrap:wrap; align-items:center; gap:10px 14px; }
+  #ctl > .crow { display:contents; }
+  #ctl .sp { order:8; } #ctl #title { order:9; } #ctl > .crow:last-child .sp { display:none; }
+
+  #capbox .crow { flex-wrap:nowrap; }
 </style>
 </head>
 <body>
@@ -138,11 +239,11 @@
 </div>
 <div id="capbox" class="pane">
   <div id="caplist"></div>
-  <label class="g">fade in and out <input id="c_fade" type="number" min="0" max="3" step="0.05" style="width:64px"> s <span class="h">for all captions</span></label>
-  <label class="g">blur behind a caption <input id="c_blur" type="range" min="0" max="12" step="0.5" style="width:130px"> <span id="c_blurv" class="h"></span></label>
-  <label class="g">animation <select id="c_anim"><option value="card">the card appears</option><option value="words">words pop in</option><option value="type">typed letter by letter</option></select> <span class="h">*word* is shown in the accent colour</span></label>
-  <label class="g">dim behind a caption <input id="c_dim" type="range" min="0" max="80" step="1" style="width:130px"> <span id="c_dimv" class="h"></span></label>
-  <label class="g">a new caption lasts <input id="c_len" type="number" min="1" max="60" step="0.5" style="width:64px"> s <span class="h">for all new captions</span></label>
+  <label class="g"><span class="lt">fade in and out</span><span class="lc"><input id="c_fade" type="number" min="0" max="3" step="0.05" style="width:64px"> s <span class="h">for all captions</span></span></label>
+  <label class="g"><span class="lt">blur behind a caption</span><span class="lc"><input id="c_blur" type="range" min="0" max="12" step="0.5" style="width:130px"> <span id="c_blurv" class="h"></span></span></label>
+  <label class="g"><span class="lt">animation</span><span class="lc"><select id="c_anim"><option value="card">the card appears</option><option value="words">words pop in</option><option value="type">typed letter by letter</option></select> <span class="h">*word* is shown in the accent colour</span></span></label>
+  <label class="g"><span class="lt">dim behind a caption</span><span class="lc"><input id="c_dim" type="range" min="0" max="80" step="1" style="width:130px"> <span id="c_dimv" class="h"></span></span></label>
+  <label class="g"><span class="lt">a new caption lasts</span><span class="lc"><input id="c_len" type="number" min="1" max="60" step="0.5" style="width:64px"> s <span class="h">for all new captions</span></span></label>
   <button id="capadd" title="a caption from the time you are at">add a caption here</button>
 </div>
 <div id="chbox" class="pane">
@@ -168,41 +269,46 @@
   <div class="row"><span class="h">offset</span><input id="cam_sync" type="number" step="0.001" style="width:96px"><span class="h">s</span>
     <button data-n="-1">-1 s</button><button data-n="-0.1">-0.1</button><button data-n="-0.0333">-1 f</button><button data-n="0.0333">+1 f</button><button data-n="0.1">+0.1</button><button data-n="1">+1 s</button></div>
   <div class="h2 sub">picture</div>
-  <label class="g">zoom <input id="cam_zoom" type="range" min="1" max="3" step="0.01"> <span id="cam_zoomv" class="h"></span></label>
-  <label class="g">left / right <input id="cam_cx" type="range" min="0" max="1" step="0.005"></label>
-  <label class="g">up / down <input id="cam_cy" type="range" min="0" max="1" step="0.005"></label>
-  <label class="g">corners <input id="cam_round" type="range" min="0" max="60" step="1"> <label class="g" style="margin-left:8px"><input id="cam_mirror" type="checkbox"> mirror</label></label>
-  <label class="g">the box is <select id="cam_layer"><option value="front">in front of the panels</option><option value="behind">behind the panels</option></select></label>
+  <label class="g"><span class="lt">zoom</span><span class="lc"><input id="cam_zoom" type="range" min="1" max="3" step="0.01"> <span id="cam_zoomv" class="h"></span></span></label>
+  <label class="g"><span class="lt">left / right</span><span class="lc"><input id="cam_cx" type="range" min="0" max="1" step="0.005"></span></label>
+  <label class="g"><span class="lt">up / down</span><span class="lc"><input id="cam_cy" type="range" min="0" max="1" step="0.005"></span></label>
+  <label class="g"><span class="lt">corners</span><span class="lc"><input id="cam_round" type="range" min="0" max="60" step="1"> <label class="chk"><input id="cam_mirror" type="checkbox"> mirror</label></span></label>
+  <label class="g"><span class="lt">the box is</span><span class="lc"><select id="cam_layer"><option value="front">in front of the panels</option><option value="behind">behind the panels</option></select></span></label>
   <div class="row"><button id="cam_scene" title="a new scene from here: the box and the panels can differ">new scene here</button><button id="cam_hide" title="a scene without the camera">hide the camera from here</button><button id="cam_off">no camera</button></div>
 </div>
 <div id="stylebox" class="pane">
-  <label>look <select id="s_preset"></select></label>
-  <label>accent <input id="s_accent" type="color" value="#ffb000"> <button id="s_accent_auto" title="the colour of the look">auto</button></label>
-  <label>background <select id="s_bgkind"><option value="preset">the look's</option><option value="solid">colour</option><option value="gradient">gradient</option><option value="image">picture</option></select></label>
-  <label>colours <input id="s_bg1" type="color" value="#000000"> <input id="s_bg2" type="color" value="#1b1b2e"></label>
-  <label>picture <input id="s_bgimg" type="file" accept="image/*"></label>
-  <label>picture dimmed <input id="s_bgdim" type="range" min="0" max="95" value="60"></label>
-  <label>picture fills <select id="s_bgfit"><option value="cover">the video (cropped to fit)</option><option value="contain">the video (all of it)</option><option value="stretch">the video (stretched)</option><option value="tile">as tiles</option><option value="center">centred (its own size)</option></select></label>
-  <label>picture position <span class="two"><input id="s_bgpx" type="range" min="0" max="100"><input id="s_bgpy" type="range" min="0" max="100"></span></label>
-  <label>picture zoom <input id="s_bgzoom" type="range" min="50" max="300"></label>
-  <label>picture blur <input id="s_bgblur" type="range" min="0" max="30"></label>
-  <label>picture drifts <input id="s_bgdrift" type="range" min="0" max="100" title="moves slowly from side to side"> <span id="s_bgdriftv" class="h"></span></label>
-  <label>picture breathes <input id="s_bgbreath" type="range" min="0" max="100" title="zooms in and out a little"> <span id="s_bgbreathv" class="h"></span></label>
-  <label>a new direction every <input id="s_bgper" type="range" min="4" max="60"> <span id="s_bgperv" class="h"></span></label>
+  <label><span class="lt">look</span><span class="lc"><select id="s_preset"></select></span></label>
+  <label><span class="lt">accent</span><span class="lc"><input id="s_accent" type="color" value="#ffb000"> <button id="s_accent_auto" title="the colour of the look">auto</button></span></label>
+  <label><span class="lt">background</span><span class="lc"><select id="s_bgkind"><option value="preset">the look's</option><option value="solid">colour</option><option value="gradient">gradient</option><option value="image">picture</option></select></span></label>
+  <label><span class="lt">colours</span><span class="lc"><input id="s_bg1" type="color" value="#000000"> <input id="s_bg2" type="color" value="#1b1b2e"></span></label>
+  <label><span class="lt">picture</span><span class="lc"><input id="s_bgimg" type="file" accept="image/*"></span></label>
+  <label><span class="lt">picture dimmed</span><span class="lc"><input id="s_bgdim" type="range" min="0" max="95" value="60"></span></label>
+  <label><span class="lt">picture fills</span><span class="lc"><select id="s_bgfit"><option value="cover">the video (cropped to fit)</option><option value="contain">the video (all of it)</option><option value="stretch">the video (stretched)</option><option value="tile">as tiles</option><option value="center">centred (its own size)</option></select></span></label>
+  <label><span class="lt">picture position</span><span class="lc"><span class="two"><input id="s_bgpx" type="range" min="0" max="100"><input id="s_bgpy" type="range" min="0" max="100"></span></span></label>
+  <label><span class="lt">picture zoom</span><span class="lc"><input id="s_bgzoom" type="range" min="50" max="300"></span></label>
+  <label><span class="lt">picture blur</span><span class="lc"><input id="s_bgblur" type="range" min="0" max="30"></span></label>
+  <label><span class="lt">picture drifts</span><span class="lc"><input id="s_bgdrift" type="range" min="0" max="100" title="moves slowly from side to side"> <span id="s_bgdriftv" class="h"></span></span></label>
+  <label><span class="lt">picture breathes</span><span class="lc"><input id="s_bgbreath" type="range" min="0" max="100" title="zooms in and out a little"> <span id="s_bgbreathv" class="h"></span></span></label>
+  <label><span class="lt">a new direction every</span><span class="lc"><input id="s_bgper" type="range" min="4" max="60"> <span id="s_bgperv" class="h"></span></span></label>
   <label><input id="s_rec" type="checkbox"> a REC mark on the video (split view; off: the time is in the header)</label>
-  <label>hit reactions <input id="s_hits" type="range" min="0" max="100" title="a pad that is hit pops up and glows a little (25 %); more adds a ring, over 50 % sparks; 0 = off"> <span id="s_hitsv" class="h"></span></label>
-  <label>panel opacity <input id="s_bgpanels" type="range" min="0" max="100"> <span id="s_bgpanelsv" class="h"></span></label>
-  <label>logo <input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></label>
-  <label>BUS 1 at the start <span class="bw"><select id="s_bussel0"></select> <input id="s_bus0" placeholder="your own text" size="18" hidden></span></label>
-  <label>BUS 2 at the start <span class="bw"><select id="s_bussel1"></select> <input id="s_bus1" placeholder="your own text" size="18" hidden></span></label>
-  <label>BUS 3 at the start <span class="bw"><select id="s_bussel2"></select> <input id="s_bus2" placeholder="your own text" size="18" hidden></span></label>
-  <label>BUS 4 at the start <span class="bw"><select id="s_bussel3"></select> <input id="s_bus3" placeholder="your own text" size="18" hidden></span></label>
+  <label><span class="lt">hit reactions</span><span class="lc"><input id="s_hits" type="range" min="0" max="100" title="a pad that is hit pops up and glows a little (25 %); more adds a ring, over 50 % sparks; 0 = off"> <span id="s_hitsv" class="h"></span></span></label>
+  <label><span class="lt">panel opacity</span><span class="lc"><input id="s_bgpanels" type="range" min="0" max="100"> <span id="s_bgpanelsv" class="h"></span></span></label>
+  <label><span class="lt">logo</span><span class="lc"><input id="s_logo" type="file" accept="image/*"> <button id="s_logo_clear">remove</button></span></label>
+  <label><span class="lt">BUS 1 at the start</span><span class="lc"><span class="bw"><select id="s_bussel0"></select> <input id="s_bus0" placeholder="your own text" size="18" hidden></span></span></label>
+  <label><span class="lt">BUS 2 at the start</span><span class="lc"><span class="bw"><select id="s_bussel1"></select> <input id="s_bus1" placeholder="your own text" size="18" hidden></span></span></label>
+  <label><span class="lt">BUS 3 at the start</span><span class="lc"><span class="bw"><select id="s_bussel2"></select> <input id="s_bus2" placeholder="your own text" size="18" hidden></span></span></label>
+  <label><span class="lt">BUS 4 at the start</span><span class="lc"><span class="bw"><select id="s_bussel3"></select> <input id="s_bus3" placeholder="your own text" size="18" hidden></span></span></label>
   <div class="h" style="color:#777;font-size:11px">later in the take: the "bus change" button</div>
-  <label>handle <input id="s_handle" placeholder="@yourname" size="18"></label>
-  <label>subtitle <input id="s_sub" placeholder="under the title" size="22"></label>
+  <label><span class="lt">handle</span><span class="lc"><input id="s_handle" placeholder="@yourname" size="18"></span></label>
+  <label><span class="lt">subtitle</span><span class="lc"><input id="s_sub" placeholder="under the title" size="22"></span></label>
   <button id="s_reset">reset the look</button>
 </div>
   </div>
+</div>
+<div id="rail">
+<span class="gl">add</span><button id="tplbtn" title="save a setup as a template, use one on this take">templates</button><button id="cambtn" title="the video of you playing">camera</button><button id="capbtn" title="text shown at times of the take">captions</button><button id="chbtn" title="the chapters, and the list for YouTube">chapters</button><button id="vmbtn" title="the view changes from here on: the split view with a mode, or back to the normal view">view change</button><button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
+<span class="gl">view</span><button id="modebtn" title="p: the pads, c: the chromatic keys, a: the arp view, m: the MIDI notes">pads</button><select id="padsel" title="the sample (pad) of the chromatic keys and the arp: its bank is the keyboard" style="display:none"></select><button id="lookbtn" title="s: how the arp is drawn (columns, step grid, ring)" style="display:none">columns</button><button id="laybtn" title="l: the layout of the split view (video, mode and captions; video and mode side by side; one above the other; video with a sidebar of buses, level and logs)">layout</button><button id="viewbtn" title="v: the split view (camera, keys, captions) or the normal view with all the panels">split view</button>
+<span class="gl">look</span><button id="stylebtn" title="colours, background, logo, handle">style</button><button id="full" title="f">full screen</button>
 </div>
 </div>
 <div id="bar">
@@ -223,27 +329,19 @@
     <span class="lbl"></span><div id="seekrow"><input id="seek" type="range" min="0" max="1000" value="0"><div id="vwin"></div></div>
   </div>
   <div id="ctl">
-    <span class="grp"><button id="play" title="Space">play</button><span id="time">0:00.0</span>
-      <button id="undo" title="Ctrl-Z">undo</button><button id="redo" title="Ctrl-Shift-Z">redo</button></span>
-    <span class="grp"><button id="zout" title="show more of the take (Ctrl + wheel, or -)">-</button><span id="zlev" style="min-width:34px;text-align:center;color:var(--dim)">1x</span><button id="zin" title="show less of the take (Ctrl + wheel, or +)">+</button><button id="zfit" title="the whole take">fit</button></span>
-    <span class="grp"><input id="title" placeholder="title" size="18" title="the title shown in the video">
-      <select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button>
+    <div class="crow">
+      <span class="grp"><button id="play" class="primary" title="Space">play</button><span id="time">0:00.0</span></span>
+      <span class="seg"><button id="undo" title="Ctrl-Z">undo</button><button id="redo" title="Ctrl-Shift-Z">redo</button></span>
+      <span class="seg"><button id="zout" title="show more of the take (Ctrl + wheel, or -)">-</button><span id="zlev">1x</span><button id="zin" title="show less of the take (Ctrl + wheel, or +)">+</button><button id="zfit" title="the whole take">fit</button></span>
+      <span class="grp"><select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select><span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span></span>
+      <span class="sp"></span>
+      <input id="title" placeholder="title" size="18" title="the title shown in the video">
+    </div>
+    <div class="crow">
+      <span class="grp"><select id="pat" title="the pattern that plays from here on (at the next loop start): the unit did not say"><option value="">pattern from here...</option></select><button id="clearcues" title="remove all the patterns set by hand">clear</button>
       <select id="cutsel" title="leave a part of the take out of the video (keys: i starts a cut here, o ends it)"><option value="">cut...</option><option value="in">start a cut here (i)</option><option value="out">end the cut here (o)</option><option value="before">cut everything before here</option><option value="after">cut everything after here</option><option value="none">restore all cuts</option></select></span>
-    <span class="grp"><select id="speed" title="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select>
-      <span id="nudge" title="[ and ] move the events against the sound by 10 ms">sync +0 ms</span></span>
-    <span class="grp right"><button id="tplbtn" title="save a setup as a template, use one on this take">templates</button>
-      <button id="cambtn" title="the video of you playing">camera</button>
-      <button id="vmbtn" title="the view changes from here on: the split view with a mode, or back to the normal view">view change</button>
-      <button id="bnbtn" title="the effect of a bus changes from here on">bus change</button>
-      <button id="chbtn" title="the chapters, and the list for YouTube">chapters</button>
-      <button id="capbtn" title="text shown at times of the take">captions</button>
-      <select id="padsel" title="the sample (pad) of the chromatic keys and the arp: its bank is the keyboard" style="display:none"></select>
-      <button id="modebtn" title="p: the pads, c: the chromatic keys, a: the arp view, m: the MIDI notes">pads</button>
-      <button id="lookbtn" title="s: how the arp is drawn (columns, step grid, ring)" style="display:none">columns</button>
-      <button id="laybtn" title="l: the layout of the split view (video, mode and captions; video and mode side by side; one above the other; video with a sidebar of buses, level and logs)">layout</button>
-      <button id="viewbtn" title="v: the split view (camera, keys, captions) or the normal view with all the panels">split view</button>
-      <button id="stylebtn" title="colours, background, logo, handle">style</button>
-      <button id="full" title="f">full screen</button></span>
+      <span class="sp"></span>
+    </div>
   </div>
   <div id="cuepop"></div>
 </div>
@@ -392,9 +490,115 @@ function atIndex(list, T) {
 }
 const push = (map, key, v) => { if (!map.has(key)) map.set(key, []); map.get(key).push(v); };
 
+
+// ---- the terminal cast: the screen of the terminal program as it was drawn, and the keys that were pressed
+let TF = [], TK = []; // TF: {t, lines} each time the screen changed (every one a whole screen); TK: {t, key}
+function buildTerm(timed) {
+  TF = []; TK = [];
+  let cur = null;
+  for (const e of timed) {
+    if (e.k === "key") TK.push({ t: e.t, key: e.key });
+    else if (e.k === "screen") {
+      if (e.lines) cur = e.lines.slice(); else if (cur && e.d) { cur = cur.slice(); for (const k in e.d) cur[+k] = e.d[k]; } else continue;
+      TF.push({ t: e.t, lines: cur });
+    }
+  }
+}
+const termOn = () => TF.length > 0;
+const ANSI16 = ["#1c1c1c", "#e5534b", "#57d38c", "#f0b429", "#5aa7ff", "#c678dd", "#4fd1c5", "#d4d4d8", "#6b6b73", "#ff7a72", "#7ee6a8", "#ffd166", "#8cc4ff", "#dda0ee", "#7fe8dd", "#ffffff"];
+function ansi256(n) {
+  if (n < 16) return ANSI16[n];
+  if (n >= 232) { const v = 8 + (n - 232) * 10; return "rgb(" + v + "," + v + "," + v + ")"; }
+  n -= 16; const q = [0, 95, 135, 175, 215, 255]; return "rgb(" + q[Math.floor(n / 36)] + "," + q[Math.floor(n / 6) % 6] + "," + q[n % 6] + ")";
+}
+// a line of the screen as runs of one style: [{s, fg, bg, bold, dim}]
+const RUNCACHE = new Map();
+function ansiRuns(line) {
+  let r = RUNCACHE.get(line); if (r) return r;
+  r = []; let st = { fg: null, bg: null, bold: false, dim: false, rev: false }, buf = "", i = 0;
+  const flush = () => { if (buf) { const rv = st.rev; r.push({ s: buf, fg: rv ? st.bg || "#0c0c0e" : st.fg, bg: rv ? st.fg || "#d4d4d8" : st.bg, bold: st.bold, dim: st.dim }); buf = ""; } };
+  while (i < line.length) {
+    const c = line[i];
+    if (c === "\x1b" && line[i + 1] === "[") {
+      let j = i + 2; while (j < line.length && !/[@-~]/.test(line[j])) j++;
+      if (line[j] === "m") {
+        flush(); const p = line.slice(i + 2, j).split(";").map(x => x === "" ? 0 : +x);
+        for (let k = 0; k < p.length; k++) {
+          const v = p[k];
+          if (v === 0) st = { fg: null, bg: null, bold: false, dim: false, rev: false };
+          else if (v === 1) st.bold = true; else if (v === 2) st.dim = true; else if (v === 22) st.bold = st.dim = false; else if (v === 7) st.rev = true; else if (v === 27) st.rev = false;
+          else if (v >= 30 && v <= 37) st.fg = ANSI16[v - 30]; else if (v >= 90 && v <= 97) st.fg = ANSI16[v - 90 + 8]; else if (v === 39) st.fg = null;
+          else if (v >= 40 && v <= 47) st.bg = ANSI16[v - 40]; else if (v >= 100 && v <= 107) st.bg = ANSI16[v - 100 + 8]; else if (v === 49) st.bg = null;
+          else if ((v === 38 || v === 48) && p[k + 1] === 2) { const col = "rgb(" + p[k + 2] + "," + p[k + 3] + "," + p[k + 4] + ")"; if (v === 38) st.fg = col; else st.bg = col; k += 4; }
+          else if ((v === 38 || v === 48) && p[k + 1] === 5) { const col = ansi256(p[k + 2]); if (v === 38) st.fg = col; else st.bg = col; k += 2; }
+        }
+      }
+      i = j + 1; continue;
+    }
+    buf += c; i++;
+  }
+  flush(); if (RUNCACHE.size > 4000) RUNCACHE.clear(); RUNCACHE.set(line, r); return r;
+}
+const KEYNAMES = { " ": "Space", enter: "Enter", tab: "Tab", "shift+tab": "Shift Tab", esc: "Esc", backspace: "Backspace", delete: "Del", up: "↑", down: "↓", left: "←", right: "→", pgup: "PgUp", pgdown: "PgDn", home: "Home", end: "End" };
+function keyLabel(k) {
+  if (KEYNAMES[k]) return KEYNAMES[k];
+  const m = k.match(/^((?:ctrl|alt|shift)\+)+(.+)$/);
+  if (m) return k.split("+").map(x => KEYNAMES[x] || (x.length === 1 ? x.toUpperCase() : x[0].toUpperCase() + x.slice(1))).join(" ");
+  return k.length === 1 ? k : k[0].toUpperCase() + k.slice(1);
+}
+const TERM_BG = "#0c0c0e";
+function drawTerminal(T) {
+  const i = atIndex(TF, T), top = VERT ? 108 : 78, bot = H - (VERT ? 190 : 120), padx = VERT ? 24 : 40;
+  const aw = W - 2 * padx, ah = bot - top;
+  if (i < 0) { panel(padx - 12, top - 8, aw + 24, ah + 16); text("the terminal starts here", W / 2, (top + bot) / 2, COL.dim, 26, false, "center"); return; }
+  const lines = TF[i].lines, rows = lines.length, cols = Math.max(80, ...lines.map(l => l.replace(/\x1b\[[0-9;]*[@-~]/g, "").length));
+  g.font = "100px " + TERM_FONT; const cw1 = g.measureText("M").width / 100; // the width of a cell for a font of 1 px
+  let px = Math.min(aw / (cols * cw1), ah / (rows * 1.22)); px = Math.floor(px * 2) / 2;
+  const cw0 = cw1 * px, lh = px * 1.22, oy = top + (ah - rows * lh) / 2;
+  const cw = Math.min(Math.max(cw0, aw / cols), cw0 * 1.08), sx = cw / cw0; // the cells may be a little wider to fill the width, not more: letters stay letters
+  const tw = cols * cw, ox = padx + (aw - tw) / 2; // the panel is as wide as the terminal
+  panel(ox - 12, oy - 8, tw + 24, rows * lh + 16);
+  g.save(); g.beginPath(); g.roundRect(ox - 12, oy - 8, tw + 24, rows * lh + 16, 12); g.clip(); rect(ox - 12, oy - 8, tw + 24, rows * lh + 16, TERM_BG);
+  g.textBaseline = "alphabetic"; g.textAlign = "left";
+  for (let y = 0; y < rows; y++) {
+    let x = 0;
+    for (const r of ansiRuns(lines[y])) {
+      const n = [...r.s].length;
+      if (r.bg) { const x0 = Math.round(ox + x * cw), y0 = Math.round(oy + y * lh); rect(x0, y0, Math.round(ox + (x + n) * cw) - x0, Math.round(oy + (y + 1) * lh) - y0, r.bg); } // whole pixels: no seams between the cells
+      g.fillStyle = r.fg || "#d4d4d8"; g.globalAlpha = r.dim ? 0.55 : 1; g.font = (r.bold ? "bold " : "") + px + "px " + TERM_FONT;
+      g.save(); g.translate(ox, 0); g.scale(sx, 1);
+      let k = 0; for (const ch of r.s) { if (ch !== " ") g.fillText(ch, (x + k) * cw0, oy + y * lh + px * 0.92); k++; }
+      g.restore(); g.globalAlpha = 1; x += n;
+    }
+  }
+  g.restore();
+  drawKeyCaps(T);
+}
+const TERM_FONT = "ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace";
+const KEY_SPAN = 1.6;
+function drawKeyCaps(T) { // the keys that were pressed lately, as caps at the bottom: the newest pops, they all fade
+  let j = atIndex(TK, T); const show = [];
+  while (j >= 0 && show.length < 7 && T - TK[j].t < KEY_SPAN) show.unshift(TK[j--]);
+  if (!show.length) return;
+  const px = VERT ? 46 : 34, hgt = px * 1.9, gap = 14, y = H - (VERT ? 170 : 104);
+  g.font = FONT(px, true); g.textAlign = "center"; g.textBaseline = "alphabetic";
+  const items = show.map(e => { const s = keyLabel(e.key); return { e, s, w: Math.max(hgt, g.measureText(s).width + px * 1.2) }; });
+  let x = (W - (items.reduce((a, b) => a + b.w, 0) + gap * (items.length - 1))) / 2;
+  items.forEach((it, n) => {
+    const age = T - it.e.t, newest = n === items.length - 1, fade = clamp((KEY_SPAN - age) / 0.5, 0, 1), pop = clamp(age / 0.12, 0, 1), sc = newest ? 0.86 + 0.14 * easeOut(pop) + 0.06 * (1 - pop) : 1;
+    g.save(); g.globalAlpha = fade; g.translate(x + it.w / 2, y + hgt / 2); g.scale(sc, sc);
+    g.shadowColor = "rgba(0,0,0,.5)"; g.shadowBlur = 16; g.shadowOffsetY = 5;
+    rrect(-it.w / 2, -hgt / 2, it.w, hgt, 12, newest ? COL.amber : "#2c2c33"); g.shadowColor = "transparent";
+    if (!newest) { g.strokeStyle = "#47474f"; g.lineWidth = 2; g.beginPath(); g.roundRect(-it.w / 2, -hgt / 2, it.w, hgt, 12); g.stroke(); }
+    g.fillStyle = newest ? "#151100" : COL.text; g.fillText(it.s, 0, px * 0.36); g.restore();
+    x += it.w + gap;
+  });
+}
+
 function prepare(events, analysis, cuesIn, adoptedIn) {
   EV = events; AN = analysis;
   const timed = EV.filter(e => e.t !== undefined);
+  buildTerm(timed);
   const ps = [...timed].reverse().find(e => e.k === "project"); // the last: the unit's own project when it was read
   if (ps) PROJ = ps.data;
   for (const p of PROJ.pads || []) padInfo.set(p.n, p);
@@ -829,17 +1033,15 @@ function drawPatternStrip(x, y, w, T) {
   }
 }
 
-function knob(cx, cy, r, v, label, c, hist, T) {
-  const k = r / 40, a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
-  g.lineWidth = 9 * k; g.lineCap = "round";
-  g.strokeStyle = "#2b2b2b"; g.beginPath(); g.arc(cx, cy, r, a0, a1); g.stroke();
+function knob(cx, cy, r, v, label, c, hist, T) { // a control as a vertical bar (the name stayed from when it was a knob)
+  const k = r / 40, bw = 32 * k, bh = 2 * r + 8, bx = cx - bw - 2, by = cy - r - 6;
+  rrect(bx, by, bw, bh, bw / 2, "#2b2b2b");
   if (v !== null) {
-    g.strokeStyle = c; g.beginPath(); g.arc(cx, cy, r, a0, a0 + (a1 - a0) * v / 127); g.stroke();
-    const a = a0 + (a1 - a0) * v / 127;
-    g.strokeStyle = "#fff"; g.lineWidth = 4 * k; g.beginPath(); g.moveTo(cx + Math.cos(a) * (r - 22 * k), cy + Math.sin(a) * (r - 22 * k)); g.lineTo(cx + Math.cos(a) * (r + 3 * k), cy + Math.sin(a) * (r + 3 * k)); g.stroke();
+    const fh = Math.max(bw, bh * v / 127);
+    rrect(bx, by + bh - fh, bw, fh, bw / 2, c);
+    rect(bx - 3 * k, by + bh - fh + (v > 0 ? 0 : bw - 3), bw + 6 * k, 3, "#fff");
   }
-  g.lineCap = "butt";
-  text(v === null ? "-" : String(v), cx, cy + 9 * k, v === null ? COL.dim : COL.text, 24 * k, true, "center");
+  text(v === null ? "-" : String(v), cx + 4, cy + 8, v === null ? COL.dim : COL.text, 26, true, "left");
   text(fit(label, k < 0.8 ? 9 : 12), cx, cy + r + 28 * k, COL.dim, Math.max(13, 16 * k), false, "center");
   const sw = 104 * k, sh = 26 * k, sx = cx - sw / 2, sy = cy + r + 36 * k;
   rect(sx, sy, sw, sh, "#222");
@@ -905,7 +1107,7 @@ function drawMeter(T) {
     for (let k = 0; k < 6; k++) if (peak[Math.max(f - k, 0) * 2 + c] > 65535 * 0.966) clip = true;
   }
   if (clip) { rect(x0 + w - 110, y0 + 10, 90, 28, COL.bad); text("CLIP", x0 + w - 65, y0 + 32, "#111", 20, true, "center"); }
-  const sx = x0 + 24, sy = y0 + 134, sw = w - 48, sh = Math.max(h - 134 - 34 - (VERT ? 12 : 66), 40), nb = AN.bands;
+  const sx = x0 + 24, sy = y0 + 134, sw = w - 48, sh = Math.max(h - 134 - 34 - 12, 40), nb = AN.bands;
   g.globalAlpha = PANEL_A; rect(sx, sy, sw, sh, COL.deep); g.globalAlpha = 1;
   const bwid = sw / nb;
   for (let i = 0; i < nb; i++) {
@@ -915,7 +1117,6 @@ function drawMeter(T) {
     rect(sx + i * bwid + 1, sy + sh - 4 - bh, bwid - 2, Math.max(bh, 2), mix(COL.amber, "#ff5f5f", clamp(v - 0.6, 0, 0.4) / 0.4));
   }
   text("30 Hz", sx + 4, sy + sh + 18, COL.dim, 14); text("18 kHz", sx + sw, sy + sh + 18, COL.dim, 14, false, "right");
-  if (!VERT) drawTempo(x0 + 24, y0 + h - 68, w - 48, 54, T);
 }
 
 // the tempo over the whole take: the tempo of the bank of each pattern in turn (the clock where no pattern is known)
@@ -930,23 +1131,6 @@ function tempoSteps() {
   }
   return tempoSeries.map(e => ({ t: e.t - OFFSET, bpm: e.bpm }));
 }
-function drawTempo(sx, sy, sw, sh, T) {
-  text("TEMPO", sx, sy + 14, COL.dim, 16, true);
-  const d = AN.duration, pts = tempoSteps();
-  if (!pts.length || !d) { text("no clock in the take", sx + 90, sy + 14, COL.dim, 16); return; }
-  let lo = Infinity, hi = -Infinity; for (const e of pts) { lo = Math.min(lo, e.bpm); hi = Math.max(hi, e.bpm); }
-  const mid = (lo + hi) / 2, half = Math.max((hi - lo) / 2, 2) * 1.2;
-  const gx = sx + 90, gw = sw - 190, gy = sy + 2, gh = sh - 4;
-  g.globalAlpha = PANEL_A; rect(gx, gy, gw, gh, COL.deep); g.globalAlpha = 1;
-  g.strokeStyle = COL.amber; g.lineWidth = 2; g.beginPath();
-  pts.forEach((e, i) => { const x = gx + clamp(e.t / d, 0, 1) * gw, y = gy + gh / 2 - (e.bpm - mid) / half * gh / 2; i ? g.lineTo(x, y) : g.moveTo(x, y); });
-  g.stroke();
-  rect(gx + clamp(T_audio / d, 0, 1) * gw - 1, gy, 3, gh, COL.good);
-  const bpm = tempoAt(T).bpm;
-  text(bpm ? (Number.isInteger(bpm) ? bpm : bpm.toFixed(1)) : "", sx + sw, sy + 40, COL.amber, 28, true, "right");
-  text(lo === hi ? "steady" : lo + " - " + hi, sx + sw, sy + 12, COL.dim, 14, false, "right");
-}
-
 // ---- the look: a palette, an accent colour, a background, a logo and a handle. Kept by the server beside the log ({style}), set from the
 // "style" button in the bar, and also by the URL (?preset=midnight&accent=%23ff3b30&handle=@name&subtitle=...) for one viewing.
 const PRESETS = {
@@ -1575,6 +1759,7 @@ function drawFrame(audioTime) {
   drawBackground();
   if (CAM.layer === "behind") drawCamera(audioTime);
   drawHeader(T, audioTime);
+  if (termOn()) { drawTerminal(T); drawCaption(audioTime); drawChapter(audioTime); drawChapterCard(audioTime); drawBrand(); return; }
   if (splitOn()) { drawSplit(T, audioTime); drawChapter(audioTime); drawChapterCard(audioTime); drawBrand(); return; }
   for (const [id, fn] of [["pads", drawPads], ["pattern", drawPattern], ["fx", drawFx], ["meter", drawMeter], ["feed", drawFeed]]) {
     const a = panelAlpha(id, audioTime); if (a <= 0.001) continue;
@@ -1606,7 +1791,7 @@ function frame() {
     followPlayhead(t / d, !audio.paused);
   }
   timeEl.textContent = CUTS.length ? mmss(outTime(t)) + " / " + mmss(outDur()) + "  (take " + mmss(t) + ")" : mmss(t) + " / " + mmss(d);
-  play.textContent = audio.paused ? "play" : "pause";
+  play.textContent = audio.paused ? "play" : "pause"; play.classList.toggle("playing", !audio.paused);
   requestAnimationFrame(frame);
 }
 play.onclick = () => (audio.paused ? audio.play() : audio.pause());
@@ -1683,14 +1868,15 @@ function initCaptions() {
     CAPS.forEach((c, i) => {
       const crow = document.createElement("div"); crow.className = "crow";
       const r1 = document.createElement("div"), r2 = document.createElement("div"), r3 = document.createElement("div"); r1.className = r2.className = r3.className = "row";
-      const f = document.createElement("input"), t = document.createElement("input"), x = document.createElement("input"), del = document.createElement("button");
+      const f = document.createElement("input"), t = document.createElement("input"), x = document.createElement("textarea"), del = document.createElement("button");
       const fs = document.createElement("select"), pi = document.createElement("input"), lab = document.createElement("span");
       f.className = t.className = "t"; x.className = "x";
       f.value = mmss(c.from); t.value = mmss(c.to); x.value = c.text; x.placeholder = "the text"; del.textContent = "x"; del.title = "remove";
       f.title = "from (m:ss.s)"; t.title = "to (m:ss.s)";
       f.onchange = () => { c.from = num(f.value); save(); render(); };
       t.onchange = () => { c.to = num(t.value); save(); };
-      x.oninput = () => { c.text = x.value; save("text"); };
+      x.rows = 3; x.onkeydown = e => { if (e.key === "Enter") e.preventDefault(); };
+      x.oninput = () => { c.text = x.value.replace(/\n/g, " "); save("text"); };
       f.onfocus = () => { audio.currentTime = c.from; };
       del.onclick = () => { CAPS.splice(i, 1); save(); render(); };
       // the spotlight: what the picture is turned to while the caption shows (the rest is blurred and dimmed)
@@ -1746,7 +1932,7 @@ function initCaptions() {
       hl.onpointerdown = ev => drag(ev, b, "l", c); hr.onpointerdown = ev => drag(ev, b, "r", c); b.onpointerdown = ev => { if (ev.target === b) drag(ev, b, "move", c); };
       b.onclick = () => {
         if (b._moved) { b._moved = false; return; }
-        showSettings(); box.classList.add("open"); render(); const rows = list.querySelectorAll("input.x"); if (rows[i]) { rows[i].focus(); rows[i].scrollIntoView({ block: "nearest" }); } audio.currentTime = c.from;
+        showSettings(); box.classList.add("open"); render(); const rows = list.querySelectorAll("textarea.x"); if (rows[i]) { rows[i].focus(); rows[i].scrollIntoView({ block: "nearest" }); } audio.currentTime = c.from;
       };
       el.appendChild(b);
     });
@@ -1756,7 +1942,7 @@ function initCaptions() {
   document.getElementById("capadd").onclick = () => {
     const a = now(), d = AN ? AN.duration : a + 5;
     CAPS.push({ from: +a.toFixed(1), to: +Math.min(a + (+STYLE.capLength || 5), d).toFixed(1), text: "" }); save(); render();
-    const inputs = list.querySelectorAll("input.x"); if (inputs.length) inputs[inputs.length - 1].focus();
+    const inputs = list.querySelectorAll("textarea.x"); if (inputs.length) inputs[inputs.length - 1].focus();
   };
   render(); lane();
 }

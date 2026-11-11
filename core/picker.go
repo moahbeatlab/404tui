@@ -21,11 +21,13 @@ type picker struct {
 	}
 	// a picker of pads (the same dialog everywhere a pad is chosen): the title, whether the pad must have a sample, and what
 	// to do with the pad chosen
-	pads    bool
-	title   string
-	needed  bool
-	onPick  func(pad int)
-	replace bool // the pads with a sample are taken over (a bounce), they are marked so
+	pads   bool
+	title  string
+	needed bool
+	onPick func(pad int)
+	// onCancel is what B does besides closing it: a picker that came out of a menu goes back to it
+	onCancel func()
+	replace  bool // the pads with a sample are taken over (a bounce), they are marked so
 }
 
 // pickPad opens the pad picker: a bank at a time, the pads as they are on the PADS screen. start is the pad the cursor
@@ -108,6 +110,17 @@ func (a *App) pickerKey(k Key) {
 		bank(1)
 	case B:
 		a.picker = nil
+		if p.onCancel != nil {
+			p.onCancel()
+		}
+	case X: // Space: hear the sample of the pad in front
+		if p.pads {
+			if n := p.bank*16 + p.cur; a.info.Pads[n].File {
+				a.playPad(n)
+			} else {
+				a.say(a.label(n)+" has no sample", true)
+			}
+		}
 	case A:
 		if p.pads {
 			n := p.bank*16 + p.cur

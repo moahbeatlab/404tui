@@ -32,6 +32,7 @@ type settings struct {
 	Buses         *app.BusRule `json:"buses,omitempty"`
 	RecordDir     string       `json:"record_dir,omitempty"`
 	RecordDevice  string       `json:"record_device,omitempty"`
+	CastNoAudio   bool         `json:"cast_no_audio,omitempty"` // a terminal cast without the unit's audio
 	LiveCode      string       `json:"live_code,omitempty"`
 	RecCode       string       `json:"rec_code,omitempty"`
 	MidiPort      string       `json:"midi_port,omitempty"`
@@ -40,6 +41,9 @@ type settings struct {
 	MidiLevelChan string       `json:"midi_level_chan,omitempty"`
 	BusNotes      [2]string    `json:"bus_notes,omitempty"`
 	LooperBank    int          `json:"looper_bank,omitempty"`
+	GenKit        genKit       `json:"gen_kit,omitempty"`     // the pads chosen in Generator kit
+	GenBars       int          `json:"gen_bars,omitempty"`    // the bars of a generated pattern (0: the style's own, 2)
+	AutoListen    bool         `json:"auto_listen,omitempty"` // FILES: the file under the cursor plays at once (Ctrl-A)
 }
 
 // dataDir is where the app keeps its own files (settings, autosaves): beside the card folder.

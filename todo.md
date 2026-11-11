@@ -1,5 +1,13 @@
 # TODO
 
+## Remove or refactor the classic program (`tui/`, bubbletea)
+
+The program people use is `platform/terminal` on top of `core` (the same screens as the handheld and the web page). The older
+bubbletea program in `tui/` (Files tree, Perform, Slicer, its own views) is the "classic" one: remove it, or move what is only
+there (and still wanted) into `core`. Look at what `sp404` starts by default, what `-classic` or similar flags still reach it,
+the docs that describe it (`docs/ui.md`, screenshots), and its large test suite (`tui/tui_test.go`, one test already fails
+without a unit: `TestRawMIDIBytesDriveARunningProgram`). The first scripted terminal cast was made against `tui/` by mistake.
+
 ## Record a tmux-based session on a real device
 
 Goal: a replayable recording of 404tui driving a real SP-404MKII, to show the workflow
@@ -90,3 +98,10 @@ use a spare project.
 - [ ] **Patterns page**: Program Change switching (unit: PC Rx on, MIDI mode B) and the blink and takeover of the page.
 - [ ] **Queued PLACE and DELETE on beat 1**, and the import without a Stop: is the gap in the pattern gone?
 - [ ] A pattern file rewritten while it plays (earlier: the write worked, nothing changed audibly).
+
+## Pattern generator (branch pattern-generator)
+
+First version: `sp404 generate <project> -style house|tech house|techno` writes an arrangement (intro, groove, variation, build, stop, drop,
+break, outro) into a copy of a project, played with the kit on one bank (pad names say the roles). Done after that: three effects after MIDI Conductor's chain: euclid/polymeter lines with free cycle lengths, echo (repeats that fade, round the loop end) and chance with a memory (the dice repeat every n hits). Next: round-robin between similar pads, a bell-shaped humanise, CC sweeps in the build, the effects as a chain per lane in a style, a sequencer tool (`t`) for it,
+variations on an existing pattern (fill, ghosts, hat pattern, half-time, per-lane locks), re-rolling one section, drill/trap/DnB styles,
+checking the result by rendering and measuring it.

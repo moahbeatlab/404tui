@@ -153,6 +153,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tick()
 	case tea.KeyMsg:
+		m.app.CastKey(msg.String())
 		m.key(msg)
 		if m.app.Quit {
 			return m, tea.Quit
@@ -274,13 +275,25 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.Dispatch(core.Event{Key: core.Y, Down: false})
 		}
 		return
+	case "#": // the search by categories (kick, hat, loop...), in the file browser
+		m.disarm()
+		m.app.OpenTagSearch()
+		return
 	case "ctrl+l": // reload the unit (while a project is edited live), from any screen
 		m.disarm()
 		m.app.ReloadUnit()
 		return
+	case "ctrl+a": // FILES: auto play, the file under the cursor plays at once
+		m.disarm()
+		m.app.ToggleAutoListen()
+		return
 	case "ctrl+e": // PADS: export the bank
 		m.disarm()
 		m.app.ExportBank()
+		return
+	case "ctrl+t", "f10": // the terminal cast (F10 too): the keys and the screen (and the audio), a recording of its own
+		m.disarm()
+		m.app.ToggleCast()
 		return
 	case "ctrl+r", "f9": // record the unit's audio, as everywhere in the program (F9 too, for a terminal that keeps Ctrl-R for itself)
 		m.disarm()
@@ -302,6 +315,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 		return
 	case "y", "Y":
 		m.arm(yShift, core.Y)
+		return
+	case "p": // SEQ: the arrows choose the pattern in the row of 16 boxes
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			m.app.SeqStrip()
+		}
 		return
 	case "m", "M": // SEQ: mute the track; FILES and PADS: mark the file or the pad, M marks them all (and unmarks them all again)
 		if m.armed == noShift && !m.aHeld && !m.app.Modal() {
@@ -459,6 +477,7 @@ func (m *Model) View() string {
 	st := time.Now()
 	cells := m.app.RenderCells()
 	out := Render(cells, m.profile, m.glyphs)
+	m.app.CastScreen(out, m.cols)
 	if d := time.Since(st); d > 80*time.Millisecond && dbg.Enabled() {
 		dbg.Logger.Warn("slow frame", "ms", d.Milliseconds(), "screen", m.app.ScreenName(), "cols", m.cols, "rows", m.rows)
 	}

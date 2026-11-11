@@ -15,8 +15,10 @@ import (
 	"fmt"
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/dbg"
+	"github.com/moahbeatlab/404tui/perflog"
 	"github.com/moahbeatlab/404tui/perform"
 	"github.com/moahbeatlab/404tui/record"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -119,6 +121,7 @@ type entry struct {
 	dir     bool
 	project bool // a folder with a PADCONF.BIN: a project of the SP-404MKII
 	size    int64
+	where   string // a result of the search by categories: the whole folder it is in (the name is then a path from the folder in view)
 }
 
 // App is the state of the front end.
@@ -167,8 +170,10 @@ type App struct {
 	splash            *splash   // the logo and dashboard at the start
 	as                autosave
 	idx               indexJob
-	onepad            onePad
-	autoSens          float64 // how easily Y+A hears an onset (0: 0.5)
+	onepad            onePad      // the arp tool's notes
+	chordp            onePad      // the chord tool's
+	sampleIn          map[int]int // the note a pad's sample is in, as chosen in the chord or arp tool
+	autoSens          float64     // how easily Y+A hears an onset (0: 0.5)
 	lfo               lfoState
 	env               envState
 	envInit           bool
@@ -182,7 +187,9 @@ type App struct {
 	aTick             uint32
 	aSession          int // counts the holds of A, so that an edit session is one undo step
 	undoSes           int
-	toolBase          *lab.Snap // the project as it was when the open tool dialog began: its changes are trials
+	toolBase          *lab.Snap       // the project as it was when the open tool dialog began: its changes are trials
+	genRand           *rand.Rand      // the dice of the generator's seeds (made from the clock when first needed)
+	trialUndo         func(redo bool) // undo and redo inside a dialog that rolls patterns: its rolls (nil: none is open)
 	tt2               trackState2
 	tt                trackState  // the settings of the track tools
 	scopeRow          bool        // the timing tools act on the row under the cursor only, not on every pad
@@ -199,11 +206,14 @@ type App struct {
 	usedCache         map[int]string  // the patterns that use each pad, read once per change
 	peakMax           map[peakKey]int // the loudest value of each sample, for the slicer's scale
 	soundUntil        time.Time       // when the sample that plays ends, for Space (play or stop)
+	patStrip          bool            // SEQ on a terminal: the arrows choose the pattern in the row of 16 boxes (p)
 	seqOneBar         bool            // SEQ on a wide terminal: one bar in view, though the window has the room for more
 	orderOn           bool            // SLICE: the order plays in a loop
 	orderFrames       int             // its length
 	slUndo, slRedo    []string        // the slicing before each change, as text, for undo and redo on the slicer's screen
 	slSkip            bool
+	ltags             *localTags       // your tags on this computer's samples
+	assignTo          int              // FILES, from a pad's "Pick a sample": the pad (1..160) the sample goes on, 0 for none
 	tagSearch         bool             // the search is by tags
 	searchCut         bool             // the search gave up before the end
 	kb                *keyboard        // the on-screen keyboard of the search, when open
@@ -238,7 +248,6 @@ type App struct {
 	jobAfter          func(err error) // what to do on the main loop when the job in the background is finished
 	aud               map[int]int     // pads whose sample is being auditioned in the pattern: pad -> handle
 	prevOrder         []string        // the files decoded for the browser, oldest first
-	arp               arpState        // the settings of the sample arp, kept between visits
 	arpp              arpPrint        // and of the pattern arp
 	marks             []int           // the pads marked as keys of the arp, in the order they were marked
 	arpOn             bool            // the live arp is looping
@@ -256,6 +265,9 @@ type App struct {
 	seqStart          time.Time
 	evSnapCh          chan unitSnap       // the unit's project, read for the event log
 	evlog             *eventLog           // the log of events beside the recording that runs
+	cast              castState           // what the cast has of the screen (castlog.go)
+	castRun           *castRun            // the terminal cast that runs (Ctrl-T)
+	castLog           *perflog.Log        // the log the keys and the screen go to while a recording runs
 	playPat           int                 // the pattern that loops (1..160), 0 when none: the view can be on another pattern
 	trk               map[int]map[int]int // SEQ: pattern -> pad -> mute/solo
 	freeze            bool                // SEQ: loop only the bar in focus
@@ -823,7 +835,7 @@ func (a *App) Playing() bool {
 // PlayStop is the space bar on PADS and SEQ: what sounds stops, and when nothing does it plays (the key X). It says whether
 // it stopped something.
 func (a *App) PlayStop() bool {
-	if (a.scr != Pads && a.scr != Seq) || a.menu != nil || a.prompt != nil || a.pp != nil || a.carry != nil {
+	if (a.scr != Pads && a.scr != Seq) || a.menu != nil || a.picker != nil || a.prompt != nil || a.pp != nil || a.carry != nil {
 		return false
 	}
 	if a.scr == Pads && (a.arpOn || a.seqOn || a.playing >= 0 && time.Now().Before(a.soundUntil)) {
@@ -831,6 +843,41 @@ func (a *App) PlayStop() bool {
 		return true
 	}
 	return false
+}
+
+// ToggleAutoListen is Ctrl-A of a keyboard on FILES: from now on the file under the cursor plays as soon as it is there, as Space
+// would play it (in the pattern in place of the pad's sample while the pattern loops and the pad has notes in it). It is remembered.
+func (a *App) ToggleAutoListen() {
+	if a.scr != Files || a.Modal() || a.prompt != nil || a.kb != nil {
+		return
+	}
+	a.CancelShift()
+	a.set.AutoListen = !a.set.AutoListen
+	a.saveSettings()
+	if !a.set.AutoListen {
+		a.stopPreview()
+		a.say("auto play off: Space plays a file (Ctrl-A turns it on)", false)
+		return
+	}
+	a.say("auto play on: the file under the cursor plays at once (Ctrl-A turns it off)", false)
+	a.listenHere()
+}
+
+// listenHere plays the file under the cursor for auto play. On a folder (or a file that does not decode) what was heard stops, and the
+// pad that had a file in its place in the pattern plays its own sample again.
+func (a *App) listenHere() {
+	e, ok := a.current()
+	if ok && !e.dir && !e.project && audioExts[strings.ToLower(pathExt(e.name))] {
+		if id, err := a.decode(e); err == nil {
+			a.listen(e, id)
+			return
+		}
+	}
+	a.stopPreview()
+	if a.aud != nil {
+		a.aud = nil
+		a.replay()
+	}
 }
 
 // ExportBank is Ctrl-E of a keyboard on PADS: the pads of the bank (the marked ones) as WAV files in a folder.
@@ -1007,8 +1054,12 @@ func (a *App) ToolsMenu() {
 		if a.pp != nil {
 			a.pp.page = 2
 		}
-	case Unit:
-		a.modeMenu()
+	case Unit: // the project menu: the same as A
+		if Terminal && !a.onlineNow() {
+			a.offlineMenu()
+		} else {
+			a.unitMenu()
+		}
 	case Files:
 		a.placesMenu() // t on FILES: load files from where (the file tools are in it)
 	case Slice, Seq:
@@ -1056,6 +1107,10 @@ func (a *App) NextScreen(d int) {
 }
 
 func (a *App) go_(s Screen) {
+	a.patStrip = false
+	if s != Files {
+		a.assignTo = 0
+	}
 	if a.arpOn && s != Pads {
 		a.stop()
 	}
@@ -1315,6 +1370,12 @@ func (a *App) filesKey(k Key) {
 			return
 		}
 		name := strings.TrimSuffix(filepath.Base(e.name), filepath.Ext(e.name))
+		if a.assignTo > 0 { // came from "Pick a sample" of a pad: it goes on that pad
+			n := a.assignTo - 1
+			a.assignTo = 0
+			a.assignFile(id, name, n)
+			return
+		}
 		if Terminal { // a computer chooses the pad in the pad dialog, as everywhere a pad is chosen
 			a.pickPad("put "+fit(name, 24)+" on a pad", a.padN(), false, func(n int) { a.assignFile(id, name, n) })
 			return

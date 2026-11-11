@@ -14,7 +14,7 @@ The panel names the target pad (`TARGET A3`, the pad the cursor was on in PADS) 
 - **Browse.** `j k` up and down, `l` opens a folder, `h` goes up, `[ ]` page. `Space` listens to a sample on the computer's speakers, `x` stops. `Esc` goes back to PADS.
 - **Put a file on a pad.** `a` opens the pad dialog and puts the sample on the pad you choose (the cursor follows to that pad). With files marked (`m` marks the file and moves on, `M` marks the whole folder), `a` puts them all on pads: files that start with a number (a kit: `03_Loop.wav`,
   `12_Clap.wav`) go on the pad of that number in the bank you choose, the others one after the other from the pad you choose, in the order of their names (`clap_2` before `clap_10`); files named EMPTY and silent ones are left out.
-- **Search.** `y a` (or `/`) opens a one-line search: what you type filters the files of the folder and everything below it, and the line says how many are left. `Enter` keeps the result, `Esc` ends the search.
+- **Search.** `y a` (or `/`) opens a one-line search: what you type filters the files of the folder and everything below it, and the line says how many are left. `Enter` keeps the result, `Esc` ends the search. `Tab` while typing changes what is searched: file names, then folders, then **categories**. `#` opens the search by categories at once: the categories are the words of a sample's name and of its folders, worked out as the unit's tag index does it (`kick`, `hat`, `loop`, `126`, `house`; `bd` is a `kick`, `hh` a `hat`), so `kick 909` finds every kick of a 909 kit however its file is named. You can add your own: in the files menu (`t`) **Tag as** puts the file (or, on a folder, everything in it) in a category with one key (`kick`, `snare`, `hat`, `bass`, `synth`, `loop`, `favourite`... left and right choose, `a` applies), and **Tag with words** takes any words (`909`, `c#m`, `wobbly`). They are kept in `tags.json` next to the settings, and the file's tags show in the panel. It always searches every index you have made (`t`, Index), wherever you are in the file system; each result says its whole folder, and `Enter` loads it from there; the status line says which categories would narrow the result (`kick 340  hat 280 ...`).
 
 ![The search](img/pc-file-search.png)
 
@@ -28,7 +28,7 @@ MIDI files (`.mid`) are in the list too: `a` on one makes a pattern of a track o
 
 ## Keys
 
-**On a computer:** `a` to a pad... · `Space` listen · `x` stop · `j k` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where / file tools · `m` mark file · `M` mark all · `y x` places · `y a` search · `y b` favourite.
+**On a computer:** `a` to a pad... · `Space` listen · `x` stop · `j k` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where / file tools · `m` mark file · `M` mark all · `Ctrl-A` auto play (the file under the cursor plays at once, in the pattern while it loops) · `y x` places · `y a` or `/` search · `#` categories · `y b` favourite.
 
 **On the handheld:** `A` to pad · `X` listen · D-pad browse, open and up · `L1 R1` page · `B` pads · `Y+X` places · `Y+A` search · `Y+B` favourite · `Sel+A` mark · `Sel+B` files menu.
 
