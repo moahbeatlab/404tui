@@ -305,6 +305,7 @@ func (a *App) searchLocalTags(words []string) {
 		prefix = strings.ToLower(rel) + string(filepath.Separator)
 	}
 	base := filepath.Dir(root)
+	ltags := a.localTagStore()
 	counts := map[string]int{}
 	s := bufio.NewScanner(f)
 	s.Scan() // the #root line
@@ -314,7 +315,8 @@ func (a *App) searchLocalTags(words []string) {
 		if tab < 0 || prefix != "" && !strings.HasPrefix(strings.ToLower(line[:tab]), prefix) {
 			continue
 		}
-		tags := app.TagsFor(filepath.ToSlash(filepath.Join(root, line[:tab])), filepath.ToSlash(base))
+		full := filepath.Join(root, line[:tab])
+		tags := append(app.TagsFor(filepath.ToSlash(full), filepath.ToSlash(base)), ltags.userTags(full)...)
 		ok := true
 		for _, w := range words {
 			hit := false

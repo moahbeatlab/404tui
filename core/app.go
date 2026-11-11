@@ -201,6 +201,7 @@ type App struct {
 	orderFrames       int             // its length
 	slUndo, slRedo    []string        // the slicing before each change, as text, for undo and redo on the slicer's screen
 	slSkip            bool
+	ltags             *localTags       // your tags on this computer's samples
 	tagSearch         bool             // the search is by tags
 	searchCut         bool             // the search gave up before the end
 	kb                *keyboard        // the on-screen keyboard of the search, when open

@@ -645,6 +645,13 @@ The file browser: this computer, the unit's card and its storage. `t` chooses wh
 
 - `New folder...`
 
+*Your Tags (This Computer)*
+
+- `Search by categories (#)`
+- `Tag as (1)` — kick, snare, ... favourite (18 values); now kick
+- `Tag with words...`
+- `Take a tag off...`
+
 ## SLICE
 
 The slicer: cut a sample into slices and play them in an order. `Enter` opens the settings, `t` the tools.

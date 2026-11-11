@@ -4255,3 +4255,55 @@ func TestSearchByCategoriesInTheIndex(t *testing.T) {
 		t.Fatal("names, folders, categories")
 	}
 }
+
+// your own tags: a file, or a folder for everything below it; the search by categories finds them, and they are kept
+func TestLocalTagsAreFoundByTheCategorySearch(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	a.go_(Files)
+	a.cd(a.Root)
+	a.startIndex(a.Root)
+	for i := 0; i < 200; i++ {
+		a.idx.mu.Lock()
+		running := a.idx.running
+		a.idx.mu.Unlock()
+		if !running {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	a.indexTick()
+	bass := filepath.Join(a.Root, "bass")
+	files := filepath.Join(bass, "bass_C1.wav")
+	st := a.localTagStore()
+	if n := st.change([]string{files}, []string{"Wobbly"}, true); n != 1 {
+		t.Fatalf("one file tagged: %d", n)
+	}
+	if n := st.change([]string{filepath.Join(a.Root, "drums")}, []string{"909"}, true); n != 1 {
+		t.Fatalf("one folder tagged: %d", n)
+	}
+	a.saveLocalTags()
+	a.OpenTagSearch()
+	a.searchQ = "wobbly"
+	a.list()
+	if len(a.entries) != 1 || !strings.HasSuffix(a.entries[0].name, "bass_C1.wav") {
+		t.Fatalf("the file with the tag: %+v", a.entries)
+	}
+	a.searchQ = "909"
+	a.list()
+	if len(a.entries) == 0 {
+		t.Fatal("a tag on a folder is on its files")
+	}
+	for _, e := range a.entries {
+		if !strings.HasPrefix(e.name, "drums") {
+			t.Fatalf("only the drums have it: %s", e.name)
+		}
+	}
+	if got := a.tagsOf(files); got != "wobbly" {
+		t.Fatalf("the panel's tags: %q", got)
+	}
+	a.ltags = nil
+	if n := a.localTagStore().change([]string{files}, []string{"wobbly"}, false); n != 1 {
+		t.Fatal("the tags were kept, and can be taken off")
+	}
+}
