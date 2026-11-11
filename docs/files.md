@@ -24,6 +24,8 @@ The panel names the target pad (`TARGET A3`, the pad the cursor was on in PADS) 
 - **Tags and the index of the unit's files.** With a unit plugged in, the files menu can **index** the folder you are in: every sample gets tags worked out from its name and the folders it is in (`SD:Synth/House/124_bass_wobble.wav` is synth, house, 124, bass, wobble).
   The index is one file on the card. **Search by tags** finds the samples that have them; **Tag** gives files tags of your own, **Favourite** the tag `favourite`. A platform without a unit does not offer this.
 
+MIDI files (`.mid`) are in the list too: `a` on one makes a pattern of a track of it (see [midi.md](midi.md)).
+
 ## Keys
 
 **On a computer:** `a` to a pad... · `Space` listen · `x` stop · `j k` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where / file tools · `m` mark file · `M` mark all · `Ctrl-A` auto play (the file under the cursor plays at once, in the pattern while it loops) · `y x` places · `y a` or `/` search · `#` categories · `y b` favourite.

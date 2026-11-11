@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -9,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/moahbeatlab/404tui/core"
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/web"
 )
 
@@ -170,4 +173,71 @@ func TestTheToolsPageSlicesAndOpensPadTools(t *testing.T) {
 		t.Fatal("the tools of a pad are a menu")
 	}
 	post(t, ts, "", `{"op":"escape"}`)
+}
+
+// A MIDI file sent from the page opens the form of the program; the form's last entry writes the pattern, and the pattern comes back as a file.
+func TestTheToolsPageImportsAndExportsMIDI(t *testing.T) {
+	ts, _ := toolsServer(t, "")
+	notes := []formats.MIDINote{{Tick: 0, Len: 240, Note: 36, Vel: 100}, {Tick: 480, Len: 240, Note: 43, Vel: 90}, {Tick: 960, Len: 240, Note: 48, Vel: 80}}
+	file := formats.WriteMIDI([]formats.MIDIOut{{Name: "bass", Notes: notes}}, 120, 4, 4*formats.PPQ)
+	b64 := base64.StdEncoding.EncodeToString(file)
+	st := post(t, ts, "", `{"op":"midi-open","text":"bass.mid","data":"`+b64+`"}`)
+	if st.Menu == nil || !strings.HasPrefix(st.Menu.Title, "MIDI file") {
+		t.Fatalf("no form: %+v (%s)", st.Menu, st.Msg)
+	}
+	last := st.Menu.Items[len(st.Menu.Items)-1]
+	st = post(t, ts, "", fmt.Sprintf(`{"op":"run","i":%d}`, last.Index))
+	if st.Menu != nil || !strings.Contains(st.Msg, "3 notes") {
+		t.Fatalf("after the import: menu %v, %q", st.Menu, st.Msg)
+	}
+	resp, err := http.Post(ts.URL+"/tools/api", "application/json", strings.NewReader(fmt.Sprintf(`{"op":"midi-export","slot":%d}`, st.Pattern.Slot)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out struct{ Name, Data string }
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || out.Name == "" {
+		t.Fatalf("export: %v %+v", err, out)
+	}
+	raw, err := base64.StdEncoding.DecodeString(out.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := formats.ParseMIDI(raw)
+	if err != nil || len(g.Parts) != 1 || len(g.Parts[0].Notes) != 3 {
+		t.Fatalf("the file that came back: %v %+v", err, g.Parts)
+	}
+	// a damaged upload is refused, not a crash
+	r2, err := http.Post(ts.URL+"/tools/api", "application/json", strings.NewReader(`{"op":"midi-open","text":"x.mid","data":"!!!"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2.Body.Close()
+	if r2.StatusCode != 400 {
+		t.Fatalf("a broken upload gave %d", r2.StatusCode)
+	}
+}
+
+// Several files sent together: the first opens the form, the others wait, and each import goes into the same pattern, added to it.
+func TestTheToolsPageImportsSeveralMIDIFilesIntoOnePattern(t *testing.T) {
+	ts, _ := toolsServer(t, "")
+	one := func(note uint8, bars int) string {
+		var ns []formats.MIDINote
+		for i := 0; i < bars*4; i++ {
+			ns = append(ns, formats.MIDINote{Tick: uint32(i) * formats.PPQ, Len: 120, Note: note, Vel: 100})
+		}
+		return base64.StdEncoding.EncodeToString(formats.WriteMIDI([]formats.MIDIOut{{Name: "x", Notes: ns}}, 120, 4, uint32(bars*4*formats.PPQ)))
+	}
+	st := post(t, ts, "", `{"op":"midi-open","text":"a.mid","i":0,"val":2,"data":"`+one(36, 1)+`"}`)
+	post(t, ts, "", `{"op":"midi-open","text":"b.mid","i":1,"data":"`+one(48, 2)+`"}`)
+	for n := 0; n < 2; n++ {
+		if st.Menu == nil || !strings.Contains(st.Menu.Title, fmt.Sprintf("%d of 2", n+1)) {
+			t.Fatalf("form %d: %+v (%s)", n+1, st.Menu, st.Msg)
+		}
+		imp := st.Menu.Items[len(st.Menu.Items)-2] // Import the pattern; the last one leaves the file out
+		st = post(t, ts, "", fmt.Sprintf(`{"op":"run","i":%d}`, imp.Index))
+	}
+	if st.Menu != nil || !strings.Contains(st.Msg, "now 16 notes in 2 bars") {
+		t.Fatalf("after both: menu %v, %q", st.Menu, st.Msg)
+	}
 }

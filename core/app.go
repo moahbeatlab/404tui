@@ -126,10 +126,14 @@ type entry struct {
 
 // App is the state of the front end.
 type App struct {
-	lab    *lab.Lab
-	Root   string // where the samples are: the file browser cannot go above it
-	OutDir string // where projects are written
-	Audio  Audio
+	midiRun  *midiBatch // the MIDI files that are being imported into one pattern
+	midiInto int        // the pattern the last MIDI file went into: the next form starts on it
+	midiPad  int        // the pad (sample) the last melody of a MIDI file was on, plus one (0: none yet)
+	midiMode int        // what the last MIDI import did in the pattern (see midiForm.mode), plus one (0: none yet)
+	lab      *lab.Lab
+	Root     string // where the samples are: the file browser cannot go above it
+	OutDir   string // where projects are written
+	Audio    Audio
 	// AudioLate delivers an audio output that opened after the start (opening it can take long or block); Run takes it.
 	AudioLate chan Audio
 
@@ -402,7 +406,7 @@ func (a *App) readDir(dir string, projects bool) ([]entry, error) {
 			continue
 		}
 		switch strings.ToLower(pathExt(n)) {
-		case ".wav", ".aif", ".aiff", ".flac", ".mp3", ".smp":
+		case ".wav", ".aif", ".aiff", ".flac", ".mp3", ".smp", ".mid", ".midi":
 			var size int64
 			if local {
 				if fi, err := os.Stat(filepath.Join(dir, n)); err == nil {
@@ -1319,6 +1323,10 @@ func (a *App) filesKey(k Key) {
 		if !ok || e.dir {
 			return
 		}
+		if isMIDIFile(e.name) {
+			a.say("a MIDI file: A makes a pattern of it", false)
+			return
+		}
 		id, err := a.decode(e)
 		if err != nil {
 			a.say(err.Error(), true)
@@ -1336,6 +1344,14 @@ func (a *App) filesKey(k Key) {
 		}
 		if e.dir {
 			a.openEntry()
+			return
+		}
+		if isMIDIFile(e.name) {
+			if a.joinPick {
+				a.say("the slicer needs a sample, not a MIDI file", true)
+				return
+			}
+			a.importMIDIEntry(e)
 			return
 		}
 		id, err := a.decode(e)

@@ -2,7 +2,11 @@
 // program serves it over HTTP (sp404 serve) and the demo on GitHub Pages runs it in the browser (cmd/demowasm).
 package toolsapi
 
-import "github.com/moahbeatlab/404tui/core"
+import (
+	"encoding/base64"
+
+	"github.com/moahbeatlab/404tui/core"
+)
 
 // Request is one call: Op says what to do, the rest is what it needs.
 type Request struct {
@@ -20,6 +24,7 @@ type Request struct {
 	Text string `json:"text"`
 	Done bool   `json:"done"`
 	Kind string `json:"kind"`
+	Data string `json:"data"` // a file, in base64 (a MIDI file for midi-open)
 }
 
 // Do does what the request says and returns what is to be sent back (the state, or the pads for "pads"); a failure has a status code
@@ -93,6 +98,18 @@ func Do(r *core.Remote, in Request) (v any, code int, msg string) {
 		r.ReloadUnit()
 	case "live":
 		r.SetLive(in.On)
+	case "midi-open":
+		b, err := base64.StdEncoding.DecodeString(in.Data)
+		if err != nil {
+			return nil, 400, "the file did not come across"
+		}
+		r.MIDIOpen(in.Text, b, in.I == 0, in.Val) // I: the place of the file in a run of files (0 starts a run), Val: how many files the run has
+	case "midi-export":
+		name, b, err := r.MIDIExport(in.Slot)
+		if err != nil {
+			return nil, 409, err.Error()
+		}
+		return map[string]string{"name": name, "data": base64.StdEncoding.EncodeToString(b)}, 0, ""
 	case "send":
 		if msg := r.SendToUnit(in.I); msg != "" {
 			return nil, 409, msg

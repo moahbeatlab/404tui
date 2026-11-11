@@ -282,6 +282,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Drum and bass  174 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
     - `Dubstep  140 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
     - `Trap  140 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+- `Export this pattern as a MIDI file`
 - `Variation of this pattern (fill, roll, thinner, busier, break)...`
   - **variation of A1** (a dialog):
 

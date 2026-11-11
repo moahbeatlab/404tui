@@ -42,6 +42,8 @@ The pattern in front as the unit's step grid: a track for each pad that has note
 
 - **Tempo.** The tempo of the bank is set in the pattern tools (60 to 240 BPM); *Tempo select* chooses between each bank's own tempo and the project's.
 
+A pattern can come from a MIDI file and go out as one: [midi.md](midi.md). In the pattern menu (`t`): *Export this pattern as a MIDI file*.
+
 ## Keys
 
 **On a computer:** `a` note on/off · `e h j k l` edit (hold) · `Space` play / stop · `Enter` or `b` note settings · `x` hear note · `h j k l` pad, step · `[ ]` bank · `p` the 4 by 4 tiles of the bank's patterns (arrows choose, the pattern changes as you move, `p` goes back) · `{ }` bar · `t` tools · `m` mute track · `s` solo track · `f` freeze view · `z` one bar / more ·

@@ -606,3 +606,25 @@ func (a *App) remoteReplay() {
 		a.hearOrder(false)
 	}
 }
+
+// MIDIOpen takes a MIDI file that was sent from the page: the first of a run (of total files) opens the form (which part, which pad,
+// which pattern), the others of the run wait and come one after the other into the same pattern.
+func (r *Remote) MIDIOpen(name string, data []byte, first bool, total int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if first || r.a.midiRun == nil {
+		r.a.startMIDIBatch([]midiItem{{name: name, data: data}}, total)
+		return
+	}
+	r.a.midiRun.queue = append(r.a.midiRun.queue, midiItem{name: name, data: data})
+}
+
+// MIDIExport is pattern slot (the one in front when 0) as a MIDI file, with a name for it.
+func (r *Remote) MIDIExport(slot int) (string, []byte, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if slot < 1 || slot > 160 {
+		slot = r.a.pat
+	}
+	return r.a.patternMIDI(slot)
+}
