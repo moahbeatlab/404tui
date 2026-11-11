@@ -165,8 +165,10 @@ type App struct {
 	splash            *splash   // the logo and dashboard at the start
 	as                autosave
 	idx               indexJob
-	onepad            onePad
-	autoSens          float64 // how easily Y+A hears an onset (0: 0.5)
+	onepad            onePad      // the arp tool's notes
+	chordp            onePad      // the chord tool's
+	sampleIn          map[int]int // the note a pad's sample is in, as chosen in the chord or arp tool
+	autoSens          float64     // how easily Y+A hears an onset (0: 0.5)
 	lfo               lfoState
 	env               envState
 	envInit           bool
@@ -241,7 +243,6 @@ type App struct {
 	jobAfter          func(err error) // what to do on the main loop when the job in the background is finished
 	aud               map[int]int     // pads whose sample is being auditioned in the pattern: pad -> handle
 	prevOrder         []string        // the files decoded for the browser, oldest first
-	arp               arpState        // the settings of the sample arp, kept between visits
 	arpp              arpPrint        // and of the pattern arp
 	marks             []int           // the pads marked as keys of the arp, in the order they were marked
 	arpOn             bool            // the live arp is looping

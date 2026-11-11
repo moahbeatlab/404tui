@@ -276,9 +276,8 @@ func (a *App) padToolsMenu(n int) *menu {
 	add("Pick a sample...", func(int) { a.go_(Files); a.assignTo = n + 1 }) // the sample chosen there goes on this pad: no second question
 	if has {
 		add("Slice...", func(int) { a.go_(Slice) })
-		add("Chords & arps...", func(int) { a.openArpMenu(n) })
-		add("Chord from this one sample (scales)...", func(int) { a.openOnePadMenu(n, true) })
-		add("Arp from this one sample (scales, chords)...", func(int) { a.openOnePadMenu(n, false) })
+		add("Chord...", func(int) { a.openOnePadMenu(n, true) })
+		add("Arp...", func(int) { a.openOnePadMenu(n, false) })
 		add("Keyboard from it...", func(int) { a.openKeyboardMenu(n) })
 		each := func(op string, arg int) {
 			if bulk {

@@ -48,42 +48,18 @@ The settings of the pad under the cursor, written into the project at once. With
 
 - `Pick a sample...`
 - `Slice...`
-- `Chords & arps...`
-  - **chords & arps  A3** (a dialog):
-
-    *The Notes*
-
-    - `Root` — C, Db, ... B (12 values); now C
-    - `Chord` — MAJ, MIN, ... 9 (12 values); now MAJ
-    - `Sample is in` — C, Db, ... B (12 values); now C
-    - `Octaves` — 1 / 2 / 3; now 2
-
-    *How It Plays*
-
-    - `Pattern` — CHORD, UP, ... STABS (11 values); now UP
-    - `Rate` — 1/4 / 1/8 / 1/8T / 1/16 / 1/16T / 1/32; now 1/16
-    - `Gate` — 25% / 50% / 75% / 100% / ring; now 50%
-    - `Swing` — OFF / LIGHT / TRIPLET; now OFF
-    - `Length` — 1 bar / 2 bar / 4 bar / 8 bar; now 1 bar
-
-    *Make It*
-
-    - `Play it`
-    - `Put it on a free pad`
-- `Chord from this one sample (scales)...`
+- `Chord...`
   - **chord from A3** (a dialog):
     - `Sample is in` — C, Db, ... B (12 values); now C
-    - `Key` — C, Db, ... B (12 values); now C
-    - `Scale` — CHROMATIC (chord types) / MAJ / MIN / MIN-P / MAJ-P / DOR / MIXO / BLUES; now CHROMATIC (chord types)
-    - `On degree (scales)` — 1 / 2 / 3 / 4 / 5 / 6 / 7; now 1
-    - `Chord` — MAJ, MIN, ... 9 (12 values); now MAJ
-    - `Octaves` — -3 / -2 / -1 / +0 / +1 / +2 / +3; now +1
+    - `Root` — C, Db, ... B (12 values); now C
+    - `Chord` — major, minor, ... maj13 (28 values); now major
+    - `Octaves` — -3 / -2 / -1 / +0 / +1 / +2 / +3; now +0
     - `Hold` — off: once / on: every bar; now off: once
 
     *Make*
 
     - `Bounce the chord to a new pad`
-- `Arp from this one sample (scales, chords)...`
+- `Arp...`
   - **arp from A3** (a dialog):
 
     *Page Notes*
@@ -92,7 +68,7 @@ The settings of the pad under the cursor, written into the project at once. With
     - `Key` — C, Db, ... B (12 values); now C
     - `Scale` — CHROMATIC (chord types) / MAJ / MIN / MIN-P / MAJ-P / DOR / MIXO / BLUES; now CHROMATIC (chord types)
     - `On degree (scales)` — 1 / 2 / 3 / 4 / 5 / 6 / 7; now 1
-    - `Chord` — MAJ, MIN, ... 9 (12 values); now MAJ
+    - `Chord` — major, minor, ... maj13 (28 values); now major
     - `Octaves` — -3 / -2 / -1 / +0 / +1 / +2 / +3; now +1
     - `Hold` — off: one pass / on: loops; now off: one pass
 

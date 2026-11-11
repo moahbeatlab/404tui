@@ -61,8 +61,8 @@ func TestOnePadFollowsTheNoteOfTheSample(t *testing.T) {
 	keys(t, a, kit)
 	a.info.Pads[0].Name = "bass_G1"
 	a.openOnePadMenu(0, true)
-	if a.onepad.from != 7 || menuItemNamed(t, a, "Sample is in").val != 7 {
-		t.Fatalf("the name says G: %d (%s)", a.onepad.from, a.Message())
+	if a.chordp.from != 7 || menuItemNamed(t, a, "Sample is in").val != 7 {
+		t.Fatalf("the name says G: %d (%s)", a.chordp.from, a.Message())
 	}
 	it := menuItemNamed(t, a, "Sample is in")
 	it.val = 2
@@ -70,6 +70,17 @@ func TestOnePadFollowsTheNoteOfTheSample(t *testing.T) {
 	a.menu = nil
 	a.openOnePadMenu(0, false)
 	if a.onepad.from != 2 {
-		t.Fatalf("the note chosen for the pad is kept: %d", a.onepad.from)
+		t.Fatalf("the note chosen for the pad is kept, for the arp too: %d", a.onepad.from)
+	}
+	// every chord type of the chord tool
+	a.menu = nil
+	a.openOnePadMenu(0, true)
+	if got := len(menuItemNamed(t, a, "Chord").vals); got != len(chordTypes) || got < 25 {
+		t.Fatalf("the chord tool lists %d chords", got)
+	}
+	for _, it := range a.menu.items {
+		if it.label == "Scale" {
+			t.Fatal("the chord tool has no scale")
+		}
 	}
 }

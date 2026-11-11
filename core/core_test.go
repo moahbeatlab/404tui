@@ -1218,22 +1218,21 @@ func TestSampleToolsArpAndKeyboard(t *testing.T) {
 	a.cur = 0 // A1, the kick
 	a.go_(Pads)
 	keys(t, a, "A [")
-	chooseMenu(t, a, "Chords & arps")
-	if a.menu == nil || !strings.Contains(a.menu.title, "A1") {
-		t.Fatalf("the arp menu: %+v", a.menu)
+	chooseMenu(t, a, "Chord...")
+	if a.menu == nil || a.menu.title != "chord from A1" {
+		t.Fatalf("the chord tool: %+v", a.menu)
 	}
 	a.Render()
 	au.Played = 0
-	chooseMenu(t, a, "Play it")
+	keys(t, a, "X") // Space
 	if au.Played != 1 {
-		t.Fatalf("Play it plays the arp: %d (%s)", au.Played, a.msg)
+		t.Fatalf("Space plays the chord: %d (%s)", au.Played, a.msg)
 	}
 	before := padsWithSamples(a)
-	a.menu = nil
-	a.arpToPad(0)
+	chooseMenu(t, a, "Bounce the chord to a new pad")
 	keys(t, a, "A") // the pad dialog: the free pad it starts on
 	if padsWithSamples(a) != before+1 {
-		t.Fatalf("the arp goes on a free pad: %s", a.msg)
+		t.Fatalf("the chord goes on a free pad: %s", a.msg)
 	}
 	// the keyboard: 5 pitched copies on free pads, a major scale
 	a.menu = nil

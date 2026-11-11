@@ -144,7 +144,7 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 
 | Menu | Group | Actions |
 | --- | --- | --- |
-| **PADS, A** (sample tools) | SAMPLE | pick a sample, slice, **chords & arps**, **keyboard**, reverse, normalize, pitch |
+| **PADS, A** (sample tools) | SAMPLE | pick a sample, slice, **chord**, **arp**, **keyboard**, reverse, normalize, pitch |
 | | THE PAD | pattern with this pad, move or swap, copy, clear |
 | **SLICE, Y+B** (the slicer, a sample tool) | slice / order / result | pitch, gain, reverse, fades, roll, chance; play order, grid, swing, length in steps; play, to a pad, shuffle |
 | **SEQ, B** (pattern tools) | THE PATTERN | choose a pattern, template, copy to the next, delete |
@@ -153,9 +153,7 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 | | THE COLUMN | fill, euclid, shift, clear, pad of the column (the notes of one pad) |
 | | GENERATE | **arp over the columns** |
 
-- **Chords & arps** (a sample tool): the pad's sample pitched once for each note of a chord, mixed or laid out in time (11
-  patterns, rates 1/4 to 1/32 with triplets, gate, swing, 1-3 octaves, 1-8 bars at the bank's tempo) and put on a free pad.
-  This is the computer app's engine.
+- **Chord** and **Arp** (sample tools): see "Chord and arp from one sample" below.
 - **Keyboard**: 4 to 16 pitched copies of the sample on a run of free pads, chromatic or in one of the scales: the pads play like
   keys.
 - **Arp over the columns** (a pattern tool, after the arpeggiator of the unit's DOOM OS): the pads of the columns that have a
@@ -217,7 +215,7 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 
 - **A on a pad opens the pad panel**: three pages (L1/R1 turn them). **SOUND**: level, pan, pitch, fine pitch, time stretch, sample
   BPM, each a horizontal fader with a mark for its default (A puts it back). **SHAPE**: attack, hold, release, play mode, gate, loop,
-  one shot, fixed velocity, vinyl, BPM sync, mute group, bus. **TOOLS**: the actions on the sample and the pad (slice, chords & arps,
+  one shot, fixed velocity, vinyl, BPM sync, mute group, bus. **TOOLS**: the actions on the sample and the pad (slice, chord, arp,
   keyboard, reverse, normalize, pitch, pattern, move, copy, clear, the marked pads). An empty pad opens on the tools. **X hears the
   pad with its settings** (level, pan, pitch in semitones, direction, hold). The settings are the project file's own (PADCONF), so
   they go to the SP. Undo covers them.
@@ -302,15 +300,22 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 
 - **LFO range, centre, invert, DRIFT; ENV (SEQ).** The LFO tool has a "Velocity goes: around the notes / between min and max" choice (min and max velocity), a Direction (inverted = a negative depth, as the LFO slot of Loop Cartographer), a Center that shifts the middle, and the shape DRIFT (a smooth slow wander). New pattern-menu tool "ENV: each note shapes the next": every note starts an envelope (attack, decay, sustain, release in 16ths, depth, centre, direction) and the following note's velocity, length or timing is moved by how far that envelope has got when it arrives (the first note follows the last): ducking after a close note, a build-up after a gap.
 
-## Arp from one sample
+## Chord and arp from one sample
 
-PADS menu, "Arp from this one sample (scales, chords)...": as in DOOM OS, one pad is the sound and the notes are its pitches.
+PADS menu, "Chord...": the pad's sample pitched once for each note of a chord and struck together. Sample is in (the note the
+sample plays at), Root, Chord (28 types: major, minor, power, sus, dim, aug, sixths, sevenths, half-diminished, add9, 6/9, ninths,
+altered sevenths, elevenths, thirteenths), Octaves, Hold. Space (X) plays it once; with Hold on it repeats every bar until Space
+again, and a change is heard at once. Bounce the chord to a new pad.
+
+PADS menu, "Arp...": as in DOOM OS, one pad is the sound and the notes are its pitches. Space plays one pass, with Hold it loops.
 Key (C..B), Scale (chromatic with chord types, or MAJ, MIN, pentatonics, DOR, MIXO, BLUES), the chord degree, and the Chord:
 stacked on the scale (root, thirds, fifths, triad, sus2/4, sixth, seventh, ninth, whole scale) or a chord type when chromatic.
 Octaves -3..+3 repeat the notes down or up. A piano at the foot of the menu lights the notes. Type, Rate, Gate, Velocity and
-Length are the ones of the marked-pad arp. Make it: hear it (a change is heard at once), bounce the arp to a new pad, bounce the
-chord (all notes at once) to a new pad, or put the pitched copies on free pads and print the arp to the pattern. The sample is
-taken as a C: the pitch of a pattern note cannot be set yet (the pitch byte is unknown), so the keys are pitched copies.
+Length are the ones of the marked-pad arp. Make it: bounce the arp to a new pad, or put the pitched copies on free pads and print
+the arp to the pattern (the keys are pitched copies).
+
+Both tools ask what note the sample is in ("Sample is in"): guessed from the pad's name (bass_G1, Pad Am), else from the sound
+(autocorrelation over a tone that holds), else C; a note chosen by hand is kept for the pad.
 
 ## Steps on the slicer
 

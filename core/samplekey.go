@@ -96,7 +96,7 @@ func noteFromSound(s formats.Sample) (int, bool) {
 
 // sampleNote is the note pad n's sample is in: the one chosen for it before, else the guess, with where the guess came from.
 func (a *App) sampleNote(n int) (int, string) {
-	if v, ok := a.onepad.in[n]; ok {
+	if v, ok := a.sampleIn[n]; ok {
 		return v, ""
 	}
 	if pc, ok := noteFromName(a.info.Pads[n].Name); ok {
