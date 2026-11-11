@@ -88,3 +88,20 @@ func TestGeneratorKitPicksAPadAndRemembersIt(t *testing.T) {
 		t.Fatalf("the choice is there at the next start: %v", b.set.GenKit)
 	}
 }
+
+// X (Space on a keyboard) in the pad picker plays the sample of the pad in front
+func TestPadPickerHearsThePad(t *testing.T) {
+	a, au := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.genKitMenu()
+	a.menu.items[a.menu.cur].run(0)
+	if a.picker == nil {
+		t.Fatal("the picker is open")
+	}
+	before := au.Played
+	a.pickerKey(X)
+	if au.Played == before || a.picker == nil {
+		t.Fatalf("X plays the pad and keeps the picker open: %d plays", au.Played)
+	}
+}

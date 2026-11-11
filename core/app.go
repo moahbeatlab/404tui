@@ -820,7 +820,7 @@ func (a *App) Playing() bool {
 // PlayStop is the space bar on PADS and SEQ: what sounds stops, and when nothing does it plays (the key X). It says whether
 // it stopped something.
 func (a *App) PlayStop() bool {
-	if (a.scr != Pads && a.scr != Seq) || a.menu != nil || a.prompt != nil || a.pp != nil || a.carry != nil {
+	if (a.scr != Pads && a.scr != Seq) || a.menu != nil || a.picker != nil || a.prompt != nil || a.pp != nil || a.carry != nil {
 		return false
 	}
 	if a.scr == Pads && (a.arpOn || a.seqOn || a.playing >= 0 && time.Now().Before(a.soundUntil)) {

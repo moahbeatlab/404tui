@@ -108,6 +108,14 @@ func (a *App) pickerKey(k Key) {
 		bank(1)
 	case B:
 		a.picker = nil
+	case X: // Space: hear the sample of the pad in front
+		if p.pads {
+			if n := p.bank*16 + p.cur; a.info.Pads[n].File {
+				a.playPad(n)
+			} else {
+				a.say(a.label(n)+" has no sample", true)
+			}
+		}
 	case A:
 		if p.pads {
 			n := p.bank*16 + p.cur

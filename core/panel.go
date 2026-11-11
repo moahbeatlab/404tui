@@ -192,6 +192,9 @@ func (a *App) rawHints() (plain, shift []hint) {
 		if a.picker.pads {
 			open = "this pad"
 		}
+		if a.picker.pads {
+			return []hint{{"^v<>", "choose"}, {"L1 R1", "bank"}, {"X", "hear it"}, {"A", open}, {"B", "cancel"}}, nil
+		}
 		return []hint{{"^v<>", "choose"}, {"L1 R1", "bank"}, {"A", open}, {"B", "cancel"}}, nil
 	}
 	if a.menu != nil {
