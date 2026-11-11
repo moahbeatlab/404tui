@@ -490,7 +490,7 @@ func (a *App) drawFileList(g Gfx, dir string, x0, w int, ents []entry, cur int, 
 				room -= 7 // the size is at the right
 			}
 			if room > 6 {
-				g.Text(px, y, fit("‹ "+short2(parent, room-2), room), cDim, false)
+				g.Text(px, y, "‹ "+short2(parent, room-2), cDim, false) // (not fit: the ‹ is three bytes, and fit would cut the end off)
 			}
 		}
 		if e.dir && !e.project && w >= 20 && a.isFavourite(joinPath(dir, e.name)) { // a favourite folder: a mark at the right

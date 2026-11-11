@@ -554,6 +554,16 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 			}
 			g.Text(x, row(tagRow), fit(tg, w), cAmber, false)
 		}
+		if a.searchQ != "" && Terminal { // a search result: the whole folder it is in, under the shape
+			full := filepath.Dir(joinPath(a.dir, e.name))
+			g.Text(x, row(14), "FOLDER", cDim, true)
+			for i, l := range wrapPath(full, w) {
+				if row(15+i) >= y1 || i >= 4 {
+					break
+				}
+				g.Text(x, row(15+i), l, cText, false)
+			}
+		}
 		if id, err := a.decode(e); err == nil {
 			s, _ := a.lab.Sample(id)
 			g.Text(x, row(3), fmt.Sprintf("%.2f s", float64(s.Frames())/48000), cDim, false)
@@ -755,4 +765,18 @@ func (a *App) keyColumns(g Gfx, x, y, w int, hs []hint, active, two bool) {
 	half := (len(hs) + 1) / 2
 	a.keyBlock(g, x, y, w/2, hs[:half], active)
 	a.keyBlock(g, x+w/2, y, w-w/2, hs[half:], active)
+}
+
+// wrapPath breaks a path into lines of at most w characters, after a slash.
+func wrapPath(p string, w int) []string {
+	var lines []string
+	for len(p) > w && w > 4 {
+		cut := strings.LastIndex(p[:w], "/")
+		if cut <= 0 {
+			cut = w
+		}
+		lines = append(lines, p[:cut])
+		p = p[cut:]
+	}
+	return append(lines, p)
 }

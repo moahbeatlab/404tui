@@ -1607,3 +1607,20 @@ func TestRenameOfflineProjectMovesIt(t *testing.T) {
 		t.Fatal("PROJECT_03 is gone")
 	}
 }
+
+// a search result says its folder: in the list (the end of the path, whole) and in the panel (the whole path)
+func TestSearchResultShowsItsFolder(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	SetSize(160, 48)
+	a.GoScreen(3)
+	a.openSearch()
+	a.TypeText("c1")
+	txt := screenStr(a)
+	if !strings.Contains(txt, "FOLDER") || !strings.Contains(txt, "/samples/bass") {
+		t.Fatalf("the panel names the whole folder:\n%s", txt)
+	}
+	if strings.Contains(txt, "bass~") {
+		t.Fatalf("the folder in the list is not cut at the end:\n%s", txt)
+	}
+}
