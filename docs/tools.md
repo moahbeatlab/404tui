@@ -72,6 +72,7 @@ The settings of the pad under the cursor, written into the project at once. With
     - `Put it on a free pad`
 - `Chord from this one sample (scales)...`
   - **chord from A3** (a dialog):
+    - `Sample is in` — C, Db, ... B (12 values); now C
     - `Key` — C, Db, ... B (12 values); now C
     - `Scale` — CHROMATIC (chord types) / MAJ / MIN / MIN-P / MAJ-P / DOR / MIXO / BLUES; now CHROMATIC (chord types)
     - `On degree (scales)` — 1 / 2 / 3 / 4 / 5 / 6 / 7; now 1
@@ -87,6 +88,7 @@ The settings of the pad under the cursor, written into the project at once. With
 
     *Page Notes*
 
+    - `Sample is in` — C, Db, ... B (12 values); now C
     - `Key` — C, Db, ... B (12 values); now C
     - `Scale` — CHROMATIC (chord types) / MAJ / MIN / MIN-P / MAJ-P / DOR / MIXO / BLUES; now CHROMATIC (chord types)
     - `On degree (scales)` — 1 / 2 / 3 / 4 / 5 / 6 / 7; now 1

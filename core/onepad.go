@@ -28,7 +28,9 @@ var (
 // onePad is the settings of the menu, kept between visits. The playing settings are a.arpp, as for the marked pads.
 type onePad struct {
 	key, scale, stack, chord, degree, oct int
-	hold                                  bool // X (Space) repeats the chord or the arp until it is pressed again; off, it plays once
+	hold                                  bool        // X (Space) repeats the chord or the arp until it is pressed again; off, it plays once
+	from                                  int         // the note the sample of the pad in front is in (0 C .. 11 B)
+	in                                    map[int]int // the note chosen for a pad's sample, by pad
 	init                                  bool
 }
 
@@ -66,7 +68,7 @@ func onePadSemis(o onePad) []int {
 	}
 	for oct := 0; oct != n+step; oct += step {
 		for _, s := range base {
-			if v := o.key + s + 12*oct; v >= -36 && v <= 36 {
+			if v := (o.key-o.from+12)%12 + s + 12*oct; v >= -36 && v <= 36 { // from the sample's own note up to the key
 				add(v)
 			}
 		}
@@ -79,17 +81,18 @@ func onePadSemis(o onePad) []int {
 	return out
 }
 
-// onePadKeyboard draws two octaves of a piano with the notes of the arp lit.
-func onePadKeyboard(semis []int) func(g Gfx, col, row, cols int) {
+// onePadKeyboard draws two octaves of a piano with the notes of the arp lit: the semitones from the sample, whose own note is from.
+func onePadKeyboard(semis []int, from int) func(g Gfx, col, row, cols int) {
 	return func(g Gfx, col, row, cols int) {
 		on := map[int]bool{}
 		names := ""
 		seen := map[int]bool{}
 		for _, s := range semis {
-			on[s%24] = true
-			if !seen[s%12] {
-				seen[s%12] = true
-				names += formats.PitchNames[s%12] + " "
+			v := s + from + 48 // a note below the sample (octaves down) is still on the keys
+			on[v%24] = true
+			if !seen[v%12] {
+				seen[v%12] = true
+				names += formats.PitchNames[v%12] + " "
 			}
 		}
 		g.Piano(col, row, cols, on)
@@ -138,7 +141,7 @@ func (a *App) openOnePadMenu(n int, chord bool) {
 	}
 	var degI, chI int
 	redo := func() {
-		m.foot = onePadKeyboard(onePadSemis(*o))
+		m.foot = onePadKeyboard(onePadSemis(*o), o.from)
 		if o.scale == 0 { // chromatic: the chord types, else the stacks of the scale
 			m.at(chI).vals, m.at(chI).val = chords, o.chord
 		} else {
@@ -157,6 +160,18 @@ func (a *App) openOnePadMenu(n int, chord bool) {
 	}
 	if !chord {
 		m.tabHead("NOTES")
+	}
+	from, how := a.sampleNote(n)
+	o.from = from
+	set("Sample is in", formats.PitchNames, o.from, func(v int) {
+		o.from = v
+		if o.in == nil {
+			o.in = map[int]int{}
+		}
+		o.in[n] = v
+	})
+	if how != "" {
+		a.say(fmt.Sprintf("the sample of %s is in %s (%s)", a.label(n), formats.PitchNames[from], how), false)
 	}
 	set("Key", formats.PitchNames, o.key, func(v int) { o.key = v })
 	set("Scale", scales, o.scale, func(v int) { o.scale = v })
