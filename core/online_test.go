@@ -538,11 +538,15 @@ func TestSearchShowsTheFolderAndCanLookForFoldersOnly(t *testing.T) {
 	if !a.searchDirs || len(a.entries) != 1 || !a.entries[0].dir || a.entries[0].name != "bass" {
 		t.Fatalf("Tab: folders only: %+v", a.entries)
 	}
-	if txt := screenStr(a); !strings.Contains(txt, "FOLDERS") || !strings.Contains(txt, "Tab files") {
+	if txt := screenStr(a); !strings.Contains(txt, "FOLDERS") || !strings.Contains(txt, "Tab categories") {
 		t.Fatalf("the search line says it looks for folders:\n%s", txt)
 	}
 	a.TypeTab()
-	if a.searchDirs || a.entries[0].dir {
+	if a.searchDirs || !a.tagSearch {
+		t.Fatal("Tab again: categories")
+	}
+	a.TypeTab()
+	if a.searchDirs || a.tagSearch || len(a.entries) == 0 || a.entries[0].dir {
 		t.Fatalf("Tab again: files: %+v", a.entries)
 	}
 }

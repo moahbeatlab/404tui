@@ -284,3 +284,85 @@ func (a *App) drawIndexProgress(g Gfx, x, y, w int) {
 	}
 	g.Fill(x+pos, y+2, run, 1, cAmber)
 }
+
+// searchLocalTags is the search by categories on this computer: the files of the index that covers the folder whose tags (the words of the
+// name and of the folders, as the unit's tag index works them out) start with each word of the search. The categories that would narrow
+// the search are said in the status line.
+func (a *App) searchLocalTags(words []string) {
+	a.entries, a.searchCut, a.fcur = nil, false, 0
+	p, root := a.indexFor(a.dir)
+	if p == "" {
+		a.say("categories need an index: index this folder first (t on FILES, Index)", true)
+		return
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	prefix := ""
+	if rel, _ := filepath.Rel(root, a.dir); rel != "." {
+		prefix = strings.ToLower(rel) + string(filepath.Separator)
+	}
+	base := filepath.Dir(root)
+	counts := map[string]int{}
+	s := bufio.NewScanner(f)
+	s.Scan() // the #root line
+	for s.Scan() {
+		line := s.Text()
+		tab := strings.LastIndexByte(line, '\t')
+		if tab < 0 || prefix != "" && !strings.HasPrefix(strings.ToLower(line[:tab]), prefix) {
+			continue
+		}
+		tags := app.TagsFor(filepath.ToSlash(filepath.Join(root, line[:tab])), filepath.ToSlash(base))
+		ok := true
+		for _, w := range words {
+			hit := false
+			for _, t := range tags {
+				if strings.HasPrefix(t, w) {
+					hit = true
+					break
+				}
+			}
+			if !hit {
+				ok = false
+				break
+			}
+		}
+		if !ok {
+			continue
+		}
+		for _, t := range tags {
+			counts[t]++
+		}
+		if len(a.entries) < 400 {
+			size, _ := strconv.ParseInt(line[tab+1:], 10, 64)
+			a.entries = append(a.entries, entry{name: line[len(prefix):tab], size: size})
+		} else {
+			a.searchCut = true
+		}
+	}
+	sort.SliceStable(a.entries, func(i, j int) bool {
+		return app.NaturalLess(strings.ToLower(a.entries[i].name), strings.ToLower(a.entries[j].name))
+	})
+	for _, w := range words { // what is asked for is in every result: it does not narrow anything
+		delete(counts, w)
+	}
+	var top []app.TagCount
+	for t, n := range counts {
+		top = append(top, app.TagCount{Tag: t, Count: n})
+	}
+	sort.Slice(top, func(i, j int) bool {
+		if top[i].Count != top[j].Count {
+			return top[i].Count > top[j].Count
+		}
+		return top[i].Tag < top[j].Tag
+	})
+	var say []string
+	for i := 0; i < len(top) && i < 8; i++ {
+		say = append(say, fmt.Sprintf("%s %d", top[i].Tag, top[i].Count))
+	}
+	if len(say) > 0 {
+		a.say("narrow it with: "+strings.Join(say, "  "), false)
+	}
+}

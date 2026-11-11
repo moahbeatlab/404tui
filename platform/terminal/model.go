@@ -274,6 +274,10 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.Dispatch(core.Event{Key: core.Y, Down: false})
 		}
 		return
+	case "#": // the search by categories (kick, hat, loop...), in the file browser
+		m.disarm()
+		m.app.OpenTagSearch()
+		return
 	case "ctrl+l": // reload the unit (while a project is edited live), from any screen
 		m.disarm()
 		m.app.ReloadUnit()

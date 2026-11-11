@@ -4206,3 +4206,52 @@ func TestFavouriteFolderHasAMark(t *testing.T) {
 		t.Fatalf("a favourite folder has a mark: %q", row)
 	}
 }
+
+// the search by categories: the tags of the indexed samples (kick, hat...), not their names; Tab cycles names, folders, categories
+func TestSearchByCategoriesInTheIndex(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	a.go_(Files)
+	a.cd(a.Root)
+	a.startIndex(a.Root)
+	for i := 0; i < 200; i++ {
+		a.idx.mu.Lock()
+		running := a.idx.running
+		a.idx.mu.Unlock()
+		if !running {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	a.indexTick()
+	a.OpenTagSearch()
+	if a.kb == nil || !a.tagSearch {
+		t.Fatal("# opens the search by categories")
+	}
+	all := len(a.entries)
+	if all == 0 {
+		t.Fatal("with no words every indexed sample is a result")
+	}
+	a.searchQ = "kick"
+	a.list()
+	if len(a.entries) == 0 || len(a.entries) >= all {
+		t.Fatalf("kick narrows %d to %d", all, len(a.entries))
+	}
+	for _, e := range a.entries {
+		if !strings.Contains(strings.ToLower(e.name), "kick") && !strings.Contains(strings.ToLower(e.name), "bd") {
+			t.Logf("kick category: %s", e.name)
+		}
+	}
+	if !strings.Contains(a.Message(), "narrow it with") {
+		t.Fatalf("the categories that narrow it are named: %q", a.Message())
+	}
+	a.TypeTab() // categories -> names
+	if a.tagSearch || a.searchDirs {
+		t.Fatal("Tab from categories is the names again")
+	}
+	a.TypeTab()
+	a.TypeTab()
+	if !a.tagSearch {
+		t.Fatal("names, folders, categories")
+	}
+}

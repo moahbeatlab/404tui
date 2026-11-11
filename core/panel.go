@@ -214,7 +214,9 @@ func (a *App) rawHints() (plain, shift []hint) {
 		if a.kb != nil && Terminal {
 			mode := "folders only"
 			if a.searchDirs {
-				mode = "files again"
+				mode = "categories"
+			} else if a.tagSearch {
+				mode = "file names"
 			}
 			return []hint{{"type", "the words"}, {"Tab", mode}, {"Enter", "keep the result"}, {"Esc", "end the search"}, {"Bksp", "delete"}}, nil
 		}
