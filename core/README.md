@@ -303,14 +303,19 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 ## Chord and arp from one sample
 
 PADS menu, "Chord...": the pad's sample pitched once for each note of a chord and struck together. Sample is in (the note the
-sample plays at), Root, Chord (28 types: major, minor, power, sus, dim, aug, sixths, sevenths, half-diminished, add9, 6/9, ninths,
+sample plays at), Root, Chord (29 types: major, minor, power, sus, dim, aug, sixths, sevenths, half-diminished, add9, 6/9, ninths,
 altered sevenths, elevenths, thirteenths), Octaves, Hold. Space (X) plays it once; with Hold on it repeats every bar until Space
 again, and a change is heard at once. Bounce the chord to a new pad; after it (or when the pad dialog is left) the tool is back as
 it was, to make the next one.
 
-PROGRESSION: 13 common EDM progressions in the key of Root (the minor ones with Root as the minor tonic): i VI III VII, i VII VI VII,
-i VI VII, i iv VI V (trance), i iv VII III, i VI iv v, i III VII VI, i iv (deep house), I V vi IV, I vi IV V, IV V iii vi (future
-bass), vi IV I V, ii V I vi; as triads or sevenths (maj7, m7, the dominant V7). The menu shows the chords by name (Am F C G). "Hear the
+PROGRESSION: 13 common EDM progressions in the key of Root (the minor ones with Root as the minor tonic), each with a name and the
+feeling it is known for (the row Feels): Epic anthem i VI III VII (euphoric, uplifting, a bit sad), Rise and fall i VII VI VII
+(driving, restless), Three-step climb i VI VII (hopeful, building up), Trance minor i iv VI V (dramatic, longing), Melodic house
+i iv VII III (wistful, warm), Dark progressive i VI iv v (dark, brooding), Big room minor i III VII VI (heroic, triumphant), Deep
+two-chord i iv (hypnotic, moody), Pop anthem I V vi IV (happy, euphoric), Fifties I vi IV V (nostalgic, sweet), Royal road IV V iii
+vi (bittersweet, emotional), Heartfelt vi IV I V (sad yet hopeful), Deep house jazz ii V I vi (smooth, sophisticated). Chords:
+triads, sevenths (maj7, m7, the dominant V7), ninths (maj9, m9, 9) or elevenths (m11, 11, maj9#11: a major chord's eleventh is
+raised, the plain one clashes with the third). The menu shows the chords by name (Epic anthem: Am F C G). "Hear the
 progression" plays it a chord a bar at the bank's tempo (with Hold it loops); "Bounce the progression to free pads" puts every
 chord on a run of empty pads, one chord a pad, named after the chord. Each chord's root stays within a fifth of the tonic, so the
 chords sit close together.

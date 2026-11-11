@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/moahbeatlab/404tui/formats"
 )
@@ -32,7 +33,7 @@ var (
 		{"dim", []int{0, 3, 6}}, {"aug", []int{0, 4, 8}}, {"6", []int{0, 4, 7, 9}}, {"m6", []int{0, 3, 7, 9}},
 		{"7", []int{0, 4, 7, 10}}, {"maj7", []int{0, 4, 7, 11}}, {"m7", []int{0, 3, 7, 10}}, {"m(maj7)", []int{0, 3, 7, 11}},
 		{"dim7", []int{0, 3, 6, 9}}, {"m7b5  half-dim", []int{0, 3, 6, 10}}, {"7sus4", []int{0, 5, 7, 10}}, {"add9", []int{0, 4, 7, 14}},
-		{"m(add9)", []int{0, 3, 7, 14}}, {"6/9", []int{0, 4, 7, 9, 14}}, {"9", []int{0, 4, 7, 10, 14}}, {"maj9", []int{0, 4, 7, 11, 14}},
+		{"m(add9)", []int{0, 3, 7, 14}}, {"6/9", []int{0, 4, 7, 9, 14}}, {"9", []int{0, 4, 7, 10, 14}}, {"maj9", []int{0, 4, 7, 11, 14}}, {"maj9#11", []int{0, 4, 7, 11, 14, 18}},
 		{"m9", []int{0, 3, 7, 10, 14}}, {"7b9", []int{0, 4, 7, 10, 13}}, {"7#9", []int{0, 4, 7, 10, 15}}, {"11", []int{0, 4, 7, 10, 14, 17}},
 		{"m11", []int{0, 3, 7, 10, 14, 17}}, {"13", []int{0, 4, 7, 10, 14, 21}}, {"maj13", []int{0, 4, 7, 11, 14, 21}},
 	}
@@ -43,7 +44,7 @@ type onePad struct {
 	key, scale, stack, chord, degree, oct int
 	hold                                  bool // X (Space) repeats the chord or the arp until it is pressed again; off, it plays once
 	progOn                                bool // the chord tool: the loop that plays is the progression
-	prog, color                           int  // the chord tool: the progression (an index of progressions), triads (0) or sevenths (1)
+	prog, color                           int  // the chord tool: the progression (an index of progressions), an index of progColors
 	from                                  int  // the note the sample of the pad in front is in (0 C .. 11 B)
 	init                                  bool
 }
@@ -150,12 +151,13 @@ func (a *App) openOnePadMenu(n int, chord bool) {
 		}
 		return out
 	}
-	var degI, chI, progI int
+	var degI, chI, progI, moodI int
 	redo := func() {
 		m.foot = onePadKeyboard(onePadSemis(*o), o.from)
 		if chord {
 			if progI > 0 {
-				m.at(progI).vals = progLabels(o.key, o.color == 1)
+				m.at(progI).vals = progLabels(o.key, o.color)
+				m.at(moodI).vals = []string{progressions[o.prog].mood}
 			}
 			if a.arpOn {
 				a.onePadReplay(n, chord)
@@ -224,7 +226,13 @@ func (a *App) openOnePadMenu(n int, chord bool) {
 		m.head("MAKE")
 		m.items = append(m.items, menuItem{label: "Bounce the chord to a new pad", run: func(int) { a.onePadBounce(n, true, m) }})
 		m.head("PROGRESSION (IN THE ROOT'S KEY)")
-		progI = set("Progression", progLabels(o.key, o.color == 1), o.prog, func(v int) { o.prog = v })
+		progI = set("Progression", progLabels(o.key, o.color), o.prog, func(v int) {
+			o.prog = v
+			pr := progressions[v]
+			a.say(fmt.Sprintf("%s (%s): %s = %s", pr.name, pr.mood, pr.roman, strings.Join(progNames(v, o.key, o.color), " ")), false)
+		})
+		moodI = len(m.items)
+		m.items = append(m.items, menuItem{label: "Feels", vals: []string{progressions[o.prog].mood}, keepOpen: true})
 		set("Chords", progColors, o.color, func(v int) { o.color = v })
 		m.items = append(m.items,
 			menuItem{label: "Hear the progression (a chord a bar)", keepOpen: true, run: func(int) { a.progHear(n) }},

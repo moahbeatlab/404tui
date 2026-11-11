@@ -52,7 +52,7 @@ The settings of the pad under the cursor, written into the project at once. With
   - **chord from A3** (a dialog):
     - `Sample is in` — C, Db, ... B (12 values); now C
     - `Root` — C, Db, ... B (12 values); now C
-    - `Chord` — major, minor, ... maj13 (28 values); now major
+    - `Chord` — major, minor, ... maj13 (29 values); now major
     - `Octaves` — -3 / -2 / -1 / +0 / +1 / +2 / +3; now +0
     - `Hold` — off: once / on: every bar; now off: once
 
@@ -62,8 +62,9 @@ The settings of the pad under the cursor, written into the project at once. With
 
     *Progression (In The Root'S Key)*
 
-    - `Progression` — i VI III VII: Cm Ab Eb Bb, i VII VI VII: Cm Bb Ab Bb, ... ii V I vi: Dm G C Am (13 values); now i VI III VII: Cm Ab Eb Bb
-    - `Chords` — triads / sevenths; now triads
+    - `Progression` — Epic anthem: Cm Ab Eb Bb, Rise and fall: Cm Bb Ab Bb, ... Deep house jazz: Dm G C Am (13 values); now Epic anthem: Cm Ab Eb Bb
+    - `Feels` — euphoric, uplifting, a bit sad; now euphoric, uplifting, a bit sad
+    - `Chords` — triads / sevenths / ninths / elevenths; now triads
     - `Hear the progression (a chord a bar)`
     - `Bounce the progression to free pads`
 - `Arp...`
@@ -75,7 +76,7 @@ The settings of the pad under the cursor, written into the project at once. With
     - `Key` — C, Db, ... B (12 values); now C
     - `Scale` — CHROMATIC (chord types) / MAJ / MIN / MIN-P / MAJ-P / DOR / MIXO / BLUES; now CHROMATIC (chord types)
     - `On degree (scales)` — 1 / 2 / 3 / 4 / 5 / 6 / 7; now 1
-    - `Chord` — major, minor, ... maj13 (28 values); now major
+    - `Chord` — major, minor, ... maj13 (29 values); now major
     - `Octaves` — -3 / -2 / -1 / +0 / +1 / +2 / +3; now +1
     - `Hold` — off: one pass / on: loops; now off: one pass
 

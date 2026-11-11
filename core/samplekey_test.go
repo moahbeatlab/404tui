@@ -92,16 +92,22 @@ func TestChordProgressions(t *testing.T) {
 	if got := fmt.Sprint(progSemis(o)); got != "[[9 12 16] [5 9 12] [12 16 19] [7 11 14]]" {
 		t.Fatalf("Am F C G: %s", got)
 	}
-	if got := progNames(0, 9, false); fmt.Sprint(got) != "[Am F C G]" {
+	if got := progNames(0, 9, 0); fmt.Sprint(got) != "[Am F C G]" {
 		t.Fatalf("names: %v", got)
 	}
-	if got := progNames(12, 0, true); fmt.Sprint(got) != "[Dm7 G7 Cmaj7 Am7]" {
+	if got := progNames(12, 0, 1); fmt.Sprint(got) != "[Dm7 G7 Cmaj7 Am7]" {
 		t.Fatalf("sevenths: %v", got)
+	}
+	if got := progNames(0, 9, 2); fmt.Sprint(got) != "[Am9 Fmaj9 Cmaj9 Gmaj9]" {
+		t.Fatalf("ninths: %v", got)
+	}
+	if got := progNames(3, 9, 3); fmt.Sprint(got) != "[Am11 Dm11 Fmaj9#11 E11]" {
+		t.Fatalf("elevenths: %v", got)
 	}
 	for i := range progressions {
 		for _, s := range progressions[i].steps {
-			for _, sev := range []bool{false, true} {
-				if c, _ := progChord(s.q, sev); c == 0 && (sev || s.q != 'M' && s.q != 'D') {
+			for color := range progColors {
+				if c, _ := progChord(s.q, color); c == 0 && (color > 0 || s.q != 'M' && s.q != 'D') {
 					t.Fatalf("%s: no chord type for %c", progressions[i].name, s.q)
 				}
 			}

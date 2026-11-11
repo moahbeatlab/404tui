@@ -13,42 +13,48 @@ import (
 // one chord a pad, so they can be played and sequenced straight away.
 
 // progStep is one chord of a progression: semitones above the tonic and its quality (M major, m minor, d diminished, D the dominant:
-// a major triad, a 7 among sevenths).
+// a major triad, a 7, 9 or 11 in the richer colours).
 type progStep struct {
 	semi int
 	q    byte
 }
 
+// progressions: a name to find it again by, the feeling it is known for, the Roman numerals (small: minor) and the chords.
 var progressions = []struct {
-	name  string
-	steps []progStep
+	name, mood, roman string
+	steps             []progStep
 }{
-	{"i VI III VII", []progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}},  // the anthem: Am F C G
-	{"i VII VI VII", []progStep{{0, 'm'}, {10, 'M'}, {8, 'M'}, {10, 'M'}}}, // Am G F G
-	{"i VI VII", []progStep{{0, 'm'}, {8, 'M'}, {10, 'M'}}},                // Am F G
-	{"i iv VI V", []progStep{{0, 'm'}, {5, 'm'}, {8, 'M'}, {7, 'D'}}},      // trance, the major V of harmonic minor: Am Dm F E
-	{"i iv VII III", []progStep{{0, 'm'}, {5, 'm'}, {10, 'M'}, {3, 'M'}}},  // Am Dm G C
-	{"i VI iv v", []progStep{{0, 'm'}, {8, 'M'}, {5, 'm'}, {7, 'm'}}},      // Am F Dm Em
-	{"i III VII VI", []progStep{{0, 'm'}, {3, 'M'}, {10, 'M'}, {8, 'M'}}},  // Am C G F
-	{"i iv", []progStep{{0, 'm'}, {5, 'm'}}},                               // deep house, two chords: Am Dm
-	{"I V vi IV", []progStep{{0, 'M'}, {7, 'D'}, {9, 'm'}, {5, 'M'}}},      // pop and big room: C G Am F
-	{"I vi IV V", []progStep{{0, 'M'}, {9, 'm'}, {5, 'M'}, {7, 'D'}}},      // C Am F G
-	{"IV V iii vi", []progStep{{5, 'M'}, {7, 'D'}, {4, 'm'}, {9, 'm'}}},    // future bass, "royal road": F G Em Am
-	{"vi IV I V", []progStep{{9, 'm'}, {5, 'M'}, {0, 'M'}, {7, 'D'}}},      // Am F C G in C major
-	{"ii V I vi", []progStep{{2, 'm'}, {7, 'D'}, {0, 'M'}, {9, 'm'}}},      // deep house with sevenths: Dm7 G7 Cmaj7 Am7
+	{"Epic anthem", "euphoric, uplifting, a bit sad", "i VI III VII", []progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}}, // the anthem: Am F C G
+	{"Rise and fall", "driving, restless", "i VII VI VII", []progStep{{0, 'm'}, {10, 'M'}, {8, 'M'}, {10, 'M'}}},           // Am G F G
+	{"Three-step climb", "hopeful, building up", "i VI VII", []progStep{{0, 'm'}, {8, 'M'}, {10, 'M'}}},                    // Am F G
+	{"Trance minor", "dramatic, longing", "i iv VI V", []progStep{{0, 'm'}, {5, 'm'}, {8, 'M'}, {7, 'D'}}},                 // trance, the major V of harmonic minor: Am Dm F E
+	{"Melodic house", "wistful, warm", "i iv VII III", []progStep{{0, 'm'}, {5, 'm'}, {10, 'M'}, {3, 'M'}}},                // Am Dm G C
+	{"Dark progressive", "dark, brooding", "i VI iv v", []progStep{{0, 'm'}, {8, 'M'}, {5, 'm'}, {7, 'm'}}},                // Am F Dm Em
+	{"Big room minor", "heroic, triumphant", "i III VII VI", []progStep{{0, 'm'}, {3, 'M'}, {10, 'M'}, {8, 'M'}}},          // Am C G F
+	{"Deep two-chord", "hypnotic, moody", "i iv", []progStep{{0, 'm'}, {5, 'm'}}},                                          // deep house, two chords: Am Dm
+	{"Pop anthem", "happy, euphoric", "I V vi IV", []progStep{{0, 'M'}, {7, 'D'}, {9, 'm'}, {5, 'M'}}},                     // pop and big room: C G Am F
+	{"Fifties", "nostalgic, sweet", "I vi IV V", []progStep{{0, 'M'}, {9, 'm'}, {5, 'M'}, {7, 'D'}}},                       // C Am F G
+	{"Royal road", "bittersweet, emotional", "IV V iii vi", []progStep{{5, 'M'}, {7, 'D'}, {4, 'm'}, {9, 'm'}}},            // future bass, "royal road": F G Em Am
+	{"Heartfelt", "sad yet hopeful", "vi IV I V", []progStep{{9, 'm'}, {5, 'M'}, {0, 'M'}, {7, 'D'}}},                      // Am F C G in C major
+	{"Deep house jazz", "smooth, sophisticated", "ii V I vi", []progStep{{2, 'm'}, {7, 'D'}, {0, 'M'}, {9, 'm'}}},          // deep house with sevenths: Dm7 G7 Cmaj7 Am7
 }
 
-// progColors: plain triads, or sevenths (maj7, m7, dominant 7, half-diminished).
-var progColors = []string{"triads", "sevenths"}
+// progColors are how rich the chords of a progression are. A major chord's eleventh is raised (#11): the plain one clashes with the
+// third. The diminished chord stays half-diminished above triads.
+var progColors = []string{"triads", "sevenths", "ninths", "elevenths"}
+
+// progQualities are, for each colour, the chord type (a name in chordTypes) and the name suffix of each quality.
+var progQualities = []map[byte][2]string{
+	{'M': {"major", ""}, 'm': {"minor", "m"}, 'd': {"dim", "dim"}, 'D': {"major", ""}},
+	{'M': {"maj7", "maj7"}, 'm': {"m7", "m7"}, 'd': {"m7b5  half-dim", "m7b5"}, 'D': {"7", "7"}},
+	{'M': {"maj9", "maj9"}, 'm': {"m9", "m9"}, 'd': {"m7b5  half-dim", "m7b5"}, 'D': {"9", "9"}},
+	{'M': {"maj9#11", "maj9#11"}, 'm': {"m11", "m11"}, 'd': {"m7b5  half-dim", "m7b5"}, 'D': {"11", "11"}},
+}
 
 // progChord is the chord type (an index of chordTypes) and the name suffix of a step in a colour.
-func progChord(q byte, sevenths bool) (int, string) {
-	name := map[byte]string{'M': "major", 'm': "minor", 'd': "dim", 'D': "major"}[q]
-	suffix := map[byte]string{'M': "", 'm': "m", 'd': "dim", 'D': ""}[q]
-	if sevenths {
-		name = map[byte]string{'M': "maj7", 'm': "m7", 'd': "m7b5  half-dim", 'D': "7"}[q]
-		suffix = map[byte]string{'M': "maj7", 'm': "m7", 'd': "m7b5", 'D': "7"}[q]
-	}
+func progChord(q byte, color int) (int, string) {
+	qs := progQualities[min(max(color, 0), len(progQualities)-1)][q]
+	name, suffix := qs[0], qs[1]
 	for i, c := range chordTypes {
 		if c.name == name {
 			return i, suffix
@@ -58,20 +64,20 @@ func progChord(q byte, sevenths bool) (int, string) {
 }
 
 // progNames is the chords of progression p over the tonic key, as names (Am F C G).
-func progNames(p, key int, sevenths bool) []string {
+func progNames(p, key, color int) []string {
 	var out []string
 	for _, s := range progressions[p].steps {
-		_, suf := progChord(s.q, sevenths)
+		_, suf := progChord(s.q, color)
 		out = append(out, formats.PitchNames[(key+s.semi)%12]+suf)
 	}
 	return out
 }
 
 // progLabels are the progressions as the menu shows them, in the key.
-func progLabels(key int, sevenths bool) []string {
+func progLabels(key, color int) []string {
 	out := make([]string, len(progressions))
 	for i, p := range progressions {
-		out[i] = p.name + ": " + strings.Join(progNames(i, key, sevenths), " ")
+		out[i] = p.name + ": " + strings.Join(progNames(i, key, color), " ")
 	}
 	return out
 }
@@ -89,7 +95,7 @@ func progSemis(o onePad) [][]int {
 		base := shift + semi
 		c := o
 		c.scale = 0
-		c.chord, _ = progChord(s.q, o.color == 1)
+		c.chord, _ = progChord(s.q, o.color)
 		c.key = ((base%12+12)%12 + o.from) % 12 // onePadSemis starts the chord at base mod 12
 		delta := base - (base%12+12)%12
 		semis := onePadSemis(c)
@@ -133,7 +139,7 @@ func (a *App) progHear(n int) {
 		return
 	}
 	o := a.notesOf(true)
-	names := strings.Join(progNames(o.prog, o.key, o.color == 1), " ")
+	names := strings.Join(progNames(o.prog, o.key, o.color), " ")
 	if !o.hold {
 		a.play(s)
 		a.say(names+", a chord a bar", false)
@@ -159,7 +165,7 @@ func (a *App) progHear(n int) {
 func (a *App) progBounce(n int, m *menu) {
 	o := *a.notesOf(true)
 	chords := progSemis(o)
-	names := progNames(o.prog, o.key, o.color == 1)
+	names := progNames(o.prog, o.key, o.color)
 	start := a.freeRun(len(chords), n+1)
 	if start < 0 {
 		a.say(fmt.Sprintf("no room: %d empty pads in a row are needed", len(chords)), true)

@@ -233,8 +233,11 @@ func (a *App) drawMenu(g Gfx) {
 		vw := 0
 		if len(it.vals) > 0 {
 			v := it.vals[it.val]
+			room := wc - 5 - min(len(menuLabel(it.label)), 12) // a long value is cut: the label keeps room for 12 characters
 			if i == m.cur {
-				v = "< " + v + " >"
+				v = "< " + fit(v, room-4) + " >"
+			} else {
+				v = fit(v, room)
 			}
 			vw = len(v) + 1
 			g.Text(x+wc-2-len(v), yy, v, cAmber, i == m.cur)
