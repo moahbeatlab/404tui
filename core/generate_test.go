@@ -1,8 +1,10 @@
 package core
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/generate"
 )
 
@@ -41,5 +43,28 @@ func TestGenerateFamilyFillsABank(t *testing.T) {
 		if d, ok := a.patternDoc(slot); !ok || len(d.Notes) == 0 {
 			t.Fatalf("slot %d is empty (%s)", slot, a.Message())
 		}
+	}
+}
+
+func TestGeneratorKitFollowsWhatWasChosen(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	_, pads, _ := a.generatorKit()
+	if _, ok := pads[formats.LaneKick]; !ok {
+		t.Fatal("the names give a kick")
+	}
+	a.genKitMenu()
+	if a.menu == nil || !strings.Contains(screenStr(a), "WHICH PAD PLAYS WHAT") {
+		t.Fatalf("the kit menu is open:\n%s", screenStr(a))
+	}
+	a.gk.pad[formats.LaneKick] = 5
+	a.gk.pad[formats.LaneSnare] = -1
+	_, pads, _ = a.generatorKit()
+	if pads[formats.LaneKick].Index() != 5 {
+		t.Fatalf("the kick is the pad chosen: %d", pads[formats.LaneKick].Index())
+	}
+	if _, ok := pads[formats.LaneSnare]; ok {
+		t.Fatal("none takes the voice out")
 	}
 }

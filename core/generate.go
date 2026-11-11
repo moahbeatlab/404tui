@@ -38,9 +38,9 @@ func (a *App) kitBank() (int, map[formats.Lane]proto.PadIndex) {
 }
 
 func (a *App) generateArc(st generate.Style, mode string, bars int) {
-	bank, pads := a.kitBank()
-	if bank < 0 {
-		a.say("no bank has a pad named like a kick: name the pads of the kit (kick, snare, hat...)", true)
+	bank, pads, alts := a.generatorKit()
+	if bank < 0 || len(pads) == 0 {
+		a.say("no bank has a pad named like a kick: name the pads of the kit (kick, snare, hat...) or choose them in Generator kit", true)
 		return
 	}
 	has := func(l formats.Lane) bool { _, ok := pads[l]; return ok }
@@ -63,7 +63,7 @@ func (a *App) generateArc(st generate.Style, mode string, bars int) {
 	}
 	pre := a.lab.Snapshot()
 	for i, r := range results {
-		b, err := r.Pattern.Bytes(pads)
+		b, err := r.Pattern.BytesAlt(pads, alts)
 		if err == nil {
 			err = a.lab.SetPatternBytes(slots[i], b)
 		}

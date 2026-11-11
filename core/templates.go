@@ -21,6 +21,7 @@ var barChoices = []string{"1 bar", "2 bars", "3 bars", "4 bars", "5 bars", "6 ba
 func (a *App) templatesMenu() {
 	m := &menu{title: "new pattern from a template"}
 	m.items = append(m.items, menuItem{label: "Blank pattern", vals: barChoices, val: 3, run: func(v int) { a.blankPattern(v + 1) }})
+	m.items = append(m.items, menuItem{label: "Generator kit: which pad plays kick, snare, hats...", run: func(int) { a.genKitMenu() }})
 	for _, st := range generate.Styles() {
 		st := st
 		m.items = append(m.items, menuItem{

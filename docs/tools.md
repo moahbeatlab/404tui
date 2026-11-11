@@ -191,6 +191,37 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 - `New pattern from a template...`
   - **new pattern from a template** (a dialog):
     - `Blank pattern` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 4 bars
+    - `Generator kit: which pad plays kick, snare, hats...`
+      - **generator kit: which pad plays what** (a dialog):
+
+        *Voices (The Pads Of Bank A)*
+
+        - `Kick` — auto A1 kick_808, none, ... A16  (18 values); now auto A1 kick_808
+        - `Snare` — auto A2 snare_tight, none, ... A16  (18 values); now auto A2 snare_tight
+        - `Clap` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Closed hat` — auto A3 hat_closed, none, ... A16  (18 values); now auto A3 hat_closed
+        - `Open hat` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Rim` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Percussion` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Tom` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Shaker` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Ride` — auto: none, none, ... A16  (18 values); now auto: none
+
+        *Second Pads: Take Over Some Hits*
+
+        - `Kick 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Snare 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Clap 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Closed hat 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Open hat 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Percussion 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Tom 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Shaker 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Ride 2` — auto: none, none, ... A16  (18 values); now auto: none
+
+        **
+
+        - `Back to the names of the pads`
     - `Generate House  124 BPM` — family / random / layers / drift / arc / fills; now family
     - `Generate Tech house  126 BPM` — family / random / layers / drift / arc / fills; now family
     - `Generate Techno  130 BPM` — family / random / layers / drift / arc / fills; now family

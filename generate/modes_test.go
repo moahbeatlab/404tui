@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/moahbeatlab/404tui/formats"
+	"github.com/moahbeatlab/404tui/proto"
 )
 
 func rowSteps(p Pattern, l formats.Lane) []uint8 {
@@ -123,7 +124,9 @@ func TestLayersAddsAndDriftWanders(t *testing.T) {
 
 // a kit with only a kick, a snare and a clap still gives sixteen patterns with notes in them (a break has no kick)
 func TestFamilyOfASmallKitHasNoEmptyPattern(t *testing.T) {
-	has := func(l formats.Lane) bool { return l == formats.LaneKick || l == formats.LaneSnare || l == formats.LaneClap }
+	has := func(l formats.Lane) bool {
+		return l == formats.LaneKick || l == formats.LaneSnare || l == formats.LaneClap
+	}
 	for _, st := range Styles() {
 		for seed := int64(0); seed < 60; seed++ {
 			for i, r := range Family(st, 2, seed, has) {
@@ -140,3 +143,43 @@ func TestFamilyOfASmallKitHasNoEmptyPattern(t *testing.T) {
 		}
 	}
 }
+
+// a second pad takes the hits off the beat of the kick, the ghosts of the snare and every other hat: both pads sound, and no hit is lost
+func TestSecondPadsShareTheHits(t *testing.T) {
+	st, _ := StyleByName("tech house")
+	p := Base(st, 2, 1.0)
+	pads := map[formats.Lane]proto.PadIndex{formats.LaneKick: pad(0), formats.LaneSnare: pad(1), formats.LaneClosedHat: pad(2)}
+	alts := map[formats.Lane]proto.PadIndex{formats.LaneClosedHat: pad(3), formats.LaneKick: pad(4)}
+	plain, err := p.Bytes(pads)
+	if err != nil {
+		t.Fatal(err)
+	}
+	both, err := p.BytesAlt(pads, alts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := func(b []byte, n int) int {
+		pt, err := formats.ParsePattern(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := 0
+		for _, e := range pt.Events {
+			if !e.Control && int(e.Pad.Index()) == n {
+				c++
+			}
+		}
+		return c
+	}
+	if count(both, 3) == 0 || count(both, 2) == 0 {
+		t.Fatalf("both hats sound: %d and %d", count(both, 2), count(both, 3))
+	}
+	if count(both, 2)+count(both, 3) != count(plain, 2) {
+		t.Fatalf("the hats share the hits of one: %d + %d vs %d", count(both, 2), count(both, 3), count(plain, 2))
+	}
+	if count(both, 0)+count(both, 4) != count(plain, 0) {
+		t.Fatal("the kicks share the hits of one")
+	}
+}
+
+func pad(i int) proto.PadIndex { p, _ := proto.NewPadIndex(uint16(i)); return p }

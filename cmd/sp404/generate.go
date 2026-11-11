@@ -110,6 +110,7 @@ func runGenerate(args []string) error {
 		rows = append(rows, app.PadRow{Pad: pad, HasSample: p.Has, Name: p.Name})
 	}
 	pads := app.GuessRoles(rows)
+	alts := app.GuessAlternates(rows, pads) // a second pad for a voice, played in turn with the first
 	if _, ok := pads[formats.LaneKick]; !ok {
 		return fmt.Errorf("bank %c has no pad named like a kick: name the pads of the kit (kick, snare, clap, hat...) or say which bank has it with -kit", 'A'+kitBank)
 	}
@@ -119,6 +120,11 @@ func runGenerate(args []string) error {
 		for lane, pad := range pads {
 			if pad == r.Pad {
 				role = lane.LaneName()
+			}
+		}
+		for lane, pad := range alts {
+			if pad == r.Pad {
+				role = lane.LaneName() + " (2nd)"
 			}
 		}
 		if r.HasSample || role != "" {
@@ -175,7 +181,7 @@ func runGenerate(args []string) error {
 			bpm = float64(j.st.BPM)
 		}
 		for i, r := range j.results {
-			b, err := r.Pattern.Bytes(pads)
+			b, err := r.Pattern.BytesAlt(pads, alts)
 			if err != nil {
 				return fmt.Errorf("%s: %w", r.Section.Name, err)
 			}

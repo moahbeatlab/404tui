@@ -79,11 +79,74 @@ func (p Pattern) Lanes() []formats.StepLane {
 
 // Bytes writes the pattern as a PTNnnnnn.BIN for the pads.
 func (p Pattern) Bytes(pads map[formats.Lane]proto.PadIndex) ([]byte, error) {
+	return p.BytesAlt(pads, nil)
+}
+
+// altBase is where the lanes of the second pads start: lane + altBase plays on alts[lane].
+const altBase formats.Lane = 100
+
+// BytesAlt is Bytes with a second pad for some lanes. The kick plays it on the hits off the beat, the snare on its ghost notes, the others
+// on every second hit, so a kit of 16 pads is heard in full and the hits are not all the same sample.
+func (p Pattern) BytesAlt(pads, alts map[formats.Lane]proto.PadIndex) ([]byte, error) {
 	m := map[formats.Lane]proto.PadIndex{}
 	for l, pad := range pads {
 		m[l] = pad
 	}
-	return formats.BuildSteps(p.Lanes(), m, p.Bars)
+	var lanes []formats.StepLane
+	for _, sl := range p.Lanes() {
+		alt, ok := alts[sl.Lane]
+		if !ok || len(sl.Steps) == 0 {
+			lanes = append(lanes, sl)
+			continue
+		}
+		n := p.Bars * 16
+		main, second := sl, sl
+		main.Steps, second.Steps = make([]uint8, n), make([]uint8, n)
+		second.Lane = sl.Lane + altBase
+		m[second.Lane] = alt
+		hit := 0
+		for i := 0; i < n; i++ {
+			v := sl.Steps[i%len(sl.Steps)]
+			if v == 0 {
+				continue
+			}
+			hit++
+			var useAlt bool
+			switch sl.Lane {
+			case formats.LaneKick:
+				useAlt = i%4 != 0
+			case formats.LaneSnare:
+				useAlt = v < 80
+			default:
+				useAlt = hit%2 == 0
+			}
+			if useAlt {
+				second.Steps[i] = v
+			} else {
+				main.Steps[i] = v
+			}
+		}
+		// per-step lists follow the steps: they are as long as the pattern now
+		for _, sp := range []*formats.StepLane{&main, &second} {
+			sp.Gates = tile(sl.Gates, n)
+			sp.Ratchet = tile(sl.Ratchet, n)
+			sp.Flam = tile(sl.Flam, n)
+		}
+		lanes = append(lanes, main, second)
+	}
+	return formats.BuildSteps(lanes, m, p.Bars)
+}
+
+// tile repeats a per-step list to n steps (nil stays nil).
+func tile[T any](s []T, n int) []T {
+	if len(s) == 0 {
+		return nil
+	}
+	out := make([]T, n)
+	for i := range out {
+		out[i] = s[i%len(s)]
+	}
+	return out
 }
 
 // Notes is how many hits the pattern has.
