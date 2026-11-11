@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/moahbeatlab/404tui/formats"
 )
@@ -23,11 +24,28 @@ var (
 		{"1-3-5-7  seventh", []int{0, 2, 4, 6}}, {"1-3-5-7-9  ninth", []int{0, 2, 4, 6, 8}}, {"every note of the scale", nil},
 	}
 	onePadOcts = []int{-3, -2, -1, 0, 1, 2, 3} // as DOOM OS: the notes repeated up to three octaves up or down
+	// chordTypes are the chords of the chord tool (and of the arp on CHROMATIC): the semitones above the root.
+	chordTypes = []struct {
+		name string
+		iv   []int
+	}{
+		{"major", []int{0, 4, 7}}, {"minor", []int{0, 3, 7}}, {"5  power", []int{0, 7}}, {"sus2", []int{0, 2, 7}}, {"sus4", []int{0, 5, 7}},
+		{"dim", []int{0, 3, 6}}, {"aug", []int{0, 4, 8}}, {"6", []int{0, 4, 7, 9}}, {"m6", []int{0, 3, 7, 9}},
+		{"7", []int{0, 4, 7, 10}}, {"maj7", []int{0, 4, 7, 11}}, {"m7", []int{0, 3, 7, 10}}, {"m(maj7)", []int{0, 3, 7, 11}},
+		{"dim7", []int{0, 3, 6, 9}}, {"m7b5  half-dim", []int{0, 3, 6, 10}}, {"7sus4", []int{0, 5, 7, 10}}, {"add9", []int{0, 4, 7, 14}},
+		{"m(add9)", []int{0, 3, 7, 14}}, {"6/9", []int{0, 4, 7, 9, 14}}, {"9", []int{0, 4, 7, 10, 14}}, {"maj9", []int{0, 4, 7, 11, 14}}, {"maj9#11", []int{0, 4, 7, 11, 14, 18}},
+		{"m9", []int{0, 3, 7, 10, 14}}, {"7b9", []int{0, 4, 7, 10, 13}}, {"7#9", []int{0, 4, 7, 10, 15}}, {"11", []int{0, 4, 7, 10, 14, 17}},
+		{"m11", []int{0, 3, 7, 10, 14, 17}}, {"13", []int{0, 4, 7, 10, 14, 21}}, {"maj13", []int{0, 4, 7, 11, 14, 21}},
+	}
 )
 
 // onePad is the settings of the menu, kept between visits. The playing settings are a.arpp, as for the marked pads.
 type onePad struct {
 	key, scale, stack, chord, degree, oct int
+	hold                                  bool // X (Space) repeats the chord or the arp until it is pressed again; off, it plays once
+	progOn                                bool // the chord tool: the loop that plays is the progression
+	prog, color                           int  // the chord tool: the progression (an index of progressions), an index of progColors
+	from                                  int  // the note the sample of the pad in front is in (0 C .. 11 B)
 	init                                  bool
 }
 
@@ -44,7 +62,7 @@ func onePadSemis(o onePad) []int {
 	}
 	var base []int // the chord over the key, in semitones
 	if o.scale == 0 {
-		base = append(base, formats.ArpChords[o.chord].Iv...)
+		base = append(base, chordTypes[o.chord].iv...)
 	} else {
 		iv := formats.ArpScales[o.scale-1].Iv
 		at := func(d int) int { return iv[d%len(iv)] + 12*(d/len(iv)) }
@@ -65,7 +83,7 @@ func onePadSemis(o onePad) []int {
 	}
 	for oct := 0; oct != n+step; oct += step {
 		for _, s := range base {
-			if v := o.key + s + 12*oct; v >= -36 && v <= 36 {
+			if v := (o.key-o.from+12)%12 + s + 12*oct; v >= -36 && v <= 36 { // from the sample's own note up to the key
 				add(v)
 			}
 		}
@@ -78,17 +96,18 @@ func onePadSemis(o onePad) []int {
 	return out
 }
 
-// onePadKeyboard draws two octaves of a piano with the notes of the arp lit.
-func onePadKeyboard(semis []int) func(g Gfx, col, row, cols int) {
+// onePadKeyboard draws two octaves of a piano with the notes of the arp lit: the semitones from the sample, whose own note is from.
+func onePadKeyboard(semis []int, from int) func(g Gfx, col, row, cols int) {
 	return func(g Gfx, col, row, cols int) {
 		on := map[int]bool{}
 		names := ""
 		seen := map[int]bool{}
 		for _, s := range semis {
-			on[s%24] = true
-			if !seen[s%12] {
-				seen[s%12] = true
-				names += formats.PitchNames[s%12] + " "
+			v := s + from + 48 // a note below the sample (octaves down) is still on the keys
+			on[v%24] = true
+			if !seen[v%12] {
+				seen[v%12] = true
+				names += formats.PitchNames[v%12] + " "
 			}
 		}
 		g.Piano(col, row, cols, on)
@@ -96,23 +115,26 @@ func onePadKeyboard(semis []int) func(g Gfx, col, row, cols int) {
 	}
 }
 
-func (a *App) openOnePadMenu(n int) {
+// openOnePadMenu is the chord (chord) or the arp from pad n's one sample. The two share the notes (key, scale, chord, octaves): a chord
+// found in one is there in the other. X (Space) plays it once; with Hold it repeats (the chord every bar, the arp as a loop) until X again.
+func (a *App) openOnePadMenu(n int, chord bool) {
 	a.arpPrintDefaults()
 	st := &a.arpp
-	o := &a.onepad
-	if !o.init {
-		*o = onePad{stack: 3, oct: 4, init: true}
+	o := a.notesOf(chord)
+	what := "arp"
+	if chord {
+		what = "chord"
 	}
-	m := &menu{title: "arp from " + a.label(n), footH: 4}
+	m := &menu{title: what + " from " + a.label(n), footH: 4}
 	scales := []string{"CHROMATIC (chord types)"}
 	for _, s := range formats.ArpScales {
 		scales = append(scales, s.Name)
 	}
-	chords := arpNames(formats.ArpChords, func(c struct {
-		Name string
-		Iv   []int
+	chords := arpNames(chordTypes, func(c struct {
+		name string
+		iv   []int
 	}) string {
-		return c.Name
+		return c.name
 	})
 	stacks := make([]string, len(onePadStacks))
 	for i, s := range onePadStacks {
@@ -129,9 +151,19 @@ func (a *App) openOnePadMenu(n int) {
 		}
 		return out
 	}
-	var degI, chI int
+	var degI, chI, progI, moodI int
 	redo := func() {
-		m.foot = onePadKeyboard(onePadSemis(*o))
+		m.foot = onePadKeyboard(onePadSemis(*o), o.from)
+		if chord {
+			if progI > 0 {
+				m.at(progI).vals, m.at(progI).val = progLabels(o.key, o.color), o.prog
+				m.at(moodI).vals = []string{progressions[o.prog].mood}
+			}
+			if a.arpOn {
+				a.onePadReplay(n, chord)
+			}
+			return
+		}
 		if o.scale == 0 { // chromatic: the chord types, else the stacks of the scale
 			m.at(chI).vals, m.at(chI).val = chords, o.chord
 		} else {
@@ -141,46 +173,201 @@ func (a *App) openOnePadMenu(n int) {
 		o.degree = min(o.degree, len(m.at(degI).vals)-1)
 		m.at(degI).val = o.degree
 		if a.arpOn {
-			a.onePadReplay(n)
+			a.onePadReplay(n, chord)
 		}
 	}
 	set := func(label string, vals []string, cur int, change func(v int)) int {
 		m.items = append(m.items, menuItem{label: label, vals: vals, val: cur, keepOpen: true, onChange: func(v int) { change(v); redo() }})
 		return len(m.items) - 1
 	}
-	m.tabHead("NOTES")
-	set("Key", formats.PitchNames, o.key, func(v int) { o.key = v })
-	set("Scale", scales, o.scale, func(v int) { o.scale = v })
-	degI = set("On degree (scales)", degrees(), o.degree, func(v int) { o.degree = v })
-	chI = set("Chord", stacks, o.stack, func(v int) {
-		if o.scale == 0 {
-			o.chord = v
-		} else {
-			o.stack = v
+	if !chord {
+		m.tabHead("NOTES")
+	}
+	from, how := a.sampleNote(n)
+	o.from = from
+	set("Sample is in", formats.PitchNames, o.from, func(v int) {
+		o.from = v
+		if a.sampleIn == nil {
+			a.sampleIn = map[int]int{}
 		}
+		a.sampleIn[n] = v
 	})
+	if how != "" {
+		a.say(fmt.Sprintf("the sample of %s is in %s (%s)", a.label(n), formats.PitchNames[from], how), false)
+	}
+	if chord {
+		set("Root", formats.PitchNames, o.key, func(v int) { o.key = v })
+		set("Chord", chords, o.chord, func(v int) { o.chord = v })
+	} else {
+		set("Key", formats.PitchNames, o.key, func(v int) { o.key = v })
+		set("Scale", scales, o.scale, func(v int) { o.scale = v })
+		degI = set("On degree (scales)", degrees(), o.degree, func(v int) { o.degree = v })
+		chI = set("Chord", stacks, o.stack, func(v int) {
+			if o.scale == 0 {
+				o.chord = v
+			} else {
+				o.stack = v
+			}
+		})
+	}
 	set("Octaves", names(onePadOcts, func(v int) string { return fmt.Sprintf("%+d", v) }), o.oct, func(v int) { o.oct = v })
-	m.tabHead("PLAY")
-	set("Type", arpTypes, st.typ, func(v int) { st.typ = v; a.say(arpTypeNotes[v], false) })
-	set("Rate", arpNames(formats.ArpRates, func(r formats.ArpRate) string { return r.Name }), st.rate, func(v int) { st.rate = v })
-	set("Gate", names(printGates, func(v int) string { return fmt.Sprintf("%d%%", v) }), st.gate, func(v int) { st.gate = v })
-	set("Velocity", names(printVels, func(v int) string { return fmt.Sprint(v) }), st.vel, func(v int) { st.vel = v })
-	set("Length", names(printBars, func(v int) string { return fmt.Sprintf("%d bar", v) }), near(printBars, st.bars), func(v int) { st.bars = printBars[v] })
-	m.tabHead("MAKE")
-	m.items = append(m.items,
-		menuItem{label: "Hear it / stop it", keepOpen: true, run: func(int) { a.onePadToggle(n) }},
-		menuItem{label: "Bounce the arp to a new pad", run: func(int) { a.onePadBounce(n, false) }},
-		menuItem{label: "Bounce the chord to a new pad", run: func(int) { a.onePadBounce(n, true) }},
-		menuItem{label: "Print the arp to the pattern", run: func(int) { a.onePadPattern(n) }},
-	)
+	holdVals := []string{"off: one pass", "on: loops"}
+	if chord {
+		holdVals = []string{"off: once", "on: every bar"}
+	}
+	m.items = append(m.items, menuItem{label: "Hold", vals: holdVals, val: btoi(o.hold), keepOpen: true,
+		onChange: func(v int) {
+			o.hold = v == 1
+			if !o.hold && a.arpOn {
+				a.stop()
+			}
+		}})
+	if chord {
+		m.head("MAKE")
+		m.items = append(m.items, menuItem{label: "Bounce the chord to a new pad", run: func(int) { a.onePadBounce(n, true, m) }})
+		m.head("PROGRESSION (IN THE ROOT'S KEY)")
+		progI = set("Progression", progLabels(o.key, o.color), o.prog, func(v int) {
+			o.prog = v
+			pr := progressions[v]
+			a.say(fmt.Sprintf("%s (%s): %s = %s", pr.name, pr.mood, pr.roman, strings.Join(progNames(v, o.key, o.color), " ")), false)
+		})
+		m.items[progI].run = func(int) { a.progList(n, m, redo) } // A (Enter): the box of every progression
+		moodI = len(m.items)
+		m.items = append(m.items, menuItem{label: "Feels", vals: []string{progressions[o.prog].mood}, keepOpen: true})
+		set("Chords", progColors, o.color, func(v int) { o.color = v })
+		m.items = append(m.items,
+			menuItem{label: "Hear the progression (a chord a bar)", keepOpen: true, run: func(int) { a.progHear(n) }},
+			menuItem{label: "Bounce the progression to free pads", run: func(int) { a.progBounce(n, m) }},
+		)
+	} else {
+		m.tabHead("PLAY")
+		set("Type", arpTypes, st.typ, func(v int) { st.typ = v; a.say(arpTypeNotes[v], false) })
+		set("Rate", arpNames(formats.ArpRates, func(r formats.ArpRate) string { return r.Name }), st.rate, func(v int) { st.rate = v })
+		set("Gate", names(printGates, func(v int) string { return fmt.Sprintf("%d%%", v) }), st.gate, func(v int) { st.gate = v })
+		set("Velocity", names(printVels, func(v int) string { return fmt.Sprint(v) }), st.vel, func(v int) { st.vel = v })
+		set("Length", names(printBars, func(v int) string { return fmt.Sprintf("%d bar", v) }), near(printBars, st.bars), func(v int) { st.bars = printBars[v] })
+		m.tabHead("MAKE")
+		m.items = append(m.items,
+			menuItem{label: "Bounce the arp to a new pad", run: func(int) { a.onePadBounce(n, false, m) }},
+			menuItem{label: "Print the arp to the pattern", run: func(int) { a.onePadPattern(n) }},
+		)
+	}
 	m.onClose = func() {
 		if a.arpOn {
 			a.stop()
 		}
 	}
+	// X (Space) plays what the cursor is on: the progression on its rows, else the chord (or the arp)
+	onProg := func() bool { return chord && progI > 0 && m.cur >= progI-1 }
+	m.onX = func() {
+		if onProg() {
+			a.progHear(n)
+			return
+		}
+		a.onePadSpace(n, chord)
+	}
+	m.xHintOf = func() string {
+		if onProg() {
+			return onePadXHint(o.hold, "progression")
+		}
+		return onePadXHint(o.hold, what)
+	}
 	redo()
-	m.tabify()
+	if !chord {
+		m.tabify()
+	}
 	a.menu = m
+}
+
+// chordSymbol is the chord type as it is written after the root: "" for major, m, 7, maj7, m7b5...
+func chordSymbol(c int) string {
+	name := chordTypes[c].name
+	switch name {
+	case "major":
+		return ""
+	case "minor":
+		return "m"
+	case "m(maj7)":
+		return "mMaj7"
+	case "m(add9)":
+		return "madd9"
+	}
+	return strings.Fields(name)[0]
+}
+
+// notesOf is the settings of the chord tool or the arp tool, each kept between visits.
+func (a *App) notesOf(chord bool) *onePad {
+	o := &a.onepad
+	def := onePad{stack: 3, oct: 4, init: true} // a triad over two octaves
+	if chord {
+		o = &a.chordp
+		def = onePad{oct: 3, init: true} // a major chord, one octave
+	}
+	if !o.init {
+		*o = def
+	}
+	return o
+}
+
+func onePadXHint(hold bool, what string) string {
+	if hold {
+		return "loop " + what + " / stop"
+	}
+	return what + " once"
+}
+
+// onePadSpace is X (Space) in the menu: with Hold the chord or the arp repeats until X again, else it plays once. A loop that plays
+// is stopped either way.
+func (a *App) onePadSpace(n int, chord bool) {
+	if a.arpOn {
+		a.stop()
+		if !(chord && a.notesOf(true).progOn) { // the progression looped: the chord takes its place
+			a.say("stopped", false)
+			return
+		}
+	}
+	hold := a.notesOf(chord).hold
+	s, err := a.onePadSound(n, chord, hold)
+	if err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	if !hold {
+		a.play(s)
+		return
+	}
+	lp, ok := a.Audio.(looper)
+	if a.Audio == nil || !ok {
+		a.say("no audio output", true)
+		return
+	}
+	a.stop()
+	if err := lp.Loop(s); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	a.arpOn = true
+	a.notesOf(chord).progOn = false
+	a.say("it loops: change a setting to hear it at once, Space stops it", false)
+}
+
+// onePadSound is what X plays: the chord (as a loop, one bar at the bank's tempo) or the arp.
+func (a *App) onePadSound(n int, chord, loop bool) (formats.Sample, error) {
+	if !chord {
+		return a.onePadRender(n)
+	}
+	ss, err := a.onePadSamples(n, onePadSemis(*a.notesOf(true)))
+	if err != nil {
+		return formats.Sample{}, err
+	}
+	s := chordMix(ss)
+	if loop {
+		bar := int(4 * 60 / a.tempoOf(n/16) * formats.SampleRate)
+		out := make([]int16, bar*2)
+		copy(out, s.Samples)
+		s.Samples = out
+	}
+	return s, nil
 }
 
 // onePadSamples is the sample of pad n pitched to each of the semitones.
@@ -215,38 +402,17 @@ func (a *App) onePadRender(n int) (formats.Sample, error) {
 	return a.mixArp(ss, a.tempoOf(n/16))
 }
 
-func (a *App) onePadToggle(n int) {
-	if a.arpOn {
-		a.stop()
-		a.say("arp stopped", false)
-		return
-	}
-	lp, ok := a.Audio.(looper)
-	if a.Audio == nil || !ok {
-		a.say("no audio output", true)
-		return
-	}
-	s, err := a.onePadRender(n)
-	if err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	a.stop()
-	if err := lp.Loop(s); err != nil {
-		a.say(err.Error(), true)
-		return
-	}
-	a.arpOn = true
-	a.say("the arp loops: change a setting to hear it at once", false)
-}
-
 // onePadReplay puts a changed setting into the loop that plays.
-func (a *App) onePadReplay(n int) {
+func (a *App) onePadReplay(n int, chord bool) {
 	r, ok := a.Audio.(replacer)
 	if !ok {
 		return
 	}
-	if s, err := a.onePadRender(n); err == nil {
+	s, err := a.onePadSound(n, chord, true)
+	if chord && a.notesOf(true).progOn { // the progression loops, not the chord
+		s, err = a.progSound(n)
+	}
+	if err == nil {
 		r.ReplaceLoop(s)
 	}
 }
@@ -273,15 +439,16 @@ func chordMix(ss []formats.Sample) formats.Sample {
 	return formats.Sample{Channels: 2, Samples: out}
 }
 
-// onePadBounce keeps the arp, or with chord the notes played together, on the next free pad.
-func (a *App) onePadBounce(n int, chord bool) {
+// onePadBounce keeps the arp, or with chord the notes played together, on the next free pad. Then (or when the pad dialog is left)
+// the tool's menu m is back as it was, to make another one.
+func (a *App) onePadBounce(n int, chord bool, m *menu) {
 	var s formats.Sample
 	var err error
 	name := "arp"
 	if chord {
 		name = "chord"
 		var ss []formats.Sample
-		if ss, err = a.onePadSamples(n, onePadSemis(a.onepad)); err == nil {
+		if ss, err = a.onePadSamples(n, onePadSemis(*a.notesOf(true))); err == nil {
 			s = chordMix(ss)
 		}
 	} else {
@@ -292,13 +459,19 @@ func (a *App) onePadBounce(n int, chord bool) {
 		return
 	}
 	a.pickFreePad("Put it on a pad", n+1, func(to int) {
+		defer func() { a.menu = m }()
 		mb, err := a.lab.Decode(s.WAV(), "wav")
 		var meta struct{ ID int }
 		if err != nil || json.Unmarshal(mb, &meta) != nil {
 			a.say("cannot keep the arp", true)
 			return
 		}
-		err = a.assignPad(to, meta.ID, fmt.Sprintf("%s_%s", fit(a.info.Pads[n].Name, 9), name))
+		padName := fmt.Sprintf("%s_%s", fit(a.info.Pads[n].Name, 9), name)
+		if chord { // named after the chord, first, so a tile that cuts the name still shows it: Am7_Pad
+			o := a.notesOf(true)
+			padName = fit(formats.PitchNames[o.key]+chordSymbol(o.chord)+"_"+a.info.Pads[n].Name, 15)
+		}
+		err = a.assignPad(to, meta.ID, padName)
 		a.lab.Free(meta.ID)
 		if err != nil {
 			a.say(err.Error(), true)
@@ -306,8 +479,11 @@ func (a *App) onePadBounce(n int, chord bool) {
 		}
 		delete(a.pcm, to)
 		a.refresh()
-		a.say(fmt.Sprintf("the %s is on %s", name, a.label(to)), false)
+		a.say(fmt.Sprintf("the %s is on %s: change it and bounce again for another", name, a.label(to)), false)
 	})
+	if a.picker != nil {
+		a.picker.onCancel = func() { a.menu = m }
+	}
 }
 
 // onePadPattern puts the pitched copies on free pads (low to high) and writes the arp over them into the pattern.

@@ -81,7 +81,7 @@ func (a *App) drawRanger(g Gfx) {
 					at = i
 				}
 			}
-			a.drawFileList(g, 2, pw-2, ents, at, false)
+			a.drawFileList(g, resDir, 2, pw-2, ents, at, false)
 		}
 	}
 	if !hasParent && a.searchQ == "" { // the top of a source: the left column says which source this is, and what else there is
@@ -95,7 +95,7 @@ func (a *App) drawRanger(g Gfx) {
 					at = i
 				}
 			}
-			a.drawFileList(g, 2, pw-2, ents, at, false)
+			a.drawFileList(g, parent, 2, pw-2, ents, at, false)
 		}
 	}
 	ctitle := baseName(a.dir)
@@ -119,7 +119,7 @@ func (a *App) drawRanger(g Gfx) {
 			g.Text(1+pw+2, 6, short2(a.Root, cw-5), cAmber, false)
 		}
 	}
-	a.drawFileList(g, 2+pw, cw-2, a.entries, a.fcur, true)
+	a.drawFileList(g, a.dir, 2+pw, cw-2, a.entries, a.fcur, true)
 	e, ok := a.current()
 	pt := ""
 	if ok && (e.dir || !Terminal) { // a computer's third column is for folders (the shape of a sample is in the panel)
@@ -154,7 +154,7 @@ func (a *App) drawPreview(g Gfx, x, w int) {
 			g.Text(x, 2, "(empty)", cDim, false)
 			return
 		}
-		a.drawFileList(g, x-1, w+2, ents, -1, false)
+		a.drawFileList(g, path, x-1, w+2, ents, -1, false)
 	default:
 		if Terminal {
 			return

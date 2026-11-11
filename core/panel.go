@@ -114,10 +114,14 @@ func (a *App) hints() (plain, shift []hint) {
 		plain = out
 	}
 	if Terminal && a.scr == Unit && !a.Modal() && a.prompt == nil {
-		plain = append(append([]hint{}, plain...), hint{"o", "open from a folder"}, hint{"t", "online / offline"})
+		plain = append(append([]hint{}, plain...), hint{"o", "open from a folder"}, hint{"t", "project menu"})
 	}
 	if Terminal && a.scr == Files && !a.Modal() && a.prompt == nil && a.kb == nil {
-		plain = append(append([]hint{}, plain...), hint{"m", "mark file"}, hint{"M", "mark all"})
+		auto := "auto play: off"
+		if a.set.AutoListen {
+			auto = "auto play: ON"
+		}
+		plain = append(append([]hint{}, plain...), hint{"m", "mark file"}, hint{"M", "mark all"}, hint{"^A", auto})
 	}
 	if Terminal && a.scr == Files && !a.Modal() && a.prompt == nil && a.kb == nil { // t: load files from where
 		out := make([]hint, 0, len(plain)+1)
@@ -192,13 +196,28 @@ func (a *App) rawHints() (plain, shift []hint) {
 		if a.picker.pads {
 			open = "this pad"
 		}
+		if a.picker.pads {
+			return []hint{{"^v<>", "choose"}, {"L1 R1", "bank"}, {"X", "hear it"}, {"A", open}, {"B", "cancel"}}, nil
+		}
 		return []hint{{"^v<>", "choose"}, {"L1 R1", "bank"}, {"A", open}, {"B", "cancel"}}, nil
 	}
 	if a.menu != nil {
-		if a.menu.tabs != nil {
-			return []hint{{"^v", "choose"}, {"<>", "change"}, {"A", "run"}, {"L1 R1", "tab"}, {"B", "close"}}, nil
+		hs := []hint{{"^v", "choose"}, {"<>", "change"}, {"A", "run"}}
+		if a.menu.onX != nil {
+			x := "X"
+			if Terminal {
+				x = "Space"
+			}
+			what := ""
+			if a.menu.xHintOf != nil {
+				what = a.menu.xHintOf()
+			}
+			hs = append(hs, hint{x, what})
 		}
-		return []hint{{"^v", "choose"}, {"<>", "change"}, {"A", "run"}, {"B", "close"}}, nil
+		if a.menu.tabs != nil {
+			hs = append(hs, hint{"L1 R1", "tab"})
+		}
+		return append(hs, hint{"B", "close"}), nil
 	}
 	switch a.scr {
 	case Pads:
@@ -211,7 +230,9 @@ func (a *App) rawHints() (plain, shift []hint) {
 		if a.kb != nil && Terminal {
 			mode := "folders only"
 			if a.searchDirs {
-				mode = "files again"
+				mode = "categories"
+			} else if a.tagSearch {
+				mode = "file names"
 			}
 			return []hint{{"type", "the words"}, {"Tab", mode}, {"Enter", "keep the result"}, {"Esc", "end the search"}, {"Bksp", "delete"}}, nil
 		}
@@ -254,6 +275,13 @@ func (a *App) rawHints() (plain, shift []hint) {
 		play, stop := hint{"X", "play"}, hint{"B", "note settings"}
 		if a.seqOn {
 			play = hint{"X", "stop"}
+		}
+		if a.patStrip { // the arrows are on the row of pattern boxes
+			return []hint{{"^v<>", "choose the pattern"}, {"L1 R1", "bank"}, play, {"A", "back to the grid"}}, nil
+		}
+		if Terminal {
+			return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"R2", "mute/solo"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}},
+				[]hint{{"Y+X", "add track"}, {"p", "pattern tiles"}, {"Sel+B", "tools"}, {"Y+^v", "pattern +-"}, {"Sel+X", "record"}} // (y b, the dialog with every bank, is in the docs)
 		}
 		return []hint{{"A", "note on/off"}, {"A+^<>", "edit (hold)"}, play, stop, {"L2", "hear note"}, {"R2", "mute/solo"}, {"^v<>", "pad, step"}, {"L1 R1", "bar"}}, // (z: one bar or more, listed below on a keyboard)
 			[]hint{{"Y+X", "add track"}, {"Y+B", "pick pattern"}, {"Sel+B", "tools"}, {"Y+^v", "pattern +-"}, {"Sel+X", "record"}}
@@ -330,7 +358,7 @@ func (a *App) drawPanel(g Gfx) {
 			if cw-1 >= 8 {
 				n = fmt.Sprintf("%d %s", i+1, n)
 			}
-			g.Text(cx+(cw-1-len(n))/2, cy, n, fg, sc == a.scr)
+			g.Text(cx+max(min(2, (cw-1-len(n))/2), 0), cy, n, fg, sc == a.scr) // the names start at the same column in every button
 		}
 	} else {
 		for i, n := range screenNames {
@@ -468,14 +496,18 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 			g.Badge(bx, row(1), sw.ch, on)
 			bx += 2
 		}
-		g.Fill(x, row(2), w, 2, cPanel2)
+		wh := 2 // the shape of the sample: taller on a computer when the panel has the room
+		if Terminal && y1-row(0) >= 24 {
+			wh = 4
+		}
+		g.Fill(x, row(2), w, wh, cPanel2)
 		if id, ok := a.padSampleSoft(n); ok {
-			a.wave(g, id, 0, p.Frames, x, row(2), w, 2, cAmber)
+			a.wave(g, id, 0, p.Frames, x, row(2), w, wh, cAmber)
 		} else if a.live != nil && a.lab.IsRemote(n) {
 			g.Text(x+1, row(2), "fetching from the unit...", cDim, false)
 		}
 		if Terminal { // values, no faders: the numbers say it
-			a.drawPadInfo(g, x, row(5), w, y1, n)
+			a.drawPadInfo(g, x, row(3+wh), w, y1, n)
 			return
 		}
 		get := func(id byte, def int32) int32 { return a.padValue(n, id, def) }
@@ -541,6 +573,16 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 				tagRow = 13 // under the waveform
 			}
 			g.Text(x, row(tagRow), fit(tg, w), cAmber, false)
+		}
+		if a.searchQ != "" && Terminal { // a search result: the whole folder it is in, under the shape
+			full := filepath.Dir(joinPath(a.dir, e.name))
+			g.Text(x, row(14), "FOLDER", cDim, true)
+			for i, l := range wrapPath(full, w) {
+				if row(15+i) >= y1 || i >= 4 {
+					break
+				}
+				g.Text(x, row(15+i), l, cText, false)
+			}
 		}
 		if id, err := a.decode(e); err == nil {
 			s, _ := a.lab.Sample(id)
@@ -675,7 +717,14 @@ func (a *App) drawKeyboardKeys(g Gfx, x, y, w int) {
 		}
 		return n
 	}
-	viewRows := func() int { return 1 + rowsOf(len(plain)) + rowsOf(len(shift)) }
+	floor := 0
+	if a.scr == Seq && a.patStrip { // p: the arrows are on the tiles and the keys are few; the block keeps the height it has with the grid, so nothing moves
+		a.patStrip = false
+		p2, s2 := a.hints()
+		a.patStrip = true
+		floor = 1 + rowsOf(len(p2)) + rowsOf(len(s2))
+	}
+	viewRows := func() int { return max(1+rowsOf(len(plain))+rowsOf(len(shift)), floor) }
 	globalRows := func() int { return 1 + len(global) }
 	total := func() int { return viewRows() + globalRows() + 2 } // two rules
 	limit := Rows - 3 - (y + 2) - room
@@ -723,6 +772,14 @@ func (a *App) drawKeyboardKeys(g Gfx, x, y, w int) {
 		}
 	}
 	g.HRule(x, gy-1, w, cLine)
+	if a.scr == Seq && w >= 40 && gy-2-7-(y+2) >= 12 { // the bank's 16 patterns, 4 by 4, right under the level and the tempo; what is under the cursor below them
+		g.Text(x, y+2, "PATTERNS", cDim, true)
+		g.Text(x+len("PATTERNS  "), y+2, "p choose with the arrows", cDim, false)
+		a.drawPatternStrip(g, x, y+3, w)
+		g.HRule(x, y+7, w, cLine)
+		a.context(g, x, y+8, w, gy-2)
+		return
+	}
 	a.context(g, x, y+2, w, gy-2)
 }
 
@@ -735,4 +792,18 @@ func (a *App) keyColumns(g Gfx, x, y, w int, hs []hint, active, two bool) {
 	half := (len(hs) + 1) / 2
 	a.keyBlock(g, x, y, w/2, hs[:half], active)
 	a.keyBlock(g, x+w/2, y, w-w/2, hs[half:], active)
+}
+
+// wrapPath breaks a path into lines of at most w characters, after a slash.
+func wrapPath(p string, w int) []string {
+	var lines []string
+	for len(p) > w && w > 4 {
+		cut := strings.LastIndex(p[:w], "/")
+		if cut <= 0 {
+			cut = w
+		}
+		lines = append(lines, p[:cut])
+		p = p[cut:]
+	}
+	return append(lines, p)
 }

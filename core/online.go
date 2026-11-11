@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 // ONLINE and OFFLINE, on a computer. Online the PROJECTS screen lists the 16 projects of the unit that is plugged in; offline it lists
@@ -74,6 +76,7 @@ func (a *App) offlineMenu() {
 	add := func(l string, run func(int)) { m.items = append(m.items, menuItem{label: l, run: run}) }
 	if ok {
 		add("Open it in the editor", func(int) { a.openOffline(n) })
+		add("Rename project...", func(int) { a.renameOffline(n) })
 	}
 	add("Open a project from a folder...", func(int) { a.openProjectFolder() })
 	add("Write the project of the editor here", func(int) {
@@ -89,7 +92,51 @@ func (a *App) offlineMenu() {
 		a.say(fmt.Sprintf("wrote %d files as PROJECT_%02d in %s", len(names), n+1, short2(a.offlineDir(), 30)), false)
 	})
 	add("Export the project of the editor into a folder...", func(int) { a.exportProjectAsk() })
+	add("Online or offline, and the offline folder...", func(int) { a.modeMenu() })
 	a.menu = m
+}
+
+// renameOffline gives project n (0..15) another number: the unit knows its projects only as PROJECT_01..PROJECT_16, so a rename is a
+// move to a free number. The editor follows when it has this project open.
+func (a *App) renameOffline(n int) {
+	from, ok := a.offlineProject(n)
+	if !ok {
+		return
+	}
+	a.askText(fmt.Sprintf("new number of PROJECT_%02d (1..16)", n+1), "", fmt.Sprint(n+1), func(s string) {
+		to, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(s)), "PROJECT_")))
+		if err != nil || to < 1 || to > 16 {
+			a.say("a project is PROJECT_01 to PROJECT_16: type a number from 1 to 16", true)
+			return
+		}
+		if to == n+1 {
+			return
+		}
+		if _, taken := a.offlineProject(to - 1); taken {
+			a.say(fmt.Sprintf("PROJECT_%02d is already there: rename or move that one first", to), true)
+			return
+		}
+		dst := filepath.Join(a.offlineDir(), fmt.Sprintf("PROJECT_%02d", to))
+		if _, err := os.Stat(dst); err == nil { // a folder without a project in it
+			if err := os.Remove(dst); err != nil {
+				a.say(fmt.Sprintf("PROJECT_%02d is in the way: %v", to, err), true)
+				return
+			}
+		}
+		if err := os.Rename(from, dst); err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		if a.slot == n+1 {
+			a.slot = to
+		}
+		if a.set.LastOffline == n+1 {
+			a.set.LastOffline = to
+			a.saveSettings()
+		}
+		a.unitCur = to - 1
+		a.say(fmt.Sprintf("PROJECT_%02d is now PROJECT_%02d", n+1, to), false)
+	})
 }
 
 // modeMenu is t on PROJECTS: work online or offline, and the folder of the offline projects.

@@ -15,6 +15,8 @@ type menu struct {
 	cur     int
 	onClose func()                          // what B does besides closing the menu (a tool throws its trial away)
 	parent  *menu                           // the menu this one was opened from: B goes back to it, and B there closes
+	onX     func()                          // what X (Space on a keyboard) does in the menu, nil for nothing
+	xHintOf func() string                   // what the hints call it
 	foot    func(g Gfx, col, row, cols int) // drawn under the items (a keyboard), footH rows high
 	footH   int                             // in rows
 	// tabs: the headings split the menu into pages (as the pad panel), L1 and R1 turn them. items is the page in front;
@@ -146,6 +148,10 @@ func (a *App) menuKey(k Key) {
 				m.step(d)
 			}
 		}
+	case X:
+		if m.onX != nil {
+			m.onX()
+		}
 	case B:
 		if m.onClose != nil {
 			m.onClose()
@@ -227,8 +233,11 @@ func (a *App) drawMenu(g Gfx) {
 		vw := 0
 		if len(it.vals) > 0 {
 			v := it.vals[it.val]
+			room := wc - 5 - min(len(menuLabel(it.label)), 12) // a long value is cut: the label keeps room for 12 characters
 			if i == m.cur {
-				v = "< " + v + " >"
+				v = "< " + fit(v, room-4) + " >"
+			} else {
+				v = fit(v, room)
 			}
 			vw = len(v) + 1
 			g.Text(x+wc-2-len(v), yy, v, cAmber, i == m.cur)
@@ -267,11 +276,11 @@ func (a *App) padToolsMenu(n int) *menu {
 	m := &menu{title: "pad " + a.label(n)}
 	add := func(l string, run func(int)) { m.items = append(m.items, menuItem{label: l, run: run}) }
 	m.head("SAMPLE")
-	add("Pick a sample...", func(int) { a.go_(Files) })
+	add("Pick a sample...", func(int) { a.go_(Files); a.assignTo = n + 1 }) // the sample chosen there goes on this pad: no second question
 	if has {
 		add("Slice...", func(int) { a.go_(Slice) })
-		add("Chords & arps...", func(int) { a.openArpMenu(n) })
-		add("Arp from this one sample (scales, chords)...", func(int) { a.openOnePadMenu(n) })
+		add("Chord...", func(int) { a.openOnePadMenu(n, true) })
+		add("Arp...", func(int) { a.openOnePadMenu(n, false) })
 		add("Keyboard from it...", func(int) { a.openKeyboardMenu(n) })
 		each := func(op string, arg int) {
 			if bulk {

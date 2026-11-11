@@ -434,3 +434,69 @@ func TestExtendPatternDoublesTheLengthAndLeavesTheNewHalfEmpty(t *testing.T) {
 	}
 	t.Error("a pattern was extended past the longest there is")
 }
+
+// ReplaceNotes takes the named notes out and puts those of another pattern in; the other notes stay as they were, off the grid and pitched
+func TestReplaceNotesLeavesTheRestAsItWas(t *testing.T) {
+	a1, a2, b1 := padOf(t, "A1"), padOf(t, "A2"), padOf(t, "B1")
+	src := toolPattern(t, 0, 487, 960)
+	src, err := formats.InsertNotePitch(src, 300, b1, 90, 333, 67)
+	if err != nil {
+		t.Fatal(err)
+	}
+	add, err := formats.BuildSteps([]formats.StepLane{{Lane: formats.LaneSnare, Steps: []uint8{0, 0, 0, 0, 110, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}},
+		map[formats.Lane]proto.PadIndex{formats.LaneSnare: a2}, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := formats.ReplaceNotes(src, map[formats.PadTick]bool{{Pad: a1, Tick: 960}: true}, add)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p0, _ := formats.ParsePattern(src)
+	p1, err := formats.ParsePattern(out)
+	if err != nil {
+		t.Fatalf("the result does not parse: %v", err)
+	}
+	if p1.Length != p0.Length || !bytes.Equal(p1.Trailer, p0.Trailer) {
+		t.Fatalf("the length or the trailer changed: %d -> %d", p0.Length, p1.Length)
+	}
+	type key struct {
+		pad  proto.PadIndex
+		tick uint32
+	}
+	got := map[key]formats.Event{}
+	for _, e := range p1.Events {
+		if !e.Control {
+			got[key{e.Pad, e.Tick}] = e
+		}
+	}
+	for _, e := range p0.Events {
+		if e.Control {
+			continue
+		}
+		g, ok := got[key{e.Pad, e.Tick}]
+		if e.Pad == a1 && e.Tick == 960 {
+			if ok {
+				t.Error("the dropped note is still there")
+			}
+			continue
+		}
+		if !ok || g != e {
+			t.Errorf("the note of pad %d at %d changed: %+v -> %+v", e.Pad.Index(), e.Tick, e, g)
+		}
+	}
+	for _, tick := range []uint32{480, 480 + 1920} { // the snare of the added pattern, in both bars
+		if g, ok := got[key{a2, tick}]; !ok || g.Velocity != 110 {
+			t.Errorf("the added note at %d is missing: %+v", tick, g)
+		}
+	}
+	if len(got) != 5 {
+		t.Errorf("%d notes, 5 expected (3 that stay and 2 that were added)", len(got))
+	}
+	// nothing to drop and nothing to add: the same notes
+	same, err := formats.ReplaceNotes(src, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkWholePattern(t, "nothing replaced", src, same)
+}

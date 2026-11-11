@@ -369,6 +369,9 @@ func swingPush(amount int) int {
 	return int(math.Round(float64(min(amount, 75)-50) / 100 * float64(2*grooveNoteLength)))
 }
 
+// SwingTicks is how many ticks a swing of amount percent (50 is straight) delays the second 16th of each pair.
+func SwingTicks(amount int) int { return swingPush(amount) }
+
 // BuildGroove writes a PTNnnnnn.BIN of bars bars for the template (bars 0: the groove's own
 // phrase length), each mapped lane playing its phrase over and over. pads maps a lane to the pad
 // that plays it; a lane missing from the map is skipped. A groove with no mapped lane is an
@@ -382,36 +385,91 @@ func (g GrooveTemplate) BuildGroove(pads map[Lane]proto.PadIndex, bars int) ([]b
 	if bars < 1 || bars > MaxStartBars {
 		return nil, errors.New("a pattern is 1 to 8 bars long")
 	}
-	barTicks := 4 * PPQ
-	length := uint32(bars * barTicks)
-	var recs []patRecord
+	var lanes []StepLane
 	for _, spec := range g.specs {
-		pad, ok := pads[spec.lane]
-		if !ok {
-			continue
-		}
 		steps, err := parseHits(spec.hits)
 		if err != nil {
 			return nil, fmt.Errorf("%s, %s: %w", g.Name, spec.lane.LaneName(), err)
 		}
-		gate := spec.gate
+		l := StepLane{Lane: spec.lane, Swing: spec.swing, Nudge: spec.nudge, Gate: spec.gate}
+		for i := 0; i < bars*16; i++ {
+			l.Steps = append(l.Steps, steps[i%len(steps)])
+		}
+		lanes = append(lanes, l)
+	}
+	return BuildSteps(lanes, pads, bars)
+}
+
+// StepLane is one lane of a pattern as the velocity of each 16th step (0: a rest), bars*16 of them (a shorter lane repeats), with the
+// lane's own swing, nudge and gate as in a groove.
+type StepLane struct {
+	Lane         Lane
+	Steps        []uint8
+	Swing, Nudge int
+	Gate         uint16
+	// Gates is the length of each step's note (0: Gate); a shorter list repeats. An open hat that must end where the closed hat starts.
+	Gates []uint16
+	// Ratchet is how many hits a step plays (0 or 1: one): 2 is two 32nds, 3 a triplet of 16ths, 4 four 64ths, each louder than the one before
+	// (a roll). Flam is the ticks before the step at which a quiet grace note plays (0: none). Shorter lists repeat.
+	Ratchet []uint8
+	Flam    []uint8
+}
+
+// ParseHits reads hit marks (X x o g, . for a rest, spaces and | between bars) into the velocity of each step.
+func ParseHits(hits string) ([]uint8, error) { return parseHits(hits) }
+
+// BuildSteps writes a PTNnnnnn.BIN of bars bars from lanes. pads maps a lane to the pad that plays it; a lane missing from the map
+// is skipped. A pattern with no note is an error, so one is never written empty by mistake.
+func BuildSteps(lanes []StepLane, pads map[Lane]proto.PadIndex, bars int) ([]byte, error) {
+	if bars < 1 || bars > MaxStartBars {
+		return nil, errors.New("a pattern is 1 to 8 bars long")
+	}
+	length := uint32(bars * 4 * PPQ)
+	var recs []patRecord
+	for _, l := range lanes {
+		pad, ok := pads[l.Lane]
+		if !ok || len(l.Steps) == 0 {
+			continue
+		}
+		gate := l.Gate
 		if gate == 0 {
 			gate = grooveNoteLength
 		}
 		for i := 0; i < bars*16; i++ {
-			vel := steps[i%len(steps)]
+			vel := l.Steps[i%len(l.Steps)]
 			if vel == 0 {
 				continue
 			}
-			tick := i*grooveNoteLength + spec.nudge
-			if i%2 == 1 {
-				tick += swingPush(spec.swing)
+			g := gate
+			if len(l.Gates) > 0 && l.Gates[i%len(l.Gates)] > 0 {
+				g = l.Gates[i%len(l.Gates)]
 			}
-			recs = append(recs, noteRecord(uint32(clamp(tick, 0, int(length)-1)), pad, vel, gate))
+			tick := i*grooveNoteLength + l.Nudge
+			if i%2 == 1 {
+				tick += swingPush(l.Swing)
+			}
+			n := 1
+			if len(l.Ratchet) > 0 && l.Ratchet[i%len(l.Ratchet)] > 1 {
+				n = int(l.Ratchet[i%len(l.Ratchet)])
+			}
+			for k := 0; k < n; k++ {
+				v := int(vel)
+				at := tick + k*grooveNoteLength/n
+				gl := g
+				if n > 1 {
+					v = v * (55 + 45*k/(n-1)) / 100 // a roll grows
+					gl = uint16(min(int(g), grooveNoteLength/n))
+				}
+				recs = append(recs, noteRecord(uint32(clamp(at, 0, int(length)-1)), pad, uint8(max(min(v, 127), 1)), gl))
+			}
+			if len(l.Flam) > 0 && l.Flam[i%len(l.Flam)] > 0 {
+				f := int(l.Flam[i%len(l.Flam)])
+				recs = append(recs, noteRecord(uint32(clamp(tick-f, 0, int(length)-1)), pad, uint8(max(int(vel)*55/100, 1)), uint16(min(f, 60))))
+			}
 		}
 	}
 	if len(recs) == 0 {
-		return nil, errors.New("the groove has no pads to play")
+		return nil, errors.New("the pattern has no pads to play")
 	}
 	return writeRecords(recs, length, startTrailer(bars)), nil
 }

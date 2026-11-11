@@ -284,3 +284,103 @@ func (a *App) drawIndexProgress(g Gfx, x, y, w int) {
 	}
 	g.Fill(x+pos, y+2, run, 1, cAmber)
 }
+
+// searchLocalTags is the search by categories on this computer: every file of every index (wherever the folder in view is) whose tags (the
+// words of the name and of the folders, as the unit's tag index works them out, and your own) start with each word of the search. The
+// categories that would narrow the search are said in the status line.
+func (a *App) searchLocalTags(words []string) {
+	a.entries, a.searchCut, a.fcur = nil, false, 0
+	files, _ := filepath.Glob(filepath.Join(a.indexDir(), "*.txt"))
+	if len(files) == 0 {
+		a.say("categories search the index: index a folder first (t on FILES, Index)", true)
+		return
+	}
+	ltags := a.localTagStore()
+	counts := map[string]int{}
+	seen := map[string]bool{}
+	type hit struct {
+		e   entry
+		key string
+	}
+	var hits []hit
+	for _, p := range files {
+		f, err := os.Open(p)
+		if err != nil {
+			continue
+		}
+		s := bufio.NewScanner(f)
+		root := ""
+		if s.Scan() {
+			root = strings.TrimPrefix(s.Text(), "#root ")
+		}
+		base := filepath.Dir(root)
+		for root != "" && s.Scan() {
+			line := s.Text()
+			tab := strings.LastIndexByte(line, '\t')
+			if tab < 0 {
+				continue
+			}
+			full := filepath.Join(root, line[:tab])
+			if seen[full] { // an index inside another one lists the same files
+				continue
+			}
+			seen[full] = true
+			tags := append(app.TagsFor(filepath.ToSlash(full), filepath.ToSlash(base)), ltags.userTags(full)...)
+			ok := true
+			for _, w := range words {
+				hit := false
+				for _, t := range tags {
+					if strings.HasPrefix(t, w) {
+						hit = true
+						break
+					}
+				}
+				if !hit {
+					ok = false
+					break
+				}
+			}
+			if !ok {
+				continue
+			}
+			for _, t := range tags {
+				counts[t]++
+			}
+			if len(hits) < 400 {
+				rel, err := filepath.Rel(a.dir, full)
+				if err != nil {
+					rel = full
+				}
+				size, _ := strconv.ParseInt(line[tab+1:], 10, 64)
+				hits = append(hits, hit{entry{name: rel, size: size, where: filepath.Dir(full)}, strings.ToLower(full)})
+			} else {
+				a.searchCut = true
+			}
+		}
+		f.Close()
+	}
+	sort.SliceStable(hits, func(i, j int) bool { return app.NaturalLess(hits[i].key, hits[j].key) })
+	for _, h := range hits {
+		a.entries = append(a.entries, h.e)
+	}
+	for _, w := range words { // what is asked for is in every result: it does not narrow anything
+		delete(counts, w)
+	}
+	var top []app.TagCount
+	for t, n := range counts {
+		top = append(top, app.TagCount{Tag: t, Count: n})
+	}
+	sort.Slice(top, func(i, j int) bool {
+		if top[i].Count != top[j].Count {
+			return top[i].Count > top[j].Count
+		}
+		return top[i].Tag < top[j].Tag
+	})
+	var say []string
+	for i := 0; i < len(top) && i < 8; i++ {
+		say = append(say, fmt.Sprintf("%s %d", top[i].Tag, top[i].Count))
+	}
+	if len(say) > 0 {
+		a.say("narrow it with: "+strings.Join(say, "  "), false)
+	}
+}

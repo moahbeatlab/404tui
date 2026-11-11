@@ -432,11 +432,11 @@ func (a *App) drawFiles(g Gfx) {
 		}
 		g.Text(2, 8, tk("< goes up    Y+X jumps to the usb drive"), cDim, false)
 	}
-	a.drawFileList(g, 1, contentCols-2, a.entries, a.fcur, true)
+	a.drawFileList(g, a.dir, 1, contentCols-2, a.entries, a.fcur, true)
 }
 
-// drawFileList draws a column of entries from x0, w cells wide; the cursor is shown when focus is set.
-func (a *App) drawFileList(g Gfx, x0, w int, ents []entry, cur int, focus bool) {
+// drawFileList draws a column of the entries of dir from x0, w cells wide; the cursor is shown when focus is set.
+func (a *App) drawFileList(g Gfx, dir string, x0, w int, ents []entry, cur int, focus bool) {
 	rows := a.fileRows()
 	top := max(0, min(cur-rows/2, len(ents)-rows))
 	for i := 0; i < rows && top+i < len(ents); i++ {
@@ -460,6 +460,9 @@ func (a *App) drawFileList(g Gfx, x0, w int, ents []entry, cur int, focus bool) 
 			parent = path.Dir(rel)
 			if parent == "." {
 				parent = baseName(a.dir)
+			}
+			if e.where != "" { // a category result may be anywhere in the index: its folder is said whole
+				parent = e.where
 			}
 			if Terminal {
 				name = fit(name, max(avail*3/5, 12))
@@ -490,8 +493,11 @@ func (a *App) drawFileList(g Gfx, x0, w int, ents []entry, cur int, focus bool) 
 				room -= 7 // the size is at the right
 			}
 			if room > 6 {
-				g.Text(px, y, fit("‹ "+short2(parent, room-2), room), cDim, false)
+				g.Text(px, y, "‹ "+short2(parent, room-2), cDim, false) // (not fit: the ‹ is three bytes, and fit would cut the end off)
 			}
+		}
+		if e.dir && !e.project && w >= 20 && a.isFavourite(joinPath(dir, e.name)) { // a favourite folder: a mark at the right
+			g.Text(x0+w-4, y, "[*]", cAmber, true)
 		}
 		if !e.dir && w >= 20 {
 			sz := fmt.Sprintf("%dK", (e.size+512)/1024)
@@ -557,7 +563,38 @@ func (a *App) drawSlice(g Gfx) {
 			continue
 		}
 		g.Mark(2, 2, wc, wr, frac(sg.Start), cAmber)
-		g.Text(2+int(frac(sg.Start)*float64(wc))+1, 2, fmt.Sprint(i+1), cAmber, true)
+		tx := 2 + int(frac(sg.Start)*float64(wc)) + 1
+		num := fmt.Sprint(i + 1)
+		g.Text(tx, 2, num, cAmber, true)
+		// small markers after the number, as many as the slice has room for: R reversed, x4 a roll of 4, +3 pitch, g80 gain, c50 chance, ~ a fade
+		room := 2 + int(min(frac(sg.End), 1)*float64(wc)) - (tx + len(num) + 1)
+		mx := tx + len(num) + 1
+		put := func(tok string, col color.RGBA) {
+			if len(tok) > room {
+				return
+			}
+			g.Text(mx, 2, tok, col, false)
+			mx += len(tok) + 1
+			room -= len(tok) + 1
+		}
+		if sg.Reverse {
+			put("R", cWhite)
+		}
+		if sg.Roll > 1 {
+			put(fmt.Sprintf("x%d", sg.Roll), cGood)
+		}
+		if sg.Pitch != 0 {
+			put(fmt.Sprintf("%+d", sg.Pitch), cBlue)
+		}
+		if sg.Gain != 100 {
+			put(fmt.Sprintf("g%d", sg.Gain), cText)
+		}
+		if sg.Chance != 100 {
+			put(fmt.Sprintf("c%d", sg.Chance), cText)
+		}
+		if sg.Attack > 0 || sg.Release > 0 {
+			put("~", cText)
+		}
 	}
 	g.Mark(2, 2, wc, wr, min(max(frac(a.at), 0), 1), cWhite)
 

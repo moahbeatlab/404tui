@@ -274,9 +274,17 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.Dispatch(core.Event{Key: core.Y, Down: false})
 		}
 		return
+	case "#": // the search by categories (kick, hat, loop...), in the file browser
+		m.disarm()
+		m.app.OpenTagSearch()
+		return
 	case "ctrl+l": // reload the unit (while a project is edited live), from any screen
 		m.disarm()
 		m.app.ReloadUnit()
+		return
+	case "ctrl+a": // FILES: auto play, the file under the cursor plays at once
+		m.disarm()
+		m.app.ToggleAutoListen()
 		return
 	case "ctrl+e": // PADS: export the bank
 		m.disarm()
@@ -302,6 +310,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 		return
 	case "y", "Y":
 		m.arm(yShift, core.Y)
+		return
+	case "p": // SEQ: the arrows choose the pattern in the row of 16 boxes
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			m.app.SeqStrip()
+		}
 		return
 	case "m", "M": // SEQ: mute the track; FILES and PADS: mark the file or the pad, M marks them all (and unmarks them all again)
 		if m.armed == noShift && !m.aHeld && !m.app.Modal() {

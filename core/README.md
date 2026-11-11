@@ -144,7 +144,7 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 
 | Menu | Group | Actions |
 | --- | --- | --- |
-| **PADS, A** (sample tools) | SAMPLE | pick a sample, slice, **chords & arps**, **keyboard**, reverse, normalize, pitch |
+| **PADS, A** (sample tools) | SAMPLE | pick a sample, slice, **chord**, **arp**, **keyboard**, reverse, normalize, pitch |
 | | THE PAD | pattern with this pad, move or swap, copy, clear |
 | **SLICE, Y+B** (the slicer, a sample tool) | slice / order / result | pitch, gain, reverse, fades, roll, chance; play order, grid, swing, length in steps; play, to a pad, shuffle |
 | **SEQ, B** (pattern tools) | THE PATTERN | choose a pattern, template, copy to the next, delete |
@@ -153,9 +153,7 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 | | THE COLUMN | fill, euclid, shift, clear, pad of the column (the notes of one pad) |
 | | GENERATE | **arp over the columns** |
 
-- **Chords & arps** (a sample tool): the pad's sample pitched once for each note of a chord, mixed or laid out in time (11
-  patterns, rates 1/4 to 1/32 with triplets, gate, swing, 1-3 octaves, 1-8 bars at the bank's tempo) and put on a free pad.
-  This is the computer app's engine.
+- **Chord** and **Arp** (sample tools): see "Chord and arp from one sample" below.
 - **Keyboard**: 4 to 16 pitched copies of the sample on a run of free pads, chromatic or in one of the scales: the pads play like
   keys.
 - **Arp over the columns** (a pattern tool, after the arpeggiator of the unit's DOOM OS): the pads of the columns that have a
@@ -217,7 +215,7 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 
 - **A on a pad opens the pad panel**: three pages (L1/R1 turn them). **SOUND**: level, pan, pitch, fine pitch, time stretch, sample
   BPM, each a horizontal fader with a mark for its default (A puts it back). **SHAPE**: attack, hold, release, play mode, gate, loop,
-  one shot, fixed velocity, vinyl, BPM sync, mute group, bus. **TOOLS**: the actions on the sample and the pad (slice, chords & arps,
+  one shot, fixed velocity, vinyl, BPM sync, mute group, bus. **TOOLS**: the actions on the sample and the pad (slice, chord, arp,
   keyboard, reverse, normalize, pitch, pattern, move, copy, clear, the marked pads). An empty pad opens on the tools. **X hears the
   pad with its settings** (level, pan, pitch in semitones, direction, hold). The settings are the project file's own (PADCONF), so
   they go to the SP. Undo covers them.
@@ -302,15 +300,42 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 
 - **LFO range, centre, invert, DRIFT; ENV (SEQ).** The LFO tool has a "Velocity goes: around the notes / between min and max" choice (min and max velocity), a Direction (inverted = a negative depth, as the LFO slot of Loop Cartographer), a Center that shifts the middle, and the shape DRIFT (a smooth slow wander). New pattern-menu tool "ENV: each note shapes the next": every note starts an envelope (attack, decay, sustain, release in 16ths, depth, centre, direction) and the following note's velocity, length or timing is moved by how far that envelope has got when it arrives (the first note follows the last): ducking after a close note, a build-up after a gap.
 
-## Arp from one sample
+## Chord and arp from one sample
 
-PADS menu, "Arp from this one sample (scales, chords)...": as in DOOM OS, one pad is the sound and the notes are its pitches.
+PADS menu, "Chord...": the pad's sample pitched once for each note of a chord and struck together. Sample is in (the note the
+sample plays at), Root, Chord (29 types: major, minor, power, sus, dim, aug, sixths, sevenths, half-diminished, add9, 6/9, ninths,
+altered sevenths, elevenths, thirteenths), Octaves, Hold. Space (X) plays it once; with Hold on it repeats every bar until Space
+again, and a change is heard at once. Bounce the chord to a new pad (named after the chord, first: Am7_Pad); after it (or when the pad dialog is left) the tool is back as
+it was, to make the next one.
+
+PROGRESSION: 24 common EDM progressions in the key of Root (the minor ones with Root as the minor tonic), each with a name and the
+feeling it is known for (the row Feels): Epic anthem i VI III VII (euphoric, uplifting, a bit sad), Rise and fall i VII VI VII
+(driving, restless), Three-step climb i VI VII (hopeful, building up), Trance minor i iv VI V (dramatic, longing), Melodic house
+i iv VII III (wistful, warm), Dark progressive i VI iv v (dark, brooding), Big room minor i III VII VI (heroic, triumphant), Deep
+two-chord i iv (hypnotic, moody), Pop anthem I V vi IV (happy, euphoric), Fifties I vi IV V (nostalgic, sweet), Royal road IV V iii
+vi (bittersweet, emotional), Heartfelt vi IV I V (sad yet hopeful), Deep house jazz ii V I vi (smooth, sophisticated), Tension and
+release vi IV V I (powerful, resolving), Wide open IV I vi V (uplifting, open), Sunset chill i VII v VI (chilled, laid-back), Dorian
+groove i IV (funky, soulful), Phrygian menace i bII (menacing, tense), Hypnotic pulse i v (cold, hypnotic), Andalusian descent
+i VII VI V (dramatic, fateful), Harmonic noir i ii° V i (tense, cinematic), Gospel lift I IV (joyful, soulful), Mixolydian anthem
+I bVII IV I (bright, rocking), Neo soul turn IV III vi v I (smooth, romantic). Keys with sharps are written with sharps (F#m in A
+major). Chords:
+triads, sevenths (maj7, m7, the dominant V7), ninths (maj9, m9, 9) or elevenths (m11, 11, maj9#11: a major chord's eleventh is
+raised, the plain one clashes with the third). The menu shows the chords by name (Epic anthem: Am F C G).
+A (Enter) on the Progression row opens a box of all of them, minor and major apart, with their chords in the key; its foot tells
+the feeling and the numerals of the one under the cursor, Space hears it, A takes it, B goes back as it was. "Hear the
+progression" plays it a chord a bar at the bank's tempo (with Hold it loops); "Bounce the progression to free pads" puts every
+chord on a run of empty pads, one chord a pad, named after the chord (Am_Pad, F_Pad...). Each chord's root stays within a fifth of the tonic, so the
+chords sit close together.
+
+PADS menu, "Arp...": as in DOOM OS, one pad is the sound and the notes are its pitches. Space plays one pass, with Hold it loops.
 Key (C..B), Scale (chromatic with chord types, or MAJ, MIN, pentatonics, DOR, MIXO, BLUES), the chord degree, and the Chord:
 stacked on the scale (root, thirds, fifths, triad, sus2/4, sixth, seventh, ninth, whole scale) or a chord type when chromatic.
 Octaves -3..+3 repeat the notes down or up. A piano at the foot of the menu lights the notes. Type, Rate, Gate, Velocity and
-Length are the ones of the marked-pad arp. Make it: hear it (a change is heard at once), bounce the arp to a new pad, bounce the
-chord (all notes at once) to a new pad, or put the pitched copies on free pads and print the arp to the pattern. The sample is
-taken as a C: the pitch of a pattern note cannot be set yet (the pitch byte is unknown), so the keys are pitched copies.
+Length are the ones of the marked-pad arp. Make it: bounce the arp to a new pad, or put the pitched copies on free pads and print
+the arp to the pattern (the keys are pitched copies).
+
+Both tools ask what note the sample is in ("Sample is in"): guessed from the pad's name (bass_G1, Pad Am), else from the sound
+(autocorrelation over a tone that holds), else C; a note chosen by hand is kept for the pad.
 
 ## Steps on the slicer
 
