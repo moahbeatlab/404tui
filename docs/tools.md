@@ -249,6 +249,14 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
         **
 
         - `Back to the names of the pads`
+    - `Variation of this pattern (fill, roll, thinner, busier, break)...`
+      - **variation of A1** (a dialog):
+
+        *Trial*
+
+        - `What` — with a fill / with a roll / thinner / busier / break; now with a fill
+        - `Another roll of the dice`
+        - `Keep it (B throws it away)`
 
     *A Style: Left And Right Choose What Is Made, A Makes It*
 
@@ -262,6 +270,14 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Industrial techno  140 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
     - `Acid  130 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
     - `90s house  125 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+- `Variation of this pattern (fill, roll, thinner, busier, break)...`
+  - **variation of A1** (a dialog):
+
+    *Trial*
+
+    - `What` — with a fill / with a roll / thinner / busier / break; now with a fill
+    - `Another roll of the dice`
+    - `Keep it (B throws it away)`
 - `Loop only the bar in focus (Y+A)` — off / on; now off
 - `New pattern from the audible tracks`
 - `Bounce the tracks as you hear them to a pad`

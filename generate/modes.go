@@ -73,11 +73,9 @@ func ModeInfo(mode string) string {
 // Generate fills a bank in a mode: bars is the length of each pattern, seed makes it (the same seed gives the same patterns).
 func Generate(mode string, st Style, bars int, seed int64, has func(formats.Lane) bool) ([]Result, error) {
 	switch mode {
-	case "single":
-		c := NewCtx(seed, has)
-		return []Result{Make(st, Section{Name: "Pattern", Kind: "groove", Energy: 0.45 + c.Rng.Float64()*0.4, Bars: bars}, seed, has)}, nil
-	case "fill", "roll":
-		return []Result{OneFill(st, bars, seed, has, mode == "roll")}, nil
+	case "single", "fill", "roll":
+		r, _ := One(mode, st, bars, seed, seed+7919, has, nil, nil)
+		return []Result{r}, nil
 	case "", "family":
 		return Family(st, bars, seed, has), nil
 	case "random":
@@ -210,8 +208,66 @@ func OnePattern(mode string) bool { return mode == "single" || mode == "fill" ||
 
 // OneFill is one pattern: the groove with a fill, or with a roll, at the end of its last bar.
 func OneFill(st Style, bars int, seed int64, has func(formats.Lane) bool, roll bool) Result {
+	mode := "fill"
+	if roll {
+		mode = "roll"
+	}
+	r, _ := One(mode, st, bars, seed, seed+7919, has, nil, nil)
+	return r
+}
+
+// Groups are the voices a roll of the dice can leave as they were: the kick, the snare and the clap, the hats, and everything else.
+var Groups = []string{"Kick", "Snare and clap", "Hats", "Percussion and the rest"}
+
+// GroupOf is the group of Groups a lane belongs to.
+func GroupOf(l formats.Lane) int {
+	switch l {
+	case formats.LaneKick:
+		return 0
+	case formats.LaneSnare, formats.LaneClap:
+		return 1
+	case formats.LaneClosedHat, formats.LaneOpenHat:
+		return 2
+	}
+	return 3
+}
+
+// take puts the rows of prev that keep chooses in place of the pattern's own: those lanes play what they played in prev (nothing, when prev
+// had no such row), whatever the dice made of them.
+func (p *Pattern) take(prev *Pattern, keep func(formats.Lane) bool) {
+	if prev == nil || keep == nil || prev.Bars != p.Bars {
+		return
+	}
+	var rows []*Row
+	for _, r := range p.Rows {
+		if !keep(r.Lane) {
+			rows = append(rows, r)
+		}
+	}
+	for _, r := range prev.Clone().Rows {
+		if keep(r.Lane) {
+			rows = append(rows, r)
+		}
+	}
+	p.Rows = rows
+}
+
+// One is the one pattern of a mode that makes one (single, fill, roll). seed makes the groove and fillSeed the fill or the roll on it, so that
+// either can be rolled again alone. The lanes keep chooses are taken from prev, the groove of the roll before, and not from the dice: a
+// kick or a hat line that is liked stays while the rest is rolled again. The second result is the groove without its fill, to give as prev
+// to the next roll.
+func One(mode string, st Style, bars int, seed, fillSeed int64, has func(formats.Lane) bool, prev *Pattern, keep func(formats.Lane) bool) (Result, Pattern) {
+	if mode != "fill" && mode != "roll" {
+		c := NewCtx(seed, has)
+		r := Make(st, Section{Name: "Pattern", Kind: "groove", Energy: 0.45 + c.Rng.Float64()*0.4, Bars: bars}, seed, has)
+		r.Pattern.take(prev, keep)
+		return r, r.Pattern.Clone()
+	}
+	roll := mode == "roll"
 	th := newTheme(st, bars, seed, has)
-	c := NewCtx(seed+7919, th.has)
+	groove := th.groove.Clone()
+	groove.take(prev, keep)
+	c := NewCtx(fillSeed, th.has)
 	pool := st.Fills
 	if roll {
 		pool = RollKinds
@@ -226,14 +282,20 @@ func OneFill(st Style, bars int, seed int64, has func(formats.Lane) bool, roll b
 		ok = []string{"snare roll"}
 	}
 	kind := ok[c.Rng.Intn(len(ok))]
-	p := th.groove.Clone()
+	p := groove.Clone()
 	p.Fill(c, st, kind, bars-1)
+	if keep != nil { // a lane that stays is not moved again: it was humanised when it was made
+		c.Lock = map[formats.Lane]bool{}
+		for _, r := range p.Rows {
+			c.Lock[r.Lane] = keep(r.Lane)
+		}
+	}
 	p.Humanize(c, 0.2)
 	name := "Fill: " + kind
 	if roll {
 		name = "Roll: " + kind
 	}
-	return Result{Section: Section{Name: name, Kind: "fill", Energy: 0.6, Bars: bars}, Pattern: p, Notes: "the groove with " + kind}
+	return Result{Section: Section{Name: name, Kind: "fill", Energy: 0.6, Bars: bars}, Pattern: p, Notes: "the groove with " + kind}, groove
 }
 
 // Fills is the groove, and then the groove with a fill or a roll at the end of its last bar in each slot, then a roll build, fills in both

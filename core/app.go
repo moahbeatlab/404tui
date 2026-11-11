@@ -17,6 +17,7 @@ import (
 	"github.com/moahbeatlab/404tui/dbg"
 	"github.com/moahbeatlab/404tui/perform"
 	"github.com/moahbeatlab/404tui/record"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -179,7 +180,8 @@ type App struct {
 	aTick             uint32
 	aSession          int // counts the holds of A, so that an edit session is one undo step
 	undoSes           int
-	toolBase          *lab.Snap // the project as it was when the open tool dialog began: its changes are trials
+	toolBase          *lab.Snap  // the project as it was when the open tool dialog began: its changes are trials
+	genRand           *rand.Rand // the dice of the generator's seeds (made from the clock when first needed)
 	tt2               trackState2
 	tt                trackState  // the settings of the track tools
 	scopeRow          bool        // the timing tools act on the row under the cursor only, not on every pad

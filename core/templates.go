@@ -40,13 +40,20 @@ func (a *App) templatesMenu() {
 	}
 	m.tabHead("GENERATOR")
 	m.items = append(m.items, menuItem{label: "Kit: which pad plays kick, snare, hats...", run: func(int) { a.genKitMenu() }})
+	m.items = append(m.items, menuItem{label: variationLabel, run: func(int) { a.variationMenu() }})
 	m.head("a style: left and right choose what is made, A makes it")
 	for _, st := range generate.Styles() {
 		st := st
 		m.items = append(m.items, menuItem{
 			label: fmt.Sprintf("%s  %d BPM", st.Name, st.BPM),
 			vals:  modeLabels(), val: 0, // left and right choose what is made: one pattern, or a bank of them
-			run: func(v int) { a.generateArc(st, generate.Modes[v], max(st.Bars, 1)) },
+			run: func(v int) {
+				if mode := generate.Modes[v]; generate.OnePattern(mode) { // one pattern is a trial: rolled again until it is kept
+					a.generateOne(st, mode, max(st.Bars, 1))
+				} else {
+					a.generateArc(st, mode, max(st.Bars, 1))
+				}
+			},
 		})
 	}
 	m.tabify()
@@ -59,6 +66,11 @@ func (a *App) templatesMenu() {
 		case m.tab == 1 && len(it.vals) > 0:
 			mode := generate.Modes[it.val]
 			text = mode + ": " + generate.ModeInfo(mode)
+			if generate.OnePattern(mode) {
+				text += " It is a trial: roll again, keep some voices, keep it."
+			}
+		case m.tab == 1 && it.label == variationLabel:
+			text = "A: a copy of the pattern in front with a fill, a roll, fewer or more hits, or as a break, in the next free pattern. The pattern itself stays."
 		case m.tab == 1:
 			text = "A: choose which pad plays the kick, the snare, the hats... (Enter on a voice picks the pad)"
 		}

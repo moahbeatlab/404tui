@@ -376,6 +376,7 @@ func (a *App) seqMenu() {
 	m.tabHead("PATTERN")
 	run("Choose a pattern (bank, then pattern)...", a.openPicker)
 	run("New pattern from a template...", a.templatesMenu)
+	run(variationLabel, a.variationMenu)
 	set("Loop only the bar in focus (Y+A)", []string{"off", "on"}, b2i(a.freeze), func(v int) {
 		if (v == 1) != a.freeze {
 			a.toggleFreeze()

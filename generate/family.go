@@ -207,31 +207,8 @@ var famSteps = []famStep{
 		return fmt.Sprintf("the full style, the percussion as a polymeter of %d steps, an echo on the claps, %s", cycle, "fill: "+p.Fill(c, th.st, "", p.Bars-1))
 	}},
 	{"Break", "break", 0.3, func(th *theme, p *Pattern, c *Ctx) string {
-		if r := p.Row(formats.LaneKick); r != nil {
-			for i := range r.Steps {
-				r.Steps[i] = 0
-			}
-		}
-		p.HalfTime(c)
 		th.withPerc(p)
-		if r := p.Row(formats.LaneShaker); r != nil { // a break has fewer layers: no shaker, the hats in 8ths
-			for i := range r.Steps {
-				r.Steps[i] = 0
-			}
-		}
-		if r := p.Row(formats.LaneClosedHat); r != nil {
-			for i := range r.Steps {
-				if i%2 == 1 {
-					r.Steps[i] = 0
-				}
-			}
-		}
-		if r := p.Row(formats.LaneOpenHat); r != nil && c.chance(0.5) { // the hats and the claps stay, the open hat goes now and then
-			for i := range r.Steps {
-				r.Steps[i] = 0
-			}
-		}
-		return "no kick, the claps in half time, the hats in 8ths, no shaker"
+		return p.Break(c)
 	}},
 	{"Outro", "outro", 0.2, func(th *theme, p *Pattern, c *Ctx) string {
 		for _, r := range p.Rows {
