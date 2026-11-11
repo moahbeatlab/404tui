@@ -59,6 +59,13 @@ The settings of the pad under the cursor, written into the project at once. With
     *Make*
 
     - `Bounce the chord to a new pad`
+
+    *Progression (In The Root'S Key)*
+
+    - `Progression` — i VI III VII: Cm Ab Eb Bb, i VII VI VII: Cm Bb Ab Bb, ... ii V I vi: Dm G C Am (13 values); now i VI III VII: Cm Ab Eb Bb
+    - `Chords` — triads / sevenths; now triads
+    - `Hear the progression (a chord a bar)`
+    - `Bounce the progression to free pads`
 - `Arp...`
   - **arp from A3** (a dialog):
 

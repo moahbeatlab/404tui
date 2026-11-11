@@ -42,6 +42,8 @@ var (
 type onePad struct {
 	key, scale, stack, chord, degree, oct int
 	hold                                  bool // X (Space) repeats the chord or the arp until it is pressed again; off, it plays once
+	progOn                                bool // the chord tool: the loop that plays is the progression
+	prog, color                           int  // the chord tool: the progression (an index of progressions), triads (0) or sevenths (1)
 	from                                  int  // the note the sample of the pad in front is in (0 C .. 11 B)
 	init                                  bool
 }
@@ -148,10 +150,13 @@ func (a *App) openOnePadMenu(n int, chord bool) {
 		}
 		return out
 	}
-	var degI, chI int
+	var degI, chI, progI int
 	redo := func() {
 		m.foot = onePadKeyboard(onePadSemis(*o), o.from)
 		if chord {
+			if progI > 0 {
+				m.at(progI).vals = progLabels(o.key, o.color == 1)
+			}
 			if a.arpOn {
 				a.onePadReplay(n, chord)
 			}
@@ -219,6 +224,13 @@ func (a *App) openOnePadMenu(n int, chord bool) {
 	if chord {
 		m.head("MAKE")
 		m.items = append(m.items, menuItem{label: "Bounce the chord to a new pad", run: func(int) { a.onePadBounce(n, true, m) }})
+		m.head("PROGRESSION (IN THE ROOT'S KEY)")
+		progI = set("Progression", progLabels(o.key, o.color == 1), o.prog, func(v int) { o.prog = v })
+		set("Chords", progColors, o.color, func(v int) { o.color = v })
+		m.items = append(m.items,
+			menuItem{label: "Hear the progression (a chord a bar)", keepOpen: true, run: func(int) { a.progHear(n) }},
+			menuItem{label: "Bounce the progression to free pads", run: func(int) { a.progBounce(n, m) }},
+		)
 	} else {
 		m.tabHead("PLAY")
 		set("Type", arpTypes, st.typ, func(v int) { st.typ = v; a.say(arpTypeNotes[v], false) })
@@ -296,6 +308,7 @@ func (a *App) onePadSpace(n int, chord bool) {
 		return
 	}
 	a.arpOn = true
+	a.notesOf(chord).progOn = false
 	a.say("it loops: change a setting to hear it at once, Space stops it", false)
 }
 
@@ -356,7 +369,11 @@ func (a *App) onePadReplay(n int, chord bool) {
 	if !ok {
 		return
 	}
-	if s, err := a.onePadSound(n, chord, true); err == nil {
+	s, err := a.onePadSound(n, chord, true)
+	if chord && a.notesOf(true).progOn { // the progression loops, not the chord
+		s, err = a.progSound(n)
+	}
+	if err == nil {
 		r.ReplaceLoop(s)
 	}
 }

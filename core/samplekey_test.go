@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/moahbeatlab/404tui/formats"
@@ -82,5 +83,60 @@ func TestOnePadFollowsTheNoteOfTheSample(t *testing.T) {
 		if it.label == "Scale" {
 			t.Fatal("the chord tool has no scale")
 		}
+	}
+}
+
+func TestChordProgressions(t *testing.T) {
+	// the anthem in A minor from a sample in C: Am F C G, each root within a fifth of A
+	o := onePad{key: 9, oct: 3, prog: 0}
+	if got := fmt.Sprint(progSemis(o)); got != "[[9 12 16] [5 9 12] [12 16 19] [7 11 14]]" {
+		t.Fatalf("Am F C G: %s", got)
+	}
+	if got := progNames(0, 9, false); fmt.Sprint(got) != "[Am F C G]" {
+		t.Fatalf("names: %v", got)
+	}
+	if got := progNames(12, 0, true); fmt.Sprint(got) != "[Dm7 G7 Cmaj7 Am7]" {
+		t.Fatalf("sevenths: %v", got)
+	}
+	for i := range progressions {
+		for _, s := range progressions[i].steps {
+			for _, sev := range []bool{false, true} {
+				if c, _ := progChord(s.q, sev); c == 0 && (sev || s.q != 'M' && s.q != 'D') {
+					t.Fatalf("%s: no chord type for %c", progressions[i].name, s.q)
+				}
+			}
+		}
+	}
+	a, au := newApp(t)
+	keys(t, a, kit)
+	a.go_(Pads)
+	a.openOnePadMenu(0, true)
+	it := menuItemNamed(t, a, "Root")
+	it.val = 9
+	it.onChange(9)
+	if !strings.HasSuffix(menuItemNamed(t, a, "Progression").vals[0], "Am F C G") {
+		t.Fatalf("the progressions follow the root: %q", menuItemNamed(t, a, "Progression").vals[0])
+	}
+	au.Played = 0
+	chooseMenu(t, a, "Hear the progression")
+	if au.Played != 1 || !strings.Contains(a.Message(), "Am F C G") {
+		t.Fatalf("heard once: %d (%s)", au.Played, a.Message())
+	}
+	before := padsWithSamples(a)
+	chooseMenu(t, a, "Bounce the progression to free pads") // and A in the pad dialog
+	if padsWithSamples(a) != before+4 {
+		t.Fatalf("4 chords on 4 pads: %d -> %d (%s)", before, padsWithSamples(a), a.Message())
+	}
+	if a.menu == nil || a.menu.title != "chord from A1" {
+		t.Fatalf("the chord tool is back: %+v", a.menu)
+	}
+	found := 0
+	for _, p := range a.info.Pads {
+		if strings.HasSuffix(p.Name, "_Am") || strings.HasSuffix(p.Name, "_F") || strings.HasSuffix(p.Name, "_C") || strings.HasSuffix(p.Name, "_G") {
+			found++
+		}
+	}
+	if found != 4 {
+		t.Fatalf("the pads are named after their chords: %d", found)
 	}
 }
