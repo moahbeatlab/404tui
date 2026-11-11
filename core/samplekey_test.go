@@ -73,6 +73,26 @@ func TestOnePadFollowsTheNoteOfTheSample(t *testing.T) {
 	if a.onepad.from != 2 {
 		t.Fatalf("the note chosen for the pad is kept, for the arp too: %d", a.onepad.from)
 	}
+	// a bounced chord is named after it
+	if chordSymbol(0) != "" || chordSymbol(1) != "m" || chordSymbol(11) != "m7" || chordSymbol(14) != "m7b5" {
+		t.Fatalf("symbols: %q %q %q %q", chordSymbol(0), chordSymbol(1), chordSymbol(11), chordSymbol(14))
+	}
+	a.menu = nil
+	a.openOnePadMenu(0, true)
+	root := menuItemNamed(t, a, "Root")
+	root.val = 9
+	root.onChange(9)
+	ch := menuItemNamed(t, a, "Chord")
+	ch.val = 11
+	ch.onChange(11)
+	chooseMenu(t, a, "Bounce the chord to a new pad")
+	named := false
+	for _, p := range a.info.Pads {
+		named = named || strings.HasPrefix(p.Name, "Am7_")
+	}
+	if !named {
+		t.Fatalf("the bounced chord is named Am7_...: %s", a.Message())
+	}
 	// every chord type of the chord tool
 	a.menu = nil
 	a.openOnePadMenu(0, true)
@@ -138,7 +158,7 @@ func TestChordProgressions(t *testing.T) {
 	}
 	found := 0
 	for _, p := range a.info.Pads {
-		if strings.HasSuffix(p.Name, "_Am") || strings.HasSuffix(p.Name, "_F") || strings.HasSuffix(p.Name, "_C") || strings.HasSuffix(p.Name, "_G") {
+		if strings.HasPrefix(p.Name, "Am_") || strings.HasPrefix(p.Name, "F_") || strings.HasPrefix(p.Name, "C_") || strings.HasPrefix(p.Name, "G_") {
 			found++
 		}
 	}

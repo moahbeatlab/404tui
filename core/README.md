@@ -305,7 +305,7 @@ Every action belongs to a **pad** (its sample) or to a **pattern**; each has its
 PADS menu, "Chord...": the pad's sample pitched once for each note of a chord and struck together. Sample is in (the note the
 sample plays at), Root, Chord (29 types: major, minor, power, sus, dim, aug, sixths, sevenths, half-diminished, add9, 6/9, ninths,
 altered sevenths, elevenths, thirteenths), Octaves, Hold. Space (X) plays it once; with Hold on it repeats every bar until Space
-again, and a change is heard at once. Bounce the chord to a new pad; after it (or when the pad dialog is left) the tool is back as
+again, and a change is heard at once. Bounce the chord to a new pad (named after the chord, first: Am7_Pad); after it (or when the pad dialog is left) the tool is back as
 it was, to make the next one.
 
 PROGRESSION: 13 common EDM progressions in the key of Root (the minor ones with Root as the minor tonic), each with a name and the
@@ -317,7 +317,7 @@ vi (bittersweet, emotional), Heartfelt vi IV I V (sad yet hopeful), Deep house j
 triads, sevenths (maj7, m7, the dominant V7), ninths (maj9, m9, 9) or elevenths (m11, 11, maj9#11: a major chord's eleventh is
 raised, the plain one clashes with the third). The menu shows the chords by name (Epic anthem: Am F C G). "Hear the
 progression" plays it a chord a bar at the bank's tempo (with Hold it loops); "Bounce the progression to free pads" puts every
-chord on a run of empty pads, one chord a pad, named after the chord. Each chord's root stays within a fifth of the tonic, so the
+chord on a run of empty pads, one chord a pad, named after the chord (Am_Pad, F_Pad...). Each chord's root stays within a fifth of the tonic, so the
 chords sit close together.
 
 PADS menu, "Arp...": as in DOOM OS, one pad is the sound and the notes are its pitches. Space plays one pass, with Hold it loops.

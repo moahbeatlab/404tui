@@ -278,6 +278,22 @@ func (a *App) openOnePadMenu(n int, chord bool) {
 	a.menu = m
 }
 
+// chordSymbol is the chord type as it is written after the root: "" for major, m, 7, maj7, m7b5...
+func chordSymbol(c int) string {
+	name := chordTypes[c].name
+	switch name {
+	case "major":
+		return ""
+	case "minor":
+		return "m"
+	case "m(maj7)":
+		return "mMaj7"
+	case "m(add9)":
+		return "madd9"
+	}
+	return strings.Fields(name)[0]
+}
+
 // notesOf is the settings of the chord tool or the arp tool, each kept between visits.
 func (a *App) notesOf(chord bool) *onePad {
 	o := &a.onepad
@@ -449,7 +465,12 @@ func (a *App) onePadBounce(n int, chord bool, m *menu) {
 			a.say("cannot keep the arp", true)
 			return
 		}
-		err = a.assignPad(to, meta.ID, fmt.Sprintf("%s_%s", fit(a.info.Pads[n].Name, 9), name))
+		padName := fmt.Sprintf("%s_%s", fit(a.info.Pads[n].Name, 9), name)
+		if chord { // named after the chord, first, so a tile that cuts the name still shows it: Am7_Pad
+			o := a.notesOf(true)
+			padName = fit(formats.PitchNames[o.key]+chordSymbol(o.chord)+"_"+a.info.Pads[n].Name, 15)
+		}
+		err = a.assignPad(to, meta.ID, padName)
 		a.lab.Free(meta.ID)
 		if err != nil {
 			a.say(err.Error(), true)

@@ -180,7 +180,7 @@ func (a *App) progBounce(n int, m *menu) {
 				return
 			}
 		}
-		base := fit(a.info.Pads[n].Name, 8)
+		base := a.info.Pads[n].Name
 		for i, semis := range chords {
 			ss, err := a.onePadSamples(n, semis)
 			if err != nil {
@@ -193,7 +193,7 @@ func (a *App) progBounce(n int, m *menu) {
 				a.say("cannot keep the chord", true)
 				return
 			}
-			err = a.assignPad(to+i, meta.ID, fit(base+"_"+names[i], 15))
+			err = a.assignPad(to+i, meta.ID, fit(names[i]+"_"+base, 15)) // the chord first: Am7_Pad
 			a.lab.Free(meta.ID)
 			if err != nil {
 				a.say(err.Error(), true)
