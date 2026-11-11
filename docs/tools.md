@@ -498,7 +498,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
 On a computer: the 16 projects of the unit when one is plugged in (online), else those of a folder on this computer (offline). The program looks for the unit all the time, and the start screen offers `u` online and `o` offline (the project open last). `a` opens a project's menu, `t` chooses online or offline and the offline folder. On the handheld this screen is called UNIT.
 
-**Keys on a computer:** `a` project menu · `hjkl` choose · `Esc` back · `o` open from a folder · `t` online / offline · `g hl` screen (1-6) · `s x` record
+**Keys on a computer:** `a` project menu · `hjkl` choose · `Esc` back · `o` open from a folder · `t` project menu · `g hl` screen (1-6) · `s x` record
 
 **Keys on the handheld:** `A` project menu · `X` look again · `^v` choose · `L1 R1` page · `B` back · `Y+<>` screen · `Sel+X` record
 
@@ -519,7 +519,7 @@ On a computer: the 16 projects of the unit when one is plugged in (online), else
     - `Yes, erase it`
     - `No`
 
-### Online or offline (`t`)
+### Online or offline (`t`, then Online or offline...)
 
 
 *Work*
@@ -540,6 +540,21 @@ On a computer: the 16 projects of the unit when one is plugged in (online), else
 - `Open a project from a folder...`
 - `Write the project of the editor here`
 - `Export the project of the editor into a folder...`
+- `Online or offline, and the offline folder...`
+  - **projects: online or offline** (a dialog):
+
+    *Work*
+
+    - `Online: no unit is plugged in (looking for it)`
+    - `Offline: the projects in ~ui-docs/out/ROLAND/SP-404MKII`
+
+    *Other Projects*
+
+    - `Open a project from a folder...`
+
+    *Offline Folder*
+
+    - `Choose the folder of the offline projects...`
 
 ## FILES
 

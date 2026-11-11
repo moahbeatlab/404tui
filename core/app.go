@@ -1004,8 +1004,12 @@ func (a *App) ToolsMenu() {
 		if a.pp != nil {
 			a.pp.page = 2
 		}
-	case Unit:
-		a.modeMenu()
+	case Unit: // the project menu: the same as A
+		if Terminal && !a.onlineNow() {
+			a.offlineMenu()
+		} else {
+			a.unitMenu()
+		}
 	case Files:
 		a.placesMenu() // t on FILES: load files from where (the file tools are in it)
 	case Slice, Seq:

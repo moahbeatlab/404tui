@@ -259,6 +259,10 @@ func Family(st Style, bars int, seed int64, has func(formats.Lane) bool) []Resul
 			notes += th.visible(&p, th.groove, fs.kind, c)
 			p.Swing(c, th.swing)
 			p.Humanize(c, 0.2)
+			if !th.plays(p) { // a kit without hats or percussion has nothing left for a break: the groove again, never an empty pattern
+				p = th.groove.Clone()
+				notes += "; (the kit has nothing for this, so the groove again)"
+			}
 		} else {
 			notes = fs.do(th, &p, nil)
 		}
@@ -284,4 +288,19 @@ func (th *theme) visible(p *Pattern, before Pattern, kind string, c *Ctx) string
 		}
 	}
 	return ""
+}
+
+// plays says whether the pattern has a note on a voice the kit has (the pads of the others are not there, so those notes are not heard).
+func (th *theme) plays(p Pattern) bool {
+	for _, r := range p.Rows {
+		if !th.has(r.Lane) {
+			continue
+		}
+		for _, v := range r.Steps {
+			if v > 0 {
+				return true
+			}
+		}
+	}
+	return false
 }

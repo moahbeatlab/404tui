@@ -134,8 +134,12 @@ func TestOnlineWhenTheUnitIsThereOfflineWhenChosen(t *testing.T) {
 		t.Fatalf("offline chosen: the screen says so and how to go back:\n%s", screenStr(a))
 	}
 	a.ToolsMenu()
+	if a.menu == nil || !strings.Contains(screenStr(a), "Online or offline") {
+		t.Fatalf("t on PROJECTS is the project menu, with online and offline in it:\n%s", screenStr(a))
+	}
+	a.menu.items[len(a.menu.items)-1].run(0)
 	if a.menu == nil || !strings.Contains(screenStr(a), "Online: the projects of the unit") {
-		t.Fatalf("t on PROJECTS offers online and offline:\n%s", screenStr(a))
+		t.Fatalf("that item offers online and offline:\n%s", screenStr(a))
 	}
 }
 

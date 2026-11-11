@@ -739,9 +739,6 @@ func lerp(a, b color.RGBA, t float64) color.RGBA {
 func (a *App) seqRowCells() int {
 	shown := min(len(a.rows)-a.rowTop, maxRows)
 	room := Rows - 2 - 3
-	if Terminal {
-		room -= 5 // the 4 by 4 tiles of the bank's patterns, and a line of air above them
-	}
 	return min(max(room/max(shown, 1), 1), 2)
 }
 
@@ -782,14 +779,12 @@ func (a *App) stripKey(k Key) {
 
 // drawPatternStrip is the 16 patterns of the bank as a grid of tiles, 4 by 4 like the pads on PADS but a line high: the label, the bars
 // and the notes. The one in front is lit (white while the arrows are on the grid), the ones with notes are bright, empty ones dim.
-func (a *App) drawPatternStrip(g Gfx) {
-	y0 := Rows - 8
-	avail := contentCols - 2
+func (a *App) drawPatternStrip(g Gfx, x0, y0, avail int) {
 	bank := (a.pat - 1) / 16
 	for i := 0; i < 16; i++ {
 		col, row := i%4, i/4
-		x := 1 + col*avail/4
-		w := 1 + (col+1)*avail/4 - x - 1
+		x := x0 + col*avail/4
+		w := x0 + (col+1)*avail/4 - x - 1
 		y := y0 + row
 		slot := bank*16 + i + 1
 		var d lab.PatternDoc
@@ -810,6 +805,9 @@ func (a *App) drawPatternStrip(g Gfx) {
 		txt := a.label(slot-1) + "  empty"
 		if used {
 			txt = fmt.Sprintf("%s  %d bars  %d notes", a.label(slot-1), d.Bars, len(d.Notes))
+			if w < 22 {
+				txt = fmt.Sprintf("%s  %d notes", a.label(slot-1), len(d.Notes))
+			}
 		}
 		g.Text(x+1, y, fit(txt, max(w-1, 0)), fg, slot == a.pat)
 	}
@@ -971,8 +969,7 @@ func (a *App) drawSeq(g Gfx) {
 			g.Cursor(cursor[0], cursor[1], cursor[2], cursor[3])
 		}
 	}
-	if Terminal { // the banks, as on PADS: the one the pattern is in lit; above them the bank's 16 patterns
-		a.drawPatternStrip(g)
+	if Terminal { // the banks, as on PADS: the one the pattern is in lit (the bank's 16 patterns are in the panel)
 		a.drawBanks(g, (a.pat-1)/16)
 	}
 	// which bar this is, and where the loop is when it plays

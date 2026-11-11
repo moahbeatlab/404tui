@@ -39,7 +39,7 @@ func TestGenerateFamilyFillsABank(t *testing.T) {
 	a.generateArc(st, "family", 2)
 	for slot := 17; slot <= 32; slot++ { // B1..B16
 		if d, ok := a.patternDoc(slot); !ok || len(d.Notes) == 0 {
-			t.Fatalf("slot %d is empty", slot)
+			t.Fatalf("slot %d is empty (%s)", slot, a.Message())
 		}
 	}
 }

@@ -114,7 +114,7 @@ func (a *App) hints() (plain, shift []hint) {
 		plain = out
 	}
 	if Terminal && a.scr == Unit && !a.Modal() && a.prompt == nil {
-		plain = append(append([]hint{}, plain...), hint{"o", "open from a folder"}, hint{"t", "online / offline"})
+		plain = append(append([]hint{}, plain...), hint{"o", "open from a folder"}, hint{"t", "project menu"})
 	}
 	if Terminal && a.scr == Files && !a.Modal() && a.prompt == nil && a.kb == nil {
 		plain = append(append([]hint{}, plain...), hint{"m", "mark file"}, hint{"M", "mark all"})
@@ -730,6 +730,13 @@ func (a *App) drawKeyboardKeys(g Gfx, x, y, w int) {
 		}
 	}
 	g.HRule(x, gy-1, w, cLine)
+	if a.scr == Seq && w >= 40 && gy-2-6-(y+2) >= 12 { // the bank's 16 patterns, 4 by 4, right above the global keys
+		g.Text(x, gy-7, "PATTERNS", cDim, true)
+		g.Text(x+len("PATTERNS  "), gy-7, "p choose with the arrows", cDim, false)
+		a.drawPatternStrip(g, x, gy-6, w)
+		a.context(g, x, y+2, w, gy-8)
+		return
+	}
 	a.context(g, x, y+2, w, gy-2)
 }
 

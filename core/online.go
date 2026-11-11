@@ -92,6 +92,7 @@ func (a *App) offlineMenu() {
 		a.say(fmt.Sprintf("wrote %d files as PROJECT_%02d in %s", len(names), n+1, short2(a.offlineDir(), 30)), false)
 	})
 	add("Export the project of the editor into a folder...", func(int) { a.exportProjectAsk() })
+	add("Online or offline, and the offline folder...", func(int) { a.modeMenu() })
 	a.menu = m
 }
 

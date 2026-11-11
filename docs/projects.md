@@ -33,7 +33,7 @@ Open a project from a folder, write the project of the editor into the folder (a
 
 ## Keys
 
-**On a computer:** `a` project menu · `h j k l` choose · `Esc` back · `o` open from a folder · `t` online / offline · `1`-`6` a screen.
+**On a computer:** `a` project menu · `h j k l` choose · `Esc` back · `o` open from a folder · `t` project menu · `1`-`6` a screen.
 
 **On the handheld (UNIT):** `A` project menu · `X` look again · D-pad choose · `L1 R1` page · `B` back.
 

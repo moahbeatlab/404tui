@@ -120,3 +120,23 @@ func TestLayersAddsAndDriftWanders(t *testing.T) {
 		t.Fatal("drift ends where it began")
 	}
 }
+
+// a kit with only a kick, a snare and a clap still gives sixteen patterns with notes in them (a break has no kick)
+func TestFamilyOfASmallKitHasNoEmptyPattern(t *testing.T) {
+	has := func(l formats.Lane) bool { return l == formats.LaneKick || l == formats.LaneSnare || l == formats.LaneClap }
+	for _, st := range Styles() {
+		for seed := int64(0); seed < 60; seed++ {
+			for i, r := range Family(st, 2, seed, has) {
+				heard := false
+				for _, row := range r.Pattern.Rows {
+					for _, v := range row.Steps {
+						heard = heard || v > 0 && has(row.Lane)
+					}
+				}
+				if !heard {
+					t.Fatalf("%s seed %d: pattern %d (%s) has no note the kit plays", st.Name, seed, i+1, r.Section.Name)
+				}
+			}
+		}
+	}
+}
