@@ -802,11 +802,11 @@ func (a *App) drawPatternStrip(g Gfx, x0, y0, avail int) {
 			bg, fg = cLine, cText
 		}
 		g.Fill(x, y, w, 1, bg)
-		txt := a.label(slot-1) + "  empty"
+		txt := fmt.Sprintf("%-3s empty", a.label(slot-1))
 		if used {
-			txt = fmt.Sprintf("%s  %d bars  %d notes", a.label(slot-1), d.Bars, len(d.Notes))
+			txt = fmt.Sprintf("%-3s %d bars %3d notes", a.label(slot-1), d.Bars, len(d.Notes))
 			if w < 22 {
-				txt = fmt.Sprintf("%s  %d notes", a.label(slot-1), len(d.Notes))
+				txt = fmt.Sprintf("%-3s %3d notes", a.label(slot-1), len(d.Notes))
 			}
 		}
 		g.Text(x+1, y, fit(txt, max(w-1, 0)), fg, slot == a.pat)
