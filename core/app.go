@@ -119,6 +119,7 @@ type entry struct {
 	dir     bool
 	project bool // a folder with a PADCONF.BIN: a project of the SP-404MKII
 	size    int64
+	where   string // a result of the search by categories: the whole folder it is in (the name is then a path from the folder in view)
 }
 
 // App is the state of the front end.

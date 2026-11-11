@@ -4245,6 +4245,22 @@ func TestSearchByCategoriesInTheIndex(t *testing.T) {
 	if !strings.Contains(a.Message(), "narrow it with") {
 		t.Fatalf("the categories that narrow it are named: %q", a.Message())
 	}
+	// wherever the folder in view is: the whole index is searched
+	other := t.TempDir()
+	a.kb = nil
+	a.cd(other)
+	a.OpenTagSearch()
+	a.searchQ = "kick"
+	a.list()
+	if len(a.entries) == 0 {
+		t.Fatal("a folder outside the index still searches it")
+	}
+	if e := a.entries[0]; e.where == "" || !strings.HasPrefix(e.where, a.Root) {
+		t.Fatalf("a result names its folder: %+v", e)
+	}
+	if _, ok := a.current(); !ok || !strings.HasSuffix(joinPath(a.dir, a.entries[0].name), ".wav") {
+		t.Fatalf("the name leads to the file: %s", joinPath(a.dir, a.entries[0].name))
+	}
 	a.TypeTab() // categories -> names
 	if a.tagSearch || a.searchDirs {
 		t.Fatal("Tab from categories is the names again")

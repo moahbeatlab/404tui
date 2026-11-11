@@ -285,68 +285,84 @@ func (a *App) drawIndexProgress(g Gfx, x, y, w int) {
 	g.Fill(x+pos, y+2, run, 1, cAmber)
 }
 
-// searchLocalTags is the search by categories on this computer: the files of the index that covers the folder whose tags (the words of the
-// name and of the folders, as the unit's tag index works them out) start with each word of the search. The categories that would narrow
-// the search are said in the status line.
+// searchLocalTags is the search by categories on this computer: every file of every index (wherever the folder in view is) whose tags (the
+// words of the name and of the folders, as the unit's tag index works them out, and your own) start with each word of the search. The
+// categories that would narrow the search are said in the status line.
 func (a *App) searchLocalTags(words []string) {
 	a.entries, a.searchCut, a.fcur = nil, false, 0
-	p, root := a.indexFor(a.dir)
-	if p == "" {
-		a.say("categories need an index: index this folder first (t on FILES, Index)", true)
+	files, _ := filepath.Glob(filepath.Join(a.indexDir(), "*.txt"))
+	if len(files) == 0 {
+		a.say("categories search the index: index a folder first (t on FILES, Index)", true)
 		return
 	}
-	f, err := os.Open(p)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	prefix := ""
-	if rel, _ := filepath.Rel(root, a.dir); rel != "." {
-		prefix = strings.ToLower(rel) + string(filepath.Separator)
-	}
-	base := filepath.Dir(root)
 	ltags := a.localTagStore()
 	counts := map[string]int{}
-	s := bufio.NewScanner(f)
-	s.Scan() // the #root line
-	for s.Scan() {
-		line := s.Text()
-		tab := strings.LastIndexByte(line, '\t')
-		if tab < 0 || prefix != "" && !strings.HasPrefix(strings.ToLower(line[:tab]), prefix) {
+	seen := map[string]bool{}
+	type hit struct {
+		e   entry
+		key string
+	}
+	var hits []hit
+	for _, p := range files {
+		f, err := os.Open(p)
+		if err != nil {
 			continue
 		}
-		full := filepath.Join(root, line[:tab])
-		tags := append(app.TagsFor(filepath.ToSlash(full), filepath.ToSlash(base)), ltags.userTags(full)...)
-		ok := true
-		for _, w := range words {
-			hit := false
-			for _, t := range tags {
-				if strings.HasPrefix(t, w) {
-					hit = true
+		s := bufio.NewScanner(f)
+		root := ""
+		if s.Scan() {
+			root = strings.TrimPrefix(s.Text(), "#root ")
+		}
+		base := filepath.Dir(root)
+		for root != "" && s.Scan() {
+			line := s.Text()
+			tab := strings.LastIndexByte(line, '\t')
+			if tab < 0 {
+				continue
+			}
+			full := filepath.Join(root, line[:tab])
+			if seen[full] { // an index inside another one lists the same files
+				continue
+			}
+			seen[full] = true
+			tags := append(app.TagsFor(filepath.ToSlash(full), filepath.ToSlash(base)), ltags.userTags(full)...)
+			ok := true
+			for _, w := range words {
+				hit := false
+				for _, t := range tags {
+					if strings.HasPrefix(t, w) {
+						hit = true
+						break
+					}
+				}
+				if !hit {
+					ok = false
 					break
 				}
 			}
-			if !hit {
-				ok = false
-				break
+			if !ok {
+				continue
+			}
+			for _, t := range tags {
+				counts[t]++
+			}
+			if len(hits) < 400 {
+				rel, err := filepath.Rel(a.dir, full)
+				if err != nil {
+					rel = full
+				}
+				size, _ := strconv.ParseInt(line[tab+1:], 10, 64)
+				hits = append(hits, hit{entry{name: rel, size: size, where: filepath.Dir(full)}, strings.ToLower(full)})
+			} else {
+				a.searchCut = true
 			}
 		}
-		if !ok {
-			continue
-		}
-		for _, t := range tags {
-			counts[t]++
-		}
-		if len(a.entries) < 400 {
-			size, _ := strconv.ParseInt(line[tab+1:], 10, 64)
-			a.entries = append(a.entries, entry{name: line[len(prefix):tab], size: size})
-		} else {
-			a.searchCut = true
-		}
+		f.Close()
 	}
-	sort.SliceStable(a.entries, func(i, j int) bool {
-		return app.NaturalLess(strings.ToLower(a.entries[i].name), strings.ToLower(a.entries[j].name))
-	})
+	sort.SliceStable(hits, func(i, j int) bool { return app.NaturalLess(hits[i].key, hits[j].key) })
+	for _, h := range hits {
+		a.entries = append(a.entries, h.e)
+	}
 	for _, w := range words { // what is asked for is in every result: it does not narrow anything
 		delete(counts, w)
 	}

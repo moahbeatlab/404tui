@@ -461,6 +461,9 @@ func (a *App) drawFileList(g Gfx, dir string, x0, w int, ents []entry, cur int, 
 			if parent == "." {
 				parent = baseName(a.dir)
 			}
+			if e.where != "" { // a category result may be anywhere in the index: its folder is said whole
+				parent = e.where
+			}
 			if Terminal {
 				name = fit(name, max(avail*3/5, 12))
 			} else {
