@@ -4198,11 +4198,11 @@ func TestFavouriteFolderHasAMark(t *testing.T) {
 		}
 		return ""
 	}
-	if row = find(); row == "" || strings.Contains(strings.TrimSpace(row), "*") {
+	if row = find(); row == "" || strings.Contains(row, "[*]") {
 		t.Fatalf("a folder that is not a favourite has no mark: %q", row)
 	}
 	a.toggleFavourite(filepath.Join(a.Root, "drums"))
-	if row = find(); !strings.Contains(row, "*") {
+	if row = find(); !strings.Contains(row, "[*]") {
 		t.Fatalf("a favourite folder has a mark: %q", row)
 	}
 }

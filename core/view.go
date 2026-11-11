@@ -494,7 +494,7 @@ func (a *App) drawFileList(g Gfx, dir string, x0, w int, ents []entry, cur int, 
 			}
 		}
 		if e.dir && !e.project && w >= 20 && a.isFavourite(joinPath(dir, e.name)) { // a favourite folder: a mark at the right
-			g.Text(x0+w-2, y, "*", cAmber, true)
+			g.Text(x0+w-4, y, "[*]", cAmber, true)
 		}
 		if !e.dir && w >= 20 {
 			sz := fmt.Sprintf("%dK", (e.size+512)/1024)
