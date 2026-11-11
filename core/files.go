@@ -35,6 +35,10 @@ var audioExts = map[string]bool{".wav": true, ".aif": true, ".aiff": true, ".fla
 // after 1.5 s, 40000 files looked at or 400 found, and says so.
 func (a *App) searchList() {
 	words := strings.Fields(strings.ToLower(a.searchQ))
+	if a.tagSearch && app.IsLocal(a.dir) { // the categories of this computer's samples: kick, hat, loop, 126...
+		a.searchLocalTags(words)
+		return
+	}
 	if a.tagSearch && a.tags != nil {
 		for _, f := range a.tags.Matches(a.searchQ, a.dir, 400) {
 			a.entries = append(a.entries, entry{name: f.Rel})
@@ -124,8 +128,18 @@ func (a *App) openSearch() {
 	a.tagSearch, a.searchDirs = false, false
 	a.kb = &keyboard{}
 	if Terminal {
-		a.say("searching files: Tab looks for folders only, Tab again for files", false)
+		a.say("searching file names: Tab looks for folders, then for categories (kick, hat, loop...)", false)
 	}
+}
+
+// OpenTagSearch is # of a keyboard on FILES: the search by categories (the tags of the samples: kick, hat, loop, 126, the folders' words).
+func (a *App) OpenTagSearch() {
+	if a.scr != Files || a.kb != nil || a.Modal() || a.prompt != nil {
+		return
+	}
+	a.openSearch()
+	a.tagSearch = true
+	a.list()
 }
 
 func (a *App) kbKey(k Key) {
@@ -177,7 +191,9 @@ func (a *App) drawKeyboard(g Gfx) {
 		hint := "Tab folders  Enter keeps  Esc clears"
 		label := "SEARCH"
 		if a.searchDirs {
-			hint, label = "Tab files  Enter keeps  Esc clears", "FOLDERS"
+			hint, label = "Tab categories  Enter keeps  Esc clears", "FOLDERS"
+		} else if a.tagSearch {
+			hint, label = "Tab names  Enter keeps  Esc clears", "CATEGORY"
 		}
 		if contentCols < 64 { // a narrow screen keeps the keys short
 			hint = strings.Fields(hint)[0] + " " + strings.Fields(hint)[1]

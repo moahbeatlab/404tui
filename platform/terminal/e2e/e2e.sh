@@ -92,10 +92,10 @@ check "u takes the change back" "undone"
 uc UC06 "Pad tools: t opens the TOOLS page of the pad"
 lit t
 check "the tools page lists Slice" "Slice..."
-check "and the one-sample arp" "Arp from this one sample"
+check "and the arp tool" "Arp..."
 snap 09-pad-tools
 key Escape
-absent "Esc closes the tools" "Arp from this one sample"
+absent "Esc closes the tools" "Arp..."
 
 uc UC07 "Sequencer: two bars side by side, numbered steps, z, f, Enter, t, Esc, Space, x"
 lit 2

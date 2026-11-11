@@ -738,8 +738,8 @@ func TestTemplateMakesAPatternFromTheKit(t *testing.T) {
 		t.Fatal("the template list is not open")
 	}
 	keys(t, a, "]")
-	if a.menu.cur != 8 {
-		t.Fatalf("R1 pages the list: cursor %d", a.menu.cur)
+	if a.menu.tab != 1 || a.menu.tabs[1] != "GENERATOR" {
+		t.Fatalf("R1 turns to the next tab, the generator: tab %d", a.menu.tab)
 	}
 	a.Render()
 	a.menu = nil
@@ -1218,23 +1218,30 @@ func TestSampleToolsArpAndKeyboard(t *testing.T) {
 	a.cur = 0 // A1, the kick
 	a.go_(Pads)
 	keys(t, a, "A [")
-	chooseMenu(t, a, "Chords & arps")
-	if a.menu == nil || !strings.Contains(a.menu.title, "A1") {
-		t.Fatalf("the arp menu: %+v", a.menu)
+	chooseMenu(t, a, "Chord...")
+	if a.menu == nil || a.menu.title != "chord from A1" {
+		t.Fatalf("the chord tool: %+v", a.menu)
 	}
 	a.Render()
 	au.Played = 0
-	chooseMenu(t, a, "Play it")
+	keys(t, a, "X") // Space
 	if au.Played != 1 {
-		t.Fatalf("Play it plays the arp: %d (%s)", au.Played, a.msg)
+		t.Fatalf("Space plays the chord: %d (%s)", au.Played, a.msg)
 	}
 	before := padsWithSamples(a)
-	a.menu = nil
-	a.arpToPad(0)
-	keys(t, a, "A") // the pad dialog: the free pad it starts on
+	chooseMenu(t, a, "Bounce the chord to a new pad") // and A in the pad dialog: the free pad it starts on
 	if padsWithSamples(a) != before+1 {
-		t.Fatalf("the arp goes on a free pad: %s", a.msg)
+		t.Fatalf("the chord goes on a free pad: %s", a.msg)
 	}
+	if a.menu == nil || a.menu.title != "chord from A1" || a.menu.item().label != "Bounce the chord to a new pad" {
+		t.Fatalf("the chord tool is back as it was, to make another: %+v", a.menu)
+	}
+	keys(t, a, "A")
+	keys(t, a, "B") // the pad dialog left: the tool is back too
+	if a.picker != nil || a.menu == nil || a.menu.title != "chord from A1" {
+		t.Fatalf("B in the pad dialog goes back to the chord tool: %+v", a.menu)
+	}
+	a.menu = nil
 	// the keyboard: 5 pitched copies on free pads, a major scale
 	a.menu = nil
 	a.keyboard(0, 5, 0)
@@ -1444,6 +1451,60 @@ func TestPreviewDoesNotCutThePatternAndAuditionsInIt(t *testing.T) {
 	keys(t, a, "B")
 	if a.seqOn {
 		t.Fatal("B stops the pattern")
+	}
+}
+
+func TestAutoPlayPlaysTheFileUnderTheCursor(t *testing.T) {
+	termOn(t)
+	a, au := newApp(t)
+	keys(t, a, kit) // kick, snare, hat on A1..A3
+	a.go_(Files)
+	a.cd(filepath.Join(a.Root, "drums"))
+	a.fcur = 0
+	au.Played = 0
+	keys(t, a, "D")
+	if au.Played != 0 {
+		t.Fatalf("auto play is off at first: %d plays", au.Played)
+	}
+	a.ToggleAutoListen()
+	if !a.set.AutoListen || au.Played != 1 {
+		t.Fatalf("Ctrl-A plays the file in front at once: on %v, %d plays", a.set.AutoListen, au.Played)
+	}
+	if !strings.Contains(screenStr(a), "auto play: ON") {
+		t.Fatal("the panel shows that auto play is on")
+	}
+	keys(t, a, "D")
+	if au.Played != 2 {
+		t.Fatalf("the next file plays as the cursor gets there: %d plays", au.Played)
+	}
+	// while the pattern loops, a file is heard in it in place of the pad's sample, as with Space
+	a.go_(Seq)
+	a.setRow(0, rowPresets[0].mask)
+	keys(t, a, "X")
+	a.cur, a.bank = 0, 0
+	before := a.info.Pads[0].Name
+	a.go_(Files)
+	a.cd(filepath.Join(a.Root, "drums"))
+	a.fcur = 0
+	keys(t, a, "D")
+	first, in := a.aud[0]
+	if !in || !a.seqOn {
+		t.Fatalf("in the pattern on A1: aud %v, playing %v", a.aud, a.seqOn)
+	}
+	keys(t, a, "D")
+	if a.aud[0] == first {
+		t.Fatalf("the next file takes its place: %v", a.aud)
+	}
+	keys(t, a, "L") // up: the cursor is on a folder, A1 plays its own sample again
+	if a.aud != nil || !a.seqOn {
+		t.Fatalf("on a folder: aud %v, playing %v", a.aud, a.seqOn)
+	}
+	if a.info.Pads[0].Name != before {
+		t.Fatal("auto play writes nothing on the pad")
+	}
+	a.ToggleAutoListen()
+	if a.set.AutoListen {
+		t.Fatal("Ctrl-A again turns it off")
 	}
 }
 
@@ -3007,34 +3068,74 @@ func TestArpFromOneSample(t *testing.T) {
 	if got := fmt.Sprint(onePadSemis(o)); got != "[-24 -20 -17 -12 -8 -5 0 4 7]" {
 		t.Fatalf("triad -2 octaves: %s", got)
 	}
-	a, au := newApp(t)
+	a, _ := newApp(t)
 	keys(t, a, kit)
 	a.go_(Pads)
 	a.cur = 0
-	a.openOnePadMenu(0)
+	a.openOnePadMenu(0, false)
 	a.Render() // the keyboard is drawn
-	au.Loops = 0
-	chooseMenu(t, a, "Hear it / stop it")
-	if !a.arpOn || au.Loops != 1 {
-		t.Fatalf("one sample loops as an arp: on %v loops %d (%s)", a.arpOn, au.Loops, a.msg)
-	}
-	a.stop()
 	before := padsWithSamples(a)
-	a.openOnePadMenu(0)
 	chooseMenu(t, a, "Bounce the arp to a new pad")
 	if padsWithSamples(a) != before+1 {
 		t.Fatalf("bounced to one pad: %s", a.msg)
 	}
-	a.openOnePadMenu(0)
+	a.openOnePadMenu(0, true)
 	chooseMenu(t, a, "Bounce the chord to a new pad")
 	if padsWithSamples(a) != before+2 {
 		t.Fatalf("the chord on a pad of its own: %s", a.msg)
 	}
 	a.go_(Pads)
-	a.openOnePadMenu(0)
+	a.openOnePadMenu(0, false)
 	chooseMenu(t, a, "Print the arp to the pattern")
 	if d, ok := a.doc(); a.scr != Seq || !ok || len(d.Notes) == 0 {
 		t.Fatalf("keys and notes written: %s", a.msg)
+	}
+}
+
+func TestChordAndArpFromOneSampleSpaceAndHold(t *testing.T) {
+	termOn(t)
+	a, au := newApp(t)
+	keys(t, a, kit)
+	a.go_(Pads)
+	a.cur = 0
+	for _, chord := range []bool{true, false} {
+		what := map[bool]string{true: "chord", false: "arp"}[chord]
+		a.onepad.hold = false
+		a.openOnePadMenu(0, chord)
+		if !strings.Contains(screenStr(a), what+" once") {
+			t.Fatalf("%s: the hints say what Space does", what)
+		}
+		au.Played, au.Loops = 0, 0
+		keys(t, a, "X") // Space
+		if au.Played != 1 || a.arpOn || a.menu == nil {
+			t.Fatalf("%s: Space plays it once: %d plays, loop %v (%s)", what, au.Played, a.arpOn, a.msg)
+		}
+		it := menuItemNamed(t, a, "Hold")
+		it.val = 1
+		it.onChange(1)
+		keys(t, a, "X")
+		if !a.arpOn || au.Loops != 1 {
+			t.Fatalf("%s: with Hold Space loops it: on %v loops %d (%s)", what, a.arpOn, au.Loops, a.msg)
+		}
+		keys(t, a, "X")
+		if a.arpOn {
+			t.Fatalf("%s: Space again stops it", what)
+		}
+		keys(t, a, "X")
+		it = menuItemNamed(t, a, "Hold")
+		it.val = 0
+		it.onChange(0)
+		if a.arpOn {
+			t.Fatalf("%s: Hold off stops the loop", what)
+		}
+		a.menu = nil
+	}
+	// the chord tool has no arp in it
+	a.openOnePadMenu(0, true)
+	for _, it := range a.menu.items {
+		if strings.Contains(it.label, "arp") || it.label == "Rate" {
+			t.Fatalf("the chord tool has %q", it.label)
+		}
 	}
 }
 
@@ -4179,5 +4280,147 @@ func TestSwapTwoTracks(t *testing.T) {
 	a.swapTracks(0, 0)
 	if len(a.trackNotes(0)) != len(n0) {
 		t.Fatal("swapping a pad with itself changed it")
+	}
+}
+
+// a favourite folder has a mark at the right of its name in the lists
+func TestFavouriteFolderHasAMark(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	a.go_(Files)
+	a.cd(a.Root)
+	a.Render()
+	var row string
+	find := func() string {
+		for _, l := range strings.Split(screenStr(a), "\n") {
+			if strings.Contains(l, "drums/") {
+				return l
+			}
+		}
+		return ""
+	}
+	if row = find(); row == "" || strings.Contains(row, "[*]") {
+		t.Fatalf("a folder that is not a favourite has no mark: %q", row)
+	}
+	a.toggleFavourite(filepath.Join(a.Root, "drums"))
+	if row = find(); !strings.Contains(row, "[*]") {
+		t.Fatalf("a favourite folder has a mark: %q", row)
+	}
+}
+
+// the search by categories: the tags of the indexed samples (kick, hat...), not their names; Tab cycles names, folders, categories
+func TestSearchByCategoriesInTheIndex(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	a.go_(Files)
+	a.cd(a.Root)
+	a.startIndex(a.Root)
+	for i := 0; i < 200; i++ {
+		a.idx.mu.Lock()
+		running := a.idx.running
+		a.idx.mu.Unlock()
+		if !running {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	a.indexTick()
+	a.OpenTagSearch()
+	if a.kb == nil || !a.tagSearch {
+		t.Fatal("# opens the search by categories")
+	}
+	all := len(a.entries)
+	if all == 0 {
+		t.Fatal("with no words every indexed sample is a result")
+	}
+	a.searchQ = "kick"
+	a.list()
+	if len(a.entries) == 0 || len(a.entries) >= all {
+		t.Fatalf("kick narrows %d to %d", all, len(a.entries))
+	}
+	for _, e := range a.entries {
+		if !strings.Contains(strings.ToLower(e.name), "kick") && !strings.Contains(strings.ToLower(e.name), "bd") {
+			t.Logf("kick category: %s", e.name)
+		}
+	}
+	if !strings.Contains(a.Message(), "narrow it with") {
+		t.Fatalf("the categories that narrow it are named: %q", a.Message())
+	}
+	// wherever the folder in view is: the whole index is searched
+	other := t.TempDir()
+	a.kb = nil
+	a.cd(other)
+	a.OpenTagSearch()
+	a.searchQ = "kick"
+	a.list()
+	if len(a.entries) == 0 {
+		t.Fatal("a folder outside the index still searches it")
+	}
+	if e := a.entries[0]; e.where == "" || !strings.HasPrefix(e.where, a.Root) {
+		t.Fatalf("a result names its folder: %+v", e)
+	}
+	if _, ok := a.current(); !ok || !strings.HasSuffix(joinPath(a.dir, a.entries[0].name), ".wav") {
+		t.Fatalf("the name leads to the file: %s", joinPath(a.dir, a.entries[0].name))
+	}
+	a.TypeTab() // categories -> names
+	if a.tagSearch || a.searchDirs {
+		t.Fatal("Tab from categories is the names again")
+	}
+	a.TypeTab()
+	a.TypeTab()
+	if !a.tagSearch {
+		t.Fatal("names, folders, categories")
+	}
+}
+
+// your own tags: a file, or a folder for everything below it; the search by categories finds them, and they are kept
+func TestLocalTagsAreFoundByTheCategorySearch(t *testing.T) {
+	termOn(t)
+	a, _ := newApp(t)
+	a.go_(Files)
+	a.cd(a.Root)
+	a.startIndex(a.Root)
+	for i := 0; i < 200; i++ {
+		a.idx.mu.Lock()
+		running := a.idx.running
+		a.idx.mu.Unlock()
+		if !running {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	a.indexTick()
+	bass := filepath.Join(a.Root, "bass")
+	files := filepath.Join(bass, "bass_C1.wav")
+	st := a.localTagStore()
+	if n := st.change([]string{files}, []string{"Wobbly"}, true); n != 1 {
+		t.Fatalf("one file tagged: %d", n)
+	}
+	if n := st.change([]string{filepath.Join(a.Root, "drums")}, []string{"909"}, true); n != 1 {
+		t.Fatalf("one folder tagged: %d", n)
+	}
+	a.saveLocalTags()
+	a.OpenTagSearch()
+	a.searchQ = "wobbly"
+	a.list()
+	if len(a.entries) != 1 || !strings.HasSuffix(a.entries[0].name, "bass_C1.wav") {
+		t.Fatalf("the file with the tag: %+v", a.entries)
+	}
+	a.searchQ = "909"
+	a.list()
+	if len(a.entries) == 0 {
+		t.Fatal("a tag on a folder is on its files")
+	}
+	for _, e := range a.entries {
+		if !strings.HasPrefix(e.name, "drums") {
+			t.Fatalf("only the drums have it: %s", e.name)
+		}
+	}
+	if got := a.tagsOf(files); got != "wobbly" {
+		t.Fatalf("the panel's tags: %q", got)
+	}
+	a.ltags = nil
+	if n := a.localTagStore().change([]string{files}, []string{"wobbly"}, false); n != 1 {
+		t.Fatal("the tags were kept, and can be taken off")
 	}
 }

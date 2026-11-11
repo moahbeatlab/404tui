@@ -97,6 +97,9 @@ func (a *App) unitMenu() {
 		})
 		add("Erase it on the unit...", func(int) { a.unitEraseAsk(dev, n) })
 	}
+	if Terminal {
+		add("Online or offline, and the offline folder...", func(int) { a.modeMenu() })
+	}
 	a.menu = m
 }
 

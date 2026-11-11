@@ -7,6 +7,7 @@ import (
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
+	"github.com/moahbeatlab/404tui/generate"
 	"github.com/moahbeatlab/404tui/lab"
 	"github.com/moahbeatlab/404tui/proto"
 )
@@ -17,8 +18,17 @@ import (
 
 var barChoices = []string{"1 bar", "2 bars", "3 bars", "4 bars", "5 bars", "6 bars", "7 bars", "8 bars"}
 
+func modeLabels() []string {
+	out := make([]string, len(generate.Modes))
+	for i, m := range generate.Modes {
+		out[i] = generate.ModeLabel(m)
+	}
+	return out
+}
+
 func (a *App) templatesMenu() {
-	m := &menu{title: "new pattern from a template"}
+	m := &menu{title: "new pattern"}
+	m.tabHead("TEMPLATES")
 	m.items = append(m.items, menuItem{label: "Blank pattern", vals: barChoices, val: 3, run: func(v int) { a.blankPattern(v + 1) }})
 	for _, g := range formats.GrooveTemplates() {
 		g := g
@@ -27,6 +37,52 @@ func (a *App) templatesMenu() {
 			vals:  barChoices, val: g.Bars() - 1,
 			run: func(v int) { a.fromTemplate(g, v+1) },
 		})
+	}
+	m.tabHead("GENERATOR")
+	m.items = append(m.items, menuItem{label: "Kit: which pad plays kick, snare, hats...", run: func(int) { a.genKitMenu() }})
+	m.items = append(m.items, menuItem{label: variationLabel, run: func(int) { a.variationMenu() }})
+	m.items = append(m.items, menuItem{label: genLengthLabel, vals: genBarLabels(), val: genBarIndex(a.set.GenBars), keepOpen: true,
+		onChange: func(v int) { a.set.GenBars = genBarChoices[v]; a.saveSettings() }})
+	m.head("a style: left and right choose what is made, A makes it")
+	for _, st := range generate.Styles() {
+		st := st
+		m.items = append(m.items, menuItem{
+			label: fmt.Sprintf("%s  %d BPM", st.Name, st.BPM),
+			vals:  modeLabels(), val: 0, // left and right choose what is made: one pattern, or a bank of them
+			run: func(v int) {
+				if mode := generate.Modes[v]; generate.OnePattern(mode) { // one pattern is a trial: rolled again until it is kept
+					a.generateOne(st, mode, a.genBars(st))
+				} else {
+					a.generateArc(st, mode, a.genBars(st))
+				}
+			},
+		})
+	}
+	m.tabify()
+	m.footH = 4 // what the choice at the cursor does, in words
+	m.foot = func(g Gfx, x, y, wc int) {
+		g.HRule(x+1, y, wc-2, cLine)
+		it := m.item()
+		text := "A makes the pattern; left and right choose how many bars"
+		switch {
+		case m.tab == 1 && len(it.vals) > 0 && it.label != genLengthLabel:
+			mode := generate.Modes[it.val]
+			text = mode + ": " + generate.ModeInfo(mode)
+			if generate.OnePattern(mode) {
+				text += " It is a trial: roll again, keep some voices, keep it."
+			}
+		case m.tab == 1 && it.label == genLengthLabel:
+			text = "How long a generated pattern is (left and right). With 4 or 8 bars the last bar comes round: the groove with a small change at its end, unless it has a fill."
+		case m.tab == 1 && it.label == variationLabel:
+			text = "A: a copy of the pattern in front with a fill, a roll, fewer or more hits, or as a break, in the next free pattern. The pattern itself stays."
+		case m.tab == 1:
+			text = "A: choose which pad plays the kick, the snare, the hats... (Enter on a voice picks the pad)"
+		}
+		for i, l := range wrap(text, wc-4) {
+			if i < 3 {
+				g.Text(x+2, y+1+i, l, cText, i == 0 && false)
+			}
+		}
 	}
 	a.menu = m
 }
@@ -135,4 +191,36 @@ func (a *App) fromTemplate(g formats.GrooveTemplate, bars int) {
 	a.rowExtra = nil // the rows follow the pads of the new pattern
 	a.openPattern(n)
 	a.say(fmt.Sprintf("%s %s: %s", a.label(n-1), g.Name, strings.Join(said, ", ")), false)
+}
+
+// the lengths the generator makes
+var genBarChoices = []int{1, 2, 4, 8}
+
+const genLengthLabel = "Length of a generated pattern"
+
+func genBarLabels() []string {
+	out := make([]string, len(genBarChoices))
+	for i, n := range genBarChoices {
+		out[i] = fmt.Sprintf("%d bars", n)
+	}
+	out[0] = "1 bar"
+	return out
+}
+
+// genBarIndex is the place of n in genBarChoices; 0 (never chosen) is 2 bars.
+func genBarIndex(n int) int {
+	for i, b := range genBarChoices {
+		if b == n {
+			return i
+		}
+	}
+	return 1
+}
+
+// genBars is the length of a generated pattern: the one chosen, else the style's phrase.
+func (a *App) genBars(st generate.Style) int {
+	if a.set.GenBars > 0 {
+		return a.set.GenBars
+	}
+	return max(st.Bars, 1)
 }

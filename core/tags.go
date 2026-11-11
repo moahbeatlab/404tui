@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -124,6 +125,10 @@ func (a *App) tagFiles(paths []string, add bool) {
 
 // tagItems are the menu entries for tags: the file or marked files, and the folder.
 func (a *App) tagItems(m *menu) {
+	if app.IsLocal(a.dir) {
+		a.localTagItems(m)
+		return
+	}
 	if !a.tagsReady() {
 		return
 	}
@@ -148,6 +153,11 @@ func (a *App) tagItems(m *menu) {
 
 // tagsOf are the tags of a file, for the panel.
 func (a *App) tagsOf(path string) string {
+	if app.IsLocal(path) {
+		tags := a.localTagStore().userTags(path)
+		sort.Strings(tags)
+		return strings.Join(slices.Compact(tags), " ")
+	}
 	if a.tags == nil {
 		return ""
 	}

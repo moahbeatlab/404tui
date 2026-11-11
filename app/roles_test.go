@@ -5,6 +5,7 @@ import (
 
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
+	"github.com/moahbeatlab/404tui/proto"
 )
 
 func TestGuessRolesReadsTheSampleNames(t *testing.T) {
@@ -60,5 +61,35 @@ func TestGuessRolesLeavesMissingLanesOut(t *testing.T) {
 	}
 	if roles := app.GuessRoles(rows); len(roles) != 0 {
 		t.Errorf("guessed %d roles from an unnameable kit, want none", len(roles))
+	}
+}
+
+func TestGuessRolesKnowsShortHatNames(t *testing.T) {
+	var rows []app.PadRow
+	for i, n := range []string{"B01 909 KICK", "B03 909 CH", "B04 909 OH", "B13 909 CH 2", "punch"} {
+		p, _ := proto.NewPadIndex(uint16(i))
+		rows = append(rows, app.PadRow{Pad: p, HasSample: true, Name: n})
+	}
+	roles := app.GuessRoles(rows)
+	if roles[formats.LaneClosedHat].Index() != 1 || roles[formats.LaneOpenHat].Index() != 2 {
+		t.Fatalf("closed hat %v, open hat %v", roles[formats.LaneClosedHat], roles[formats.LaneOpenHat])
+	}
+}
+
+// a crash cymbal is not percussion to run a euclidean line on; the toms after the first are
+func TestGuessRolesTakesTheTomsAsPercussionNotTheCrash(t *testing.T) {
+	var rows []app.PadRow
+	for i, n := range []string{"909 LO TOM", "909 MID TOM", "909 HI TOM", "909 CRASH"} {
+		p, _ := proto.NewPadIndex(uint16(i))
+		rows = append(rows, app.PadRow{Pad: p, HasSample: true, Name: n})
+	}
+	roles := app.GuessRoles(rows)
+	if roles[formats.LaneTom].Index() != 0 || roles[formats.LanePerc].Index() != 1 {
+		t.Fatalf("tom %v, perc %v", roles[formats.LaneTom], roles[formats.LanePerc])
+	}
+	for l, p := range roles {
+		if p.Index() == 3 {
+			t.Fatalf("the crash plays the %s lane", l.LaneName())
+		}
 	}
 }

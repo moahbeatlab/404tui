@@ -107,6 +107,9 @@ func fit(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
+	if n <= 0 {
+		return ""
+	}
 	if n <= 1 {
 		return s[:n]
 	}
