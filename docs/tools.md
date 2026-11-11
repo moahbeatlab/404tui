@@ -258,6 +258,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
         - `What` — with a fill / with a roll / thinner / busier / break; now with a fill
         - `Another roll of the dice`
         - `Keep it (B throws it away)`
+    - `Length of a generated pattern` — 1 bar / 2 bars / 4 bars / 8 bars; now 2 bars
 
     *A Style: Left And Right Choose What Is Made, A Makes It*
 

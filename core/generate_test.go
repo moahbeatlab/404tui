@@ -233,3 +233,28 @@ func TestGeneratorKitBankGuessesItsPads(t *testing.T) {
 		t.Fatalf("the menu shows bank H and says what it found: %q", a.Message())
 	}
 }
+
+// the length chosen in the GENERATOR tab is the length of what is made, and it is remembered
+func TestGeneratorMakesFourBars(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.templatesMenu()
+	a.menu.setTab(1)
+	for i := range a.menu.items {
+		if it := &a.menu.items[i]; it.label == genLengthLabel {
+			it.val = 2
+			it.onChange(2)
+		}
+	}
+	if a.set.GenBars != 4 {
+		t.Fatalf("the length is kept: %d", a.set.GenBars)
+	}
+	a.menu = nil
+	a.openPattern(20)
+	st, _ := generate.StyleByName("house")
+	a.generateOne(st, "single", a.genBars(st))
+	if d, ok := a.patternDoc(20); !ok || d.Bars != 4 {
+		t.Fatalf("a pattern of 4 bars: %+v", d.Bars)
+	}
+}

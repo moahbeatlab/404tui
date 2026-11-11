@@ -2,6 +2,7 @@ package generate
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/moahbeatlab/404tui/formats"
 )
@@ -72,6 +73,14 @@ func ModeInfo(mode string) string {
 
 // Generate fills a bank in a mode: bars is the length of each pattern, seed makes it (the same seed gives the same patterns).
 func Generate(mode string, st Style, bars int, seed int64, has func(formats.Lane) bool) ([]Result, error) {
+	rs, err := generate(mode, st, bars, seed, has)
+	if mode != "single" { // One gives its pattern its turnaround itself
+		turnarounds(rs, seed, has)
+	}
+	return rs, err
+}
+
+func generate(mode string, st Style, bars int, seed int64, has func(formats.Lane) bool) ([]Result, error) {
 	switch mode {
 	case "single", "fill", "roll":
 		r, _ := One(mode, st, bars, seed, seed+7919, has, nil, nil)
@@ -261,7 +270,20 @@ func One(mode string, st Style, bars int, seed, fillSeed int64, has func(formats
 		c := NewCtx(seed, has)
 		r := Make(st, Section{Name: "Pattern", Kind: "groove", Energy: 0.45 + c.Rng.Float64()*0.4, Bars: bars}, seed, has)
 		r.Pattern.take(prev, keep)
-		return r, r.Pattern.Clone()
+		groove := r.Pattern.Clone()
+		if r.Pattern.Bars >= 4 && !ownLastBar(r) { // four bars or more: the last one comes round (a voice that stays is not touched)
+			tc := NewCtx(fillSeed, has)
+			if keep != nil {
+				tc.Lock = map[formats.Lane]bool{}
+				for _, row := range r.Pattern.Rows {
+					tc.Lock[row.Lane] = keep(row.Lane)
+				}
+			}
+			if kind := r.Pattern.Turnaround(tc); kind != "" {
+				r.Notes = strings.TrimRight(r.Notes, "; ") + "; last bar: " + kind
+			}
+		}
+		return r, groove
 	}
 	roll := mode == "roll"
 	th := newTheme(st, bars, seed, has)

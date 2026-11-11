@@ -41,6 +41,8 @@ func (a *App) templatesMenu() {
 	m.tabHead("GENERATOR")
 	m.items = append(m.items, menuItem{label: "Kit: which pad plays kick, snare, hats...", run: func(int) { a.genKitMenu() }})
 	m.items = append(m.items, menuItem{label: variationLabel, run: func(int) { a.variationMenu() }})
+	m.items = append(m.items, menuItem{label: genLengthLabel, vals: genBarLabels(), val: genBarIndex(a.set.GenBars), keepOpen: true,
+		onChange: func(v int) { a.set.GenBars = genBarChoices[v]; a.saveSettings() }})
 	m.head("a style: left and right choose what is made, A makes it")
 	for _, st := range generate.Styles() {
 		st := st
@@ -49,9 +51,9 @@ func (a *App) templatesMenu() {
 			vals:  modeLabels(), val: 0, // left and right choose what is made: one pattern, or a bank of them
 			run: func(v int) {
 				if mode := generate.Modes[v]; generate.OnePattern(mode) { // one pattern is a trial: rolled again until it is kept
-					a.generateOne(st, mode, max(st.Bars, 1))
+					a.generateOne(st, mode, a.genBars(st))
 				} else {
-					a.generateArc(st, mode, max(st.Bars, 1))
+					a.generateArc(st, mode, a.genBars(st))
 				}
 			},
 		})
@@ -63,12 +65,14 @@ func (a *App) templatesMenu() {
 		it := m.item()
 		text := "A makes the pattern; left and right choose how many bars"
 		switch {
-		case m.tab == 1 && len(it.vals) > 0:
+		case m.tab == 1 && len(it.vals) > 0 && it.label != genLengthLabel:
 			mode := generate.Modes[it.val]
 			text = mode + ": " + generate.ModeInfo(mode)
 			if generate.OnePattern(mode) {
 				text += " It is a trial: roll again, keep some voices, keep it."
 			}
+		case m.tab == 1 && it.label == genLengthLabel:
+			text = "How long a generated pattern is (left and right). With 4 or 8 bars the last bar comes round: the groove with a small change at its end, unless it has a fill."
 		case m.tab == 1 && it.label == variationLabel:
 			text = "A: a copy of the pattern in front with a fill, a roll, fewer or more hits, or as a break, in the next free pattern. The pattern itself stays."
 		case m.tab == 1:
@@ -187,4 +191,36 @@ func (a *App) fromTemplate(g formats.GrooveTemplate, bars int) {
 	a.rowExtra = nil // the rows follow the pads of the new pattern
 	a.openPattern(n)
 	a.say(fmt.Sprintf("%s %s: %s", a.label(n-1), g.Name, strings.Join(said, ", ")), false)
+}
+
+// the lengths the generator makes
+var genBarChoices = []int{1, 2, 4, 8}
+
+const genLengthLabel = "Length of a generated pattern"
+
+func genBarLabels() []string {
+	out := make([]string, len(genBarChoices))
+	for i, n := range genBarChoices {
+		out[i] = fmt.Sprintf("%d bars", n)
+	}
+	out[0] = "1 bar"
+	return out
+}
+
+// genBarIndex is the place of n in genBarChoices; 0 (never chosen) is 2 bars.
+func genBarIndex(n int) int {
+	for i, b := range genBarChoices {
+		if b == n {
+			return i
+		}
+	}
+	return 1
+}
+
+// genBars is the length of a generated pattern: the one chosen, else the style's phrase.
+func (a *App) genBars(st generate.Style) int {
+	if a.set.GenBars > 0 {
+		return a.set.GenBars
+	}
+	return max(st.Bars, 1)
 }

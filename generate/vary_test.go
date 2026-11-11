@@ -2,6 +2,7 @@ package generate
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/moahbeatlab/404tui/formats"
@@ -279,6 +280,62 @@ func TestDiffIsOnlyWhatChanged(t *testing.T) {
 					}
 				}
 			}
+		}
+	}
+}
+
+// four bars: the last one is the groove with a small change, unless it has a fill, a roll, the build or a stop of its own
+func TestFourBarsEndWithATurnaround(t *testing.T) {
+	for _, st := range Styles() {
+		turned := 0
+		for seed := int64(1); seed <= 20; seed++ {
+			r, _ := One("single", st, 4, seed, seed+1, nil, nil, nil)
+			if !ownLastBar(r) {
+				t.Errorf("%s seed %d: the last bar has nothing of its own: %s", st.Name, seed, r.Notes)
+			}
+			if strings.Contains(r.Notes, "last bar: ") {
+				turned++
+			}
+		}
+		if turned == 0 {
+			t.Errorf("%s: no pattern without a fill in 20 seeds", st.Name)
+		}
+		for _, mode := range []string{"arc", "family", "drift", "layers", "random"} {
+			rs, err := Generate(mode, st, 4, 3, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, r := range rs {
+				if r.Pattern.Bars >= 4 && !ownLastBar(r) {
+					t.Errorf("%s %s %s: the last bar has nothing of its own", st.Name, mode, r.Section.Name)
+				}
+			}
+		}
+		rs, _ := Generate("arc", st, 2, 3, nil)
+		for _, r := range rs {
+			if strings.Contains(r.Notes, "last bar: ") {
+				t.Errorf("%s: two bars get no turnaround", st.Name)
+			}
+		}
+	}
+}
+
+// a turnaround changes only the end of the last bar
+func TestTurnaroundChangesTheLastBar(t *testing.T) {
+	st, _ := StyleByName("house")
+	for seed := int64(1); seed <= 30; seed++ {
+		p := Base(st, 4, 0.6)
+		before := p.Clone()
+		if kind := p.Turnaround(NewCtx(seed, nil)); kind == "" {
+			t.Fatal("a full kit can always turn round")
+		}
+		for bar := 0; bar < 3; bar++ {
+			if p.shape(bar) != before.shape(bar) {
+				t.Fatalf("seed %d: bar %d changed", seed, bar+1)
+			}
+		}
+		if p.shape(3) == before.shape(3) {
+			t.Fatalf("seed %d: the last bar is the same", seed)
 		}
 	}
 }
