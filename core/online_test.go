@@ -1576,3 +1576,26 @@ func TestTheEventLogReadsTheUnitsProjectAndLogsItsStatus(t *testing.T) {
 		t.Fatalf("the unit's status is in the log: %v", kinds)
 	}
 }
+
+func TestRenameOfflineProjectMovesIt(t *testing.T) {
+	a, _ := newApp(t)
+	parent := t.TempDir()
+	a.set.OfflineDir = parent
+	for _, n := range []string{"PROJECT_03", "PROJECT_05"} {
+		os.MkdirAll(filepath.Join(parent, n), 0o755)
+		os.WriteFile(filepath.Join(parent, n, "PADCONF.BIN"), []byte{0}, 0o644)
+	}
+	a.renameOffline(2)
+	a.prompt.onDone("5") // taken
+	if _, ok := a.offlineProject(2); !ok {
+		t.Fatal("a taken number leaves the project where it is")
+	}
+	a.renameOffline(2)
+	a.prompt.onDone("project_9")
+	if _, ok := a.offlineProject(8); !ok {
+		t.Fatal("PROJECT_03 is PROJECT_09 now")
+	}
+	if _, ok := a.offlineProject(2); ok {
+		t.Fatal("PROJECT_03 is gone")
+	}
+}
