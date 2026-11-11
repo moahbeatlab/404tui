@@ -162,3 +162,25 @@ func TestGeneratorKitEscGoesBack(t *testing.T) {
 		t.Fatal("Esc goes back to the templates")
 	}
 }
+
+// one fill, one roll: one pattern each, in the slot in front or the next free one
+func TestGenerateOneFillAndOneRoll(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.openPattern(20)
+	st, _ := generate.StyleByName("techno")
+	a.generateArc(st, "fill", 2)
+	a.generateArc(st, "roll", 2)
+	for _, n := range []int{20, 21} {
+		if d, ok := a.patternDoc(n); !ok || len(d.Notes) == 0 {
+			t.Fatalf("slot %d has a pattern", n)
+		}
+	}
+	if _, ok := a.patternDoc(22); ok {
+		t.Fatal("two runs, two patterns")
+	}
+	if !strings.Contains(a.Message(), "Roll:") {
+		t.Fatalf("the message names the roll: %q", a.Message())
+	}
+}

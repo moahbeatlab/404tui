@@ -26,7 +26,7 @@ func TestEveryModeMakesValidPatterns(t *testing.T) {
 			switch mode {
 			case "arc":
 				want = 8
-			case "single":
+			case "single", "fill", "roll":
 				want = 1
 			}
 			if len(rs) != want {
@@ -186,3 +186,20 @@ func TestSecondPadsShareTheHits(t *testing.T) {
 }
 
 func pad(i int) proto.PadIndex { p, _ := proto.NewPadIndex(uint16(i)); return p }
+
+// one fill and one roll: a single pattern that has more going on at the end of its last bar than the groove has
+func TestOneFillAndOneRoll(t *testing.T) {
+	for _, st := range Styles() {
+		for seed := int64(1); seed < 30; seed++ {
+			for _, mode := range []string{"fill", "roll"} {
+				rs, err := Generate(mode, st, 2, seed, nil)
+				if err != nil || len(rs) != 1 {
+					t.Fatalf("%s %s: %d patterns, %v", st.Name, mode, len(rs), err)
+				}
+				if rs[0].Pattern.Text() == newTheme(st, 2, seed, nil).groove.Text() { // the fill changed something
+					t.Fatalf("%s %s seed %d: %q is the groove", st.Name, mode, seed, rs[0].Section.Name)
+				}
+			}
+		}
+	}
+}

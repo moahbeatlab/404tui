@@ -252,16 +252,16 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
     *A Style: Left And Right Choose What Is Made, A Makes It*
 
-    - `House  124 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
-    - `Tech house  126 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
-    - `Techno  130 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
-    - `Chicago house  122 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
-    - `Deep house  120 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
-    - `Minimal tech house  126 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
-    - `Dub techno  124 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
-    - `Industrial techno  140 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
-    - `Acid  130 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
-    - `90s house  125 BPM` — 1 pattern / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `House  124 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Tech house  126 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Techno  130 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Chicago house  122 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Deep house  120 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Minimal tech house  126 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Dub techno  124 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Industrial techno  140 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Acid  130 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `90s house  125 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
 - `Loop only the bar in focus (Y+A)` — off / on; now off
 - `New pattern from the audible tracks`
 - `Bounce the tracks as you hear them to a pad`

@@ -9,6 +9,8 @@ import (
 // Modes say how a bank is filled.
 //
 //	single  one pattern, in the slot in front (or the next free one)
+//	fill    one pattern: the groove with a drum fill at the end (one of the style's own)
+//	roll    one pattern: the groove with a roll at the end (a snare roll that speeds up, 32nds, flams, a tom or kick roll...)
 //	family  one theme and what is done to it: the groove, then a variation of it in each slot, a build, a stop, a drop, a break, an outro
 //	random  sixteen patterns that have nothing to do with each other (each has the dice of its own)
 //	layers  the groove, then one layer added to the one before, up to the full style
@@ -16,13 +18,17 @@ import (
 //	fills   the groove, then the same groove with a different drum fill or roll at the end of each pattern (snare rolls that speed up into
 //	        32nds, flams, tom and kick rolls, hat triplets, clap stacks), to choose from
 //	arc     eight patterns along a tension curve: intro, groove, variation, build, stop, drop, break, outro (each with its own dice)
-var Modes = []string{"single", "family", "random", "layers", "drift", "arc", "fills"}
+var Modes = []string{"single", "fill", "roll", "family", "random", "layers", "drift", "arc", "fills"}
 
 // ModeLabel is what a menu says for a mode: how many patterns it makes, and what they are.
 func ModeLabel(mode string) string {
 	switch mode {
 	case "single":
 		return "1 pattern"
+	case "fill":
+		return "1 pattern with a fill"
+	case "roll":
+		return "1 pattern with a roll"
 	case "family":
 		return "16 variations of one"
 	case "random":
@@ -42,6 +48,10 @@ func ModeLabel(mode string) string {
 // ModeInfo is a line about a mode.
 func ModeInfo(mode string) string {
 	switch mode {
+	case "fill":
+		return "one pattern: a groove of the style with a drum fill in the last bar, one of the fills the style likes. A new one each time."
+	case "roll":
+		return "one pattern: a groove of the style with a roll in the last bar (a snare roll that speeds up, 32nds, flams, a tom or kick roll, hat or clap rolls)."
 	case "single":
 		return "one new groove of the style, put in the pattern in front (or the next free one). The tempo of the project stays."
 	case "family":
@@ -66,6 +76,8 @@ func Generate(mode string, st Style, bars int, seed int64, has func(formats.Lane
 	case "single":
 		c := NewCtx(seed, has)
 		return []Result{Make(st, Section{Name: "Pattern", Kind: "groove", Energy: 0.45 + c.Rng.Float64()*0.4, Bars: bars}, seed, has)}, nil
+	case "fill", "roll":
+		return []Result{OneFill(st, bars, seed, has, mode == "roll")}, nil
 	case "", "family":
 		return Family(st, bars, seed, has), nil
 	case "random":
@@ -79,7 +91,7 @@ func Generate(mode string, st Style, bars int, seed int64, has func(formats.Lane
 	case "fills":
 		return Fills(st, bars, seed, has), nil
 	}
-	return nil, fmt.Errorf("mode %q: one of single, family, random, layers, drift, arc, fills", mode)
+	return nil, fmt.Errorf("mode %q: one of single, fill, roll, family, random, layers, drift, arc, fills", mode)
 }
 
 // Random is sixteen patterns each of its own energy and kind, rolled one by one.
@@ -192,6 +204,37 @@ func (th *theme) thinOne(p *Pattern, c *Ctx) {
 // fillList is what the fills mode puts on the groove, a slot each.
 var fillList = []string{"snare roll", "accelerating roll", "32nd roll", "snare triplets", "flam run", "tom cascade", "tom roll", "kick stutter",
 	"kick roll", "hat roll", "clap roll", "clap stack"}
+
+// OnePattern says whether a mode makes one pattern, not a bank.
+func OnePattern(mode string) bool { return mode == "single" || mode == "fill" || mode == "roll" }
+
+// OneFill is one pattern: the groove with a fill, or with a roll, at the end of its last bar.
+func OneFill(st Style, bars int, seed int64, has func(formats.Lane) bool, roll bool) Result {
+	th := newTheme(st, bars, seed, has)
+	c := NewCtx(seed+7919, th.has)
+	pool := st.Fills
+	if roll {
+		pool = RollKinds
+	}
+	var ok []string
+	for _, k := range pool {
+		if fillNeeds(k, th.has) {
+			ok = append(ok, k)
+		}
+	}
+	if len(ok) == 0 {
+		ok = []string{"snare roll"}
+	}
+	kind := ok[c.Rng.Intn(len(ok))]
+	p := th.groove.Clone()
+	p.Fill(c, st, kind, bars-1)
+	p.Humanize(c, 0.2)
+	name := "Fill: " + kind
+	if roll {
+		name = "Roll: " + kind
+	}
+	return Result{Section: Section{Name: name, Kind: "fill", Energy: 0.6, Bars: bars}, Pattern: p, Notes: "the groove with " + kind}
+}
 
 // Fills is the groove, and then the groove with a fill or a roll at the end of its last bar in each slot, then a roll build, fills in both
 // bars and a roll into a stop.
