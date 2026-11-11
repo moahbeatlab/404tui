@@ -9,7 +9,7 @@ played, nothing is. The results of each run, per use case, are in `out/usecases.
     platform/terminal/e2e/run.sh                      # needs docker; the real project is read from ~/test-projects
     platform/terminal/e2e/run.sh /path/to/project     # another project (the checks name pads of the Construction Kits project)
 
-Last run (2026-11-03): **205 checks, 205 passed, 0 failed**, 17 use cases (126 in `e2e.sh`, 79 in `e2e-tools.sh`).
+Last run (2026-11-11): **306 checks, 306 passed, 0 failed**, 23 use cases (164 in `e2e.sh`, 80 in `e2e-tools.sh`, 62 in `e2e-new.sh`).
 
 ## The use cases
 
@@ -39,7 +39,7 @@ Last run (2026-11-03): **205 checks, 205 passed, 0 failed**, 17 use cases (126 i
 | UC22 | MIDI files | Export this pattern as a MIDI file writes `pattern-A1.mid`; in FILES `a` on it opens the import (the part of the file, Play it with the sample, into the free pattern A2); Import the pattern makes it a pattern again, shown in SEQ | `67` |
 | UC23 | Terminal cast | `Ctrl-T` starts a cast and `Ctrl-T` again saves it; its events file is in the recordings folder; `q` quits with nothing on stderr | `68` |
 
-Together 205 checks. A failed check prints the screen it saw.
+Together 306 checks. A failed check prints the screen it saw.
 
 ## How it reads the screen
 
