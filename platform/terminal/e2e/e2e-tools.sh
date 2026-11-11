@@ -87,7 +87,8 @@ lit h
 checkre "and back down" "BPM 124"
 key Escape
 tool PATTERN "New pattern from a template..."
-check "the templates are listed" "NEW PATTERN FROM A TEMPLATE"
+check "the templates are listed" "NEW PATTERN"
+check "next to the generator" "TEMPLATES   GENERATOR"
 check "with their tempo" "House"
 snap 44-templates
 choose "House"
