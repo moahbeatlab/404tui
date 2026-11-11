@@ -1617,7 +1617,7 @@ func TestSearchResultShowsItsFolder(t *testing.T) {
 	a.openSearch()
 	a.TypeText("c1")
 	txt := screenStr(a)
-	if !strings.Contains(txt, "FOLDER") || !strings.Contains(txt, "/samples/bass") {
+	if !strings.Contains(txt, "FOLDER") || !strings.Contains(txt, filepath.FromSlash("/samples/bass")) {
 		t.Fatalf("the panel names the whole folder:\n%s", txt)
 	}
 	if strings.Contains(txt, "bass~") {
