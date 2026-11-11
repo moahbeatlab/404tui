@@ -13,7 +13,8 @@ import (
 
 // genKit is what was chosen by hand, by voice: a pad number (0..159), or -1 for none. A voice that is not in the map is left to the names.
 type genKit struct {
-	pad, alt map[formats.Lane]int
+	Pad map[formats.Lane]int `json:"pad,omitempty"`
+	Alt map[formats.Lane]int `json:"alt,omitempty"`
 }
 
 // genVoices are the voices the generator plays, in the order the menu lists them.
@@ -50,7 +51,7 @@ func (a *App) generatorKit() (int, map[formats.Lane]proto.PadIndex, map[formats.
 	if bank < 0 {
 		bank, pads = 0, map[formats.Lane]proto.PadIndex{}
 	}
-	for l, v := range a.gk.pad {
+	for l, v := range a.set.GenKit.Pad {
 		if idx, ok := proto.NewPadIndex(uint16(v)); ok && v >= 0 {
 			pads[l] = idx
 		} else if v < 0 {
@@ -58,7 +59,7 @@ func (a *App) generatorKit() (int, map[formats.Lane]proto.PadIndex, map[formats.
 		}
 	}
 	alts := app.GuessAlternates(a.padRows(bank), pads)
-	for l, v := range a.gk.alt {
+	for l, v := range a.set.GenKit.Alt {
 		if idx, ok := proto.NewPadIndex(uint16(v)); ok && v >= 0 {
 			alts[l] = idx
 		} else if v < 0 {
@@ -74,7 +75,9 @@ func (a *App) generatorKit() (int, map[formats.Lane]proto.PadIndex, map[formats.
 }
 
 // genKitMenu is the Generator kit menu: every voice with its pad (left and right choose another), and a second pad for the voices that have one.
-func (a *App) genKitMenu() {
+func (a *App) genKitMenu() { a.genKitMenuAt(1) }
+
+func (a *App) genKitMenuAt(cur0 int) {
 	bank, _, _ := a.generatorKit()
 	name := func(i int) string { return fmt.Sprintf("%s %s", a.label(i), short(a.info.Pads[i].Name, 18)) }
 	padVals := func(auto string) []string {
@@ -97,8 +100,11 @@ func (a *App) genKitMenu() {
 	galts := app.GuessAlternates(a.padRows(bank), gpads)
 	m := &menu{title: "generator kit: which pad plays what"}
 	m.head("VOICES (the pads of bank " + string(rune('A'+bank)) + ")")
-	if a.gk.pad == nil {
-		a.gk = genKit{pad: map[formats.Lane]int{}, alt: map[formats.Lane]int{}}
+	if a.set.GenKit.Pad == nil {
+		a.set.GenKit.Pad = map[formats.Lane]int{}
+	}
+	if a.set.GenKit.Alt == nil {
+		a.set.GenKit.Alt = map[formats.Lane]int{}
 	}
 	cur := func(set map[formats.Lane]int, l formats.Lane) int {
 		v, ok := set[l]
@@ -120,10 +126,24 @@ func (a *App) genKitMenu() {
 			set[l] = bank*16 + val - 2
 		}
 	}
+	// Enter: the pad picker, the pads as on PADS; what is picked is kept for the next time
+	choose := func(set map[formats.Lane]int, l formats.Lane, name string) {
+		at := m.cur
+		start := bank * 16
+		if v, ok := set[l]; ok && v >= 0 {
+			start = v
+		}
+		a.pickPad("the pad for "+name, start, true, func(pad int) {
+			set[l] = pad
+			a.saveSettings()
+			a.genKitMenuAt(at)
+		})
+	}
 	for _, v := range genVoices {
 		v := v
-		m.items = append(m.items, menuItem{label: v.name, vals: padVals(autoName(gpads, v.lane, "auto: none")), val: max(cur(a.gk.pad, v.lane), 0),
-			onChange: func(val int) { put(a.gk.pad, v.lane, val) }})
+		m.items = append(m.items, menuItem{label: v.name, vals: padVals(autoName(gpads, v.lane, "auto: none")), val: max(cur(a.set.GenKit.Pad, v.lane), 0),
+			onChange: func(val int) { put(a.set.GenKit.Pad, v.lane, val); a.saveSettings() },
+			run:      func(int) { choose(a.set.GenKit.Pad, v.lane, v.name) }})
 	}
 	m.head("SECOND PADS: take over some hits")
 	for _, v := range genVoices {
@@ -131,13 +151,16 @@ func (a *App) genKitMenu() {
 		if !v.alt {
 			continue
 		}
-		m.items = append(m.items, menuItem{label: v.name + " 2", vals: padVals(autoName(galts, v.lane, "auto: none")), val: max(cur(a.gk.alt, v.lane), 0),
-			onChange: func(val int) { put(a.gk.alt, v.lane, val) }})
+		m.items = append(m.items, menuItem{label: v.name + " 2", vals: padVals(autoName(galts, v.lane, "auto: none")), val: max(cur(a.set.GenKit.Alt, v.lane), 0),
+			onChange: func(val int) { put(a.set.GenKit.Alt, v.lane, val); a.saveSettings() },
+			run:      func(int) { choose(a.set.GenKit.Alt, v.lane, v.name+" 2") }})
 	}
 	m.head("")
 	m.items = append(m.items, menuItem{label: "Back to the names of the pads", run: func(int) {
-		a.gk = genKit{}
+		a.set.GenKit = genKit{}
+		a.saveSettings()
 		a.say("the generator takes its pads from their names again", false)
 	}})
+	m.cur = cur0
 	a.menu = m
 }
