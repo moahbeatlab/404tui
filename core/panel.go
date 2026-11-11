@@ -756,12 +756,12 @@ func (a *App) drawKeyboardKeys(g Gfx, x, y, w int) {
 		}
 	}
 	g.HRule(x, gy-1, w, cLine)
-	if a.scr == Seq && w >= 40 && gy-2-7-(y+2) >= 12 { // the bank's 16 patterns, 4 by 4, right above the global keys
-		g.HRule(x, gy-8, w, cLine)
-		g.Text(x, gy-7, "PATTERNS", cDim, true)
-		g.Text(x+len("PATTERNS  "), gy-7, "p choose with the arrows", cDim, false)
-		a.drawPatternStrip(g, x, gy-6, w)
-		a.context(g, x, y+2, w, gy-9)
+	if a.scr == Seq && w >= 40 && gy-2-7-(y+2) >= 12 { // the bank's 16 patterns, 4 by 4, right under the level and the tempo; what is under the cursor below them
+		g.Text(x, y+2, "PATTERNS", cDim, true)
+		g.Text(x+len("PATTERNS  "), y+2, "p choose with the arrows", cDim, false)
+		a.drawPatternStrip(g, x, y+3, w)
+		g.HRule(x, y+7, w, cLine)
+		a.context(g, x, y+8, w, gy-2)
 		return
 	}
 	a.context(g, x, y+2, w, gy-2)
