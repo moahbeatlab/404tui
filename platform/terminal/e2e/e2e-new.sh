@@ -110,9 +110,10 @@ lit 2
 tool PATTERN "Export this pattern as a MIDI file"
 checkre "the pattern is written as a .mid file" "written: .*pattern-A1\.mid"
 lit 4
-lit h
 sleep 0.3
-for i in 1 2 3 4 5 6; do tm capture-pane -e -p -t $S | python3 "$HERE/hl.py" | grep -q "exports/" && break; lit k; sleep 0.2; done
+# FILES opens where it was left: up until the work folder (it holds exports/) is the middle column, then onto exports/
+for i in 1 2 3 4 5; do cap | grep -q "╮╭─ work ─" && break; lit h; sleep 0.3; done
+pick "exports/" || bad "no exports/ folder in the work folder"
 lit l
 check "the export folder holds the file" "pattern-A1.mid"
 lit a
