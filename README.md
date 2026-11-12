@@ -43,7 +43,21 @@ It is a Go port of [SparkyMK2](https://github.com/TuscanPL/SparkyMK2), whose aut
 Plug the SP-404MKII in with its USB cable; 404tui finds it by itself and waits if it is not there yet. `?` shows the keys, `q` quits. Without a unit: `sp404 -sim` tries it against a simulated one, and
 `sp404 check` tests the installation. More in [docs/install.md](docs/install.md).
 
-![The start screen](docs/img/pc-splash.png)
+### The start screen
+
+404tui starts on a launcher that waits for a key: four doors, and the projects you opened last.
+
+![The start screen: four doors and the recent projects](docs/img/pc-splash.png)
+
+| Key | Door |
+| --- | --- |
+| `Enter` | **Continue:** carries on with what is open, or opens the project you had open last (or restores the autosave, when one is waiting) |
+| `u` | **Unit, online:** the project that is on the SP-404MKII, edited live |
+| `o` | **Offline card folder:** the offline project you had open last |
+| `f` | **Open a folder:** a project folder or a card backup, in the folder chooser |
+| `1`-`4` | **Recent:** the projects opened last, with their pads, tempo and when |
+
+Any other key carries on. More in [docs/projects.md](docs/projects.md).
 
 ## A first look
 
