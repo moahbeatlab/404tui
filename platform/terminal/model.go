@@ -37,6 +37,7 @@ func Run(o Options) error {
 		if err := app.OpenProject(o.Project); err != nil {
 			return err
 		}
+		app.RememberProject(o.Project)
 	}
 	app.ShowSplash(2500 * time.Millisecond)
 	m := NewModel(app, o)

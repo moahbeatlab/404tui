@@ -194,7 +194,7 @@ func TestToolsReference(t *testing.T) {
 		{Seq, "SEQ", "The step grid of the pattern in front. `Enter` (or `b`) opens the note panel, `t` the pattern's tools and settings.", []docMenu{
 			{"Pattern tools and settings (`t`)", Seq, func(a *App) { a.seqMenu() }},
 		}},
-		{Unit, "PROJECTS", "On a computer: the 16 projects of the unit when one is plugged in (online), else those of a folder on this computer (offline). The program looks for the unit all the time, and the start screen offers `u` online and `o` offline (the project open last). `a` opens a project's menu, `t` chooses online or offline and the offline folder. On the handheld this screen is called UNIT.", []docMenu{
+		{Unit, "PROJECTS", "On a computer: the 16 projects of the unit when one is plugged in (online), else those of a folder on this computer (offline). The program looks for the unit all the time, and the start screen (the launcher) offers `u` online, `o` offline (the project open last), `f` a folder and `1`-`4` the projects opened last. `a` opens a project's menu, `t` chooses online or offline and the offline folder. On the handheld this screen is called UNIT.", []docMenu{
 			{"Project menu of the unit (`a`, online)", Unit, func(a *App) { connectUnit(t, a); a.unitMenu() }},
 			{"Online or offline (`t`, then Online or offline...)", Unit, func(a *App) { a.go_(Unit); a.modeMenu() }},
 			{"Project menu of the offline folder (`a`, offline)", Unit, func(a *App) { a.go_(Unit); a.offlineMenu() }},

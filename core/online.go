@@ -50,7 +50,7 @@ func (a *App) openOffline(n int) {
 	a.saved = true
 	a.changed = false
 	a.set.LastOffline = n + 1
-	a.saveSettings()
+	a.RememberProject(dir)
 	a.say(fmt.Sprintf("opened %s offline", filepath.Base(dir)), false)
 	a.go_(Pads)
 }
@@ -218,21 +218,7 @@ func (a *App) openProjectFolder() {
 	a.pickFolder("open a project: its folder, or a folder of projects", start, func(dir string) {
 		a.set.LastProjectDir = filepath.Dir(dir)
 		if isProjectFolder(dir) {
-			if err := a.OpenProject(dir); err != nil {
-				a.say("cannot open it: "+err.Error(), true)
-				return
-			}
-			var n int
-			if _, err := fmt.Sscanf(filepath.Base(dir), "PROJECT_%d", &n); err == nil && n >= 1 && n <= 99 {
-				a.slot = n
-			}
-			a.sl, a.pat, a.step = nil, 1, 0
-			a.bank, a.cur = 0, 0
-			a.saved = true
-			a.changed = false
-			a.saveSettings()
-			a.say("opened "+dir, false)
-			a.go_(Pads)
+			a.openFolderProject(dir)
 			return
 		}
 		if n := countProjects(dir); n > 0 {
@@ -246,6 +232,25 @@ func (a *App) openProjectFolder() {
 		a.set.LastProjectDir = dir
 		a.say(short2(dir, 40)+" is not a project and has none in it (a project has a PADCONF.BIN)", true)
 	})
+}
+
+// openFolderProject opens the project in a folder and goes to its pads; a folder PROJECT_nn gives the editor that number.
+func (a *App) openFolderProject(dir string) {
+	if err := a.OpenProject(dir); err != nil {
+		a.say("cannot open it: "+err.Error(), true)
+		return
+	}
+	var n int
+	if _, err := fmt.Sscanf(strings.ToUpper(filepath.Base(dir)), "PROJECT_%d", &n); err == nil && n >= 1 && n <= 99 {
+		a.slot = n
+	}
+	a.sl, a.pat, a.step = nil, 1, 0
+	a.bank, a.cur = 0, 0
+	a.saved = true
+	a.changed = false
+	a.RememberProject(dir)
+	a.say("opened "+dir, false)
+	a.go_(Pads)
 }
 
 // isProjectFolder says whether a folder is a project of the unit: it has a PADCONF.BIN.

@@ -158,7 +158,7 @@ func TestSplashOffersOnlineAndOffline(t *testing.T) {
 		t.Fatal("with a unit the splash waits for a choice")
 	}
 	txt := screenStr(a)
-	for _, want := range []string{"UNIT FOUND", "u  work online", "o  work offline: PROJECT_02"} {
+	for _, want := range []string{"Unit, online", "SP-404MKII found", "Offline card folder", "opens PROJECT_02 again"} {
 		if !strings.Contains(txt, want) {
 			t.Errorf("the splash says %q:\n%s", want, txt)
 		}

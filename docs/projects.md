@@ -10,7 +10,17 @@ The 16 projects as tiles: the unit's, when one is plugged in (**online**), else 
 
 ## Online and offline
 
-The **start screen** says whether it found a unit: `u` works online (this screen shows the unit's projects), `o` works offline and opens the project that was open last offline; any other key goes on with the project that is open. With no unit it says so and works offline.
+The **start screen** is a launcher: four doors with a key each, and the projects opened last.
+
+| Key | Door | What it does |
+| --- | --- | --- |
+| `Enter` | Continue | goes on with the project that is open; with nothing open, opens the project opened last; with an autosave of an earlier session, restores it (then any other key starts empty) |
+| `u` | Unit, online | the unit's open project is loaded and edited live (PROJECTS shows the unit's projects); with no unit it says so |
+| `o` | Offline card folder | works offline and opens the project that was open last offline, else shows the folder's projects |
+| `f` | Open a folder | the folder chooser: a project, or a folder of projects such as a card backup |
+| `1`-`4` | Recent | the projects opened last (from a folder, from FILES, offline or with `-project`), with their pads, tempo and when |
+
+Any other key goes on with what is open. The name at the top is drawn in pixel letters with a shadow.
 
 ![The start screen with a unit](img/pc-splash-unit.png)
 

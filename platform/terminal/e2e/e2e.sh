@@ -291,9 +291,10 @@ check "Space plays the pad and x stops it" "stopped"
 uc UC11 "A unit (the simulator): found at the start, online or offline, level meter, its projects, a backup, live editing, its card, tags"
 start 150 44 -sim -project $W/proj
 check "the splash shows" "SAMPLE LAB FOR THE SP-404MKII"
-check "the splash finds the unit" "UNIT FOUND"
-check "and offers online" "u  work online"
-check "and offline" "o  work offline"
+check "the launcher finds the unit" "SP-404MKII found"
+check "and offers online" "Unit, online"
+check "and offline" "Offline card folder"
+check "and a folder" "Open a folder"
 snap 38-splash-unit
 lit o
 check "o works offline: the pads open" "BPM 124"

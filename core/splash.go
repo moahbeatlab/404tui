@@ -1,24 +1,27 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"time"
+
+	"github.com/moahbeatlab/404tui/lab"
 )
 
 // The splash: the logo and a short dashboard, shown for a moment before the app opens. A key skips it. When an autosave
 // of an earlier session is there and nothing is open, it waits for a key (A restores it, any other starts empty).
 type splash struct {
-	until   time.Time
-	restore string // the autosaved project, when there is one
-	when    time.Time
-	started time.Time
+	until    time.Time
+	restore  string // the autosaved project, when there is one
+	when     time.Time
+	started  time.Time
+	patterns int // the patterns of the open project with notes (counted once: the launcher says it)
 }
 
 // ShowSplash puts the splash in front for d (a script or a test never calls it).
 func (a *App) ShowSplash(d time.Duration) {
-	s := &splash{started: a.clock(), until: a.clock().Add(d)}
+	s := &splash{started: a.clock(), until: a.clock().Add(d), patterns: a.patternsWithNotes()}
 	if dir, when := a.findAutosave(); dir != "" && !a.hasWork() {
 		s.restore, s.when = dir, when
 	}
@@ -28,19 +31,25 @@ func (a *App) ShowSplash(d time.Duration) {
 func (a *App) splashKey(k Key) {
 	s := a.splash
 	a.splash = nil
-	if k == A && s.restore != "" {
+	if k != A {
+		return
+	}
+	switch {
+	case s.restore != "":
 		a.restoreAutosave(s.restore)
+	case Terminal && !a.hasWork(): // the launcher: Enter continues with the project opened last
+		a.openRecent(0)
 	}
 }
 
 func (a *App) splashTick() {
-	if s := a.splash; s != nil && s.restore == "" && !(Terminal && a.link != nil) && a.clock().After(s.until) {
+	if s := a.splash; s != nil && s.restore == "" && !Terminal && a.clock().After(s.until) { // the launcher of a computer waits for a choice
 		a.splash = nil
 	}
 }
 
-// SplashText is a letter of a keyboard on the splash: u works online (the unit's projects), o offline (the project open last,
-// or the folder's projects). It says whether the letter was one of them.
+// SplashText is a letter of a keyboard on the launcher: u works online (the unit's projects), o offline (the project open last,
+// or the folder's projects), f opens a project from a folder, 1 to 4 a recent project. It says whether the letter was one of them.
 func (a *App) SplashText(r string) bool {
 	if a.splash == nil {
 		return false
@@ -64,17 +73,40 @@ func (a *App) SplashText(r string) bool {
 			a.go_(Unit)
 		}
 		return true
+	case "f", "F":
+		a.splash = nil
+		a.openProjectFolder()
+		return true
+	case "1", "2", "3", "4":
+		if a.openRecent(int(r[0] - '1')) {
+			a.splash = nil
+		}
+		return true
 	}
 	return false
 }
 
+// patternsWithNotes is how many of the 160 patterns have notes.
+func (a *App) patternsWithNotes() int {
+	n := 0
+	for slot := 1; slot <= 160; slot++ {
+		b, err := a.lab.Pattern(slot)
+		var d lab.PatternDoc
+		if err == nil && json.Unmarshal(b, &d) == nil && len(d.Notes) > 0 {
+			n++
+		}
+	}
+	return n
+}
+
 func (a *App) drawSplash(g Gfx) {
+	if Terminal {
+		a.drawLauncher(g)
+		return
+	}
 	s := a.splash
 	dy := max((Rows-MinRows)/2, 0) // a taller screen: everything a little lower
 	w := 65
-	if Terminal { // a computer's window is wide: the lines and the box take more of it
-		w = min(max(Cols-10, 65), 110)
-	}
 	lx := max((Cols-w)/2, 2)
 	// the logo: the name in big letters beside a 4x4 pad grid with a kick pattern lit
 	g.Logo(lx, 4+dy, "404tui", cAmber)
@@ -108,53 +140,8 @@ func (a *App) drawSplash(g Gfx) {
 	row(18, "project", fmt.Sprintf("%s   %d pads with samples", a.ProjectName(), used))
 	row(19, "folder", short2(filepath.Join(a.OutDir, cardFolder), w-15))
 	row(20, "autosave", a.autosaveSetting())
-	next := 21
-	if Terminal { // the unit: found, or not (it is looked for all the time)
-		g.Text(lx, next+dy, "unit", cDim, false)
-		if a.link != nil {
-			g.Text(lx+12, next+dy, fit("SP-404MKII found: "+a.link.Name(), w-15), cGood, true)
-		} else {
-			g.Text(lx+12, next+dy, "none found yet: offline", cDim, false)
-		}
-		next++
-	}
 	if Version != "" {
-		row(next, "version", Version)
-		next++
-	}
-	top := next + 1
-	if Terminal {
-		lines := []string{}
-		if a.link != nil {
-			last := "its folder's projects"
-			if n, ok := a.lastOffline(); ok {
-				last = fmt.Sprintf("PROJECT_%02d, the last one", n+1)
-			}
-			lines = append(lines, fit("UNIT FOUND: "+a.link.Name(), w-6), "u  work online: the unit's open project is loaded and edited live", "o  work offline: "+last)
-		} else if n, ok := a.lastOffline(); ok {
-			lines = append(lines, "NO UNIT: WORKING OFFLINE", fmt.Sprintf("o  opens PROJECT_%02d again, the one open last", n+1))
-		}
-		if s.restore != "" {
-			lines = append(lines, fit(fmt.Sprintf("AUTOSAVE FOUND: %s, saved at %s", filepath.Base(s.restore), s.when.Format("15:04")), w-6), "Enter restores it     any other key starts empty")
-		} else if len(lines) > 0 {
-			lines = append(lines, "any other key continues with the project that is open")
-		}
-		if len(lines) > 0 {
-			h := len(lines) + 2
-			g.Fill(lx, top+dy, w, h, cAmberD)
-			g.Frame(lx, top+dy, w, h, cAmber)
-			for i, l := range lines {
-				col, bold := cText, false
-				if i == 0 || strings.HasPrefix(l, "AUTOSAVE") {
-					col, bold = cWhite, true
-				}
-				g.Text(lx+2, top+1+i+dy, l, col, bold)
-			}
-		} else if a.clock().Sub(s.started)/(500*time.Millisecond)%2 == 0 {
-			g.Text(lx, top+dy, "press any key", cDim, false)
-		}
-		g.Text(Cols-2-len("moahbeatlab"), Rows-1, "moahbeatlab", cLine, false)
-		return
+		row(21, "version", Version)
 	}
 	if s.restore != "" {
 		g.Fill(lx, 23+dy, 65, 4, cAmberD)
