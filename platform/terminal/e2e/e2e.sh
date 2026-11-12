@@ -250,15 +250,17 @@ check "projects offline without a unit" "OFFLINE"
 check "the folder's projects are tiles" "empty"
 snap 27-unit
 lit t
-check "t offers online and offline" "Online"
+check "t offers online and offline" "Online or offline, and the offline folder..."
+choose "Online or offline"
+check "online and offline are offered" "PROJECTS: ONLINE OR OFFLINE"
 check "and the offline folder" "Choose the folder of the offline projects"
-key Escape
+key Escape; key Escape
 lit '?'
 check "the help page names the keys" "go to a screen"
 snap 28-help
 lit '?'
 key C-r
-checkre "Ctrl-R says why it cannot record" "no recorder|no audio input|cannot record"
+checkre "Ctrl-R says why it cannot record" "no recorder|no audio input|cannot record|sound server"
 
 uc UC18 "Typing a name: one line, no keyboard of letters; export of the bank; Space plays, x stops"
 begin 150 44
@@ -280,7 +282,7 @@ check "Ctrl-E asks where to export the bank" "EXPORT BANK A INTO THE FOLDER"
 snap 37-export-bank
 key Enter
 check "the bank is exported" "pads exported to"
-ls "$W"/exports/*/samples.json >/dev/null 2>&1 && ok "samples.json and the WAV files are in the folder" || bad "no export folder"
+ls "$W"/PROJECT_01_bank_A/samples.json >/dev/null 2>&1 && ok "samples.json and the WAV files are in the folder" || bad "no export folder"
 key Space
 sleep 0.3
 lit x
@@ -299,10 +301,10 @@ lit 3
 check "PROJECTS says it is offline" "OFFLINE"
 check "and that a unit is plugged in" "a unit is plugged in"
 lit t
+choose "Online or offline"
 check "t offers to go online" "Online: the projects of the unit"
 snap 39-online-offline
-key Enter
-check "online is chosen" "online: the projects of the unit"
+choose "Online: the projects of the unit"
 check "the simulated unit is found" "ONLINE"
 check "its projects are listed" "PROJECT_02"
 check "the level meter is in the panel while a unit is there" "level:"
@@ -310,37 +312,36 @@ snap 40b-projects-online
 lit a
 check "the menu of a unit project" "UNIT PROJECT 1"
 snap 29-unit-menu
-lit j j j
-lit a
+choose "Back up: write a copy into a folder"
 check "the backup asks for a folder" "BACK UP UNIT PROJECT"
 snap 29b-backup-folder
 key Enter
 check "a backup is made, and it says where" "backed up to"
-ls "$W"/backups/*/PADCONF.BIN >/dev/null 2>&1 && ok "the backup has the project's files" || bad "no backup folder"
-lit a j; lit a
+ls "$W"/PROJECT_01/PADCONF.BIN >/dev/null 2>&1 && ok "the backup has the project's files" || bad "no backup folder"
+lit a
+choose "Edit live"
 check "loading asks first when the editor has unsaved work" "NOT SAVED"
 lit a
 check "live editing starts" "LIVE 1"
 snap 30-live
 lit 4
 check "the files screen" "╭"
-lit y x
+lit t
 check "the places include the unit's card" "SD card"
 snap 31-places
 pick "SD card"; key Enter
 check "the card of the unit is listed" "IMPORT"
 snap 32-unit-card
 lit t
+choose "Copy, cut, rename, delete, tags"
 check "the files menu" "Paste here"
-lit k
 check "the tag entries are at the end of the menu" "Favourite"
 snap 33-files-menu-tags
-lit k k k k
-key Enter
+choose "Index SD:"
 check "indexing the card" "samples indexed"
 lit t
-lit k k k k
-key Enter
+choose "Copy, cut, rename, delete, tags"
+choose "Search by tags"
 check "search by tags asks for words" "SEARCH THE TAGS"
 for ch in k i c k; do lit $ch; done
 key Enter
