@@ -15,14 +15,22 @@ It is a Go port of [SparkyMK2](https://github.com/TuscanPL/SparkyMK2), whose aut
   → [the screens](docs/ui.md#the-screens)
 - **Sequencer:** the pattern as the unit's step grid, two bars side by side; notes with velocity, length, timing and pitch; tools that write and change notes (fill, Euclid, echo, ratchets, accents, LFO, chance, cycle, nudge, pitch...), pattern
   templates from House to Footwork, swap a track with another pad, undo on everything. → [tools.md](docs/tools.md)
+- **Pattern generator** (new in 0.2): whole banks of drum patterns from the kit's pad names, in 9 styles (house, tech house, techno, deep house...), with `sp404 generate` or the GENERATOR tab; a single pattern, fill or
+  variation is a trial you roll again, keep or throw away.
+- **Chords and progressions** (new in 0.2): Chord and Arp tools on a pad, 29 chord types, 24 named progressions in the sample's key, bounced onto free pads. → [pads.md](docs/pads.md)
+- **MIDI files** (new in 0.2): a `.mid` file becomes a pattern (melody or General MIDI drums), and a pattern becomes a `.mid` file. → [midi.md](docs/midi.md)
 - **Slicer:** cut by hand, at the onsets, in equal parts, at random, on the grid; reorder, mangle, roll; slices to pads with a pattern under them.
 - **Files and projects:** a ranger-style file browser with search, favourites, tags and an index of the unit's card; offline projects in a folder, the unit's 16 projects as tiles; back up, restore, send, edit live.
-- **Record a set:** `Ctrl-R` records the unit's audio (24-bit, 48 kHz) with an event log of what the unit did (pads, knobs, clock, status).
+- **Record a set:** `Ctrl-R` records the unit's audio (24-bit, 48 kHz) with an event log of what the unit did (pads, knobs, clock, status). `Ctrl-T` (new in 0.2) records a terminal cast: the keys and the
+  screen of the program, replayed with the keys as caps.
 - **Replay and video:** play a recording back as a picture of the unit, caption it, add chapters, cuts and a camera, and render an MP4 for YouTube, Instagram and TikTok (wide or vertical). → [replay.md](docs/replay.md)
 - **On a phone or a laptop (`sp404 serve`):** the pattern, slicer and pad tools in a browser, on the project that is on the unit, with a trial you keep, a real waveform for slicing, and live editing of the unit. → [docs/web.md](docs/web.md)
 - **Perform (experimental):** a stage dashboard, pad codes, the Faderfox EC4 map, and a phone page that also runs without any program, over Web MIDI, at <https://moahbeatlab.github.io/404tui/> ([docs/web.md](docs/web.md)). → [`docs/`](docs/README.md)
 
-## Status: v0.1
+## Status: v0.2
+
+The latest release is [v0.2.0](https://github.com/moahbeatlab/404tui/releases/tag/v0.2.0) (2026-11-11): the pattern generator, chords and progressions, MIDI files in and out, and terminal casts. Builds for
+Linux, macOS and Windows are on the [releases page](https://github.com/moahbeatlab/404tui/releases); what changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 
 - **Checked against a real SP-404MKII:** reading the unit's project (pads and patterns), polling its status, MIDI input (pad notes, clock, start/stop), recording its USB audio, pressing a pad over USB, setting a pad's
   level (which is how the program mutes) and switching the pattern with a Program Change. What the unit does and does not tell the program: [docs/unit-messages.md](docs/unit-messages.md).
@@ -80,6 +88,7 @@ Keys are vim-style (`h j k l`, `g`/`G`), `y` is the shift, `?` lists every key. 
 | Command | What it does |
 | --- | --- |
 | `sp404` | the program (also `sp404 menu`) |
+| `sp404 generate <project> -mode … -style …` | write a bank of drum patterns into a project (modes family, random, layers, drift, arc, fills) |
 | `sp404 serve` | Perform and the Tools in a browser on a phone, tablet or laptop, served on the network ([docs/web.md](docs/web.md)) |
 | `sp404 replay take.wav` | the replay of a recording in the browser, with the editor ([docs/replay.md](docs/replay.md)) |
 | `sp404 replay render take.wav -o take.mp4` | the video (`-format vertical` for shorts and reels) |
@@ -118,7 +127,7 @@ the handheld, installing and building ([install.md](docs/install.md)), the earli
 
     make                    # ./sp404 for this computer
     make dist               # every platform, into dist/
-    make dist VERSION=0.1   # stamp a version into the binaries
+    make dist VERSION=0.2.0 # stamp a version into the binaries
     make handheld-card      # the R36S's program and launcher, in dist/handheld
 
 Linux and Windows build without cgo from any computer. The macOS binaries need cgo (the serial port library asks IOKit for the USB ports), so `make macos` runs on a Mac. MIDI input is in every release;
