@@ -566,7 +566,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
 ## PROJECTS
 
-On a computer: the 16 projects of the unit when one is plugged in (online), else those of a folder on this computer (offline). The program looks for the unit all the time, and the start screen offers `u` online and `o` offline (the project open last). `a` opens a project's menu, `t` chooses online or offline and the offline folder. On the handheld this screen is called UNIT.
+On a computer: the 16 projects of the unit when one is plugged in (online), else those of a folder on this computer (offline). The program looks for the unit all the time, and the start screen (the launcher) offers `u` online, `o` offline (the project open last), `f` a folder and `1`-`4` the projects opened last. `a` opens a project's menu, `t` chooses online or offline and the offline folder. On the handheld this screen is called UNIT.
 
 **Keys on a computer:** `a` project menu · `hjkl` choose · `Esc` back · `o` open from a folder · `t` project menu · `g hl` screen (1-6) · `s x` record
 

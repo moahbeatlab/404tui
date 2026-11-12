@@ -40,6 +40,23 @@ func Image(cells [][]Cell) *image.RGBA {
 				}
 			case strings.ContainsRune("│─━╭╮╰╯╎●┆", c.R):
 				drawLine(img, x0, y0, c)
+			case c.R == '░' || c.R == '▒' || c.R == '▓': // shades: a dot pattern, a quarter, half or three quarters of the cell
+				for y := 0; y < cellH; y++ {
+					for x := 0; x < cellW; x++ {
+						on := false
+						switch c.R {
+						case '░':
+							on = y%2 == 0 && (x+y)%4 == 0
+						case '▒':
+							on = (x+y)%2 == 0
+						case '▓':
+							on = (x+y)%2 == 0 || y%2 == 0
+						}
+						if on {
+							img.SetRGBA(x0+x, y0+y, c.Fg)
+						}
+					}
+				}
 			default:
 				if m, ok := shapeOf[c.R]; ok {
 					for y := 0; y < cellH; y++ {

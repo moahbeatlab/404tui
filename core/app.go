@@ -811,7 +811,7 @@ func (a *App) selShifted(k Key) {
 
 // OpenMenu is Enter of a keyboard: the settings of the slice or of the note under the cursor (on a pad A does it). It says whether it did.
 func (a *App) OpenMenu() bool {
-	if a.menu != nil || a.prompt != nil || a.kb != nil || a.pp != nil || a.picker != nil {
+	if a.splash != nil || a.menu != nil || a.prompt != nil || a.kb != nil || a.pp != nil || a.picker != nil {
 		return false
 	}
 	switch {
@@ -1465,6 +1465,7 @@ func (a *App) loadProject(e entry) {
 			files++
 		}
 	}
+	a.RememberProject(dir)
 	a.say(fmt.Sprintf("loaded %s: %d pads with samples", e.name, files), false)
 	a.go_(Pads)
 }

@@ -154,9 +154,10 @@ also has SAVE, PERF and LOOP; on a computer the writing of the project is in CON
 
 ## Online and offline
 
-The program looks for the SP-404MKII all the time (a USB cable, nothing to set up). The **start screen** says whether it found one:
-`u` works online (PROJECTS shows the unit's projects), `o` works offline and opens the project that was open last offline; any other key
-goes on with the project that is open. With no unit it says so and works offline. On PROJECTS, `t` switches between the two, and
+The program looks for the SP-404MKII all the time (a USB cable, nothing to set up). The **start screen** is a launcher with a key for each
+way in: `Enter` goes on with the project that is open (or the one opened last, or restores an autosave), `u` works online (PROJECTS shows
+the unit's projects), `o` works offline and opens the project that was open last offline, `f` opens a project from a folder, and `1`-`4`
+open the projects opened last ([projects.md](projects.md#online-and-offline)). With no unit the `u` door says so. On PROJECTS, `t` switches between the two, and
 chooses the folder of the offline projects. **While a unit is plugged in the panel has a level meter** (left and right, the highest peak
 held for a moment, and a CLIP light), so the volume can be watched; it listens to the unit's USB audio itself (a Mac, Linux), else with `ffmpeg` or `sox`. Under the bars, in a window of 36 rows or more, is a **spectrum** (64 bands from 30 Hz to 18 kHz, falling slowly).
 

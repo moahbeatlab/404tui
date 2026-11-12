@@ -136,7 +136,9 @@ on hardware too. Patterns are always 4 bars (other lengths are a guess).
   screen shows the interval and the last lines of the log (also in logs.log); the footer says how long ago it was.
 - **Splash** (about 2.5 s, any key skips it): the logo and a dashboard (project, samples folder, card, autosave, version). When an
   autosave of an earlier session is there and nothing is open, it stays until a key: **A restores it**, any other key starts
-  empty. A restored project counts as not saved: SAVE writes it.
+  empty. A restored project counts as not saved: SAVE writes it. On a computer the splash is the **launcher** (launcher.go): the
+  name in pixel letters with a shadow, four doors (Enter continue or restore, `u` online, `o` offline, `f` a folder) and the projects opened last
+  (`1`-`4`, kept in settings as `recent`); it waits for a key.
 
 ## Actions: pads and patterns (sixth round)
 
