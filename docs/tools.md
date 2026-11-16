@@ -936,6 +936,12 @@ The program's settings; on a computer the writing of the project (what SAVE does
 
 - `Colour theme of the terminal` — left right change
 
+*Record Notes From Another Device (Seq Menu)*
+
+- `Device: port with this in its name` — A edits
+- `Its channels` — A edits
+- `Its drums come on channel` — A edits
+
 *Debug*
 
 - `Debug log` — left right change

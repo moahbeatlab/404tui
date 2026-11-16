@@ -377,7 +377,9 @@ func (a *App) seqMenu() {
 	run("Choose a pattern (bank, then pattern)...", a.openPicker)
 	run("New pattern from a template...", a.templatesMenu)
 	run("Export this pattern as a MIDI file", a.exportMIDI)
-	run("Record notes from another device (MC-101)...", a.recordExtMenu)
+	if Terminal { // the handheld has no MIDI
+		run("Record notes from another device (MC-101)...", a.recordExtMenu)
+	}
 	run(variationLabel, a.variationMenu)
 	set("Loop only the bar in focus (Y+A)", []string{"off", "on"}, b2i(a.freeze), func(v int) {
 		if (v == 1) != a.freeze {
