@@ -386,6 +386,19 @@ func (a *App) cfgItems() []cfgItem {
 		cfgItem{label: "Pad volumes channel", value: func(a *App) string { return chanText(a.levelChan()) }, hint: "A edits",
 			edit: promptSetting("MIDI channel of the pad volumes", "1 to 16, or off", func(a *App) string { return chanText(a.levelChan()) }, func(a *App, s string) { a.applyChannel(&a.set.MidiLevelChan, s) })},
 		cfgItem{label: "MIDI", value: func(a *App) string { return a.midiLine() }},
+		cfgItem{head: "RECORD NOTES FROM ANOTHER DEVICE (SEQ MENU)"},
+		cfgItem{label: "Device: port with this in its name", value: func(a *App) string { return a.extPort() }, hint: "A edits",
+			edit: promptSetting("the device's MIDI port", "a part of its name, e.g. mc-101 or mc-707", func(a *App) string { return a.extPort() }, func(a *App, s string) { a.set.ExtPort = strings.ToLower(strings.TrimSpace(s)) })},
+		cfgItem{label: "Its channels", value: func(a *App) string { return a.extChansText() }, hint: "A edits",
+			edit: promptSetting("channels to record", "11-14, or 11 12 13", func(a *App) string { return a.extChansText() }, func(a *App, s string) {
+				if _, err := parseChans(s); err != nil {
+					a.say(err.Error(), true)
+					return
+				}
+				a.set.ExtChans = strings.TrimSpace(s)
+			})},
+		cfgItem{label: "Its drums come on channel", value: func(a *App) string { return chanText(a.extDrums()) }, hint: "A edits",
+			edit: promptSetting("channel of the drums", "1 to 16, or off", func(a *App) string { return chanText(a.extDrums()) }, func(a *App, s string) { a.applyChannel(&a.set.ExtDrums, s) })},
 		cfgItem{head: "COLOURS"},
 		cfgItem{label: "Colour theme of the terminal", value: func(a *App) string { return textThemes[a.set.Theme%len(textThemes)].name }, hint: "< > change",
 			change: func(a *App, by int) {

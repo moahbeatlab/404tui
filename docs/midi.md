@@ -65,6 +65,30 @@ On the page, **MIDI FILE OUT** saves the pattern that is in front. The file has 
 A plain note is the note of the unit's MIDI chart for its pad (36 for the first pad of a bank) on channel 10; a chromatic note is 60 plus its
 semitones on channel 1. Read back with this page, the first is drums and the second a melody with the root 60.
 
+## Notes from another device (an MC-101)
+
+A groovebox on USB plays its clips and the program records the notes it sends: SEQ, the pattern menu (`t`), **Record notes from another
+device (MC-101)...**. The form asks for the length (1, 2, 4, 8 or 16 bars) and whether the starts snap to 1/16 or 1/32; **Start** sends the
+device a Start and then a MIDI clock at the pattern's tempo, so it plays at that tempo from the beginning of its clips. The title of the form
+counts the bars and the notes; after the last bar the program sends Stop. **Stop now and keep the notes** ends it early, Esc throws it away.
+
+The take is saved as `take-<date>-<time>.mid` in the folder of the exports, with a track for each channel that played, and opens in the form
+of a MIDI file (above): choose the track, the pad and the pattern, hear it, import it. The drums channel is written as channel 10, so it
+comes in as drums (a pad for each drum, by the names of the samples); the others come in as melodies. To take another track of the same
+take, open the file again in FILES (`a`); Esc in the form goes back to the recording form for the next take.
+
+CONFIG, **RECORD NOTES FROM ANOTHER DEVICE**: the port (a part of its name, `mc-101`), the channels (`11-14`) and the drums channel (`11`).
+
+On the MC-101:
+
+- **Tx USB** on for each track that should be recorded (SHIFT + TRACK SEL, the track's settings; [Roland: the MIDI phrase of the clip is not
+  output](https://support.roland.com/hc/en-us/articles/360039735691-MC-101-The-MIDI-phrase-of-the-clip-is-not-output)), and **Tx Note** on.
+- The track channels 11 to 14 (MENU, SYSTEM, MIDI).
+- The sync set so that it follows the clock that comes over USB (AUTO or USB), or Start does nothing.
+
+Not tried on an MC-101 yet: whether it starts on the Start from USB, which channel its clip notes come on, and how late they come (a few
+milliseconds are expected; snap to 1/16 takes them back onto the grid).
+
 ## Unverified on the unit
 
 The import writes patterns the same way the pattern templates do (the same records, the same trailer), and the notes with a pitch are written as the

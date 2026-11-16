@@ -4,6 +4,8 @@
 
 - **A launcher at the start** (terminal): the name in pixel letters with a shadow, four doors with a key each (`Enter` continue or restore the autosave, `u` the unit online, `o` the offline card folder, `f` a folder) and the projects opened last (`1`-`4`, with pads, tempo and when). It waits for a key instead of closing after a few seconds. The handheld's start screen is unchanged. → [docs/projects.md](docs/projects.md)
 
+- **Record notes from another device** (SEQ menu): the program sends an MC-101 (or any device on USB) a Start and a clock at the pattern's tempo, records the notes of its channels (11-14 by default) for 1 to 16 bars, sends Stop, saves the take as a `.mid` and opens it in the MIDI import form. → [docs/midi.md](docs/midi.md)
+
 ## 0.2.0 (2026-11-11)
 
 Patterns that write themselves, chords and progressions from one sample, MIDI files and terminal casts.

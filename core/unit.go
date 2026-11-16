@@ -87,6 +87,7 @@ func (a *App) Tick() {
 	a.eventLogTick()
 	a.recordingTick()
 	a.midiTick()
+	a.extTick()
 	a.levelTick()
 	// the handheld looks for the unit while UNIT is in front; a computer looks all the time (slowly), for PROJECTS to show
 	wait := 2 * time.Second

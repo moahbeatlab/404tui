@@ -225,6 +225,7 @@ type App struct {
 	clk               perform.Clock    // the unit's MIDI clock
 	midi              *midiLink        // the MIDI input that is open
 	midiTry           time.Time        // when it was last tried to open it
+	ext               *extRun          // a take of notes from another device (an MC-101), while it runs
 	midiErr           string
 	codes             padCode     // the pads hit in turn
 	liveBack          Screen      // where the live mode came from

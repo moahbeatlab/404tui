@@ -40,6 +40,11 @@ type settings struct {
 	MidiChan      string       `json:"midi_chan,omitempty"`
 	MidiMap       [4]string    `json:"midi_map,omitempty"`
 	MidiLevelChan string       `json:"midi_level_chan,omitempty"`
+	ExtPort       string       `json:"ext_port,omitempty"`  // recording notes from another device: its port (part of the name)
+	ExtChans      string       `json:"ext_chans,omitempty"` // its channels, "11-14"
+	ExtDrums      string       `json:"ext_drums,omitempty"` // the channel of its drums, or off
+	ExtBars       int          `json:"ext_bars,omitempty"`
+	ExtSnap       int          `json:"ext_snap,omitempty"` // 0, 16 or 32
 	BusNotes      [2]string    `json:"bus_notes,omitempty"`
 	LooperBank    int          `json:"looper_bank,omitempty"`
 	GenKit        genKit       `json:"gen_kit,omitempty"`     // the pads chosen in Generator kit
