@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Handout** (`sp404 handout <project>`): the project as an EPUB for an e-reader (made for a PocketBook InkPad 3): every bank at a glance with its tempo, pads and patterns, then every pattern as step grids, a bar to a grid (accents black, softer notes grey, held notes as a bar, chromatic notes with their semitones). Keys, bank lines and pattern names come from a `handout.json` beside the project.
 - **A launcher at the start** (terminal): the name in pixel letters with a shadow, four doors with a key each (`Enter` continue or restore the autosave, `u` the unit online, `o` the offline card folder, `f` a folder) and the projects opened last (`1`-`4`, with pads, tempo and when). It waits for a key instead of closing after a few seconds. The handheld's start screen is unchanged. → [docs/projects.md](docs/projects.md)
 
 ## 0.2.0 (2026-11-11)

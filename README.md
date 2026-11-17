@@ -89,6 +89,7 @@ Keys are vim-style (`h j k l`, `g`/`G`), `y` is the shift, `?` lists every key. 
 | --- | --- |
 | `sp404` | the program (also `sp404 menu`) |
 | `sp404 generate <project> -mode … -style …` | write a bank of drum patterns into a project (modes family, random, layers, drift, arc, fills) |
+| `sp404 handout <project> -o set.epub` | the project as an EPUB for an e-reader: every bank at a glance, every pattern as step grids, a bar to a grid; keys and names from `handout.json` in the project |
 | `sp404 serve` | Perform and the Tools in a browser on a phone, tablet or laptop, served on the network ([docs/web.md](docs/web.md)) |
 | `sp404 replay take.wav` | the replay of a recording in the browser, with the editor ([docs/replay.md](docs/replay.md)) |
 | `sp404 replay render take.wav -o take.mp4` | the video (`-format vertical` for shorts and reels) |
