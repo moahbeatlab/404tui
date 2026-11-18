@@ -1052,6 +1052,36 @@ func (a *App) SeqPattern(d int) {
 	a.say(fmt.Sprintf("pattern %s: %s", a.label(a.pat-1), what), false)
 }
 
+// SeqCopy is c of a keyboard on SEQ: the pattern goes into the next empty slot, and the view goes to the copy (what plays goes on).
+func (a *App) SeqCopy() {
+	if a.scr != Seq || a.Modal() || a.prompt != nil || a.aHeld {
+		return
+	}
+	a.CancelShift()
+	if _, ok := a.doc(); !ok {
+		a.say("pattern "+a.label(a.pat-1)+" is empty: nothing to copy", true)
+		return
+	}
+	from, to := a.pat, a.freePattern()
+	if to < 0 {
+		a.say("all 160 patterns are used", true)
+		return
+	}
+	pre := a.lab.Snapshot()
+	if err := a.lab.CopyPattern(from, to); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	a.commitUndo(pre, A, 0)
+	a.refresh()
+	a.setPattern(to)
+	msg := fmt.Sprintf("%s copied to %s (u takes it back)", a.label(from-1), a.label(to-1))
+	if a.seqOn && a.playPat != 0 && a.playPat != a.pat {
+		msg += ": n plays it next"
+	}
+	a.say(msg, false)
+}
+
 // SeqAddTrack is . of a keyboard on SEQ: choose a pad for a new track, starting in the bank of the pattern.
 func (a *App) SeqAddTrack() {
 	if a.scr != Seq || a.Modal() || a.prompt != nil || a.aHeld {

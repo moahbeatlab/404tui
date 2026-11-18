@@ -4917,3 +4917,18 @@ func TestTheCastsAudioSwitchesPatternsAtTheEndOfTheRound(t *testing.T) {
 		t.Fatalf("the waiting sound takes over at the end of the round: %v", left)
 	}
 }
+
+func TestCCopiesThePatternIntoTheNextEmptySlot(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R A")    // a note in pattern 1
+	a.lab.NewPattern(2, 1) // 2 is used, 3 is free
+	a.SeqCopy()
+	if a.pat != 3 || len(a.trackNotes(a.rowPad())) != 1 || !strings.Contains(a.msg, "copied to A3") {
+		t.Fatalf("c copies into the next empty slot and goes to it: %d (%s)", a.pat, a.msg)
+	}
+	keys(t, a, "Y+{")
+	if _, err := a.lab.Pattern(3); err == nil {
+		t.Fatal("undo takes the copy back")
+	}
+}

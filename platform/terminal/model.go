@@ -247,6 +247,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.SeqQueue()
 		}
 		return
+	case "c": // SEQ: copy the pattern into the next empty slot
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			m.app.SeqCopy()
+		}
+		return
 	case "d": // SEQ: clear the track
 		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
 			m.app.SeqClearTrack()

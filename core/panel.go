@@ -78,7 +78,7 @@ func (a *App) hints() (plain, shift []hint) {
 		plain = out
 	}
 	if Terminal && a.scr == Seq && !a.aHeld && !a.mixer && !a.Modal() {
-		plain = append(append([]hint{}, plain...), hint{"HJKL", "pattern"}, hint{"n", "play it next"}, hint{"m M", "mute / mixer"}, hint{"s", "solo track"}, hint{"f", "freeze view"}, hint{"z", "1 bar / more"})
+		plain = append(append([]hint{}, plain...), hint{"HJKL", "pattern"}, hint{"n", "play it next"}, hint{"c", "copy pattern"}, hint{"m M", "mute / mixer"}, hint{"s", "solo track"}, hint{"f", "freeze view"}, hint{"z", "1 bar / more"})
 		sh := make([]hint, 0, len(shift)) // s is solo here: the record key is Ctrl-R
 		for _, h := range shift {
 			if h.key != "Sel+X" && h.what != "add track" && h.what != "pattern +-" { // . adds a track, HJKL the pattern

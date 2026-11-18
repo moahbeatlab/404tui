@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- SEQ: `c` copies the pattern into the next empty slot and shows the copy (while another plays, `n` plays it next).
 - SEQ: `n` plays the pattern in view next: while another plays (on the computer) it takes over at the end of the round, seamlessly, until `Space` stops it. Switching the view renders nothing, so going through the patterns while one plays is quick. Edits of the waiting pattern go into it; `n` on the playing one cancels the switch; an empty pattern leaves what plays alone. Terminal casts record the switch as it is heard.
 - SEQ (terminal): `H J K L` switch the pattern (`H L` the one before and after, `K J` a row of tiles up and down) without `p`; `.` adds a track, the pad dialog starting on the bank of the pattern (mute and solo stay on `m` and `s`); `d` removes the track from the pattern, in the grid and the mixer (`u` undoes it). PADS: `n` renames the pad (`r` still does).
 - **SEQ mixer** (`M`, terminal): the pattern's tracks as channel strips in place of the grid: level fader, pan, bus (BUS 1 / BUS 2 / none: an EQ on the unit is a bus effect), mute and solo, notes. `h l` strip, `j k` level, `[ ]` pan, `b` bus, `x` hear, `Space` play, `M` or `Esc` back. Changes are the pad's settings (undo, sent live) and heard at once while the pattern plays. The pattern played on the computer now follows each pad's level and pan (it only used the velocities before). → [docs/sequencer.md](docs/sequencer.md)
