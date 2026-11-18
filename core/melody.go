@@ -55,6 +55,7 @@ var melAccents = []string{"none", "on the offbeats", "on the beats", "here and t
 // melodySet is the dialog's settings, kept between visits; key is -1 until the bank's key is read.
 type melodySet struct {
 	key, mode, role, style, prog, rng, density, ghost, accent int
+	out                                                       [5]int // per role: where it plays, an index of synthOutNames
 	init                                                      bool
 }
 
@@ -64,7 +65,7 @@ func (a *App) melodyMenu() {
 	bank := (a.pat - 1) / 16
 	key, minor, why := a.bankKey(bank)
 	if !st.init {
-		*st = melodySet{density: 1, ghost: 1, accent: 1, init: true}
+		*st = melodySet{density: 1, ghost: 1, accent: 1, out: [5]int{1, 2, 2, 3, 3}, init: true} // MC-101: bass 11, lead 12, pads 13
 		if !minor {
 			st.mode = 1
 		}
@@ -108,6 +109,7 @@ func (a *App) melodyMenu() {
 		val("Density", melDensities, st.density, func(v int) { st.density = v }),
 		val("Ghost notes", melGhosts, st.ghost, func(v int) { st.ghost = v }),
 		val("Accents", melAccents, st.accent, func(v int) { st.accent = v }),
+		val("Play on", synthOutNames, st.out[st.role], func(v int) { st.out[st.role] = v }),
 	}, "Write the melody", func() {
 		d, err := a.ensurePattern()
 		if err != nil {
@@ -117,13 +119,37 @@ func (a *App) melodyMenu() {
 		bars := max(int(d.Length)/(16*stepTicks), 1)
 		pn, _ := a.sampleNote(pad)
 		notes := melodyNotes(pad, bars, *st, pn, a.tt.seed)
-		a.finishTrack(pad, notes, fmt.Sprintf("%s %s in %s %s", melStyles[st.style], melRoles[st.role], sharpNames[st.key], melModes[st.mode].name))
+		what := fmt.Sprintf("%s %s in %s %s", melStyles[st.style], melRoles[st.role], sharpNames[st.key], melModes[st.mode].name)
+		a.finishTrack(pad, notes, what)
+		if o := st.out[st.role]; o > 0 {
+			k := ((st.key-pn)%12 + 12) % 12
+			if k > 6 {
+				k -= 12
+			}
+			if a.synthPlay(pad, a.trackNotes(pad), 10+o, synthTonic(st.role, st.key), k) {
+				a.say(what+" "+synthSaid(10+o, a.midiOutName), false)
+			}
+		} else if a.synth != nil {
+			a.synthStop()
+		}
 	})
-	if why != "" {
-		a.say(fmt.Sprintf("the bank is in %s %s (%s)", sharpNames[key], map[bool]string{true: "minor", false: "major"}[minor], why), false)
-	} else {
-		a.say("no key found in the bank's names or sounds: C minor, change it in Key", false)
+	if m := a.menu; m != nil { // the synth stops with the dialog
+		orig := m.onClose
+		m.onClose = func() {
+			a.synthStop()
+			if orig != nil {
+				orig()
+			}
+		}
 	}
+	said := "no key found in the bank's names or sounds: C minor, change it in Key"
+	if why != "" {
+		said = fmt.Sprintf("the bank is in %s %s (%s)", sharpNames[key], map[bool]string{true: "minor", false: "major"}[minor], why)
+	}
+	if a.synth != nil {
+		said += "; playing " + synthSaid(a.synth.ch, a.midiOutName)
+	}
+	a.say(said, false)
 }
 
 // melRoleGuess is the role a pad's name points to (a bass, a lead, a pad...), else the lead.

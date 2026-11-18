@@ -1224,6 +1224,9 @@ func (a *App) trackMode(pad int) int { return a.trk[a.pat][pad] }
 
 // audible is whether the pad's notes play: with any solo only the solos do, otherwise all but the muted ones.
 func (a *App) audible(pad int) bool {
+	if a.synthPad == pad+1 { // the synth plays it
+		return false
+	}
 	m := a.trk[a.pat]
 	if len(m) == 0 {
 		return true

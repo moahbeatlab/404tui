@@ -15,6 +15,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -5013,5 +5014,66 @@ func TestTheMelodyToolReadsTheBanksKeyAndWritesATrial(t *testing.T) {
 	}
 	if len(a.trackNotes(pad)) < 3 || pitched == 0 {
 		t.Fatalf("the trial writes notes at pitches: %d notes, %d pitched", len(a.trackNotes(pad)), pitched)
+	}
+}
+
+type recOut struct {
+	mu   sync.Mutex
+	sent [][]byte
+}
+
+func (r *recOut) Send(m []byte) error {
+	r.mu.Lock()
+	r.sent = append(r.sent, append([]byte(nil), m...))
+	r.mu.Unlock()
+	return nil
+}
+func (r *recOut) Close() {}
+func (r *recOut) has(status byte) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, m := range r.sent {
+		if m[0] == status {
+			return true
+		}
+	}
+	return false
+}
+
+type fakeMIDIOut struct {
+	fakeMIDI
+	out *recOut
+}
+
+func (f fakeMIDIOut) OpenOut(string) (midiin.Out, string, error) { return f.out, "SP-404MKII", nil }
+
+func TestTheMelodyPlaysOnTheSynthBehindTheUnit(t *testing.T) {
+	a, _ := newApp(t)
+	rec := &recOut{}
+	a.SetPlatform(Platform{Name: "test", MIDI: fakeMIDIOut{fakeMIDI{ch: make(chan midiin.Event)}, rec}})
+	keys(t, a, kit)
+	keys(t, a, "Y+R A")
+	pad := a.rowPad()
+	a.info.Pads[pad].Name = "01_Bass1_125_Gs_"
+	a.mel = melodySet{}
+	a.melodyMenu() // a bass: MIDI channel 11
+	if a.mel.role != 0 || a.mel.out[0] != 1 || a.synth == nil || !strings.Contains(a.msg, "MIDI channel 11") {
+		t.Fatalf("a bass plays on channel 11: role %d, out %d (%s)", a.mel.role, a.mel.out[0], a.msg)
+	}
+	if a.audible(pad) {
+		t.Fatal("the pad is quiet on the computer while the synth plays it")
+	}
+	a.Tick() // the loop on the computer has started: the synth follows it
+	deadline := time.Now().Add(3 * time.Second)
+	for !rec.has(0x9A) && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+		a.Tick()
+	}
+	if !rec.has(0x9A) {
+		t.Fatal("note ons on channel 11 are sent while the pattern loops")
+	}
+	keys(t, a, "B") // the dialog closes
+	if a.synth != nil || !a.audible(pad) || !rec.has(0xBA) {
+		t.Fatal("closing the dialog stops the synth (All Notes Off) and the pad is heard again")
 	}
 }

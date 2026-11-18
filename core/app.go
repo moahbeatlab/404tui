@@ -27,6 +27,7 @@ import (
 
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
+	"github.com/moahbeatlab/404tui/midiin"
 )
 
 // Key is one of the eight keys, and the two shoulder buttons for paging.
@@ -191,8 +192,12 @@ type App struct {
 	genRand           *rand.Rand      // the dice of the generator's seeds (made from the clock when first needed)
 	trialUndo         func(redo bool) // undo and redo inside a dialog that rolls patterns: its rolls (nil: none is open)
 	tt2               trackState2
-	tt                trackState  // the settings of the track tools
-	mel               melodySet   // the settings of the melody tool
+	tt                trackState // the settings of the track tools
+	mel               melodySet  // the settings of the melody tool
+	synth             *synthOut  // a track sent as MIDI notes to the synth behind the unit, while the pattern loops
+	synthPad          int        // the pad that is played by the synth, plus one: quiet on the computer meanwhile
+	midiOut           midiin.Out // the unit's MIDI output, open once it was needed
+	midiOutName       string
 	scopeRow          bool        // the timing tools act on the row under the cursor only, not on every pad
 	undo              []undoEntry // the project before each change, newest last
 	redo              []undoEntry

@@ -66,6 +66,7 @@ func (j *job) state() (done, total int, name string, err error, finished bool) {
 func (a *App) Tick() {
 	a.splashTick()
 	a.advanceQueue()
+	a.synthSync()
 	if a.connCh != nil {
 		select {
 		case l := <-a.connCh:
