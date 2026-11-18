@@ -301,8 +301,8 @@ func (a *App) setPattern(n int) {
 	a.pat = (n+159)%160 + 1
 	a.step = min(a.step, a.steps()-1)
 	a.autoRows()
-	if a.seqOn {
-		a.followPattern()
+	if a.seqOn && a.playPat == 0 { // a loop that is not a pattern of its own follows the view; a pattern goes on (n queues this one)
+		a.replay()
 	}
 }
 
@@ -689,16 +689,25 @@ func (a *App) renderPat(p int) (formats.Sample, bool) {
 	return a.render()
 }
 
-// followPattern: the view went to another pattern while one plays. The one in view takes over at the end of the round, as the
-// unit does it (Space stops it all); back to the one that plays, nothing waits any more; an empty one leaves what plays alone.
-func (a *App) followPattern() {
+// SeqQueue is n of a keyboard on SEQ: the pattern in view plays next. While another plays it takes over at the end of the round,
+// as the unit does it (Space stops it all); on the one that plays, nothing waits any more; an empty one leaves what plays alone.
+// Nothing playing: it starts. Switching the view does not render anything, so going through the patterns is quick.
+func (a *App) SeqQueue() {
+	if a.scr != Seq || a.Modal() || a.prompt != nil || a.aHeld {
+		return
+	}
+	a.CancelShift()
 	a.advanceQueue()
-	if a.playPat == 0 { // a loop that is not a pattern of its own
-		a.replay()
+	if !a.seqOn {
+		a.startLoop()
+		return
+	}
+	if a.playPat == 0 {
 		return
 	}
 	nx, ok := a.Audio.(nexter)
 	if !ok {
+		a.say("this audio output cannot queue a pattern: Space stops, Space plays this one", true)
 		return
 	}
 	if a.pat == a.playPat {
@@ -707,8 +716,8 @@ func (a *App) followPattern() {
 				nx.NextLoop(s)
 			}
 			a.queued = 0
-			a.say(fmt.Sprintf("%s goes on playing", a.label(a.pat-1)), false)
 		}
+		a.say(fmt.Sprintf("%s goes on playing", a.label(a.pat-1)), false)
 		return
 	}
 	s, ok := a.render()

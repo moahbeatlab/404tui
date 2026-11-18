@@ -4864,6 +4864,10 @@ func TestAnotherPatternTakesOverAtTheEndOfTheRound(t *testing.T) {
 	round := a.loopDur
 	now = now.Add(round + round/4) // in the second round
 	a.SeqPattern(1)
+	if a.queued != 0 || au.Next != 0 || !strings.Contains(a.msg, "n plays this one") {
+		t.Fatalf("switching the view queues nothing (quick): %d (%s)", a.queued, a.msg)
+	}
+	a.SeqQueue()
 	if a.pat != 2 || a.playPat != 1 || a.queued != 2 || au.Next != 1 || !strings.Contains(a.msg, "plays after this round") {
 		t.Fatalf("the next pattern waits for the end of the round: view %d, plays %d, queued %d, next %d (%s)", a.pat, a.playPat, a.queued, au.Next, a.msg)
 	}
@@ -4881,11 +4885,14 @@ func TestAnotherPatternTakesOverAtTheEndOfTheRound(t *testing.T) {
 		t.Fatalf("at the end of the round pattern 2 plays, the playhead on its start: plays %d, step %d", a.playPat, a.playStep())
 	}
 	a.SeqPattern(-1) // pattern 1 waits; back to 2: nothing waits
+	a.SeqQueue()
 	a.SeqPattern(1)
+	a.SeqQueue()
 	if a.queued != 0 || !strings.Contains(a.msg, "goes on playing") {
 		t.Fatalf("back to the pattern that plays: %d (%s)", a.queued, a.msg)
 	}
 	a.SeqPattern(1) // pattern 3 is empty
+	a.SeqQueue()
 	if a.queued != 0 || a.playPat != 2 || !strings.Contains(a.msg, "is empty") {
 		t.Fatalf("an empty pattern leaves what plays: %d %d (%s)", a.queued, a.playPat, a.msg)
 	}

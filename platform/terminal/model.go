@@ -243,6 +243,9 @@ func (m *Model) key(msg tea.KeyMsg) {
 		if m.app.ScreenName() == "PADS" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
 			m.app.RenamePadKey()
 		}
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() { // SEQ: the pattern in view plays next
+			m.app.SeqQueue()
+		}
 		return
 	case "d": // SEQ: clear the track
 		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {

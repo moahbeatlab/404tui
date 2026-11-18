@@ -1037,17 +1037,19 @@ func (a *App) SeqPattern(d int) {
 		return
 	}
 	a.CancelShift()
-	said := a.msg
 	a.setPattern(a.pat + d)
 	a.row = min(a.row, max(len(a.rows)-1, 0))
-	if a.seqOn && a.msg != said { // setPattern has said what plays next
-		return
-	}
+	what := "empty"
 	if dc, ok := a.doc(); ok {
-		a.say(fmt.Sprintf("pattern %s: %d bars, %s", a.label(a.pat-1), dc.Bars, count(len(dc.Notes), "note")), false)
-	} else {
-		a.say(fmt.Sprintf("pattern %s: empty", a.label(a.pat-1)), false)
+		what = fmt.Sprintf("%d bars, %s", dc.Bars, count(len(dc.Notes), "note"))
 	}
+	switch {
+	case a.seqOn && a.queued == a.pat:
+		what += " · plays next"
+	case a.seqOn && a.playPat != 0 && a.pat != a.playPat:
+		what += fmt.Sprintf(" · %s plays: n plays this one after its round", a.label(a.playPat-1))
+	}
+	a.say(fmt.Sprintf("pattern %s: %s", a.label(a.pat-1), what), false)
 }
 
 // SeqAddTrack is . of a keyboard on SEQ: choose a pad for a new track, starting in the bank of the pattern.

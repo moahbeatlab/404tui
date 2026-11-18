@@ -78,7 +78,7 @@ func (a *App) hints() (plain, shift []hint) {
 		plain = out
 	}
 	if Terminal && a.scr == Seq && !a.aHeld && !a.mixer && !a.Modal() {
-		plain = append(append([]hint{}, plain...), hint{"HJKL", "pattern"}, hint{"m M", "mute / mixer"}, hint{"s", "solo track"}, hint{"f", "freeze view"}, hint{"z", "1 bar / more"})
+		plain = append(append([]hint{}, plain...), hint{"HJKL", "pattern"}, hint{"n", "play it next"}, hint{"m M", "mute / mixer"}, hint{"s", "solo track"}, hint{"f", "freeze view"}, hint{"z", "1 bar / more"})
 		sh := make([]hint, 0, len(shift)) // s is solo here: the record key is Ctrl-R
 		for _, h := range shift {
 			if h.key != "Sel+X" && h.what != "add track" && h.what != "pattern +-" { // . adds a track, HJKL the pattern
@@ -280,7 +280,7 @@ func (a *App) rawHints() (plain, shift []hint) {
 			play = hint{"X", "stop"}
 		}
 		if a.mixer { // the mixer in place of the grid (a computer's: the keys as they are)
-			return []hint{{"hl", "pad"}, {"jk", "level"}, {"[ ]", "pan"}, {"b", "bus"}, {"m", "mute"}, {"s", "solo"}, {"x", "hear pad"}, {".", "add track"}, {"d", "remove track"}, {"HJKL", "pattern"}, {"Space", map[bool]string{true: "stop", false: "play"}[a.seqOn]}, {"M Esc", "the grid"}}, nil
+			return []hint{{"hl", "pad"}, {"jk", "level"}, {"[ ]", "pan"}, {"b", "bus"}, {"m", "mute"}, {"s", "solo"}, {"x", "hear pad"}, {".", "add track"}, {"d", "remove track"}, {"HJKL", "pattern"}, {"n", "play it next"}, {"Space", map[bool]string{true: "stop", false: "play"}[a.seqOn]}, {"M Esc", "the grid"}}, nil
 		}
 		if a.patStrip { // the arrows are on the row of pattern boxes
 			return []hint{{"^v<>", "choose the pattern"}, {"L1 R1", "bank"}, play, {"A", "back to the grid"}}, nil
