@@ -270,6 +270,10 @@ type App struct {
 	castRun           *castRun            // the terminal cast that runs (Ctrl-T)
 	castLog           *perflog.Log        // the log the keys and the screen go to while a recording runs
 	playPat           int                 // the pattern that loops (1..160), 0 when none: the view can be on another pattern
+	loopDur           time.Duration       // how long a round of the loop that plays is
+	queued            int                 // the pattern that takes over at the end of the round (the view went to it), 0 when none
+	queuedAt          time.Time           // when it takes over
+	queuedDur         time.Duration       // and how long its round is
 	trk               map[int]map[int]int // SEQ: pattern -> pad -> mute/solo
 	freeze            bool                // SEQ: loop only the bar in focus
 	frozenPage        int
@@ -1033,8 +1037,12 @@ func (a *App) SeqPattern(d int) {
 		return
 	}
 	a.CancelShift()
+	said := a.msg
 	a.setPattern(a.pat + d)
 	a.row = min(a.row, max(len(a.rows)-1, 0))
+	if a.seqOn && a.msg != said { // setPattern has said what plays next
+		return
+	}
 	if dc, ok := a.doc(); ok {
 		a.say(fmt.Sprintf("pattern %s: %d bars, %s", a.label(a.pat-1), dc.Bars, count(len(dc.Notes), "note")), false)
 	} else {
@@ -1243,7 +1251,7 @@ func (a *App) padsKey(k Key) {
 }
 
 func (a *App) stop() {
-	a.playPat = 0
+	a.playPat, a.queued = 0, 0
 	a.placed = nil
 	if a.Audio != nil {
 		a.Audio.Stop()

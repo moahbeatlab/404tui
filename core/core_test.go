@@ -4843,3 +4843,70 @@ func TestDInTheMixerTakesTheStripAway(t *testing.T) {
 		t.Fatalf("undo brings the track back: %v", a.rows)
 	}
 }
+
+func TestAnotherPatternTakesOverAtTheEndOfTheRound(t *testing.T) {
+	a, _ := newApp(t)
+	au := &NullAudio{}
+	a.Audio = au
+	now := time.Unix(1000, 0)
+	a.Now = func() time.Time { return now }
+	keys(t, a, kit)
+	keys(t, a, "Y+R A") // SEQ, a note in pattern 1
+	if err := a.lab.NewPattern(2, 1); err != nil {
+		t.Fatal(err)
+	}
+	args, _ := json.Marshal(lab.PatternArgs{Pad: a.rowPad(), Tick: 0, Vel: 100, Len: 120})
+	a.lab.PatternOp(2, "insert", args)
+	a.togglePlay()
+	if !a.seqOn || a.playPat != 1 || a.loopDur <= 0 {
+		t.Fatalf("pattern 1 plays: %v %d %v", a.seqOn, a.playPat, a.loopDur)
+	}
+	round := a.loopDur
+	now = now.Add(round + round/4) // in the second round
+	a.SeqPattern(1)
+	if a.pat != 2 || a.playPat != 1 || a.queued != 2 || au.Next != 1 || !strings.Contains(a.msg, "plays after this round") {
+		t.Fatalf("the next pattern waits for the end of the round: view %d, plays %d, queued %d, next %d (%s)", a.pat, a.playPat, a.queued, au.Next, a.msg)
+	}
+	if !a.queuedAt.Equal(time.Unix(1000, 0).Add(2 * round)) {
+		t.Fatalf("it takes over at the end of the second round: %v", a.queuedAt.Sub(time.Unix(1000, 0)))
+	}
+	now = now.Add(round / 2)
+	a.Tick()
+	if a.playPat != 1 || a.playStep() != -1 {
+		t.Fatal("before the end of the round pattern 1 goes on")
+	}
+	now = a.queuedAt.Add(time.Millisecond)
+	a.Tick()
+	if a.playPat != 2 || a.queued != 0 || a.playStep() != 0 {
+		t.Fatalf("at the end of the round pattern 2 plays, the playhead on its start: plays %d, step %d", a.playPat, a.playStep())
+	}
+	a.SeqPattern(-1) // pattern 1 waits; back to 2: nothing waits
+	a.SeqPattern(1)
+	if a.queued != 0 || !strings.Contains(a.msg, "goes on playing") {
+		t.Fatalf("back to the pattern that plays: %d (%s)", a.queued, a.msg)
+	}
+	a.SeqPattern(1) // pattern 3 is empty
+	if a.queued != 0 || a.playPat != 2 || !strings.Contains(a.msg, "is empty") {
+		t.Fatalf("an empty pattern leaves what plays: %d %d (%s)", a.queued, a.playPat, a.msg)
+	}
+	a.SeqPattern(-2)
+	a.togglePlay()
+	if a.seqOn || a.queued != 0 {
+		t.Fatal("Space stops it all")
+	}
+}
+
+func TestTheCastsAudioSwitchesPatternsAtTheEndOfTheRound(t *testing.T) {
+	one := formats.Sample{Channels: 1, Samples: []int16{1, 1, 1, 1}}
+	two := formats.Sample{Channels: 1, Samples: []int16{2, 2, 2, 2}}
+	tap := &castTap{}
+	tap.ev = []tapEvent{{kind: tapLoop, pcm: stereoOf(one)}, {at: time.Second / formats.SampleRate, kind: tapNext, pcm: stereoOf(two)}}
+	out := tap.mix(10)
+	var left []int16
+	for i := 0; i < len(out); i += 2 {
+		left = append(left, out[i])
+	}
+	if want := []int16{1, 1, 1, 1, 2, 2, 2, 2, 2, 2}; !slices.Equal(left, want) {
+		t.Fatalf("the waiting sound takes over at the end of the round: %v", left)
+	}
+}

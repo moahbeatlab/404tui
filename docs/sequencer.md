@@ -21,6 +21,7 @@ The pattern in front as the unit's step grid: a track for each pad that has note
 - **Pick a pattern.** `y b` opens the pattern dialog (bank, then pattern; `[ ]` for another bank), `y j k` steps through the patterns. A new one comes from a template or the audible tracks (below).
 - **Tracks.** `.` adds a track (choose a pad; the dialog opens on the bank of the pattern), `d` removes the track under the cursor from the pattern, in the grid and in the mixer (every note of it; `u` brings them back), `m` mutes the track, `s` solos it.
 - **Patterns.** `H` and `L` go to the pattern before and after, `K` and `J` a row of tiles up and down (4 patterns), without opening the tiles.
+- **Switch while it plays.** Going to another pattern while one plays (`H J K L`, the tiles, `y j k`, the dialog) has it take over at the end of the round, without a break, as on the unit: the message line says which plays next, and the playhead comes over to it when it starts. Going back to the one that plays before then keeps it playing; an empty pattern leaves it alone. `Space` stops it all.
 - **The tools** (`t`): the pattern's menu has pages for the *pattern* (choose, new from a template, copy and move, delete, bounce to a pad, tempo of the bank), *timing* (swing, humanize, quantize, shift, reverse), *length* (double, halve),
   *notes* (what writes and changes notes) and *tracks* (dispatch over the marked pads, copy to a pad, swap with a pad, clear, add a track).
 

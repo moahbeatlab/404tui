@@ -302,7 +302,7 @@ func (a *App) setPattern(n int) {
 	a.step = min(a.step, a.steps()-1)
 	a.autoRows()
 	if a.seqOn {
-		a.replay()
+		a.followPattern()
 	}
 }
 
@@ -671,6 +671,82 @@ type replacer interface {
 	ReplaceLoop(formats.Sample) error
 }
 
+// nexter is an output that can have a loop go on with another sound from its next round, without a break.
+type nexter interface {
+	NextLoop(formats.Sample) error
+}
+
+// durOf is how long a sound plays.
+func durOf(s formats.Sample) time.Duration {
+	return time.Duration(len(s.Samples)/max(s.Channels, 1)) * time.Second / formats.SampleRate
+}
+
+// renderPat is render for another pattern than the one in view.
+func (a *App) renderPat(p int) (formats.Sample, bool) {
+	old := a.pat
+	a.pat = p
+	defer func() { a.pat = old }()
+	return a.render()
+}
+
+// followPattern: the view went to another pattern while one plays. The one in view takes over at the end of the round, as the
+// unit does it (Space stops it all); back to the one that plays, nothing waits any more; an empty one leaves what plays alone.
+func (a *App) followPattern() {
+	a.advanceQueue()
+	if a.playPat == 0 { // a loop that is not a pattern of its own
+		a.replay()
+		return
+	}
+	nx, ok := a.Audio.(nexter)
+	if !ok {
+		return
+	}
+	if a.pat == a.playPat {
+		if a.queued != 0 {
+			if s, ok := a.render(); ok {
+				nx.NextLoop(s)
+			}
+			a.queued = 0
+			a.say(fmt.Sprintf("%s goes on playing", a.label(a.pat-1)), false)
+		}
+		return
+	}
+	s, ok := a.render()
+	if !ok {
+		if a.queued != 0 {
+			if s, ok := a.renderPat(a.playPat); ok {
+				nx.NextLoop(s)
+			}
+			a.queued = 0
+		}
+		a.say(fmt.Sprintf("%s is empty: %s goes on playing", a.label(a.pat-1), a.label(a.playPat-1)), false)
+		return
+	}
+	if err := nx.NextLoop(s); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	if a.loopDur <= 0 {
+		if cur, ok := a.renderPat(a.playPat); ok {
+			a.loopDur = durOf(cur)
+		}
+	}
+	at := a.seqStart
+	if a.loopDur > 0 {
+		at = a.seqStart.Add((a.clock().Sub(a.seqStart)/a.loopDur + 1) * a.loopDur)
+	}
+	a.queued, a.queuedAt, a.queuedDur = a.pat, at, durOf(s)
+	a.say(fmt.Sprintf("%s plays after this round of %s (Space stops)", a.label(a.pat-1), a.label(a.playPat-1)), false)
+}
+
+// advanceQueue: the round is over, the pattern that waited is the one that plays (the playhead goes over to it).
+func (a *App) advanceQueue() {
+	if a.queued == 0 || !a.seqOn || a.clock().Before(a.queuedAt) {
+		return
+	}
+	a.playPat, a.seqStart, a.loopDur, a.queued = a.queued, a.queuedAt, a.queuedDur, 0
+}
+
 func (a *App) togglePlay() {
 	if a.seqOn {
 		a.stop()
@@ -696,7 +772,7 @@ func (a *App) startLoop() {
 		a.say(err.Error(), true)
 		return
 	}
-	a.seqOn, a.seqStart = true, a.clock()
+	a.seqOn, a.seqStart, a.loopDur, a.queued = true, a.clock(), durOf(s), 0
 }
 
 // replay puts an edit into the loop that plays, without a gap.
@@ -704,7 +780,16 @@ func (a *App) replay() {
 	if !a.seqOn {
 		return
 	}
-	if a.playPat != 0 && a.playPat != a.pat { // another pattern is in view: what plays is not touched (Space stops it, Space plays this one)
+	a.advanceQueue()
+	if a.playPat != 0 && a.playPat != a.pat { // another pattern is in view: what plays is not touched; the one that waits gets the edit
+		if a.queued == a.pat {
+			if s, ok := a.render(); ok {
+				if nx, ok := a.Audio.(nexter); ok {
+					nx.NextLoop(s)
+					a.queuedDur = durOf(s)
+				}
+			}
+		}
 		return
 	}
 	s, ok := a.render()
@@ -714,6 +799,7 @@ func (a *App) replay() {
 	}
 	if r, ok := a.Audio.(replacer); ok {
 		r.ReplaceLoop(s)
+		a.loopDur = durOf(s)
 	}
 }
 
@@ -726,6 +812,7 @@ func (a *App) clock() time.Time {
 
 // playStep is the step the loop is at, -1 when it is not playing.
 func (a *App) playStep() int {
+	a.advanceQueue()
 	if !a.seqOn || a.playPat != 0 && a.playPat != a.pat { // nothing plays, or another pattern does: no playhead in this one
 		return -1
 	}
