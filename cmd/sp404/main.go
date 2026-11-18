@@ -50,6 +50,7 @@ commands:
   midimap        print the map of the Faderfox EC4 for 404tui (one group of 16 pushes)
   check          check this installation: the computer, the program on a simulated unit, a plugged-in unit
   doctor         read-only checks of this program against the unit; run it first
+  doctor midi --channel 11  play a few notes on MIDI channels (11, 11-14, 11,13) to the unit, to hear a synth behind it (MIDI thru); --port names the output
                  (add -preview as an argument to also play a pad on the unit)
   ports          list every serial port, and why each is or is not taken for the unit
   status         current project, selected pad and project names
@@ -211,6 +212,10 @@ func run(args []string, o options) error {
 	switch args[0] {
 	case "ports":
 		return listPorts()
+	case "doctor":
+		if len(args) > 1 && args[1] == "midi" { // MIDI notes to the unit (and through it to a synth): no serial port needed
+			return midiDoctor(args[2:])
+		}
 	case "midimap":
 		fmt.Print(tui.EC4Sheet())
 		return nil

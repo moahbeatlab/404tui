@@ -14,44 +14,39 @@ import (
 // unit's MIDI port. The unit passes what comes in on to its MIDI out (MIDI thru), so a synth behind it (an MC-101 with a track on
 // each of channels 11 to 14) plays the line at once. While it does, the pad's own sample is not heard on the computer.
 
-// synthNote is a note of the loop: when in the round, how long, the MIDI note and velocity.
+// synthNote is a note of the loop: when in the round and how long (in ticks of the pattern), the MIDI note and velocity.
 type synthNote struct {
-	at, dur time.Duration
-	note    int
-	vel     int
+	tick, len int
+	note, vel int
 }
 
 type synthOut struct {
-	mu    sync.Mutex
-	out   midiin.Out
-	ch    int // 1..16
-	notes []synthNote
-	start time.Time
-	loop  time.Duration // 0: paused
-	stop  chan struct{}
-	done  chan struct{}
+	mu      sync.Mutex
+	out     midiin.Out
+	ch      int // 1..16
+	notes   []synthNote
+	start   time.Time     // when a round began
+	loop    time.Duration // how long a round is; 0: nothing plays
+	perTick float64       // nanoseconds a tick
+	stop    chan struct{}
+	done    chan struct{}
 }
 
-// synthPlay sends the notes of the track on channel ch (1..16) while the pattern loops; tonic is the MIDI note of the key's tonic and
-// k the semitones of the tonic from the pad's own pitch (a note's pitch p is the MIDI note tonic+p-k). The pad is quiet on the
-// computer meanwhile. It says whether a MIDI output is there.
+// synthPlay sends the notes of the track on channel ch (1..16) in time with the unit's MIDI clock while the unit plays, else with
+// the loop on the computer; tonic is the MIDI note of the key's tonic and k the semitones of the tonic from the pad's own pitch (a
+// note's pitch p is the MIDI note tonic+p-k). The pad is quiet on the computer meanwhile. It says whether a MIDI output is there.
 func (a *App) synthPlay(pad int, notes []lab.Note, ch, tonic, k int) bool {
 	out := a.midiOutput()
 	if out == nil {
 		return false
 	}
-	d, ok := a.doc()
-	if !ok {
-		return false
-	}
-	perTick := 60 / a.tempo() / formats.PPQ * float64(time.Second)
 	sn := make([]synthNote, 0, len(notes))
 	for _, n := range notes {
 		note := tonic + formats.PitchSemitones(uint8(n.Pitch)) - k
 		if note < 0 || note > 127 {
 			continue
 		}
-		sn = append(sn, synthNote{at: time.Duration(float64(n.Tick) * perTick), dur: time.Duration(float64(n.Len) * perTick), note: note, vel: n.Vel})
+		sn = append(sn, synthNote{tick: int(n.Tick), len: n.Len, note: note, vel: n.Vel})
 	}
 	if a.synth == nil {
 		a.synth = &synthOut{out: out, stop: make(chan struct{}), done: make(chan struct{})}
@@ -63,32 +58,63 @@ func (a *App) synthPlay(pad int, notes []lab.Note, ch, tonic, k int) bool {
 		s.allOff()
 	}
 	s.ch, s.notes = ch, sn
-	s.loop = 0
-	if a.seqOn {
-		s.start, s.loop = a.seqStart, time.Duration(float64(d.Length)*perTick)
-	}
 	s.mu.Unlock()
 	a.synthPad = pad + 1
 	a.replay() // the pad goes quiet on the computer
+	a.synthSync()
 	return true
 }
 
-// synthSync follows the loop on the computer: its start, and a stop (the synth goes quiet with it).
+// synthClock says whether the unit's MIDI clock runs (pulses came in the last half second).
+func (a *App) synthClock() bool {
+	return a.clk.Running && a.clk.Ticks > 0 && !a.clk.At.IsZero() && time.Since(a.clk.At) < 500*time.Millisecond
+}
+
+// synthTiming is when the round of a pattern length ticks long began and how long a round and a tick are: from the unit's MIDI
+// clock while it plays (the rounds counted from its Start, the tempo its own), else from the loop on the computer; ok is false
+// when neither plays.
+func (a *App) synthTiming(length int) (start time.Time, loop time.Duration, perTick float64, ok bool) {
+	if length <= 0 {
+		return time.Time{}, 0, 0, false
+	}
+	if a.synthClock() {
+		bpm := a.mon.BPM
+		if bpm <= 0 {
+			bpm = a.tempo()
+		}
+		pulse := 60 / bpm / 24 * float64(time.Second)
+		perPulse := formats.PPQ / 24  // ticks of the pattern in a pulse of the clock
+		lp := max(length/perPulse, 1) // the round in pulses
+		n := a.clk.Ticks - 1          // the pulse that came last, from the Start (the first one is the downbeat)
+		start = a.clk.At.Add(-time.Duration(float64(n%lp) * pulse))
+		return start, time.Duration(float64(lp) * pulse), pulse / float64(perPulse), true
+	}
+	if a.seqOn {
+		perTick = 60 / a.tempo() / formats.PPQ * float64(time.Second)
+		return a.seqStart, time.Duration(float64(length) * perTick), perTick, true
+	}
+	return time.Time{}, 0, 0, false
+}
+
+// synthSync follows the unit's clock or the loop on the computer (and goes quiet when neither plays).
 func (a *App) synthSync() {
 	s := a.synth
 	if s == nil {
 		return
 	}
-	d, ok := a.doc()
+	length := 0
+	if d, ok := a.doc(); ok {
+		length = int(d.Length)
+	}
+	start, loop, perTick, ok := a.synthTiming(length)
 	s.mu.Lock()
-	switch {
-	case !a.seqOn || !ok:
+	if !ok {
 		if s.loop != 0 {
 			s.loop = 0
 			s.allOff()
 		}
-	default:
-		s.start, s.loop = a.seqStart, time.Duration(float64(d.Length)*60/a.tempo()/formats.PPQ*float64(time.Second))
+	} else {
+		s.start, s.loop, s.perTick = start, loop, perTick
 	}
 	s.mu.Unlock()
 }
@@ -125,7 +151,8 @@ func (a *App) midiOutput() midiin.Out {
 	return o
 }
 
-// run sends the notes as the rounds go by, and the note offs when they are due.
+// run sends each note when its time comes (the round's start may move a little as the clock is read: a note is sent once a round),
+// and the note offs when they are due.
 func (s *synthOut) run() {
 	defer close(s.done)
 	type pending struct {
@@ -133,8 +160,8 @@ func (s *synthOut) run() {
 		off      time.Time
 	}
 	var on []pending
-	round, pos := -1, time.Duration(0)
-	var start time.Time
+	var last time.Time          // up to when the notes were sent
+	sent := map[int]time.Time{} // when each note was sent last
 	tk := time.NewTicker(2 * time.Millisecond)
 	defer tk.Stop()
 	for {
@@ -159,26 +186,31 @@ func (s *synthOut) run() {
 			}
 			on = keep
 			if s.loop <= 0 || now.Before(s.start) {
-				round = -1
+				last = time.Time{}
 				s.mu.Unlock()
 				continue
 			}
-			if !s.start.Equal(start) { // a new start: from where the loop is, nothing behind it
-				start, round = s.start, -1
+			if last.IsZero() || now.Sub(last) > s.loop/2 { // (a start, or a long pause: nothing behind now)
+				last = now
+				s.mu.Unlock()
+				continue
 			}
-			el := now.Sub(s.start)
-			r, p := int(el/s.loop), el%s.loop
-			if round >= 0 {
-				for _, n := range s.notes {
-					due := r == round && n.at > pos && n.at <= p || r > round && (n.at > pos || n.at <= p)
-					if !due {
+			r := int(now.Sub(s.start) / s.loop)
+			for i, n := range s.notes {
+				for _, rr := range []int{r - 1, r} {
+					at := s.start.Add(time.Duration(rr)*s.loop + time.Duration(float64(n.tick)*s.perTick))
+					if !at.After(last) || at.After(now) {
 						continue
 					}
+					if t, ok := sent[i]; ok && at.Sub(t) < s.loop/2 && t.Sub(at) < s.loop/2 {
+						continue
+					}
+					sent[i] = at
 					s.out.Send([]byte{0x90 | byte(s.ch-1), byte(n.note), byte(min(max(n.vel, 1), 127))})
-					on = append(on, pending{s.ch, n.note, now.Add(max(n.dur, 10*time.Millisecond))})
+					on = append(on, pending{s.ch, n.note, now.Add(max(time.Duration(float64(n.len)*s.perTick), 10*time.Millisecond))})
 				}
 			}
-			round, pos = r, p
+			last = now
 			s.mu.Unlock()
 		}
 	}

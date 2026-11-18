@@ -99,7 +99,7 @@ func (a *App) melodyMenu() {
 		ranges[i] = r.name
 	}
 	padNote, _ := a.sampleNote(pad)
-	a.toolMenu(fmt.Sprintf("melody for %s (sample in %s)", a.label(pad), sharpNames[padNote]), []menuItem{
+	settings := []menuItem{
 		val("Role", roles, st.role, func(v int) { st.role = v }),
 		val("Style", melStyles, st.style, func(v int) { st.style = v }),
 		val("Key", keys, st.key, func(v int) { st.key = v }),
@@ -109,8 +109,14 @@ func (a *App) melodyMenu() {
 		val("Density", melDensities, st.density, func(v int) { st.density = v }),
 		val("Ghost notes", melGhosts, st.ghost, func(v int) { st.ghost = v }),
 		val("Accents", melAccents, st.accent, func(v int) { st.accent = v }),
-		val("Play on", synthOutNames, st.out[st.role], func(v int) { st.out[st.role] = v }),
-	}, "Write the melody", func() {
+	}
+	online := a.live != nil
+	if online { // the synth behind the unit: only while the unit is edited live
+		settings = append(settings, val("Play on", synthOutNames, st.out[st.role], func(v int) { st.out[st.role] = v }))
+	}
+	a.toolNoPlay = true
+	defer func() { a.toolNoPlay = false }()
+	a.toolMenu(fmt.Sprintf("melody for %s (sample in %s)", a.label(pad), sharpNames[padNote]), settings, "Write the melody", func() {
 		d, err := a.ensurePattern()
 		if err != nil {
 			a.say(err.Error(), true)
@@ -121,7 +127,7 @@ func (a *App) melodyMenu() {
 		notes := melodyNotes(pad, bars, *st, pn, a.tt.seed)
 		what := fmt.Sprintf("%s %s in %s %s", melStyles[st.style], melRoles[st.role], sharpNames[st.key], melModes[st.mode].name)
 		a.finishTrack(pad, notes, what)
-		if o := st.out[st.role]; o > 0 {
+		if o := st.out[st.role]; o > 0 && online {
 			k := ((st.key-pn)%12 + 12) % 12
 			if k > 6 {
 				k -= 12
@@ -133,7 +139,17 @@ func (a *App) melodyMenu() {
 			a.synthStop()
 		}
 	})
-	if m := a.menu; m != nil { // the synth stops with the dialog
+	if m := a.menu; m != nil { // the synth stops with the dialog; Space plays the pattern on the computer, or stops it
+		m.onX = func() {
+			a.togglePlay()
+			a.synthSync()
+		}
+		m.xHintOf = func() string {
+			if a.seqOn {
+				return "stop"
+			}
+			return "play here"
+		}
 		orig := m.onClose
 		m.onClose = func() {
 			a.synthStop()

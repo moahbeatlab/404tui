@@ -355,7 +355,6 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Density` — sparse / medium / busy; now medium
     - `Ghost notes` — none / a few / many; now a few
     - `Accents` — none / on the offbeats / on the beats / here and there; now on the offbeats
-    - `Play on` — the pad (its sample) / MIDI channel 11 / MIDI channel 12 / MIDI channel 13 / MIDI channel 14; now MIDI channel 12
     - `Another roll of the dice`
 
     *Trial*

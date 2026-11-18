@@ -7,6 +7,7 @@ import (
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
 	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/perform"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/record"
 	"math/rand"
@@ -5047,7 +5048,7 @@ type fakeMIDIOut struct {
 
 func (f fakeMIDIOut) OpenOut(string) (midiin.Out, string, error) { return f.out, "SP-404MKII", nil }
 
-func TestTheMelodyPlaysOnTheSynthBehindTheUnit(t *testing.T) {
+func TestTheMelodyPlaysOnTheSynthBehindTheUnitInTimeWithItsClock(t *testing.T) {
 	a, _ := newApp(t)
 	rec := &recOut{}
 	a.SetPlatform(Platform{Name: "test", MIDI: fakeMIDIOut{fakeMIDI{ch: make(chan midiin.Event)}, rec}})
@@ -5056,22 +5057,50 @@ func TestTheMelodyPlaysOnTheSynthBehindTheUnit(t *testing.T) {
 	pad := a.rowPad()
 	a.info.Pads[pad].Name = "01_Bass1_125_Gs_"
 	a.mel = melodySet{}
+	a.melodyMenu() // offline: the pad plays it, no MIDI
+	if a.synth != nil || a.seqOn {
+		t.Fatal("offline nothing goes to MIDI, and the dialog does not start the pattern")
+	}
+	keys(t, a, "B")
+	a.live = &liveState{} // the unit is edited live
+	defer func() { a.live = nil }()
 	a.melodyMenu() // a bass: MIDI channel 11
 	if a.mel.role != 0 || a.mel.out[0] != 1 || a.synth == nil || !strings.Contains(a.msg, "MIDI channel 11") {
 		t.Fatalf("a bass plays on channel 11: role %d, out %d (%s)", a.mel.role, a.mel.out[0], a.msg)
 	}
-	if a.audible(pad) {
-		t.Fatal("the pad is quiet on the computer while the synth plays it")
+	if a.seqOn || a.audible(pad) {
+		t.Fatal("the pattern waits for Space, and the pad is quiet on the computer while the synth plays it")
 	}
-	a.Tick() // the loop on the computer has started: the synth follows it
+	time.Sleep(50 * time.Millisecond)
+	if rec.has(0x9A) {
+		t.Fatal("nothing plays yet: no note to the synth")
+	}
+	// the unit plays: its clock comes in, the synth follows it
+	a.mon.BPM = 125
+	pulse := time.Duration(60 / 125.0 / 24 * float64(time.Second))
+	a.clk = perform.Clock{Running: true}
 	deadline := time.Now().Add(3 * time.Second)
 	for !rec.has(0x9A) && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+		a.clk.Ticks++
+		a.clk.At = time.Now()
 		a.Tick()
+		time.Sleep(pulse)
 	}
 	if !rec.has(0x9A) {
-		t.Fatal("note ons on channel 11 are sent while the pattern loops")
+		t.Fatal("note ons on channel 11 are sent while the unit's clock runs")
 	}
+	start, loop, _, ok := a.synthTiming(4 * 16 * stepTicks)
+	if d := loop - 384*pulse; !ok || d > time.Millisecond || d < -time.Millisecond {
+		t.Fatalf("a round of 4 bars is 384 pulses of the unit's clock: %v", loop)
+	}
+	if want := a.clk.At.Add(-time.Duration(a.clk.Ticks-1) * pulse); start.Sub(want) > time.Millisecond || want.Sub(start) > time.Millisecond {
+		t.Fatalf("the round began at the unit's Start: %v off", start.Sub(want))
+	}
+	a.menu.onX() // Space: the pattern on the computer as well
+	if !a.seqOn {
+		t.Fatal("Space plays the pattern")
+	}
+	a.menu.onX()
 	keys(t, a, "B") // the dialog closes
 	if a.synth != nil || !a.audible(pad) || !rec.has(0xBA) {
 		t.Fatal("closing the dialog stops the synth (All Notes Off) and the pad is heard again")

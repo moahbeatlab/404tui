@@ -194,8 +194,8 @@ func (a *App) toolMenu(title string, settings []menuItem, applyLabel string, app
 		}
 	}
 	a.menu = m
-	preview() // the tool at work with its settings as they are
-	if !a.seqOn && a.lab.Changed(base) {
+	preview()                                             // the tool at work with its settings as they are
+	if !a.toolNoPlay && !a.seqOn && a.lab.Changed(base) { // (the melody waits for Space: the unit may be what plays)
 		a.startLoop()
 		startedLoop = a.seqOn
 	}

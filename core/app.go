@@ -194,6 +194,7 @@ type App struct {
 	tt2               trackState2
 	tt                trackState // the settings of the track tools
 	mel               melodySet  // the settings of the melody tool
+	toolNoPlay        bool       // the tool dialog that opens next does not start the loop on the computer
 	synth             *synthOut  // a track sent as MIDI notes to the synth behind the unit, while the pattern loops
 	synthPad          int        // the pad that is played by the synth, plus one: quiet on the computer meanwhile
 	midiOut           midiin.Out // the unit's MIDI output, open once it was needed
