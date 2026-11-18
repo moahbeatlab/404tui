@@ -3487,6 +3487,9 @@ func TestABankExportBringsItsPatternsToAnotherBank(t *testing.T) {
 	note(5, 2, 0)
 	a.lab.NewPattern(66, 1) // E2 is taken
 	note(66, 70, 0)
+	a.lab.SetUsesProjectTempo(false)
+	a.lab.SetBankTempo(0, 124.5)
+	a.lab.SetBankTempo(4, 98)
 	a.refresh()
 	a.bank = 0
 	a.exportBank()
@@ -3510,6 +3513,9 @@ func TestABankExportBringsItsPatternsToAnotherBank(t *testing.T) {
 			t.Fatalf("%s has the sound of the same pad of bank A", a.label(p))
 		}
 	}
+	if a.tempoOf(4) != 124.5 || !strings.Contains(a.msg, "bank E, 124.5 BPM") {
+		t.Fatalf("bank E plays at the tempo of the export: %v, %q", a.tempoOf(4), a.msg)
+	}
 	if got := pads(66); len(got) != 3 || !got[64] || !got[65] || !got[34] {
 		t.Fatalf("E2 plays E1, E2 and still C3: %v", got)
 	}
@@ -3522,6 +3528,9 @@ func TestABankExportBringsItsPatternsToAnotherBank(t *testing.T) {
 	keys(t, a, "Y+{") // undo: E2 is back
 	if got := pads(66); len(got) != 1 || !got[70] {
 		t.Fatalf("undo brings back the old E2: %v", got)
+	}
+	if a.tempoOf(4) != 98 {
+		t.Fatalf("and bank E's tempo: %v", a.tempoOf(4))
 	}
 	// keeping the taken slots
 	a.restorePads(dir)

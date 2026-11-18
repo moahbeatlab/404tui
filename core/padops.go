@@ -160,6 +160,7 @@ type sidecarFile struct {
 	Project  string           `json:"project"`
 	Pads     []sidecarPad     `json:"pads"`
 	Bank     string           `json:"bank,omitempty"`     // the bank of a whole-bank export
+	BPM      float64          `json:"bpm,omitempty"`      // the tempo it played at, in a whole-bank export
 	Patterns []sidecarPattern `json:"patterns,omitempty"` // its patterns, in a whole-bank export
 }
 
@@ -250,6 +251,7 @@ func (a *App) exportPadsTo(pads []int, bank int, dir string) {
 	}
 	if bank >= 0 {
 		sc.Bank = string(rune('A' + bank))
+		sc.BPM = a.tempoOf(bank)
 		for n := bank*16 + 1; n <= bank*16+16; n++ {
 			pb, err := a.lab.PatternBytes(n)
 			if err != nil || len(pb) == 0 {
@@ -526,6 +528,17 @@ func (a *App) applyRestore(dir string, sc sidecarFile, to int, replace bool, rea
 			pats++
 		}
 	}
+	tempo := ""
+	if sc.BPM > 0 && to >= 0 { // the bank gets the tempo it was exported with
+		if err := a.lab.SetBankTempo(to, sc.BPM); err != nil {
+			tempo = " (tempo: " + err.Error() + ")"
+		} else {
+			tempo = ", " + bpmText(sc.BPM) + " BPM"
+			if a.info.UsesProjectTempo {
+				tempo += " (the project tempo plays now)"
+			}
+		}
+	}
 	a.commitUndo(pre, A, 0)
 	a.pcm = map[int]int{}
 	a.refresh()
@@ -540,5 +553,5 @@ func (a *App) applyRestore(dir string, sc sidecarFile, to int, replace bool, rea
 			msg += fmt.Sprintf(", %d slots kept", kept)
 		}
 	}
-	a.say(msg, false)
+	a.say(msg+tempo, false)
 }
