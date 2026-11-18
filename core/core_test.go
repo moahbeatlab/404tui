@@ -3598,6 +3598,37 @@ func TestWithTheUnitABankIsExportedToItsCardFirst(t *testing.T) {
 	}
 }
 
+func TestAJobShowsItsProgressOnEveryScreen(t *testing.T) {
+	a, _ := newApp(t)
+	Terminal = true
+	defer func() { Terminal = false }()
+	a.job = &job{done: 3, total: 10, name: "A01 kick.wav"}
+	a.jobWhat = "exporting to the card"
+	a.say("writing 10 files to the unit's card...", false)
+	for _, scr := range []Screen{Pads, Seq} {
+		a.scr = scr
+		g := newTextGfx()
+		a.footer(g)
+		var line strings.Builder
+		for c := 0; c < Cols; c++ {
+			line.WriteRune(g.at(c, Rows-2).R)
+		}
+		if l := line.String(); !strings.Contains(l, "EXPORTING TO THE CARD") || !strings.Contains(l, "3 of 10  A01 kick.wav") {
+			t.Fatalf("the progress is on the message line: %q", l)
+		}
+	}
+	a.job.finished = true
+	g := newTextGfx()
+	a.footer(g)
+	var line strings.Builder
+	for c := 0; c < Cols; c++ {
+		line.WriteRune(g.at(c, Rows-2).R)
+	}
+	if strings.Contains(line.String(), "EXPORTING") {
+		t.Fatal("a finished job leaves the line to the messages")
+	}
+}
+
 func TestPatternSlotsCopyMoveAndRetarget(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit)

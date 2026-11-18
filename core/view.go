@@ -118,7 +118,24 @@ var Version string
 func (a *App) footer(g Gfx) {
 	top := Rows - 2
 	g.Fill(0, top, Cols, 2, cPanel)
-	if a.msg != "" {
+	running := false
+	if a.job != nil {
+		_, _, _, _, fin := a.job.state()
+		running = !fin
+	}
+	if running { // a job in the background (an export to the card, a send...): its progress on every screen
+		done, total, name, _, _ := a.job.state()
+		what := a.jobWhat
+		if what == "" {
+			what = "sending"
+		}
+		head := strings.ToUpper(what)
+		bw := min(30, max(Cols/5, 10))
+		g.Text(2, top, head, cAmber, true)
+		g.Bar(2+len(head)+2, top, bw, float64(done)/float64(max(total, 1)), cAmber, cPanel2)
+		x := 2 + len(head) + 2 + bw + 2
+		g.Text(x, top, fit(fmt.Sprintf("%d of %d  %s", done, total, name), max(Cols-x-2, 0)), cDim, false)
+	} else if a.msg != "" {
 		col := cGood
 		if a.msgBad {
 			col = cBad
