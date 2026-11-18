@@ -46,9 +46,21 @@ A pattern can come from a MIDI file and go out as one: [midi.md](midi.md). In th
 
 ## Keys
 
-**On a computer:** `a` note on/off · `e h j k l` edit (hold) · `Space` play / stop · `Enter` or `b` note settings · `x` hear note · `h j k l` pad, step · `[ ]` bank · `p` the 4 by 4 tiles of the bank's patterns (arrows choose, the pattern changes as you move, `p` goes back) · `{ }` bar · `t` tools · `m` mute track · `s` solo track · `f` freeze view · `z` one bar / more ·
+**On a computer:** `a` note on/off · `e h j k l` edit (hold) · `Space` play / stop · `Enter` or `b` note settings · `x` hear note · `h j k l` pad, step · `[ ]` bank · `p` the 4 by 4 tiles of the bank's patterns (arrows choose, the pattern changes as you move, `p` goes back) · `{ }` bar · `t` tools · `m` mute track · `M` the mixer · `s` solo track · `f` freeze view · `z` one bar / more ·
 `y x` add track · `y b` pick pattern · `y j k` pattern +- · `u` undo, `R` redo.
 
 **On the handheld:** `A` note on/off · `A` + D-pad edit (hold) · `X` play · `B` note settings · `L2` hear note · `R2` mute/solo · D-pad pad, step · `L1 R1` bar · `Y+X` add track · `Y+B` pick pattern · `Sel+B` tools · `Y+^v` pattern +-.
 
 Every tool and setting with its values: [tools.md](tools.md#seq).
+
+## The mixer (`M`, on a computer)
+
+`M` shows the pattern's tracks as a mixer in place of the grid: a strip for every pad the pattern plays, with its level (a fader),
+its pan, its bus, mute and solo, and how many notes it has. `h l` choose the strip, `j k` set the level, `[ ]` the pan, `b` sends
+the pad to BUS 1, BUS 2 or no bus, `m` and `s` mute and solo it (on the computer only, as in the grid), `x` hears the pad, `Space`
+plays the pattern, `M` or `Esc` go back to the grid.
+
+The level, pan and bus are the pad's own settings: the same as in the pad panel, kept in the project, undone with `u`, and sent to
+the unit when it is edited live. While the pattern plays a change is heard at once. The unit has no EQ on a pad: an EQ is an effect
+on a bus, so a pad is EQ'd by sending it to the bus that has the EQ.
+

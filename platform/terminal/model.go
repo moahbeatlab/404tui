@@ -327,6 +327,8 @@ func (m *Model) key(msg tea.KeyMsg) {
 			switch {
 			case m.app.ScreenName() == "SEQ" && s == "m":
 				m.app.SeqTrack(1)
+			case m.app.ScreenName() == "SEQ": // M: the mixer, or the grid again
+				m.app.SeqMixer()
 			case m.app.ScreenName() == "FILES" && s == "m":
 				m.app.MarkFile()
 			case m.app.ScreenName() == "FILES":
@@ -404,6 +406,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 		}
 		k = core.B
 	case "esc", "backspace":
+		if m.app.MixerOn() && !m.app.Modal() { // the mixer: back to the grid (b is the bus there)
+			m.disarm()
+			m.app.SeqMixer()
+			return
+		}
 		k = core.B
 	case "x", "X":
 		k = core.X
@@ -415,7 +422,7 @@ func (m *Model) key(msg tea.KeyMsg) {
 			k = core.L2
 		}
 	case "[", "]": // SEQ: the bank (the pattern at the same place); elsewhere L1 and R1
-		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() && !m.app.MixerOn() { // (the mixer: pan)
 			m.app.SeqBank(map[string]int{"[": -1, "]": 1}[s])
 			return
 		}

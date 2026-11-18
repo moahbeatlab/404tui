@@ -48,7 +48,11 @@ func (a *App) draw(g Gfx) {
 	case Slice:
 		a.drawSlice(g)
 	case Seq:
-		a.drawSeq(g)
+		if a.mixer {
+			a.drawMixer(g)
+		} else {
+			a.drawSeq(g)
+		}
 	case Save:
 		a.drawSave(g)
 	case Unit:
@@ -141,7 +145,7 @@ func (a *App) footer(g Gfx) {
 			col = cBad
 		}
 		g.Text(2, top, fit(a.msg, Cols-4), col, true)
-	} else if a.scr == Seq && a.menu == nil && a.picker == nil {
+	} else if a.scr == Seq && !a.mixer && a.menu == nil && a.picker == nil {
 		// no message: what is known of the note under the cursor
 		if info := a.noteInfo(); info != "" {
 			g.Text(2, top, fit(info, Cols-4), cText, false)

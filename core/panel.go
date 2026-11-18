@@ -66,7 +66,7 @@ func (a *App) hints() (plain, shift []hint) {
 		}
 		shift = sh
 	}
-	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() { // [ ] are the bank here, { } the bar
+	if Terminal && a.scr == Seq && !a.aHeld && !a.mixer && !a.Modal() { // [ ] are the bank here, { } the bar
 		out := make([]hint, 0, len(plain)+1)
 		for _, h := range plain {
 			if h.key == "L1 R1" && h.what == "bar" {
@@ -77,8 +77,8 @@ func (a *App) hints() (plain, shift []hint) {
 		}
 		plain = out
 	}
-	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() {
-		plain = append(append([]hint{}, plain...), hint{"m", "mute track"}, hint{"s", "solo track"}, hint{"f", "freeze view"}, hint{"z", "1 bar / more"})
+	if Terminal && a.scr == Seq && !a.aHeld && !a.mixer && !a.Modal() {
+		plain = append(append([]hint{}, plain...), hint{"m M", "mute / mixer"}, hint{"s", "solo track"}, hint{"f", "freeze view"}, hint{"z", "1 bar / more"})
 		sh := make([]hint, 0, len(shift)) // s is solo here: the record key is Ctrl-R
 		for _, h := range shift {
 			if h.key != "Sel+X" {
@@ -133,7 +133,7 @@ func (a *App) hints() (plain, shift []hint) {
 		}
 		plain = out
 	}
-	if Terminal && a.scr == Seq && !a.aHeld && !a.Modal() { // the keyboard: Space plays the pattern, x the note
+	if Terminal && a.scr == Seq && !a.aHeld && !a.mixer && !a.Modal() { // the keyboard: Space plays the pattern, x the note
 		out := make([]hint, 0, len(plain))
 		for _, h := range plain {
 			switch {
@@ -275,6 +275,9 @@ func (a *App) rawHints() (plain, shift []hint) {
 		play, stop := hint{"X", "play"}, hint{"B", "note settings"}
 		if a.seqOn {
 			play = hint{"X", "stop"}
+		}
+		if a.mixer { // the mixer in place of the grid (a computer's: the keys as they are)
+			return []hint{{"hl", "pad"}, {"jk", "level"}, {"[ ]", "pan"}, {"b", "bus"}, {"m", "mute"}, {"s", "solo"}, {"x", "hear pad"}, {"Space", map[bool]string{true: "stop", false: "play"}[a.seqOn]}, {"M Esc", "the grid"}}, nil
 		}
 		if a.patStrip { // the arrows are on the row of pattern boxes
 			return []hint{{"^v<>", "choose the pattern"}, {"L1 R1", "bank"}, play, {"A", "back to the grid"}}, nil

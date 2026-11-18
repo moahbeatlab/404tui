@@ -207,6 +207,7 @@ type App struct {
 	peakMax           map[peakKey]int // the loudest value of each sample, for the slicer's scale
 	soundUntil        time.Time       // when the sample that plays ends, for Space (play or stop)
 	patStrip          bool            // SEQ on a terminal: the arrows choose the pattern in the row of 16 boxes (p)
+	mixer             bool            // SEQ on a terminal: the mixer in place of the grid (M)
 	seqOneBar         bool            // SEQ on a wide terminal: one bar in view, though the window has the room for more
 	orderOn           bool            // SLICE: the order plays in a loop
 	orderFrames       int             // its length
@@ -629,6 +630,10 @@ func (a *App) press(k Key, repeat int) {
 	}
 	if a.menu != nil {
 		a.menuKey(k)
+		return
+	}
+	if a.mixer && a.scr == Seq && !a.aHeld && !a.yHeld && !a.selHeld { // the mixer: its own keys, the shoulders too
+		a.mixerKey(k, repeat)
 		return
 	}
 	if a.aHeld && a.scr == Seq && (k == L1 || k == R1) { // A held: L1 and R1 move the note

@@ -86,7 +86,7 @@ The look: flat tiles, one amber accent, rounded dialogs, waveforms in braille do
 
 | Screen | Keys |
 | --- | --- |
-| SEQ | `[` `]` the bank (the pattern at the same place in the bank before or after), `{` `}` the bar before and after, `z` one bar or as many bars as fit (two or four side by side on a wide window), `f` freeze: only the bars in view loop |
+| SEQ | `[` `]` the bank (the pattern at the same place in the bank before or after), `{` `}` the bar before and after, `z` one bar or as many bars as fit (two or four side by side on a wide window), `f` freeze: only the bars in view loop, `M` the mixer of the pattern's tracks (level, pan, bus, mute, solo) |
 | SLICE | `+` zoom in, `-` zoom out, `n` a new order of the slices at once (a loop that plays goes on with it), `.` the order plays in a loop (again stops it), `Enter` settings, `t` tools |
 | FILES | `/` search, `t` load files from where (and the file tools) |
 | PROJECTS | `a` the project's menu, `t` online or offline and the offline folder |

@@ -3679,6 +3679,71 @@ func TestDeleteTheBankAsksThenClearsPadsAndPatterns(t *testing.T) {
 	}
 }
 
+func TestTheMixerSetsLevelPanAndBusOfTheTracks(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	Terminal = true
+	defer func() { Terminal = false }()
+	keys(t, a, "Y+R A") // SEQ, a note on A1
+	args, _ := json.Marshal(lab.PatternArgs{Pad: 1, Tick: 480, Vel: 100, Len: 120})
+	if err := a.lab.PatternOp(a.pat, "insert", args); err != nil {
+		t.Fatal(err)
+	}
+	a.refresh()
+	a.autoRows()
+	if len(a.rows) != 2 {
+		t.Fatalf("two tracks: %v", a.rows)
+	}
+	a.row = 0
+	p0, p1 := a.rows[0], a.rows[1]
+	a.setSetting(p0, mixLevel, 100)
+	a.SeqMixer()
+	if !a.MixerOn() {
+		t.Fatal("M opens the mixer")
+	}
+	keys(t, a, "U U D") // level
+	if v := a.settingValue(p0, mixLevel); v != 101 {
+		t.Fatalf("j k set the level: %d", v)
+	}
+	keys(t, a, "] ]") // pan
+	if v := a.settingValue(p0, mixPan); v != 66 {
+		t.Fatalf("[ ] set the pan: %d", v)
+	}
+	keys(t, a, "B") // bus
+	if v := a.settingValue(p0, mixBus); v != 1 {
+		t.Fatalf("b sends it to BUS 1: %d", v)
+	}
+	keys(t, a, "R B B") // A2: BUS 2
+	if v := a.settingValue(p1, mixBus); v != 2 || a.settingValue(p0, mixBus) != 1 {
+		t.Fatalf("l goes to the next strip: %d %d", a.settingValue(p1, mixBus), a.settingValue(p0, mixBus))
+	}
+	g := newTextGfx()
+	a.drawMixer(g)
+	var screen strings.Builder
+	for r := 0; r < Rows; r++ {
+		for c := 0; c < Cols; c++ {
+			screen.WriteRune(g.at(c, r).R)
+		}
+		screen.WriteByte('\n')
+	}
+	for _, want := range []string{"MIXER  PATTERN", a.label(p0), a.label(p1), "BUS 1", "BUS 2", "101"} {
+		if !strings.Contains(screen.String(), want) {
+			t.Fatalf("the mixer shows %q:\n%s", want, screen.String())
+		}
+	}
+	keys(t, a, "Y+{") // undo: A2 is on BUS 1 again
+	if v := a.settingValue(p1, mixBus); v != 1 {
+		t.Fatalf("undo takes the last change back: %d", v)
+	}
+	if plain, _ := a.hints(); len(plain) == 0 || plain[0].what != "pad" {
+		t.Fatalf("the panel lists the mixer's keys: %v", plain)
+	}
+	keys(t, a, "A")
+	if a.MixerOn() {
+		t.Fatal("A goes back to the grid")
+	}
+}
+
 func TestPatternSlotsCopyMoveAndRetarget(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit)
