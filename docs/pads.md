@@ -30,12 +30,12 @@ The 16 pads of the bank in front, with the project's tempo. This is where you se
 ![The pad's tools](img/pc-pad-tools.png)
 
 - **Buses by name.** A pad goes to a bus by its name: CONFIG has the words for BUS 1 and BUS 2 (the second starts with the words of a drum kit: kick, snare, hat, perc...), and the tool *Set the buses of the bank by the names...* applies the rule to the bank. See [config.md](config.md).
-- **Rename** a pad with `r`: a one-line prompt, `Enter` done, `Esc` gives it up.
+- **Rename** a pad with `n` (or `r`): a one-line prompt, `Enter` done, `Esc` gives it up.
 - **Clear** a pad with `y` then `b`.
 
 ## Keys
 
-**On a computer:** `a` pad panel · `Space` play · `x` stop · `h j k l` move · `[ ]` bank · `.` arp marked · `t` tools · `m` mark pad · `M` mark all / none · `r` rename · `Ctrl-E` export the bank · `y j k` bank · `y b` clear pad · `g h` and `g l` the screen before and after · `1`-`6` a screen · `u` undo, `R` redo · `?` every key.
+**On a computer:** `a` pad panel · `Space` play · `x` stop · `h j k l` move · `[ ]` bank · `.` arp marked · `t` tools · `m` mark pad · `M` mark all / none · `n` rename · `Ctrl-E` export the bank · `y j k` bank · `y b` clear pad · `g h` and `g l` the screen before and after · `1`-`6` a screen · `u` undo, `R` redo · `?` every key.
 
 **On the handheld:** `A` menu · `X` play · `B` stop · D-pad move · `L1 R1` bank · `R2` arp marked · `Y+<>` screen · `Y+A` mark pad · `Y+^v` bank · `Y+B` clear pad.
 

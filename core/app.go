@@ -1027,6 +1027,54 @@ func (a *App) SeqTrack(mode int) {
 	a.replay()
 }
 
+// SeqPattern is H J K L of a keyboard on SEQ: the pattern d slots on (the tiles are 4 a row: H L one, K J a row).
+func (a *App) SeqPattern(d int) {
+	if a.scr != Seq || a.Modal() || a.prompt != nil || a.aHeld {
+		return
+	}
+	a.CancelShift()
+	a.setPattern(a.pat + d)
+	a.row = min(a.row, max(len(a.rows)-1, 0))
+	if dc, ok := a.doc(); ok {
+		a.say(fmt.Sprintf("pattern %s: %d bars, %s", a.label(a.pat-1), dc.Bars, count(len(dc.Notes), "note")), false)
+	} else {
+		a.say(fmt.Sprintf("pattern %s: empty", a.label(a.pat-1)), false)
+	}
+}
+
+// SeqAddTrack is . of a keyboard on SEQ: choose a pad for a new track, starting in the bank of the pattern.
+func (a *App) SeqAddTrack() {
+	if a.scr != Seq || a.Modal() || a.prompt != nil || a.aHeld {
+		return
+	}
+	a.CancelShift()
+	a.addTrackPick()
+}
+
+// SeqClearTrack is d of a keyboard on SEQ: every note of the track under the cursor goes (u brings them back).
+func (a *App) SeqClearTrack() {
+	if a.scr != Seq || a.Modal() || a.prompt != nil || a.aHeld || len(a.rows) == 0 {
+		return
+	}
+	a.CancelShift()
+	pad := a.rowPad()
+	n := len(a.trackNotes(pad))
+	if n == 0 {
+		a.say(a.label(pad)+" has no notes in this pattern", true)
+		return
+	}
+	pre := a.lab.Snapshot()
+	args, _ := json.Marshal(lab.PatternArgs{Pad: pad})
+	if err := a.lab.PatternOp(a.pat, "clearPad", args); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	a.commitUndo(pre, A, 0)
+	a.refresh()
+	a.replay()
+	a.say(fmt.Sprintf("%s cleared: %s gone (u brings them back)", a.label(pad), count(n, "note")), false)
+}
+
 // ToggleBars is the z key of a keyboard on SEQ: one bar in view, or as many as the window holds.
 func (a *App) ToggleBars() {
 	if a.scr != Seq || a.menu != nil || a.prompt != nil {

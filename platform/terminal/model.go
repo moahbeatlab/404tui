@@ -234,11 +234,19 @@ func (m *Model) key(msg tea.KeyMsg) {
 		}
 		m.disarm()
 		return
-	case "n": // the slicer: a new order of the slices, at once
+	case "n": // the slicer: a new order of the slices, at once; PADS: rename the pad
 		if m.app.ScreenName() == "SLICE" && m.armed == noShift && !m.app.Modal() {
 			m.disarm()
 			m.app.NewOrder()
 			return
+		}
+		if m.app.ScreenName() == "PADS" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			m.app.RenamePadKey()
+		}
+		return
+	case "d": // SEQ: clear the track
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			m.app.SeqClearTrack()
 		}
 		return
 	case "+", "=": // the slicer: zoom in
@@ -378,13 +386,19 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.Dispatch(core.Event{Key: core.A, Down: true})
 		}
 		return
-	case "up", "k", "K":
+	case "H", "J", "K", "L": // SEQ: the pattern before and after, the row of tiles above and below; elsewhere the arrows
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			m.app.SeqPattern(map[string]int{"H": -1, "L": 1, "K": -4, "J": 4}[s])
+			return
+		}
+		k = map[string]core.Key{"H": core.Left, "J": core.Down, "K": core.Up, "L": core.Right}[s]
+	case "up", "k":
 		k = core.Up
-	case "down", "j", "J":
+	case "down", "j":
 		k = core.Down
-	case "left", "h", "H":
+	case "left", "h":
 		k = core.Left
-	case "right", "l", "L":
+	case "right", "l":
 		k = core.Right
 	case " ": // play and stop
 		if m.app.PlayStop() {
@@ -440,6 +454,10 @@ func (m *Model) key(msg tea.KeyMsg) {
 		k = core.L2
 	case ".", ">":
 		k = core.R2
+		if s == "." && m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() { // SEQ: add a track (m and s mute and solo)
+			m.app.SeqAddTrack()
+			return
+		}
 	default:
 		return
 	}

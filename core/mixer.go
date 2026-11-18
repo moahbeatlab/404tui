@@ -50,6 +50,9 @@ func (a *App) SeqMixer() {
 func (a *App) MixerOn() bool { return a.mixer && a.scr == Seq }
 
 func (a *App) mixerKey(k Key, repeat int) {
+	if len(a.rows) == 0 && k != X && k != A { // a pattern without tracks (H J K L went to it): nothing to set
+		return
+	}
 	pad := a.rowPad()
 	step := int32(1 + repeat/4) // a held key runs faster
 	nudge := func(st padSetting, d int32) {

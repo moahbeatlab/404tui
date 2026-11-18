@@ -4752,3 +4752,59 @@ func TestLocalTagsAreFoundByTheCategorySearch(t *testing.T) {
 		t.Fatal("the tags were kept, and can be taken off")
 	}
 }
+
+func TestDClearsTheTrackAndDotAddsOneFromThePatternsBank(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	Terminal = true
+	defer func() { Terminal = false }()
+	keys(t, a, "Y+R A") // SEQ, a note on the first track
+	pad := a.rowPad()
+	if len(a.trackNotes(pad)) != 1 {
+		t.Fatalf("a note to clear: %v", a.trackNotes(pad))
+	}
+	a.SeqClearTrack()
+	if n := len(a.trackNotes(pad)); n != 0 || !strings.Contains(a.msg, "cleared") {
+		t.Fatalf("d clears the track: %d notes (%s)", n, a.msg)
+	}
+	keys(t, a, "Y+{")
+	if n := len(a.trackNotes(pad)); n != 1 {
+		t.Fatalf("undo brings the notes back: %d", n)
+	}
+	a.SeqAddTrack()
+	if a.picker == nil || !a.picker.pads || a.picker.bank != (a.pat-1)/16 {
+		t.Fatalf(". asks for a pad in the bank of the pattern: %+v", a.picker)
+	}
+	if p := a.picker.bank*16 + a.picker.cur; p == pad || !a.info.Pads[p].File {
+		t.Fatalf("on a pad with a sample that is not a track yet: %s", a.label(p))
+	}
+	before := len(a.rows)
+	keys(t, a, "A")
+	if len(a.rows) != before+1 {
+		t.Fatalf("the pad is a track now: %v", a.rows)
+	}
+}
+
+func TestHJKLGoThroughThePatternsWithoutTheTiles(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, "Y+R") // SEQ
+	a.pat = 21        // B5
+	a.SeqPattern(1)
+	if a.pat != 22 || !strings.Contains(a.msg, "pattern B6") {
+		t.Fatalf("L: the next pattern: %d (%s)", a.pat, a.msg)
+	}
+	a.SeqPattern(4)
+	if a.pat != 26 {
+		t.Fatalf("J: the row of tiles below: %d", a.pat)
+	}
+	a.SeqPattern(-4)
+	a.SeqPattern(-1)
+	if a.pat != 21 {
+		t.Fatalf("K and H go back: %d", a.pat)
+	}
+	a.pat = 1
+	a.SeqPattern(-1)
+	if a.pat != 160 {
+		t.Fatalf("H on the first pattern: the last one: %d", a.pat)
+	}
+}

@@ -252,18 +252,29 @@ func (a *App) seqShifted(k Key) {
 	}
 }
 
-// addTrackPick asks for a pad (the dialog the patterns are chosen in), starting on the next pad with a sample that is not a row yet.
+// addTrackPick asks for a pad (the dialog the patterns are chosen in), starting in the bank of the pattern, on its first pad with
+// a sample that is not a row yet (or on the next such pad after the cursor, when that bank has none).
 func (a *App) addTrackPick() {
 	shown := map[int]bool{}
 	for _, p := range a.rows {
 		shown[p] = true
 	}
-	start := a.rowPad()
-	for off := 1; off < 160; off++ {
-		p := (a.rowPad() + off) % 160
+	bank := (a.pat - 1) / 16 * 16
+	start := bank
+	if len(a.rows) > 0 {
+		start = a.rowPad()
+	}
+	found := false
+	for p := bank; p < bank+16; p++ {
 		if a.info.Pads[p].File && !shown[p] {
-			start = p
+			start, found = p, true
 			break
+		}
+	}
+	for off := 1; off < 160 && !found; off++ {
+		p := (start + off) % 160
+		if a.info.Pads[p].File && !shown[p] {
+			start, found = p, true
 		}
 	}
 	a.pickPad("Add a track: choose a pad", start, true, a.addTrackNote)
