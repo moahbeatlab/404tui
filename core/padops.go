@@ -193,22 +193,36 @@ func (a *App) exportBank() {
 	}
 	dir := filepath.Join(a.exportDir(), fmt.Sprintf("%s_bank_%c", app.SanitizeName(a.ProjectName()), 'A'+a.bank))
 	if Terminal { // a computer asks where to: the folder chooser, then a folder of its own in it
-		a.pickFolder(fmt.Sprintf("export bank %c into the folder", 'A'+a.bank), a.exportRoot(), func(root string) {
-			a.set.ExportDir = root
+		a.pickExportFolder(fmt.Sprintf("export bank %c into the folder", 'A'+a.bank), func(root string) {
+			if onCard(root) {
+				a.set.ExportCardDir = root
+			} else {
+				a.set.ExportDir = root
+			}
 			a.saveSettings()
-			a.freeTarget(root, filepath.Base(dir), true, func(d string) { a.exportPadsTo(pads, bank, d) })
+			// a name of its own, e.g. the song the bank belongs to
+			a.askText(fmt.Sprintf("name of the export of bank %c", 'A'+a.bank), "e.g. the song it belongs to; Enter goes on", filepath.Base(dir), func(name string) {
+				name = strings.TrimSpace(name)
+				if name == "" || strings.ContainsAny(name, `/\:`) {
+					a.say("a name without / \\ or :", true)
+					return
+				}
+				a.freeTarget(root, name, true, func(d string) { a.exportPadsTo(pads, bank, d) })
+			})
 		})
 		return
 	}
 	a.exportPadsTo(pads, bank, dir)
 }
 
-// exportPadsTo writes the pads as WAV files and samples.json into the folder; with a bank (not -1) its patterns too.
+// exportPadsTo writes the pads as WAV files and samples.json into the folder; with a bank (not -1) its patterns too. A folder on the
+// unit's card is written in the background, over USB.
 func (a *App) exportPadsTo(pads []int, bank int, dir string) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		a.say(err.Error(), true)
-		return
+	type out struct {
+		name string
+		data []byte
 	}
+	var files []out
 	sc := sidecarFile{Format: "sparkymk2-pads", Version: 1, Project: a.ProjectName()}
 	for _, n := range pads {
 		id, ok := a.padSample(n)
@@ -222,10 +236,7 @@ func (a *App) exportPadsTo(pads []int, bank int, dir string) {
 		}
 		pad, _ := proto.NewPadIndex(uint16(n))
 		file := fmt.Sprintf("%s %s.wav", app.PadLabel(pad), app.SanitizeName(a.info.Pads[n].Name))
-		if err := os.WriteFile(filepath.Join(dir, file), wav, 0o644); err != nil {
-			a.say(err.Error(), true)
-			return
-		}
+		files = append(files, out{file, wav})
 		params := map[string]int32{}
 		for _, p := range proto.Params {
 			if p.Scope != proto.ScopePad || p.Name == "start" || p.Name == "end" || p.Name == "loop-top" {
@@ -245,23 +256,45 @@ func (a *App) exportPadsTo(pads []int, bank int, dir string) {
 				continue
 			}
 			file := fmt.Sprintf("pattern %s.bin", a.label(n-1))
-			if err := os.WriteFile(filepath.Join(dir, file), pb, 0o644); err != nil {
-				a.say(err.Error(), true)
-				return
-			}
+			files = append(files, out{file, pb})
 			sc.Patterns = append(sc.Patterns, sidecarPattern{Slot: a.label(n - 1), File: file})
 		}
 	}
 	b, _ := json.MarshalIndent(sc, "", "  ")
-	if err := os.WriteFile(filepath.Join(dir, "samples.json"), b, 0o644); err != nil {
-		a.say(err.Error(), true)
-		return
-	}
+	files = append(files, out{"samples.json", b}) // last: a folder with samples.json in it is a whole export
 	msg := fmt.Sprintf("%d pads exported to %s", len(sc.Pads), short2(dir, 40))
 	if len(sc.Patterns) > 0 {
 		msg = fmt.Sprintf("%d pads and %d patterns exported to %s", len(sc.Pads), len(sc.Patterns), short2(dir, 40))
 	}
-	a.say(msg, false)
+	write := func(progress func(done, total int, name string)) error {
+		if err := a.mkdirAll(dir); err != nil {
+			return err
+		}
+		for i, f := range files {
+			progress(i, len(files), f.name)
+			if err := a.writeFile(joinPath(dir, f.name), f.data); err != nil {
+				return fmt.Errorf("%s: %w", f.name, err)
+			}
+		}
+		return nil
+	}
+	if !onCard(dir) {
+		if err := write(func(int, int, string) {}); err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		a.say(msg, false)
+		return
+	}
+	a.jobWhat = "exporting to the card"
+	a.say(fmt.Sprintf("writing %d files to the unit's card...", len(files)), false)
+	a.startJob(-1, write, func(err error) {
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		a.say(msg, false)
+	})
 }
 
 // restoreMenu lists the exports there are and puts one back.
@@ -281,6 +314,11 @@ func (a *App) restoreMenu() {
 		d := d
 		m.items = append(m.items, menuItem{label: d, run: func(int) { a.restorePads(filepath.Join(a.exportDir(), d)) }})
 	}
+	if _, ok := a.unitDevice(); ok && Terminal {
+		m.items = append(m.items, menuItem{label: "A folder on the unit's SD card...", run: func(int) {
+			a.pickExportFolder("restore pads: the folder of the export", func(d string) { a.restorePads(d) })
+		}})
+	}
 	m.items = append(m.items, menuItem{label: "A folder somewhere else...", run: func(int) {
 		a.askText("folder of an export", "the folder with samples.json in it", "", func(s string) { a.restorePads(expandHome(s)) })
 	}})
@@ -291,7 +329,7 @@ func (a *App) restoreMenu() {
 // keep their places in the bank and the patterns their slots, their notes moved to the pads of that bank. Patterns already in
 // those slots are asked about.
 func (a *App) restorePads(dir string) {
-	b, err := os.ReadFile(filepath.Join(dir, "samples.json"))
+	b, err := a.readFile(joinPath(dir, "samples.json"))
 	if err != nil {
 		a.say("there is no samples.json in "+short2(dir, 30), true)
 		return
@@ -393,6 +431,47 @@ func movedSlot(label string, to int) (int, bool) {
 // restoreTo puts the pads of an export on bank to (-1: each back where it came from) with their settings, and the patterns in
 // the slots of that bank, playing its pads; replace false leaves the slots that have a pattern alone. It is one undo.
 func (a *App) restoreTo(dir string, sc sidecarFile, to int, replace bool) {
+	if !onCard(dir) {
+		a.applyRestore(dir, sc, to, replace, func(name string) ([]byte, error) { return os.ReadFile(filepath.Join(dir, name)) })
+		return
+	}
+	// on the unit's card: the files are read in the background (over USB), then put on the pads
+	var names []string
+	for _, sp := range sc.Pads {
+		names = append(names, sp.File)
+	}
+	for _, pt := range sc.Patterns {
+		names = append(names, pt.File)
+	}
+	got := map[string][]byte{}
+	a.jobWhat = "reading from the card"
+	a.say(fmt.Sprintf("reading %d files from the unit's card...", len(names)), false)
+	a.startJob(-1, func(progress func(done, total int, name string)) error {
+		for i, n := range names {
+			progress(i, len(names), n)
+			b, err := a.readFile(joinPath(dir, n))
+			if err != nil {
+				return fmt.Errorf("%s: %w", n, err)
+			}
+			got[n] = b
+		}
+		return nil
+	}, func(err error) {
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		a.applyRestore(dir, sc, to, replace, func(name string) ([]byte, error) {
+			if b, ok := got[name]; ok {
+				return b, nil
+			}
+			return nil, os.ErrNotExist
+		})
+	})
+}
+
+// applyRestore is restoreTo with the files of the export read by read.
+func (a *App) applyRestore(dir string, sc sidecarFile, to int, replace bool, read func(name string) ([]byte, error)) {
 	pre := a.lab.Snapshot()
 	done, pats, kept := 0, 0, 0
 	for _, sp := range sc.Pads {
@@ -403,7 +482,7 @@ func (a *App) restoreTo(dir string, sc sidecarFile, to int, replace bool) {
 		if to >= 0 {
 			pad, _ = proto.PadFromBankPad(uint16(to), pad.Pad())
 		}
-		raw, err := os.ReadFile(filepath.Join(dir, sp.File))
+		raw, err := read(sp.File)
 		if err != nil {
 			continue
 		}
@@ -436,7 +515,7 @@ func (a *App) restoreTo(dir string, sc sidecarFile, to int, replace bool) {
 			kept++
 			continue
 		}
-		pb, err := os.ReadFile(filepath.Join(dir, pt.File))
+		pb, err := read(pt.File)
 		if err != nil {
 			continue
 		}

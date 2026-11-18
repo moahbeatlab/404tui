@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -3531,6 +3532,69 @@ func TestABankExportBringsItsPatternsToAnotherBank(t *testing.T) {
 	}
 	if got := pads(69); !got[66] {
 		t.Fatalf("E5 is written: %v", got)
+	}
+}
+
+func TestWithTheUnitABankIsExportedToItsCardFirst(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	Terminal = true
+	defer func() { Terminal = false }()
+	a.link, _ = a.Connect() // the unit is plugged in
+	if _, ok := a.unitDevice(); !ok {
+		t.Fatal("the test needs the simulated unit")
+	}
+	a.lab.NewPattern(2, 1)
+	args, _ := json.Marshal(lab.PatternArgs{Pad: 1, Tick: 0, Vel: 100, Len: 120})
+	if err := a.lab.PatternOp(2, "insert", args); err != nil {
+		t.Fatal(err)
+	}
+	a.refresh()
+	a.bank = 0
+	a.exportBank()
+	if a.dp == nil || a.dp.dir != app.CardRoot {
+		t.Fatalf("the chooser starts on the unit's card: %+v", a.dp)
+	}
+	if !slices.Contains(a.dp.names, "IMPORT") {
+		t.Fatalf("it lists the card's folders: %v", a.dp.names)
+	}
+	a.dpKey(A) // use this folder
+	if a.prompt == nil || a.prompt.buf != app.SanitizeName(a.ProjectName())+"_bank_A" {
+		t.Fatalf("a name is asked for, the bank's by default: %+v", a.prompt)
+	}
+	a.prompt.buf = "Song Tech House 01"
+	a.closePrompt(true)
+	waitJob(t, a)
+	dir := "SD:Song Tech House 01"
+	ents, err := a.fileStore().ListDir(dir)
+	if err != nil {
+		t.Fatalf("the export is on the card: %v", err)
+	}
+	var names []string
+	for _, e := range ents {
+		names = append(names, e.Name)
+	}
+	if !slices.Contains(names, "samples.json") || !slices.Contains(names, "pattern A2.bin") {
+		t.Fatalf("samples.json and the pattern are on the card: %v", names)
+	}
+	if a.set.ExportCardDir != app.CardRoot {
+		t.Fatalf("the card folder is remembered: %q", a.set.ExportCardDir)
+	}
+	// and back from the card, onto bank C
+	a.restorePads(dir)
+	chooseMenuNoPick(t, a, "Bank C")
+	waitJob(t, a)
+	if !a.info.Pads[32].File || !a.info.Pads[33].File {
+		t.Fatal("C1 and C2 have the sounds of A1 and A2")
+	}
+	raw, err := a.lab.Pattern(34)
+	if err != nil {
+		t.Fatalf("C2 has the pattern: %v", err)
+	}
+	var d lab.PatternDoc
+	json.Unmarshal(raw, &d)
+	if len(d.Notes) != 1 || d.Notes[0].Pad != 33 {
+		t.Fatalf("C2 plays C2: %+v", d.Notes)
 	}
 }
 
