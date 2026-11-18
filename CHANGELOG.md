@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **A bank export brings its patterns:** exporting a whole bank (`Ctrl-E`, no pads marked) also writes the bank's patterns (slots 1-16, as the unit keeps them). Restoring an export of one bank asks which bank it goes to: the pads keep their places and the patterns their slots, and notes on the exported bank's pads play the pads of the new bank (notes on other banks stay). Slots that already hold a pattern are asked about: replace them (`u` undoes it) or keep them. → [docs/pads.md](docs/pads.md)
 - **A launcher at the start** (terminal): the name in pixel letters with a shadow, four doors with a key each (`Enter` continue or restore the autosave, `u` the unit online, `o` the offline card folder, `f` a folder) and the projects opened last (`1`-`4`, with pads, tempo and when). It waits for a key instead of closing after a few seconds. The handheld's start screen is unchanged. → [docs/projects.md](docs/projects.md)
 
 ## 0.2.0 (2026-11-11)

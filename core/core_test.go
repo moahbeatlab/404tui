@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
@@ -3446,11 +3447,90 @@ func TestRenameFindSetupExportRestorePads(t *testing.T) {
 		t.Fatal("A1 is cleared")
 	}
 	a.restorePads(dir)
+	chooseMenuNoPick(t, a, "Bank A (where it came from)")
 	if !a.info.Pads[0].File || !a.info.Pads[1].File || !a.info.Pads[2].File {
 		t.Fatalf("the pads are back: %v %v %v", a.info.Pads[0].File, a.info.Pads[1].File, a.info.Pads[2].File)
 	}
 	if v, _ := a.lab.PadParam(0, 0x78); v != 64 {
 		t.Fatalf("the settings come back too: pan %d", v)
+	}
+}
+
+func TestABankExportBringsItsPatternsToAnotherBank(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	note := func(slot, pad int, tick uint32) {
+		args, _ := json.Marshal(lab.PatternArgs{Pad: pad, Tick: tick, Vel: 100, Len: 120})
+		if err := a.lab.PatternOp(slot, "insert", args); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pads := func(slot int) map[int]bool {
+		raw, err := a.lab.Pattern(slot)
+		if err != nil {
+			t.Fatalf("pattern %d: %v", slot, err)
+		}
+		var d lab.PatternDoc
+		json.Unmarshal(raw, &d)
+		out := map[int]bool{}
+		for _, n := range d.Notes {
+			out[n.Pad] = true
+		}
+		return out
+	}
+	a.lab.NewPattern(2, 1) // A2: A1, A2 and C3 of another bank
+	note(2, 0, 0)
+	note(2, 1, 480)
+	note(2, 34, 960)
+	a.lab.NewPattern(5, 1) // A5: A3
+	note(5, 2, 0)
+	a.lab.NewPattern(66, 1) // E2 is taken
+	note(66, 70, 0)
+	a.refresh()
+	a.bank = 0
+	a.exportBank()
+	dir := filepath.Join(a.exportDir(), app.SanitizeName(a.ProjectName())+"_bank_A")
+	for _, f := range []string{"pattern A2.bin", "pattern A5.bin"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			t.Fatalf("the export has %s: %v", f, err)
+		}
+	}
+	a.restorePads(dir)
+	if m := menuOf(a); m == nil || m.title != "restore bank A into bank" {
+		t.Fatalf("the restore asks for the bank: %+v", m)
+	}
+	chooseMenuNoPick(t, a, "Bank E")
+	if m := menuOf(a); m == nil || m.title != "bank E has patterns in E2" {
+		t.Fatalf("a taken slot is asked about: %+v", m)
+	}
+	chooseMenuNoPick(t, a, "Replace them")
+	for _, p := range []int{64, 65, 66} {
+		if !a.info.Pads[p].File {
+			t.Fatalf("%s has the sound of the same pad of bank A", a.label(p))
+		}
+	}
+	if got := pads(66); len(got) != 3 || !got[64] || !got[65] || !got[34] {
+		t.Fatalf("E2 plays E1, E2 and still C3: %v", got)
+	}
+	if got := pads(69); len(got) != 1 || !got[66] {
+		t.Fatalf("E5 plays E3: %v", got)
+	}
+	if got := pads(2); !got[0] {
+		t.Fatalf("A2 is as it was: %v", got)
+	}
+	keys(t, a, "Y+{") // undo: E2 is back
+	if got := pads(66); len(got) != 1 || !got[70] {
+		t.Fatalf("undo brings back the old E2: %v", got)
+	}
+	// keeping the taken slots
+	a.restorePads(dir)
+	chooseMenuNoPick(t, a, "Bank E")
+	chooseMenuNoPick(t, a, "Keep them")
+	if got := pads(66); len(got) != 1 || !got[70] {
+		t.Fatalf("E2 is kept: %v", got)
+	}
+	if got := pads(69); !got[66] {
+		t.Fatalf("E5 is written: %v", got)
 	}
 }
 

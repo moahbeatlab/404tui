@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/moahbeatlab/404tui/app"
+	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
 	"github.com/moahbeatlab/404tui/proto"
 )
@@ -147,11 +148,19 @@ type sidecarPad struct {
 	Chops  []uint32         `json:"chopPoints"`
 }
 
+// sidecarPattern is a pattern of the bank in an export: its slot and its file as the unit keeps it (PTNnnnnn.BIN).
+type sidecarPattern struct {
+	Slot string `json:"slot"`
+	File string `json:"file"`
+}
+
 type sidecarFile struct {
-	Format  string       `json:"format"`
-	Version int          `json:"version"`
-	Project string       `json:"project"`
-	Pads    []sidecarPad `json:"pads"`
+	Format   string           `json:"format"`
+	Version  int              `json:"version"`
+	Project  string           `json:"project"`
+	Pads     []sidecarPad     `json:"pads"`
+	Bank     string           `json:"bank,omitempty"`     // the bank of a whole-bank export
+	Patterns []sidecarPattern `json:"patterns,omitempty"` // its patterns, in a whole-bank export
 }
 
 func (a *App) exportDir() string { return filepath.Join(a.dataDir(), "exports") }
@@ -165,10 +174,12 @@ func (a *App) exportRoot() string {
 }
 
 // exportBank writes the pads of the bank (the marked ones among them) as WAV files named after the pad, and samples.json with
-// their settings, into a folder of its own below the exports folder.
+// their settings, into a folder of its own below the exports folder. The whole bank brings its patterns too (slots 1 to 16).
 func (a *App) exportBank() {
 	pads := a.targetsFor(a.padN())
+	bank := -1
 	if len(a.marks) == 0 {
+		bank = a.bank
 		pads = nil
 		for p := a.bank * 16; p < a.bank*16+16; p++ {
 			if a.info.Pads[p].File {
@@ -185,15 +196,15 @@ func (a *App) exportBank() {
 		a.pickFolder(fmt.Sprintf("export bank %c into the folder", 'A'+a.bank), a.exportRoot(), func(root string) {
 			a.set.ExportDir = root
 			a.saveSettings()
-			a.freeTarget(root, filepath.Base(dir), true, func(d string) { a.exportPadsTo(pads, d) })
+			a.freeTarget(root, filepath.Base(dir), true, func(d string) { a.exportPadsTo(pads, bank, d) })
 		})
 		return
 	}
-	a.exportPadsTo(pads, dir)
+	a.exportPadsTo(pads, bank, dir)
 }
 
-// exportPadsTo writes the pads as WAV files and samples.json into the folder.
-func (a *App) exportPadsTo(pads []int, dir string) {
+// exportPadsTo writes the pads as WAV files and samples.json into the folder; with a bank (not -1) its patterns too.
+func (a *App) exportPadsTo(pads []int, bank int, dir string) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		a.say(err.Error(), true)
 		return
@@ -226,12 +237,31 @@ func (a *App) exportPadsTo(pads []int, dir string) {
 		}
 		sc.Pads = append(sc.Pads, sidecarPad{Pad: app.PadLabel(pad), File: file, Name: a.info.Pads[n].Name, Params: params, Chops: []uint32{}})
 	}
+	if bank >= 0 {
+		sc.Bank = string(rune('A' + bank))
+		for n := bank*16 + 1; n <= bank*16+16; n++ {
+			pb, err := a.lab.PatternBytes(n)
+			if err != nil || len(pb) == 0 {
+				continue
+			}
+			file := fmt.Sprintf("pattern %s.bin", a.label(n-1))
+			if err := os.WriteFile(filepath.Join(dir, file), pb, 0o644); err != nil {
+				a.say(err.Error(), true)
+				return
+			}
+			sc.Patterns = append(sc.Patterns, sidecarPattern{Slot: a.label(n - 1), File: file})
+		}
+	}
 	b, _ := json.MarshalIndent(sc, "", "  ")
 	if err := os.WriteFile(filepath.Join(dir, "samples.json"), b, 0o644); err != nil {
 		a.say(err.Error(), true)
 		return
 	}
-	a.say(fmt.Sprintf("%d pads exported to %s", len(sc.Pads), short2(dir, 40)), false)
+	msg := fmt.Sprintf("%d pads exported to %s", len(sc.Pads), short2(dir, 40))
+	if len(sc.Patterns) > 0 {
+		msg = fmt.Sprintf("%d pads and %d patterns exported to %s", len(sc.Pads), len(sc.Patterns), short2(dir, 40))
+	}
+	a.say(msg, false)
 }
 
 // restoreMenu lists the exports there are and puts one back.
@@ -257,7 +287,9 @@ func (a *App) restoreMenu() {
 	a.menu = m
 }
 
-// restorePads puts every pad of an export back on its own pad, with its settings.
+// restorePads reads an export and puts it back. An export of one bank asks for the bank it goes to (its own first); the pads
+// keep their places in the bank and the patterns their slots, their notes moved to the pads of that bank. Patterns already in
+// those slots are asked about.
 func (a *App) restorePads(dir string) {
 	b, err := os.ReadFile(filepath.Join(dir, "samples.json"))
 	if err != nil {
@@ -269,12 +301,107 @@ func (a *App) restorePads(dir string) {
 		a.say("samples.json: "+err.Error(), true)
 		return
 	}
+	from, single := exportBankOf(sc)
+	if !single {
+		a.restoreTo(dir, sc, -1, true)
+		return
+	}
+	m := &menu{title: fmt.Sprintf("restore bank %c into bank", 'A'+from)}
+	for i := 0; i < 10; i++ {
+		to := (from + i) % 10
+		label := fmt.Sprintf("Bank %c", 'A'+to)
+		if to == from {
+			label += " (where it came from)"
+		}
+		if used := a.bankPads(to); used > 0 {
+			label += fmt.Sprintf("  %d pads in use", used)
+		}
+		m.items = append(m.items, menuItem{label: label, run: func(int) { a.askPatternSlots(dir, sc, from, to) }})
+	}
+	a.menu = m
+}
+
+// exportBankOf is the bank the pads (and patterns) of an export came from, when it is one.
+func exportBankOf(sc sidecarFile) (int, bool) {
+	bank := -1
+	for _, sp := range sc.Pads {
+		p, err := proto.ParsePad(sp.Pad)
+		if err != nil {
+			continue
+		}
+		if bank >= 0 && int(p.Bank()) != bank {
+			return 0, false
+		}
+		bank = int(p.Bank())
+	}
+	for _, pt := range sc.Patterns {
+		p, err := proto.ParsePad(pt.Slot)
+		if err != nil {
+			continue
+		}
+		if bank >= 0 && int(p.Bank()) != bank {
+			return 0, false
+		}
+		bank = int(p.Bank())
+	}
+	return bank, bank >= 0
+}
+
+func (a *App) bankPads(b int) int {
+	n := 0
+	for p := b * 16; p < b*16+16; p++ {
+		if a.info.Pads[p].File {
+			n++
+		}
+	}
+	return n
+}
+
+// askPatternSlots goes on with the restore, asking first when patterns of the export would replace patterns in the bank.
+func (a *App) askPatternSlots(dir string, sc sidecarFile, from, to int) {
+	var taken []string
+	for _, pt := range sc.Patterns {
+		if n, ok := movedSlot(pt.Slot, to); ok {
+			if pb, _ := a.lab.PatternBytes(n); len(pb) > 0 {
+				taken = append(taken, a.label(n-1))
+			}
+		}
+	}
+	if len(taken) == 0 {
+		a.restoreTo(dir, sc, to, true)
+		return
+	}
+	m := &menu{title: fmt.Sprintf("bank %c has patterns in %s", 'A'+to, strings.Join(taken, " "))}
+	m.items = append(m.items,
+		menuItem{label: fmt.Sprintf("Replace them (%d patterns, u undoes it)", len(taken)), run: func(int) { a.restoreTo(dir, sc, to, true) }},
+		menuItem{label: "Keep them: only the empty slots get patterns", run: func(int) { a.restoreTo(dir, sc, to, false) }})
+	a.menu = m
+}
+
+// movedSlot is the pattern slot (1..160) of a slot label moved to bank to (-1: where it is).
+func movedSlot(label string, to int) (int, bool) {
+	p, err := proto.ParsePad(label)
+	if err != nil {
+		return 0, false
+	}
+	if to >= 0 {
+		p, _ = proto.PadFromBankPad(uint16(to), p.Pad())
+	}
+	return int(p.Index()) + 1, true
+}
+
+// restoreTo puts the pads of an export on bank to (-1: each back where it came from) with their settings, and the patterns in
+// the slots of that bank, playing its pads; replace false leaves the slots that have a pattern alone. It is one undo.
+func (a *App) restoreTo(dir string, sc sidecarFile, to int, replace bool) {
 	pre := a.lab.Snapshot()
-	done := 0
+	done, pats, kept := 0, 0, 0
 	for _, sp := range sc.Pads {
 		pad, err := proto.ParsePad(sp.Pad)
 		if err != nil {
 			continue
+		}
+		if to >= 0 {
+			pad, _ = proto.PadFromBankPad(uint16(to), pad.Pad())
 		}
 		raw, err := os.ReadFile(filepath.Join(dir, sp.File))
 		if err != nil {
@@ -288,9 +415,8 @@ func (a *App) restorePads(dir string) {
 		if json.Unmarshal(mb, &meta) != nil {
 			continue
 		}
-		id := meta.ID
 		n := int(pad.Index())
-		if err := a.assignPad(n, id, sp.Name); err != nil {
+		if err := a.assignPad(n, meta.ID, sp.Name); err != nil {
 			continue
 		}
 		for name, v := range sp.Params {
@@ -300,8 +426,40 @@ func (a *App) restorePads(dir string) {
 		}
 		done++
 	}
+	for _, pt := range sc.Patterns {
+		src, err := proto.ParsePad(pt.Slot)
+		if err != nil {
+			continue
+		}
+		n, _ := movedSlot(pt.Slot, to)
+		if old, _ := a.lab.PatternBytes(n); len(old) > 0 && !replace {
+			kept++
+			continue
+		}
+		pb, err := os.ReadFile(filepath.Join(dir, pt.File))
+		if err != nil {
+			continue
+		}
+		if to >= 0 && to != int(src.Bank()) { // the notes on the exported bank's pads play the pads of this one; other banks stay
+			formats.RetargetBank(pb, src.Bank(), uint16(to))
+		}
+		if a.lab.SetPatternBytes(n, pb) == nil {
+			pats++
+		}
+	}
 	a.commitUndo(pre, A, 0)
 	a.pcm = map[int]int{}
 	a.refresh()
-	a.say(fmt.Sprintf("%d pads restored from %s", done, short2(dir, 30)), false)
+	where := ""
+	if to >= 0 {
+		where = fmt.Sprintf(" onto bank %c", 'A'+to)
+	}
+	msg := fmt.Sprintf("%d pads restored%s from %s", done, where, short2(dir, 30))
+	if pats > 0 || kept > 0 {
+		msg = fmt.Sprintf("%d pads and %d patterns restored%s", done, pats, where)
+		if kept > 0 {
+			msg += fmt.Sprintf(", %d slots kept", kept)
+		}
+	}
+	a.say(msg, false)
 }
