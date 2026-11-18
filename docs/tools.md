@@ -347,6 +347,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     *Settings*
 
     - `Role` — bass  (bass track) / lead  (synth / lead track) / arp  (synth / lead track) / stabs  (pads track) / pad (held chords)  (pads track); now lead  (synth / lead track)
+    - `Length` — the pattern's (4 bars) / 1 bar, repeated over the 4 / 2 bars, repeated over the 4 / 4 bars / 8 bars (the synth; the pattern keeps 4); now the pattern's (4 bars)
     - `Style` — house / deep house / tech house / techno / trance / progressive; now house
     - `Key` — C, C#, ... B  (the bank's) (12 values); now B  (the bank's)
     - `Scale` — minor / major / dorian / phrygian / harmonic minor / minor pentatonic; now minor

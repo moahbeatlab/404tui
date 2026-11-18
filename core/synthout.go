@@ -28,6 +28,10 @@ type synthOut struct {
 	start   time.Time     // when a round began
 	loop    time.Duration // how long a round is; 0: nothing plays
 	perTick float64       // nanoseconds a tick
+	length  int           // the round in ticks of the pattern (the melody's own length)
+	gen     int           // which melody the notes are (one more at every change)
+	sentGen int           // the melody of the last note sent, and when its first note went
+	sentAt  time.Time
 	stop    chan struct{}
 	done    chan struct{}
 }
@@ -35,7 +39,7 @@ type synthOut struct {
 // synthPlay sends the notes of the track on channel ch (1..16) in time with the unit's MIDI clock while the unit plays, else with
 // the loop on the computer; tonic is the MIDI note of the key's tonic and k the semitones of the tonic from the pad's own pitch (a
 // note's pitch p is the MIDI note tonic+p-k). The pad is quiet on the computer meanwhile. It says whether a MIDI output is there.
-func (a *App) synthPlay(pad int, notes []lab.Note, ch, tonic, k int) bool {
+func (a *App) synthPlay(pad int, notes []lab.Note, length, ch, tonic, k int) bool {
 	out := a.midiOutput()
 	if out == nil {
 		return false
@@ -57,7 +61,8 @@ func (a *App) synthPlay(pad int, notes []lab.Note, ch, tonic, k int) bool {
 	if s.ch != 0 && s.ch != ch {
 		s.allOff()
 	}
-	s.ch, s.notes = ch, sn
+	s.ch, s.notes, s.length = ch, sn, length
+	s.gen++
 	s.mu.Unlock()
 	a.synthPad = pad + 1
 	a.replay() // the pad goes quiet on the computer
@@ -102,8 +107,10 @@ func (a *App) synthSync() {
 	if s == nil {
 		return
 	}
-	length := 0
-	if d, ok := a.doc(); ok {
+	s.mu.Lock()
+	length := s.length
+	s.mu.Unlock()
+	if d, ok := a.doc(); ok && length == 0 {
 		length = int(d.Length)
 	}
 	start, loop, perTick, ok := a.synthTiming(length)
@@ -206,6 +213,9 @@ func (s *synthOut) run() {
 						continue
 					}
 					sent[i] = at
+					if s.sentGen != s.gen {
+						s.sentGen, s.sentAt = s.gen, at
+					}
 					s.out.Send([]byte{0x90 | byte(s.ch-1), byte(n.note), byte(min(max(n.vel, 1), 127))})
 					on = append(on, pending{s.ch, n.note, now.Add(max(time.Duration(float64(n.len)*s.perTick), 10*time.Millisecond))})
 				}

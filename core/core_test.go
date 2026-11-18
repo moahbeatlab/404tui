@@ -5075,6 +5075,9 @@ func TestTheMelodyPlaysOnTheSynthBehindTheUnitInTimeWithItsClock(t *testing.T) {
 	if rec.has(0x9A) {
 		t.Fatal("nothing plays yet: no note to the synth")
 	}
+	if txt := melodyNowText(a); !strings.Contains(txt, "waiting: start the unit") {
+		t.Fatalf("the dialog says the synth waits:\n%s", txt)
+	}
 	// the unit plays: its clock comes in, the synth follows it
 	a.mon.BPM = 125
 	pulse := time.Duration(60 / 125.0 / 24 * float64(time.Second))
@@ -5089,12 +5092,44 @@ func TestTheMelodyPlaysOnTheSynthBehindTheUnitInTimeWithItsClock(t *testing.T) {
 	if !rec.has(0x9A) {
 		t.Fatal("note ons on channel 11 are sent while the unit's clock runs")
 	}
+	if txt := melodyNowText(a); !strings.Contains(txt, "MIDI ch 11, melody #1 on the synth since bar 1 (the unit's clock)") {
+		t.Fatalf("the dialog says which melody the synth plays, since when and what it follows:\n%s", txt)
+	}
+	a.menuKey(Right) // another role: a new melody
+	if txt := melodyNowText(a); !strings.Contains(txt, "melody #2: from its next note") && !strings.Contains(txt, "melody #2 on the synth") {
+		t.Fatalf("a change is a new melody:\n%s", txt)
+	}
 	start, loop, _, ok := a.synthTiming(4 * 16 * stepTicks)
 	if d := loop - 384*pulse; !ok || d > time.Millisecond || d < -time.Millisecond {
 		t.Fatalf("a round of 4 bars is 384 pulses of the unit's clock: %v", loop)
 	}
 	if want := a.clk.At.Add(-time.Duration(a.clk.Ticks-1) * pulse); start.Sub(want) > time.Millisecond || want.Sub(start) > time.Millisecond {
 		t.Fatalf("the round began at the unit's Start: %v off", start.Sub(want))
+	}
+	pl := 0
+	if d, ok := a.doc(); ok {
+		pl = int(d.Length)
+	}
+	for i, it := range a.menu.items { // Length: 8 bars, longer than the pattern
+		if it.label == "Length" {
+			a.menu.cur = i
+		}
+	}
+	for a.mel.bars != 4 {
+		a.menuKey(Right)
+	}
+	if a.synth.length != 8*16*stepTicks {
+		t.Fatalf("the synth loops the 8 bars: %d", a.synth.length)
+	}
+	for _, n := range a.trackNotes(pad) {
+		if int(n.Tick) >= pl {
+			t.Fatalf("the pattern keeps its own bars: a note at %d of %d", n.Tick, pl)
+		}
+	}
+	a.clk.Ticks++ // a pulse of the unit's clock, just now
+	a.clk.At = time.Now()
+	if _, loop, _, _ := a.synthTiming(a.synth.length); loop < 768*pulse-time.Millisecond {
+		t.Fatalf("a round of the synth is 8 bars of the unit's clock: %v", loop)
 	}
 	a.menu.onX() // Space: the pattern on the computer as well
 	if !a.seqOn {
@@ -5104,5 +5139,33 @@ func TestTheMelodyPlaysOnTheSynthBehindTheUnitInTimeWithItsClock(t *testing.T) {
 	keys(t, a, "B") // the dialog closes
 	if a.synth != nil || !a.audible(pad) || !rec.has(0xBA) {
 		t.Fatal("closing the dialog stops the synth (All Notes Off) and the pad is heard again")
+	}
+}
+
+func melodyNowText(a *App) string {
+	g := newTextGfx()
+	a.melodyNow(g, 0, 0, 70)
+	var b strings.Builder
+	for r := 0; r < 3; r++ {
+		for c := 0; c < 70; c++ {
+			b.WriteRune(g.at(c, r).R)
+		}
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+func TestAShortMelodyRepeatsALongOneIsCut(t *testing.T) {
+	bar := uint32(16 * stepTicks)
+	ns := []lab.Note{{Tick: 0, Len: 120}, {Tick: bar + 120, Len: 2 * int(bar)}}
+	if got := fitBars(ns, 2, 4); len(got) != 4 || got[2].Tick != 2*bar || got[3].Tick != 3*bar+120 {
+		t.Fatalf("2 bars over 4: repeated: %+v", got)
+	}
+	got := fitBars(ns, 2, 1)
+	if len(got) != 1 || got[0].Tick != 0 {
+		t.Fatalf("2 bars into 1: the first bar: %+v", got)
+	}
+	if got := fitBars(ns, 2, 2); got[1].Len != int(bar)-120 {
+		t.Fatalf("a note is cut at the end of the pattern: %d", got[1].Len)
 	}
 }

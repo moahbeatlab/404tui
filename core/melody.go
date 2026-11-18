@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
@@ -49,12 +50,16 @@ var melRanges = []struct {
 }
 
 var melDensities = []string{"sparse", "medium", "busy"}
+
+// melBars are the lengths a melody can have, in bars; 0 is the pattern's.
+var melBars = []int{0, 1, 2, 4, 8}
 var melGhosts = []string{"none", "a few", "many"}
 var melAccents = []string{"none", "on the offbeats", "on the beats", "here and there"}
 
 // melodySet is the dialog's settings, kept between visits; key is -1 until the bank's key is read.
 type melodySet struct {
 	key, mode, role, style, prog, rng, density, ghost, accent int
+	bars                                                      int    // an index of melBars: 0 the pattern's length
 	out                                                       [5]int // per role: where it plays, an index of synthOutNames
 	init                                                      bool
 }
@@ -99,8 +104,24 @@ func (a *App) melodyMenu() {
 		ranges[i] = r.name
 	}
 	padNote, _ := a.sampleNote(pad)
+	patBars := 0
+	if d, ok := a.doc(); ok {
+		patBars = max(int(d.Length)/(16*stepTicks), 1)
+	}
+	lengths := []string{fmt.Sprintf("the pattern's (%s)", count(max(patBars, 1), "bar"))}
+	for _, b := range melBars[1:] {
+		l := count(b, "bar")
+		switch {
+		case patBars > 0 && b < patBars:
+			l += fmt.Sprintf(", repeated over the %d", patBars)
+		case patBars > 0 && b > patBars:
+			l += fmt.Sprintf(" (the synth; the pattern keeps %d)", patBars)
+		}
+		lengths = append(lengths, l)
+	}
 	settings := []menuItem{
 		val("Role", roles, st.role, func(v int) { st.role = v }),
+		val("Length", lengths, st.bars, func(v int) { st.bars = v }),
 		val("Style", melStyles, st.style, func(v int) { st.style = v }),
 		val("Key", keys, st.key, func(v int) { st.key = v }),
 		val("Scale", modes, st.mode, func(v int) { st.mode = v }),
@@ -123,16 +144,20 @@ func (a *App) melodyMenu() {
 			return
 		}
 		bars := max(int(d.Length)/(16*stepTicks), 1)
+		mb := bars
+		if st.bars > 0 {
+			mb = melBars[st.bars]
+		}
 		pn, _ := a.sampleNote(pad)
-		notes := melodyNotes(pad, bars, *st, pn, a.tt.seed)
-		what := fmt.Sprintf("%s %s in %s %s", melStyles[st.style], melRoles[st.role], sharpNames[st.key], melModes[st.mode].name)
-		a.finishTrack(pad, notes, what)
+		notes := melodyNotes(pad, mb, *st, pn, a.tt.seed)
+		what := fmt.Sprintf("%s %s in %s %s, %s", melStyles[st.style], melRoles[st.role], sharpNames[st.key], melModes[st.mode].name, count(mb, "bar"))
+		a.finishTrack(pad, fitBars(notes, mb, bars), what)
 		if o := st.out[st.role]; o > 0 && online {
 			k := ((st.key-pn)%12 + 12) % 12
 			if k > 6 {
 				k -= 12
 			}
-			if a.synthPlay(pad, a.trackNotes(pad), 10+o, synthTonic(st.role, st.key), k) {
+			if a.synthPlay(pad, notes, mb*16*stepTicks, 10+o, synthTonic(st.role, st.key), k) {
 				a.say(what+" "+synthSaid(10+o, a.midiOutName), false)
 			}
 		} else if a.synth != nil {
@@ -150,6 +175,7 @@ func (a *App) melodyMenu() {
 			}
 			return "play here"
 		}
+		m.foot, m.footH = a.melodyNow, 3
 		orig := m.onClose
 		m.onClose = func() {
 			a.synthStop()
@@ -648,4 +674,109 @@ func containsInt(xs []int, x int) bool {
 		}
 	}
 	return false
+}
+
+// melodyNow is the foot of the melody dialog: the bars of the pattern with the one that plays lit and the beat, what the time
+// follows, and whether the melody in the dialog is the one the synth plays yet.
+func (a *App) melodyNow(g Gfx, x, y, w int) {
+	g.HRule(x+1, y, w-2, cLine)
+	g.Fill(x+1, y, 6, 1, cPanel2)
+	g.Text(x+2, y, "NOW", cDim, true)
+	d, ok := a.doc()
+	if !ok {
+		return
+	}
+	length := int(d.Length)
+	if s := a.synth; s != nil { // the synth loops the melody's own length
+		s.mu.Lock()
+		if s.length > 0 {
+			length = s.length
+		}
+		s.mu.Unlock()
+	}
+	bars := max(length/(16*stepTicks), 1)
+	start, loop, perTick, playing := a.synthTiming(length)
+	if a.synth == nil && !a.seqOn {
+		playing = false
+	}
+	bar, beat := -1, -1
+	now := time.Now()
+	barOf := func(t time.Time) int {
+		if loop <= 0 || perTick <= 0 {
+			return 0
+		}
+		el := t.Sub(start) % loop
+		if el < 0 {
+			el += loop
+		}
+		return int(float64(el)/perTick) / (16 * stepTicks)
+	}
+	if playing && loop > 0 && !now.Before(start) {
+		tick := int(float64(now.Sub(start)%loop) / perTick)
+		bar, beat = tick/(16*stepTicks), tick/(4*stepTicks)%4
+	}
+	cx := x + 2
+	shown := min(bars, max((w-16)/4, 1))
+	for b := 0; b < shown; b++ {
+		label := fmt.Sprintf("%2d", b+1)
+		if b == bar {
+			g.Fill(cx, y+1, 3, 1, cAmber)
+			g.Text(cx, y+1, label, cBg, true)
+		} else {
+			g.Text(cx, y+1, label, cDim, false)
+		}
+		cx += 4
+	}
+	if bars > shown && bar >= shown {
+		g.Text(cx, y+1, fmt.Sprintf("bar %d", bar+1), cAmber, true)
+		cx += 7
+	}
+	cx++
+	for i := 0; i < 4; i++ {
+		g.Badge(cx+i*2, y+1, fmt.Sprint(i+1), i == beat)
+	}
+	from := "the pattern here"
+	if a.synthClock() {
+		from = "the unit's clock"
+	}
+	var line string
+	col := cText
+	switch {
+	case a.synth != nil:
+		s := a.synth
+		s.mu.Lock()
+		ch, gen, sentGen, sentAt := s.ch, s.gen, s.sentGen, s.sentAt
+		s.mu.Unlock()
+		switch {
+		case !playing:
+			line, col = fmt.Sprintf("MIDI ch %d: waiting: start the unit (or Space)", ch), cDim
+		case sentGen == gen:
+			line = fmt.Sprintf("MIDI ch %d, melody #%d on the synth since bar %d (%s)", ch, gen, barOf(sentAt)+1, from)
+		default:
+			line, col = fmt.Sprintf("MIDI ch %d, melody #%d: from its next note", ch, gen), cAmber
+		}
+	case playing:
+		line = "on the pad, heard here"
+	default:
+		line, col = "waiting: Space plays it here", cDim
+	}
+	g.Text(x+2, y+2, fit(line, w-4), col, false)
+}
+
+// fitBars puts a melody of mb bars into a pattern of bars: repeated when it is shorter, its first bars when it is longer.
+func fitBars(notes []lab.Note, mb, bars int) []lab.Note {
+	barT := 16 * stepTicks
+	var out []lab.Note
+	for off := 0; off < bars; off += mb {
+		for _, n := range notes {
+			t := int(n.Tick) + off*barT
+			if t >= bars*barT {
+				continue
+			}
+			n.Tick = uint32(t)
+			n.Len = min(n.Len, bars*barT-t)
+			out = append(out, n)
+		}
+	}
+	return out
 }
