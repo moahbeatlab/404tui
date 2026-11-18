@@ -317,6 +317,7 @@ func (a *App) padToolsMenu(n int) *menu {
 	add("Set the buses of the bank by the names...", func(int) { a.busScanMenu() })
 	add("Export the bank to a folder", func(int) { a.exportBank() })
 	add("Restore pads from an export...", func(int) { a.restoreMenu() })
+	add("Delete the bank...", func(int) { a.deleteBankAsk() })
 	m.head(fmt.Sprintf("MARKED PADS (%d)", len(a.marks)))
 	add("Mark every pad of this bank with a sample", func(int) { a.markBank() })
 	add("Arp the marked pads...", func(int) { a.openMarkedArpMenu() })

@@ -3638,6 +3638,47 @@ func TestAJobShowsItsProgressOnEveryScreen(t *testing.T) {
 	}
 }
 
+func TestDeleteTheBankAsksThenClearsPadsAndPatterns(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.lab.NewPattern(2, 1)
+	args, _ := json.Marshal(lab.PatternArgs{Pad: 0, Tick: 0, Vel: 100, Len: 120})
+	a.lab.PatternOp(2, "insert", args)
+	a.lab.NewPattern(18, 1) // B2 stays
+	a.lab.PatternOp(18, "insert", args)
+	a.refresh()
+	a.bank = 0
+	before := padsWithSamples(a)
+	a.deleteBankAsk()
+	if m := menuOf(a); m == nil || m.title != "delete bank A: 3 pads and 1 pattern?" {
+		t.Fatalf("it asks first: %+v", m)
+	}
+	chooseMenuNoPick(t, a, "No")
+	if padsWithSamples(a) != before {
+		t.Fatal("No keeps everything")
+	}
+	a.deleteBankAsk()
+	chooseMenuNoPick(t, a, "Yes, delete them")
+	for p := 0; p < 16; p++ {
+		if a.info.Pads[p].File {
+			t.Fatalf("%s is cleared", a.label(p))
+		}
+	}
+	if pb, _ := a.lab.PatternBytes(2); len(pb) != 0 {
+		t.Fatal("A2 is deleted")
+	}
+	if pb, _ := a.lab.PatternBytes(18); len(pb) == 0 {
+		t.Fatal("B2 stays")
+	}
+	keys(t, a, "Y+{") // undo
+	if padsWithSamples(a) != before {
+		t.Fatalf("undo brings the pads back: %d of %d", padsWithSamples(a), before)
+	}
+	if pb, _ := a.lab.PatternBytes(2); len(pb) == 0 {
+		t.Fatal("and A2")
+	}
+}
+
 func TestPatternSlotsCopyMoveAndRetarget(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit)

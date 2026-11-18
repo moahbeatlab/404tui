@@ -555,3 +555,53 @@ func (a *App) applyRestore(dir string, sc sidecarFile, to int, replace bool, rea
 	}
 	a.say(msg+tempo, false)
 }
+
+// deleteBankAsk asks before the bank's pads and patterns are deleted.
+func (a *App) deleteBankAsk() {
+	b := a.bank
+	pads, pats := a.bankPads(b), 0
+	for n := b*16 + 1; n <= b*16+16; n++ {
+		if pb, _ := a.lab.PatternBytes(n); len(pb) > 0 {
+			pats++
+		}
+	}
+	if pads == 0 && pats == 0 {
+		a.say(fmt.Sprintf("bank %c has no pads and no patterns", 'A'+b), true)
+		return
+	}
+	m := &menu{title: fmt.Sprintf("delete bank %c: %s and %s?", 'A'+b, count(pads, "pad"), count(pats, "pattern"))}
+	m.items = append(m.items,
+		menuItem{label: "No", run: func(int) {}},
+		menuItem{label: "Yes, delete them (u undoes it)", run: func(int) { a.deleteBank(b) }})
+	a.menu = m
+}
+
+// deleteBank clears every pad of bank b (sample, name and settings) and deletes its patterns, as one undo.
+func (a *App) deleteBank(b int) {
+	pre := a.lab.Snapshot()
+	pads, pats := 0, 0
+	for p := b * 16; p < b*16+16; p++ {
+		had := a.info.Pads[p].File
+		if err := a.lab.ClearPad(p); err == nil && had {
+			pads++
+		}
+		delete(a.pcm, p)
+	}
+	for n := b*16 + 1; n <= b*16+16; n++ {
+		if pb, _ := a.lab.PatternBytes(n); len(pb) > 0 && a.lab.DeletePattern(n) == nil {
+			pats++
+		}
+	}
+	a.marks = nil
+	a.commitUndo(pre, A, 0)
+	a.refresh()
+	a.say(fmt.Sprintf("bank %c deleted: %s and %s (u brings them back)", 'A'+b, count(pads, "pad"), count(pats, "pattern")), false)
+}
+
+// count is n things, with an s when it is not one.
+func count(n int, thing string) string {
+	if n == 1 {
+		return "1 " + thing
+	}
+	return fmt.Sprintf("%d %ss", n, thing)
+}
