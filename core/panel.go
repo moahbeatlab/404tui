@@ -772,12 +772,19 @@ func (a *App) drawKeyboardKeys(g Gfx, x, y, w int) {
 		}
 	}
 	g.HRule(x, gy-1, w, cLine)
-	if a.scr == Seq && w >= 40 && gy-2-7-(y+2) >= 12 { // the bank's 16 patterns, 4 by 4, right under the level and the tempo; what is under the cursor below them
-		g.Text(x, y+2, "PATTERNS", cDim, true)
-		g.Text(x+len("PATTERNS  "), y+2, "p choose with the arrows", cDim, false)
-		a.drawPatternStrip(g, x, y+3, w)
-		g.HRule(x, y+7, w, cLine)
-		a.context(g, x, y+8, w, gy-2)
+	// the bank's 16 patterns, 4 by 4, right under the level and the tempo; what is under the cursor below them. With a unit
+	// the level meter and ^L take rows: then the tiles go without their heading (p is in the keys) and the note and pattern
+	// get the 9 rows they need
+	if free := gy - 2 - (y + 2); a.scr == Seq && w >= 40 && free >= 5+9 {
+		top := y + 2
+		if free >= 6+12 {
+			g.Text(x, top, "PATTERNS", cDim, true)
+			g.Text(x+len("PATTERNS  "), top, "p choose with the arrows", cDim, false)
+			top++
+		}
+		a.drawPatternStrip(g, x, top, w)
+		g.HRule(x, top+4, w, cLine)
+		a.context(g, x, top+5, w, gy-2)
 		return
 	}
 	a.context(g, x, y+2, w, gy-2)
