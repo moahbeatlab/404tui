@@ -3744,6 +3744,44 @@ func TestTheMixerSetsLevelPanAndBusOfTheTracks(t *testing.T) {
 	}
 }
 
+func TestThePatternIsHeardWithThePadsLevelAndPan(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R A") // SEQ, a note
+	a.autoRows()
+	pad := a.rows[0]
+	peak := func() (l, r int) {
+		s, ok := a.render()
+		if !ok {
+			t.Fatal("the pattern renders")
+		}
+		for f := 0; f < s.Frames(); f++ {
+			l = max(l, abs(int(s.Samples[f*2])))
+			r = max(r, abs(int(s.Samples[f*2+1])))
+		}
+		return l, r
+	}
+	a.setSetting(pad, mixLevel, 127)
+	a.setSetting(pad, mixPan, 64)
+	fl, fr := peak()
+	if fl == 0 || fr == 0 {
+		t.Fatalf("the note is heard: %d %d", fl, fr)
+	}
+	a.setSetting(pad, mixLevel, 64)
+	if l, _ := peak(); l > fl*55/100 || l < fl*45/100 {
+		t.Fatalf("level 64 is about half: %d of %d", l, fl)
+	}
+	a.setSetting(pad, mixLevel, 0)
+	if l, r := peak(); l != 0 || r != 0 {
+		t.Fatalf("level 0 is silent: %d %d", l, r)
+	}
+	a.setSetting(pad, mixLevel, 127)
+	a.setSetting(pad, mixPan, 13) // all the way left
+	if l, r := peak(); r != 0 || l < fl*95/100 {
+		t.Fatalf("panned left: the right side is silent: %d %d (full %d)", l, r, fl)
+	}
+}
+
 func TestPatternSlotsCopyMoveAndRetarget(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit)

@@ -606,6 +606,21 @@ func (a *App) mixDoc(d lab.PatternDoc, bpm float64, lo, hi int, play func(pad in
 	perTick := 60 / bpm / formats.PPQ * formats.SampleRate
 	n := int(float64(hi-lo) * perTick)
 	mix := make([]int32, n*2)
+	// the pad's level and pan, as the unit mixes it (the centre leaves both sides as they are, a side turned away goes to nothing)
+	type gains struct{ l, r int64 }
+	padGain := map[int]gains{}
+	gainOf := func(pad int) gains {
+		if g, ok := padGain[pad]; ok {
+			return g
+		}
+		level, bal := int64(a.padValue(pad, 0x69, 127)), int64(a.padValue(pad, 0x78, 64))
+		if raw, err := a.lab.PadParam(pad, 0x78); err != nil || raw == 0 { // a pad that was never set up: zeros, it plays as it is
+			level, bal = 127, 64
+		}
+		g := gains{level * min((115-bal)*1000/51, 1000), level * min((bal-13)*1000/51, 1000)} // level 0..127 times 0..1000
+		padGain[pad] = g
+		return g
+	}
 	for _, nt := range d.Notes {
 		if int(nt.Tick) < lo || int(nt.Tick) >= hi || !play(nt.Pad) {
 			continue
@@ -623,12 +638,14 @@ func (a *App) mixDoc(d lab.PatternDoc, bpm float64, lo, hi int, play func(pad in
 			continue
 		}
 		at := int(float64(int(nt.Tick)-lo) * perTick)
-		g := int32(nt.Vel)
+		pg := gainOf(nt.Pad)
+		gl, gr := int64(nt.Vel)*pg.l, int64(nt.Vel)*pg.r // velocity x level x pan
+		const full = 127 * 127 * 1000
 		for f := 0; f < s.Frames() && at+f < n; f++ {
-			l := int32(s.Samples[f*s.Channels])
-			r := int32(s.Samples[f*s.Channels+s.Channels-1])
-			mix[(at+f)*2] += l * g / 127
-			mix[(at+f)*2+1] += r * g / 127
+			l := int64(s.Samples[f*s.Channels])
+			r := int64(s.Samples[f*s.Channels+s.Channels-1])
+			mix[(at+f)*2] += int32(l * gl / full)
+			mix[(at+f)*2+1] += int32(r * gr / full)
 		}
 	}
 	out := make([]int16, len(mix))
