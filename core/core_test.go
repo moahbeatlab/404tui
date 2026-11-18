@@ -4951,36 +4951,38 @@ func TestTheMelodyStaysInTheKeyAndTheRange(t *testing.T) {
 	for role := range melRoles {
 		for style := range melStyles {
 			for rg := range melRanges {
-				st := melodySet{key: 8, role: role, style: style, rng: rg, density: 1, ghost: 2, accent: 1}
-				notes := melodyNotes(5, 4, st, 3, 42) // G# minor on a pad whose sample is in D#
-				if len(notes) == 0 {
-					t.Fatalf("%s %s: no notes", melRoles[role], melStyles[style])
-				}
-				lo, hi := melWindow(st)
-				ghosts, accents := 0, 0
-				for _, n := range notes {
-					p := formats.PitchSemitones(uint8(n.Pitch))
-					if p < lo || p > hi || p < -12 || p > 12 {
-						t.Fatalf("%s %s %s: pitch %d out of %d..%d", melRoles[role], melStyles[style], melRanges[rg].name, p, lo, hi)
+				for rate := range melRates {
+					st := melodySet{key: 8, role: role, style: style, rng: rg, density: 1, ghost: 2, accent: 1, rate: rate}
+					notes := melodyNotes(5, 4, st, 3, 42) // G# minor on a pad whose sample is in D#
+					if len(notes) == 0 {
+						t.Fatalf("%s %s: no notes", melRoles[role].name, melStyles[style])
 					}
-					if pc := ((3+p)%12 + 12) % 12; !slices.Contains([]int{8, 10, 11, 1, 3, 4, 6}, pc) { // G# minor
-						t.Fatalf("%s %s: %s is not in G# minor", melRoles[role], melStyles[style], sharpNames[pc])
+					lo, hi := melWindow(st)
+					ghosts, accents := 0, 0
+					for _, n := range notes {
+						p := formats.PitchSemitones(uint8(n.Pitch))
+						if p < lo || p > hi || p < -12 || p > 12 {
+							t.Fatalf("%s %s %s: pitch %d out of %d..%d", melRoles[role].name, melStyles[style], melRanges[rg].name, p, lo, hi)
+						}
+						if pc := ((3+p)%12 + 12) % 12; !slices.Contains([]int{8, 10, 11, 1, 3, 4, 6}, pc) { // G# minor
+							t.Fatalf("%s %s: %s is not in G# minor", melRoles[role].name, melStyles[style], sharpNames[pc])
+						}
+						if n.Pad != 5 || int(n.Tick)+n.Len > 4*16*stepTicks {
+							t.Fatalf("a note off the track or past the end: %+v", n)
+						}
+						if n.Vel < 60 {
+							ghosts++
+						}
+						if n.Vel >= 120 {
+							accents++
+						}
 					}
-					if n.Pad != 5 || int(n.Tick)+n.Len > 4*16*stepTicks {
-						t.Fatalf("a note off the track or past the end: %+v", n)
+					if rate == 0 && role < 3 && ghosts == 0 {
+						t.Errorf("%s %s: many ghost notes asked, none written", melRoles[role].name, melStyles[style])
 					}
-					if n.Vel < 60 {
-						ghosts++
+					if rate == 0 && accents == 0 && role < 4 {
+						t.Errorf("%s %s: accents on the offbeats asked, none written", melRoles[role].name, melStyles[style])
 					}
-					if n.Vel >= 120 {
-						accents++
-					}
-				}
-				if role < 3 && ghosts == 0 {
-					t.Errorf("%s %s: many ghost notes asked, none written", melRoles[role], melStyles[style])
-				}
-				if accents == 0 && role != 4 {
-					t.Errorf("%s %s: accents on the offbeats asked, none written", melRoles[role], melStyles[style])
 				}
 			}
 		}
@@ -5183,5 +5185,38 @@ func TestTheMelodyShowsTheChordOfEachBar(t *testing.T) {
 	a.mel.prog = 0
 	if c := a.melChordName(3); c != "G#m" {
 		t.Fatalf("one chord: the key's: %s", c)
+	}
+}
+
+func TestTheMelodyIsWrittenInTheNoteValueAsked(t *testing.T) {
+	ticksOf := func(role, rate int) []int {
+		var ts []int
+		for _, n := range melodyNotes(0, 4, melodySet{key: 0, role: role, rate: rate, density: 2, ghost: 1, accent: 1}, 0, 7) {
+			ts = append(ts, int(n.Tick))
+		}
+		return ts
+	}
+	for rate, r := range melRates {
+		if r.ticks < stepTicks || rate == 0 {
+			continue
+		}
+		for _, role := range []int{0, 1, 3, 7, 8, 10} {
+			for _, tk := range ticksOf(role, rate) {
+				if tk%r.ticks != 0 {
+					t.Fatalf("%s in %s: a note at %d is off the grid", melRoles[role].name, r.name, tk)
+				}
+			}
+		}
+	}
+	arp := ticksOf(2, 5) // 1/32
+	if len(arp) != 4*32 || arp[1]-arp[0] != 60 {
+		t.Fatalf("an arp in 1/32: 32 notes a bar, 60 ticks apart: %d notes, %v", len(arp), arp[:3])
+	}
+	if tr := ticksOf(2, 7); len(tr) != 4*12 || tr[1] != 160 { // 1/8 triplets
+		t.Fatalf("an arp in 1/8 triplets: 12 a bar: %d, %v", len(tr), tr[:3])
+	}
+	held := melodyNotes(0, 2, melodySet{role: 11, rate: 5}, 0, 1)
+	if len(held) != 2 || held[0].Len < 15*stepTicks {
+		t.Fatalf("a drone stays held whatever the value: %+v", held)
 	}
 }

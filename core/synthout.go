@@ -238,7 +238,7 @@ var synthOutNames = []string{"the pad (its sample)", "MIDI channel 11", "MIDI ch
 
 // synthTonic is the MIDI note the key's tonic is played on for a role: the bass low, the rest an octave up.
 func synthTonic(role, key int) int {
-	if role == 0 {
+	if melRoles[role].kind == kBass {
 		return 36 + key // C2..B2
 	}
 	return 48 + key // C3..B3
