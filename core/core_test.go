@@ -5220,3 +5220,32 @@ func TestTheMelodyIsWrittenInTheNoteValueAsked(t *testing.T) {
 		t.Fatalf("a drone stays held whatever the value: %+v", held)
 	}
 }
+
+func TestADubChordIsASeventhWithItsEchoes(t *testing.T) {
+	notes := melodyNotes(0, 1, melodySet{key: 9, role: 12, density: 0, accent: 0}, 9, 5) // A minor, sparse: one stab a bar
+	byTick := map[uint32][]lab.Note{}
+	for _, n := range notes {
+		byTick[n.Tick] = append(byTick[n.Tick], n)
+	}
+	if len(byTick) != 4 {
+		t.Fatalf("a stab and three echoes: %d onsets", len(byTick))
+	}
+	var first uint32 = 1 << 30
+	for tk := range byTick {
+		first = min(first, tk)
+	}
+	stab := byTick[first]
+	pcs := map[int]bool{}
+	for _, n := range stab {
+		pcs[((9+formats.PitchSemitones(uint8(n.Pitch)))%12+12)%12] = true
+	}
+	if len(stab) != 4 || !pcs[9] || !pcs[0] || !pcs[4] || !pcs[7] {
+		t.Fatalf("Am7: A C E G: %v", pcs)
+	}
+	for e := 1; e <= 3; e++ {
+		echo := byTick[first+uint32(e*3*stepTicks)]
+		if len(echo) != 4 || echo[0].Vel >= stab[0].Vel {
+			t.Fatalf("echo %d: the chord again, a dotted 8th later, quieter: %+v", e, echo)
+		}
+	}
+}

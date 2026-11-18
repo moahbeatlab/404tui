@@ -346,7 +346,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
     *Settings*
 
-    - `Role` — bass  (bass track), lead  (synth / lead track), ... drone (the tonic held)  (pads track) (12 values); now lead  (synth / lead track)
+    - `Role` — bass  (bass track), lead  (synth / lead track), ... dub chord (deep echo)  (pads track) (13 values); now lead  (synth / lead track)
     - `Length` — the pattern's (4 bars) / 1 bar, repeated over the 4 / 2 bars, repeated over the 4 / 4 bars / 8 bars (the synth; the pattern keeps 4); now the pattern's (4 bars)
     - `Style` — house / deep house / tech house / techno / trance / progressive; now house
     - `Notes` — the style's / 1/2 / 1/4 / 1/8 / 1/16 / 1/32 / 1/4 triplets / 1/8 triplets / 1/16 triplets; now the style's

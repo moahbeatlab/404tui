@@ -48,6 +48,7 @@ var melRoles = []melRole{
 	{"call and response", "synth / lead track", kLead, -2, 12, 2},
 	{"piano house (broken chords)", "pads track", kChords, -5, 10, 3},
 	{"drone (the tonic held)", "pads track", kHeld, -12, 0, 3},
+	{"dub chord (deep echo)", "pads track", kChords, -5, 10, 3},
 }
 
 // melRates are the note values a melody can be written in (ticks; 0 the style's own rhythm), the triplets last.
@@ -268,6 +269,8 @@ func melRoleGuess(name string) int {
 		return 3
 	case has("drone"):
 		return 11
+	case has("dub", "echo"):
+		return 12
 	case has("pad", "string", "atmo"):
 		return 4
 	}
@@ -717,6 +720,37 @@ func melodyNotes(pad, bars int, st melodySet, padNote int, seed int64) []lab.Not
 			add(bar, hit{0, 16, tonic, 88})
 			if st.density == 2 {
 				add(bar, hit{0, 16, nearest(tonic+7, func(q int) bool { return ((q-k-7)%12+12)%12 == 0 }), 80})
+			}
+		}
+	case 12: // dub chord: a seventh chord on an offbeat, its echoes a dotted 8th apart, each quieter (the delay of dub techno)
+		stabs := [][]int{{2}, {2, 10}, {2, 7, 10}}[st.density]
+		if rng.Intn(2) == 0 { // or a push: the "and" of 2 and 4
+			stabs = [][]int{{6}, {6, 14}, {3, 6, 14}}[st.density]
+		}
+		for bar := 0; bar < bars; bar++ {
+			ch := chordOf(bar)
+			seventh := 10 // a minor seventh on a minor chord and the dominant, a major one on a major chord
+			major := ((ch[1]-ch[0])%12+12)%12 == 4
+			dominant := st.prog > 0 && progressions[st.prog-1].steps[bar%len(progressions[st.prog-1].steps)].q == 'D'
+			if major && !dominant {
+				seventh = 11
+			}
+			root := rootNear(ch, centre-4)
+			voice := []int{root}
+			for _, c := range append(ch[1:], (ch[0]+seventh)%12) {
+				voice = append(voice, nearest(root+((c-ch[0])%12+12)%12, func(q int) bool { return ((q-k-c)%12+12)%12 == 0 }))
+			}
+			sort.Ints(voice)
+			for _, s0 := range stabs {
+				for e, vel := range []int{92, 55, 33, 20} { // the stab, then its echoes
+					s := s0 + e*3 // a dotted 8th (3 16ths) between the echoes: the classic dub delay
+					if bar*16+s >= bars*16 {
+						break
+					}
+					for _, p := range voice {
+						add(bar, hit{s, 1, p, vel})
+					}
+				}
 			}
 		}
 	case 3, 4: // stabs: the chord on the style's offbeats; pad: the chord held over the bar
