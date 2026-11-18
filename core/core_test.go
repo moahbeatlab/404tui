@@ -4764,7 +4764,7 @@ func TestDClearsTheTrackAndDotAddsOneFromThePatternsBank(t *testing.T) {
 		t.Fatalf("a note to clear: %v", a.trackNotes(pad))
 	}
 	a.SeqClearTrack()
-	if n := len(a.trackNotes(pad)); n != 0 || !strings.Contains(a.msg, "cleared") {
+	if n := len(a.trackNotes(pad)); n != 0 || !strings.Contains(a.msg, "removed") {
 		t.Fatalf("d clears the track: %d notes (%s)", n, a.msg)
 	}
 	keys(t, a, "Y+{")
@@ -4806,5 +4806,40 @@ func TestHJKLGoThroughThePatternsWithoutTheTiles(t *testing.T) {
 	a.SeqPattern(-1)
 	if a.pat != 160 {
 		t.Fatalf("H on the first pattern: the last one: %d", a.pat)
+	}
+}
+
+func TestDInTheMixerTakesTheStripAway(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	Terminal = true
+	defer func() { Terminal = false }()
+	keys(t, a, "Y+R A")
+	for _, p := range []int{5, 6} {
+		args, _ := json.Marshal(lab.PatternArgs{Pad: p, Tick: 480, Vel: 100, Len: 120})
+		a.lab.PatternOp(a.pat, "insert", args)
+	}
+	a.refresh()
+	a.autoRows()
+	if len(a.rows) != 3 {
+		t.Fatalf("three tracks: %v", a.rows)
+	}
+	a.SeqMixer()
+	a.row = 1
+	gone, next := a.rows[1], a.rows[2]
+	a.SeqClearTrack()
+	if slices.Contains(a.rows, gone) || len(a.rows) != 2 || a.rowPad() != next || !a.MixerOn() {
+		t.Fatalf("d takes the strip away, the cursor on the next: rows %v, on %d", a.rows, a.rowPad())
+	}
+	a.row = len(a.rows) - 1
+	last, before := a.rows[a.row], a.rows[a.row-1]
+	a.SeqClearTrack()
+	if slices.Contains(a.rows, last) || a.rowPad() != before {
+		t.Fatalf("the last strip: the cursor on the one before: rows %v, on %d", a.rows, a.rowPad())
+	}
+	keys(t, a, "Y+{")
+	a.autoRows()
+	if !slices.Contains(a.rows, last) {
+		t.Fatalf("undo brings the track back: %v", a.rows)
 	}
 }

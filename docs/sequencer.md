@@ -19,7 +19,7 @@ The pattern in front as the unit's step grid: a track for each pad that has note
 
 - **Move around.** `h j k l` pad and step, `[ ]` bank, `{ }` a bar on, `z` one bar or as many as fit, `f` freezes the view on the bar in focus so that it loops only that bar (`FROZEN`).
 - **Pick a pattern.** `y b` opens the pattern dialog (bank, then pattern; `[ ]` for another bank), `y j k` steps through the patterns. A new one comes from a template or the audible tracks (below).
-- **Tracks.** `.` adds a track (choose a pad; the dialog opens on the bank of the pattern), `d` clears the track under the cursor (every note of it; `u` brings them back), `m` mutes the track, `s` solos it.
+- **Tracks.** `.` adds a track (choose a pad; the dialog opens on the bank of the pattern), `d` removes the track under the cursor from the pattern, in the grid and in the mixer (every note of it; `u` brings them back), `m` mutes the track, `s` solos it.
 - **Patterns.** `H` and `L` go to the pattern before and after, `K` and `J` a row of tiles up and down (4 patterns), without opening the tiles.
 - **The tools** (`t`): the pattern's menu has pages for the *pattern* (choose, new from a template, copy and move, delete, bounce to a pad, tempo of the bank), *timing* (swing, humanize, quantize, shift, reverse), *length* (double, halve),
   *notes* (what writes and changes notes) and *tracks* (dispatch over the marked pads, copy to a pad, swap with a pad, clear, add a track).
@@ -48,7 +48,7 @@ A pattern can come from a MIDI file and go out as one: [midi.md](midi.md). In th
 ## Keys
 
 **On a computer:** `a` note on/off · `e h j k l` edit (hold) · `Space` play / stop · `Enter` or `b` note settings · `x` hear note · `h j k l` pad, step · `H L` pattern -+ · `K J` 4 patterns -+ · `[ ]` bank · `p` the 4 by 4 tiles of the bank's patterns (arrows choose, the pattern changes as you move, `p` goes back) · `{ }` bar · `t` tools · `m` mute track · `M` the mixer · `s` solo track · `f` freeze view · `z` one bar / more ·
-`.` add track (or `y x`) · `d` clear track · `y b` pick pattern · `y j k` pattern +- · `u` undo, `R` redo.
+`.` add track (or `y x`) · `d` remove track · `y b` pick pattern · `y j k` pattern +- · `u` undo, `R` redo.
 
 **On the handheld:** `A` note on/off · `A` + D-pad edit (hold) · `X` play · `B` note settings · `L2` hear note · `R2` mute/solo · D-pad pad, step · `L1 R1` bar · `Y+X` add track · `Y+B` pick pattern · `Sel+B` tools · `Y+^v` pattern +-.
 
@@ -58,8 +58,9 @@ Every tool and setting with its values: [tools.md](tools.md#seq).
 
 `M` shows the pattern's tracks as a mixer in place of the grid: a strip for every pad the pattern plays, with its level (a fader),
 its pan, its bus, mute and solo, and how many notes it has. `h l` choose the strip, `j k` set the level, `[ ]` the pan, `b` sends
-the pad to BUS 1, BUS 2 or no bus, `m` and `s` mute and solo it (on the computer only, as in the grid), `x` hears the pad, `Space`
-plays the pattern, `M` or `Esc` go back to the grid.
+the pad to BUS 1, BUS 2 or no bus, `m` and `s` mute and solo it (on the computer only, as in the grid), `x` hears the pad, `.` adds
+a track, `d` removes the strip's track from the pattern (its notes; `u` brings them back), `H J K L` go to another pattern,
+`Space` plays the pattern, `M` or `Esc` go back to the grid.
 
 The level, pan and bus are the pad's own settings: the same as in the pad panel, kept in the project, undone with `u`, and sent to
 the unit when it is edited live. While the pattern plays a change is heard at once. The unit has no EQ on a pad: an EQ is an effect

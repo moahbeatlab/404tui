@@ -40,7 +40,7 @@ func (a *App) SeqMixer() {
 			a.say("no tracks in this pattern", true)
 			return
 		}
-		a.say("mixer: h l the pad, j k level, [ ] pan, b bus, M or Esc the grid", false)
+		a.say("mixer: h l the pad, j k level, [ ] pan, b bus, d remove, M or Esc the grid", false)
 		return
 	}
 	a.say("the grid", false)

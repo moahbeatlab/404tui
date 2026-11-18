@@ -143,7 +143,7 @@ func (a *App) hints() (plain, shift []hint) {
 				h = hint{"x", "hear note"}
 			case h.key == "R2" && h.what == "mute/solo": // m and s are mute and solo here
 				out = append(out, hint{".", "add track"})
-				h = hint{"d", "clear track"}
+				h = hint{"d", "remove track"}
 			}
 			out = append(out, h)
 		}
@@ -280,7 +280,7 @@ func (a *App) rawHints() (plain, shift []hint) {
 			play = hint{"X", "stop"}
 		}
 		if a.mixer { // the mixer in place of the grid (a computer's: the keys as they are)
-			return []hint{{"hl", "pad"}, {"jk", "level"}, {"[ ]", "pan"}, {"b", "bus"}, {"m", "mute"}, {"s", "solo"}, {"x", "hear pad"}, {"HJKL", "pattern"}, {"Space", map[bool]string{true: "stop", false: "play"}[a.seqOn]}, {"M Esc", "the grid"}}, nil
+			return []hint{{"hl", "pad"}, {"jk", "level"}, {"[ ]", "pan"}, {"b", "bus"}, {"m", "mute"}, {"s", "solo"}, {"x", "hear pad"}, {".", "add track"}, {"d", "remove track"}, {"HJKL", "pattern"}, {"Space", map[bool]string{true: "stop", false: "play"}[a.seqOn]}, {"M Esc", "the grid"}}, nil
 		}
 		if a.patStrip { // the arrows are on the row of pattern boxes
 			return []hint{{"^v<>", "choose the pattern"}, {"L1 R1", "bank"}, play, {"A", "back to the grid"}}, nil

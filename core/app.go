@@ -1051,7 +1051,8 @@ func (a *App) SeqAddTrack() {
 	a.addTrackPick()
 }
 
-// SeqClearTrack is d of a keyboard on SEQ: every note of the track under the cursor goes (u brings them back).
+// SeqClearTrack is d of a keyboard on SEQ (the grid and the mixer): the track under the cursor leaves the pattern, every note of
+// it (u brings them back).
 func (a *App) SeqClearTrack() {
 	if a.scr != Seq || a.Modal() || a.prompt != nil || a.aHeld || len(a.rows) == 0 {
 		return
@@ -1071,8 +1072,23 @@ func (a *App) SeqClearTrack() {
 	}
 	a.commitUndo(pre, A, 0)
 	a.refresh()
+	// the track leaves the pattern: its row goes (unless it is the only one), the cursor on the track after it, or before
+	extras := a.rowExtra[:0]
+	for _, p := range a.rowExtra {
+		if p != pad {
+			extras = append(extras, p)
+		}
+	}
+	a.rowExtra = extras
+	switch {
+	case a.row+1 < len(a.rows):
+		a.rowFocus = a.rows[a.row+1]
+	case a.row > 0:
+		a.rowFocus = a.rows[a.row-1]
+	}
+	a.autoRows()
 	a.replay()
-	a.say(fmt.Sprintf("%s cleared: %s gone (u brings them back)", a.label(pad), count(n, "note")), false)
+	a.say(fmt.Sprintf("%s removed from pattern %s: %s gone (u brings them back)", a.label(pad), a.label(a.pat-1), count(n, "note")), false)
 }
 
 // ToggleBars is the z key of a keyboard on SEQ: one bar in view, or as many as the window holds.
