@@ -192,6 +192,7 @@ type App struct {
 	trialUndo         func(redo bool) // undo and redo inside a dialog that rolls patterns: its rolls (nil: none is open)
 	tt2               trackState2
 	tt                trackState  // the settings of the track tools
+	mel               melodySet   // the settings of the melody tool
 	scopeRow          bool        // the timing tools act on the row under the cursor only, not on every pad
 	undo              []undoEntry // the project before each change, newest last
 	redo              []undoEntry

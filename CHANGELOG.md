@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- SEQ notes tools: **Melody...** writes a pad's track at pitches in the key of the bank: bass, lead, arp, stabs or held pad chords, in a style (house, deep house, tech house, techno, trance, progressive), over one chord or a progression, in a range of octaves, with density, ghost notes and accents; a trial with rolls of the dice, kept as one undo step. The bank's key comes from its names (now also `Gs` for G sharp, `Cmin`, `Fmaj`) or the sound of its tonal pads. → [docs/sequencer.md](docs/sequencer.md)
 - SEQ: `c` copies the pattern into the next empty slot and shows the copy (while another plays, `n` plays it next).
 - SEQ: `n` plays the pattern in view next: while another plays (on the computer) it takes over at the end of the round, seamlessly, until `Space` stops it. Switching the view renders nothing, so going through the patterns while one plays is quick. Edits of the waiting pattern go into it; `n` on the playing one cancels the switch; an empty pattern leaves what plays alone. Terminal casts record the switch as it is heard.
 - SEQ (terminal): `H J K L` switch the pattern (`H L` the one before and after, `K J` a row of tiles up and down) without `p`; `.` adds a track, the pad dialog starting on the bank of the pattern (mute and solo stay on `m` and `s`); `d` removes the track from the pattern, in the grid and the mixer (`u` undoes it). PADS: `n` renames the pad (`r` still does).

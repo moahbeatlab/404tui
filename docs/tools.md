@@ -341,6 +341,25 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
 *Write*
 
+- `Melody (bass, lead, arp, stabs, pad) in the key of the bank...`
+  - **melody for A3 (sample in C)** (a dialog):
+
+    *Settings*
+
+    - `Role` — bass  (bass track) / lead  (synth / lead track) / arp  (synth / lead track) / stabs  (pads track) / pad (held chords)  (pads track); now lead  (synth / lead track)
+    - `Style` — house / deep house / tech house / techno / trance / progressive; now house
+    - `Key` — C, C#, ... B  (the bank's) (12 values); now B  (the bank's)
+    - `Scale` — minor / major / dorian / phrygian / harmonic minor / minor pentatonic; now minor
+    - `Chords` — one chord (the key's), Epic anthem  i VI III VII, ... Neo soul turn  IV III vi v I (25 values); now one chord (the key's)
+    - `Range` — for the role / low octave (-12 to 0) / around the pad (-6 to +6) / high octave (0 to +12) / two octaves (-12 to +12); now for the role
+    - `Density` — sparse / medium / busy; now medium
+    - `Ghost notes` — none / a few / many; now a few
+    - `Accents` — none / on the offbeats / on the beats / here and there; now on the offbeats
+    - `Another roll of the dice`
+
+    *Trial*
+
+    - `Keep it (B throws it away)`
 - `Fill...`
   - **fill A3** (a dialog):
 

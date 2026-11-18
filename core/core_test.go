@@ -4932,3 +4932,86 @@ func TestCCopiesThePatternIntoTheNextEmptySlot(t *testing.T) {
 		t.Fatal("undo takes the copy back")
 	}
 }
+
+func TestKitNamesGiveTheKey(t *testing.T) {
+	for name, want := range map[string][2]int{"14_Kick_125_Gs_V": {8, -1}, "06_Lead_125_F_Pa": {5, -1}, "Pad 3 Am": {9, 0}, "bass Cmaj": {0, 1}, "Chord_Fs_min": {6, -1}} {
+		pc, mode, ok := keyFromName(name)
+		if !ok || pc != want[0] || mode != want[1] {
+			t.Errorf("%s: %d %d %v, want %v", name, pc, mode, ok, want)
+		}
+	}
+	if _, _, ok := keyFromName("loop as it was"); ok {
+		t.Error("the word as is not A sharp")
+	}
+}
+
+func TestTheMelodyStaysInTheKeyAndTheRange(t *testing.T) {
+	for role := range melRoles {
+		for style := range melStyles {
+			for rg := range melRanges {
+				st := melodySet{key: 8, role: role, style: style, rng: rg, density: 1, ghost: 2, accent: 1}
+				notes := melodyNotes(5, 4, st, 3, 42) // G# minor on a pad whose sample is in D#
+				if len(notes) == 0 {
+					t.Fatalf("%s %s: no notes", melRoles[role], melStyles[style])
+				}
+				lo, hi := melWindow(st)
+				ghosts, accents := 0, 0
+				for _, n := range notes {
+					p := formats.PitchSemitones(uint8(n.Pitch))
+					if p < lo || p > hi || p < -12 || p > 12 {
+						t.Fatalf("%s %s %s: pitch %d out of %d..%d", melRoles[role], melStyles[style], melRanges[rg].name, p, lo, hi)
+					}
+					if pc := ((3+p)%12 + 12) % 12; !slices.Contains([]int{8, 10, 11, 1, 3, 4, 6}, pc) { // G# minor
+						t.Fatalf("%s %s: %s is not in G# minor", melRoles[role], melStyles[style], sharpNames[pc])
+					}
+					if n.Pad != 5 || int(n.Tick)+n.Len > 4*16*stepTicks {
+						t.Fatalf("a note off the track or past the end: %+v", n)
+					}
+					if n.Vel < 60 {
+						ghosts++
+					}
+					if n.Vel >= 120 {
+						accents++
+					}
+				}
+				if role < 3 && ghosts == 0 {
+					t.Errorf("%s %s: many ghost notes asked, none written", melRoles[role], melStyles[style])
+				}
+				if accents == 0 && role != 4 {
+					t.Errorf("%s %s: accents on the offbeats asked, none written", melRoles[role], melStyles[style])
+				}
+			}
+		}
+	}
+	st := melodySet{key: 0, role: 1, density: 1}
+	a1, a2, b := melodyNotes(0, 4, st, 0, 1), melodyNotes(0, 4, st, 0, 1), melodyNotes(0, 4, st, 0, 2)
+	if !slices.Equal(a1, a2) || slices.Equal(a1, b) {
+		t.Error("the same roll writes the same melody, another roll another one")
+	}
+}
+
+func TestTheMelodyToolReadsTheBanksKeyAndWritesATrial(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R A")
+	pad := a.rowPad()
+	for p := 0; p < 3; p++ {
+		a.info.Pads[p].Name = []string{"01_Bass1_125_Gs_", "07_FX1_125_Gs_VI", "14_Kick_125_Gs_V"}[p]
+	}
+	a.melodyMenu()
+	if a.menu == nil || !strings.Contains(a.msg, "G# minor") {
+		t.Fatalf("the dialog says the bank's key: %q", a.msg)
+	}
+	if a.mel.key != 8 {
+		t.Fatalf("the key is set to the bank's: %d", a.mel.key)
+	}
+	pitched := 0
+	for _, n := range a.trackNotes(pad) {
+		if n.Pitch != 0 {
+			pitched++
+		}
+	}
+	if len(a.trackNotes(pad)) < 3 || pitched == 0 {
+		t.Fatalf("the trial writes notes at pitches: %d notes, %d pitched", len(a.trackNotes(pad)), pitched)
+	}
+}

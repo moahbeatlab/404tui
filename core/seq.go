@@ -531,6 +531,7 @@ func (a *App) seqMenu() {
 
 	m.tabHead("NOTES")
 	m.head("WRITE")
+	run("Melody (bass, lead, arp, stabs, pad) in the key of the bank...", a.melodyMenu)
 	run("Fill...", a.fillMenu)
 	run("Euclid...", a.euclidMenu)
 	run("Evolve over the bars...", a.evolveMenu)
