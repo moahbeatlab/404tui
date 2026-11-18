@@ -18,8 +18,9 @@ type settings struct {
 
 	// ONLINE and OFFLINE (the PROJECTS screen of a computer): the folder of projects to work on without the unit, and the project
 	// (1..99) that was open last in it.
-	ExportDir      string          `json:"export_dir,omitempty"` // where banks and projects are exported to
-	BackupDir      string          `json:"backup_dir,omitempty"` // where the unit's projects are backed up to
+	ExportDir      string          `json:"export_dir,omitempty"`      // where banks and projects are exported to
+	ExportCardDir  string          `json:"export_card_dir,omitempty"` // where on the unit's SD card a bank was exported to last
+	BackupDir      string          `json:"backup_dir,omitempty"`      // where the unit's projects are backed up to
 	OfflineDir     string          `json:"offline_dir,omitempty"`
 	LastProjectDir string          `json:"last_project_dir,omitempty"`  // where a project was last opened from
 	NoNative       bool            `json:"no_native_capture,omitempty"` // recording and the meter with ffmpeg or sox, not the program's own capture

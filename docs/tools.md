@@ -143,6 +143,10 @@ The settings of the pad under the cursor, written into the project at once. With
 - `Restore pads from an export...`
   - **restore pads from an export** (a dialog):
     - `A folder somewhere else...`
+- `Delete the bank...`
+  - **delete bank A: 3 pads and 1 pattern?** (a dialog):
+    - `No`
+    - `Yes, delete them (u undoes it)`
 
 *Marked Pads (0)*
 

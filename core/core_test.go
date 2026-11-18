@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
@@ -11,6 +12,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -3446,11 +3448,234 @@ func TestRenameFindSetupExportRestorePads(t *testing.T) {
 		t.Fatal("A1 is cleared")
 	}
 	a.restorePads(dir)
+	chooseMenuNoPick(t, a, "Bank A (where it came from)")
 	if !a.info.Pads[0].File || !a.info.Pads[1].File || !a.info.Pads[2].File {
 		t.Fatalf("the pads are back: %v %v %v", a.info.Pads[0].File, a.info.Pads[1].File, a.info.Pads[2].File)
 	}
 	if v, _ := a.lab.PadParam(0, 0x78); v != 64 {
 		t.Fatalf("the settings come back too: pan %d", v)
+	}
+}
+
+func TestABankExportBringsItsPatternsToAnotherBank(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	note := func(slot, pad int, tick uint32) {
+		args, _ := json.Marshal(lab.PatternArgs{Pad: pad, Tick: tick, Vel: 100, Len: 120})
+		if err := a.lab.PatternOp(slot, "insert", args); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pads := func(slot int) map[int]bool {
+		raw, err := a.lab.Pattern(slot)
+		if err != nil {
+			t.Fatalf("pattern %d: %v", slot, err)
+		}
+		var d lab.PatternDoc
+		json.Unmarshal(raw, &d)
+		out := map[int]bool{}
+		for _, n := range d.Notes {
+			out[n.Pad] = true
+		}
+		return out
+	}
+	a.lab.NewPattern(2, 1) // A2: A1, A2 and C3 of another bank
+	note(2, 0, 0)
+	note(2, 1, 480)
+	note(2, 34, 960)
+	a.lab.NewPattern(5, 1) // A5: A3
+	note(5, 2, 0)
+	a.lab.NewPattern(66, 1) // E2 is taken
+	note(66, 70, 0)
+	a.lab.SetUsesProjectTempo(false)
+	a.lab.SetBankTempo(0, 124.5)
+	a.lab.SetBankTempo(4, 98)
+	a.refresh()
+	a.bank = 0
+	a.exportBank()
+	dir := filepath.Join(a.exportDir(), app.SanitizeName(a.ProjectName())+"_bank_A")
+	for _, f := range []string{"pattern A2.bin", "pattern A5.bin"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			t.Fatalf("the export has %s: %v", f, err)
+		}
+	}
+	a.restorePads(dir)
+	if m := menuOf(a); m == nil || m.title != "restore bank A into bank" {
+		t.Fatalf("the restore asks for the bank: %+v", m)
+	}
+	chooseMenuNoPick(t, a, "Bank E")
+	if m := menuOf(a); m == nil || m.title != "bank E has patterns in E2" {
+		t.Fatalf("a taken slot is asked about: %+v", m)
+	}
+	chooseMenuNoPick(t, a, "Replace them")
+	for _, p := range []int{64, 65, 66} {
+		if !a.info.Pads[p].File {
+			t.Fatalf("%s has the sound of the same pad of bank A", a.label(p))
+		}
+	}
+	if a.tempoOf(4) != 124.5 || !strings.Contains(a.msg, "bank E, 124.5 BPM") {
+		t.Fatalf("bank E plays at the tempo of the export: %v, %q", a.tempoOf(4), a.msg)
+	}
+	if got := pads(66); len(got) != 3 || !got[64] || !got[65] || !got[34] {
+		t.Fatalf("E2 plays E1, E2 and still C3: %v", got)
+	}
+	if got := pads(69); len(got) != 1 || !got[66] {
+		t.Fatalf("E5 plays E3: %v", got)
+	}
+	if got := pads(2); !got[0] {
+		t.Fatalf("A2 is as it was: %v", got)
+	}
+	keys(t, a, "Y+{") // undo: E2 is back
+	if got := pads(66); len(got) != 1 || !got[70] {
+		t.Fatalf("undo brings back the old E2: %v", got)
+	}
+	if a.tempoOf(4) != 98 {
+		t.Fatalf("and bank E's tempo: %v", a.tempoOf(4))
+	}
+	// keeping the taken slots
+	a.restorePads(dir)
+	chooseMenuNoPick(t, a, "Bank E")
+	chooseMenuNoPick(t, a, "Keep them")
+	if got := pads(66); len(got) != 1 || !got[70] {
+		t.Fatalf("E2 is kept: %v", got)
+	}
+	if got := pads(69); !got[66] {
+		t.Fatalf("E5 is written: %v", got)
+	}
+}
+
+func TestWithTheUnitABankIsExportedToItsCardFirst(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	Terminal = true
+	defer func() { Terminal = false }()
+	a.link, _ = a.Connect() // the unit is plugged in
+	if _, ok := a.unitDevice(); !ok {
+		t.Fatal("the test needs the simulated unit")
+	}
+	a.lab.NewPattern(2, 1)
+	args, _ := json.Marshal(lab.PatternArgs{Pad: 1, Tick: 0, Vel: 100, Len: 120})
+	if err := a.lab.PatternOp(2, "insert", args); err != nil {
+		t.Fatal(err)
+	}
+	a.refresh()
+	a.bank = 0
+	a.exportBank()
+	if a.dp == nil || a.dp.dir != app.CardRoot {
+		t.Fatalf("the chooser starts on the unit's card: %+v", a.dp)
+	}
+	if !slices.Contains(a.dp.names, "IMPORT") {
+		t.Fatalf("it lists the card's folders: %v", a.dp.names)
+	}
+	a.dpKey(A) // use this folder
+	if a.prompt == nil || a.prompt.buf != app.SanitizeName(a.ProjectName())+"_bank_A" {
+		t.Fatalf("a name is asked for, the bank's by default: %+v", a.prompt)
+	}
+	a.prompt.buf = "Song Tech House 01"
+	a.closePrompt(true)
+	waitJob(t, a)
+	dir := "SD:Song Tech House 01"
+	ents, err := a.fileStore().ListDir(dir)
+	if err != nil {
+		t.Fatalf("the export is on the card: %v", err)
+	}
+	var names []string
+	for _, e := range ents {
+		names = append(names, e.Name)
+	}
+	if !slices.Contains(names, "samples.json") || !slices.Contains(names, "pattern A2.bin") {
+		t.Fatalf("samples.json and the pattern are on the card: %v", names)
+	}
+	if a.set.ExportCardDir != app.CardRoot {
+		t.Fatalf("the card folder is remembered: %q", a.set.ExportCardDir)
+	}
+	// and back from the card, onto bank C
+	a.restorePads(dir)
+	chooseMenuNoPick(t, a, "Bank C")
+	waitJob(t, a)
+	if !a.info.Pads[32].File || !a.info.Pads[33].File {
+		t.Fatal("C1 and C2 have the sounds of A1 and A2")
+	}
+	raw, err := a.lab.Pattern(34)
+	if err != nil {
+		t.Fatalf("C2 has the pattern: %v", err)
+	}
+	var d lab.PatternDoc
+	json.Unmarshal(raw, &d)
+	if len(d.Notes) != 1 || d.Notes[0].Pad != 33 {
+		t.Fatalf("C2 plays C2: %+v", d.Notes)
+	}
+}
+
+func TestAJobShowsItsProgressOnEveryScreen(t *testing.T) {
+	a, _ := newApp(t)
+	Terminal = true
+	defer func() { Terminal = false }()
+	a.job = &job{done: 3, total: 10, name: "A01 kick.wav"}
+	a.jobWhat = "exporting to the card"
+	a.say("writing 10 files to the unit's card...", false)
+	for _, scr := range []Screen{Pads, Seq} {
+		a.scr = scr
+		g := newTextGfx()
+		a.footer(g)
+		var line strings.Builder
+		for c := 0; c < Cols; c++ {
+			line.WriteRune(g.at(c, Rows-2).R)
+		}
+		if l := line.String(); !strings.Contains(l, "EXPORTING TO THE CARD") || !strings.Contains(l, "3 of 10  A01 kick.wav") {
+			t.Fatalf("the progress is on the message line: %q", l)
+		}
+	}
+	a.job.finished = true
+	g := newTextGfx()
+	a.footer(g)
+	var line strings.Builder
+	for c := 0; c < Cols; c++ {
+		line.WriteRune(g.at(c, Rows-2).R)
+	}
+	if strings.Contains(line.String(), "EXPORTING") {
+		t.Fatal("a finished job leaves the line to the messages")
+	}
+}
+
+func TestDeleteTheBankAsksThenClearsPadsAndPatterns(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.lab.NewPattern(2, 1)
+	args, _ := json.Marshal(lab.PatternArgs{Pad: 0, Tick: 0, Vel: 100, Len: 120})
+	a.lab.PatternOp(2, "insert", args)
+	a.lab.NewPattern(18, 1) // B2 stays
+	a.lab.PatternOp(18, "insert", args)
+	a.refresh()
+	a.bank = 0
+	before := padsWithSamples(a)
+	a.deleteBankAsk()
+	if m := menuOf(a); m == nil || m.title != "delete bank A: 3 pads and 1 pattern?" {
+		t.Fatalf("it asks first: %+v", m)
+	}
+	chooseMenuNoPick(t, a, "No")
+	if padsWithSamples(a) != before {
+		t.Fatal("No keeps everything")
+	}
+	a.deleteBankAsk()
+	chooseMenuNoPick(t, a, "Yes, delete them")
+	for p := 0; p < 16; p++ {
+		if a.info.Pads[p].File {
+			t.Fatalf("%s is cleared", a.label(p))
+		}
+	}
+	if pb, _ := a.lab.PatternBytes(2); len(pb) != 0 {
+		t.Fatal("A2 is deleted")
+	}
+	if pb, _ := a.lab.PatternBytes(18); len(pb) == 0 {
+		t.Fatal("B2 stays")
+	}
+	keys(t, a, "Y+{") // undo
+	if padsWithSamples(a) != before {
+		t.Fatalf("undo brings the pads back: %d of %d", padsWithSamples(a), before)
+	}
+	if pb, _ := a.lab.PatternBytes(2); len(pb) == 0 {
+		t.Fatal("and A2")
 	}
 }
 
