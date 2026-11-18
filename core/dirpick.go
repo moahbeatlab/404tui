@@ -70,10 +70,8 @@ func (a *App) pickExportFolder(title string, onDone func(dir string)) {
 		return
 	}
 	start := app.CardRoot
-	if d := a.set.ExportCardDir; d != "" {
-		if _, err := a.fileStore().ListDir(d); err == nil {
-			start = d
-		}
+	if d := a.set.ExportCardDir; d != "" && a.cardHas(d) {
+		start = d
 	}
 	a.pickFolder(title, a.exportRoot(), onDone)
 	a.dp.card = true
@@ -265,7 +263,7 @@ func (a *App) drawDirPicker(g Gfx) {
 func (a *App) freeTarget(root, name string, rename bool, onDone func(dir string)) {
 	dir := joinPath(root, name)
 	if onCard(dir) {
-		if _, err := a.fileStore().ListDir(dir); err != nil {
+		if !a.cardHas(dir) {
 			onDone(dir)
 			return
 		}
@@ -309,7 +307,7 @@ func (a *App) dpType() {
 	a.askText("go to the folder", "any path, from / ; ~ is your home folder", dp.dir, func(s string) {
 		s = expandHome(strings.TrimSpace(s))
 		if dp.card && onCard(s) {
-			if _, err := a.fileStore().ListDir(s); err != nil {
+			if !a.cardHas(s) {
 				a.say(s+" is not a folder on the card", true)
 				return
 			}
@@ -344,8 +342,7 @@ func (a *App) mkdirAll(dir string) error {
 	if !onCard(dir) {
 		return os.MkdirAll(dir, 0o755)
 	}
-	st := a.fileStore()
-	if _, err := st.ListDir(dir); err == nil {
+	if a.cardHas(dir) {
 		return nil
 	}
 	if up, ok := parentPath(dir); ok && up != app.CardRoot {
@@ -353,7 +350,31 @@ func (a *App) mkdirAll(dir string) error {
 			return err
 		}
 	}
-	return st.Mkdir(dir)
+	return a.fileStore().Mkdir(dir)
+}
+
+// cardHas is whether a folder is on the unit's card. The unit opens a folder that is not there as an empty one, so the folder
+// is looked for among the folders of the one above it (the card's names are the same in any case).
+func (a *App) cardHas(dir string) bool {
+	dir = strings.TrimRight(dir, "/")
+	if dir == app.CardRoot {
+		return true
+	}
+	up, ok := parentPath(dir)
+	if !ok {
+		return false
+	}
+	ents, err := a.fileStore().ListDir(up)
+	if err != nil {
+		return false
+	}
+	name := baseName(dir)
+	for _, e := range ents {
+		if e.Kind == fileapi.DtDir && strings.EqualFold(e.Name, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // writeFile writes a file on this computer or on the unit's card.
