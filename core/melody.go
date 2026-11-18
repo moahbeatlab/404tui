@@ -716,16 +716,16 @@ func (a *App) melodyNow(g Gfx, x, y, w int) {
 		bar, beat = tick/(16*stepTicks), tick/(4*stepTicks)%4
 	}
 	cx := x + 2
-	shown := min(bars, max((w-16)/4, 1))
+	shown := min(bars, max((w-16)/8, 1))
 	for b := 0; b < shown; b++ {
-		label := fmt.Sprintf("%2d", b+1)
+		label := fmt.Sprintf("%d %s", b+1, a.melChordName(b)) // the bar and its chord
 		if b == bar {
-			g.Fill(cx, y+1, 3, 1, cAmber)
+			g.Fill(cx, y+1, len(label)+1, 1, cAmber)
 			g.Text(cx, y+1, label, cBg, true)
 		} else {
 			g.Text(cx, y+1, label, cDim, false)
 		}
-		cx += 4
+		cx += 8
 	}
 	if bars > shown && bar >= shown {
 		g.Text(cx, y+1, fmt.Sprintf("bar %d", bar+1), cAmber, true)
@@ -779,4 +779,15 @@ func fitBars(notes []lab.Note, mb, bars int) []lab.Note {
 		}
 	}
 	return out
+}
+
+// melChordName is the chord of a bar in the dialog's key and progression (G#m, E, Bdim).
+func (a *App) melChordName(bar int) string {
+	st := a.mel
+	step := progStep{0, map[bool]byte{true: 'm', false: 'M'}[melModes[st.mode].minor]}
+	if st.prog > 0 {
+		steps := progressions[st.prog-1].steps
+		step = steps[bar%len(steps)]
+	}
+	return sharpNames[(st.key+step.semi)%12] + progQualities[0][step.q][1]
 }

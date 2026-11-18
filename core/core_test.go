@@ -5169,3 +5169,19 @@ func TestAShortMelodyRepeatsALongOneIsCut(t *testing.T) {
 		t.Fatalf("a note is cut at the end of the pattern: %d", got[1].Len)
 	}
 }
+
+func TestTheMelodyShowsTheChordOfEachBar(t *testing.T) {
+	a, _ := newApp(t)
+	a.mel = melodySet{key: 8, prog: 1, init: true} // G# minor, Epic anthem i VI III VII
+	var got []string
+	for b := 0; b < 5; b++ {
+		got = append(got, a.melChordName(b))
+	}
+	if want := []string{"G#m", "E", "B", "F#", "G#m"}; !slices.Equal(got, want) {
+		t.Fatalf("the chords of the bars: %v, want %v", got, want)
+	}
+	a.mel.prog = 0
+	if c := a.melChordName(3); c != "G#m" {
+		t.Fatalf("one chord: the key's: %s", c)
+	}
+}
