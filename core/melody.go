@@ -71,25 +71,30 @@ type melHarm struct {
 // melStyleHarmony is what a style plays when Chords, Chord length and Chord notes are "the style's": loops in minor, one of which
 // each roll of the dice takes (a loop twice in the list is taken twice as often), the loop of a major key, and the notes of the
 // chords (an index of melColors). From tutorials and the counted studies there are (GiantSteps keys and tempos, 100 uplifting
-// trance loops: two bars a chord, five or six chords): two-chord shuttles or 4-bar loops a chord a bar in house and deep house,
+// trance loops: two bars a chord, five or six chords) and the loops Hooktheory's TheoryTab has of trance, progressive and house
+// artists (the anthem loop most, i v and i VI often, i iv seldom): two-chord shuttles or 4-bar loops a chord a bar in house and deep house,
 // one chord in tech house, techno, dub techno and acid, the anthem loops in trance and progressive.
 var melStyleHarmony = []struct {
 	minor []melHarm
 	major melHarm
 	color int
 }{
-	{[]melHarm{{[]progStep{{0, 'm'}, {10, 'M'}}, 1}, {[]progStep{{0, 'm'}, {5, 'm'}}, 1}, {[]progStep{{5, 'm'}, {8, 'M'}, {0, 'm'}, {10, 'M'}}, 1}},
-		melHarm{[]progStep{{0, 'M'}, {5, 'M'}}, 1}, 2}, // house: i VII, i iv, iv VI i VII; I IV; sevenths
-	{[]melHarm{{[]progStep{{0, 'm'}, {5, 'm'}}, 1}, {[]progStep{{0, 'm'}, {5, 'm'}}, 1}, {[]progStep{{0, 'm'}, {8, 'M'}, {5, 'm'}, {5, 'm'}}, 1}, {[]progStep{{0, 'm'}, {5, 'm'}, {10, 'M'}, {10, 'M'}}, 1}},
-		melHarm{[]progStep{{0, 'M'}, {5, 'M'}}, 1}, 3}, // deep house: i iv (twice as often), i VI iv iv, i iv VII VII; ninths
+	{[]melHarm{{[]progStep{{0, 'm'}, {10, 'M'}}, 1}, {[]progStep{{0, 'm'}, {5, 'm'}}, 1}, {[]progStep{{5, 'm'}, {8, 'M'}, {0, 'm'}, {10, 'M'}}, 1},
+		{[]progStep{{0, 'm'}, {8, 'M'}}, 1}, {[]progStep{{8, 'M'}, {10, 'M'}, {0, 'm'}, {0, 'm'}}, 1}, {[]progStep{{0, 'm'}, {10, 'M'}}, 1}},
+		melHarm{[]progStep{{0, 'M'}, {5, 'M'}}, 1}, 2}, // house: i VII (twice), i iv, iv VI i VII, i VI, VI VII i; I IV; sevenths
+	{[]melHarm{{[]progStep{{0, 'm'}, {5, 'm'}}, 1}, {[]progStep{{0, 'm'}, {5, 'm'}}, 1}, {[]progStep{{0, 'm'}, {8, 'M'}, {5, 'm'}, {5, 'm'}}, 1}, {[]progStep{{0, 'm'}, {5, 'm'}, {10, 'M'}, {10, 'M'}}, 1},
+		{[]progStep{{0, 'm'}, {8, 'M'}}, 1}, {[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, 1}},
+		melHarm{[]progStep{{0, 'M'}, {5, 'M'}}, 1}, 3}, // deep house: i iv (twice), i VI iv iv, i iv VII VII, and as pop deep house i VI, i VI III VII; ninths
 	{[]melHarm{{nil, 1}, {nil, 1}, {[]progStep{{0, 'm'}, {8, 'M'}, {10, 'M'}, {10, 'M'}}, 1}, {[]progStep{{0, 'm'}, {5, 'm'}, {7, 'm'}, {7, 'm'}}, 1}},
 		melHarm{nil, 1}, 2}, // tech house: one chord mostly, else i VI VII, i iv v
 	{[]melHarm{{nil, 1}, {nil, 1}, {[]progStep{{0, 'm'}, {10, 'M'}, {8, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, 4}},
 		melHarm{nil, 1}, 1}, // techno: one chord mostly; melodic techno i VII VI VII, i VI III VII over 2 and 4 bars a chord
-	{[]melHarm{{[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {10, 'M'}, {8, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {10, 'M'}, {8, 'M'}, {7, 'D'}}, 2}, {[]progStep{{8, 'M'}, {10, 'M'}, {0, 'm'}, {0, 'm'}}, 2}},
-		melHarm{[]progStep{{0, 'M'}, {7, 'D'}, {9, 'm'}, {5, 'M'}}, 2}, 1}, // trance: i VI III VII, i VII VI VII, i VII VI V, VI VII i; two bars a chord
-	{[]melHarm{{[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {3, 'M'}, {10, 'M'}, {8, 'M'}}, 2}, {[]progStep{{0, 'm'}, {8, 'M'}, {10, 'M'}, {10, 'M'}}, 1}},
-		melHarm{[]progStep{{0, 'M'}, {7, 'D'}, {9, 'm'}, {5, 'M'}}, 2}, 4}, // progressive: i VI III VII, i III VII VI, i VI VII; sus2
+	{[]melHarm{{[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {10, 'M'}, {8, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {10, 'M'}, {8, 'M'}, {7, 'D'}}, 2}, {[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, 2},
+		{[]progStep{{8, 'M'}, {10, 'M'}, {0, 'm'}, {0, 'm'}}, 2}, {[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {8, 'M'}, {10, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {7, 'm'}, {8, 'M'}, {3, 'M'}}, 2}},
+		melHarm{[]progStep{{0, 'M'}, {7, 'D'}, {9, 'm'}, {5, 'M'}}, 2}, 1}, // trance: i VI III VII (three times), i VII VI VII, i VII VI V, VI VII i, i VI VII, i v VI III; two bars a chord
+	{[]melHarm{{[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {3, 'M'}, {10, 'M'}, {8, 'M'}}, 2}, {[]progStep{{0, 'm'}, {8, 'M'}, {10, 'M'}, {10, 'M'}}, 1},
+		{[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {7, 'm'}, {8, 'M'}, {3, 'M'}}, 2}},
+		melHarm{[]progStep{{0, 'M'}, {7, 'D'}, {9, 'm'}, {5, 'M'}}, 2}, 4}, // progressive: i VI III VII (twice), i III VII VI, i VI VII, i v VI III; sus2
 	{[]melHarm{{nil, 1}, {[]progStep{{0, 'm'}, {5, 'm'}}, 2}, {[]progStep{{0, 'm'}, {5, 's'}}, 2}},
 		melHarm{nil, 1}, 5}, // dub techno: one chord, i7 iv7, i7 IVsus2, a chord two bars; open
 	{[]melHarm{{nil, 1}}, melHarm{nil, 1}, 1}, // acid house: one chord
