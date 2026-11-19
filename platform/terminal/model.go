@@ -234,7 +234,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 		}
 		m.disarm()
 		return
-	case "n": // the slicer: a new order of the slices, at once; PADS: rename the pad
+	case "n": // the slicer: a new order of the slices, at once; PADS: rename the pad; a tool's dialog: another roll of the dice
+		if m.armed == noShift && m.app.MenuDice() {
+			m.disarm()
+			return
+		}
 		if m.app.ScreenName() == "SLICE" && m.armed == noShift && !m.app.Modal() {
 			m.disarm()
 			m.app.NewOrder()

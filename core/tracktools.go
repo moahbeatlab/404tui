@@ -162,7 +162,7 @@ func (a *App) toolMenu(title string, settings []menuItem, applyLabel string, app
 		m.items = append(m.items, it)
 	}
 	if randomTools[applyLabel] {
-		m.items = append(m.items, menuItem{label: "Another roll of the dice", keepOpen: true, run: func(int) { a.tt.seed++; preview() }})
+		m.items = append(m.items, menuItem{label: diceLabel, keepOpen: true, run: func(int) { a.tt.seed++; preview() }})
 	}
 	m.head("TRIAL")
 	m.items = append(m.items, menuItem{label: "Keep it (B throws it away)", keepOpen: true, run: func(int) {

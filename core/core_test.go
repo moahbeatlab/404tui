@@ -5475,6 +5475,18 @@ func TestTheMelodyDialogSaysWhatEachSettingDoesAndShowsTheRolesMIDIOut(t *testin
 	if !strings.Contains(melodyHelp("Form", a.menu.item().val, a.mel), "motif") {
 		t.Fatal("Form says what it does")
 	}
+	// n rolls the dice from anywhere in the dialog, and the hints say so
+	a.menu.cur = at("Form")
+	seed := a.tt.seed
+	if !a.MenuDice() || a.tt.seed != seed+1 {
+		t.Fatal("n rolls the dice")
+	}
+	was := Terminal
+	Terminal = true
+	if hs, _ := a.hints(); !slices.Contains(hs, hint{"n", "roll the dice"}) {
+		t.Fatalf("the hints show n: %v", hs)
+	}
+	Terminal = was
 	// MIDI out is one channel for the dialog: other settings leave it, and every change goes to the synth at once
 	a.menu.cur = at("MIDI out")
 	a.menuKey(Right) // channel 11

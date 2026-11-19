@@ -421,3 +421,31 @@ func (a *App) carryKey(k Key) {
 }
 
 var _ = formats.PPQ
+
+// diceLabel is the item of a tool's dialog that rolls the dice again (n on a keyboard).
+const diceLabel = "Another roll of the dice"
+
+// menuDice is the open menu's roll of the dice, nil when it has none.
+func (a *App) menuDice() *menuItem {
+	if a.menu == nil {
+		return nil
+	}
+	for _, list := range [][]menuItem{a.menu.items, a.menu.full} {
+		for i := range list {
+			if list[i].label == diceLabel && list[i].run != nil {
+				return &list[i]
+			}
+		}
+	}
+	return nil
+}
+
+// MenuDice rolls the dice of the open dialog (n on a keyboard): false when it has none.
+func (a *App) MenuDice() bool {
+	it := a.menuDice()
+	if it == nil {
+		return false
+	}
+	it.run(it.val)
+	return true
+}

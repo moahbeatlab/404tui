@@ -124,7 +124,7 @@ func melodyHelp(label string, val int, st melodySet) string {
 	case label == "MIDI out":
 		return "Where this role plays: the pad's sample, or a MIDI channel to the synth behind the unit (the MC-101), in time with the unit's clock. It stays as it is when other settings change; every change is sent at once."
 	case label == "Another roll of the dice":
-		return "A: the same settings, other notes (and another of the style's chord loops)."
+		return "A (or n anywhere in the dialog on a keyboard): the same settings, other notes (and another of the style's chord loops)."
 	case strings.HasPrefix(label, "Keep it"):
 		return "A: keep the melody in the track. Closing the dialog without it throws the trial away."
 	case strings.HasPrefix(label, "Write"):

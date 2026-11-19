@@ -256,7 +256,7 @@ func (a *App) generateOne(st generate.Style, mode string, bars int) {
 	}
 	m := &menu{title: "generate: " + st.Name}
 	m.head("TRIAL: " + generate.ModeLabel(mode))
-	m.items = append(m.items, menuItem{label: "Another roll of the dice", keepOpen: true, run: func(int) { roll(true) }})
+	m.items = append(m.items, menuItem{label: diceLabel, keepOpen: true, run: func(int) { roll(true) }})
 	switch mode {
 	case "fill":
 		m.items = append(m.items, menuItem{label: "Only another fill, the groove stays", keepOpen: true, run: func(int) { roll(false) }})
@@ -458,7 +458,7 @@ func (a *App) variationMenu() {
 	m := &menu{title: "variation of " + a.label(s.n-1)}
 	m.head("TRIAL")
 	m.items = append(m.items, menuItem{label: "What", vals: labels, keepOpen: true, onChange: func(v int) { kind = v; roll() }, run: func(int) { roll() }})
-	m.items = append(m.items, menuItem{label: "Another roll of the dice", keepOpen: true, run: func(int) { roll() }})
+	m.items = append(m.items, menuItem{label: diceLabel, keepOpen: true, run: func(int) { roll() }})
 	m.items = append(m.items, menuItem{label: "Keep it (B throws it away)", keepOpen: true, run: func(int) { t.keep() }})
 	m.footH = 3
 	m.foot = func(g Gfx, x, y, wc int) {

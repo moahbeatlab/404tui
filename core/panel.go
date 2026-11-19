@@ -220,6 +220,9 @@ func (a *App) rawHints() (plain, shift []hint) {
 		if a.menu.tabs != nil {
 			hs = append(hs, hint{"L1 R1", "tab"})
 		}
+		if Terminal && a.menuDice() != nil {
+			hs = append(hs, hint{"n", "roll the dice"})
+		}
 		return append(hs, hint{"B", "close"}), nil
 	}
 	switch a.scr {
