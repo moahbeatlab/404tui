@@ -39,7 +39,7 @@ The pattern in front as the unit's step grid: a track for each pad that has note
 ![The Fill tool, with its trial in the pattern](img/pc-fill.png)
 
 - **Start from a template.** *New pattern from a template...* lists rhythms from House to Footwork with their tempo and length; the one you pick becomes a new pattern in the next free slot, with named tracks.
-- **Generate.** The GENERATE part of the PATTERN page holds what makes notes for you: *Generate a pattern (style, kit, variation)...* opens the same dialog on its GENERATOR page, *Melody...* writes a melody for the track's pad, and *Variation of this pattern* rolls a variation of the one in front.
+- **Generate.** The GENERATE part of the PATTERN page holds what makes notes for you: *Generate a pattern (style, kit, variation)...* opens the same dialog on its GENERATOR page, *Melody...* writes a melody for the track's pad, and *Variation of this pattern* rolls a variation of the one in front (slightly different, a fill, a roll, thinner, busier, a break) into the next free pattern of its bank. After **Keep it** in the generator, *Variations of the kept pattern* goes straight there: keep one, roll the dice, keep the next, each in its own slot of the bank, all made of the kept pattern.
 
 | The templates | A template as a pattern |
 | --- | --- |

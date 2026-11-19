@@ -10,7 +10,7 @@ import (
 // and a copy is changed. No style is needed: what is done depends on the lanes the pattern and the kit have.
 
 // Variations are the kinds Vary knows.
-var Variations = []string{"fill", "roll", "thinner", "busier", "break"}
+var Variations = []string{"slight", "fill", "roll", "thinner", "busier", "break"}
 
 // FillKinds are the fills that are not rolls.
 var FillKinds = []string{"snare roll", "tom cascade", "clap stack", "open hat swell", "ghost shuffle", "rim run", "kick stutter", "hat stop"}
@@ -22,6 +22,8 @@ func VaryLabel(kind string) string {
 		return "with a fill"
 	case "roll":
 		return "with a roll"
+	case "slight":
+		return "slightly different"
 	}
 	return kind
 }
@@ -33,6 +35,8 @@ func VaryInfo(kind string) string {
 		return "the same pattern with a drum fill in the second half of its last bar."
 	case "roll":
 		return "the same pattern with a roll at the end of its last bar (a snare roll that speeds up, 32nds, flams, a tom, kick, hat or clap roll)."
+	case "slight":
+		return "the same groove with two to four small changes: a hat or a percussion hit moved, one less or one more, a ghost snare, an open hat, a kick pickup. Roll again for others."
 	case "thinner":
 		return "the quiet hits go, and one of the layers around the kick and the backbeat."
 	case "busier":
@@ -108,6 +112,13 @@ func Vary(src Pattern, kind string, seed int64, has func(formats.Lane) bool) (Pa
 			}
 		}
 		return src, "", fmt.Errorf("the kit has no voice for a %s (a snare, a clap, toms, hats)", kind)
+	case "slight":
+		p := src.Clone()
+		what := p.Slight(c)
+		if !differs(p) {
+			return src, "", fmt.Errorf("the pattern has nothing to change a little")
+		}
+		return p, join(what), nil
 	case "thinner":
 		p := src.Clone()
 		var what []string
@@ -242,4 +253,171 @@ func join(what []string) string {
 		out += w
 	}
 	return out
+}
+
+// Slight makes two to four small changes to a pattern, so that it is the same groove a little different: a hit of the hats or the
+// percussion moved a step, one of them less or one more on an offstep, a ghost on the snare or the clap, an open hat on an offbeat in
+// place of the closed one, a kick before the end of a bar. The kick on the beats and the backbeat stay. It says what it changed.
+func (p *Pattern) Slight(c *Ctx) []string {
+	steps := p.Bars * 16
+	var layers []*Row // the rows around the kick and the backbeat that play
+	for _, r := range p.Rows {
+		if !core[r.Lane] && r.Lane != formats.LaneOpenHat && r.hits() > 0 && len(r.Steps) == steps {
+			layers = append(layers, r)
+		}
+	}
+	plain := func(r *Row, i int) bool { // a hit with no roll and no flam on it
+		return (len(r.Ratchet) <= i || r.Ratchet[i] <= 1) && (len(r.Flam) <= i || r.Flam[i] == 0)
+	}
+	hitsOff := func(r *Row) []int { // its hits off the beat
+		var out []int
+		for i, v := range r.Steps {
+			if v > 0 && i%4 != 0 && plain(r, i) {
+				out = append(out, i)
+			}
+		}
+		return out
+	}
+	name := func(r *Row) string { return lower(r.Lane.LaneName()) }
+	type spot struct {
+		l formats.Lane
+		i int
+	}
+	touched := map[spot]bool{} // a step is changed once: two changes never undo each other
+	free := func(l formats.Lane, is ...int) bool {
+		for _, i := range is {
+			if touched[spot{l, i}] {
+				return false
+			}
+		}
+		for _, i := range is {
+			touched[spot{l, i}] = true
+		}
+		return true
+	}
+	changes := []func() string{
+		func() string { // a hit moved a step
+			if len(layers) == 0 {
+				return ""
+			}
+			r := layers[c.Rng.Intn(len(layers))]
+			hs := hitsOff(r)
+			if len(hs) == 0 {
+				return ""
+			}
+			i := hs[c.Rng.Intn(len(hs))]
+			j := i + []int{-1, 1}[c.Rng.Intn(2)]
+			if j < 0 || j >= steps || r.Steps[j] > 0 || j%4 == 0 || !free(r.Lane, i, j) {
+				return ""
+			}
+			r.Steps[j], r.Steps[i] = r.Steps[i], 0
+			return fmt.Sprintf("a %s moved (bar %d)", name(r), i/16+1)
+		},
+		func() string { // one hit less
+			if len(layers) == 0 {
+				return ""
+			}
+			r := layers[c.Rng.Intn(len(layers))]
+			hs := hitsOff(r)
+			if len(hs) < 3 {
+				return ""
+			}
+			i := hs[c.Rng.Intn(len(hs))]
+			if !free(r.Lane, i) {
+				return ""
+			}
+			r.Steps[i] = 0
+			return fmt.Sprintf("a %s less (bar %d)", name(r), i/16+1)
+		},
+		func() string { // one hit more, on an offstep, as loud as the row is
+			if len(layers) == 0 {
+				return ""
+			}
+			r := layers[c.Rng.Intn(len(layers))]
+			sum, n := 0, 0
+			for _, v := range r.Steps {
+				if v > 0 {
+					sum, n = sum+int(v), n+1
+				}
+			}
+			i := c.Rng.Intn(steps/2)*2 + 1 // an odd 16th
+			if r.Steps[i] > 0 || !free(r.Lane, i) {
+				return ""
+			}
+			r.Steps[i] = uint8(max(sum/max(n, 1)-12, 40))
+			return fmt.Sprintf("a %s more (bar %d)", name(r), i/16+1)
+		},
+		func() string { // a ghost on the snare or the clap
+			for _, l := range []formats.Lane{formats.LaneSnare, formats.LaneClap} {
+				r := p.Row(l)
+				if r == nil || r.hits() == 0 || len(r.Steps) != steps {
+					continue
+				}
+				i := c.Rng.Intn(steps)
+				if i%4 == 0 || r.Steps[i] > 0 || (i > 0 && r.Steps[i-1] > 0) || (i+1 < steps && r.Steps[i+1] > 0) || !free(l, i) {
+					return ""
+				}
+				r.Steps[i] = uint8(38 + c.Rng.Intn(16))
+				return fmt.Sprintf("a ghost %s (bar %d)", lower(l.LaneName()), i/16+1)
+			}
+			return ""
+		},
+		func() string { // an open hat on an offbeat 8th, the closed one there goes
+			if !c.has(formats.LaneOpenHat) {
+				return ""
+			}
+			i := c.Rng.Intn(p.Bars*4)*4 + 2
+			o := p.ensure(formats.LaneOpenHat)
+			if len(o.Steps) != steps || o.Steps[i] > 0 || !free(formats.LaneOpenHat, i) || !free(formats.LaneClosedHat, i) {
+				return ""
+			}
+			v := uint8(90)
+			if ch := p.Row(formats.LaneClosedHat); ch != nil && len(ch.Steps) == steps && ch.Steps[i] > 0 {
+				v = ch.Steps[i]
+				ch.Steps[i] = 0
+			}
+			o.Steps[i] = v
+			return fmt.Sprintf("an open hat (bar %d)", i/16+1)
+		},
+		func() string { // a kick before the end of a bar, a pickup into the next
+			k := p.Row(formats.LaneKick)
+			if k == nil || len(k.Steps) != steps || c.Rng.Intn(3) > 0 {
+				return ""
+			}
+			b := c.Rng.Intn(p.Bars)
+			i := b*16 + []int{14, 15}[c.Rng.Intn(2)]
+			if k.Steps[i] > 0 || k.Steps[i-1] > 0 || !free(formats.LaneKick, i) {
+				return ""
+			}
+			k.Steps[i] = 88
+			return fmt.Sprintf("a kick pickup (bar %d)", b+1)
+		},
+	}
+	want := 2 + c.Rng.Intn(3)
+	var what []string
+	for tries := 0; len(what) < want && tries < 60; tries++ {
+		if w := changes[c.Rng.Intn(len(changes))](); w != "" {
+			what = append(what, w)
+		}
+	}
+	if len(what) == 0 { // a bare pattern (a kick and a backbeat): a few hits louder or softer, the kick on the beats as it is
+		var at [][2]int
+		for ri, r := range p.Rows {
+			for i, v := range r.Steps {
+				if v > 0 && !(r.Lane == formats.LaneKick && i%4 == 0) {
+					at = append(at, [2]int{ri, i})
+				}
+			}
+		}
+		for k := 0; k < min(3, len(at)); k++ {
+			h := at[c.Rng.Intn(len(at))]
+			r := p.Rows[h[0]]
+			d := []int{-24, -16, 16, 24}[c.Rng.Intn(4)]
+			r.Steps[h[1]] = uint8(min(max(int(r.Steps[h[1]])+d, 30), 127))
+		}
+		if len(at) > 0 {
+			what = append(what, "some hits louder or softer")
+		}
+	}
+	return what
 }

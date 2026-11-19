@@ -83,7 +83,7 @@ func (a *App) templatesMenu() {
 		case m.tab == 1 && it.label == genLengthLabel:
 			text = "How long a generated pattern is (left and right). With 4 or 8 bars the last bar comes round: the groove with a small change at its end, unless it has a fill."
 		case m.tab == 1 && it.label == variationLabel:
-			text = "A: a copy of the pattern in front with a fill, a roll, fewer or more hits, or as a break, in the next free pattern. The pattern itself stays."
+			text = "A: a copy of the pattern in front, slightly different, with a fill, a roll, fewer or more hits, or as a break, in the next free pattern of its bank. The pattern itself stays."
 		case m.tab == 1:
 			text = "A: choose which pad plays the kick, the snare, the hats... (Enter on a voice picks the pad)"
 		}

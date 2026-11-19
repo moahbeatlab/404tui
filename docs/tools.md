@@ -251,12 +251,12 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
         **
 
         - `Back to the names of the pads`
-    - `Variation of this pattern (fill, roll, thinner, busier, break)...`
+    - `Variation of this pattern (slight, fill, roll, thinner, busier, break)...`
       - **variation of A1** (a dialog):
 
         *Trial*
 
-        - `What` — with a fill / with a roll / thinner / busier / break; now with a fill
+        - `What` — slightly different / with a fill / with a roll / thinner / busier / break; now slightly different
         - `Another roll of the dice`
         - `Keep it (B throws it away)`
     - `Length of a generated pattern` — 1 bar / 2 bars / 4 bars / 8 bars; now 2 bars
@@ -351,12 +351,12 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
         **
 
         - `Back to the names of the pads`
-    - `Variation of this pattern (fill, roll, thinner, busier, break)...`
+    - `Variation of this pattern (slight, fill, roll, thinner, busier, break)...`
       - **variation of A1** (a dialog):
 
         *Trial*
 
-        - `What` — with a fill / with a roll / thinner / busier / break; now with a fill
+        - `What` — slightly different / with a fill / with a roll / thinner / busier / break; now slightly different
         - `Another roll of the dice`
         - `Keep it (B throws it away)`
     - `Length of a generated pattern` — 1 bar / 2 bars / 4 bars / 8 bars; now 2 bars
@@ -413,12 +413,12 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     *Trial*
 
     - `Keep it (B throws it away)`
-- `Variation of this pattern (fill, roll, thinner, busier, break)...`
+- `Variation of this pattern (slight, fill, roll, thinner, busier, break)...`
   - **variation of A1** (a dialog):
 
     *Trial*
 
-    - `What` — with a fill / with a roll / thinner / busier / break; now with a fill
+    - `What` — slightly different / with a fill / with a roll / thinner / busier / break; now slightly different
     - `Another roll of the dice`
     - `Keep it (B throws it away)`
 
