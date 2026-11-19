@@ -5076,8 +5076,8 @@ func TestTheMelodyPlaysOnTheSynthBehindTheUnitInTimeWithItsClock(t *testing.T) {
 	a.live = &liveState{} // the unit is edited live
 	defer func() { a.live = nil }()
 	a.melodyMenu() // live too the pad plays it: MIDI out is off until asked
-	if a.mel.role != 0 || a.mel.out[0] != 0 || a.synth != nil || a.seqOn || !a.audible(pad) {
-		t.Fatalf("MIDI out is off at first: role %d, out %d", a.mel.role, a.mel.out[0])
+	if a.mel.role != 0 || a.mel.out != 0 || a.synth != nil || a.seqOn || !a.audible(pad) {
+		t.Fatalf("MIDI out is off at first: role %d, out %d", a.mel.role, a.mel.out)
 	}
 	if len(a.trackNotes(pad)) == 0 {
 		t.Fatal("the melody is written on the pad")
@@ -5088,8 +5088,8 @@ func TestTheMelodyPlaysOnTheSynthBehindTheUnitInTimeWithItsClock(t *testing.T) {
 		}
 	}
 	a.menuKey(Right)
-	if a.mel.role != 0 || a.mel.out[0] != 1 || a.synth == nil || !strings.Contains(a.msg, "MIDI channel 11") {
-		t.Fatalf("a bass plays on channel 11: role %d, out %d (%s)", a.mel.role, a.mel.out[0], a.msg)
+	if a.mel.role != 0 || a.mel.out != 1 || a.synth == nil || !strings.Contains(a.msg, "MIDI channel 11") {
+		t.Fatalf("a bass plays on channel 11: role %d, out %d (%s)", a.mel.role, a.mel.out, a.msg)
 	}
 	if a.seqOn || a.audible(pad) {
 		t.Fatal("the pattern waits for Space, and the pad is quiet on the computer while the synth plays it")
@@ -5475,18 +5475,27 @@ func TestTheMelodyDialogSaysWhatEachSettingDoesAndShowsTheRolesMIDIOut(t *testin
 	if !strings.Contains(melodyHelp("Form", a.menu.item().val, a.mel), "motif") {
 		t.Fatal("Form says what it does")
 	}
-	// MIDI out is kept per role: changing the role shows the new role's
+	// MIDI out is one channel for the dialog: other settings leave it, and every change goes to the synth at once
 	a.menu.cur = at("MIDI out")
-	a.menuKey(Right) // the role's own: channel 11
-	r := a.mel.role
-	a.menu.cur = at("Role")
-	a.menuKey(Right)
-	if got := a.menu.items[at("MIDI out")].val; got != a.mel.out[a.mel.role] || got != 0 {
-		t.Fatalf("another role shows its own MIDI out (off), not %d", got)
+	a.menuKey(Right) // channel 11
+	gen := func() int {
+		if a.synth == nil {
+			return -1
+		}
+		a.synth.mu.Lock()
+		defer a.synth.mu.Unlock()
+		return a.synth.gen
 	}
-	a.menuKey(Left)
-	if a.mel.role != r || a.menu.items[at("MIDI out")].val != 1 {
-		t.Fatalf("back to the role: channel 11 again, shows %d", a.menu.items[at("MIDI out")].val)
+	for _, l := range []string{"Role", "Style", "Notes", "Chords", "Length", "Form", "Role"} {
+		g := gen()
+		a.menu.cur = at(l)
+		a.menuKey(Right)
+		if a.mel.out != 1 || a.menu.items[at("MIDI out")].val != 1 || a.synth == nil {
+			t.Fatalf("%s changed the MIDI out: %d, shows %d", l, a.mel.out, a.menu.items[at("MIDI out")].val)
+		}
+		if gen() <= g {
+			t.Fatalf("%s: the new melody is not sent to the synth (melody #%d, was #%d)", l, gen(), g)
+		}
 	}
 	a.synthStop()
 }

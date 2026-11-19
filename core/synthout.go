@@ -169,6 +169,7 @@ func (s *synthOut) run() {
 	var on []pending
 	var last time.Time          // up to when the notes were sent
 	sent := map[int]time.Time{} // when each note was sent last
+	seen := 0                   // the melody sent is known for: a new one starts with nothing sent
 	tk := time.NewTicker(2 * time.Millisecond)
 	defer tk.Stop()
 	for {
@@ -201,6 +202,9 @@ func (s *synthOut) run() {
 				last = now
 				s.mu.Unlock()
 				continue
+			}
+			if seen != s.gen { // a changed melody: its notes are new, from now on
+				seen, sent = s.gen, map[int]time.Time{}
 			}
 			r := int(now.Sub(s.start) / s.loop)
 			for i, n := range s.notes {

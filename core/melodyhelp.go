@@ -122,7 +122,7 @@ func melodyHelp(label string, val int, st melodySet) string {
 	case label == "Accents":
 		return "Which notes are played louder: on the offbeats (house), on the beats, or here and there. An acid line's accents are its own."
 	case label == "MIDI out":
-		return "Where this role plays: the pad's sample, or a MIDI channel to the synth behind the unit (the MC-101), in time with the unit's clock. Each role keeps its own channel (bass on 11, pads on 13...)."
+		return "Where this role plays: the pad's sample, or a MIDI channel to the synth behind the unit (the MC-101), in time with the unit's clock. It stays as it is when other settings change; every change is sent at once."
 	case label == "Another roll of the dice":
 		return "A: the same settings, other notes (and another of the style's chord loops)."
 	case strings.HasPrefix(label, "Keep it"):
@@ -143,7 +143,7 @@ func (a *App) melodyFoot(m *menu) func(g Gfx, x, y, w int) {
 		lines := wrap(melodyHelp(it.label, it.val, a.mel), w-4)
 		for i, l := range lines {
 			if i == melodyHelpRows-1 && len(lines) > melodyHelpRows {
-				l = fit(l, w-5) + "~"
+				l = fit(l+" "+lines[i+1], w-4) // fit ends it with ~
 			}
 			if i >= melodyHelpRows {
 				break

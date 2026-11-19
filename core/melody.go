@@ -145,14 +145,14 @@ var melAccents = []string{"none", "on the offbeats", "on the beats", "here and t
 // melodySet is the dialog's settings, kept between visits; key is -1 until the bank's key is read.
 type melodySet struct {
 	key, mode, role, style, density, ghost, accent int
-	prog                                           int     // 0 the style's, 1 the key's one chord, else progressions[prog-2]
-	chordLen, color                                int     // indexes of melChordLens and melColors: 0 the style's
-	swing, form, echo                              int     // indexes of melSwings, melForms and melEchoes
-	pick                                           int     // the roll of the dice: which of the style's loops
-	octLo, octHi                                   int     // indexes of melOctaves: 0 the role's
-	bars                                           int     // an index of melBars: 0 the pattern's length
-	rate                                           int     // an index of melRates: 0 the style's rhythm
-	out                                            [16]int // per role: where it plays, an index of synthOutNames (0: the pad)
+	prog                                           int // 0 the style's, 1 the key's one chord, else progressions[prog-2]
+	chordLen, color                                int // indexes of melChordLens and melColors: 0 the style's
+	swing, form, echo                              int // indexes of melSwings, melForms and melEchoes
+	pick                                           int // the roll of the dice: which of the style's loops
+	octLo, octHi                                   int // indexes of melOctaves: 0 the role's
+	bars                                           int // an index of melBars: 0 the pattern's length
+	rate                                           int // an index of melRates: 0 the style's rhythm
+	out                                            int // where the melody plays, an index of synthOutNames (0: the pad); one for every role
 	init                                           bool
 }
 
@@ -212,10 +212,7 @@ func (a *App) melodyMenu() {
 		lengths = append(lengths, l)
 	}
 	settings := []menuItem{
-		val("Role", roles, st.role, func(v int) {
-			st.role = v
-			a.melShowOut() // MIDI out is kept per role: show the new role's
-		}),
+		val("Role", roles, st.role, func(v int) { st.role = v }),
 		val("Length", lengths, st.bars, func(v int) { st.bars = v }),
 		val("Style", melStyles, st.style, func(v int) { st.style = v }),
 		val("Notes", rates, st.rate, func(v int) { st.rate = v }),
@@ -235,7 +232,7 @@ func (a *App) melodyMenu() {
 	}
 	online := a.live != nil
 	if online { // the synth behind the unit: only while the unit is edited live, and only when asked
-		settings = append(settings, val("MIDI out", synthOutNames, st.out[st.role], func(v int) { st.out[st.role] = v }))
+		settings = append(settings, val("MIDI out", synthOutNames, st.out, func(v int) { st.out = v }))
 	}
 	a.toolNoPlay = true
 	defer func() { a.toolNoPlay = false }()
@@ -255,7 +252,7 @@ func (a *App) melodyMenu() {
 		line := melodyLine(pad, mb, *st, pn, a.tt.seed)
 		notes := padPitches(line)
 		what := fmt.Sprintf("%s %s in %s %s, %s", melStyles[st.style], melRoles[st.role].name, sharpNames[st.key], melModes[st.mode].name, count(mb, "bar"))
-		o := st.out[st.role]
+		o := st.out
 		if lo, hi := melWindow(*st); (o == 0 || !online) && (lo < -formats.PitchRange || hi > formats.PitchRange) {
 			what += " (a pad goes an octave up and down at most: the notes further out are moved in)"
 		}
@@ -1359,16 +1356,20 @@ func (a *App) melodyNow(g Gfx, x, y, w int) {
 		bar, beat = tick/(16*stepTicks), tick/(4*stepTicks)%4
 	}
 	cx := x + 2
-	shown := min(bars, max((w-16)/8, 1))
-	for b := 0; b < shown; b++ {
-		label := fmt.Sprintf("%d %s", b+1, a.melChordName(b)) // the bar and its chord
+	shown := 0 // the bars and their chords that fit before the beats, each as wide as its name
+	for b := 0; b < bars; b++ {
+		label := fmt.Sprintf("%d %s", b+1, a.melChordName(b))
+		if b > 0 && cx+len(label)+16 > x+w {
+			break
+		}
 		if b == bar {
 			g.Fill(cx, y+1, len(label)+1, 1, cAmber)
 			g.Text(cx, y+1, label, cBg, true)
 		} else {
 			g.Text(cx, y+1, label, cDim, false)
 		}
-		cx += 8
+		cx += max(len(label)+2, 8)
+		shown++
 	}
 	if bars > shown && bar >= shown {
 		g.Text(cx, y+1, fmt.Sprintf("bar %d", bar+1), cAmber, true)
@@ -1543,19 +1544,4 @@ func melChordSuffix(step progStep, v []int) string {
 		return map[bool]string{true: "m(maj7)", false: "maj7"}[minor]
 	}
 	return progQualities[0][step.q][1]
-}
-
-// melShowOut sets the MIDI out line of the open Melody dialog to where the role now chosen plays (each role keeps its own).
-func (a *App) melShowOut() {
-	m := a.menu
-	if m == nil {
-		return
-	}
-	for _, list := range [][]menuItem{m.items, m.full} {
-		for i := range list {
-			if list[i].label == "MIDI out" {
-				list[i].val = a.mel.out[a.mel.role]
-			}
-		}
-	}
 }
