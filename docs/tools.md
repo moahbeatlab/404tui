@@ -286,7 +286,133 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Drum and bass  174 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
     - `Dubstep  140 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
     - `Trap  140 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
-- `Export this pattern as a MIDI file`
+
+*Generate*
+
+- `Generate a pattern (style, kit, variation)...`
+  - **new pattern** (a dialog):
+
+    *Page Templates*
+
+    - `Blank pattern` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 4 bars
+    - `House  122-127` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Deep house  120-125` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Tech house  122-130` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 4 bars
+    - `Techno  128-135` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Hypnotic techno  135-140` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Hip-hop  85-95` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
+    - `Drum and bass  170-175` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Jungle  160-170` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Dubstep  138-142` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Trance  136-142` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
+    - `Psytrance  140-148` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Hard techno  145-160` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `UK garage  130-135` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Breakbeat  120-135` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Electro  120-135` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Trap  130-150` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Amapiano  108-115` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Reggaeton  90-100` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Disco  110-125` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
+    - `Footwork  155-165` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 2 bars
+    - `Son (martillo + tumbao)  90-110` — 1 bar / 2 bars / 3 bars / 4 bars / 5 bars / 6 bars / 7 bars / 8 bars; now 1 bar
+
+    *Page Generator*
+
+    - `Kit: which pad plays kick, snare, hats...`
+      - **generator kit: which pad plays what** (a dialog):
+        - `Bank` — auto: A, bank A, ... bank J (11 values); now auto: A
+
+        *Voices (The Pads Of Bank A)*
+
+        - `Kick` — auto A1 kick_808, none, ... A16  (18 values); now auto A1 kick_808
+        - `Snare` — auto A2 snare_tight, none, ... A16  (18 values); now auto A2 snare_tight
+        - `Clap` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Closed hat` — auto A3 hat_closed, none, ... A16  (18 values); now auto A3 hat_closed
+        - `Open hat` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Rim` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Percussion` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Tom` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Shaker` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Ride` — auto: none, none, ... A16  (18 values); now auto: none
+
+        *Second Pads: Take Over Some Hits*
+
+        - `Kick 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Snare 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Clap 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Closed hat 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Open hat 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Percussion 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Tom 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Shaker 2` — auto: none, none, ... A16  (18 values); now auto: none
+        - `Ride 2` — auto: none, none, ... A16  (18 values); now auto: none
+
+        **
+
+        - `Back to the names of the pads`
+    - `Variation of this pattern (fill, roll, thinner, busier, break)...`
+      - **variation of A1** (a dialog):
+
+        *Trial*
+
+        - `What` — with a fill / with a roll / thinner / busier / break; now with a fill
+        - `Another roll of the dice`
+        - `Keep it (B throws it away)`
+    - `Length of a generated pattern` — 1 bar / 2 bars / 4 bars / 8 bars; now 2 bars
+
+    *A Style: Left And Right Choose What Is Made, A Makes It*
+
+    - `House  124 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Tech house  126 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Techno  130 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Chicago house  122 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Deep house  120 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Minimal tech house  126 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Dub techno  124 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Industrial techno  140 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Acid  130 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `90s house  125 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Big room  128 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Electro house  128 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Progressive house  128 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Future house  125 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Melodic techno  124 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Trance  138 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Hardstyle  150 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Afro house  122 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `UK garage  132 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Breakbeat  130 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Drum and bass  174 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Dubstep  140 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+    - `Trap  140 BPM` — 1 pattern / 1 pattern with a fill / 1 pattern with a roll / 16 variations of one / 16 different ones / 16, one layer more each / 16, each a small change / 8 from intro to outro / 16 drum fills on a groove; now 1 pattern
+- `Melody (bass, lead, arp, stabs, pad) in the key of the bank...`
+  - **melody for A3 (sample in C)** (a dialog):
+
+    *Settings*
+
+    - `Role` — bass, lead, ... rolling bass (root, fifth, octave) (15 values); now lead
+    - `Length` — the pattern's (4 bars) / 1 bar, repeated over the 4 / 2 bars, repeated over the 4 / 4 bars / 8 bars (the synth; the pattern keeps 4); now the pattern's (4 bars)
+    - `Style` — house / deep house / tech house / techno / trance / progressive / dub techno / acid house; now house
+    - `Notes` — the style's / 1/2 / 1/4 / 1/8 / 1/16 / 1/32 / 1/4 triplets / 1/8 triplets / 1/16 triplets; now the style's
+    - `Key` — C, C#, ... B  (the bank's) (12 values); now B  (the bank's)
+    - `Scale` — minor / major / dorian / phrygian / harmonic minor / minor pentatonic; now minor
+    - `Chords` — the style's, one chord (the key's), ... Neo soul turn  IV III vi v I (26 values); now the style's
+    - `Chord length` — the style's / 1 bar / 2 bars / 4 bars; now the style's
+    - `Chord notes` — the style's / triads / sevenths / ninths / sus2 / dub (root, fifth, seventh, the third up) / seventh at the bottom (Kerri Chandler); now the style's
+    - `Form` — A A' A B / A A B B / A A A A (the same bar); now A A' A B
+    - `Swing` — the role's / none (straight) / 54% / 57% / 60%; now the role's
+    - `Echo (dub chord)` — 3/16 (dotted 8th) / 5/16 / 7/16; now 3/16 (dotted 8th)
+    - `Octave from` — the role's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the role's
+    - `Octave to` — the role's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the role's
+    - `Density` — sparse / medium / busy; now medium
+    - `Ghost notes` — none / a few / many; now a few
+    - `Accents` — none / on the offbeats / on the beats / here and there; now on the offbeats
+    - `Another roll of the dice`
+
+    *Trial*
+
+    - `Keep it (B throws it away)`
 - `Variation of this pattern (fill, roll, thinner, busier, break)...`
   - **variation of A1** (a dialog):
 
@@ -295,6 +421,10 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `What` — with a fill / with a roll / thinner / busier / break; now with a fill
     - `Another roll of the dice`
     - `Keep it (B throws it away)`
+
+*This Pattern*
+
+- `Export this pattern as a MIDI file`
 - `Loop only the bar in focus (Y+A)` — off / on; now off
 - `New pattern from the audible tracks`
 - `Bounce the tracks as you hear them to a pad`
@@ -341,33 +471,6 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
 *Write*
 
-- `Melody (bass, lead, arp, stabs, pad) in the key of the bank...`
-  - **melody for A3 (sample in C)** (a dialog):
-
-    *Settings*
-
-    - `Role` — bass, lead, ... rolling bass (root, fifth, octave) (15 values); now lead
-    - `Length` — the pattern's (4 bars) / 1 bar, repeated over the 4 / 2 bars, repeated over the 4 / 4 bars / 8 bars (the synth; the pattern keeps 4); now the pattern's (4 bars)
-    - `Style` — house / deep house / tech house / techno / trance / progressive / dub techno / acid house; now house
-    - `Notes` — the style's / 1/2 / 1/4 / 1/8 / 1/16 / 1/32 / 1/4 triplets / 1/8 triplets / 1/16 triplets; now the style's
-    - `Key` — C, C#, ... B  (the bank's) (12 values); now B  (the bank's)
-    - `Scale` — minor / major / dorian / phrygian / harmonic minor / minor pentatonic; now minor
-    - `Chords` — the style's, one chord (the key's), ... Neo soul turn  IV III vi v I (26 values); now the style's
-    - `Chord length` — the style's / 1 bar / 2 bars / 4 bars; now the style's
-    - `Chord notes` — the style's / triads / sevenths / ninths / sus2 / dub (root, fifth, seventh, the third up) / seventh at the bottom (Kerri Chandler); now the style's
-    - `Form` — A A' A B / A A B B / A A A A (the same bar); now A A' A B
-    - `Swing` — the role's / none (straight) / 54% / 57% / 60%; now the role's
-    - `Echo (dub chord)` — 3/16 (dotted 8th) / 5/16 / 7/16; now 3/16 (dotted 8th)
-    - `Octave from` — the role's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the role's
-    - `Octave to` — the role's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the role's
-    - `Density` — sparse / medium / busy; now medium
-    - `Ghost notes` — none / a few / many; now a few
-    - `Accents` — none / on the offbeats / on the beats / here and there; now on the offbeats
-    - `Another roll of the dice`
-
-    *Trial*
-
-    - `Keep it (B throws it away)`
 - `Fill...`
   - **fill A3** (a dialog):
 

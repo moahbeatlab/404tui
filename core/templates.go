@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/moahbeatlab/404tui/app"
@@ -24,6 +25,14 @@ func modeLabels() []string {
 		out[i] = generate.ModeLabel(m)
 	}
 	return out
+}
+
+// generatorMenu is the same dialog, opened on its GENERATOR page.
+func (a *App) generatorMenu() {
+	a.templatesMenu()
+	if i := slices.Index(a.menu.tabs, "GENERATOR"); i >= 0 {
+		a.menu.setTab(i)
+	}
 }
 
 func (a *App) templatesMenu() {

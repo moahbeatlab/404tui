@@ -387,8 +387,12 @@ func (a *App) seqMenu() {
 	m.tabHead("PATTERN")
 	run("Choose a pattern (bank, then pattern)...", a.openPicker)
 	run("New pattern from a template...", a.templatesMenu)
-	run("Export this pattern as a MIDI file", a.exportMIDI)
+	m.head("GENERATE")
+	run("Generate a pattern (style, kit, variation)...", a.generatorMenu)
+	run("Melody (bass, lead, arp, stabs, pad) in the key of the bank...", a.melodyMenu)
 	run(variationLabel, a.variationMenu)
+	m.head("THIS PATTERN")
+	run("Export this pattern as a MIDI file", a.exportMIDI)
 	set("Loop only the bar in focus (Y+A)", []string{"off", "on"}, b2i(a.freeze), func(v int) {
 		if (v == 1) != a.freeze {
 			a.toggleFreeze()
@@ -531,7 +535,6 @@ func (a *App) seqMenu() {
 
 	m.tabHead("NOTES")
 	m.head("WRITE")
-	run("Melody (bass, lead, arp, stabs, pad) in the key of the bank...", a.melodyMenu)
 	run("Fill...", a.fillMenu)
 	run("Euclid...", a.euclidMenu)
 	run("Evolve over the bars...", a.evolveMenu)
