@@ -5446,3 +5446,47 @@ func TestEchoSwingAndTheTechnoStabs(t *testing.T) {
 		t.Fatalf("busy techno stabs every 3 16ths: %v", on)
 	}
 }
+
+func TestTheMelodyDialogSaysWhatEachSettingDoesAndShowsTheRolesMIDIOut(t *testing.T) {
+	a, _ := newApp(t)
+	a.SetPlatform(Platform{Name: "test", MIDI: fakeMIDIOut{fakeMIDI{ch: make(chan midiin.Event)}, &recOut{}}})
+	keys(t, a, kit)
+	keys(t, a, "Y+R A")
+	a.mel = melodySet{}
+	a.live = &liveState{}
+	defer func() { a.live = nil }()
+	a.melodyMenu()
+	at := func(label string) int {
+		for i, it := range a.menu.items {
+			if it.label == label {
+				return i
+			}
+		}
+		t.Fatalf("no %q in the dialog", label)
+		return -1
+	}
+	for _, it := range a.menu.items { // every setting and action has words of its own
+		if !it.header && strings.HasPrefix(melodyHelp(it.label, it.val, a.mel), "Up and down") {
+			t.Errorf("%q has no help", it.label)
+		}
+	}
+	a.menu.cur = at("Form")
+	a.Render()
+	if !strings.Contains(melodyHelp("Form", a.menu.item().val, a.mel), "motif") {
+		t.Fatal("Form says what it does")
+	}
+	// MIDI out is kept per role: changing the role shows the new role's
+	a.menu.cur = at("MIDI out")
+	a.menuKey(Right) // the role's own: channel 11
+	r := a.mel.role
+	a.menu.cur = at("Role")
+	a.menuKey(Right)
+	if got := a.menu.items[at("MIDI out")].val; got != a.mel.out[a.mel.role] || got != 0 {
+		t.Fatalf("another role shows its own MIDI out (off), not %d", got)
+	}
+	a.menuKey(Left)
+	if a.mel.role != r || a.menu.items[at("MIDI out")].val != 1 {
+		t.Fatalf("back to the role: channel 11 again, shows %d", a.menu.items[at("MIDI out")].val)
+	}
+	a.synthStop()
+}

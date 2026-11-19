@@ -212,7 +212,10 @@ func (a *App) melodyMenu() {
 		lengths = append(lengths, l)
 	}
 	settings := []menuItem{
-		val("Role", roles, st.role, func(v int) { st.role = v }),
+		val("Role", roles, st.role, func(v int) {
+			st.role = v
+			a.melShowOut() // MIDI out is kept per role: show the new role's
+		}),
 		val("Length", lengths, st.bars, func(v int) { st.bars = v }),
 		val("Style", melStyles, st.style, func(v int) { st.style = v }),
 		val("Notes", rates, st.rate, func(v int) { st.rate = v }),
@@ -280,7 +283,7 @@ func (a *App) melodyMenu() {
 			}
 			return "play here"
 		}
-		m.foot, m.footH = a.melodyNow, 3
+		m.foot, m.footH = a.melodyFoot(m), 1+melodyHelpRows+3 // what the setting at the cursor does, then NOW
 		orig := m.onClose
 		m.onClose = func() {
 			a.synthStop()
@@ -1540,4 +1543,19 @@ func melChordSuffix(step progStep, v []int) string {
 		return map[bool]string{true: "m(maj7)", false: "maj7"}[minor]
 	}
 	return progQualities[0][step.q][1]
+}
+
+// melShowOut sets the MIDI out line of the open Melody dialog to where the role now chosen plays (each role keeps its own).
+func (a *App) melShowOut() {
+	m := a.menu
+	if m == nil {
+		return
+	}
+	for _, list := range [][]menuItem{m.items, m.full} {
+		for i := range list {
+			if list[i].label == "MIDI out" {
+				list[i].val = a.mel.out[a.mel.role]
+			}
+		}
+	}
 }
