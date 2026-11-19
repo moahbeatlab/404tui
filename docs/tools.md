@@ -346,14 +346,15 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
     *Settings*
 
-    - `Role` — bass  (bass track), lead  (synth / lead track), ... dub chord (deep echo)  (pads track) (13 values); now lead  (synth / lead track)
+    - `Role` — bass, lead, ... dub chord (deep echo) (13 values); now lead
     - `Length` — the pattern's (4 bars) / 1 bar, repeated over the 4 / 2 bars, repeated over the 4 / 4 bars / 8 bars (the synth; the pattern keeps 4); now the pattern's (4 bars)
     - `Style` — house / deep house / tech house / techno / trance / progressive; now house
     - `Notes` — the style's / 1/2 / 1/4 / 1/8 / 1/16 / 1/32 / 1/4 triplets / 1/8 triplets / 1/16 triplets; now the style's
     - `Key` — C, C#, ... B  (the bank's) (12 values); now B  (the bank's)
     - `Scale` — minor / major / dorian / phrygian / harmonic minor / minor pentatonic; now minor
     - `Chords` — one chord (the key's), Epic anthem  i VI III VII, ... Neo soul turn  IV III vi v I (25 values); now one chord (the key's)
-    - `Range` — for the role / low octave (-12 to 0) / around the pad (-6 to +6) / high octave (0 to +12) / two octaves (-12 to +12); now for the role
+    - `Octave from` — the role's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the role's
+    - `Octave to` — the role's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the role's
     - `Density` — sparse / medium / busy; now medium
     - `Ghost notes` — none / a few / many; now a few
     - `Accents` — none / on the offbeats / on the beats / here and there; now on the offbeats

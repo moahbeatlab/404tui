@@ -26,28 +26,27 @@ const (
 	kHeld
 )
 
-// melRole is a role: its name, the track of a groovebox it fits (MC-101: bass, synth/lead, pads/everything else), its kind, the
-// range "for the role" (semitones from the pad's own pitch).
+// melRole is a role: its name, its kind and the range "for the role" (semitones from the pad's own pitch).
 type melRole struct {
-	name, track string
-	kind        int
-	lo, hi      int
+	name   string
+	kind   int
+	lo, hi int
 }
 
 var melRoles = []melRole{
-	{"bass", "bass track", kBass, -7, 7},
-	{"lead", "synth / lead track", kLead, -2, 12},
-	{"arp", "synth / lead track", kArp, -5, 12},
-	{"stabs", "pads track", kChords, -5, 10},
-	{"pad (held chords)", "pads track", kHeld, -7, 9},
-	{"sub bass (long roots)", "bass track", kBass, -12, 0},
-	{"octave bass (low, high)", "bass track", kBass, -12, 12},
-	{"acid line (16ths, octaves, slides)", "bass track", kBass, -12, 12},
-	{"pluck (short offbeat hook)", "synth / lead track", kLead, 0, 12},
-	{"call and response", "synth / lead track", kLead, -2, 12},
-	{"piano house (broken chords)", "pads track", kChords, -5, 10},
-	{"drone (the tonic held)", "pads track", kHeld, -12, 0},
-	{"dub chord (deep echo)", "pads track", kChords, -5, 10},
+	{"bass", kBass, -7, 7},
+	{"lead", kLead, -2, 12},
+	{"arp", kArp, -5, 12},
+	{"stabs", kChords, -5, 10},
+	{"pad (held chords)", kHeld, -7, 9},
+	{"sub bass (long roots)", kBass, -12, 0},
+	{"octave bass (low, high)", kBass, -12, 12},
+	{"acid line (16ths, octaves, slides)", kBass, -12, 12},
+	{"pluck (short offbeat hook)", kLead, 0, 12},
+	{"call and response", kLead, -2, 12},
+	{"piano house (broken chords)", kChords, -5, 10},
+	{"drone (the tonic held)", kHeld, -12, 0},
+	{"dub chord (deep echo)", kChords, -5, 10},
 }
 
 // melRates are the note values a melody can be written in (ticks; 0 the style's own rhythm), the triplets last.
@@ -74,17 +73,12 @@ var melModes = []struct {
 	{"minor pentatonic", []int{0, 3, 5, 7, 10}, true},
 }
 
-// melRanges are the windows of pitch the notes stay in, in semitones from the pad's own pitch; the first follows the role.
-var melRanges = []struct {
-	name   string
-	lo, hi int
-}{
-	{"for the role", 0, 0},
-	{"low octave (-12 to 0)", -12, 0},
-	{"around the pad (-6 to +6)", -6, 6},
-	{"high octave (0 to +12)", 0, 12},
-	{"two octaves (-12 to +12)", -12, 12},
-}
+// melOctaves are the octaves the notes go from and to: the role's own range, or an octave counted from the pad's own pitch (0: the
+// octave from it up; on the synth the one from C3, a bass's from C2). A pad plays a sample one octave up and down at most.
+var melOctaves = []string{"the role's", "-3", "-2", "-1", "0", "+1", "+2", "+3"}
+
+// melOctave is the octave of an index of melOctaves (not the first).
+func melOctave(i int) int { return i - 4 }
 
 var melDensities = []string{"sparse", "medium", "busy"}
 
@@ -95,11 +89,12 @@ var melAccents = []string{"none", "on the offbeats", "on the beats", "here and t
 
 // melodySet is the dialog's settings, kept between visits; key is -1 until the bank's key is read.
 type melodySet struct {
-	key, mode, role, style, prog, rng, density, ghost, accent int
-	bars                                                      int     // an index of melBars: 0 the pattern's length
-	rate                                                      int     // an index of melRates: 0 the style's rhythm
-	out                                                       [16]int // per role: where it plays, an index of synthOutNames (0: the pad)
-	init                                                      bool
+	key, mode, role, style, prog, density, ghost, accent int
+	octLo, octHi                                         int     // indexes of melOctaves: 0 the role's
+	bars                                                 int     // an index of melBars: 0 the pattern's length
+	rate                                                 int     // an index of melRates: 0 the style's rhythm
+	out                                                  [16]int // per role: where it plays, an index of synthOutNames (0: the pad)
+	init                                                 bool
 }
 
 func (a *App) melodyMenu() {
@@ -131,7 +126,7 @@ func (a *App) melodyMenu() {
 	}
 	roles := make([]string, len(melRoles))
 	for i, r := range melRoles {
-		roles[i] = fmt.Sprintf("%s  (%s)", r.name, r.track)
+		roles[i] = r.name
 	}
 	rates := make([]string, len(melRates))
 	for i, r := range melRates {
@@ -140,10 +135,6 @@ func (a *App) melodyMenu() {
 	progs := []string{"one chord (the key's)"}
 	for _, p := range progressions {
 		progs = append(progs, fmt.Sprintf("%s  %s", p.name, p.roman))
-	}
-	ranges := make([]string, len(melRanges))
-	for i, r := range melRanges {
-		ranges[i] = r.name
 	}
 	padNote, _ := a.sampleNote(pad)
 	patBars := 0
@@ -169,7 +160,8 @@ func (a *App) melodyMenu() {
 		val("Key", keys, st.key, func(v int) { st.key = v }),
 		val("Scale", modes, st.mode, func(v int) { st.mode = v }),
 		val("Chords", progs, st.prog, func(v int) { st.prog = v }),
-		val("Range", ranges, st.rng, func(v int) { st.rng = v }),
+		val("Octave from", melOctaves, st.octLo, func(v int) { st.octLo = v }),
+		val("Octave to", melOctaves, st.octHi, func(v int) { st.octHi = v }),
 		val("Density", melDensities, st.density, func(v int) { st.density = v }),
 		val("Ghost notes", melGhosts, st.ghost, func(v int) { st.ghost = v }),
 		val("Accents", melAccents, st.accent, func(v int) { st.accent = v }),
@@ -192,15 +184,20 @@ func (a *App) melodyMenu() {
 			mb = melBars[st.bars]
 		}
 		pn, _ := a.sampleNote(pad)
-		notes := melodyNotes(pad, mb, *st, pn, a.tt.seed)
+		line := melodyLine(pad, mb, *st, pn, a.tt.seed)
+		notes := padPitches(line)
 		what := fmt.Sprintf("%s %s in %s %s, %s", melStyles[st.style], melRoles[st.role].name, sharpNames[st.key], melModes[st.mode].name, count(mb, "bar"))
+		o := st.out[st.role]
+		if lo, hi := melWindow(*st); (o == 0 || !online) && (lo < -formats.PitchRange || hi > formats.PitchRange) {
+			what += " (a pad goes an octave up and down at most: the notes further out are moved in)"
+		}
 		a.finishTrack(pad, fitBars(notes, mb, bars), what)
-		if o := st.out[st.role]; o > 0 && online {
+		if o > 0 && online {
 			k := ((st.key-pn)%12 + 12) % 12
 			if k > 6 {
 				k -= 12
 			}
-			if a.synthPlay(pad, notes, mb*16*stepTicks, 10+o, synthTonic(st.role, st.key), k) {
+			if a.synthPlay(pad, line, mb*16*stepTicks, 10+o, synthTonic(st.role, st.key), k) {
 				a.say(what+" "+synthSaid(10+o, a.midiOutName), false)
 			}
 		} else if a.synth != nil {
@@ -340,7 +337,30 @@ func tonalName(name string) bool {
 }
 
 // melodyNotes writes the track: bars of the pattern, the settings, the note the pad's sample is in, and the roll of the dice.
+// melodyNotes is the melody as notes of the pad: a pitch further than an octave from the pad's own is moved into that octave (a
+// pad plays its sample one octave up and down at most).
 func melodyNotes(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note {
+	return padPitches(melodyLine(pad, bars, st, padNote, seed))
+}
+
+// padPitches is the line for the pad: each pitch (in semitones) within an octave of the pad's, as the pattern's pitch byte.
+func padPitches(line []lab.Note) []lab.Note {
+	out := make([]lab.Note, len(line))
+	for i, n := range line {
+		for n.Pitch > formats.PitchRange {
+			n.Pitch -= 12
+		}
+		for n.Pitch < -formats.PitchRange {
+			n.Pitch += 12
+		}
+		n.Pitch = int(formats.PitchByte(n.Pitch))
+		out[i] = n
+	}
+	return out
+}
+
+// melodyLine is the melody with its pitches in semitones from the pad's own pitch, as far as the octaves go (for the synth).
+func melodyLine(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note {
 	rng := rand.New(rand.NewSource(seed*7919 + int64(pad)*131 + int64(st.role)))
 	mode := melModes[st.mode]
 	k := ((st.key-padNote)%12 + 12) % 12 // the tonic, in semitones from the pad's own pitch (-5..6)
@@ -380,7 +400,7 @@ func melodyNotes(pad, bars int, st melodySet, padNote int, seed int64) []lab.Not
 		return false
 	}
 	nearest := func(p int, ok func(int) bool) int { // the nearest pitch of the range that ok takes
-		for d := 0; d <= 24; d++ {
+		for d := 0; d <= 48; d++ {
 			for _, q := range []int{p - d, p + d} {
 				if q >= lo && q <= hi && ok(q) {
 					return q
@@ -836,7 +856,7 @@ func melodyNotes(pad, bars int, st melodySet, padNote int, seed int64) []lab.Not
 			continue
 		}
 		ln := min(h.length, bars*16-h.step) * stepTicks
-		notes = append(notes, lab.Note{Tick: uint32(h.step * stepTicks), Pad: pad, Vel: h.vel, Len: max(ln-stepTicks/8, 1), Pitch: int(formats.PitchByte(h.pitch))})
+		notes = append(notes, lab.Note{Tick: uint32(h.step * stepTicks), Pad: pad, Vel: h.vel, Len: max(ln-stepTicks/8, 1), Pitch: h.pitch})
 	}
 	sort.SliceStable(notes, func(i, j int) bool { return notes[i].Tick < notes[j].Tick })
 	return applyRate(notes, melRoles[st.role].kind, melRates[st.rate].ticks, bars*16*stepTicks, rng)
@@ -919,13 +939,27 @@ func applyRate(notes []lab.Note, kind, r, total int, rng *rand.Rand) []lab.Note 
 	return out
 }
 
-// melWindow is the range of pitch (semitones from the pad's own pitch) for the settings.
+// melWindow is the range of pitch (semitones from the pad's own pitch) for the settings: the role's, or from the low octave's
+// bottom to the high octave's top (turned round when they are the wrong way round).
 func melWindow(st melodySet) (int, int) {
-	r := melRanges[st.rng]
-	if st.rng > 0 {
-		return r.lo, r.hi
+	lo, hi := melRoles[st.role].lo, melRoles[st.role].hi
+	if st.octLo > 0 {
+		lo = melOctave(st.octLo) * 12
 	}
-	return melRoles[st.role].lo, melRoles[st.role].hi
+	if st.octHi > 0 {
+		hi = melOctave(st.octHi)*12 + 12
+	}
+	if st.octLo > 0 && st.octHi > 0 && lo >= hi {
+		lo, hi = melOctave(st.octHi)*12, melOctave(st.octLo)*12+12
+	}
+	if lo >= hi {
+		if st.octLo > 0 {
+			hi = lo + 12
+		} else {
+			lo = hi - 12
+		}
+	}
+	return lo, hi
 }
 
 // melBassRhythm is a bar of a bass line in a style: the steps and lengths (in steps).

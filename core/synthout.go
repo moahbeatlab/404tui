@@ -38,7 +38,7 @@ type synthOut struct {
 
 // synthPlay sends the notes of the track on channel ch (1..16) in time with the unit's MIDI clock while the unit plays, else with
 // the loop on the computer; tonic is the MIDI note of the key's tonic and k the semitones of the tonic from the pad's own pitch (a
-// note's pitch p is the MIDI note tonic+p-k). The pad is quiet on the computer meanwhile. It says whether a MIDI output is there.
+// note's pitch p, in semitones and not the pattern's pitch byte, is the MIDI note tonic+p-k). The pad is quiet on the computer meanwhile. It says whether a MIDI output is there.
 func (a *App) synthPlay(pad int, notes []lab.Note, length, ch, tonic, k int) bool {
 	out := a.midiOutput()
 	if out == nil {
@@ -46,7 +46,7 @@ func (a *App) synthPlay(pad int, notes []lab.Note, length, ch, tonic, k int) boo
 	}
 	sn := make([]synthNote, 0, len(notes))
 	for _, n := range notes {
-		note := tonic + formats.PitchSemitones(uint8(n.Pitch)) - k
+		note := tonic + n.Pitch - k
 		if note < 0 || note > 127 {
 			continue
 		}

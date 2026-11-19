@@ -4950,19 +4950,28 @@ func TestKitNamesGiveTheKey(t *testing.T) {
 func TestTheMelodyStaysInTheKeyAndTheRange(t *testing.T) {
 	for role := range melRoles {
 		for style := range melStyles {
-			for rg := range melRanges {
+			for _, oct := range [][2]int{{0, 0}, {1, 6}, {4, 4}, {3, 5}, {6, 3}, {0, 7}} { // the role's, -3 to +2, 0, -1 to +1, turned round
 				for rate := range melRates {
-					st := melodySet{key: 8, role: role, style: style, rng: rg, density: 1, ghost: 2, accent: 1, rate: rate}
+					st := melodySet{key: 8, role: role, style: style, octLo: oct[0], octHi: oct[1], density: 1, ghost: 2, accent: 1, rate: rate}
 					notes := melodyNotes(5, 4, st, 3, 42) // G# minor on a pad whose sample is in D#
-					if len(notes) == 0 {
+					line := melodyLine(5, 4, st, 3, 42)
+					if len(notes) == 0 || len(line) != len(notes) {
 						t.Fatalf("%s %s: no notes", melRoles[role].name, melStyles[style])
 					}
 					lo, hi := melWindow(st)
+					if oct == [2]int{1, 6} && (lo != -36 || hi != 36) {
+						t.Fatalf("octaves -3 to +2: %d..%d", lo, hi)
+					}
+					for _, n := range line {
+						if n.Pitch < lo || n.Pitch > hi {
+							t.Fatalf("%s %s %v: pitch %d out of %d..%d", melRoles[role].name, melStyles[style], oct, n.Pitch, lo, hi)
+						}
+					}
 					ghosts, accents := 0, 0
-					for _, n := range notes {
+					for i, n := range notes {
 						p := formats.PitchSemitones(uint8(n.Pitch))
-						if p < lo || p > hi || p < -12 || p > 12 {
-							t.Fatalf("%s %s %s: pitch %d out of %d..%d", melRoles[role].name, melStyles[style], melRanges[rg].name, p, lo, hi)
+						if p < -12 || p > 12 || ((p-line[i].Pitch)%12+12)%12 != 0 {
+							t.Fatalf("%s %s %v: pitch %d on the pad for %d", melRoles[role].name, melStyles[style], oct, p, line[i].Pitch)
 						}
 						if pc := ((3+p)%12 + 12) % 12; !slices.Contains([]int{8, 10, 11, 1, 3, 4, 6}, pc) { // G# minor
 							t.Fatalf("%s %s: %s is not in G# minor", melRoles[role].name, melStyles[style], sharpNames[pc])
