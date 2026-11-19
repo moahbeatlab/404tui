@@ -355,6 +355,9 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Chords` — the style's, one chord (the key's), ... Neo soul turn  IV III vi v I (26 values); now the style's
     - `Chord length` — the style's / 1 bar / 2 bars / 4 bars; now the style's
     - `Chord notes` — the style's / triads / sevenths / ninths / sus2 / dub (root, fifth, seventh, the third up) / seventh at the bottom (Kerri Chandler); now the style's
+    - `Form` — A A' A B / A A B B / A A A A (the same bar); now A A' A B
+    - `Swing` — the role's / none (straight) / 54% / 57% / 60%; now the role's
+    - `Echo (dub chord)` — 3/16 (dotted 8th) / 5/16 / 7/16; now 3/16 (dotted 8th)
     - `Octave from` — the role's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the role's
     - `Octave to` — the role's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the role's
     - `Density` — sparse / medium / busy; now medium

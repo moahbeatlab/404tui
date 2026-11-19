@@ -62,22 +62,37 @@ var melRates = []struct {
 
 var melStyles = []string{"house", "deep house", "tech house", "techno", "trance", "progressive", "dub techno", "acid house"}
 
-// melStyleHarmony is what a style plays when Chords, Chord length and Chord notes are "the style's": its progression in minor and
-// in major (none: the key's one chord), the bars a chord lasts and its notes (an index of melColors). From producer tutorials, not
-// counts: two chords in house, i7-iv7 with ninths in deep house, one chord in tech house, techno, dub techno and acid, the anthem
-// loop in trance and, two bars a chord, in progressive.
+// melHarm is a loop of chords and the bars each lasts (no chords: the key's one chord).
+type melHarm struct {
+	steps []progStep
+	per   int
+}
+
+// melStyleHarmony is what a style plays when Chords, Chord length and Chord notes are "the style's": loops in minor, one of which
+// each roll of the dice takes (a loop twice in the list is taken twice as often), the loop of a major key, and the notes of the
+// chords (an index of melColors). From tutorials and the counted studies there are (GiantSteps keys and tempos, 100 uplifting
+// trance loops: two bars a chord, five or six chords): two-chord shuttles or 4-bar loops a chord a bar in house and deep house,
+// one chord in tech house, techno, dub techno and acid, the anthem loops in trance and progressive.
 var melStyleHarmony = []struct {
-	minor, major []progStep
-	per, color   int
+	minor []melHarm
+	major melHarm
+	color int
 }{
-	{[]progStep{{0, 'm'}, {10, 'M'}}, []progStep{{0, 'M'}, {5, 'M'}}, 1, 2}, // house: i VII, I IV; sevenths
-	{[]progStep{{0, 'm'}, {5, 'm'}}, []progStep{{0, 'M'}, {5, 'M'}}, 1, 3},  // deep house: i9 iv9
-	{nil, nil, 1, 2}, // tech house: one chord
-	{nil, nil, 1, 1}, // techno: one chord
-	{[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, []progStep{{0, 'M'}, {7, 'D'}, {9, 'm'}, {5, 'M'}}, 1, 1}, // trance: i VI III VII, I V vi IV
-	{[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, []progStep{{0, 'M'}, {7, 'D'}, {9, 'm'}, {5, 'M'}}, 2, 4}, // progressive: the same, two bars a chord, sus2
-	{nil, nil, 4, 5}, // dub techno: one chord, open
-	{nil, nil, 1, 1}, // acid house: one chord
+	{[]melHarm{{[]progStep{{0, 'm'}, {10, 'M'}}, 1}, {[]progStep{{0, 'm'}, {5, 'm'}}, 1}, {[]progStep{{5, 'm'}, {8, 'M'}, {0, 'm'}, {10, 'M'}}, 1}},
+		melHarm{[]progStep{{0, 'M'}, {5, 'M'}}, 1}, 2}, // house: i VII, i iv, iv VI i VII; I IV; sevenths
+	{[]melHarm{{[]progStep{{0, 'm'}, {5, 'm'}}, 1}, {[]progStep{{0, 'm'}, {5, 'm'}}, 1}, {[]progStep{{0, 'm'}, {8, 'M'}, {5, 'm'}, {5, 'm'}}, 1}, {[]progStep{{0, 'm'}, {5, 'm'}, {10, 'M'}, {10, 'M'}}, 1}},
+		melHarm{[]progStep{{0, 'M'}, {5, 'M'}}, 1}, 3}, // deep house: i iv (twice as often), i VI iv iv, i iv VII VII; ninths
+	{[]melHarm{{nil, 1}, {nil, 1}, {[]progStep{{0, 'm'}, {8, 'M'}, {10, 'M'}, {10, 'M'}}, 1}, {[]progStep{{0, 'm'}, {5, 'm'}, {7, 'm'}, {7, 'm'}}, 1}},
+		melHarm{nil, 1}, 2}, // tech house: one chord mostly, else i VI VII, i iv v
+	{[]melHarm{{nil, 1}, {nil, 1}, {[]progStep{{0, 'm'}, {10, 'M'}, {8, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, 4}},
+		melHarm{nil, 1}, 1}, // techno: one chord mostly; melodic techno i VII VI VII, i VI III VII over 2 and 4 bars a chord
+	{[]melHarm{{[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {10, 'M'}, {8, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {10, 'M'}, {8, 'M'}, {7, 'D'}}, 2}, {[]progStep{{8, 'M'}, {10, 'M'}, {0, 'm'}, {0, 'm'}}, 2}},
+		melHarm{[]progStep{{0, 'M'}, {7, 'D'}, {9, 'm'}, {5, 'M'}}, 2}, 1}, // trance: i VI III VII, i VII VI VII, i VII VI V, VI VII i; two bars a chord
+	{[]melHarm{{[]progStep{{0, 'm'}, {8, 'M'}, {3, 'M'}, {10, 'M'}}, 2}, {[]progStep{{0, 'm'}, {3, 'M'}, {10, 'M'}, {8, 'M'}}, 2}, {[]progStep{{0, 'm'}, {8, 'M'}, {10, 'M'}, {10, 'M'}}, 1}},
+		melHarm{[]progStep{{0, 'M'}, {7, 'D'}, {9, 'm'}, {5, 'M'}}, 2}, 4}, // progressive: i VI III VII, i III VII VI, i VI VII; sus2
+	{[]melHarm{{nil, 1}, {[]progStep{{0, 'm'}, {5, 'm'}}, 2}, {[]progStep{{0, 'm'}, {5, 's'}}, 2}},
+		melHarm{nil, 1}, 5}, // dub techno: one chord, i7 iv7, i7 IVsus2, a chord two bars; open
+	{[]melHarm{{nil, 1}}, melHarm{nil, 1}, 1}, // acid house: one chord
 }
 
 // melColors are the notes of a chord: the style's, or a voicing.
@@ -85,6 +100,15 @@ var melColors = []string{"the style's", "triads", "sevenths", "ninths", "sus2", 
 
 // melChordLens are the bars a chord of the progression lasts (0: the style's).
 var melChordLens = []int{0, 1, 2, 4}
+
+// melSwings are how late every second 16th comes (MPC swing, %; 0: the role's, a rolling bass 57, the rest straight).
+var melSwings = []int{0, 50, 54, 57, 60}
+
+// melForms are how the bars of a motif follow each other: A A' A B (the end changes), A A B B, or the same bar.
+var melForms = []string{"A A' A B", "A A B B", "A A A A (the same bar)"}
+
+// melEchoes are the steps between a dub chord's echoes: 3/16 (the dotted 8th), 5/16, 7/16.
+var melEchoes = []int{3, 5, 7}
 
 var melModes = []struct {
 	name  string
@@ -118,6 +142,8 @@ type melodySet struct {
 	key, mode, role, style, density, ghost, accent int
 	prog                                           int     // 0 the style's, 1 the key's one chord, else progressions[prog-2]
 	chordLen, color                                int     // indexes of melChordLens and melColors: 0 the style's
+	swing, form, echo                              int     // indexes of melSwings, melForms and melEchoes
+	pick                                           int     // the roll of the dice: which of the style's loops
 	octLo, octHi                                   int     // indexes of melOctaves: 0 the role's
 	bars                                           int     // an index of melBars: 0 the pattern's length
 	rate                                           int     // an index of melRates: 0 the style's rhythm
@@ -190,6 +216,9 @@ func (a *App) melodyMenu() {
 		val("Chords", progs, st.prog, func(v int) { st.prog = v }),
 		val("Chord length", []string{"the style's", "1 bar", "2 bars", "4 bars"}, st.chordLen, func(v int) { st.chordLen = v }),
 		val("Chord notes", melColors, st.color, func(v int) { st.color = v }),
+		val("Form", melForms, st.form, func(v int) { st.form = v }),
+		val("Swing", []string{"the role's", "none (straight)", "54%", "57%", "60%"}, st.swing, func(v int) { st.swing = v }),
+		val("Echo (dub chord)", []string{"3/16 (dotted 8th)", "5/16", "7/16"}, st.echo, func(v int) { st.echo = v }),
 		val("Octave from", melOctaves, st.octLo, func(v int) { st.octLo = v }),
 		val("Octave to", melOctaves, st.octHi, func(v int) { st.octHi = v }),
 		val("Density", melDensities, st.density, func(v int) { st.density = v }),
@@ -214,6 +243,7 @@ func (a *App) melodyMenu() {
 			mb = melBars[st.bars]
 		}
 		pn, _ := a.sampleNote(pad)
+		st.pick = int(a.tt.seed & 0xffff) // the style's loop of this roll
 		line := melodyLine(pad, mb, *st, pn, a.tt.seed)
 		notes := padPitches(line)
 		what := fmt.Sprintf("%s %s in %s %s, %s", melStyles[st.style], melRoles[st.role].name, sharpNames[st.key], melModes[st.mode].name, count(mb, "bar"))
@@ -410,7 +440,7 @@ func melodyLine(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note
 	}
 	chordOf := func(bar int) []int { // the pitch classes (from the tonic) of the bar's chord, root first
 		step := melStep(st, bar)
-		third := map[byte]int{'M': 4, 'D': 4, 'm': 3, 'd': 3}[step.q]
+		third := map[byte]int{'M': 4, 'D': 4, 'm': 3, 'd': 3, 's': 2}[step.q]
 		fifth := 7
 		if step.q == 'd' {
 			fifth = 6
@@ -501,10 +531,33 @@ func melodyLine(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note
 		for i := range tmpl {
 			roll(i)
 		}
+		if st.style == 3 && rng.Intn(2) == 0 { // techno: the root on the beats, the fifth on the 8ths between
+			tmpl, fn = nil, nil
+			for s := 0; s < 16; s += 2 {
+				tmpl = append(tmpl, [2]int{s, 1})
+				fn = append(fn, map[bool]int{true: 0, false: 2}[s%4 == 0])
+			}
+		}
+		for i, h := range tmpl { // house: an octave or a fifth on the last offbeat
+			if st.style == 0 && h[0] == 14 && rng.Intn(2) == 0 {
+				fn[i] = 1 + rng.Intn(2)
+			}
+		}
+		fnB := append([]int(nil), fn...) // the B bars of A A B B: the second half again
+		for i, h := range tmpl {
+			if h[0] >= 8 {
+				old := fn[i]
+				roll(i)
+				fnB[i], fn[i] = fn[i], old
+			}
+		}
 		base := rootNear(chordOf(0), min(max(0, lo), hi)) // the bass sits on the root nearest the pad's own pitch
 		for bar := 0; bar < bars; bar++ {
 			f := append([]int(nil), fn...)
-			if form := bar % 4; form == 1 || form == 3 { // A' and B: the end of the bar changes
+			switch form := bar % 4; {
+			case st.form == 1 && form >= 2:
+				f = append([]int(nil), fnB...)
+			case st.form == 0 && (form == 1 || form == 3): // A' and B: the end of the bar changes
 				for i := max(len(f)-1-form/2, 0); i < len(f); i++ {
 					old := fn[i]
 					roll(i)
@@ -543,10 +596,23 @@ func melodyLine(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note
 			walk[i] = walk[i-1] + []int{-2, -1, -1, 0, 1, 1, 2, -3, 3}[rng.Intn(9)]
 		}
 		start := toneNear(chordOf(0), centre)
+		off := make([]int, len(rhythm)) // where a repeated note steps off to (0: it stays), the same in every bar
+		for i := range off {
+			if rng.Intn(3) > 0 {
+				off[i] = []int{-1, 1}[rng.Intn(2)]
+			}
+		}
+		walkB := append([]int(nil), walk...) // the B bars of A A B B: the second half moves elsewhere
+		for i := max(len(walkB)/2, 1); i < len(walkB); i++ {
+			walkB[i] = walkB[i-1] + []int{-2, -1, 1, 2, 3}[rng.Intn(5)]
+		}
 		for bar := 0; bar < bars; bar++ {
 			form := bar % 4
 			r, w := rhythm, walk
-			if form == 1 || form == 3 { // the answer: the end changes
+			switch {
+			case st.form == 1 && form >= 2:
+				w = walkB
+			case st.form == 0 && (form == 1 || form == 3): // the answer: the end changes
 				w = append([]int(nil), walk...)
 				from := len(w) - 1 - form/2
 				for i := max(from, 1); i < len(w); i++ {
@@ -562,8 +628,8 @@ func melodyLine(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note
 				if h[0]%4 == 0 || i == 0 { // a strong step: a chord tone
 					p = toneNear(ch, p)
 				}
-				if p == prev && rng.Intn(3) > 0 { // a line moves: the same note twice is rare
-					j = min(max(scaleIdx(p)+[]int{-1, 1}[rng.Intn(2)], 0), len(scale)-1)
+				if p == prev && off[i] != 0 { // a line moves: the same note twice is rare
+					j = min(max(scaleIdx(p)+off[i], 0), len(scale)-1)
 					p = scale[j]
 				}
 				prev = p
@@ -634,50 +700,76 @@ func melodyLine(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note
 				add(bar, hit{s, 1, p, 100})
 			}
 		}
-	case 7: // acid line: 16ths of the root, its octave and the scale's colours, a few tied over (a slide on a synth with portamento)
-		keep := []float64{0.55, 0.75, 0.9}[st.density]
-		type acid struct{ on, fn, tie int }
-		motif := make([]acid, 16)
-		roll := func(i int) {
-			m := acid{}
-			if i%4 == 0 || rng.Float64() < keep {
+	case 7: // acid line, as the classic 303 patterns go (Confusion, Access, Higher State, Acid Thunder, Funalogue...): 12 to 16 of
+		// the 16 steps, one to three notes, octave jumps on some, slides on some, accents on a few steps or on all of them
+		keep := []float64{0.75, 0.85, 1}[st.density]
+		notes := []int{0} // in the scale from the root: the root, and one or two more (the third, the fifth, the seventh, the second)
+		for n := 1 + rng.Intn(3); len(notes) < n; {
+			if c := []int{2, 4, 6, 1, 3}[rng.Intn(5)]; !containsInt(notes, c) {
+				notes = append(notes, c)
+			}
+		}
+		octP, slideP := 0.06+rng.Float64()*0.38, rng.Float64()*0.4
+		allAcc := rng.Intn(4) == 0 // accents: on every step (a quarter of the time), else on 8 to 23% of them
+		accP := 0.08 + rng.Float64()*0.15
+		type acid struct{ on, note, oct, tie, acc int }
+		mk := func(i int) acid {
+			m := acid{note: notes[0]}
+			if i == 0 || rng.Float64() < keep {
 				m.on = 1
 			}
-			switch r := rng.Float64(); {
-			case r < 0.45:
-				m.fn = 0
-			case r < 0.7:
-				m.fn = 1
-			default:
-				m.fn = 2 + rng.Intn(3) // up the scale 2, 3 or 4 places
+			if i%4 != 0 && rng.Intn(3) == 0 { // the root on the beats mostly
+				m.note = notes[rng.Intn(len(notes))]
 			}
-			if rng.Float64() < 0.2 {
+			if rng.Float64() < octP {
+				m.oct = 1
+			}
+			if rng.Float64() < slideP {
 				m.tie = 1
 			}
-			motif[i] = m
+			if st.accent > 0 && (allAcc || rng.Float64() < accP) { // (Accents: none, none)
+				m.acc = 1
+			}
+			return m
 		}
+		motif, motifB := make([]acid, 16), make([]acid, 16)
+		accented := false
 		for i := range motif {
-			roll(i)
+			motif[i] = mk(i)
+			accented = accented || motif[i].acc == 1
+		}
+		if st.accent > 0 && !accented { // an accent at least
+			motif[0].acc = 1
+		}
+		copy(motifB, motif)
+		for i := 8; i < 16; i++ {
+			motifB[i] = mk(i)
 		}
 		for bar := 0; bar < bars; bar++ {
-			if form := bar % 4; form == 3 { // B: the last beat changes
+			m := motif
+			switch form := bar % 4; {
+			case st.form == 1 && form >= 2:
+				m = motifB
+			case st.form == 0 && form == 3: // B: the last beat changes
+				m = append([]acid(nil), motif...)
 				for i := 12; i < 16; i++ {
-					roll(i)
+					m[i] = mk(i)
 				}
 			}
 			root := rootNear(chordOf(bar), lo+5)
-			for s, m := range motif {
-				if m.on == 0 {
+			for s, x := range m {
+				if x.on == 0 {
 					continue
 				}
-				p := root
-				switch {
-				case m.fn == 1 && root+12 <= hi:
-					p = root + 12
-				case m.fn >= 2:
-					p = scale[min(scaleIdx(root)+m.fn, len(scale)-1)]
+				p := scale[min(scaleIdx(root)+x.note, len(scale)-1)]
+				if x.oct == 1 && p+12 <= hi {
+					p += 12
 				}
-				add(bar, hit{s, 1 + m.tie, p, 100})
+				vel := 88
+				if x.acc == 1 {
+					vel = 124
+				}
+				add(bar, hit{s, 1 + x.tie, p, vel}) // a slide: held into the next step (portamento on the synth)
 			}
 		}
 	case 8: // pluck: short notes on the offbeat 16ths, the chord's tones in a set order (a hook)
@@ -713,7 +805,7 @@ func melodyLine(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note
 			}
 			for i, s := range steps {
 				o := order[i]
-				if bar%4 == 3 && i == len(steps)-1 {
+				if st.form == 0 && bar%4 == 3 && i == len(steps)-1 {
 					o = 0 // the end of the phrase: its lowest tone
 				}
 				add(bar, hit{s, 1, tones[o%len(tones)], 96})
@@ -805,7 +897,7 @@ func melodyLine(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note
 			}
 			for _, s0 := range stabs {
 				for e, vel := range []int{92, 55, 33, 20} { // the stab, then its echoes
-					s := s0 + e*3 // a dotted 8th (3 16ths) between the echoes: the classic dub delay
+					s := s0 + e*melEchoes[st.echo] // 3 16ths (the dotted 8th, the classic dub delay), 5 or 7
 					if bar*16+s >= bars*16 {
 						break
 					}
@@ -891,7 +983,7 @@ func melodyLine(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note
 		for bar := 0; bar < bars; bar++ {
 			voice := voiceOf(bar, centre-3)
 			r := tmpl
-			if bar%4 == 3 && st.role == 3 && len(tmpl) > 1 && rng.Intn(2) == 0 { // B: one stab less, or a push before the bar
+			if st.form == 0 && bar%4 == 3 && st.role == 3 && len(tmpl) > 1 && rng.Intn(2) == 0 { // B: one stab less
 				r = tmpl[:len(tmpl)-1]
 			}
 			for _, h := range r {
@@ -938,7 +1030,7 @@ func melodyLine(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note
 	// accents
 	for i := range out {
 		h := &out[i]
-		if h.vel < 60 { // a ghost
+		if h.vel < 60 || (st.role == 7 && st.accent > 0) { // a ghost; an acid line's accents are its own
 			continue
 		}
 		s := h.step % 16
@@ -968,11 +1060,15 @@ func melodyLine(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note
 		notes = append(notes, lab.Note{Tick: uint32(h.step * stepTicks), Pad: pad, Vel: h.vel, Len: max(ln-stepTicks/8, 1), Pitch: h.pitch})
 	}
 	sort.SliceStable(notes, func(i, j int) bool { return notes[i].Tick < notes[j].Tick })
-	if st.role == 14 && melRates[st.rate].ticks == 0 { // the roll swings: every second 16th a little late (57%)
+	sw := melSwings[st.swing]
+	if sw == 0 && st.role == 14 { // the role's: a rolling bass swings, the rest is straight
+		sw = 57
+	}
+	if d := (sw - 50) * 2 * stepTicks / 100; d > 0 && melRates[st.rate].ticks == 0 { // every second 16th a little late
 		for i := range notes {
 			if notes[i].Tick%(2*stepTicks) == stepTicks {
-				notes[i].Tick += stepTicks * 14 / 100
-				notes[i].Len = max(notes[i].Len-stepTicks*14/100, 1)
+				notes[i].Tick += uint32(d)
+				notes[i].Len = max(notes[i].Len-d, 1)
 			}
 		}
 	}
@@ -1084,7 +1180,10 @@ func melBassRhythm(style, density int, rng *rand.Rand) [][2]int {
 	var steps []int
 	length := 1
 	switch style {
-	case 0: // house: the offbeat
+	case 0: // house: the offbeat, or now and then the 3+3+2 cell (Underworld's "Pearl's Girl")
+		if rng.Intn(4) == 0 {
+			return [][2]int{{0, 3}, {6, 3}, {12, 2}}
+		}
 		steps, length = []int{2, 6, 10, 14}, 2
 		if density == 2 {
 			steps = append(steps, 3, 11)
@@ -1094,7 +1193,10 @@ func melBassRhythm(style, density int, rng *rand.Rand) [][2]int {
 		if density == 0 {
 			steps = []int{0, 6, 10}
 		}
-	case 2, 4: // tech house and trance: rolling 16ths around the kick
+	case 2, 4: // tech house and trance: rolling 16ths around the kick; tech house now and then the broken offbeat
+		if style == 2 && rng.Intn(3) == 0 {
+			return [][2]int{{2, 2}, {6, 2}, {9, 2}, {14, 2}}
+		}
 		for s := 0; s < 16; s++ {
 			if s%4 != 0 {
 				steps = append(steps, s)
@@ -1102,8 +1204,8 @@ func melBassRhythm(style, density int, rng *rand.Rand) [][2]int {
 		}
 	case 3, 5: // techno and progressive: offbeat pairs
 		steps = []int{2, 3, 6, 7, 10, 11, 14, 15}
-	case 6: // dub techno: a few notes between the beats, held
-		return append([][2]int(nil), [][][2]int{{{6, 3}}, {{6, 3}, {14, 2}}, {{3, 2}, {6, 3}, {11, 2}, {14, 2}}}[density]...)
+	case 6: // dub techno: the root held (a sub drone), or a few notes between the beats
+		return append([][2]int(nil), [][][2]int{{{0, 16}}, {{0, 12}, {14, 2}}, {{3, 2}, {6, 3}, {11, 2}, {14, 2}}}[density]...)
 	case 7: // acid house: 16ths, a few left out
 		for s := 0; s < 16; s++ {
 			steps = append(steps, s)
@@ -1167,11 +1269,21 @@ func melStabRhythm(style, density int, rng *rand.Rand) [][2]int {
 	switch style {
 	case 1: // deep house: the classic push
 		steps = []int{3, 6, 10, 13}
-	case 2, 3: // tech house, techno: few and dry
+	case 2: // tech house: few and dry
 		steps = []int{2, 10}
 		if density == 2 {
 			steps = []int{2, 7, 10}
 		}
+	case 3: // techno: the "and" of 2 and 4, the push on the last 16th held over the bar, or every 3 16ths against the kick
+		switch {
+		case density == 0:
+			return [][2]int{{6, 1}, {14, 1}}
+		case density == 2 || rng.Intn(3) == 0:
+			return [][2]int{{0, 1}, {3, 1}, {6, 1}, {9, 1}, {12, 1}, {15, 1}}
+		case rng.Intn(2) == 0:
+			return [][2]int{{15, 2}}
+		}
+		return [][2]int{{6, 1}, {14, 1}}
 	case 6: // dub techno: the chord on the "and", seldom
 		return append([][2]int(nil), [][][2]int{{{6, 1}}, {{6, 1}, {14, 1}}, {{2, 1}, {6, 1}, {10, 1}, {14, 1}}}[density]...)
 	default: // house, trance, progressive: the offbeats
@@ -1315,30 +1427,33 @@ func (a *App) melChordName(bar int) string {
 	return sharpNames[(st.key+step.semi)%12] + melChordSuffix(step, melVoicing(step, melColor(st), in))
 }
 
-// melSteps is the progression of the settings (none: the key's one chord).
-func melSteps(st melodySet) []progStep {
+// melSteps is the progression of the settings and the bars a chord lasts (no chords: the key's one chord).
+func melSteps(st melodySet) ([]progStep, int) {
+	per := 1
+	var steps []progStep
 	switch {
 	case st.prog == 1:
-		return nil
 	case st.prog >= 2:
-		return progressions[st.prog-2].steps
+		steps = progressions[st.prog-2].steps
+	default:
+		h := melStyleHarmony[st.style]
+		alt := h.major
+		if melModes[st.mode].minor {
+			alt = h.minor[st.pick%len(h.minor)]
+		}
+		steps, per = alt.steps, alt.per
 	}
-	h := melStyleHarmony[st.style]
-	if melModes[st.mode].minor {
-		return h.minor
+	if st.chordLen > 0 {
+		per = melChordLens[st.chordLen]
 	}
-	return h.major
+	return steps, per
 }
 
 // melStep is the chord of a bar: the progression's, each chord as many bars as Chord length says.
 func melStep(st melodySet, bar int) progStep {
-	steps := melSteps(st)
+	steps, per := melSteps(st)
 	if len(steps) == 0 {
 		return progStep{0, map[bool]byte{true: 'm', false: 'M'}[melModes[st.mode].minor]}
-	}
-	per := melStyleHarmony[st.style].per
-	if st.chordLen > 0 {
-		per = melChordLens[st.chordLen]
 	}
 	return steps[(bar/max(per, 1))%len(steps)]
 }
@@ -1362,8 +1477,11 @@ func melVoicing(step progStep, color int, inScale map[int]bool) []int {
 		return want
 	}
 	third, fifth := 3, 7
-	if step.q == 'M' || step.q == 'D' {
+	switch step.q {
+	case 'M', 'D':
 		third = 4
+	case 's': // sus2
+		third = pick(2, 1)
 	}
 	if step.q == 'd' {
 		fifth = 6
@@ -1407,6 +1525,8 @@ func melChordSuffix(step progStep, v []int) string {
 		return map[bool]string{true: "m9", false: "9"}[minor]
 	case has(11) && ninth:
 		return map[bool]string{true: "m(maj9)", false: "maj9"}[minor]
+	case !has(3) && !has(4) && has(1):
+		return "sus(b2)"
 	case has(10) && step.q == 'd':
 		return "m7b5"
 	case has(10):

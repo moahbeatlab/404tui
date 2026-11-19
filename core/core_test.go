@@ -5292,13 +5292,16 @@ func TestEachStyleHasItsOwnChords(t *testing.T) {
 		st   melodySet
 		want []string
 	}{
-		{melodySet{key: 9, style: 0}, []string{"Am7", "G7", "Am7"}},                          // house: i VII, sevenths (G7: the VII of A minor)
-		{melodySet{key: 9, style: 1}, []string{"Am9", "Dm9", "Am9"}},                         // deep house: i9 iv9
-		{melodySet{key: 9, style: 2}, []string{"Am7", "Am7", "Am7"}},                         // tech house: one chord
-		{melodySet{key: 9, style: 5}, []string{"Asus2", "Asus2", "Fsus2", "Fsus2", "Csus2"}}, // progressive: two bars a chord, sus2
-		{melodySet{key: 9, style: 4, chordLen: 3}, []string{"Am", "Am", "Am", "Am", "F"}},    // trance, a chord 4 bars
-		{melodySet{key: 9, style: 6}, []string{"Am7", "Am7"}},                                // dub techno: one open chord
-		{melodySet{key: 0, mode: 1, style: 0}, []string{"Cmaj7", "Fmaj7"}},                   // house in major: I IV
+		{melodySet{key: 9, style: 0}, []string{"Am7", "G7", "Am7"}},                           // house: i VII, sevenths (G7: the VII of A minor)
+		{melodySet{key: 9, style: 1}, []string{"Am9", "Dm9", "Am9"}},                          // deep house: i9 iv9
+		{melodySet{key: 9, style: 2}, []string{"Am7", "Am7", "Am7"}},                          // tech house: one chord
+		{melodySet{key: 9, style: 5}, []string{"Asus2", "Asus2", "Fsus2", "Fsus2", "Csus2"}},  // progressive: two bars a chord, sus2
+		{melodySet{key: 9, style: 4, chordLen: 3}, []string{"Am", "Am", "Am", "Am", "F"}},     // trance, a chord 4 bars
+		{melodySet{key: 9, style: 4}, []string{"Am", "Am", "F", "F", "C"}},                    // trance: two bars a chord
+		{melodySet{key: 9, style: 4, pick: 2}, []string{"Am", "Am", "G", "G", "F", "F", "E"}}, // another roll: i VII VI V
+		{melodySet{key: 9, style: 6, pick: 2}, []string{"Am7", "Am7", "Dsus2"}},               // dub techno: i7 IVsus2
+		{melodySet{key: 9, style: 6}, []string{"Am7", "Am7"}},                                 // dub techno: one open chord
+		{melodySet{key: 0, mode: 1, style: 0}, []string{"Cmaj7", "Fmaj7"}},                    // house in major: I IV
 	} {
 		if got := names(c.st, len(c.want)); !slices.Equal(got, c.want) {
 			t.Errorf("%s: %v, want %v", melStyles[c.st.style], got, c.want)
@@ -5359,5 +5362,87 @@ func TestTheRollingBassIsRootFifthOctaveAndSwings(t *testing.T) {
 	}
 	if _, ok := at[5*stepTicks+stepTicks*14/100]; !ok {
 		t.Fatalf("the 16th after the beat's 8th comes late (swing): %v", at)
+	}
+}
+
+func TestTheAcidLineIsAFewNotesOnMostSteps(t *testing.T) {
+	for seed := int64(1); seed < 30; seed++ {
+		line := melodyLine(0, 2, melodySet{key: 9, role: 7, style: 7, density: 2, prog: 1, accent: 3}, 9, seed)
+		steps, pcs, loud := map[int]bool{}, map[int]bool{}, 0
+		for _, n := range line {
+			if int(n.Tick) < 16*stepTicks {
+				steps[int(n.Tick)/stepTicks] = true
+			}
+			pcs[((n.Pitch)%12+12)%12] = true
+			if n.Vel >= 120 {
+				loud++
+			}
+		}
+		if len(steps) != 16 || len(pcs) > 3 {
+			t.Fatalf("seed %d: busy: every step, one to three notes: %d steps, %d notes", seed, len(steps), len(pcs))
+		}
+		if loud == 0 {
+			t.Fatalf("seed %d: no accents", seed)
+		}
+	}
+}
+
+func TestTheFormSettingRepeatsTheBars(t *testing.T) {
+	bar := func(line []lab.Note, b int) [][2]int {
+		var out [][2]int
+		for _, n := range line {
+			if int(n.Tick)/(16*stepTicks) == b {
+				out = append(out, [2]int{int(n.Tick) % (16 * stepTicks), n.Pitch})
+			}
+		}
+		return out
+	}
+	st := melodySet{key: 9, role: 1, style: 0, density: 1, prog: 1}
+	st.form = 2 // A A A A
+	line := melodyLine(0, 4, st, 9, 3)
+	if !slices.Equal(bar(line, 0), bar(line, 1)) || !slices.Equal(bar(line, 0), bar(line, 2)) {
+		t.Fatal("A A A A: the same bar")
+	}
+	st.form = 1 // A A B B
+	differ := false
+	for seed := int64(1); seed < 10; seed++ {
+		line = melodyLine(0, 4, st, 9, seed)
+		if !slices.Equal(bar(line, 0), bar(line, 1)) {
+			t.Fatal("A A B B: the first two bars the same")
+		}
+		differ = differ || !slices.Equal(bar(line, 0), bar(line, 2))
+	}
+	if !differ {
+		t.Fatal("A A B B: the B bars differ")
+	}
+}
+
+func TestEchoSwingAndTheTechnoStabs(t *testing.T) {
+	notes := melodyLine(0, 1, melodySet{key: 9, role: 12, density: 0, echo: 1, prog: 1}, 9, 5) // echoes 5/16 apart
+	var ticks []int
+	for _, n := range notes {
+		if !slices.Contains(ticks, int(n.Tick)) {
+			ticks = append(ticks, int(n.Tick))
+		}
+	}
+	slices.Sort(ticks)
+	if len(ticks) < 2 || ticks[1]-ticks[0] != 5*stepTicks {
+		t.Fatalf("echoes 5 16ths apart: %v", ticks)
+	}
+	late := false
+	for _, n := range melodyLine(0, 2, melodySet{key: 9, role: 0, style: 2, density: 2, swing: 4, prog: 1}, 9, 1) { // 60%
+		late = late || int(n.Tick)%(2*stepTicks) == stepTicks+stepTicks/5
+	}
+	if !late {
+		t.Fatal("swing 60%: every second 16th a fifth of a 16th late")
+	}
+	var on []int
+	for _, n := range melodyLine(0, 1, melodySet{key: 9, role: 3, style: 3, density: 2, prog: 1}, 9, 1) {
+		if s := int(n.Tick) / stepTicks; !slices.Contains(on, s) {
+			on = append(on, s)
+		}
+	}
+	if !slices.Equal(on, []int{0, 3, 6, 9, 12, 15}) {
+		t.Fatalf("busy techno stabs every 3 16ths: %v", on)
 	}
 }
