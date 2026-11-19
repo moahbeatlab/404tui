@@ -5066,7 +5066,19 @@ func TestTheMelodyPlaysOnTheSynthBehindTheUnitInTimeWithItsClock(t *testing.T) {
 	keys(t, a, "B")
 	a.live = &liveState{} // the unit is edited live
 	defer func() { a.live = nil }()
-	a.melodyMenu() // a bass: MIDI channel 11
+	a.melodyMenu() // live too the pad plays it: MIDI out is off until asked
+	if a.mel.role != 0 || a.mel.out[0] != 0 || a.synth != nil || a.seqOn || !a.audible(pad) {
+		t.Fatalf("MIDI out is off at first: role %d, out %d", a.mel.role, a.mel.out[0])
+	}
+	if len(a.trackNotes(pad)) == 0 {
+		t.Fatal("the melody is written on the pad")
+	}
+	for i, it := range a.menu.items { // MIDI out: channel 11
+		if it.label == "MIDI out" {
+			a.menu.cur = i
+		}
+	}
+	a.menuKey(Right)
 	if a.mel.role != 0 || a.mel.out[0] != 1 || a.synth == nil || !strings.Contains(a.msg, "MIDI channel 11") {
 		t.Fatalf("a bass plays on channel 11: role %d, out %d (%s)", a.mel.role, a.mel.out[0], a.msg)
 	}

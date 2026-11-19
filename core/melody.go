@@ -27,28 +27,27 @@ const (
 )
 
 // melRole is a role: its name, the track of a groovebox it fits (MC-101: bass, synth/lead, pads/everything else), its kind, the
-// range "for the role" (semitones from the pad's own pitch) and where it plays first (an index of synthOutNames: 11, 12, 13).
+// range "for the role" (semitones from the pad's own pitch).
 type melRole struct {
 	name, track string
 	kind        int
 	lo, hi      int
-	out         int
 }
 
 var melRoles = []melRole{
-	{"bass", "bass track", kBass, -7, 7, 1},
-	{"lead", "synth / lead track", kLead, -2, 12, 2},
-	{"arp", "synth / lead track", kArp, -5, 12, 2},
-	{"stabs", "pads track", kChords, -5, 10, 3},
-	{"pad (held chords)", "pads track", kHeld, -7, 9, 3},
-	{"sub bass (long roots)", "bass track", kBass, -12, 0, 1},
-	{"octave bass (low, high)", "bass track", kBass, -12, 12, 1},
-	{"acid line (16ths, octaves, slides)", "bass track", kBass, -12, 12, 1},
-	{"pluck (short offbeat hook)", "synth / lead track", kLead, 0, 12, 2},
-	{"call and response", "synth / lead track", kLead, -2, 12, 2},
-	{"piano house (broken chords)", "pads track", kChords, -5, 10, 3},
-	{"drone (the tonic held)", "pads track", kHeld, -12, 0, 3},
-	{"dub chord (deep echo)", "pads track", kChords, -5, 10, 3},
+	{"bass", "bass track", kBass, -7, 7},
+	{"lead", "synth / lead track", kLead, -2, 12},
+	{"arp", "synth / lead track", kArp, -5, 12},
+	{"stabs", "pads track", kChords, -5, 10},
+	{"pad (held chords)", "pads track", kHeld, -7, 9},
+	{"sub bass (long roots)", "bass track", kBass, -12, 0},
+	{"octave bass (low, high)", "bass track", kBass, -12, 12},
+	{"acid line (16ths, octaves, slides)", "bass track", kBass, -12, 12},
+	{"pluck (short offbeat hook)", "synth / lead track", kLead, 0, 12},
+	{"call and response", "synth / lead track", kLead, -2, 12},
+	{"piano house (broken chords)", "pads track", kChords, -5, 10},
+	{"drone (the tonic held)", "pads track", kHeld, -12, 0},
+	{"dub chord (deep echo)", "pads track", kChords, -5, 10},
 }
 
 // melRates are the note values a melody can be written in (ticks; 0 the style's own rhythm), the triplets last.
@@ -99,7 +98,7 @@ type melodySet struct {
 	key, mode, role, style, prog, rng, density, ghost, accent int
 	bars                                                      int     // an index of melBars: 0 the pattern's length
 	rate                                                      int     // an index of melRates: 0 the style's rhythm
-	out                                                       [16]int // per role: where it plays, an index of synthOutNames
+	out                                                       [16]int // per role: where it plays, an index of synthOutNames (0: the pad)
 	init                                                      bool
 }
 
@@ -109,10 +108,7 @@ func (a *App) melodyMenu() {
 	bank := (a.pat - 1) / 16
 	key, minor, why := a.bankKey(bank)
 	if !st.init {
-		*st = melodySet{density: 1, ghost: 1, accent: 1, init: true}
-		for i, r := range melRoles { // MC-101: bass 11, lead 12, pads 13
-			st.out[i] = r.out
-		}
+		*st = melodySet{density: 1, ghost: 1, accent: 1, init: true} // MIDI out off: the pad's sample plays the melody
 		if !minor {
 			st.mode = 1
 		}
@@ -179,8 +175,8 @@ func (a *App) melodyMenu() {
 		val("Accents", melAccents, st.accent, func(v int) { st.accent = v }),
 	}
 	online := a.live != nil
-	if online { // the synth behind the unit: only while the unit is edited live
-		settings = append(settings, val("Play on", synthOutNames, st.out[st.role], func(v int) { st.out[st.role] = v }))
+	if online { // the synth behind the unit: only while the unit is edited live, and only when asked
+		settings = append(settings, val("MIDI out", synthOutNames, st.out[st.role], func(v int) { st.out[st.role] = v }))
 	}
 	a.toolNoPlay = true
 	defer func() { a.toolNoPlay = false }()

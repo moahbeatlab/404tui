@@ -233,8 +233,9 @@ func (s *synthOut) allOff() {
 	}
 }
 
-// synthOutName is the dialog's choice of where a melody plays: the pad, or a MIDI channel of the synth behind the unit.
-var synthOutNames = []string{"the pad (its sample)", "MIDI channel 11", "MIDI channel 12", "MIDI channel 13", "MIDI channel 14"}
+// synthOutNames is the dialog's choice of where a melody plays: the pad (no MIDI), or a MIDI channel of the synth behind the unit
+// (the tracks of an MC-101 set up for live).
+var synthOutNames = []string{"off (the pad's sample plays it)", "channel 11 (bass)", "channel 12 (synth / lead)", "channel 13 (pads)", "channel 14"}
 
 // synthTonic is the MIDI note the key's tonic is played on for a role: the bass low, the rest an octave up.
 func synthTonic(role, key int) int {
