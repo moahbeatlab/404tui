@@ -5486,7 +5486,37 @@ func TestTheMelodyDialogSaysWhatEachSettingDoesAndShowsTheRolesMIDIOut(t *testin
 	if hs, _ := a.hints(); !slices.Contains(hs, hint{"n", "roll the dice"}) {
 		t.Fatalf("the hints show n: %v", hs)
 	}
+	if hs, _ := a.hints(); !slices.Contains(hs, hint{"u R", "undo / redo"}) {
+		t.Fatalf("the hints show undo and redo: %v", hs)
+	}
 	Terminal = was
+	// undo and redo go back and forth through the dialog's changes and rolls
+	role, style, seed2 := a.mel.role, a.mel.style, a.tt.seed
+	notes := fmt.Sprint(a.trackNotes(a.rowPad()))
+	a.menu.cur = at("Role")
+	a.menuKey(Right)
+	a.menu.cur = at("Style")
+	a.menuKey(Right)
+	a.MenuDice()
+	undo := func(k Key) {
+		a.Dispatch(Event{Key: Y, Down: true})
+		a.Dispatch(Event{Key: k, Down: true})
+		a.Dispatch(Event{Key: k, Down: false})
+		a.Dispatch(Event{Key: Y, Down: false})
+	}
+	undo(L2)
+	if a.tt.seed != seed2 || a.mel.style == style {
+		t.Fatalf("undo takes back the roll only: seed %d, style %d", a.tt.seed, a.mel.style)
+	}
+	undo(L2)
+	undo(L2)
+	if a.mel.role != role || a.mel.style != style || a.menu.items[at("Role")].val != role || fmt.Sprint(a.trackNotes(a.rowPad())) != notes {
+		t.Fatalf("three undos: the role, the style and the notes as they were (role %d, style %d)", a.mel.role, a.mel.style)
+	}
+	undo(R2)
+	if a.mel.role == role || a.menu.items[at("Role")].val != a.mel.role || a.menu == nil {
+		t.Fatal("redo brings the role back, the dialog stays open")
+	}
 	// MIDI out is one channel for the dialog: other settings leave it, and every change goes to the synth at once
 	a.menu.cur = at("MIDI out")
 	a.menuKey(Right) // channel 11

@@ -223,6 +223,13 @@ func (a *App) rawHints() (plain, shift []hint) {
 		if Terminal && a.menuDice() != nil {
 			hs = append(hs, hint{"n", "roll the dice"})
 		}
+		if a.trialUndo != nil {
+			if Terminal {
+				hs = append(hs, hint{"u R", "undo / redo"})
+			} else {
+				hs = append(hs, hint{"Y+L2 R2", "undo / redo"})
+			}
+		}
 		return append(hs, hint{"B", "close"}), nil
 	}
 	switch a.scr {

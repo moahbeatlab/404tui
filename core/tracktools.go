@@ -149,20 +149,80 @@ func (a *App) toolMenu(title string, settings []menuItem, applyLabel string, app
 		apply()
 	}
 	m := &menu{title: title}
+	// the dialog's own undo: every change of a setting and every roll of the dice is a step, undo and redo go back and forth
+	// through them (the settings and the roll as they were, the trial written again)
+	type toolState struct {
+		vals []int
+		seed int64
+	}
+	var hist []toolState
+	at := -1
+	setters := make([]func(int), len(settings))
+	idx := make([]int, len(settings)) // where each setting is among the menu's items
+	state := func() toolState {
+		st := toolState{seed: a.tt.seed}
+		for _, i := range idx {
+			st.vals = append(st.vals, m.items[i].val)
+		}
+		return st
+	}
+	record := func() {
+		hist = append(hist[:at+1], state())
+		at = len(hist) - 1
+	}
 	m.head("SETTINGS")
-	for _, it := range settings {
+	for k, it := range settings {
 		it.keepOpen = true
 		orig := it.onChange
+		setters[k] = orig
 		it.onChange = func(v int) {
 			if orig != nil {
 				orig(v)
 			}
 			preview()
+			record()
 		}
+		idx[k] = len(m.items)
 		m.items = append(m.items, it)
 	}
 	if randomTools[applyLabel] {
-		m.items = append(m.items, menuItem{label: diceLabel, keepOpen: true, run: func(int) { a.tt.seed++; preview() }})
+		m.items = append(m.items, menuItem{label: diceLabel, keepOpen: true, run: func(int) { a.tt.seed++; preview(); record() }})
+	}
+	a.trialUndo = func(redo bool) {
+		n := at - 1
+		if redo {
+			n = at + 1
+		}
+		if n < 0 || n >= len(hist) {
+			if redo {
+				a.say("nothing to redo in the dialog", false)
+			} else {
+				a.say("nothing to undo in the dialog (B throws the trial away)", false)
+			}
+			return
+		}
+		at = n
+		st := hist[n]
+		changed := ""
+		for k, i := range idx {
+			if m.items[i].val != st.vals[k] {
+				changed = m.items[i].label
+			}
+			m.items[i].val = st.vals[k]
+			if setters[k] != nil {
+				setters[k](st.vals[k])
+			}
+		}
+		if changed == "" && a.tt.seed != st.seed {
+			changed = "the roll of the dice"
+		}
+		a.tt.seed = st.seed
+		preview()
+		word := "undone"
+		if redo {
+			word = "redone"
+		}
+		a.say(fmt.Sprintf("%s %s (step %d of %d)", word, changed, n+1, len(hist)), false)
 	}
 	m.head("TRIAL")
 	m.items = append(m.items, menuItem{label: "Keep it (B throws it away)", keepOpen: true, run: func(int) {
@@ -179,6 +239,8 @@ func (a *App) toolMenu(title string, settings []menuItem, applyLabel string, app
 		a.trimUndo()
 		base = a.lab.Snapshot()
 		a.toolBase = base
+		hist, at = nil, -1 // the dialog's undo starts again from what was kept
+		record()
 		a.say("kept: "+label, false)
 		a.liveSync() // a unit that is edited live gets what was kept (a trial is not sent)
 	}})
@@ -186,6 +248,7 @@ func (a *App) toolMenu(title string, settings []menuItem, applyLabel string, app
 		changed := a.lab.Changed(base)
 		a.restoreProject(base)
 		a.toolBase = nil
+		a.trialUndo = nil
 		if startedLoop && a.seqOn {
 			a.stop()
 		}
@@ -194,7 +257,8 @@ func (a *App) toolMenu(title string, settings []menuItem, applyLabel string, app
 		}
 	}
 	a.menu = m
-	preview()                                             // the tool at work with its settings as they are
+	preview() // the tool at work with its settings as they are
+	record()
 	if !a.toolNoPlay && !a.seqOn && a.lab.Changed(base) { // (the melody waits for Space: the unit may be what plays)
 		a.startLoop()
 		startedLoop = a.seqOn
