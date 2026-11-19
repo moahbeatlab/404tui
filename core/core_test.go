@@ -4973,7 +4973,7 @@ func TestTheMelodyStaysInTheKeyAndTheRange(t *testing.T) {
 						if p < -12 || p > 12 || ((p-line[i].Pitch)%12+12)%12 != 0 {
 							t.Fatalf("%s %s %v: pitch %d on the pad for %d", melRoles[role].name, melStyles[style], oct, p, line[i].Pitch)
 						}
-						if pc := ((3+p)%12 + 12) % 12; !slices.Contains([]int{8, 10, 11, 1, 3, 4, 6}, pc) { // G# minor
+						if pc := ((3+p)%12 + 12) % 12; role != 13 && !slices.Contains([]int{8, 10, 11, 1, 3, 4, 6}, pc) { // G# minor (parallel stabs leave it)
 							t.Fatalf("%s %s: %s is not in G# minor", melRoles[role].name, melStyles[style], sharpNames[pc])
 						}
 						if n.Pad != 5 || int(n.Tick)+n.Len > 4*16*stepTicks {
@@ -5195,15 +5195,22 @@ func TestAShortMelodyRepeatsALongOneIsCut(t *testing.T) {
 
 func TestTheMelodyShowsTheChordOfEachBar(t *testing.T) {
 	a, _ := newApp(t)
-	a.mel = melodySet{key: 8, prog: 1, init: true} // G# minor, Epic anthem i VI III VII
-	var got []string
-	for b := 0; b < 5; b++ {
-		got = append(got, a.melChordName(b))
+	a.mel = melodySet{key: 8, prog: 2, color: 1, init: true} // G# minor, Epic anthem i VI III VII, triads
+	names := func() []string {
+		var got []string
+		for b := 0; b < 5; b++ {
+			got = append(got, a.melChordName(b))
+		}
+		return got
 	}
-	if want := []string{"G#m", "E", "B", "F#", "G#m"}; !slices.Equal(got, want) {
+	if got, want := names(), []string{"G#m", "E", "B", "F#", "G#m"}; !slices.Equal(got, want) {
 		t.Fatalf("the chords of the bars: %v, want %v", got, want)
 	}
-	a.mel.prog = 0
+	a.mel.color = 2 // sevenths from the scale: the VII of a minor key is a dominant seventh
+	if got, want := names(), []string{"G#m7", "Emaj7", "Bmaj7", "F#7", "G#m7"}; !slices.Equal(got, want) {
+		t.Fatalf("sevenths: %v, want %v", got, want)
+	}
+	a.mel.prog, a.mel.color = 1, 1
 	if c := a.melChordName(3); c != "G#m" {
 		t.Fatalf("one chord: the key's: %s", c)
 	}
@@ -5268,5 +5275,89 @@ func TestADubChordIsASeventhWithItsEchoes(t *testing.T) {
 		if len(echo) != 4 || echo[0].Vel >= stab[0].Vel {
 			t.Fatalf("echo %d: the chord again, a dotted 8th later, quieter: %+v", e, echo)
 		}
+	}
+}
+
+func TestEachStyleHasItsOwnChords(t *testing.T) {
+	a, _ := newApp(t)
+	names := func(st melodySet, n int) []string {
+		a.mel = st
+		var got []string
+		for b := 0; b < n; b++ {
+			got = append(got, a.melChordName(b))
+		}
+		return got
+	}
+	for _, c := range []struct {
+		st   melodySet
+		want []string
+	}{
+		{melodySet{key: 9, style: 0}, []string{"Am7", "G7", "Am7"}},                          // house: i VII, sevenths (G7: the VII of A minor)
+		{melodySet{key: 9, style: 1}, []string{"Am9", "Dm9", "Am9"}},                         // deep house: i9 iv9
+		{melodySet{key: 9, style: 2}, []string{"Am7", "Am7", "Am7"}},                         // tech house: one chord
+		{melodySet{key: 9, style: 5}, []string{"Asus2", "Asus2", "Fsus2", "Fsus2", "Csus2"}}, // progressive: two bars a chord, sus2
+		{melodySet{key: 9, style: 4, chordLen: 3}, []string{"Am", "Am", "Am", "Am", "F"}},    // trance, a chord 4 bars
+		{melodySet{key: 9, style: 6}, []string{"Am7", "Am7"}},                                // dub techno: one open chord
+		{melodySet{key: 0, mode: 1, style: 0}, []string{"Cmaj7", "Fmaj7"}},                   // house in major: I IV
+	} {
+		if got := names(c.st, len(c.want)); !slices.Equal(got, c.want) {
+			t.Errorf("%s: %v, want %v", melStyles[c.st.style], got, c.want)
+		}
+	}
+	// Kerri Chandler: the seventh at the bottom
+	notes := melodyNotes(0, 1, melodySet{key: 9, role: 4, style: 1, prog: 1, color: 6}, 9, 1) // A minor, a held pad
+	low := notes[0]
+	for _, n := range notes {
+		if formats.PitchSemitones(uint8(n.Pitch)) < formats.PitchSemitones(uint8(low.Pitch)) {
+			low = n
+		}
+	}
+	if pc := ((9+formats.PitchSemitones(uint8(low.Pitch)))%12 + 12) % 12; pc != 7 || len(notes) != 4 {
+		t.Fatalf("Am7 with its G at the bottom: lowest %s, %d notes", sharpNames[pc], len(notes))
+	}
+}
+
+func TestParallelStabsKeepTheirShape(t *testing.T) {
+	line := melodyLine(0, 4, melodySet{key: 9, role: 13, style: 3, density: 2}, 9, 3)
+	byTick := map[uint32][]int{}
+	for _, n := range line {
+		byTick[n.Tick] = append(byTick[n.Tick], n.Pitch)
+	}
+	var shape []int
+	roots := map[int]bool{}
+	for _, ps := range byTick {
+		slices.Sort(ps)
+		d := make([]int, len(ps))
+		for i, p := range ps {
+			d[i] = p - ps[0]
+		}
+		if shape == nil {
+			shape = d
+		}
+		if !slices.Equal(d, shape) {
+			t.Fatalf("one shape moved: %v and %v", shape, d)
+		}
+		roots[ps[0]] = true
+	}
+	if len(roots) < 3 {
+		t.Fatalf("the shape goes to other roots: %v", roots)
+	}
+}
+
+func TestTheRollingBassIsRootFifthOctaveAndSwings(t *testing.T) {
+	line := melodyLine(0, 1, melodySet{key: 9, role: 14, style: 2, density: 1, prog: 1}, 9, 1) // A minor, one bar
+	at := map[int]int{}
+	for _, n := range line {
+		at[int(n.Tick)] = n.Pitch
+	}
+	if len(at) != 10 {
+		t.Fatalf("R...5R8RR...5R8R: %d notes", len(at))
+	}
+	root := at[0]
+	if at[4*stepTicks]-root != 7 || at[6*stepTicks]-root != 12 {
+		t.Fatalf("the fifth on step 5, the octave on step 7: %v", at)
+	}
+	if _, ok := at[5*stepTicks+stepTicks*14/100]; !ok {
+		t.Fatalf("the 16th after the beat's 8th comes late (swing): %v", at)
 	}
 }

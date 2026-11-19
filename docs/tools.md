@@ -346,13 +346,15 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
     *Settings*
 
-    - `Role` — bass, lead, ... dub chord (deep echo) (13 values); now lead
+    - `Role` — bass, lead, ... rolling bass (root, fifth, octave) (15 values); now lead
     - `Length` — the pattern's (4 bars) / 1 bar, repeated over the 4 / 2 bars, repeated over the 4 / 4 bars / 8 bars (the synth; the pattern keeps 4); now the pattern's (4 bars)
-    - `Style` — house / deep house / tech house / techno / trance / progressive; now house
+    - `Style` — house / deep house / tech house / techno / trance / progressive / dub techno / acid house; now house
     - `Notes` — the style's / 1/2 / 1/4 / 1/8 / 1/16 / 1/32 / 1/4 triplets / 1/8 triplets / 1/16 triplets; now the style's
     - `Key` — C, C#, ... B  (the bank's) (12 values); now B  (the bank's)
     - `Scale` — minor / major / dorian / phrygian / harmonic minor / minor pentatonic; now minor
-    - `Chords` — one chord (the key's), Epic anthem  i VI III VII, ... Neo soul turn  IV III vi v I (25 values); now one chord (the key's)
+    - `Chords` — the style's, one chord (the key's), ... Neo soul turn  IV III vi v I (26 values); now the style's
+    - `Chord length` — the style's / 1 bar / 2 bars / 4 bars; now the style's
+    - `Chord notes` — the style's / triads / sevenths / ninths / sus2 / dub (root, fifth, seventh, the third up) / seventh at the bottom (Kerri Chandler); now the style's
     - `Octave from` — the role's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the role's
     - `Octave to` — the role's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the role's
     - `Density` — sparse / medium / busy; now medium
