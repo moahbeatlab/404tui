@@ -391,7 +391,26 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
     *Settings*
 
-    - `Role` — bass, lead, ... rolling bass (root, fifth, octave) (15 values); now lead
+    - `Type` — bass / 303 / lead / arp / pluck / stabs / pad / drone; now lead
+
+    *The Lead'S Own*
+
+    - `Pattern` — the style's, offbeat 8ths, ... slide arc (12 values); now the style's
+    - `Approach` — the pattern's (now and then) / none / always; now the pattern's (now and then)
+    - `Phrase` — a motif (Form) / call and response; now a motif (Form)
+    - `Leaps` — steps (the scale) / wide (4ths, 5ths, octaves); now steps (the scale)
+    - `Direction` — the type's (up, or up and down), up, ... chord (all at once) (15 values); now the type's (up, or up and down)
+    - `Span` — the type's / 1 octave / 2 octaves / 3 octaves; now the type's
+    - `Gate` — the type's (2/3) / 25% / 50% / 75% / 100% (legato); now the type's (2/3)
+    - `Hook` — the type's (3 or more) / 3 notes / 4 notes / 5 notes / 6 notes / 7 notes; now the type's (3 or more)
+    - `Placement` — offbeats / anywhere; now offbeats
+    - `Rhythm` — the style's / piano house (M1) / parallel shape (Detroit) / dub chord (deep echo); now the style's
+    - `Echo (dub chord)` — 3/16 (dotted 8th) / 5/16 / 7/16; now 3/16 (dotted 8th)
+    - `Movement` — held / struck again each half bar / rising (soft to loud, 4 a bar); now held
+    - `Drone note` — the type's (the fifth when busy) / the root / the root and the fifth; now the type's (the fifth when busy)
+
+    *For Every Type*
+
     - `Length` — the pattern's (4 bars) / 1 bar, repeated over the 4 / 2 bars, repeated over the 4 / 4 bars / 8 bars (the synth; the pattern keeps 4); now the pattern's (4 bars)
     - `Style` — house / deep house / tech house / techno / trance / progressive / dub techno / acid house; now house
     - `Notes` — the style's / 1/2 / 1/4 / 1/8 / 1/16 / 1/32 / 1/4 triplets / 1/8 triplets / 1/16 triplets; now the style's
@@ -401,10 +420,9 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Chord length` — the style's / 1 bar / 2 bars / 4 bars; now the style's
     - `Chord notes` — the style's / triads / sevenths / ninths / sus2 / dub (root, fifth, seventh, the third up) / seventh at the bottom (Kerri Chandler); now the style's
     - `Form` — A A' A B / A A B B / A A A A (the same bar); now A A' A B
-    - `Swing` — the role's / none (straight) / 54% / 57% / 60%; now the role's
-    - `Echo (dub chord)` — 3/16 (dotted 8th) / 5/16 / 7/16; now 3/16 (dotted 8th)
-    - `Octave from` — the role's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the role's
-    - `Octave to` — the role's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the role's
+    - `Swing` — the type's / none (straight) / 54% / 57% / 60%; now the type's
+    - `Octave from` — the type's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the type's
+    - `Octave to` — the type's / -3 / -2 / -1 / 0 / +1 / +2 / +3; now the type's
     - `Density` — sparse / medium / busy; now medium
     - `Ghost notes` — none / a few / many; now a few
     - `Accents` — none / on the offbeats / on the beats / here and there; now on the offbeats

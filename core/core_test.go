@@ -5491,9 +5491,9 @@ func TestTheMelodyDialogSaysWhatEachSettingDoesAndShowsTheRolesMIDIOut(t *testin
 	}
 	Terminal = was
 	// undo and redo go back and forth through the dialog's changes and rolls
-	role, style, seed2 := a.mel.role, a.mel.style, a.tt.seed
+	role, typ, style, seed2 := a.mel.role, a.mel.typ, a.mel.style, a.tt.seed
 	notes := fmt.Sprint(a.trackNotes(a.rowPad()))
-	a.menu.cur = at("Role")
+	a.menu.cur = at("Type")
 	a.menuKey(Right)
 	a.menu.cur = at("Style")
 	a.menuKey(Right)
@@ -5510,11 +5510,11 @@ func TestTheMelodyDialogSaysWhatEachSettingDoesAndShowsTheRolesMIDIOut(t *testin
 	}
 	undo(L2)
 	undo(L2)
-	if a.mel.role != role || a.mel.style != style || a.menu.items[at("Role")].val != role || fmt.Sprint(a.trackNotes(a.rowPad())) != notes {
+	if a.mel.role != role || a.mel.style != style || a.menu.items[at("Type")].val != typ || fmt.Sprint(a.trackNotes(a.rowPad())) != notes {
 		t.Fatalf("three undos: the role, the style and the notes as they were (role %d, style %d)", a.mel.role, a.mel.style)
 	}
 	undo(R2)
-	if a.mel.role == role || a.menu.items[at("Role")].val != a.mel.role || a.menu == nil {
+	if a.mel.role == role || a.menu.items[at("Type")].val != a.mel.typ || a.menu == nil {
 		t.Fatal("redo brings the role back, the dialog stays open")
 	}
 	// MIDI out is one channel for the dialog: other settings leave it, and every change goes to the synth at once
@@ -5528,7 +5528,7 @@ func TestTheMelodyDialogSaysWhatEachSettingDoesAndShowsTheRolesMIDIOut(t *testin
 		defer a.synth.mu.Unlock()
 		return a.synth.gen
 	}
-	for _, l := range []string{"Role", "Style", "Notes", "Chords", "Length", "Form", "Role"} {
+	for _, l := range []string{"Type", "Style", "Notes", "Chords", "Length", "Form", "Type"} {
 		g := gen()
 		a.menu.cur = at(l)
 		a.menuKey(Right)
@@ -5589,5 +5589,164 @@ func TestTheMelodyChordsOpenTheListOfProgressions(t *testing.T) {
 	a.menuKey(B)
 	if a.menu != dialog {
 		t.Fatal("B goes back to the dialog")
+	}
+}
+
+func TestTheMelodyTypeShowsItsOwnSettingsAndKeepsThem(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R A")
+	a.mel = melodySet{}
+	a.melodyMenu()
+	m := a.menu
+	at := func(label string) *menuItem {
+		for i := range m.items {
+			if m.items[i].label == label {
+				return &m.items[i]
+			}
+		}
+		t.Fatalf("no %q", label)
+		return nil
+	}
+	setType := func(ty int) {
+		m.cur = slices.IndexFunc(m.items, func(it menuItem) bool { return it.label == "Type" })
+		for a.mel.typ != ty {
+			a.menuKey(Right)
+		}
+	}
+	setType(tBass)
+	if at("Pattern").hidden || !at("Direction").hidden || !at("Echo (dub chord)").hidden || at("THE BASS'S OWN").hidden {
+		t.Fatal("the bass shows its pattern, not the arp's direction nor the dub echo")
+	}
+	m.cur = slices.IndexFunc(m.items, func(it menuItem) bool { return it.label == "Pattern" })
+	for a.mel.bassPat != bpGallop {
+		a.menuKey(Right)
+	}
+	if a.mel.role != 15 || !strings.Contains(a.msg, "gallop") {
+		t.Fatalf("the gallop writes with the pattern engine: role %d (%s)", a.mel.role, a.msg)
+	}
+	setType(tArp)
+	if !at("Pattern").hidden || at("Direction").hidden || at("Span").hidden || at("Gate").hidden || !at("Form").hidden {
+		t.Fatal("the arp shows its direction, span and gate; not the bass pattern nor Form")
+	}
+	for i := 0; i < len(m.items); i++ { // the cursor never stops on what is hidden
+		a.menuKey(Down)
+		if m.item().hidden {
+			t.Fatalf("the cursor is on hidden %q", m.item().label)
+		}
+	}
+	setType(tStabs)
+	m.cur = slices.IndexFunc(m.items, func(it menuItem) bool { return it.label == "Rhythm" })
+	for a.mel.stabRhythm != 3 {
+		a.menuKey(Right)
+	}
+	if at("Echo (dub chord)").hidden || a.mel.role != 12 {
+		t.Fatal("a dub chord shows its echo")
+	}
+	setType(t303)
+	if !at("THE 303'S OWN").hidden {
+		t.Fatal("a type with no settings of its own shows no heading for them")
+	}
+	setType(tBass)
+	if a.mel.bassPat != bpGallop || at("Pattern").val != bpGallop || a.mel.role != 15 {
+		t.Fatal("back to the bass: its gallop is kept")
+	}
+	a.trialUndo(false) // undo: back to the type before (the drone, on the way round), the bass's settings hidden again
+	if a.mel.typ != tDrone || !at("Pattern").hidden || at("Drone note").hidden {
+		t.Fatalf("undo brings the type and its settings back: type %d", a.mel.typ)
+	}
+}
+
+func TestTheMelodyTypesOwnSettingsWriteInKeyAndRange(t *testing.T) {
+	inKey := func(p int) bool { return slices.Contains([]int{9, 11, 0, 2, 4, 5, 7}, ((9+p)%12+12)%12) } // A minor, the pad in A
+	check := func(name string, st melodySet) []lab.Note {
+		t.Helper()
+		st.key, st.role = 9, melEngine(st)
+		line := melodyLine(0, 4, st, 9, 3)
+		if len(line) == 0 {
+			t.Fatalf("%s: no notes", name)
+		}
+		lo, hi := melWindow(st)
+		for _, n := range line {
+			if n.Pitch < lo || n.Pitch > hi || !inKey(n.Pitch) && st.stabRhythm != 2 {
+				t.Fatalf("%s: pitch %d (window %d..%d)", name, n.Pitch, lo, hi)
+			}
+		}
+		return line
+	}
+	steps := func(line []lab.Note, bar int) []int {
+		var out []int
+		for _, n := range line {
+			if s := int(n.Tick) / stepTicks; s/16 == bar && n.Vel >= 60 && !slices.Contains(out, s%16) {
+				out = append(out, s%16)
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+	for p := range melBassPats {
+		for d := 0; d < 3; d++ {
+			for ap := range melApproaches {
+				check(melBassPats[p], melodySet{typ: tBass, bassPat: p, density: d, approach: ap, prog: 2})
+			}
+		}
+	}
+	if got := steps(check("offbeat", melodySet{typ: tBass, bassPat: bpOffbeat, density: 1, prog: 1}), 0); fmt.Sprint(got) != "[2 6 10 14]" {
+		t.Fatalf("offbeat 8ths on the ands: %v", got)
+	}
+	if got := steps(check("gallop", melodySet{typ: tBass, bassPat: bpGallop, density: 1, prog: 1}), 0); fmt.Sprint(got) != "[0 2 3 4 6 7 8 10 11 12 14 15]" {
+		t.Fatalf("the gallop: %v", got)
+	}
+	for dir := range melArpDirs {
+		for span := range melArpSpans {
+			for g := range melArpGates {
+				check(melArpDirs[dir], melodySet{typ: tArp, arpDir: dir, arpSpan: span, arpGate: g, density: 1, style: 2})
+			}
+		}
+	}
+	up := check("arp up", melodySet{typ: tArp, arpDir: adUp, arpSpan: 2, density: 1, style: 2, prog: 1})
+	for i := 1; i < 4; i++ {
+		if up[i].Pitch <= up[i-1].Pitch {
+			t.Fatalf("the arp goes up: %v", up[:4])
+		}
+	}
+	if s := melArpSeq(adConverge, []int{0, 3, 7, 12, 15}, nil, nil, nil); fmt.Sprint(s) != "[0 15 3 12 7]" {
+		t.Fatalf("converge: %v", s)
+	}
+	if s := melArpSeq(adPinky, []int{0, 3, 7, 12}, nil, nil, nil); fmt.Sprint(s) != "[0 12 3 12 7 12]" {
+		t.Fatalf("pinky: %v", s)
+	}
+	if s := melArpSeq(adUpDownPlus, []int{0, 3, 7}, nil, nil, nil); fmt.Sprint(s) != "[0 3 7 7 3 0]" {
+		t.Fatalf("up and down, the ends twice: %v", s)
+	}
+	gated := check("arp 25%", melodySet{typ: tArp, arpGate: 1, density: 1, style: 2, prog: 1})
+	if gated[0].Len != stepTicks/4 {
+		t.Fatalf("a 25%% gate: %d ticks", gated[0].Len)
+	}
+	for h := 1; h < len(melHooks); h++ {
+		for pl := range melPlaces {
+			l := check("pluck", melodySet{typ: tPluck, hook: h, place: pl, density: 1, prog: 1})
+			if got := steps(l, 0); len(got) != h+2 {
+				t.Fatalf("a hook of %d notes: %v", h+2, got)
+			}
+		}
+	}
+	rising := check("pad", melodySet{typ: tPad, padMove: 2, prog: 1, accent: 2})
+	if rising[0].Vel >= rising[len(rising)-1].Vel || len(steps(rising, 0)) != 4 {
+		t.Fatal("a rising pad: four a bar, soft to loud")
+	}
+	for r := range melStabRhythms {
+		check(melStabRhythms[r], melodySet{typ: tStabs, stabRhythm: r, density: 1, prog: 2})
+	}
+	for dn := range melDroneNotes {
+		l := check("drone", melodySet{typ: tDrone, droneNote: dn, density: 1})
+		if want := []int{1, 1, 2}[dn] * 4; len(l) != want {
+			t.Fatalf("drone note %d: %d notes, want %d", dn, len(l), want)
+		}
+	}
+	for ph := range melPhrases {
+		for lp := range melLeaps {
+			check("lead", melodySet{typ: tLead, phrase: ph, leaps: lp, density: 1, prog: 2})
+		}
 	}
 }
