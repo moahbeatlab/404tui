@@ -5541,3 +5541,53 @@ func TestTheMelodyDialogSaysWhatEachSettingDoesAndShowsTheRolesMIDIOut(t *testin
 	}
 	a.synthStop()
 }
+
+func TestTheMelodyChordsOpenTheListOfProgressions(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R A")
+	a.mel = melodySet{}
+	a.melodyMenu()
+	dialog := a.menu
+	row := -1
+	for i, it := range dialog.items {
+		if it.label == "Chords" {
+			row = i
+		}
+	}
+	dialog.cur = row
+	a.menuKey(A)
+	if a.menu == dialog || !strings.HasPrefix(a.menu.title, "chords in ") {
+		t.Fatalf("A on Chords opens the list, got %q", a.menu.title)
+	}
+	sad := slices.IndexFunc(progressions, func(p struct {
+		name, mood, roman string
+		steps             []progStep
+	}) bool {
+		return p.name == "Sad descent"
+	})
+	if sad < 0 {
+		t.Fatal("the MC-101 notes' progressions are in the list")
+	}
+	a.menu.cur = slices.IndexFunc(a.menu.items, func(it menuItem) bool { return it.label == "Sad descent" })
+	a.Render()
+	before := fmt.Sprint(a.trackNotes(a.rowPad()))
+	a.menuKey(A)
+	if a.menu != dialog || a.mel.prog != sad+2 || dialog.items[row].val != sad+2 {
+		t.Fatalf("A takes it back into the dialog: prog %d, want %d", a.mel.prog, sad+2)
+	}
+	if fmt.Sprint(a.trackNotes(a.rowPad())) == before {
+		t.Fatal("the trial is written again with the chords")
+	}
+	a.trialUndo(false)
+	if a.mel.prog == sad+2 {
+		t.Fatal("undo takes the chords back")
+	}
+	// B in the list goes back as it was
+	dialog.cur = row
+	a.menuKey(A)
+	a.menuKey(B)
+	if a.menu != dialog {
+		t.Fatal("B goes back to the dialog")
+	}
+}

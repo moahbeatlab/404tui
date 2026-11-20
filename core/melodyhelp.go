@@ -90,11 +90,11 @@ func melodyHelp(label string, val int, st melodySet) string {
 	case label == "Chords":
 		switch val {
 		case 0:
-			return "The chords under the melody: one of the style's loops; another roll of the dice can take another. NOW shows each bar's chord."
+			return "The chords under the melody: one of the style's loops; another roll of the dice can take another. A (Enter): the list of every progression with its chords. NOW shows each bar's chord."
 		case 1:
-			return "The chords under the melody: only the key's own chord, every bar."
+			return "The chords under the melody: only the key's own chord, every bar. A (Enter): the list of every progression."
 		}
-		return "The chords under the melody: this progression in roman numerals (i is the key's chord, iv the one on the 4th, VI on the 6th...). NOW shows each bar's chord."
+		return "The chords under the melody: this progression in roman numerals (i is the key's chord, iv the one on the 4th, VI on the 6th...). A (Enter): the list, with the chords and how each feels."
 	case label == "Chord length":
 		return "How many bars each chord of the loop lasts. The style's: house a bar, trance and progressive two."
 	case label == "Chord notes":

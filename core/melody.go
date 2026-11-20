@@ -218,7 +218,7 @@ func (a *App) melodyMenu() {
 		val("Notes", rates, st.rate, func(v int) { st.rate = v }),
 		val("Key", keys, st.key, func(v int) { st.key = v }),
 		val("Scale", modes, st.mode, func(v int) { st.mode = v }),
-		val("Chords", progs, st.prog, func(v int) { st.prog = v }),
+		{label: "Chords", vals: progs, val: st.prog, onChange: func(v int) { st.prog = v }, run: func(int) { a.melProgList(a.menu) }},
 		val("Chord length", []string{"the style's", "1 bar", "2 bars", "4 bars"}, st.chordLen, func(v int) { st.chordLen = v }),
 		val("Chord notes", melColors, st.color, func(v int) { st.color = v }),
 		val("Form", melForms, st.form, func(v int) { st.form = v }),

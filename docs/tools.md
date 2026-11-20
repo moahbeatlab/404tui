@@ -62,7 +62,7 @@ The settings of the pad under the cursor, written into the project at once. With
 
     *Progression (In The Root'S Key)*
 
-    - `Progression` — Epic anthem: Cm Ab Eb Bb, Rise and fall: Cm Bb Ab Bb, ... Neo soul turn: F E Am Gm C (24 values); now Epic anthem: Cm Ab Eb Bb
+    - `Progression` — Epic anthem: Cm Ab Eb Bb, Rise and fall: Cm Bb Ab Bb, ... Happy: F G C C (33 values); now Epic anthem: Cm Ab Eb Bb
     - `Feels` — euphoric, uplifting, a bit sad; now euphoric, uplifting, a bit sad
     - `Chords` — triads / sevenths / ninths / elevenths; now triads
     - `Hear the progression (a chord a bar)`
@@ -397,7 +397,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Notes` — the style's / 1/2 / 1/4 / 1/8 / 1/16 / 1/32 / 1/4 triplets / 1/8 triplets / 1/16 triplets; now the style's
     - `Key` — C, C#, ... B  (the bank's) (12 values); now B  (the bank's)
     - `Scale` — minor / major / dorian / phrygian / harmonic minor / minor pentatonic; now minor
-    - `Chords` — the style's, one chord (the key's), ... Neo soul turn  IV III vi v I (26 values); now the style's
+    - `Chords` — the style's, one chord (the key's), ... Happy  IV V I I (35 values); now the style's
     - `Chord length` — the style's / 1 bar / 2 bars / 4 bars; now the style's
     - `Chord notes` — the style's / triads / sevenths / ninths / sus2 / dub (root, fifth, seventh, the third up) / seventh at the bottom (Kerri Chandler); now the style's
     - `Form` — A A' A B / A A B B / A A A A (the same bar); now A A' A B
