@@ -11,16 +11,20 @@ import (
 	"github.com/moahbeatlab/404tui/midiin"
 )
 
-// midiDoctor is `sp404 doctor midi --channel 11 [--port name]`: a few notes on each channel to the unit's MIDI port, to hear
+// midiDoctor is `sp404 doctor midi --channel 11 [--port name]` (--ports lists them): a few notes on each channel to the unit's MIDI port, to hear
 // whether a synth behind the unit (MIDI thru) gets them. Channels: 11, 11-14 or 11,13. With --listen it listens instead (midiListen).
 func midiDoctor(args []string) error {
 	fs := flag.NewFlagSet("doctor midi", flag.ContinueOnError)
 	chFlag := fs.String("channel", "", "the MIDI channels: 11, 11-14 or 11,13")
-	port := fs.String("port", os.Getenv("SP404_MIDI_PORT"), "a part of the MIDI port's name (default: 404, as the app; with --listen: mc-101)")
+	port := fs.String("port", os.Getenv("SP404_MIDI_PORT"), "a part of the MIDI port's name (default: 404, as the app; with --listen: every input)")
 	listen := fs.Bool("listen", false, "listen instead: print the notes that come in on the port (a synth on USB), as the app gets them")
 	secs := fs.Int("seconds", 30, "with --listen: how long to listen")
+	list := fs.Bool("ports", false, "list the MIDI inputs and outputs there are")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *list {
+		return midiPorts()
 	}
 	if *listen {
 		return midiListen(*port, *chFlag, time.Duration(*secs)*time.Second)
@@ -88,7 +92,7 @@ func parseChannels(s string) ([]int, error) {
 
 var noteNames = []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 
-// midiListen is `sp404 doctor midi --listen [--port mc-101] [--channel 12]`: the input ports there are, then every note (and the
+// midiListen is `sp404 doctor midi --listen [--channel 12] [--port name]`: the input ports there are, then every note (and the
 // clock, Start and Stop, counted) that comes in on the port, for a while: whether the app would get what the synth plays.
 func midiListen(part, chFlag string, d time.Duration) error {
 	src := midiin.Default()
@@ -99,9 +103,6 @@ func midiListen(part, chFlag string, d time.Duration) error {
 	fmt.Println("MIDI inputs:")
 	for _, p := range ports {
 		fmt.Println("  " + p)
-	}
-	if part == "" {
-		part = "mc-101"
 	}
 	want := map[int]bool{}
 	if chFlag != "" {
@@ -114,14 +115,23 @@ func midiListen(part, chFlag string, d time.Duration) error {
 		}
 	}
 	events := make(chan midiin.Event, 512)
-	stop, name, err := src.Open(part, func(e midiin.Event) {
+	on := func(e midiin.Event) {
 		select {
 		case events <- e:
 		default:
 		}
-	})
+	}
+	var stop func()
+	var name string
+	if part == "" { // every input: a hub has several ports, the channel says whose a note is
+		var names []string
+		stop, names, err = midiin.OpenAll(src, on)
+		name = strings.Join(names, ", ")
+	} else {
+		stop, name, err = src.Open(part, on)
+	}
 	if err != nil {
-		return fmt.Errorf("no input with %q in its name (--port picks another): %w", part, err)
+		return err
 	}
 	defer stop()
 	fmt.Printf("listening to %s for %s: play on the synth (Ctrl-C stops)\n", name, d)
@@ -165,4 +175,32 @@ func midiListen(part, chFlag string, d time.Duration) error {
 			}
 		}
 	}
+}
+
+// midiPorts is `sp404 doctor midi --ports`: the MIDI inputs and outputs the system has.
+func midiPorts() error {
+	src := midiin.Default()
+	ins, err := src.Ports()
+	if err != nil {
+		return err
+	}
+	show := func(what string, names []string) {
+		fmt.Printf("MIDI %s (%d):\n", what, len(names))
+		for _, n := range names {
+			fmt.Println("  " + n)
+		}
+		if len(names) == 0 {
+			fmt.Println("  none: is the device plugged in (a data cable, not a hub that only charges) and on?")
+		}
+	}
+	show("inputs", ins)
+	if l, ok := src.(midiin.OutLister); ok {
+		outs, err := l.OutPorts()
+		if err != nil {
+			return err
+		}
+		show("outputs", outs)
+	}
+	fmt.Println("--port takes a part of a name: 404 for the SP-404MKII on its own USB, h2midi for a CME hub")
+	return nil
 }

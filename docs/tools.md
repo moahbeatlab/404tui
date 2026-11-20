@@ -466,7 +466,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
     *Listen To*
 
-    - `Port (its name holds)` — mc-101; now mc-101
+    - `Port` — every input; now every input
     - `Channel` — 1, 2, ... 16 (16 values); now 12
 
     *Take*

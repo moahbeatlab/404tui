@@ -127,6 +127,37 @@ type Outputs interface {
 	OpenOut(part string) (Out, string, error)
 }
 
+// OpenAll listens to every input there is (a MIDI hub has several ports, and which one a device is on does not matter when the
+// channel says whose a message is). It says the inputs it took; an error only when it took none.
+func OpenAll(s Source, on func(Event)) (stop func(), names []string, err error) {
+	ports, err := s.Ports()
+	if err != nil {
+		return nil, nil, err
+	}
+	var stops []func()
+	for _, p := range ports {
+		st, name, err := s.Open(p, on)
+		if err != nil {
+			continue
+		}
+		stops = append(stops, st)
+		names = append(names, name)
+	}
+	if len(stops) == 0 {
+		return nil, nil, errors.New("no MIDI input to listen to")
+	}
+	return func() {
+		for _, st := range stops {
+			st()
+		}
+	}, names, nil
+}
+
+// OutLister is a Source that names its outputs.
+type OutLister interface {
+	OutPorts() ([]string, error)
+}
+
 // ErrUnavailable is what a build without the midi tag says.
 var ErrUnavailable = errors.New("this build has no MIDI: build with -tags midi (needs a C compiler)")
 
@@ -137,3 +168,4 @@ func (unavailable) Open(string, func(Event)) (func(), string, error) {
 	return nil, "", ErrUnavailable
 }
 func (unavailable) OpenOut(string) (Out, string, error) { return nil, "", ErrUnavailable }
+func (unavailable) OutPorts() ([]string, error)         { return nil, ErrUnavailable }

@@ -17,8 +17,6 @@ import (
 // USB, its own MIDI port) on one channel are caught where they fall in the loop, every pass adding to the take (overdub). Disarm writes
 // the pattern again to the next empty slot with the take on the armed pad, each note's pitch counted from the pad's sample.
 
-const defaultLivePort = "mc-101"
-
 // liveSnaps are the grids the starts of the notes are moved to: their names and ticks (0: as played).
 var liveSnaps = []struct {
 	name  string
@@ -128,11 +126,14 @@ type liveRec struct {
 	length int
 }
 
-func (a *App) livePort() string {
-	if a.set.LivePort != "" {
-		return a.set.LivePort
+// livePort is a part of the name of the input to listen to; "" listens to every input (the channel says whose a note is).
+func (a *App) livePort() string { return a.set.LivePort }
+
+func (a *App) livePortText() string {
+	if a.set.LivePort == "" {
+		return "every input"
 	}
-	return defaultLivePort
+	return a.set.LivePort
 }
 
 func (a *App) liveChan() int {
@@ -168,18 +169,28 @@ func (a *App) liveOpen() {
 		return
 	}
 	ch := make(chan midiin.Event, 512)
-	stop, name, err := a.plat.MIDI.Open(a.livePort(), func(e midiin.Event) {
+	on := func(e midiin.Event) {
 		e.At = time.Now()
 		select {
 		case ch <- e:
 		default:
 		}
-	})
+	}
+	var stop func()
+	var name string
+	var err error
+	if a.livePort() == "" {
+		var names []string
+		stop, names, err = midiin.OpenAll(a.plat.MIDI, on)
+		name = strings.Join(names, ", ")
+	} else {
+		stop, name, err = a.plat.MIDI.Open(a.livePort(), on)
+	}
 	switch {
 	case errors.Is(err, midiin.ErrUnavailable):
 		r.port = "no MIDI in this build"
 	case err != nil:
-		r.port = "no input named like " + a.livePort() + ": plug the synth in (USB), then A on Port"
+		r.port = "no input: " + err.Error() + "; plug the synth in, then A on Port"
 	default:
 		r.ch, r.stop, r.port, r.ok = ch, stop, name, true
 	}
@@ -265,11 +276,11 @@ func (a *App) liveRecMenu() {
 	m = &menu{title: "record " + a.label(pad) + " from a synth", parent: a.menu}
 	m.items = []menuItem{
 		{label: "LISTEN TO", header: true},
-		{label: "Port (its name holds)", vals: []string{a.livePort()}, run: func(int) {
-			a.askText("the synth's MIDI port", "a part of its name: mc-101, mc-707...", a.livePort(), func(s string) {
+		{label: "Port", vals: []string{a.livePortText()}, run: func(int) {
+			a.askText("the MIDI input to listen to", "empty: every input (the channel picks the notes); or a part of a name: h2midi, mc-101", a.livePort(), func(s string) {
 				a.set.LivePort = strings.ToLower(strings.TrimSpace(s))
 				a.saveSettings()
-				m.items[1].vals = []string{a.livePort()}
+				m.items[1].vals = []string{a.livePortText()}
 				a.liveOpen()
 			})
 		}},
