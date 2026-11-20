@@ -357,7 +357,7 @@ func (a *App) liveSays(w int) []string {
 		in := int(t) % max(r.length, 1)
 		out = append(out, fit(fmt.Sprintf("the loop: bar %d.%d of %d", in/(16*stepTicks)+1, in%(16*stepTicks)/(4*stepTicks)+1, max(r.length/(16*stepTicks), 1)), w))
 	} else {
-		out = append(out, fit("the loop: stopped; Space plays the pattern, or start the unit", w))
+		out = append(out, fit("stopped: Space plays the loop (or start the unit)", w))
 	}
 	if r.ok {
 		out = append(out, fit("listening to "+r.port, w))
