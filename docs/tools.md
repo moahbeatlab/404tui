@@ -391,6 +391,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
     *Settings*
 
+    - `Pad` — A3  hat_closed; now A3  hat_closed
     - `Type` — bass / 303 / lead / arp / pluck / stabs / pad / drone; now lead
 
     *The Lead'S Own*
@@ -445,22 +446,6 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `What` — slightly different / with a fill / with a roll / thinner / busier / break; now slightly different
     - `Another roll of the dice`
     - `Keep it (B throws it away)`
-- `A played melody in a key: a new pattern...`
-  - **the melody of A3 (1 notes) in a key** (a dialog):
-
-    *Played*
-
-    - `In the key of` — C, C#, ... B (12 values); now B
-    - `Its sample is in` — C, C#, ... B (12 values); now C
-
-    *Written*
-
-    - `In the key of` — C, C#, ... B (12 values); now B
-    - `Scale` — minor / major / dorian / phrygian / harmonic minor / minor pentatonic; now minor
-    - `Notes off the scale` — moved to the nearest in it / kept as played; now moved to the nearest in it
-    - `On the pad` — A3 (the one played on); now A3 (the one played on)
-    - `Its sample is in (the pad)` — C, C#, ... B (12 values); now C
-    - `Write the new pattern`
 
 *This Pattern*
 

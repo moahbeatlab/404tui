@@ -87,6 +87,8 @@ func melodyHelp(label string, val int, st melodySet) string {
 		return ""
 	}
 	switch {
+	case label == "Pad":
+		return "A: choose the pad the melody is written for (its track; the sample stays). The dialog opens again on it, the trial thrown away."
 	case label == "Type":
 		return "What is written; its own settings are under it. " + pick(melTypeHelp, val)
 	case label == "Pattern":

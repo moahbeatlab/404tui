@@ -220,6 +220,19 @@ func (a *App) melodyMenu() {
 		lengths = append(lengths, l)
 	}
 	settings := []menuItem{
+		{label: "Pad", vals: []string{strings.TrimSpace(a.label(pad) + "  " + a.info.Pads[pad].Name)}, run: func(int) {
+			a.pickPad("the pad that gets the melody", pad, false, func(p int) {
+				if m := a.menu; m != nil && m.onClose != nil {
+					m.onClose() // the trial is thrown away, the synth stops
+				}
+				a.menu = nil
+				a.addTrack(p)
+				a.melodyMenu()
+			})
+			if a.picker != nil {
+				a.picker.replace = false // the pad's sample stays: only its track is written
+			}
+		}},
 		val("Type", melTypes, st.typ, func(v int) { st.typ = v }),
 		{label: "THE TYPE'S OWN", header: true},
 		val("Pattern", melBassPats, st.bassPat, func(v int) { st.bassPat = v }),
