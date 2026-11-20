@@ -392,7 +392,6 @@ func (a *App) seqMenu() {
 	run("Melody (bass, lead, arp, stabs, pad) in the key of the bank...", a.melodyMenu)
 	run(variationLabel, a.variationMenu)
 	run("A played melody in a key: a new pattern...", a.transcribeMenu)
-	run("Record this track from a synth (MC-101): arm, play, disarm...", a.liveRecMenu)
 	m.head("THIS PATTERN")
 	run("Export this pattern as a MIDI file", a.exportMIDI)
 	set("Loop only the bar in focus (Y+A)", []string{"off", "on"}, b2i(a.freeze), func(v int) {
