@@ -163,7 +163,9 @@ type melodySet struct {
 	hook, place         int // pluck: melHooks, melPlaces
 	stabRhythm, padMove int // stabs: melStabRhythms; pad: melPadMoves
 	droneNote           int // drone: melDroneNotes
-	init                bool
+	// the 303: mel303Steps, mel303Pitches, mel303OffKey, mel303Slides, mel303Octaves, mel303Accents
+	s3Steps, s3Pitches, s3OffKey, s3Slides, s3Octs, s3Accs int
+	init                                                   bool
 }
 
 func (a *App) melodyMenu() {
@@ -233,6 +235,12 @@ func (a *App) melodyMenu() {
 		val("Echo (dub chord)", []string{"3/16 (dotted 8th)", "5/16", "7/16"}, st.echo, func(v int) { st.echo = v }),
 		val("Movement", melPadMoves, st.padMove, func(v int) { st.padMove = v }),
 		val("Drone note", melDroneNotes, st.droneNote, func(v int) { st.droneNote = v }),
+		val("Steps", mel303StepNames, st.s3Steps, func(v int) { st.s3Steps = v }),
+		val("Pitches", mel303Pitches, st.s3Pitches, func(v int) { st.s3Pitches = v }),
+		val("Off-key notes", mel303OffKey, st.s3OffKey, func(v int) { st.s3OffKey = v }),
+		val("Slides", mel303Slides, st.s3Slides, func(v int) { st.s3Slides = v }),
+		val("Octave jumps", mel303Octaves, st.s3Octs, func(v int) { st.s3Octs = v }),
+		val("Accent steps", mel303Accents, st.s3Accs, func(v int) { st.s3Accs = v }),
 		{label: "FOR EVERY TYPE", header: true},
 		val("Length", lengths, st.bars, func(v int) { st.bars = v }),
 		val("Style", melStyles, st.style, func(v int) { st.style = v }),
@@ -787,78 +795,12 @@ func melodyLine(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note
 				add(bar, hit{s, 1, p, 100, 0})
 			}
 		}
-	case 7: // acid line, as the classic 303 patterns go (Confusion, Access, Higher State, Acid Thunder, Funalogue...): 12 to 16 of
-		// the 16 steps, one to three notes, octave jumps on some, slides on some, accents on a few steps or on all of them
-		keep := []float64{0.75, 0.85, 1}[st.density]
-		notes := []int{0} // in the scale from the root: the root, and one or two more (the third, the fifth, the seventh, the second)
-		for n := 1 + rng.Intn(3); len(notes) < n; {
-			if c := []int{2, 4, 6, 1, 3}[rng.Intn(5)]; !containsInt(notes, c) {
-				notes = append(notes, c)
-			}
-		}
-		octP, slideP := 0.06+rng.Float64()*0.38, rng.Float64()*0.4
-		allAcc := rng.Intn(4) == 0 // accents: on every step (a quarter of the time), else on 8 to 23% of them
-		accP := 0.08 + rng.Float64()*0.15
-		type acid struct{ on, note, oct, tie, acc int }
-		mk := func(i int) acid {
-			m := acid{note: notes[0]}
-			if i == 0 || rng.Float64() < keep {
-				m.on = 1
-			}
-			if i%4 != 0 && rng.Intn(3) == 0 { // the root on the beats mostly
-				m.note = notes[rng.Intn(len(notes))]
-			}
-			if rng.Float64() < octP {
-				m.oct = 1
-			}
-			if rng.Float64() < slideP {
-				m.tie = 1
-			}
-			if st.accent > 0 && (allAcc || rng.Float64() < accP) { // (Accents: none, none)
-				m.acc = 1
-			}
-			return m
-		}
-		motif, motifB := make([]acid, 16), make([]acid, 16)
-		accented := false
-		for i := range motif {
-			motif[i] = mk(i)
-			accented = accented || motif[i].acc == 1
-		}
-		if st.accent > 0 && !accented { // an accent at least
-			motif[0].acc = 1
-		}
-		copy(motifB, motif)
-		for i := 8; i < 16; i++ {
-			motifB[i] = mk(i)
-		}
-		for bar := 0; bar < bars; bar++ {
-			m := motif
-			switch form := bar % 4; {
-			case st.form == 1 && form >= 2:
-				m = motifB
-			case st.form == 0 && form == 3: // B: the last beat changes
-				m = append([]acid(nil), motif...)
-				for i := 12; i < 16; i++ {
-					m[i] = mk(i)
-				}
-			}
-			root := rootNear(chordOf(bar), lo+5)
-			for s, x := range m {
-				if x.on == 0 {
-					continue
-				}
-				p := scale[min(scaleIdx(root)+x.note, len(scale)-1)]
-				if x.oct == 1 && p+12 <= hi {
-					p += 12
-				}
-				vel := 88
-				if x.acc == 1 {
-					vel = 124
-				}
-				add(bar, hit{s, 1 + x.tie, p, vel, 0}) // a slide: held into the next step (portamento on the synth)
-			}
-		}
+	case 7: // 303: as the TB-303's sequencer has it, a row of pitches (each with its octave up or down, slide and accent) and a
+		// row of time (Note, Tie, Rest), each looping on its own: a pitch is taken at each Note, so when the rows differ in length
+		// the line turns over itself; the time row is Steps long, so a 12 or 7 against the 4/4 drifts and comes back
+		line303(st, bars, rng, scale, scaleIdx, lo, hi, func(bar int) int { return rootNear(chordOf(bar), lo+5) }, func(bar int, s, l, p, v int) {
+			add(bar, hit{s, l, p, v, 0})
+		})
 	case 8: // pluck: short notes on the offbeat 16ths, the chord's tones in a set order (a hook)
 		cands := []int{2, 3, 6, 7, 10, 11, 14}
 		if st.place == 1 { // anywhere: every 16th
@@ -1258,7 +1200,7 @@ func melodyLine(pad, bars int, st melodySet, padNote int, seed int64) []lab.Note
 	// accents
 	for i := range out {
 		h := &out[i]
-		if h.vel < 60 || (st.role == 7 && st.accent > 0) || (st.role == 4 && st.padMove == 2) { // a ghost; an acid line's accents are its own; a rising pad its own
+		if h.vel < 60 || st.role == 7 || (st.role == 4 && st.padMove == 2) { // a ghost; a 303's accents are its own; a rising pad its own
 			continue
 		}
 		s := h.step % 16

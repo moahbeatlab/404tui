@@ -408,6 +408,12 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `Echo (dub chord)` — 3/16 (dotted 8th) / 5/16 / 7/16; now 3/16 (dotted 8th)
     - `Movement` — held / struck again each half bar / rising (soft to loud, 4 a bar); now held
     - `Drone note` — the type's (the fifth when busy) / the root / the root and the fifth; now the type's (the fifth when busy)
+    - `Steps` — 16 (a bar) / 15 / 14 / 12 (in line every 3 bars) / 8 (half a bar) / 7; now 16 (a bar)
+    - `Pitches` — the type's (1 to 3) / 3 / 4 / 5 / 6 / 8; now the type's (1 to 3)
+    - `Off-key notes` — none / some (b2, b5, the 7th); now none
+    - `Slides` — the type's (rolled) / none / few / some / many; now the type's (rolled)
+    - `Octave jumps` — the type's (up, rolled) / none / up / down / up and down; now the type's (up, rolled)
+    - `Accent steps` — the type's (rolled) / none / few / many / every step; now the type's (rolled)
 
     *For Every Type*
 

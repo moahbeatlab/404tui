@@ -11,7 +11,7 @@ const melodyHelpRows = 4
 // melTypeHelp says what each type (melTypes, in order) writes.
 var melTypeHelp = []string{
 	"bass: a bass line on the chord roots; Pattern picks how it moves (the classic house, techno and trance lines).",
-	"303: an acid line as the TB-303 plays it: 16ths, one to three notes, octave jumps, slides and accents.",
+	"303: an acid line as the TB-303 makes it: a row of pitches (octave, slide, accent each) over a row of Note, Tie and Rest, each looping on its own.",
 	"lead: a melody on the scale: a motif that repeats and answers itself, or a call and its response.",
 	"arp: the chord's notes one after the other, in a Direction, over a Span of octaves.",
 	"pluck: a short hook of the chord's notes, on the offbeats or anywhere in the bar.",
@@ -114,6 +114,18 @@ func melodyHelp(label string, val int, st melodySet) string {
 		return "How the stabs go. " + pick(melStabHelp, val)
 	case label == "Movement":
 		return "How the pad plays the chord: held, struck again each half bar, or four times a bar from soft to loud."
+	case label == "Steps":
+		return "How long the 303's time row is (Note, Tie, Rest), in 16ths: 16 is a bar; 12 against the 4/4 starts 4 steps earlier each bar and comes back in line every 3 bars (the acid techno trick); 15, 14 and 7 drift further."
+	case label == "Pitches":
+		return "How many notes the 303's pitch row has (each with its octave, slide and accent). A pitch is taken at each Note, so a row of 5 over a time row of 16 turns over itself: the line comes out different each bar."
+	case label == "Off-key notes":
+		return "Some of the row's notes off the scale (the flat 2nd, the flat 5th, the major 7th): the sour, chromatic acid of Phuture and Hardfloor."
+	case label == "Slides":
+		return "How many of the row's notes slide into the next: held over it, so a synth set to legato (portamento) glides. With an octave jump, the classic acid bend."
+	case label == "Octave jumps":
+		return "Which of the row's notes jump an octave: up (the 303's UP), down, or both. The type's rolls how many, up."
+	case label == "Accent steps":
+		return "How many of the row's notes are accented (louder; on a synth with velocity to the filter, brighter). Accents in a row climb, as the 303's accent sweep does."
 	case label == "Drone note":
 		return "What the drone holds: the root (the fifth too when Density is busy), the root alone, or the root and the fifth."
 	case label == "Length":

@@ -150,8 +150,12 @@ func melOwn(label string, st melodySet) bool {
 		return st.typ == tPad
 	case "Drone note":
 		return st.typ == tDrone
+	case "Steps", "Pitches", "Off-key notes", "Slides", "Octave jumps", "Accent steps":
+		return st.typ == t303
+	case "Accents":
+		return e != 7 // the 303 has its own
 	case "Form":
-		return e == 0 || e == 1 || e == 3 || e == 7 || e == 8
+		return e == 0 || e == 1 || e == 3 || e == 8
 	case "Echo (dub chord)":
 		return e == 12
 	case "Ghost notes":
@@ -263,4 +267,151 @@ func melArpSeq(dir int, t, scale []int, fold func(int) int, rng *rand.Rand) []in
 		return t
 	}
 	return seq
+}
+
+var mel303Steps = []int{16, 15, 14, 12, 8, 7}
+var mel303StepNames = []string{"16 (a bar)", "15", "14", "12 (in line every 3 bars)", "8 (half a bar)", "7"}
+var mel303Pitches = []string{"the type's (1 to 3)", "3", "4", "5", "6", "8"}
+var mel303OffKey = []string{"none", "some (b2, b5, the 7th)"}
+var mel303Slides = []string{"the type's (rolled)", "none", "few", "some", "many"}
+var mel303Octaves = []string{"the type's (up, rolled)", "none", "up", "down", "up and down"}
+var mel303Accents = []string{"the type's (rolled)", "none", "few", "many", "every step"}
+
+// line303 writes a 303 line: root is each bar's root (the chords transpose the pattern, as the 303's track mode does), add puts a
+// note (bar, step, length in steps, pitch, velocity). A slide holds the note into the next one (a synth set to legato glides);
+// accents in a row climb, as the 303's accent sweep does.
+func line303(st melodySet, bars int, rng *rand.Rand, scale []int, scaleIdx func(int) int, lo, hi int, root func(int) int, add func(bar, s, l, p, v int)) {
+	type pitch struct{ deg, semi, oct, slide, acc int } // deg: scale steps from the root; semi: chromatic, off the key
+	n := 1 + rng.Intn(3)
+	if st.s3Pitches > 0 {
+		n = []int{0, 3, 4, 5, 6, 8}[st.s3Pitches]
+	}
+	octP, slideP := 0.06+rng.Float64()*0.38, rng.Float64()*0.4
+	if st.s3Octs == 1 {
+		octP = 0
+	} else if st.s3Octs > 1 {
+		octP = 0.3
+	}
+	if st.s3Slides > 0 {
+		slideP = []float64{0, 0, 0.12, 0.25, 0.45}[st.s3Slides]
+	}
+	allAcc := rng.Intn(4) == 0
+	accP := 0.08 + rng.Float64()*0.15
+	switch st.s3Accs {
+	case 1:
+		accP, allAcc = 0, false
+	case 2:
+		accP, allAcc = 0.12, false
+	case 3:
+		accP, allAcc = 0.3, false
+	case 4:
+		allAcc = true
+	}
+	if st.accent == 0 && st.s3Accs == 0 { // Accents none, the type's: none
+		accP, allAcc = 0, false
+	}
+	degs := []int{0} // the root first, then the third, fifth, seventh, second... of the scale
+	cands := []int{2, 4, 6, 1, 3, 5}
+	for len(degs) < min(n, 1+len(cands)) {
+		if c := cands[rng.Intn(len(cands))]; !containsInt(degs, c) {
+			degs = append(degs, c)
+		}
+	}
+	for len(degs) < n { // 8 pitches: some again
+		degs = append(degs, degs[rng.Intn(len(degs))])
+	}
+	row := make([]pitch, n)
+	for i := range row {
+		row[i].deg = degs[i]
+		if i > 0 && rng.Intn(2) == 0 { // the row is not in order
+			j := 1 + rng.Intn(i)
+			row[i].deg, row[j].deg = row[j].deg, row[i].deg
+		}
+	}
+	for i := range row {
+		p := &row[i]
+		if st.s3OffKey == 1 && i > 0 && rng.Float64() < 0.3 { // off the key: the flat 2nd, the flat 5th, the major 7th
+			p.deg, p.semi = 0, []int{1, 6, 11}[rng.Intn(3)]
+		}
+		if rng.Float64() < octP {
+			p.oct = 1
+			switch {
+			case st.s3Octs == 3:
+				p.oct = -1
+			case st.s3Octs == 4 && rng.Intn(2) == 0:
+				p.oct = -1
+			}
+		}
+		if rng.Float64() < slideP {
+			p.slide = 1
+		}
+		if allAcc || rng.Float64() < accP {
+			p.acc = 1
+		}
+	}
+	if st.accent > 0 || st.s3Accs > 1 { // an accent at least
+		acc := false
+		for _, p := range row {
+			acc = acc || p.acc == 1
+		}
+		if !acc {
+			row[0].acc = 1
+		}
+	}
+	steps := mel303Steps[st.s3Steps]
+	rest, tie := []float64{0.25, 0.15, 0}[st.density], []float64{0.08, 0.08, 0}[st.density]
+	time := make([]byte, steps) // N a note, T a tie, R a rest
+	for i := range time {
+		r := rng.Float64()
+		switch {
+		case i == 0 || r >= rest+tie:
+			time[i] = 'N'
+		case r < rest:
+			time[i] = 'R'
+		default:
+			time[i] = 'T'
+		}
+	}
+	type on struct{ bar, s, l, p, v int }
+	var last *on
+	var out []*on
+	pi, prevAcc := 0, false
+	for g := 0; g < bars*16; g++ {
+		bar, s := g/16, g%16
+		switch time[g%steps] {
+		case 'R':
+			last, prevAcc = nil, false
+		case 'T':
+			if last != nil {
+				last.l++
+			}
+		default:
+			x := row[pi%len(row)]
+			pi++
+			r := root(bar)
+			pp := r + x.semi
+			if x.semi == 0 {
+				pp = scale[min(max(scaleIdx(r)+x.deg, 0), len(scale)-1)]
+			}
+			if x.oct == 1 && pp+12 <= hi {
+				pp += 12
+			} else if x.oct == -1 && pp-12 >= lo {
+				pp -= 12
+			}
+			pp = min(max(pp, lo), hi)
+			v := 88
+			if x.acc == 1 {
+				v = 120
+				if prevAcc { // the accent sweep: accents in a row climb
+					v = 127
+				}
+			}
+			prevAcc = x.acc == 1
+			last = &on{bar, s, 1 + x.slide, pp, v}
+			out = append(out, last)
+		}
+	}
+	for _, o := range out {
+		add(o.bar, o.s, o.l, o.p, o.v)
+	}
 }

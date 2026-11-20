@@ -5644,8 +5644,8 @@ func TestTheMelodyTypeShowsItsOwnSettingsAndKeepsThem(t *testing.T) {
 		t.Fatal("a dub chord shows its echo")
 	}
 	setType(t303)
-	if !at("THE 303'S OWN").hidden {
-		t.Fatal("a type with no settings of its own shows no heading for them")
+	if at("THE 303'S OWN").hidden || at("Steps").hidden || !at("Accents").hidden || !at("Form").hidden {
+		t.Fatal("the 303 shows its own settings, its own accents in place of Accents, no Form")
 	}
 	setType(tBass)
 	if a.mel.bassPat != bpGallop || at("Pattern").val != bpGallop || a.mel.role != 15 {
@@ -5748,5 +5748,75 @@ func TestTheMelodyTypesOwnSettingsWriteInKeyAndRange(t *testing.T) {
 		for lp := range melLeaps {
 			check("lead", melodySet{typ: tLead, phrase: ph, leaps: lp, density: 1, prog: 2})
 		}
+	}
+}
+
+func TestThe303IsAPitchRowAndATimeRowEachLoopingOnItsOwn(t *testing.T) {
+	line := func(st melodySet, seed int64) []lab.Note {
+		st.key, st.typ, st.prog, st.accent = 9, t303, 1, 1
+		st.role = melEngine(st)
+		return melodyLine(0, 4, st, 9, seed)
+	}
+	onsets := func(l []lab.Note) map[int]bool {
+		out := map[int]bool{}
+		for _, n := range l {
+			out[int(n.Tick)/stepTicks] = true
+		}
+		return out
+	}
+	for seed := int64(1); seed < 20; seed++ {
+		// 12 steps: the rests and ties come round every 12 16ths, against the bar
+		on := onsets(line(melodySet{s3Steps: 3, density: 0}, seed))
+		for g := 0; g+12 < 64; g++ {
+			if on[g] != on[g+12] {
+				t.Fatalf("seed %d: 12 steps: step %d and %d differ", seed, g, g+12)
+			}
+		}
+		// 5 pitches over 16 busy steps: the next bar starts further along the row
+		l := line(melodySet{s3Pitches: 3, density: 2}, seed)
+		var b0, b1 []int
+		for _, n := range l {
+			switch int(n.Tick) / (16 * stepTicks) {
+			case 0:
+				b0 = append(b0, n.Pitch)
+			case 1:
+				b1 = append(b1, n.Pitch)
+			}
+		}
+		if fmt.Sprint(b0) == fmt.Sprint(b1) {
+			t.Fatalf("seed %d: 5 pitches turn over the bar: %v", seed, b0)
+		}
+		// every step accented: loud, and louder in a row
+		for i, n := range line(melodySet{s3Accs: 4, density: 2}, seed) {
+			if n.Vel < 120 || i > 0 && n.Vel != 127 {
+				t.Fatalf("seed %d: every step accented, climbing: note %d vel %d", seed, i, n.Vel)
+			}
+		}
+		// no slides, busy (no ties): every note shorter than its step; many slides: some held over the next
+		held := 0
+		for _, n := range line(melodySet{s3Slides: 1, density: 2}, seed) {
+			if n.Len >= stepTicks {
+				t.Fatalf("seed %d: no slides, a note of %d ticks", seed, n.Len)
+			}
+		}
+		for _, n := range line(melodySet{s3Slides: 4, s3Pitches: 5, density: 2}, seed) {
+			if n.Len > stepTicks {
+				held++
+			}
+		}
+		if held == 0 {
+			t.Fatalf("seed %d: many slides, none held over", seed)
+		}
+	}
+	off := 0
+	for seed := int64(1); seed < 20; seed++ {
+		for _, n := range line(melodySet{s3OffKey: 1, s3Pitches: 5, density: 2}, seed) {
+			if !slices.Contains([]int{9, 11, 0, 2, 4, 5, 7}, ((9+n.Pitch)%12+12)%12) {
+				off++
+			}
+		}
+	}
+	if off == 0 {
+		t.Fatal("off-key notes asked, none written")
 	}
 }
