@@ -65,6 +65,11 @@ On the page, **MIDI FILE OUT** saves the pattern that is in front. The file has 
 A plain note is the note of the unit's MIDI chart for its pad (36 for the first pad of a bank) on channel 10; a chromatic note is 60 plus its
 semitones on channel 1. Read back with this page, the first is drums and the second a melody with the root 60.
 
+## Checking the MIDI
+
+- `sp404 doctor midi --channel 11-14` plays a few notes on those channels to the unit's port (`--port`, `404` by default), to hear whether a synth behind it (MIDI thru) gets them.
+- `sp404 doctor midi --listen` lists the MIDI inputs and prints every note that comes in on one (`--port`, `mc-101` by default; `--channel 12` only that channel; `--seconds 30`), with Start and Stop, and counts the clock: whether the program would get what a synth on USB plays (for *Record this track from a synth*). No notes from an MC-101: its track needs Tx USB and Tx Note on, and its channel is set in MENU, SYSTEM, MIDI.
+
 ## Unverified on the unit
 
 The import writes patterns the same way the pattern templates do (the same records, the same trailer), and the notes with a pitch are written as the

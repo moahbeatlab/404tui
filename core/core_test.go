@@ -5903,3 +5903,87 @@ func TestAPlayedMelodyIsWrittenAgainInAKey(t *testing.T) {
 		}
 	}
 }
+
+func TestATrackIsRecordedFromASynthOverTheLoop(t *testing.T) {
+	// the take: the grid, the loop, the passes, the last pass winning
+	tk := newLiveTake(1920, 120)
+	tk.feed(midiin.Event{Kind: midiin.NoteOn, Data1: 60, Data2: 100}, 125)
+	tk.feed(midiin.Event{Kind: midiin.NoteOff, Data1: 60}, 360)
+	tk.feed(midiin.Event{Kind: midiin.NoteOn, Data1: 60, Data2: 90}, 1920+118)
+	tk.feed(midiin.Event{Kind: midiin.NoteOn, Data1: 60, Data2: 0}, 1920+200)
+	if len(tk.notes) != 1 || tk.notes[0].Tick != 120 || tk.notes[0].Vel != 90 || len(tk.passes) != 2 {
+		t.Fatalf("one note on 120, the second pass's: %+v %d passes", tk.notes, len(tk.passes))
+	}
+	if tk.notes[0].Len != 82 {
+		t.Fatalf("the length as held: %d", tk.notes[0].Len)
+	}
+	tk.feed(midiin.Event{Kind: midiin.NoteOn, Data1: 63, Data2: 100}, 1900)
+	tk.finish(1900 + 240)
+	if len(tk.notes) != 2 || tk.notes[1].Tick != 0 || tk.notes[1].Len != 240 {
+		t.Fatalf("a note at the end of the loop snaps to its start; a held one ends with the take: %+v", tk.notes)
+	}
+
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	pad := a.rowPad()
+	if err := a.setTrack(pad, []lab.Note{{Tick: 960, Pad: pad, Vel: 100, Len: 120}}); err != nil {
+		t.Fatal(err)
+	}
+	a.refresh()
+	f := fakeMIDI{ch: make(chan midiin.Event, 8)}
+	a.SetPlatform(Platform{Name: "test", MIDI: f})
+	a.set.LiveChan = 12
+	a.liveRecMenu()
+	if a.srec == nil || !a.srec.ok {
+		t.Fatalf("the synth's port is open: %+v", a.srec)
+	}
+	m := a.menu
+	arm := slices.IndexFunc(m.items, func(it menuItem) bool { return strings.HasPrefix(it.label, "Arm") })
+	m.cur = arm
+	a.menuKey(A)
+	if !a.srec.armed || a.menu != m {
+		t.Fatal("A arms, the dialog stays")
+	}
+	a.Render()
+	was := a.pat
+	t0 := time.Now().Add(-10 * time.Second)
+	a.seqOn, a.seqStart = true, t0
+	defer func() { a.seqOn = false }()
+	per := 60 / a.tempo() / formats.PPQ * float64(time.Second)
+	at := func(tick int) time.Time { return t0.Add(time.Duration(float64(tick) * per)) }
+	pc, _ := a.sampleNote(pad)
+	ref := 60 + pc
+	send := func(kind midiin.Kind, ch, note, vel, tick int) {
+		a.liveEvent(midiin.Event{Kind: kind, Channel: ch, Data1: note, Data2: vel, At: at(tick)})
+	}
+	send(midiin.NoteOn, 12, ref, 100, 125)
+	send(midiin.NoteOff, 12, ref, 0, 300)
+	send(midiin.NoteOn, 5, ref+5, 100, 240) // another channel
+	send(midiin.NoteOff, 5, ref+5, 0, 300)
+	send(midiin.NoteOn, 12, ref+2, 100, 4*1920+478) // the next round of a pattern of 4 bars
+	send(midiin.NoteOff, 12, ref+2, 0, 4*1920+600)
+	send(midiin.NoteOn, 12, ref+24, 80, 4*1920+1920)
+	send(midiin.NoteOff, 12, ref+24, 0, 4*1920+2000)
+	if n := len(a.srec.take.notes); n != 3 {
+		t.Fatalf("three notes on channel 12: %d", n)
+	}
+	a.menuKey(A) // disarm
+	if a.pat == was || a.srec.armed {
+		t.Fatalf("disarm writes a new pattern: %s", a.Message())
+	}
+	got := map[uint32]int{}
+	for _, n := range a.trackNotes(pad) {
+		got[n.Tick] = formats.PitchSemitones(uint8(n.Pitch))
+	}
+	if len(got) != 4 || got[960] != 0 || got[120] != 0 || got[480] != 2 || got[1920] != 12 {
+		t.Fatalf("the track's note and the take, from the sample's pitch (+24 an octave in): %v (%s)", got, a.Message())
+	}
+	a.pat = was
+	if len(a.trackNotes(pad)) != 1 {
+		t.Fatal("the pattern played over stays as it was")
+	}
+	a.menuKey(B)
+	if a.srec != nil {
+		t.Fatal("closing the dialog stops listening")
+	}
+}

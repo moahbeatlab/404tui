@@ -46,6 +46,10 @@ type settings struct {
 	GenKit        genKit       `json:"gen_kit,omitempty"`     // the pads chosen in Generator kit
 	GenBars       int          `json:"gen_bars,omitempty"`    // the bars of a generated pattern (0: the style's own, 2)
 	AutoListen    bool         `json:"auto_listen,omitempty"` // FILES: the file under the cursor plays at once (Ctrl-A)
+	LivePort      string       `json:"live_port,omitempty"`   // recording a track from a synth: a part of its port's name
+	LiveChan      int          `json:"live_chan,omitempty"`   // its channel, 1-16 (0: 12)
+	LiveSnap      int          `json:"live_snap,omitempty"`   // an index of liveSnaps
+	LiveOct       int          `json:"live_oct,omitempty"`    // the octave of the pad's sample, 1 + an index of liveOctaves (0: C4)
 }
 
 // dataDir is where the app keeps its own files (settings, autosaves): beside the card folder.

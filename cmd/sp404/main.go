@@ -51,6 +51,7 @@ commands:
   check          check this installation: the computer, the program on a simulated unit, a plugged-in unit
   doctor         read-only checks of this program against the unit; run it first
   doctor midi --channel 11  play a few notes on MIDI channels (11, 11-14, 11,13) to the unit, to hear a synth behind it (MIDI thru); --port names the output
+  doctor midi --listen      list the MIDI inputs and print the notes that come in on one (--port, default mc-101; --channel 12; --seconds 30)
                  (add -preview as an argument to also play a pad on the unit)
   ports          list every serial port, and why each is or is not taken for the unit
   status         current project, selected pad and project names

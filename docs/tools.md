@@ -461,6 +461,20 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
     - `On the pad` — A3 (the one played on); now A3 (the one played on)
     - `Its sample is in (the pad)` — C, C#, ... B (12 values); now C
     - `Write the new pattern`
+- `Record this track from a synth (MC-101): arm, play, disarm...`
+  - **record A3 from a synth** (a dialog):
+
+    *Listen To*
+
+    - `Port (its name holds)` — mc-101; now mc-101
+    - `Channel` — 1, 2, ... 16 (16 values); now 12
+
+    *Take*
+
+    - `Snap the starts to` — 1/16 / 1/32 / 1/8 triplets / off: as played; now 1/16
+    - `The pad's sample sounds at` — C1 (MIDI 24) / C2 (MIDI 36) / C3 (MIDI 48) / C4 (MIDI 60) / C5 (MIDI 72) / C6 (MIDI 84); now C4 (MIDI 60)
+    - `Arm: record what is played`
+    - `Clear the take (stay armed)`
 
 *This Pattern*
 
