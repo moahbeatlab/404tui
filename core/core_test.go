@@ -5820,3 +5820,86 @@ func TestThe303IsAPitchRowAndATimeRowEachLoopingOnItsOwn(t *testing.T) {
 		t.Fatal("off-key notes asked, none written")
 	}
 }
+
+func TestAPlayedMelodyIsWrittenAgainInAKey(t *testing.T) {
+	minor := melModes[0].steps
+	// a tie goes down; a note in the scale stays
+	if d := snapToScale(4, minor); d != -1 {
+		t.Fatalf("a major third in minor becomes the minor third: %d", d)
+	}
+	if d := snapToScale(11, minor); d != -1 {
+		t.Fatalf("a major seventh in minor goes down to the seventh: %d", d)
+	}
+	if d := snapToScale(7, minor); d != 0 {
+		t.Fatalf("the fifth stays: %d", d)
+	}
+	if d := snapToScale(-1, minor); d != -1 {
+		t.Fatalf("a note under the tonic (the major seventh below) goes down: %d", d)
+	}
+	// played in A against a sample in C, written in C minor on a sample in C: every note 3 st up
+	ts := transcribeSet{played: 9, playedNote: 0, into: 0, toNote: 0}
+	if s := transcribeShift(ts); s != 3 {
+		t.Fatalf("A to C is 3 st up: %d", s)
+	}
+	semi := func(b uint8) int { return formats.PitchSemitones(b) }
+	// A (the sample's +9) is the tonic: C, +12 on a C sample... folded to stay within the pad's octave
+	if b, sn, f := transcribePitch(formats.PitchByte(9), ts); semi(b) != 12 || sn || f {
+		t.Fatalf("A becomes C: %+d %v %v", semi(b), sn, f)
+	}
+	// C# over A is a major third: in minor the minor third, C over A, then to C minor: Eb
+	if b, sn, _ := transcribePitch(formats.PitchByte(1), ts); semi(b) != 3 || !sn {
+		t.Fatalf("C# (a major third over A) becomes Eb: %+d %v", semi(b), sn)
+	}
+	ts.keep = 1
+	if b, sn, _ := transcribePitch(formats.PitchByte(1), ts); semi(b) != 4 || sn {
+		t.Fatalf("kept as played: E: %+d %v", semi(b), sn)
+	}
+	// on a pad whose sample is in G, the same C is 5 st up from it
+	ts.keep, ts.toNote = 0, 7
+	if b, _, _ := transcribePitch(formats.PitchByte(9), ts); (7+semi(b))%12 != 0 {
+		t.Fatalf("a C on a G sample: %+d", semi(b))
+	}
+	// the tool: the melody on the pad in front written to a new pattern, this one as it was
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	pad := a.rowPad()
+	played := []lab.Note{
+		{Tick: 0, Pad: pad, Vel: 100, Len: 120, Pitch: int(formats.PitchByte(9))},
+		{Tick: 240, Pad: pad, Vel: 100, Len: 120, Pitch: int(formats.PitchByte(1))},
+		{Tick: 480, Pad: pad, Vel: 100, Len: 120, Pitch: int(formats.PitchByte(-5))},
+	}
+	if err := a.setTrack(pad, played); err != nil {
+		t.Fatal(err)
+	}
+	a.refresh()
+	was := a.pat
+	a.tr = transcribeSet{}
+	a.transcribeMenu()
+	if a.menu == nil || !strings.Contains(a.menu.title, "3 notes") {
+		t.Fatalf("the tool opens on the track in front: %v", a.menu)
+	}
+	a.tr.played, a.tr.playedNote, a.tr.into, a.tr.mode, a.tr.toNote = 9, 0, 0, 0, 0
+	a.Render()
+	a.transcribeWrite(pad)
+	if a.pat == was {
+		t.Fatalf("a new pattern: %s", a.Message())
+	}
+	var got []int
+	for _, n := range a.trackNotes(pad) {
+		got = append(got, semi(uint8(n.Pitch)))
+	}
+	// A (+9) is C, C# (+1) is Eb
+	if len(got) != 3 || got[0] != 12 || got[1] != 3 {
+		t.Fatalf("the melody in C minor: %v (%s)", got, a.Message())
+	}
+	// -5 is G: a minor seventh over A, in the scale: Bb in C minor, -2
+	if got[2] != -2 {
+		t.Fatalf("G over A is the seventh: Bb: %v", got)
+	}
+	a.pat = was
+	for i, n := range a.trackNotes(pad) {
+		if n.Pitch != played[i].Pitch {
+			t.Fatal("the played pattern stays as it is")
+		}
+	}
+}

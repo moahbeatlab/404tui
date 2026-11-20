@@ -192,12 +192,13 @@ type App struct {
 	genRand           *rand.Rand      // the dice of the generator's seeds (made from the clock when first needed)
 	trialUndo         func(redo bool) // undo and redo inside a dialog that rolls patterns: its rolls (nil: none is open)
 	tt2               trackState2
-	tt                trackState // the settings of the track tools
-	mel               melodySet  // the settings of the melody tool
-	toolNoPlay        bool       // the tool dialog that opens next does not start the loop on the computer
-	synth             *synthOut  // a track sent as MIDI notes to the synth behind the unit, while the pattern loops
-	synthPad          int        // the pad that is played by the synth, plus one: quiet on the computer meanwhile
-	midiOut           midiin.Out // the unit's MIDI output, open once it was needed
+	tt                trackState    // the settings of the track tools
+	mel               melodySet     // the settings of the melody tool
+	tr                transcribeSet // the settings of the tool that writes a played melody again in a key
+	toolNoPlay        bool          // the tool dialog that opens next does not start the loop on the computer
+	synth             *synthOut     // a track sent as MIDI notes to the synth behind the unit, while the pattern loops
+	synthPad          int           // the pad that is played by the synth, plus one: quiet on the computer meanwhile
+	midiOut           midiin.Out    // the unit's MIDI output, open once it was needed
 	midiOutName       string
 	scopeRow          bool        // the timing tools act on the row under the cursor only, not on every pad
 	undo              []undoEntry // the project before each change, newest last

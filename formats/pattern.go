@@ -152,6 +152,28 @@ func RetargetBank(b []byte, fromBank, toBank uint16) int {
 	return changed
 }
 
+// RewritePadNotes moves every note of pad in a pattern file to pad to, its pitch byte the one f gives for its own: how many.
+func RewritePadNotes(b []byte, pad, to proto.PadIndex, f func(pitch uint8) uint8) int {
+	if len(b)%record != 0 {
+		return 0
+	}
+	changed := 0
+	for at := 0; at+record <= len(b); at += record {
+		r := b[at : at+record]
+		if r[1] < noteFirst || r[1] > noteLast {
+			continue
+		}
+		if p, ok := notePad(r); !ok || p != pad {
+			continue
+		}
+		r[1] = noteFirst + byte(to.Index()%groupSize)
+		r[2] = r[2]&0xF0 | byte(to.Index()/groupSize)&0x0F
+		r[3] = f(r[3])
+		changed++
+	}
+	return changed
+}
+
 // MaxStartBars is the longest pattern StartPattern builds.
 const MaxStartBars = 8
 
