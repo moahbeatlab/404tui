@@ -64,7 +64,7 @@ func (a *App) draw(g Gfx) {
 	case Loop:
 		a.drawLoop(g)
 	}
-	if a.picker != nil {
+	if a.picker != nil && a.menu == nil {
 		a.drawPicker(g)
 	}
 	if a.kb != nil {
@@ -86,6 +86,9 @@ func (a *App) draw(g Gfx) {
 	a.footer(g)
 	if a.menu != nil {
 		a.drawMenu(g)
+		if a.picker != nil { // a picker opened from a dialog goes over it
+			a.drawPicker(g)
+		}
 	}
 	if a.help {
 		a.drawHelp(g)
