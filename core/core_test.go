@@ -7,6 +7,7 @@ import (
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
 	"github.com/moahbeatlab/404tui/midiin"
+	"github.com/moahbeatlab/404tui/perform"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/record"
 	"math/rand"
@@ -15,6 +16,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -3679,6 +3681,109 @@ func TestDeleteTheBankAsksThenClearsPadsAndPatterns(t *testing.T) {
 	}
 }
 
+func TestTheMixerSetsLevelPanAndBusOfTheTracks(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	Terminal = true
+	defer func() { Terminal = false }()
+	keys(t, a, "Y+R A") // SEQ, a note on A1
+	args, _ := json.Marshal(lab.PatternArgs{Pad: 1, Tick: 480, Vel: 100, Len: 120})
+	if err := a.lab.PatternOp(a.pat, "insert", args); err != nil {
+		t.Fatal(err)
+	}
+	a.refresh()
+	a.autoRows()
+	if len(a.rows) != 2 {
+		t.Fatalf("two tracks: %v", a.rows)
+	}
+	a.row = 0
+	p0, p1 := a.rows[0], a.rows[1]
+	a.setSetting(p0, mixLevel, 100)
+	a.SeqMixer()
+	if !a.MixerOn() {
+		t.Fatal("M opens the mixer")
+	}
+	keys(t, a, "U U D") // level
+	if v := a.settingValue(p0, mixLevel); v != 101 {
+		t.Fatalf("j k set the level: %d", v)
+	}
+	keys(t, a, "] ]") // pan
+	if v := a.settingValue(p0, mixPan); v != 66 {
+		t.Fatalf("[ ] set the pan: %d", v)
+	}
+	keys(t, a, "B") // bus
+	if v := a.settingValue(p0, mixBus); v != 1 {
+		t.Fatalf("b sends it to BUS 1: %d", v)
+	}
+	keys(t, a, "R B B") // A2: BUS 2
+	if v := a.settingValue(p1, mixBus); v != 2 || a.settingValue(p0, mixBus) != 1 {
+		t.Fatalf("l goes to the next strip: %d %d", a.settingValue(p1, mixBus), a.settingValue(p0, mixBus))
+	}
+	g := newTextGfx()
+	a.drawMixer(g)
+	var screen strings.Builder
+	for r := 0; r < Rows; r++ {
+		for c := 0; c < Cols; c++ {
+			screen.WriteRune(g.at(c, r).R)
+		}
+		screen.WriteByte('\n')
+	}
+	for _, want := range []string{"MIXER  PATTERN", a.label(p0), a.label(p1), "BUS 1", "BUS 2", "101"} {
+		if !strings.Contains(screen.String(), want) {
+			t.Fatalf("the mixer shows %q:\n%s", want, screen.String())
+		}
+	}
+	keys(t, a, "Y+{") // undo: A2 is on BUS 1 again
+	if v := a.settingValue(p1, mixBus); v != 1 {
+		t.Fatalf("undo takes the last change back: %d", v)
+	}
+	if plain, _ := a.hints(); len(plain) == 0 || plain[0].what != "pad" {
+		t.Fatalf("the panel lists the mixer's keys: %v", plain)
+	}
+	keys(t, a, "A")
+	if a.MixerOn() {
+		t.Fatal("A goes back to the grid")
+	}
+}
+
+func TestThePatternIsHeardWithThePadsLevelAndPan(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R A") // SEQ, a note
+	a.autoRows()
+	pad := a.rows[0]
+	peak := func() (l, r int) {
+		s, ok := a.render()
+		if !ok {
+			t.Fatal("the pattern renders")
+		}
+		for f := 0; f < s.Frames(); f++ {
+			l = max(l, abs(int(s.Samples[f*2])))
+			r = max(r, abs(int(s.Samples[f*2+1])))
+		}
+		return l, r
+	}
+	a.setSetting(pad, mixLevel, 127)
+	a.setSetting(pad, mixPan, 64)
+	fl, fr := peak()
+	if fl == 0 || fr == 0 {
+		t.Fatalf("the note is heard: %d %d", fl, fr)
+	}
+	a.setSetting(pad, mixLevel, 64)
+	if l, _ := peak(); l > fl*55/100 || l < fl*45/100 {
+		t.Fatalf("level 64 is about half: %d of %d", l, fl)
+	}
+	a.setSetting(pad, mixLevel, 0)
+	if l, r := peak(); l != 0 || r != 0 {
+		t.Fatalf("level 0 is silent: %d %d", l, r)
+	}
+	a.setSetting(pad, mixLevel, 127)
+	a.setSetting(pad, mixPan, 13) // all the way left
+	if l, r := peak(); r != 0 || l < fl*95/100 {
+		t.Fatalf("panned left: the right side is silent: %d %d (full %d)", l, r, fl)
+	}
+}
+
 func TestPatternSlotsCopyMoveAndRetarget(t *testing.T) {
 	a, _ := newApp(t)
 	keys(t, a, kit)
@@ -4647,5 +4752,1103 @@ func TestLocalTagsAreFoundByTheCategorySearch(t *testing.T) {
 	a.ltags = nil
 	if n := a.localTagStore().change([]string{files}, []string{"wobbly"}, false); n != 1 {
 		t.Fatal("the tags were kept, and can be taken off")
+	}
+}
+
+func TestDClearsTheTrackAndDotAddsOneFromThePatternsBank(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	Terminal = true
+	defer func() { Terminal = false }()
+	keys(t, a, "Y+R A") // SEQ, a note on the first track
+	pad := a.rowPad()
+	if len(a.trackNotes(pad)) != 1 {
+		t.Fatalf("a note to clear: %v", a.trackNotes(pad))
+	}
+	a.SeqClearTrack()
+	if n := len(a.trackNotes(pad)); n != 0 || !strings.Contains(a.msg, "removed") {
+		t.Fatalf("d clears the track: %d notes (%s)", n, a.msg)
+	}
+	keys(t, a, "Y+{")
+	if n := len(a.trackNotes(pad)); n != 1 {
+		t.Fatalf("undo brings the notes back: %d", n)
+	}
+	a.SeqAddTrack()
+	if a.picker == nil || !a.picker.pads || a.picker.bank != (a.pat-1)/16 {
+		t.Fatalf(". asks for a pad in the bank of the pattern: %+v", a.picker)
+	}
+	if p := a.picker.bank*16 + a.picker.cur; p == pad || !a.info.Pads[p].File {
+		t.Fatalf("on a pad with a sample that is not a track yet: %s", a.label(p))
+	}
+	before := len(a.rows)
+	keys(t, a, "A")
+	if len(a.rows) != before+1 {
+		t.Fatalf("the pad is a track now: %v", a.rows)
+	}
+}
+
+func TestHJKLGoThroughThePatternsWithoutTheTiles(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, "Y+R") // SEQ
+	a.pat = 21        // B5
+	a.SeqPattern(1)
+	if a.pat != 22 || !strings.Contains(a.msg, "pattern B6") {
+		t.Fatalf("L: the next pattern: %d (%s)", a.pat, a.msg)
+	}
+	a.SeqPattern(4)
+	if a.pat != 26 {
+		t.Fatalf("J: the row of tiles below: %d", a.pat)
+	}
+	a.SeqPattern(-4)
+	a.SeqPattern(-1)
+	if a.pat != 21 {
+		t.Fatalf("K and H go back: %d", a.pat)
+	}
+	a.pat = 1
+	a.SeqPattern(-1)
+	if a.pat != 160 {
+		t.Fatalf("H on the first pattern: the last one: %d", a.pat)
+	}
+}
+
+func TestDInTheMixerTakesTheStripAway(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	Terminal = true
+	defer func() { Terminal = false }()
+	keys(t, a, "Y+R A")
+	for _, p := range []int{5, 6} {
+		args, _ := json.Marshal(lab.PatternArgs{Pad: p, Tick: 480, Vel: 100, Len: 120})
+		a.lab.PatternOp(a.pat, "insert", args)
+	}
+	a.refresh()
+	a.autoRows()
+	if len(a.rows) != 3 {
+		t.Fatalf("three tracks: %v", a.rows)
+	}
+	a.SeqMixer()
+	a.row = 1
+	gone, next := a.rows[1], a.rows[2]
+	a.SeqClearTrack()
+	if slices.Contains(a.rows, gone) || len(a.rows) != 2 || a.rowPad() != next || !a.MixerOn() {
+		t.Fatalf("d takes the strip away, the cursor on the next: rows %v, on %d", a.rows, a.rowPad())
+	}
+	a.row = len(a.rows) - 1
+	last, before := a.rows[a.row], a.rows[a.row-1]
+	a.SeqClearTrack()
+	if slices.Contains(a.rows, last) || a.rowPad() != before {
+		t.Fatalf("the last strip: the cursor on the one before: rows %v, on %d", a.rows, a.rowPad())
+	}
+	keys(t, a, "Y+{")
+	a.autoRows()
+	if !slices.Contains(a.rows, last) {
+		t.Fatalf("undo brings the track back: %v", a.rows)
+	}
+}
+
+func TestAnotherPatternTakesOverAtTheEndOfTheRound(t *testing.T) {
+	a, _ := newApp(t)
+	au := &NullAudio{}
+	a.Audio = au
+	now := time.Unix(1000, 0)
+	a.Now = func() time.Time { return now }
+	keys(t, a, kit)
+	keys(t, a, "Y+R A") // SEQ, a note in pattern 1
+	if err := a.lab.NewPattern(2, 1); err != nil {
+		t.Fatal(err)
+	}
+	args, _ := json.Marshal(lab.PatternArgs{Pad: a.rowPad(), Tick: 0, Vel: 100, Len: 120})
+	a.lab.PatternOp(2, "insert", args)
+	a.togglePlay()
+	if !a.seqOn || a.playPat != 1 || a.loopDur <= 0 {
+		t.Fatalf("pattern 1 plays: %v %d %v", a.seqOn, a.playPat, a.loopDur)
+	}
+	round := a.loopDur
+	now = now.Add(round + round/4) // in the second round
+	a.SeqPattern(1)
+	if a.queued != 0 || au.Next != 0 || !strings.Contains(a.msg, "n plays this one") {
+		t.Fatalf("switching the view queues nothing (quick): %d (%s)", a.queued, a.msg)
+	}
+	a.SeqQueue()
+	if a.pat != 2 || a.playPat != 1 || a.queued != 2 || au.Next != 1 || !strings.Contains(a.msg, "plays after this round") {
+		t.Fatalf("the next pattern waits for the end of the round: view %d, plays %d, queued %d, next %d (%s)", a.pat, a.playPat, a.queued, au.Next, a.msg)
+	}
+	if !a.queuedAt.Equal(time.Unix(1000, 0).Add(2 * round)) {
+		t.Fatalf("it takes over at the end of the second round: %v", a.queuedAt.Sub(time.Unix(1000, 0)))
+	}
+	now = now.Add(round / 2)
+	a.Tick()
+	if a.playPat != 1 || a.playStep() != -1 {
+		t.Fatal("before the end of the round pattern 1 goes on")
+	}
+	now = a.queuedAt.Add(time.Millisecond)
+	a.Tick()
+	if a.playPat != 2 || a.queued != 0 || a.playStep() != 0 {
+		t.Fatalf("at the end of the round pattern 2 plays, the playhead on its start: plays %d, step %d", a.playPat, a.playStep())
+	}
+	a.SeqPattern(-1) // pattern 1 waits; back to 2: nothing waits
+	a.SeqQueue()
+	a.SeqPattern(1)
+	a.SeqQueue()
+	if a.queued != 0 || !strings.Contains(a.msg, "goes on playing") {
+		t.Fatalf("back to the pattern that plays: %d (%s)", a.queued, a.msg)
+	}
+	a.SeqPattern(1) // pattern 3 is empty
+	a.SeqQueue()
+	if a.queued != 0 || a.playPat != 2 || !strings.Contains(a.msg, "is empty") {
+		t.Fatalf("an empty pattern leaves what plays: %d %d (%s)", a.queued, a.playPat, a.msg)
+	}
+	a.SeqPattern(-2)
+	a.togglePlay()
+	if a.seqOn || a.queued != 0 {
+		t.Fatal("Space stops it all")
+	}
+}
+
+func TestTheCastsAudioSwitchesPatternsAtTheEndOfTheRound(t *testing.T) {
+	one := formats.Sample{Channels: 1, Samples: []int16{1, 1, 1, 1}}
+	two := formats.Sample{Channels: 1, Samples: []int16{2, 2, 2, 2}}
+	tap := &castTap{}
+	tap.ev = []tapEvent{{kind: tapLoop, pcm: stereoOf(one)}, {at: time.Second / formats.SampleRate, kind: tapNext, pcm: stereoOf(two)}}
+	out := tap.mix(10)
+	var left []int16
+	for i := 0; i < len(out); i += 2 {
+		left = append(left, out[i])
+	}
+	if want := []int16{1, 1, 1, 1, 2, 2, 2, 2, 2, 2}; !slices.Equal(left, want) {
+		t.Fatalf("the waiting sound takes over at the end of the round: %v", left)
+	}
+}
+
+func TestCCopiesThePatternIntoTheNextEmptySlot(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R A")    // a note in pattern 1
+	a.lab.NewPattern(2, 1) // 2 is used, 3 is free
+	a.SeqCopy()
+	if a.pat != 3 || len(a.trackNotes(a.rowPad())) != 1 || !strings.Contains(a.msg, "copied to A3") {
+		t.Fatalf("c copies into the next empty slot and goes to it: %d (%s)", a.pat, a.msg)
+	}
+	keys(t, a, "Y+{")
+	if _, err := a.lab.Pattern(3); err == nil {
+		t.Fatal("undo takes the copy back")
+	}
+}
+
+func TestKitNamesGiveTheKey(t *testing.T) {
+	for name, want := range map[string][2]int{"14_Kick_125_Gs_V": {8, -1}, "06_Lead_125_F_Pa": {5, -1}, "Pad 3 Am": {9, 0}, "bass Cmaj": {0, 1}, "Chord_Fs_min": {6, -1}} {
+		pc, mode, ok := keyFromName(name)
+		if !ok || pc != want[0] || mode != want[1] {
+			t.Errorf("%s: %d %d %v, want %v", name, pc, mode, ok, want)
+		}
+	}
+	if _, _, ok := keyFromName("loop as it was"); ok {
+		t.Error("the word as is not A sharp")
+	}
+}
+
+func TestTheMelodyStaysInTheKeyAndTheRange(t *testing.T) {
+	for role := range melRoles {
+		for style := range melStyles {
+			for _, oct := range [][2]int{{0, 0}, {1, 6}, {4, 4}, {3, 5}, {6, 3}, {0, 7}} { // the role's, -3 to +2, 0, -1 to +1, turned round
+				for rate := range melRates {
+					st := melodySet{key: 8, role: role, style: style, octLo: oct[0], octHi: oct[1], density: 1, ghost: 2, accent: 1, rate: rate}
+					notes := melodyNotes(5, 4, st, 3, 42) // G# minor on a pad whose sample is in D#
+					line := melodyLine(5, 4, st, 3, 42)
+					if len(notes) == 0 || len(line) != len(notes) {
+						t.Fatalf("%s %s: no notes", melRoles[role].name, melStyles[style])
+					}
+					lo, hi := melWindow(st)
+					if oct == [2]int{1, 6} && (lo != -36 || hi != 36) {
+						t.Fatalf("octaves -3 to +2: %d..%d", lo, hi)
+					}
+					for _, n := range line {
+						if n.Pitch < lo || n.Pitch > hi {
+							t.Fatalf("%s %s %v: pitch %d out of %d..%d", melRoles[role].name, melStyles[style], oct, n.Pitch, lo, hi)
+						}
+					}
+					ghosts, accents := 0, 0
+					for i, n := range notes {
+						p := formats.PitchSemitones(uint8(n.Pitch))
+						if p < -12 || p > 12 || ((p-line[i].Pitch)%12+12)%12 != 0 {
+							t.Fatalf("%s %s %v: pitch %d on the pad for %d", melRoles[role].name, melStyles[style], oct, p, line[i].Pitch)
+						}
+						if pc := ((3+p)%12 + 12) % 12; role != 13 && !slices.Contains([]int{8, 10, 11, 1, 3, 4, 6}, pc) { // G# minor (parallel stabs leave it)
+							t.Fatalf("%s %s: %s is not in G# minor", melRoles[role].name, melStyles[style], sharpNames[pc])
+						}
+						if n.Pad != 5 || int(n.Tick)+n.Len > 4*16*stepTicks {
+							t.Fatalf("a note off the track or past the end: %+v", n)
+						}
+						if n.Vel < 60 {
+							ghosts++
+						}
+						if n.Vel >= 120 {
+							accents++
+						}
+					}
+					if rate == 0 && role < 3 && ghosts == 0 {
+						t.Errorf("%s %s: many ghost notes asked, none written", melRoles[role].name, melStyles[style])
+					}
+					if rate == 0 && accents == 0 && role < 4 {
+						t.Errorf("%s %s: accents on the offbeats asked, none written", melRoles[role].name, melStyles[style])
+					}
+				}
+			}
+		}
+	}
+	st := melodySet{key: 0, role: 1, density: 1}
+	a1, a2, b := melodyNotes(0, 4, st, 0, 1), melodyNotes(0, 4, st, 0, 1), melodyNotes(0, 4, st, 0, 2)
+	if !slices.Equal(a1, a2) || slices.Equal(a1, b) {
+		t.Error("the same roll writes the same melody, another roll another one")
+	}
+}
+
+func TestTheMelodyToolReadsTheBanksKeyAndWritesATrial(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R A")
+	pad := a.rowPad()
+	for p := 0; p < 3; p++ {
+		a.info.Pads[p].Name = []string{"01_Bass1_125_Gs_", "07_FX1_125_Gs_VI", "14_Kick_125_Gs_V"}[p]
+	}
+	a.melodyMenu()
+	if a.menu == nil || !strings.Contains(a.msg, "G# minor") {
+		t.Fatalf("the dialog says the bank's key: %q", a.msg)
+	}
+	if a.mel.key != 8 {
+		t.Fatalf("the key is set to the bank's: %d", a.mel.key)
+	}
+	pitched := 0
+	for _, n := range a.trackNotes(pad) {
+		if n.Pitch != 0 {
+			pitched++
+		}
+	}
+	if len(a.trackNotes(pad)) < 3 || pitched == 0 {
+		t.Fatalf("the trial writes notes at pitches: %d notes, %d pitched", len(a.trackNotes(pad)), pitched)
+	}
+}
+
+type recOut struct {
+	mu   sync.Mutex
+	sent [][]byte
+}
+
+func (r *recOut) Send(m []byte) error {
+	r.mu.Lock()
+	r.sent = append(r.sent, append([]byte(nil), m...))
+	r.mu.Unlock()
+	return nil
+}
+func (r *recOut) Close() {}
+func (r *recOut) has(status byte) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, m := range r.sent {
+		if m[0] == status {
+			return true
+		}
+	}
+	return false
+}
+
+type fakeMIDIOut struct {
+	fakeMIDI
+	out *recOut
+}
+
+func (f fakeMIDIOut) OpenOut(string) (midiin.Out, string, error) { return f.out, "SP-404MKII", nil }
+
+func TestTheMelodyPlaysOnTheSynthBehindTheUnitInTimeWithItsClock(t *testing.T) {
+	a, _ := newApp(t)
+	rec := &recOut{}
+	a.SetPlatform(Platform{Name: "test", MIDI: fakeMIDIOut{fakeMIDI{ch: make(chan midiin.Event)}, rec}})
+	keys(t, a, kit)
+	keys(t, a, "Y+R A")
+	pad := a.rowPad()
+	a.info.Pads[pad].Name = "01_Bass1_125_Gs_"
+	a.mel = melodySet{}
+	a.melodyMenu() // offline: the pad plays it, no MIDI
+	if a.synth != nil || a.seqOn {
+		t.Fatal("offline nothing goes to MIDI, and the dialog does not start the pattern")
+	}
+	keys(t, a, "B")
+	a.live = &liveState{} // the unit is edited live
+	defer func() { a.live = nil }()
+	a.melodyMenu() // live too the pad plays it: MIDI out is off until asked
+	if a.mel.role != 0 || a.mel.out != 0 || a.synth != nil || a.seqOn || !a.audible(pad) {
+		t.Fatalf("MIDI out is off at first: role %d, out %d", a.mel.role, a.mel.out)
+	}
+	if len(a.trackNotes(pad)) == 0 {
+		t.Fatal("the melody is written on the pad")
+	}
+	for i, it := range a.menu.items { // MIDI out: channel 11
+		if it.label == "MIDI out" {
+			a.menu.cur = i
+		}
+	}
+	a.menuKey(Right)
+	if a.mel.role != 0 || a.mel.out != 1 || a.synth == nil || !strings.Contains(a.msg, "MIDI channel 11") {
+		t.Fatalf("a bass plays on channel 11: role %d, out %d (%s)", a.mel.role, a.mel.out, a.msg)
+	}
+	if a.seqOn || a.audible(pad) {
+		t.Fatal("the pattern waits for Space, and the pad is quiet on the computer while the synth plays it")
+	}
+	time.Sleep(50 * time.Millisecond)
+	if rec.has(0x9A) {
+		t.Fatal("nothing plays yet: no note to the synth")
+	}
+	if txt := melodyNowText(a); !strings.Contains(txt, "waiting: start the unit") {
+		t.Fatalf("the dialog says the synth waits:\n%s", txt)
+	}
+	// the unit plays: its clock comes in, the synth follows it
+	a.mon.BPM = 125
+	pulse := time.Duration(60 / 125.0 / 24 * float64(time.Second))
+	a.clk = perform.Clock{Running: true}
+	deadline := time.Now().Add(3 * time.Second)
+	for !rec.has(0x9A) && time.Now().Before(deadline) {
+		a.clk.Ticks++
+		a.clk.At = time.Now()
+		a.Tick()
+		time.Sleep(pulse)
+	}
+	if !rec.has(0x9A) {
+		t.Fatal("note ons on channel 11 are sent while the unit's clock runs")
+	}
+	if txt := melodyNowText(a); !strings.Contains(txt, "MIDI ch 11, melody #1 on the synth since bar 1 (the unit's clock)") {
+		t.Fatalf("the dialog says which melody the synth plays, since when and what it follows:\n%s", txt)
+	}
+	a.menuKey(Right) // another role: a new melody
+	if txt := melodyNowText(a); !strings.Contains(txt, "melody #2: from its next note") && !strings.Contains(txt, "melody #2 on the synth") {
+		t.Fatalf("a change is a new melody:\n%s", txt)
+	}
+	start, loop, _, ok := a.synthTiming(4 * 16 * stepTicks)
+	if d := loop - 384*pulse; !ok || d > time.Millisecond || d < -time.Millisecond {
+		t.Fatalf("a round of 4 bars is 384 pulses of the unit's clock: %v", loop)
+	}
+	if want := a.clk.At.Add(-time.Duration(a.clk.Ticks-1) * pulse); start.Sub(want) > time.Millisecond || want.Sub(start) > time.Millisecond {
+		t.Fatalf("the round began at the unit's Start: %v off", start.Sub(want))
+	}
+	pl := 0
+	if d, ok := a.doc(); ok {
+		pl = int(d.Length)
+	}
+	for i, it := range a.menu.items { // Length: 8 bars, longer than the pattern
+		if it.label == "Length" {
+			a.menu.cur = i
+		}
+	}
+	for a.mel.bars != 4 {
+		a.menuKey(Right)
+	}
+	if a.synth.length != 8*16*stepTicks {
+		t.Fatalf("the synth loops the 8 bars: %d", a.synth.length)
+	}
+	for _, n := range a.trackNotes(pad) {
+		if int(n.Tick) >= pl {
+			t.Fatalf("the pattern keeps its own bars: a note at %d of %d", n.Tick, pl)
+		}
+	}
+	a.clk.Ticks++ // a pulse of the unit's clock, just now
+	a.clk.At = time.Now()
+	if _, loop, _, _ := a.synthTiming(a.synth.length); loop < 768*pulse-time.Millisecond {
+		t.Fatalf("a round of the synth is 8 bars of the unit's clock: %v", loop)
+	}
+	a.menu.onX() // Space: the pattern on the computer as well
+	if !a.seqOn {
+		t.Fatal("Space plays the pattern")
+	}
+	a.menu.onX()
+	keys(t, a, "B") // the dialog closes
+	if a.synth != nil || !a.audible(pad) || !rec.has(0xBA) {
+		t.Fatal("closing the dialog stops the synth (All Notes Off) and the pad is heard again")
+	}
+}
+
+func melodyNowText(a *App) string {
+	g := newTextGfx()
+	a.melodyNow(g, 0, 0, 70)
+	var b strings.Builder
+	for r := 0; r < 3; r++ {
+		for c := 0; c < 70; c++ {
+			b.WriteRune(g.at(c, r).R)
+		}
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+func TestAShortMelodyRepeatsALongOneIsCut(t *testing.T) {
+	bar := uint32(16 * stepTicks)
+	ns := []lab.Note{{Tick: 0, Len: 120}, {Tick: bar + 120, Len: 2 * int(bar)}}
+	if got := fitBars(ns, 2, 4); len(got) != 4 || got[2].Tick != 2*bar || got[3].Tick != 3*bar+120 {
+		t.Fatalf("2 bars over 4: repeated: %+v", got)
+	}
+	got := fitBars(ns, 2, 1)
+	if len(got) != 1 || got[0].Tick != 0 {
+		t.Fatalf("2 bars into 1: the first bar: %+v", got)
+	}
+	if got := fitBars(ns, 2, 2); got[1].Len != int(bar)-120 {
+		t.Fatalf("a note is cut at the end of the pattern: %d", got[1].Len)
+	}
+}
+
+func TestTheMelodyShowsTheChordOfEachBar(t *testing.T) {
+	a, _ := newApp(t)
+	a.mel = melodySet{key: 8, prog: 2, color: 1, init: true} // G# minor, Epic anthem i VI III VII, triads
+	names := func() []string {
+		var got []string
+		for b := 0; b < 5; b++ {
+			got = append(got, a.melChordName(b))
+		}
+		return got
+	}
+	if got, want := names(), []string{"G#m", "E", "B", "F#", "G#m"}; !slices.Equal(got, want) {
+		t.Fatalf("the chords of the bars: %v, want %v", got, want)
+	}
+	a.mel.color = 2 // sevenths from the scale: the VII of a minor key is a dominant seventh
+	if got, want := names(), []string{"G#m7", "Emaj7", "Bmaj7", "F#7", "G#m7"}; !slices.Equal(got, want) {
+		t.Fatalf("sevenths: %v, want %v", got, want)
+	}
+	a.mel.prog, a.mel.color = 1, 1
+	if c := a.melChordName(3); c != "G#m" {
+		t.Fatalf("one chord: the key's: %s", c)
+	}
+}
+
+func TestTheMelodyIsWrittenInTheNoteValueAsked(t *testing.T) {
+	ticksOf := func(role, rate int) []int {
+		var ts []int
+		for _, n := range melodyNotes(0, 4, melodySet{key: 0, role: role, rate: rate, density: 2, ghost: 1, accent: 1}, 0, 7) {
+			ts = append(ts, int(n.Tick))
+		}
+		return ts
+	}
+	for rate, r := range melRates {
+		if r.ticks < stepTicks || rate == 0 {
+			continue
+		}
+		for _, role := range []int{0, 1, 3, 7, 8, 10} {
+			for _, tk := range ticksOf(role, rate) {
+				if tk%r.ticks != 0 {
+					t.Fatalf("%s in %s: a note at %d is off the grid", melRoles[role].name, r.name, tk)
+				}
+			}
+		}
+	}
+	arp := ticksOf(2, 5) // 1/32
+	if len(arp) != 4*32 || arp[1]-arp[0] != 60 {
+		t.Fatalf("an arp in 1/32: 32 notes a bar, 60 ticks apart: %d notes, %v", len(arp), arp[:3])
+	}
+	if tr := ticksOf(2, 7); len(tr) != 4*12 || tr[1] != 160 { // 1/8 triplets
+		t.Fatalf("an arp in 1/8 triplets: 12 a bar: %d, %v", len(tr), tr[:3])
+	}
+	held := melodyNotes(0, 2, melodySet{role: 11, rate: 5}, 0, 1)
+	if len(held) != 2 || held[0].Len < 15*stepTicks {
+		t.Fatalf("a drone stays held whatever the value: %+v", held)
+	}
+}
+
+func TestADubChordIsASeventhWithItsEchoes(t *testing.T) {
+	notes := melodyNotes(0, 1, melodySet{key: 9, role: 12, density: 0, accent: 0}, 9, 5) // A minor, sparse: one stab a bar
+	byTick := map[uint32][]lab.Note{}
+	for _, n := range notes {
+		byTick[n.Tick] = append(byTick[n.Tick], n)
+	}
+	if len(byTick) != 4 {
+		t.Fatalf("a stab and three echoes: %d onsets", len(byTick))
+	}
+	var first uint32 = 1 << 30
+	for tk := range byTick {
+		first = min(first, tk)
+	}
+	stab := byTick[first]
+	pcs := map[int]bool{}
+	for _, n := range stab {
+		pcs[((9+formats.PitchSemitones(uint8(n.Pitch)))%12+12)%12] = true
+	}
+	if len(stab) != 4 || !pcs[9] || !pcs[0] || !pcs[4] || !pcs[7] {
+		t.Fatalf("Am7: A C E G: %v", pcs)
+	}
+	for e := 1; e <= 3; e++ {
+		echo := byTick[first+uint32(e*3*stepTicks)]
+		if len(echo) != 4 || echo[0].Vel >= stab[0].Vel {
+			t.Fatalf("echo %d: the chord again, a dotted 8th later, quieter: %+v", e, echo)
+		}
+	}
+}
+
+func TestEachStyleHasItsOwnChords(t *testing.T) {
+	a, _ := newApp(t)
+	names := func(st melodySet, n int) []string {
+		a.mel = st
+		var got []string
+		for b := 0; b < n; b++ {
+			got = append(got, a.melChordName(b))
+		}
+		return got
+	}
+	for _, c := range []struct {
+		st   melodySet
+		want []string
+	}{
+		{melodySet{key: 9, style: 0}, []string{"Am7", "G7", "Am7"}},                           // house: i VII, sevenths (G7: the VII of A minor)
+		{melodySet{key: 9, style: 1}, []string{"Am9", "Dm9", "Am9"}},                          // deep house: i9 iv9
+		{melodySet{key: 9, style: 2}, []string{"Am7", "Am7", "Am7"}},                          // tech house: one chord
+		{melodySet{key: 9, style: 5}, []string{"Asus2", "Asus2", "Fsus2", "Fsus2", "Csus2"}},  // progressive: two bars a chord, sus2
+		{melodySet{key: 9, style: 4, chordLen: 3}, []string{"Am", "Am", "Am", "Am", "F"}},     // trance, a chord 4 bars
+		{melodySet{key: 9, style: 4}, []string{"Am", "Am", "F", "F", "C"}},                    // trance: two bars a chord
+		{melodySet{key: 9, style: 4, pick: 2}, []string{"Am", "Am", "G", "G", "F", "F", "E"}}, // another roll: i VII VI V
+		{melodySet{key: 9, style: 6, pick: 2}, []string{"Am7", "Am7", "Dsus2"}},               // dub techno: i7 IVsus2
+		{melodySet{key: 9, style: 6}, []string{"Am7", "Am7"}},                                 // dub techno: one open chord
+		{melodySet{key: 0, mode: 1, style: 0}, []string{"Cmaj7", "Fmaj7"}},                    // house in major: I IV
+	} {
+		if got := names(c.st, len(c.want)); !slices.Equal(got, c.want) {
+			t.Errorf("%s: %v, want %v", melStyles[c.st.style], got, c.want)
+		}
+	}
+	// Kerri Chandler: the seventh at the bottom
+	notes := melodyNotes(0, 1, melodySet{key: 9, role: 4, style: 1, prog: 1, color: 6}, 9, 1) // A minor, a held pad
+	low := notes[0]
+	for _, n := range notes {
+		if formats.PitchSemitones(uint8(n.Pitch)) < formats.PitchSemitones(uint8(low.Pitch)) {
+			low = n
+		}
+	}
+	if pc := ((9+formats.PitchSemitones(uint8(low.Pitch)))%12 + 12) % 12; pc != 7 || len(notes) != 4 {
+		t.Fatalf("Am7 with its G at the bottom: lowest %s, %d notes", sharpNames[pc], len(notes))
+	}
+}
+
+func TestParallelStabsKeepTheirShape(t *testing.T) {
+	line := melodyLine(0, 4, melodySet{key: 9, role: 13, style: 3, density: 2}, 9, 3)
+	byTick := map[uint32][]int{}
+	for _, n := range line {
+		byTick[n.Tick] = append(byTick[n.Tick], n.Pitch)
+	}
+	var shape []int
+	roots := map[int]bool{}
+	for _, ps := range byTick {
+		slices.Sort(ps)
+		d := make([]int, len(ps))
+		for i, p := range ps {
+			d[i] = p - ps[0]
+		}
+		if shape == nil {
+			shape = d
+		}
+		if !slices.Equal(d, shape) {
+			t.Fatalf("one shape moved: %v and %v", shape, d)
+		}
+		roots[ps[0]] = true
+	}
+	if len(roots) < 3 {
+		t.Fatalf("the shape goes to other roots: %v", roots)
+	}
+}
+
+func TestTheRollingBassIsRootFifthOctaveAndSwings(t *testing.T) {
+	line := melodyLine(0, 1, melodySet{key: 9, role: 14, style: 2, density: 1, prog: 1}, 9, 1) // A minor, one bar
+	at := map[int]int{}
+	for _, n := range line {
+		at[int(n.Tick)] = n.Pitch
+	}
+	if len(at) != 10 {
+		t.Fatalf("R...5R8RR...5R8R: %d notes", len(at))
+	}
+	root := at[0]
+	if at[4*stepTicks]-root != 7 || at[6*stepTicks]-root != 12 {
+		t.Fatalf("the fifth on step 5, the octave on step 7: %v", at)
+	}
+	if _, ok := at[5*stepTicks+stepTicks*14/100]; !ok {
+		t.Fatalf("the 16th after the beat's 8th comes late (swing): %v", at)
+	}
+}
+
+func TestTheAcidLineIsAFewNotesOnMostSteps(t *testing.T) {
+	for seed := int64(1); seed < 30; seed++ {
+		line := melodyLine(0, 2, melodySet{key: 9, role: 7, style: 7, density: 2, prog: 1, accent: 3}, 9, seed)
+		steps, pcs, loud := map[int]bool{}, map[int]bool{}, 0
+		for _, n := range line {
+			if int(n.Tick) < 16*stepTicks {
+				steps[int(n.Tick)/stepTicks] = true
+			}
+			pcs[((n.Pitch)%12+12)%12] = true
+			if n.Vel >= 120 {
+				loud++
+			}
+		}
+		if len(steps) != 16 || len(pcs) > 3 {
+			t.Fatalf("seed %d: busy: every step, one to three notes: %d steps, %d notes", seed, len(steps), len(pcs))
+		}
+		if loud == 0 {
+			t.Fatalf("seed %d: no accents", seed)
+		}
+	}
+}
+
+func TestTheFormSettingRepeatsTheBars(t *testing.T) {
+	bar := func(line []lab.Note, b int) [][2]int {
+		var out [][2]int
+		for _, n := range line {
+			if int(n.Tick)/(16*stepTicks) == b {
+				out = append(out, [2]int{int(n.Tick) % (16 * stepTicks), n.Pitch})
+			}
+		}
+		return out
+	}
+	st := melodySet{key: 9, role: 1, style: 0, density: 1, prog: 1}
+	st.form = 2 // A A A A
+	line := melodyLine(0, 4, st, 9, 3)
+	if !slices.Equal(bar(line, 0), bar(line, 1)) || !slices.Equal(bar(line, 0), bar(line, 2)) {
+		t.Fatal("A A A A: the same bar")
+	}
+	st.form = 1 // A A B B
+	differ := false
+	for seed := int64(1); seed < 10; seed++ {
+		line = melodyLine(0, 4, st, 9, seed)
+		if !slices.Equal(bar(line, 0), bar(line, 1)) {
+			t.Fatal("A A B B: the first two bars the same")
+		}
+		differ = differ || !slices.Equal(bar(line, 0), bar(line, 2))
+	}
+	if !differ {
+		t.Fatal("A A B B: the B bars differ")
+	}
+}
+
+func TestEchoSwingAndTheTechnoStabs(t *testing.T) {
+	notes := melodyLine(0, 1, melodySet{key: 9, role: 12, density: 0, echo: 1, prog: 1}, 9, 5) // echoes 5/16 apart
+	var ticks []int
+	for _, n := range notes {
+		if !slices.Contains(ticks, int(n.Tick)) {
+			ticks = append(ticks, int(n.Tick))
+		}
+	}
+	slices.Sort(ticks)
+	if len(ticks) < 2 || ticks[1]-ticks[0] != 5*stepTicks {
+		t.Fatalf("echoes 5 16ths apart: %v", ticks)
+	}
+	late := false
+	for _, n := range melodyLine(0, 2, melodySet{key: 9, role: 0, style: 2, density: 2, swing: 4, prog: 1}, 9, 1) { // 60%
+		late = late || int(n.Tick)%(2*stepTicks) == stepTicks+stepTicks/5
+	}
+	if !late {
+		t.Fatal("swing 60%: every second 16th a fifth of a 16th late")
+	}
+	var on []int
+	for _, n := range melodyLine(0, 1, melodySet{key: 9, role: 3, style: 3, density: 2, prog: 1}, 9, 1) {
+		if s := int(n.Tick) / stepTicks; !slices.Contains(on, s) {
+			on = append(on, s)
+		}
+	}
+	if !slices.Equal(on, []int{0, 3, 6, 9, 12, 15}) {
+		t.Fatalf("busy techno stabs every 3 16ths: %v", on)
+	}
+}
+
+func TestTheMelodyDialogSaysWhatEachSettingDoesAndShowsTheRolesMIDIOut(t *testing.T) {
+	a, _ := newApp(t)
+	a.SetPlatform(Platform{Name: "test", MIDI: fakeMIDIOut{fakeMIDI{ch: make(chan midiin.Event)}, &recOut{}}})
+	keys(t, a, kit)
+	keys(t, a, "Y+R A")
+	a.mel = melodySet{}
+	a.live = &liveState{}
+	defer func() { a.live = nil }()
+	a.melodyMenu()
+	at := func(label string) int {
+		for i, it := range a.menu.items {
+			if it.label == label {
+				return i
+			}
+		}
+		t.Fatalf("no %q in the dialog", label)
+		return -1
+	}
+	for _, it := range a.menu.items { // every setting and action has words of its own
+		if !it.header && strings.HasPrefix(melodyHelp(it.label, it.val, a.mel), "Up and down") {
+			t.Errorf("%q has no help", it.label)
+		}
+	}
+	a.menu.cur = at("Form")
+	a.Render()
+	if !strings.Contains(melodyHelp("Form", a.menu.item().val, a.mel), "motif") {
+		t.Fatal("Form says what it does")
+	}
+	// n rolls the dice from anywhere in the dialog, and the hints say so
+	a.menu.cur = at("Form")
+	seed := a.tt.seed
+	if !a.MenuDice() || a.tt.seed != seed+1 {
+		t.Fatal("n rolls the dice")
+	}
+	was := Terminal
+	Terminal = true
+	if hs, _ := a.hints(); !slices.Contains(hs, hint{"n", "roll the dice"}) {
+		t.Fatalf("the hints show n: %v", hs)
+	}
+	if hs, _ := a.hints(); !slices.Contains(hs, hint{"u R", "undo / redo"}) {
+		t.Fatalf("the hints show undo and redo: %v", hs)
+	}
+	Terminal = was
+	// undo and redo go back and forth through the dialog's changes and rolls
+	role, typ, style, seed2 := a.mel.role, a.mel.typ, a.mel.style, a.tt.seed
+	notes := fmt.Sprint(a.trackNotes(a.rowPad()))
+	a.menu.cur = at("Type")
+	a.menuKey(Right)
+	a.menu.cur = at("Style")
+	a.menuKey(Right)
+	a.MenuDice()
+	undo := func(k Key) {
+		a.Dispatch(Event{Key: Y, Down: true})
+		a.Dispatch(Event{Key: k, Down: true})
+		a.Dispatch(Event{Key: k, Down: false})
+		a.Dispatch(Event{Key: Y, Down: false})
+	}
+	undo(L2)
+	if a.tt.seed != seed2 || a.mel.style == style {
+		t.Fatalf("undo takes back the roll only: seed %d, style %d", a.tt.seed, a.mel.style)
+	}
+	undo(L2)
+	undo(L2)
+	if a.mel.role != role || a.mel.style != style || a.menu.items[at("Type")].val != typ || fmt.Sprint(a.trackNotes(a.rowPad())) != notes {
+		t.Fatalf("three undos: the role, the style and the notes as they were (role %d, style %d)", a.mel.role, a.mel.style)
+	}
+	undo(R2)
+	if a.mel.role == role || a.menu.items[at("Type")].val != a.mel.typ || a.menu == nil {
+		t.Fatal("redo brings the role back, the dialog stays open")
+	}
+	// MIDI out is one channel for the dialog: other settings leave it, and every change goes to the synth at once
+	a.menu.cur = at("MIDI out")
+	a.menuKey(Right) // channel 11
+	gen := func() int {
+		if a.synth == nil {
+			return -1
+		}
+		a.synth.mu.Lock()
+		defer a.synth.mu.Unlock()
+		return a.synth.gen
+	}
+	for _, l := range []string{"Type", "Style", "Notes", "Chords", "Length", "Form", "Type"} {
+		g := gen()
+		a.menu.cur = at(l)
+		a.menuKey(Right)
+		if a.mel.out != 1 || a.menu.items[at("MIDI out")].val != 1 || a.synth == nil {
+			t.Fatalf("%s changed the MIDI out: %d, shows %d", l, a.mel.out, a.menu.items[at("MIDI out")].val)
+		}
+		if gen() <= g {
+			t.Fatalf("%s: the new melody is not sent to the synth (melody #%d, was #%d)", l, gen(), g)
+		}
+	}
+	a.synthStop()
+}
+
+func TestTheMelodyChordsOpenTheListOfProgressions(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R A")
+	a.mel = melodySet{}
+	a.melodyMenu()
+	dialog := a.menu
+	row := -1
+	for i, it := range dialog.items {
+		if it.label == "Chords" {
+			row = i
+		}
+	}
+	dialog.cur = row
+	a.menuKey(A)
+	if a.menu == dialog || !strings.HasPrefix(a.menu.title, "chords in ") {
+		t.Fatalf("A on Chords opens the list, got %q", a.menu.title)
+	}
+	sad := slices.IndexFunc(progressions, func(p struct {
+		name, mood, roman string
+		steps             []progStep
+	}) bool {
+		return p.name == "Sad descent"
+	})
+	if sad < 0 {
+		t.Fatal("the MC-101 notes' progressions are in the list")
+	}
+	a.menu.cur = slices.IndexFunc(a.menu.items, func(it menuItem) bool { return it.label == "Sad descent" })
+	a.Render()
+	before := fmt.Sprint(a.trackNotes(a.rowPad()))
+	a.menuKey(A)
+	if a.menu != dialog || a.mel.prog != sad+2 || dialog.items[row].val != sad+2 {
+		t.Fatalf("A takes it back into the dialog: prog %d, want %d", a.mel.prog, sad+2)
+	}
+	if fmt.Sprint(a.trackNotes(a.rowPad())) == before {
+		t.Fatal("the trial is written again with the chords")
+	}
+	a.trialUndo(false)
+	if a.mel.prog == sad+2 {
+		t.Fatal("undo takes the chords back")
+	}
+	// B in the list goes back as it was
+	dialog.cur = row
+	a.menuKey(A)
+	a.menuKey(B)
+	if a.menu != dialog {
+		t.Fatal("B goes back to the dialog")
+	}
+}
+
+func TestTheMelodyTypeShowsItsOwnSettingsAndKeepsThem(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R A")
+	a.mel = melodySet{}
+	a.melodyMenu()
+	m := a.menu
+	at := func(label string) *menuItem {
+		for i := range m.items {
+			if m.items[i].label == label {
+				return &m.items[i]
+			}
+		}
+		t.Fatalf("no %q", label)
+		return nil
+	}
+	setType := func(ty int) {
+		m.cur = slices.IndexFunc(m.items, func(it menuItem) bool { return it.label == "Type" })
+		for a.mel.typ != ty {
+			a.menuKey(Right)
+		}
+	}
+	setType(tBass)
+	if at("Pattern").hidden || !at("Direction").hidden || !at("Echo (dub chord)").hidden || at("THE BASS'S OWN").hidden {
+		t.Fatal("the bass shows its pattern, not the arp's direction nor the dub echo")
+	}
+	m.cur = slices.IndexFunc(m.items, func(it menuItem) bool { return it.label == "Pattern" })
+	for a.mel.bassPat != bpGallop {
+		a.menuKey(Right)
+	}
+	if a.mel.role != 15 || !strings.Contains(a.msg, "gallop") {
+		t.Fatalf("the gallop writes with the pattern engine: role %d (%s)", a.mel.role, a.msg)
+	}
+	setType(tArp)
+	if !at("Pattern").hidden || at("Direction").hidden || at("Span").hidden || at("Gate").hidden || !at("Form").hidden {
+		t.Fatal("the arp shows its direction, span and gate; not the bass pattern nor Form")
+	}
+	for i := 0; i < len(m.items); i++ { // the cursor never stops on what is hidden
+		a.menuKey(Down)
+		if m.item().hidden {
+			t.Fatalf("the cursor is on hidden %q", m.item().label)
+		}
+	}
+	setType(tStabs)
+	m.cur = slices.IndexFunc(m.items, func(it menuItem) bool { return it.label == "Rhythm" })
+	for a.mel.stabRhythm != 3 {
+		a.menuKey(Right)
+	}
+	if at("Echo (dub chord)").hidden || a.mel.role != 12 {
+		t.Fatal("a dub chord shows its echo")
+	}
+	setType(t303)
+	if at("THE 303'S OWN").hidden || at("Steps").hidden || !at("Accents").hidden || !at("Form").hidden {
+		t.Fatal("the 303 shows its own settings, its own accents in place of Accents, no Form")
+	}
+	setType(tBass)
+	if a.mel.bassPat != bpGallop || at("Pattern").val != bpGallop || a.mel.role != 15 {
+		t.Fatal("back to the bass: its gallop is kept")
+	}
+	a.trialUndo(false) // undo: back to the type before (the drone, on the way round), the bass's settings hidden again
+	if a.mel.typ != tDrone || !at("Pattern").hidden || at("Drone note").hidden {
+		t.Fatalf("undo brings the type and its settings back: type %d", a.mel.typ)
+	}
+}
+
+func TestTheMelodyTypesOwnSettingsWriteInKeyAndRange(t *testing.T) {
+	inKey := func(p int) bool { return slices.Contains([]int{9, 11, 0, 2, 4, 5, 7}, ((9+p)%12+12)%12) } // A minor, the pad in A
+	check := func(name string, st melodySet) []lab.Note {
+		t.Helper()
+		st.key, st.role = 9, melEngine(st)
+		line := melodyLine(0, 4, st, 9, 3)
+		if len(line) == 0 {
+			t.Fatalf("%s: no notes", name)
+		}
+		lo, hi := melWindow(st)
+		for _, n := range line {
+			if n.Pitch < lo || n.Pitch > hi || !inKey(n.Pitch) && st.stabRhythm != 2 {
+				t.Fatalf("%s: pitch %d (window %d..%d)", name, n.Pitch, lo, hi)
+			}
+		}
+		return line
+	}
+	steps := func(line []lab.Note, bar int) []int {
+		var out []int
+		for _, n := range line {
+			if s := int(n.Tick) / stepTicks; s/16 == bar && n.Vel >= 60 && !slices.Contains(out, s%16) {
+				out = append(out, s%16)
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+	for p := range melBassPats {
+		for d := 0; d < 3; d++ {
+			for ap := range melApproaches {
+				check(melBassPats[p], melodySet{typ: tBass, bassPat: p, density: d, approach: ap, prog: 2})
+			}
+		}
+	}
+	if got := steps(check("offbeat", melodySet{typ: tBass, bassPat: bpOffbeat, density: 1, prog: 1}), 0); fmt.Sprint(got) != "[2 6 10 14]" {
+		t.Fatalf("offbeat 8ths on the ands: %v", got)
+	}
+	if got := steps(check("gallop", melodySet{typ: tBass, bassPat: bpGallop, density: 1, prog: 1}), 0); fmt.Sprint(got) != "[0 2 3 4 6 7 8 10 11 12 14 15]" {
+		t.Fatalf("the gallop: %v", got)
+	}
+	for dir := range melArpDirs {
+		for span := range melArpSpans {
+			for g := range melArpGates {
+				check(melArpDirs[dir], melodySet{typ: tArp, arpDir: dir, arpSpan: span, arpGate: g, density: 1, style: 2})
+			}
+		}
+	}
+	up := check("arp up", melodySet{typ: tArp, arpDir: adUp, arpSpan: 2, density: 1, style: 2, prog: 1})
+	for i := 1; i < 4; i++ {
+		if up[i].Pitch <= up[i-1].Pitch {
+			t.Fatalf("the arp goes up: %v", up[:4])
+		}
+	}
+	if s := melArpSeq(adConverge, []int{0, 3, 7, 12, 15}, nil, nil, nil); fmt.Sprint(s) != "[0 15 3 12 7]" {
+		t.Fatalf("converge: %v", s)
+	}
+	if s := melArpSeq(adPinky, []int{0, 3, 7, 12}, nil, nil, nil); fmt.Sprint(s) != "[0 12 3 12 7 12]" {
+		t.Fatalf("pinky: %v", s)
+	}
+	if s := melArpSeq(adUpDownPlus, []int{0, 3, 7}, nil, nil, nil); fmt.Sprint(s) != "[0 3 7 7 3 0]" {
+		t.Fatalf("up and down, the ends twice: %v", s)
+	}
+	gated := check("arp 25%", melodySet{typ: tArp, arpGate: 1, density: 1, style: 2, prog: 1})
+	if gated[0].Len != stepTicks/4 {
+		t.Fatalf("a 25%% gate: %d ticks", gated[0].Len)
+	}
+	for h := 1; h < len(melHooks); h++ {
+		for pl := range melPlaces {
+			l := check("pluck", melodySet{typ: tPluck, hook: h, place: pl, density: 1, prog: 1})
+			if got := steps(l, 0); len(got) != h+2 {
+				t.Fatalf("a hook of %d notes: %v", h+2, got)
+			}
+		}
+	}
+	rising := check("pad", melodySet{typ: tPad, padMove: 2, prog: 1, accent: 2})
+	if rising[0].Vel >= rising[len(rising)-1].Vel || len(steps(rising, 0)) != 4 {
+		t.Fatal("a rising pad: four a bar, soft to loud")
+	}
+	for r := range melStabRhythms {
+		check(melStabRhythms[r], melodySet{typ: tStabs, stabRhythm: r, density: 1, prog: 2})
+	}
+	for dn := range melDroneNotes {
+		l := check("drone", melodySet{typ: tDrone, droneNote: dn, density: 1})
+		if want := []int{1, 1, 2}[dn] * 4; len(l) != want {
+			t.Fatalf("drone note %d: %d notes, want %d", dn, len(l), want)
+		}
+	}
+	for ph := range melPhrases {
+		for lp := range melLeaps {
+			check("lead", melodySet{typ: tLead, phrase: ph, leaps: lp, density: 1, prog: 2})
+		}
+	}
+}
+
+func TestThe303IsAPitchRowAndATimeRowEachLoopingOnItsOwn(t *testing.T) {
+	line := func(st melodySet, seed int64) []lab.Note {
+		st.key, st.typ, st.prog, st.accent = 9, t303, 1, 1
+		st.role = melEngine(st)
+		return melodyLine(0, 4, st, 9, seed)
+	}
+	onsets := func(l []lab.Note) map[int]bool {
+		out := map[int]bool{}
+		for _, n := range l {
+			out[int(n.Tick)/stepTicks] = true
+		}
+		return out
+	}
+	for seed := int64(1); seed < 20; seed++ {
+		// 12 steps: the rests and ties come round every 12 16ths, against the bar
+		on := onsets(line(melodySet{s3Steps: 3, density: 0}, seed))
+		for g := 0; g+12 < 64; g++ {
+			if on[g] != on[g+12] {
+				t.Fatalf("seed %d: 12 steps: step %d and %d differ", seed, g, g+12)
+			}
+		}
+		// 5 pitches over 16 busy steps: the next bar starts further along the row
+		l := line(melodySet{s3Pitches: 3, density: 2}, seed)
+		var b0, b1 []int
+		for _, n := range l {
+			switch int(n.Tick) / (16 * stepTicks) {
+			case 0:
+				b0 = append(b0, n.Pitch)
+			case 1:
+				b1 = append(b1, n.Pitch)
+			}
+		}
+		if fmt.Sprint(b0) == fmt.Sprint(b1) {
+			t.Fatalf("seed %d: 5 pitches turn over the bar: %v", seed, b0)
+		}
+		// every step accented: loud, and louder in a row
+		for i, n := range line(melodySet{s3Accs: 4, density: 2}, seed) {
+			if n.Vel < 120 || i > 0 && n.Vel != 127 {
+				t.Fatalf("seed %d: every step accented, climbing: note %d vel %d", seed, i, n.Vel)
+			}
+		}
+		// no slides, busy (no ties): every note shorter than its step; many slides: some held over the next
+		held := 0
+		for _, n := range line(melodySet{s3Slides: 1, density: 2}, seed) {
+			if n.Len >= stepTicks {
+				t.Fatalf("seed %d: no slides, a note of %d ticks", seed, n.Len)
+			}
+		}
+		for _, n := range line(melodySet{s3Slides: 4, s3Pitches: 5, density: 2}, seed) {
+			if n.Len > stepTicks {
+				held++
+			}
+		}
+		if held == 0 {
+			t.Fatalf("seed %d: many slides, none held over", seed)
+		}
+	}
+	off := 0
+	for seed := int64(1); seed < 20; seed++ {
+		for _, n := range line(melodySet{s3OffKey: 1, s3Pitches: 5, density: 2}, seed) {
+			if !slices.Contains([]int{9, 11, 0, 2, 4, 5, 7}, ((9+n.Pitch)%12+12)%12) {
+				off++
+			}
+		}
+	}
+	if off == 0 {
+		t.Fatal("off-key notes asked, none written")
+	}
+}
+
+func TestTheMelodyToolChoosesItsPadInTheDialog(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R A")
+	from := a.rowPad()
+	to := (from + 5) % 16
+	a.melodyMenu()
+	before := len(a.trackNotes(to))
+	i := slices.IndexFunc(a.menu.items, func(it menuItem) bool { return it.label == "Pad" })
+	if i < 0 {
+		t.Fatal("the dialog has a Pad setting")
+	}
+	a.menu.items[i].run(0)
+	if a.picker == nil || a.picker.replace {
+		t.Fatalf("A on Pad opens the pad picker, nothing marked as replaced: %+v", a.picker)
+	}
+	p := a.picker
+	a.picker = nil
+	p.onPick(to)
+	if a.rowPad() != to || a.menu == nil || !strings.Contains(a.menu.title, a.label(to)) {
+		t.Fatalf("the dialog opens again on %s: row %s, menu %v", a.label(to), a.label(a.rowPad()), a.menu)
+	}
+	if len(a.trackNotes(to)) <= before {
+		t.Fatal("the trial is written on the chosen pad")
+	}
+	a.menu.onClose()
+	a.menu = nil
+	if len(a.trackNotes(to)) != before {
+		t.Fatal("closing throws the trial away")
 	}
 }

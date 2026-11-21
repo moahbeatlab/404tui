@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -58,8 +59,16 @@ func (a *App) newSeed() int64 {
 	return a.genRand.Int63n(1 << 30)
 }
 
-// free is the first pattern from home on that holds nothing, -1 when every pattern is used.
+// free is the first pattern from home on that holds nothing: in home's bank first (variations of a pattern stay with it), then in the
+// banks after it; -1 when every pattern is used.
 func (t *patTrial) free() int {
+	bank := (t.home - 1) / 16
+	for i := 0; i < 16; i++ {
+		n := bank*16 + (t.home-1-bank*16+i)%16 + 1
+		if _, ok := t.a.patternDoc(n); !ok {
+			return n
+		}
+	}
 	for i := 0; i < 160; i++ {
 		n := (t.home-1+i)%160 + 1
 		if _, ok := t.a.patternDoc(n); !ok {
@@ -256,7 +265,7 @@ func (a *App) generateOne(st generate.Style, mode string, bars int) {
 	}
 	m := &menu{title: "generate: " + st.Name}
 	m.head("TRIAL: " + generate.ModeLabel(mode))
-	m.items = append(m.items, menuItem{label: "Another roll of the dice", keepOpen: true, run: func(int) { roll(true) }})
+	m.items = append(m.items, menuItem{label: diceLabel, keepOpen: true, run: func(int) { roll(true) }})
 	switch mode {
 	case "fill":
 		m.items = append(m.items, menuItem{label: "Only another fill, the groove stays", keepOpen: true, run: func(int) { roll(false) }})
@@ -264,6 +273,17 @@ func (a *App) generateOne(st generate.Style, mode string, bars int) {
 		m.items = append(m.items, menuItem{label: "Only another drum roll, the groove stays", keepOpen: true, run: func(int) { roll(false) }})
 	}
 	m.items = append(m.items, menuItem{label: "Keep it (B throws it away)", keepOpen: true, run: func(int) { t.keep() }})
+	m.items = append(m.items, menuItem{label: varyKeptLabel, keepOpen: true, run: func(int) {
+		if t.pending {
+			a.say("keep the pattern first (A on Keep it), then make variations of it", true)
+			return
+		}
+		kept := t.home
+		t.close()
+		a.menu = nil
+		a.openPattern(kept)
+		a.variationMenu()
+	}})
 	m.head("WHAT STAYS AT THE NEXT ROLL")
 	for i, name := range generate.Groups {
 		i := i
@@ -282,7 +302,10 @@ type oneState struct {
 
 // ---- a variation of the pattern in front
 
-const variationLabel = "Variation of this pattern (fill, roll, thinner, busier, break)..."
+// varyKeptLabel is the generator's way to the variations of the pattern it kept.
+const varyKeptLabel = "Variations of the kept pattern, in its bank..."
+
+const variationLabel = "Variation of this pattern (slight, fill, roll, thinner, busier, break)..."
 
 // varySource is a pattern read for a variation: its notes as rows of steps, which voice each of its pads plays, and the pad a voice's new
 // notes go to.
@@ -425,6 +448,9 @@ func (a *App) vary(s *varySource, kind string, seed int64) ([]byte, string, erro
 	if err != nil {
 		return nil, "", err
 	}
+	if bytes.Equal(out, src) { // (voices that share a pad: the change can come out as the notes that were there)
+		return nil, "", fmt.Errorf("%s changes nothing here", generate.VaryLabel(kind))
+	}
 	return out, what, nil
 }
 
@@ -441,6 +467,9 @@ func (a *App) variationMenu() {
 	roll := func() {
 		k := generate.Variations[kind]
 		b, what, err := a.vary(s, k, a.newSeed())
+		for try := 0; err != nil && try < 8; try++ { // another roll of the dice may change something
+			b, what, err = a.vary(s, k, a.newSeed())
+		}
 		if err != nil { // this kind does nothing for this pattern: the trial of the kind before does not stay under its name
 			t.drop()
 			a.say(err.Error(), true)
@@ -458,7 +487,7 @@ func (a *App) variationMenu() {
 	m := &menu{title: "variation of " + a.label(s.n-1)}
 	m.head("TRIAL")
 	m.items = append(m.items, menuItem{label: "What", vals: labels, keepOpen: true, onChange: func(v int) { kind = v; roll() }, run: func(int) { roll() }})
-	m.items = append(m.items, menuItem{label: "Another roll of the dice", keepOpen: true, run: func(int) { roll() }})
+	m.items = append(m.items, menuItem{label: diceLabel, keepOpen: true, run: func(int) { roll() }})
 	m.items = append(m.items, menuItem{label: "Keep it (B throws it away)", keepOpen: true, run: func(int) { t.keep() }})
 	m.footH = 3
 	m.foot = func(g Gfx, x, y, wc int) {

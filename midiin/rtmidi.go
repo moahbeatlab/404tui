@@ -92,6 +92,23 @@ func (o *rtOut) Close() {
 }
 
 // OpenOut opens the first output with part in its name.
+func (rtSource) OutPorts() ([]string, error) {
+	drv, err := rtmididrv.New()
+	if err != nil {
+		return nil, err
+	}
+	defer drv.Close()
+	outs, err := drv.Outs()
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, o := range outs {
+		names = append(names, o.String())
+	}
+	return names, nil
+}
+
 func (rtSource) OpenOut(part string) (Out, string, error) {
 	drv, err := rtmididrv.New()
 	if err != nil {

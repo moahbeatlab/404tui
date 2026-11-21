@@ -235,8 +235,8 @@ func TestThePanelNamesTheKeysOfTheKeyboard(t *testing.T) {
 	press(m, "y")
 	press(m, "l") // SEQ
 	txt = m.text()
-	if !strings.Contains(txt, "tools") || !strings.Contains(txt, "y x") || strings.Contains(txt, "Sel+B") {
-		t.Errorf("SEQ names t (tools) and y x:\n%s", txt)
+	if !strings.Contains(txt, "tools") || !strings.Contains(txt, "add track") || !strings.Contains(txt, "HJKL") || strings.Contains(txt, "Sel+B") {
+		t.Errorf("SEQ names t (tools), . (add track) and HJKL:\n%s", txt)
 	}
 	core.Terminal = false
 	if txt := screenText(m.app.RenderCells()); !strings.Contains(txt, "L1 R1") {

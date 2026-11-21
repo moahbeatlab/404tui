@@ -13,10 +13,16 @@ import (
 // sound (the pitch of a tone that holds), else C; the tool shows it and it can be changed.
 
 // noteToken is a note in a name: a letter, a sharp or flat, then perhaps minor, major or an octave (G, F#, Bb, Am, C3, Ebmin).
-var noteToken = regexp.MustCompile(`^([A-Ga-g])([#b]?)(m|min|maj|M)?(-?[0-9])?$`)
+var noteToken = regexp.MustCompile(`^([A-Ga-g])([#bs]?)(m|min|maj|M|Min|Maj|minor|major)?(-?[0-9])?$`) // Gs: G sharp, as kits write it
 
 // noteFromName is the pitch class (0 C .. 11 B) named in a sample's name, false when it names none.
 func noteFromName(name string) (int, bool) {
+	pc, _, ok := keyFromName(name)
+	return pc, ok
+}
+
+// keyFromName is noteFromName with the mode the name says: 0 minor (Am, Cmin), 1 major (Cmaj), -1 none.
+func keyFromName(name string) (int, int, bool) {
 	toks := strings.FieldsFunc(name, func(r rune) bool { return r == ' ' || r == '_' || r == '-' || r == '.' || r == '(' || r == ')' })
 	for i := len(toks) - 1; i >= 0; i-- { // the note is mostly at the end (bass_G1, Pad 3 Am)
 		t := toks[i]
@@ -30,16 +36,26 @@ func noteFromName(name string) (int, bool) {
 		if m[1] == "b" && m[2] == "" && m[3] == "" && m[4] == "" {
 			continue
 		}
+		if m[2] == "s" && (m[1] == strings.ToLower(m[1]) || m[3] != "" || m[4] != "") { // "as", "es" are words; Gs is G sharp
+			continue
+		}
 		pc := map[byte]int{'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}[strings.ToUpper(m[1])[0]]
 		switch m[2] {
-		case "#":
+		case "#", "s":
 			pc++
 		case "b":
 			pc--
 		}
-		return (pc + 12) % 12, true
+		mode := -1
+		switch m[3] {
+		case "m", "min", "Min", "minor":
+			mode = 0
+		case "maj", "M", "Maj", "major":
+			mode = 1
+		}
+		return (pc + 12) % 12, mode, true
 	}
-	return 0, false
+	return 0, -1, false
 }
 
 // noteFromSound is the pitch class of a sample that holds a tone, found by autocorrelation over a part of it after the attack; false
