@@ -663,6 +663,12 @@ func (a *App) drawSlice(g Gfx) {
 			g.Text(cx, 1+wr, "╵"+fmt.Sprint(k+1), cDim, false)
 		}
 	}
+	if ph, ok := a.playhead(); ok && ph >= from && ph < to { // what plays: a green line
+		g.Mark(2, 2, wc, wr, frac(ph), cGood)
+		if Terminal {
+			g.Text(2+min(int(frac(ph)*float64(wc)), wc-1), 1+wr, "▲", cGood, true)
+		}
+	}
 	g.Mark(2, 2, wc, wr, min(max(frac(a.at), 0), 1), cWhite) // the cursor: a white line, with a head on a computer
 	if Terminal {
 		g.Text(2+min(max(int(frac(a.at)*float64(wc)), 0), wc-1), 2, "▼", cWhite, true)
@@ -742,8 +748,15 @@ func (a *App) drawSlice(g Gfx) {
 }
 
 // sliceWaveRows is the rows of the big waveform: the body less the title, the overview (2 rows) and the numbers and
-// the order under it (4 rows).
-func (a *App) sliceWaveRows() int { return max(Rows-3-1-2-4, 6) &^ 1 }
+// the order under it (4 rows). On a computer it takes at most two fifths of the screen (at least 12 rows), so that a tall
+// terminal is not all shape.
+func (a *App) sliceWaveRows() int {
+	r := max(Rows-3-1-2-4, 6)
+	if Terminal {
+		r = min(r, max(Rows*2/5, 12))
+	}
+	return r &^ 1
+}
 
 // ---- SAVE
 

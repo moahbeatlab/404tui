@@ -469,6 +469,7 @@ func (a *App) loopSlice() bool {
 		return false
 	}
 	a.soundUntil = time.Now().Add(24 * time.Hour) // X stops it
+	a.slPlay = slicePlay{slice: i, frames: s.Frames(), at: time.Now(), loop: true}
 	a.say(fmt.Sprintf("slice %d in a loop (%s): x stops it", i+1, a.barsText(s.Frames())), false)
 	return true
 }

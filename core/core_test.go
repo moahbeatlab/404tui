@@ -5203,3 +5203,36 @@ func TestOnlyTheMarkedSlicesGoToPads(t *testing.T) {
 		t.Fatal("M again: none")
 	}
 }
+
+func TestAPlayingSliceShowsWhereItIs(t *testing.T) {
+	a, _ := newApp(t)
+	const bar = 92160
+	s := formats.Sample{Channels: 1, Samples: make([]int16, 8*bar)}
+	mb, _ := a.lab.Decode(s.WAV(), ".wav")
+	var m lab.Meta
+	json.Unmarshal(mb, &m)
+	a.assignPad(0, m.ID, "song_125")
+	a.refresh()
+	a.cur, a.bank = 0, 0
+	a.go_(Slice)
+	a.bars.down = 0
+	a.at = 4 * bar
+	keys(t, a, "A")
+	if _, ok := a.playhead(); ok {
+		t.Fatal("nothing plays: no playhead")
+	}
+	a.at = 5 * bar
+	a.playSlice()
+	if a.Audio == nil {
+		t.Skip("no audio in the test")
+	}
+	a.slPlay.at = time.Now().Add(-time.Second) // a second into the slice
+	ph, ok := a.playhead()
+	if !ok || ph < 4*bar+47000 || ph > 4*bar+49000 {
+		t.Fatalf("a second into slice 2 the playhead is at %d (%v), not about %d", ph, ok, 4*bar+48000)
+	}
+	a.stop()
+	if _, ok := a.playhead(); ok {
+		t.Fatal("stopped: no playhead")
+	}
+}

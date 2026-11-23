@@ -185,6 +185,53 @@ func (a *App) playSlice() {
 		return
 	}
 	a.play(s)
+	a.slPlay = slicePlay{slice: i, frames: s.Frames(), at: time.Now()}
+}
+
+// slicePlay is the slice that x played: for the playhead.
+type slicePlay struct {
+	slice, frames int
+	at            time.Time
+	loop          bool // played in a loop, until X
+}
+
+// playhead is where in the sample what plays now is (a slice, or the order's step), false when nothing of the slicer plays.
+func (a *App) playhead() (int, bool) {
+	if a.sl == nil || a.tap {
+		return 0, false
+	}
+	slice, off, of := -1, 0, 0
+	if a.orderOn || time.Now().Before(a.soundUntil) && !a.playT0.IsZero() && a.slPlay.at.Before(a.playT0) {
+		i := a.playingStep()
+		if i < 0 || a.placed[i].Rest {
+			return 0, false
+		}
+		p := a.placed[i]
+		frame := int(time.Since(a.playT0).Seconds() * formats.SampleRate)
+		if a.orderOn && a.orderFrames > 0 {
+			frame %= a.orderFrames
+		}
+		slice, off, of = p.Slice, frame-p.At, p.Frames
+	} else if !a.slPlay.at.IsZero() && time.Now().Before(a.soundUntil) {
+		slice, of = a.slPlay.slice, a.slPlay.frames
+		off = int(time.Since(a.slPlay.at).Seconds() * formats.SampleRate)
+		if a.slPlay.loop {
+			off %= of
+		}
+	}
+	if slice < 0 || slice >= len(a.sl.Slices) || of <= 0 {
+		return 0, false
+	}
+	sg := a.sl.Slices[slice]
+	n := sg.End - sg.Start
+	d := min(int(float64(off)/float64(of)*float64(n)), n-1) // the played length (pitch, rolls) laid over the slice
+	if of <= n {
+		d = min(off, n-1)
+	}
+	if sg.Reverse {
+		return sg.End - 1 - d, true
+	}
+	return sg.Start + d, true
 }
 
 func (a *App) autoSensitivity() float64 {
