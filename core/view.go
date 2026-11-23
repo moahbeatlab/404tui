@@ -624,6 +624,9 @@ func (a *App) drawSlice(g Gfx) {
 			mx += len(tok) + 1
 			room -= len(tok) + 1
 		}
+		if a.slMarks[sg.Start] {
+			put("●", cGood)
+		}
 		if sg.Reverse {
 			put("R", cWhite)
 		}

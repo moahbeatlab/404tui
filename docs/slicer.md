@@ -32,12 +32,13 @@ Cut a sample into slices and play them in an order. It opens on the sample of th
 
 ![The slice tools](img/pc-slice-tools.png)
 
+- **Choose the slices that go.** `m` marks the slice under the cursor (a green dot after its number), `M` marks every slice or none. With slices marked, *Slices to pads* (and `y x`) puts only those on pads, in their order; with none marked, all of them. The marks are kept with the slicing.
 - **Keep what you made.** `y x` sends the slices to pads: they land on consecutive pads from the one you choose, and the pad tiles show their lengths. With a pattern under them, SEQ then has the pattern that plays the slices.
 - **Undo.** `u` takes back the last change (a removed slice, a cut in equal parts, a mangle...), `R` redoes it, and it goes on back.
 
 ## Keys
 
-**On a computer:** `Space` play from the cursor (again: stop) · `v` the shape of the sound on or off · `[ ]` a bar back or on (while it plays, it plays on from there; without bars a quarter of the view) · `a` cut · `b` join · `x` play slice (whole bars: in a loop) · `s a` listen from the cursor (`, .` skip 10 s) · `s k` bar 1 here · `s j` a later bar starts here (the tempo from the two) · `w W` the slice longer or shorter in bars · `.` play order · `,` grid step · `h l` move · `j k` marker · `t` tools · `n` new order · `+ -` zoom · `Enter` settings · `y a` auto cut · `y x` to pads · `y b` settings · `u` undo, `R` redo.
+**On a computer:** `Space` play from the cursor (again: stop) · `m M` mark the slice / all or none (only the marked go to pads) · `v` the shape of the sound on or off · `[ ]` a bar back or on (while it plays, it plays on from there; without bars a quarter of the view) · `a` cut · `b` join · `x` play slice (whole bars: in a loop) · `s a` listen from the cursor (`, .` skip 10 s) · `s k` bar 1 here · `s j` a later bar starts here (the tempo from the two) · `w W` the slice longer or shorter in bars · `.` play order · `,` grid step · `h l` move · `j k` marker · `t` tools · `n` new order · `+ -` zoom · `Enter` settings · `y a` auto cut · `y x` to pads · `y b` settings · `u` undo, `R` redo.
 
 **On the handheld:** `A` cut · `B` join · `X` play slice · `Sel+A` listen from the cursor (`L2 R2` skip 10 s) · `Sel+Up` bar 1 here · `R2` play order · `L2` grid step · D-pad move and marker · `Y+A` auto cut · `Y+X` to pads · `Y+B` settings · `Sel+B` tools · `Y+^v` zoom.
 

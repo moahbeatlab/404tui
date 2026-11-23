@@ -634,6 +634,7 @@ func (a *App) sliceFile() {
 		a.spath = p
 	}
 	a.sl = formats.NewSlicing(s.Frames(), 1)
+	a.slMarks = nil
 	a.at, a.zoom = 0, 0
 	a.slUndo, a.slRedo = nil, nil
 	a.resetBars()

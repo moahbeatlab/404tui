@@ -327,6 +327,8 @@ func (m *Model) key(msg tea.KeyMsg) {
 			switch {
 			case m.app.ScreenName() == "SEQ" && s == "m":
 				m.app.SeqTrack(1)
+			case m.app.ScreenName() == "SLICE":
+				m.app.MarkSlice(s == "M")
 			case m.app.ScreenName() == "FILES" && s == "m":
 				m.app.MarkFile()
 			case m.app.ScreenName() == "FILES":

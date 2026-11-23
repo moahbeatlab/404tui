@@ -5145,3 +5145,44 @@ func TestAPadsSlicingIsKeptByItsSound(t *testing.T) {
 		t.Fatal("the pad's slicing comes back")
 	}
 }
+
+func TestOnlyTheMarkedSlicesGoToPads(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R Y+R Y+R Y+A") // auto cut
+	n := len(a.sl.Slices)
+	if n < 3 {
+		t.Skipf("%d slices", n)
+	}
+	a.at = a.sl.Slices[1].Start
+	a.MarkSlice(false)
+	a.at = a.sl.Slices[n-1].Start
+	a.MarkSlice(false)
+	if a.slicesMarked() != 2 || !strings.Contains(a.msg, "2 of") {
+		t.Fatalf("m marks: %d (%q)", a.slicesMarked(), a.msg)
+	}
+	before := 0
+	for _, p := range a.info.Pads {
+		if p.File {
+			before++
+		}
+	}
+	a.slicesToPads(false)
+	after := 0
+	for _, p := range a.info.Pads {
+		if p.File {
+			after++
+		}
+	}
+	if after-before != 2 {
+		t.Fatalf("only the 2 marked slices go to pads: %d", after-before)
+	}
+	a.MarkSlice(true)
+	if a.slicesMarked() != n {
+		t.Fatal("M marks every slice")
+	}
+	a.MarkSlice(true)
+	if a.slicesMarked() != 0 {
+		t.Fatal("M again: none")
+	}
+}

@@ -69,7 +69,7 @@ func (a *App) hints() (plain, shift []hint) {
 		if a.set.SliceNoWave {
 			wave = "shape: off"
 		}
-		plain = append(plain, hint{"v", wave})
+		plain = append(plain, hint{"v", wave}, hint{"m M", "mark slice / all"})
 	}
 	if Terminal && a.scr == Slice && !a.tap && !a.lane && !a.Modal() && a.barFrames() > 0 { // a track with bars: w W the slice's length
 		plain = append(append([]hint{}, plain...), hint{"w W", "slice bars"})

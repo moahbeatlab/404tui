@@ -690,7 +690,7 @@ The file browser: this computer, the unit's card and its storage. `t` chooses wh
 
 The slicer: cut a sample into slices and play them in an order. `Enter` opens the settings, `t` the tools.
 
-**Keys on a computer:** `Space` play here · `a` cut · `b` join · `x` play slice · `.` play order · `,` grid step · `hl` move · `jk` marker · `t` tools · `v` shape: on · `n` new order · `+ -` zoom in / out · `s a` listen here · `s k` bar 1 here · `s j` bar line here · `y a` auto cut · `y x` to pads · `y b` settings · `s x` record
+**Keys on a computer:** `Space` play here · `a` cut · `b` join · `x` play slice · `.` play order · `,` grid step · `hl` move · `jk` marker · `t` tools · `v` shape: on · `m M` mark slice / all · `n` new order · `+ -` zoom in / out · `s a` listen here · `s k` bar 1 here · `s j` bar line here · `y a` auto cut · `y x` to pads · `y b` settings · `s x` record
 
 **Keys on the handheld:** `A` cut · `B` join · `X` play slice · `R2` play order · `L2` grid step · `<>` move · `^v` marker · `Y+A` auto cut · `Y+X` to pads · `Y+B` settings · `Sel+B` tools · `Y+^v` zoom · `Sel+X` record
 

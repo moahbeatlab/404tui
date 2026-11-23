@@ -239,6 +239,7 @@ type App struct {
 	slKept            string           // the slicing as it was last written
 	slChanged         time.Time        // when it changed since
 	slRestored        string           // what was said of a slicing that came back
+	slMarks           map[int]bool     // the marked slices (by their start): only they go to pads
 	bg                *bgDecode        // the long file decoded in the background on FILES
 	bgFailed          map[string]error // the long files that did not decode
 	tapStart          int              // the frame the tap (listening from the cursor) started at

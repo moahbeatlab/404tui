@@ -33,6 +33,7 @@ func (a *App) openSlicer() {
 	}
 	a.sid, a.spad, a.sfile, a.spath = id, n, "", ""
 	a.sl = formats.NewSlicing(s.Frames(), 1)
+	a.slMarks = nil
 	a.resetBars()
 	a.slRestored = ""
 	if a.restoreSlicing() {
@@ -258,15 +259,16 @@ func (a *App) autoSlice() {
 
 // slicesToPads puts each slice on its own pad, starting after the pad that was cut.
 func (a *App) slicesToPads(shuffled bool) {
-	if len(a.sl.Slices) < 2 {
+	if len(a.sl.Slices) < 2 && a.slicesMarked() == 0 {
 		a.say("cut it first (A) or Y+A for auto", true)
 		return
 	}
 	// on pads that are free: the first run of empty pads after the one that was cut (then from the start), never on
 	// top of a sample the project already has
-	first := a.freeRun(len(a.sl.Slices), a.spad+1)
+	n := len(a.padOrder())
+	first := a.freeRun(n, a.spad+1)
 	if first < 0 {
-		a.say(fmt.Sprintf("no room: %d empty pads in a row are needed (clear some with Y+B)", len(a.sl.Slices)), true)
+		a.say(fmt.Sprintf("no room: %d empty pads in a row are needed (clear some with Y+B)", n), true)
 		return
 	}
 	a.slicesToPadsFrom(first, shuffled)
@@ -274,8 +276,8 @@ func (a *App) slicesToPads(shuffled bool) {
 
 // slicesToPadsPick asks where the slices go: the first pad of a run of empty ones.
 func (a *App) slicesToPadsPick(shuffled bool) {
-	n := len(a.sl.Slices)
-	if n < 2 {
+	n := len(a.padOrder())
+	if n < 2 && a.slicesMarked() == 0 {
 		a.say("cut it first (A) or Y+A for auto", true)
 		return
 	}
@@ -342,7 +344,63 @@ func (a *App) padOrder() []int {
 			out = append(out, i)
 		}
 	}
+	if a.slicesMarked() > 0 { // marked slices: only they go
+		var m []int
+		for _, i := range out {
+			if a.slMarks[a.sl.Slices[i].Start] {
+				m = append(m, i)
+			}
+		}
+		out = m
+	}
 	return out
+}
+
+// slicesMarked is how many slices are marked (marks of slices that are gone do not count).
+func (a *App) slicesMarked() int {
+	n := 0
+	for _, s := range a.sl.Slices {
+		if a.slMarks[s.Start] {
+			n++
+		}
+	}
+	return n
+}
+
+// MarkSlice is m of a keyboard in the slicer: the slice under the cursor marked or not; all is M: every slice, or none.
+func (a *App) MarkSlice(all bool) {
+	if a.scr != Slice || a.sl == nil || a.Modal() || a.prompt != nil || a.lane {
+		return
+	}
+	a.CancelShift()
+	if a.slMarks == nil {
+		a.slMarks = map[int]bool{}
+	}
+	if all {
+		on := a.slicesMarked() < len(a.sl.Slices)
+		a.slMarks = map[int]bool{}
+		if on {
+			for _, s := range a.sl.Slices {
+				a.slMarks[s.Start] = true
+			}
+		}
+	} else {
+		i := a.sliceAt(a.at)
+		if i < 0 {
+			a.say("the cursor is in no slice", true)
+			return
+		}
+		st := a.sl.Slices[i].Start
+		a.slMarks[st] = !a.slMarks[st]
+		if !a.slMarks[st] {
+			delete(a.slMarks, st)
+		}
+	}
+	if n := a.slicesMarked(); n > 0 {
+		a.say(fmt.Sprintf("%d of %d slices marked: only they go to pads (m, M none)", n, len(a.sl.Slices)), false)
+	} else {
+		a.say("no slice marked: all of them go to pads", false)
+	}
 }
 
 // freeRun is the first pad at or after from (wrapping round to the start) that begins n empty pads in a row, or -1.

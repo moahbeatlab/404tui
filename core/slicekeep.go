@@ -7,6 +7,7 @@ import (
 	"hash/fnv"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/moahbeatlab/404tui/app"
@@ -23,6 +24,7 @@ type keptSlicing struct {
 	Slicing *formats.Slicing  `json:"slicing"`
 	Bars    keptBars          `json:"bars"`
 	Saved   time.Time         `json:"saved"`
+	Marks   []int             `json:"marks,omitempty"` // the starts of the marked slices
 	Extra   map[string]string `json:"extra,omitempty"`
 }
 
@@ -77,7 +79,8 @@ func (a *App) slicingState() string {
 	b, _ := json.Marshal(struct {
 		S *formats.Slicing
 		B sliceBars
-	}{a.sl, a.bars})
+		M map[int]bool
+	}{a.sl, a.bars, a.slMarks})
 	return fmt.Sprintf("%s%+v", b, a.bars)
 }
 
@@ -113,6 +116,12 @@ func (a *App) keepSlicing() {
 	}
 	k := keptSlicing{Name: a.sliceName(), Slicing: a.sl, Saved: time.Now(), Bars: keptBars{BPM: a.bars.bpm, FromTag: a.bars.fromTag,
 		Conf: a.bars.conf, Down: a.bars.down, DownSet: a.bars.downSet, NoSnap: a.bars.noSnap}}
+	for st, on := range a.slMarks {
+		if on {
+			k.Marks = append(k.Marks, st)
+		}
+	}
+	slices.Sort(k.Marks)
 	b, err := json.MarshalIndent(k, "", " ")
 	if err != nil {
 		return
@@ -141,6 +150,10 @@ func (a *App) restoreSlicing() bool {
 	}
 	a.sl = k.Slicing
 	a.bars = sliceBars{bpm: k.Bars.BPM, fromTag: k.Bars.FromTag, conf: k.Bars.Conf, down: k.Bars.Down, downSet: k.Bars.DownSet, noSnap: k.Bars.NoSnap}
+	a.slMarks = map[int]bool{}
+	for _, st := range k.Marks {
+		a.slMarks[st] = true
+	}
 	a.slKept = a.slicingState()
 	a.slRestored = fmt.Sprintf("the slicing of %s is back: %d slices", k.Saved.Format("Jan 2 15:04"), len(k.Slicing.Slices))
 	return true
@@ -155,6 +168,7 @@ func (a *App) startAgain() {
 		os.Remove(p)
 	}
 	a.sl = formats.NewSlicing(a.sl.Frames, 1)
+	a.slMarks = nil
 	a.at = 0
 	a.resetBars()
 	a.slKept = a.slicingState()
