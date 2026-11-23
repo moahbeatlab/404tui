@@ -152,10 +152,13 @@ func DetectTempo(s Sample) Tempo {
 			}
 		}
 	}
-	if r := math.Round(bestBPM); math.Abs(bestBPM-r) < 0.06 { // most tracks are at a whole tempo
-		bestBPM = r
-		bestScore, bestPh = gridScore(on, 60*fps/bestBPM)
-	} else {
+	// most tracks are at a whole tempo: the nearest whole one when it fits nearly as well (over a long track 0.1 BPM is a beat)
+	if r := math.Round(bestBPM); math.Abs(bestBPM-r) <= 0.25 {
+		if sc, ph := gridScore(on, 60*fps/r); sc >= 0.97*bestScore {
+			bestBPM, bestScore, bestPh = r, sc, ph
+		}
+	}
+	if bestBPM != math.Round(bestBPM) {
 		bestBPM = math.Round(bestBPM*10) / 10
 	}
 	var avg float64

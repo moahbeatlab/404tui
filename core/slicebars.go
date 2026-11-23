@@ -197,7 +197,7 @@ func (a *App) setDownbeat() {
 	}
 	a.at = at
 	a.bars.down, a.bars.downSet = at, true
-	a.say(fmt.Sprintf("bar 1 starts at %.3f s: the cuts snap to the bars of %s BPM", float64(a.at)/formats.SampleRate, bpmText(a.bars.bpm)), false)
+	a.say(fmt.Sprintf("bar 1 at %.3f s: every bar moved with it, %s BPM stays (if later bars are off: the kick of a far bar, %s)", float64(a.at)/formats.SampleRate, bpmText(a.bars.bpm), tk("Sel+v")), false)
 }
 
 // fitBars makes the cursor a bar line too: bar 1 stays, the tempo becomes the one that puts a bar line here (the bar nearest the
