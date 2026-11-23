@@ -1691,3 +1691,42 @@ func TestSlicesShowTheirMarkers(t *testing.T) {
 		t.Fatal("a plain slice has none")
 	}
 }
+
+func TestProjectsAreNamed(t *testing.T) {
+	a, _ := newApp(t)
+	parent := t.TempDir()
+	a.set.OfflineDir = parent
+	a.nameEditorProject()
+	a.prompt.onDone("Headphone Silence live")
+	if a.info.Name != "Headphone Silence live" {
+		t.Fatalf("the editor's project is named: %q", a.info.Name)
+	}
+	a.slot = 3
+	if _, err := a.exportTo(parent); err != nil {
+		t.Fatal(err)
+	}
+	dir, ok := a.offlineProject(2)
+	if !ok || offlineName(dir) != "Headphone Silence live" {
+		t.Fatalf("it is written with its name: %v %q", ok, offlineName(dir))
+	}
+	before, _ := os.ReadFile(filepath.Join(dir, "PADCONF.BIN"))
+	a.nameOffline(2)
+	a.prompt.onDone("DJ set 2026 ✓ with a name far longer than the unit shows")
+	after, _ := os.ReadFile(filepath.Join(dir, "PADCONF.BIN"))
+	if got := offlineName(dir); got != "DJ set 2026  with a name far l" && got != "DJ set 2026  with a name far lo" {
+		t.Fatalf("the project in the folder is renamed (printable, 31 characters): %q", got)
+	}
+	if len(after) != len(before) {
+		t.Fatal("only the name changes")
+	}
+	for i := range before {
+		if (i < 0x80 || i >= 0xA0) && before[i] != after[i] {
+			t.Fatalf("byte %#x changed outside the name", i)
+		}
+	}
+	a.unitCur = 2
+	a.offlineMenu()
+	if !strings.Contains(a.menu.title, "DJ set 2026") {
+		t.Fatalf("the menu says its name: %q", a.menu.title)
+	}
+}

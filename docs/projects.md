@@ -39,7 +39,9 @@ Backups and exports open a **folder chooser** (`l` opens a folder, `h` goes up, 
 ## What you do with the offline projects (`a`)
 
 Open a project from a folder, write the project of the editor into the folder (a slot of the 16), or export it into any folder. `o` opens a project from any folder: the folder chooser marks project folders; a project folder is opened in the editor, and a folder that holds
-`PROJECT_nn` folders becomes the offline folder. The project open last offline is remembered. A project is a folder with a `PADCONF.BIN` (and its patterns and samples); from the command line: `sp404 -project <folder>`.
+`PROJECT_nn` folders becomes the offline folder. The project open last offline is remembered.
+
+**Names.** A project has a name inside it (up to 31 characters, what the unit shows on its project list); the tiles show it. *Rename project...* (on a project that is there) writes a new name into its `PADCONF.BIN` and changes nothing else; *Move it to another number (1..16)...* gives it another PROJECT_nn folder. *Name the project of the editor...* (on any tile, an empty one too) names the project in the editor: it is written with that name by *Write the project of the editor here*, an export or a send to the unit. Online, the unit's menu renames a project on the unit. A project is a folder with a `PADCONF.BIN` (and its patterns and samples); from the command line: `sp404 -project <folder>`.
 
 ## Keys
 

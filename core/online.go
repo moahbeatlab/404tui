@@ -2,10 +2,13 @@ package core
 
 import (
 	"fmt"
+	"github.com/moahbeatlab/404tui/formats"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ONLINE and OFFLINE, on a computer. Online the PROJECTS screen lists the 16 projects of the unit that is plugged in; offline it lists
@@ -75,9 +78,14 @@ func (a *App) offlineMenu() {
 	}
 	add := func(l string, run func(int)) { m.items = append(m.items, menuItem{label: l, run: run}) }
 	if ok {
+		if nm := offlineName(dir); nm != "" {
+			m.title = fmt.Sprintf("project %d  %s", n+1, nm)
+		}
 		add("Open it in the editor", func(int) { a.openOffline(n) })
-		add("Rename project...", func(int) { a.renameOffline(n) })
+		add("Rename project...", func(int) { a.nameOffline(n) })
+		add("Move it to another number (1..16)...", func(int) { a.renameOffline(n) })
 	}
+	add("Name the project of the editor...", func(int) { a.nameEditorProject() })
 	add("Open a project from a folder...", func(int) { a.openProjectFolder() })
 	add("Write the project of the editor here", func(int) {
 		a.slot = n + 1
@@ -94,6 +102,108 @@ func (a *App) offlineMenu() {
 	add("Export the project of the editor into a folder...", func(int) { a.exportProjectAsk() })
 	add("Online or offline, and the offline folder...", func(int) { a.modeMenu() })
 	a.menu = m
+}
+
+// offlineName is the name a project of the offline folder has inside it (what the unit shows), "" when it has none.
+// The screen asks for them every frame: they are kept by the file's time and size.
+func offlineName(dir string) string {
+	p := filepath.Join(dir, "PADCONF.BIN")
+	st, err := os.Stat(p)
+	if err != nil {
+		return ""
+	}
+	if c, ok := offlineNames[p]; ok && c.mod.Equal(st.ModTime()) && c.size == st.Size() {
+		return c.name
+	}
+	name := ""
+	if b, err := os.ReadFile(p); err == nil {
+		if pc, err := formats.ParsePadconf(b); err == nil && !defaultName.MatchString(pc.Name) { // PROJECT_nn is no name of its own
+			name = pc.Name
+		}
+	}
+	if len(offlineNames) > 64 {
+		offlineNames = map[string]offlineNameAt{}
+	}
+	offlineNames[p] = offlineNameAt{name, st.ModTime(), st.Size()}
+	return name
+}
+
+type offlineNameAt struct {
+	name string
+	mod  time.Time
+	size int64
+}
+
+var offlineNames = map[string]offlineNameAt{}
+
+// defaultName is the name a project has when it was never named: its number, which the folder says better.
+var defaultName = regexp.MustCompile(`^(?i)PROJECT[ _]?\d{1,2}$`)
+
+// nameOffline gives project n (0..15) of the offline folder a name (what the unit shows on its project list), written into its
+// PADCONF.BIN. When the editor has that project open, its name follows.
+func (a *App) nameOffline(n int) {
+	dir, ok := a.offlineProject(n)
+	if !ok {
+		return
+	}
+	a.askText(fmt.Sprintf("name of project %d (up to 31 characters)", n+1), "", offlineName(dir), func(s string) {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return
+		}
+		p := filepath.Join(dir, "PADCONF.BIN")
+		b, err := os.ReadFile(p)
+		if err == nil {
+			if _, err = formats.ParsePadconf(b); err == nil && b[8] != 3 {
+				err = fmt.Errorf("project %d is from an older firmware (its PADCONF.BIN has no name): open it and write it again first", n+1)
+			}
+		}
+		if err == nil { // only the 32 bytes of the name change: the rest of the file stays as the unit wrote it
+			name := b[0x80 : 0x80+32]
+			clear(name)
+			copy(name, cleanName(s, 31))
+		}
+		if err == nil {
+			err = os.WriteFile(p, b, 0o644)
+		}
+		if err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		if a.slot == n+1 && a.set.LastOffline == n+1 { // the editor has it open
+			a.lab.SetName(s)
+			a.refresh()
+		}
+		a.say(fmt.Sprintf("project %d is called %s", n+1, offlineName(dir)), false)
+	})
+}
+
+// cleanName keeps the printable ASCII of s (what the unit can show), cut to n characters.
+func cleanName(s string, n int) string {
+	var out []byte
+	for _, c := range []byte(s) {
+		if c >= 0x20 && c <= 0x7e && len(out) < n {
+			out = append(out, c)
+		}
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// nameEditorProject names the project in the editor: the name it is written with (to a card folder or the unit).
+func (a *App) nameEditorProject() {
+	a.askText("name of the project in the editor (up to 31 characters)", "", a.info.Name, func(s string) {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return
+		}
+		if err := a.lab.SetName(s); err != nil {
+			a.say(err.Error(), true)
+			return
+		}
+		a.saved = false
+		a.refresh()
+		a.say(fmt.Sprintf("the project is called %s: it is written with this name (Write ... here, Send)", a.info.Name), false)
+	})
 }
 
 // renameOffline gives project n (0..15) another number: the unit knows its projects only as PROJECT_01..PROJECT_16, so a rename is a

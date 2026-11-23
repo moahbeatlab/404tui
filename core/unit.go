@@ -270,7 +270,11 @@ func (a *App) unitContext(g Gfx, x, y, w int) {
 		g.Text(x, y+1, fit(short2(a.offlineDir(), w), w), cDim, false)
 		g.Text(x, y+3, fmt.Sprintf("project %d", a.unitCur+1), cText, true)
 		if dir, ok := a.offlineProject(a.unitCur); ok {
-			g.Text(x, y+4, fit(filepath.Base(dir), w), cText, false)
+			nm := filepath.Base(dir)
+			if o := offlineName(dir); o != "" && o != nm {
+				nm = o + "  (" + nm + ")"
+			}
+			g.Text(x, y+4, fit(nm, w), cText, false)
 			g.Text(x, y+5, "A  open it in the editor", cDim, false)
 		} else {
 			g.Text(x, y+4, "empty", cDim, false)
@@ -347,6 +351,9 @@ func (a *App) drawProjects(g Gfx) {
 		for i := range names {
 			if dir, ok := a.offlineProject(i); ok {
 				names[i] = filepath.Base(dir)
+				if nm := offlineName(dir); nm != "" && nm != names[i] { // the name the unit shows
+					names[i] = nm
+				}
 			}
 		}
 	}

@@ -611,6 +611,7 @@ On a computer: the 16 projects of the unit when one is plugged in (online), else
 
 ### Project menu of the offline folder (`a`, offline)
 
+- `Name the project of the editor...`
 - `Open a project from a folder...`
 - `Write the project of the editor here`
 - `Export the project of the editor into a folder...`
