@@ -83,6 +83,7 @@ func (a *App) Tick() {
 	a.jobTick()
 	a.tapTick()
 	a.bgDecodeTick()
+	a.keepSlicingTick()
 	a.liveTick()
 	a.fetchTick()
 	a.eventLogTick()

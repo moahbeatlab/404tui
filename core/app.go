@@ -235,6 +235,10 @@ type App struct {
 	tap               bool        // the slicer's tap: the sample plays, A cuts
 	tapT0             time.Time
 	sfile             string           // the slicer holds this file (its name), not the sample of a pad
+	spath             string           // and where it is (its slicing is kept next to it)
+	slKept            string           // the slicing as it was last written
+	slChanged         time.Time        // when it changed since
+	slRestored        string           // what was said of a slicing that came back
 	bg                *bgDecode        // the long file decoded in the background on FILES
 	bgFailed          map[string]error // the long files that did not decode
 	tapStart          int              // the frame the tap (listening from the cursor) started at
@@ -541,6 +545,9 @@ func (a *App) pageKey(fwd bool) {
 // RequestQuit is Select+Start. A project with samples that was not written is asked about once: the
 // same request again quits, any other key cancels.
 func (a *App) RequestQuit() {
+	if a.sl != nil && a.slicingState() != a.slKept { // the slicing is written before the program ends
+		a.keepSlicing()
+	}
 	if !a.saved && !a.quitAsk && a.hasWork() {
 		a.quitAsk = true
 		again := "Select+Start"

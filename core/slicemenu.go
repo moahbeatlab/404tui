@@ -142,6 +142,7 @@ func (a *App) sliceToolsMenu() {
 	m.items = append(m.items, menuItem{label: "Cut at random places", vals: names(parts, func(v int) string { return fmt.Sprint(v) }), val: 2,
 		run: func(v int) { a.randomParts(parts[v]) }})
 	m.items = append(m.items, menuItem{label: "Listen from the cursor: A cuts where it plays", run: func(int) { a.startTap() }})
+	m.items = append(m.items, menuItem{label: "Start again: one slice (the kept slicing goes)", run: func(int) { a.startAgain() }})
 	barsLabel := "Bars: the tempo of the track"
 	barsVal := "not set"
 	if a.bars.bpm > 0 {

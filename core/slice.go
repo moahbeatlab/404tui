@@ -28,9 +28,16 @@ func (a *App) openSlicer() {
 		a.say(err.Error(), true)
 		return
 	}
-	a.sid, a.spad, a.sfile = id, n, ""
+	if a.sl != nil && a.slicingState() != a.slKept { // the slicing before is written first
+		a.keepSlicing()
+	}
+	a.sid, a.spad, a.sfile, a.spath = id, n, "", ""
 	a.sl = formats.NewSlicing(s.Frames(), 1)
 	a.resetBars()
+	a.slRestored = ""
+	if a.restoreSlicing() {
+		a.say(a.slRestored+" (tools: Start again)", false)
+	}
 	a.at, a.zoom = 0, 0
 	a.slUndo, a.slRedo = nil, nil
 }

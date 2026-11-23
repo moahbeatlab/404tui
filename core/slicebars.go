@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moahbeatlab/404tui/app"
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
 )
@@ -625,14 +626,24 @@ func (a *App) sliceFile() {
 		return
 	}
 	a.stopPreview()
-	a.sid, a.spad, a.sfile = id, a.padN(), filepath.Base(e.name)
+	if a.sl != nil && a.slicingState() != a.slKept { // the slicing before is written first
+		a.keepSlicing()
+	}
+	a.sid, a.spad, a.sfile, a.spath = id, a.padN(), filepath.Base(e.name), ""
+	if p := joinPath(a.dir, e.name); app.IsLocal(p) {
+		a.spath = p
+	}
 	a.sl = formats.NewSlicing(s.Frames(), 1)
 	a.at, a.zoom = 0, 0
 	a.slUndo, a.slRedo = nil, nil
 	a.resetBars()
+	a.slRestored = ""
+	a.restoreSlicing()
 	a.go_(Slice)
 	said := fmt.Sprintf("%s in the slicer, on no pad: keep slices on pads from the tools", fit(a.sliceName(), 30))
 	switch {
+	case a.slRestored != "":
+		said = fmt.Sprintf("%s: %s (tools: Start again)", fit(a.sliceName(), 30), a.slRestored)
 	case a.bars.fromTag:
 		said += fmt.Sprintf("; %s BPM from its name, %s sets bar 1", bpmText(a.bars.bpm), downbeatKey())
 	case a.bars.bpm > 0:

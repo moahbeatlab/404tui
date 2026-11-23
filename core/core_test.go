@@ -5086,3 +5086,62 @@ func TestTwoBarLinesSetTheTempo(t *testing.T) {
 		t.Fatalf("a bar line is its bar's first beat: %q %q", a.barText(5000+32*bar), a.barText(a.barLine(6)))
 	}
 }
+
+func TestASlicingIsKeptNextToItsFile(t *testing.T) {
+	a, _ := newApp(t)
+	const bar = 92160
+	s := formats.Sample{Channels: 1, Samples: make([]int16, 12*bar)}
+	path := filepath.Join(a.Root, "000_song_125.wav")
+	if err := os.WriteFile(path, s.WAV(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	open := func() {
+		a.go_(Files)
+		a.dir = a.Root
+		a.list()
+		a.fcur = slices.IndexFunc(a.entries, func(e entry) bool { return e.name == "000_song_125.wav" })
+		a.SliceFileKey()
+	}
+	open()
+	a.bars.down = 1000
+	a.at = 1000 + 4*bar
+	keys(t, a, "A")
+	a.bars.bpm = 124.5
+	a.slChanged = time.Now().Add(-2 * time.Second) // a change, a while ago
+	a.keepSlicingTick()
+	if _, err := os.Stat(path + ".slices.json"); err != nil {
+		t.Fatal("the slicing is written next to the file")
+	}
+	a.sl = nil // as if the program started again
+	open()
+	if len(a.sl.Slices) != 2 || a.sl.Slices[1].Start != 1000+4*bar || a.bars.bpm != 124.5 || a.bars.down != 1000 {
+		t.Fatalf("the slicing and the bars come back: %+v %+v", a.sl.Slices, a.bars)
+	}
+	if !strings.Contains(a.msg, "is back: 2 slices") {
+		t.Fatalf("it says so: %q", a.msg)
+	}
+	a.startAgain()
+	if len(a.sl.Slices) != 1 {
+		t.Fatal("start again: one slice")
+	}
+	if _, err := os.Stat(path + ".slices.json"); err == nil {
+		t.Fatal("and the kept slicing is gone")
+	}
+}
+
+func TestAPadsSlicingIsKeptByItsSound(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R Y+R Y+R R*6 A") // the kick in two
+	n := len(a.sl.Slices)
+	a.keepSlicing()
+	matches, _ := filepath.Glob(filepath.Join(a.dataDir(), "slices", "*.json"))
+	if len(matches) != 1 {
+		t.Fatalf("one slicing in the program's folder: %v", matches)
+	}
+	a.sl = nil
+	a.go_(Slice)
+	if a.sl == nil || len(a.sl.Slices) != n {
+		t.Fatal("the pad's slicing comes back")
+	}
+}

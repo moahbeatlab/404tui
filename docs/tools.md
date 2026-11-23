@@ -729,6 +729,7 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
     - `Cut in equal parts` — 2 / 4 / 8 / 16 / 32; now 8
     - `Cut at random places` — 2 / 4 / 8 / 16 / 32; now 8
     - `Listen from the cursor: A cuts where it plays`
+    - `Start again: one slice (the kept slicing goes)`
     - `Bars: the tempo of the track` — not set; now not set
     - `Bars: detect the tempo and bar 1`
     - `Bars: a later bar starts at the cursor (Sel+v)`
@@ -806,6 +807,7 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
 - `Cut in equal parts` — 2 / 4 / 8 / 16 / 32; now 8
 - `Cut at random places` — 2 / 4 / 8 / 16 / 32; now 8
 - `Listen from the cursor: A cuts where it plays`
+- `Start again: one slice (the kept slicing goes)`
 - `Bars: the tempo of the track` — not set; now not set
 - `Bars: detect the tempo and bar 1`
 - `Bars: a later bar starts at the cursor (Sel+v)`
@@ -881,6 +883,7 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
         - `Cut in equal parts` — 2 / 4 / 8 / 16 / 32; now 8
         - `Cut at random places` — 2 / 4 / 8 / 16 / 32; now 8
         - `Listen from the cursor: A cuts where it plays`
+        - `Start again: one slice (the kept slicing goes)`
         - `Bars: the tempo of the track` — not set; now not set
         - `Bars: detect the tempo and bar 1`
         - `Bars: a later bar starts at the cursor (Sel+v)`
