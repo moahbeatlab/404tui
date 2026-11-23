@@ -305,9 +305,14 @@ func downbeatKey() string { return tk("Sel+^") }
 // ---- listening from the cursor
 
 // tapSkipKey is L2 (back) and R2 (forward) while the track plays from the cursor: it goes on 10 s earlier or later.
-func (a *App) tapSkipKey(fwd bool) {
+func (a *App) tapSkipKey(fwd bool) { a.tapSkipBy(fwd, a.heldSkip(fwd, 0)) }
+
+func (a *App) tapSkipBy(fwd bool, by time.Duration) {
+	if by == 0 {
+		return
+	}
 	pos := a.at
-	d := int(tapSkip.Seconds() * formats.SampleRate)
+	d := int(by.Seconds() * formats.SampleRate)
 	if !fwd {
 		d = -d
 	}

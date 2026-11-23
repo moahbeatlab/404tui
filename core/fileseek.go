@@ -42,8 +42,58 @@ func (a *App) playFileFrom(id int, s formats.Sample, from int) {
 	a.play(formats.Sample{Channels: s.Channels, Samples: s.Samples[from*ch:]})
 }
 
+// Held down, L2 and R2 run: a skip every 150 ms, 5 s each for the first second and a half (about half a minute a second), then
+// 20 s each (more than two minutes a second), with a bit of the song at every stop, so it is heard where it is.
+
+type skipHold struct {
+	since, last, key time.Time // when the key went down, when it last skipped, when it last came
+	fwd              bool
+}
+
+// heldSkip is how far a press (repeat 0) or a repeat of a held L2 or R2 skips; 0: not yet (a repeat too soon after the last skip).
+// A press that comes within 130 ms of the last one the same way is the key held too (a keyboard that repeats slowly).
+func (a *App) heldSkip(fwd bool, repeat int) time.Duration {
+	now := a.clock()
+	h := &a.skipHeld
+	held := repeat > 0 || (h.fwd == fwd && !h.key.IsZero() && now.Sub(h.key) < 130*time.Millisecond)
+	h.key = now
+	if !held {
+		*h = skipHold{since: now, last: now, key: now, fwd: fwd}
+		return fileSkip
+	}
+	if now.Sub(a.skipHeld.last) < 150*time.Millisecond {
+		return 0
+	}
+	a.skipHeld.last = now
+	if now.Sub(a.skipHeld.since) < 1500*time.Millisecond {
+		return 5 * time.Second
+	}
+	return 20 * time.Second
+}
+
+// skipRepeat runs a held L2 or R2 where it skips (FILES, the slicer while it plays from the cursor); false elsewhere.
+func (a *App) skipRepeat(k Key, repeat int) bool {
+	if k != L2 && k != R2 || a.Modal() || a.prompt != nil {
+		return false
+	}
+	switch {
+	case a.scr == Files:
+		a.fileSkipBy(k == R2, a.heldSkip(k == R2, repeat))
+	case a.scr == Slice && a.tap:
+		a.tapSkipBy(k == R2, a.heldSkip(k == R2, repeat))
+	default:
+		return false
+	}
+	return true
+}
+
 // fileSkipKey is L2 (back) and R2 (forward) on FILES: the file that plays goes on from 10 s earlier or later.
-func (a *App) fileSkipKey(fwd bool) {
+func (a *App) fileSkipKey(fwd bool) { a.fileSkipBy(fwd, a.heldSkip(fwd, 0)) }
+
+func (a *App) fileSkipBy(fwd bool, by time.Duration) {
+	if by == 0 {
+		return
+	}
 	at, ok := a.filePos()
 	if !ok {
 		play := "X"
@@ -58,7 +108,7 @@ func (a *App) fileSkipKey(fwd bool) {
 		a.say(err.Error(), true)
 		return
 	}
-	d := int(fileSkip.Seconds() * 48000)
+	d := int(by.Seconds() * 48000)
 	if !fwd {
 		d = -d
 	}

@@ -207,6 +207,7 @@ type App struct {
 	usedCache         map[int]string  // the patterns that use each pad, read once per change
 	peakMax           map[peakKey]int // the loudest value of each sample, for the slicer's scale
 	slPlay            slicePlay       // the slice x played, for the playhead
+	skipHeld          skipHold        // L2 or R2 held down on FILES (or listening in the slicer): since when, the last skip
 	soundUntil        time.Time       // when the sample that plays ends, for Space (play or stop)
 	patStrip          bool            // SEQ on a terminal: the arrows choose the pattern in the row of 16 boxes (p)
 	seqOneBar         bool            // SEQ on a wide terminal: one bar in view, though the window has the room for more
@@ -586,6 +587,9 @@ func accel(repeat int) int {
 }
 
 func (a *App) press(k Key, repeat int) {
+	if repeat > 0 && (k == L2 || k == R2) && a.splash == nil && a.skipRepeat(k, repeat) { // L2 R2 held: skipping runs
+		return
+	}
 	if repeat > 0 && !Holds(k) { // only the direction keys and the shoulders mean anything held down
 		return
 	}

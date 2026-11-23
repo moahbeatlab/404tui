@@ -4682,7 +4682,9 @@ func TestAFileThatPlaysIsSkippedThroughOnFiles(t *testing.T) {
 	if a.fplay.from != 15*48000 || au.Played != played+1 || !strings.Contains(a.msg, "0:15 / 1:00") {
 		t.Fatalf("R2 goes on 10 s later: from %d, %q", a.fplay.from, a.msg)
 	}
-	keys(t, a, "{ {")
+	keys(t, a, "{")
+	now = now.Add(300 * time.Millisecond)
+	keys(t, a, "{")
 	if a.fplay.from != 0 {
 		t.Fatalf("L2 goes back 10 s, not before the start: %d", a.fplay.from)
 	}
@@ -5324,5 +5326,68 @@ func TestASliceIsNudgedByEar(t *testing.T) {
 	a.SliceNudgeKey(false, -1)
 	if a.sl.Slices[0].Start != 0 || !strings.Contains(a.msg, "cannot") {
 		t.Fatalf("not before the sample: %+v %q", a.sl.Slices[0], a.msg)
+	}
+}
+
+func TestHoldingSkipGoesFaster(t *testing.T) {
+	a, au := newApp(t)
+	s := formats.Sample{Channels: 1, Samples: make([]int16, 48000*600)} // ten minutes
+	if err := os.WriteFile(filepath.Join(a.Root, "000_long.wav"), s.WAV(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1000, 0)
+	a.Now = func() time.Time { return now }
+	a.go_(Files)
+	a.dir = a.Root
+	a.list()
+	a.fcur = slices.IndexFunc(a.entries, func(e entry) bool { return e.name == "000_long.wav" })
+	keys(t, a, "X")
+	a.Press(R2, 0)
+	if a.fplay.from != 10*48000 {
+		t.Fatalf("a press: 10 s: %d", a.fplay.from)
+	}
+	step := func(ms int) (int, int) { // the clock on, a repeat: how far it went (less the time that played), whether it played again
+		before, played := a.fplay.from, au.Played
+		now = now.Add(time.Duration(ms) * time.Millisecond)
+		a.Press(R2, 1)
+		return (a.fplay.from - before - ms*48) / 48000, au.Played - played
+	}
+	if d, p := step(30); p != 0 || d != 0 {
+		t.Fatalf("a repeat 30 ms on: nothing yet (%d s, %d)", d, p)
+	}
+	if d, p := step(150); p != 1 || d != 5 {
+		t.Fatalf("held: 5 s at a time at first: %d s, %d", d, p)
+	}
+	for i := 0; i < 10; i++ {
+		step(150)
+	}
+	if d, _ := step(150); d != 20 {
+		t.Fatalf("held longer: 20 s at a time: %d s", d)
+	}
+	now = now.Add(time.Second)
+	a.Press(L2, 0) // a new press: 10 s again
+	now = now.Add(150 * time.Millisecond)
+	before := a.fplay.from
+	a.Press(L2, 1)
+	if got := (before - a.fplay.from + 150*48) / 48000; got != 5 {
+		t.Fatalf("back, held: 5 s at first: %d", got)
+	}
+	now = now.Add(2 * time.Second) // a keyboard that repeats slowly: presses 100 ms apart are the key held
+	a.Press(R2, 0)
+	for i := 0; i < 20; i++ {
+		now = now.Add(100 * time.Millisecond)
+		a.Press(R2, 0)
+	}
+	last := 0
+	for i := 0; i < 4; i++ {
+		before = a.fplay.from
+		now = now.Add(100 * time.Millisecond)
+		a.Press(R2, 0)
+		if d := (a.fplay.from - before - 100*48) / 48000; d != 0 {
+			last = d
+		}
+	}
+	if last != 20 {
+		t.Fatalf("presses that come fast are held too: %d s", last)
 	}
 }
