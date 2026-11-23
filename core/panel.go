@@ -290,7 +290,10 @@ func (a *App) rawHints() (plain, shift []hint) {
 			[]hint{screen, {"Y+X", "places"}, {"Y+A", "search"}, {"Y+B", "favourite"}, {"Sel+A", "mark"}, {"Sel+B", "files menu"}, {"Sel+X", "record"}}
 	case Slice:
 		if a.tap {
-			hs := []hint{{"A", "cut here"}, {"L2 R2", "skip 10 s"}, {"B", "stop"}}
+			hs := []hint{{"A", "cut here"}, {"L2 R2", "skip 10 s"}, {"B", "stop"}, {"Y+^v", "zoom"}}
+			if Terminal {
+				hs[3] = hint{"+ -", "zoom"}
+			}
 			if a.barFrames() > 0 {
 				hs = append(hs, hint{"Sel+^", "bar 1 here"})
 			}

@@ -780,7 +780,13 @@ func (a *App) shifted(k Key) {
 			a.laneShifted(k)
 			return
 		}
-		if a.tap {
+		if a.tap { // while it plays: only the zoom
+			switch k {
+			case Up:
+				a.zoom = min(a.zoom+1, 8)
+			case Down:
+				a.zoom = max(a.zoom-1, 0)
+			}
 			return
 		}
 		switch k {
@@ -1099,7 +1105,7 @@ func (a *App) ToolsMenu() {
 
 // Zoom is + and - of a keyboard in the slicer: in (d > 0) or out.
 func (a *App) Zoom(d int) {
-	if a.scr != Slice || a.sl == nil || a.menu != nil || a.prompt != nil || a.tap || a.lane {
+	if a.scr != Slice || a.sl == nil || a.menu != nil || a.prompt != nil || a.lane { // also while it plays from the cursor
 		return
 	}
 	a.zoom = max(0, min(a.zoom+d, 8))

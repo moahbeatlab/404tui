@@ -4949,6 +4949,11 @@ func TestTheCursorGoesFromBarToBar(t *testing.T) {
 	if a.tapStart != 1000+3*bar {
 		t.Fatalf("] while it plays: on from the next bar: %d", a.tapStart)
 	}
+	z := a.zoom
+	a.Zoom(1)
+	if a.zoom != z+1 || !a.tap {
+		t.Fatal("+ zooms in while it plays")
+	}
 	if !a.SlicePlayKey() || a.tap {
 		t.Fatal("Space again stops it")
 	}
