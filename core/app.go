@@ -519,7 +519,11 @@ func (a *App) pageKey(fwd bool) {
 		a.bank = (a.bank + 10 + d) % 10
 	case Files:
 		a.fcur = max(0, min(a.fcur+d*20, len(a.entries)-1))
-	case Slice: // L1 and R1 jump a quarter of the view (zoom is Y+Up/Down)
+	case Slice: // L1 and R1 jump a bar when the track has bars (while it plays, it plays on from there), else a quarter of the view
+		if a.sl != nil && a.barFrames() > 0 {
+			a.jumpBar(fwd)
+			return
+		}
 		if a.sl != nil {
 			from, to := a.view()
 			a.at = max(0, min(a.at+d*max((to-from)/4, 1), a.sl.Frames-1))

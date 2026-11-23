@@ -2675,7 +2675,8 @@ func TestNudgeAndTheSlicerCursor(t *testing.T) {
 		t.Fatalf("the first press is 2 pixels: %d", one)
 	}
 	a.at = 0
-	keys(t, a, "]") // R1 jumps a quarter of the view
+	a.bars = sliceBars{} // without bars (with them R1 goes a bar on)
+	keys(t, a, "]")      // R1 jumps a quarter of the view
 	if a.at != max((to-from)/4, 1) {
 		t.Fatalf("R1 jumps a quarter of the view: %d", a.at)
 	}
@@ -4917,5 +4918,68 @@ func TestTheSlicerHearsTheTempoOfASongWithoutOneInItsName(t *testing.T) {
 	}
 	if !strings.Contains(a.msg, "125 BPM heard") {
 		t.Fatalf("it says so: %q", a.msg)
+	}
+}
+
+func TestTheCursorGoesFromBarToBar(t *testing.T) {
+	a, _ := newApp(t)
+	const bar = 92160
+	s := formats.Sample{Channels: 1, Samples: make([]int16, 20*bar)}
+	mb, _ := a.lab.Decode(s.WAV(), ".wav")
+	var m lab.Meta
+	json.Unmarshal(mb, &m)
+	a.assignPad(0, m.ID, "song_125")
+	a.refresh()
+	a.cur, a.bank = 0, 0
+	a.go_(Slice)
+	a.bars.down = 1000
+	a.at = 1000 + 3*bar + 500
+	keys(t, a, "]")
+	if a.at != 1000+4*bar || a.barText(a.at) != "bar 5.1" {
+		t.Fatalf("] goes to the next bar: %d %q", a.at, a.barText(a.at))
+	}
+	keys(t, a, "[ [")
+	if a.at != 1000+2*bar {
+		t.Fatalf("[ goes a bar back: %d", a.at)
+	}
+	if !a.SlicePlayKey() || !a.tap || a.tapStart != 1000+2*bar {
+		t.Fatalf("Space plays from the cursor: %v %d", a.tap, a.tapStart)
+	}
+	keys(t, a, "]")
+	if a.tapStart != 1000+3*bar {
+		t.Fatalf("] while it plays: on from the next bar: %d", a.tapStart)
+	}
+	if !a.SlicePlayKey() || a.tap {
+		t.Fatal("Space again stops it")
+	}
+}
+
+func TestTheSliceLengthChangesFromTheMenuAtOnce(t *testing.T) {
+	a, _ := newApp(t)
+	const bar = 92160
+	s := formats.Sample{Channels: 1, Samples: make([]int16, 20*bar)}
+	mb, _ := a.lab.Decode(s.WAV(), ".wav")
+	var m lab.Meta
+	json.Unmarshal(mb, &m)
+	a.assignPad(0, m.ID, "song_125")
+	a.refresh()
+	a.cur, a.bank = 0, 0
+	a.go_(Slice)
+	a.bars.down = 0
+	a.at = 2 * bar
+	keys(t, a, "A")
+	a.at = 2*bar + 10
+	a.sliceMenu()
+	i := slices.IndexFunc(a.menu.items, func(it menuItem) bool { return strings.HasPrefix(it.label, "Length of the slice") })
+	if i < 0 {
+		t.Fatal("the slice's menu has its length in bars")
+	}
+	it := &a.menu.items[i]
+	if it.vals[it.val] != "18.00 bars" {
+		t.Fatalf("it says how long the slice is: %q", it.vals[it.val])
+	}
+	it.onChange(4) // 8 bars
+	if sg := a.sl.Slices[a.sliceAt(a.at)]; sg.End != 10*bar {
+		t.Fatalf("a change sets it at once: %+v", sg)
 	}
 }

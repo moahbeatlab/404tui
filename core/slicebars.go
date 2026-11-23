@@ -55,11 +55,33 @@ func (a *App) resetBars() {
 	a.bars = sliceBars{}
 	if v := bpmOfName(a.sliceName()); v > 0 {
 		a.bars = sliceBars{bpm: v, fromTag: true}
+		if a.sl != nil && a.sl.Frames >= 8*formats.SampleRate { // the tempo from the name, bar 1 on the first beat heard
+			if s, err := a.lab.Sample(a.sid); err == nil {
+				if at := formats.BeatAt(s, v); at >= 0 {
+					a.bars.down, a.bars.downSet = a.onsetNear(at), true
+				}
+			}
+		}
 		return
 	}
 	if a.sl != nil && a.sl.Frames >= 8*formats.SampleRate { // a long sample with no tempo in its name: it is heard for one
 		a.detectBars(false)
 	}
+}
+
+// onsetNear is the onset within 25 ms of a frame, else the frame.
+func (a *App) onsetNear(at int) int {
+	on, err := a.lab.Transients(a.sid, 256, a.autoSensitivity())
+	if err != nil {
+		return at
+	}
+	best, bestD := at, formats.SampleRate/40
+	for _, o := range on {
+		if d := abs(o - at); d <= bestD {
+			best, bestD = o, d
+		}
+	}
+	return best
 }
 
 // detectBars finds the tempo of the sample in the slicer and puts bar 1 on its first beat (the onset there, when there is one
@@ -76,18 +98,7 @@ func (a *App) detectBars(loud bool) {
 		}
 		return
 	}
-	at := tp.FirstBeat
-	if on, err := a.lab.Transients(a.sid, 256, a.autoSensitivity()); err == nil {
-		best, bestD := -1, formats.SampleRate/40
-		for _, o := range on {
-			if d := abs(o - at); d <= bestD {
-				best, bestD = o, d
-			}
-		}
-		if best >= 0 {
-			at = best
-		}
-	}
+	at := a.onsetNear(tp.FirstBeat)
 	a.bars = sliceBars{bpm: tp.BPM, conf: math.Max(tp.Confidence, 0.01), down: at, downSet: true}
 	if loud {
 		a.say(fmt.Sprintf("%s BPM (%.0f%% sure), bar 1 at %.3f s: %s moves bar 1 to the cursor", bpmText(tp.BPM), tp.Confidence*100, float64(at)/formats.SampleRate, downbeatKey()), false)
@@ -273,6 +284,52 @@ func (a *App) tapFrom(from int) {
 	a.say(where, false)
 }
 
+// SlicePlayKey is Space of a keyboard in the slicer: the sample plays from the cursor (the cursor going with it; A cuts where it
+// plays, , and . skip 10 s), and Space again stops it. It says whether it did.
+func (a *App) SlicePlayKey() bool {
+	if a.scr != Slice || a.sl == nil || a.Modal() || a.prompt != nil || a.lane {
+		return false
+	}
+	a.CancelShift()
+	if a.tap {
+		a.stopTap()
+		return true
+	}
+	if a.orderOn || time.Now().Before(a.soundUntil) { // a slice or the order sounds: Space stops it
+		a.stop()
+		a.say("stopped", false)
+		return true
+	}
+	a.startTap()
+	return true
+}
+
+// jumpBar moves the cursor to the next bar line (or the one before); while the sample plays, it plays on from there.
+func (a *App) jumpBar(fwd bool) {
+	bf := a.barFrames()
+	k := int(math.Floor(float64(a.at-a.bars.down) / bf))
+	at := a.barLine(k)
+	switch {
+	case fwd:
+		for at <= a.at {
+			k++
+			at = a.barLine(k)
+		}
+	case at >= a.at || a.tap && a.at-at < formats.SampleRate/4: // back: the bar before, not the one it just passed
+		k--
+		at = a.barLine(k)
+	}
+	if at < 0 || at >= a.sl.Frames {
+		return
+	}
+	if a.tap {
+		a.tapFrom(at)
+		return
+	}
+	a.at = at
+	a.say(a.barText(at), false)
+}
+
 // ---- one slice to a pad
 
 // sliceToPad asks for a pad and puts the slice under the cursor there as a loop, its tempo the track's.
@@ -343,6 +400,30 @@ func (a *App) loopSlice() bool {
 
 // sliceLens are the lengths in bars a slice can be set to.
 var sliceLens = []int{1, 2, 4, 8, 16}
+
+// sliceBarsItem is the menu's setting of the slice's length in bars: a change moves its end at once.
+func (a *App) sliceBarsItem() menuItem {
+	vals := names(sliceLens, func(v int) string { return count(v, "bar") })
+	cur := -1
+	if i := a.sliceAt(a.at); i >= 0 && a.barFrames() > 0 {
+		n := float64(a.sl.Slices[i].End-a.sl.Slices[i].Start) / a.barFrames()
+		for j, l := range sliceLens {
+			if math.Abs(n-float64(l)) < 0.01 {
+				cur = j
+			}
+		}
+		if cur < 0 { // not a length of the list: it says how long it is, the next change goes to one
+			vals = append([]string{fmt.Sprintf("%.2f bars", n)}, vals...)
+			cur = 0
+		}
+	}
+	off := len(vals) - len(sliceLens)
+	return menuItem{label: "Length of the slice (w W)", vals: vals, val: max(cur, 0), keepOpen: true, onChange: func(v int) {
+		if v >= off {
+			a.setSliceBars(sliceLens[v-off])
+		}
+	}}
+}
 
 // setSliceBars makes the slice under the cursor n bars long from its start: its end moves (the slices it now covers go, the one it
 // reaches starts later; a shorter slice leaves the rest to no slice).

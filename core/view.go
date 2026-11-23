@@ -612,18 +612,27 @@ func (a *App) drawSlice(g Gfx) {
 			put("~", cText)
 		}
 	}
-	if bf := a.barFrames(); bf > 0 && float64(to-from)/bf <= float64(wc)/4 { // the bar lines, when there is room for them
+	if bf := a.barFrames(); bf > 0 { // the bars: a tick and the bar's number under the shape (every 2nd, 4th... when they are close)
+		every := 1
+		for float64(to-from)/bf/float64(every) > float64(wc)/5 {
+			every *= 2
+		}
 		for k := int(math.Floor(float64(from-a.bars.down)/bf)) - 1; ; k++ {
 			at := a.barLine(k)
 			if at >= to {
 				break
 			}
-			if at >= from {
-				g.Mark(2, 2, wc, wr, frac(at), cDim)
+			if at < from || k < 0 || k%every != 0 {
+				continue
 			}
+			cx := 2 + min(int(frac(at)*float64(wc)), wc-1)
+			g.Text(cx, 1+wr, "╵"+fmt.Sprint(k+1), cDim, false)
 		}
 	}
-	g.Mark(2, 2, wc, wr, min(max(frac(a.at), 0), 1), cWhite)
+	g.Mark(2, 2, wc, wr, min(max(frac(a.at), 0), 1), cWhite) // the cursor: a white line, with a head on a computer
+	if Terminal {
+		g.Text(2+min(max(int(frac(a.at)*float64(wc)), 0), wc-1), 2, "▼", cWhite, true)
+	}
 
 	// the overview, with the window in it
 	oy := 2 + wr
@@ -648,6 +657,9 @@ func (a *App) drawSlice(g Gfx) {
 	cur := fmt.Sprintf("cursor %.3f s", sec(a.at))
 	if b := a.barText(a.at); b != "" {
 		cur += fmt.Sprintf("  %s  (%s BPM)", b, bpmText(a.bars.bpm))
+		if a.snapping() {
+			cur += fmt.Sprintf("   %s cuts at %s", tk("A"), a.barText(a.nearestBar(a.at)))
+		}
 	}
 	g.Text(2, ny+1, cur, cDim, false)
 	// the order as it plays: one cell per step, the slice's number in it, whatever the mode and the grid make of the order. A

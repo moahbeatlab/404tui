@@ -395,6 +395,10 @@ func (m *Model) key(msg tea.KeyMsg) {
 	case "right", "l", "L":
 		k = core.Right
 	case " ": // play and stop
+		if m.armed == noShift && m.app.SlicePlayKey() { // the slicer: from the cursor
+			m.disarm()
+			return
+		}
 		if m.app.PlayStop() {
 			m.disarm()
 			return

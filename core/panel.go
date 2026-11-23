@@ -56,6 +56,16 @@ func (a *App) hints() (plain, shift []hint) {
 		}
 		shift = sh
 	}
+	if Terminal && a.scr == Slice && !a.lane && !a.Modal() { // the keyboard: Space plays from the cursor (and stops)
+		what := "play from here"
+		if a.tap {
+			what = "stop"
+		}
+		plain = append([]hint{{"Space", what}}, plain...)
+		if a.barFrames() > 0 {
+			plain = append(plain, hint{"[ ]", "bar back / on"})
+		}
+	}
 	if Terminal && a.scr == Slice && !a.tap && !a.lane && !a.Modal() && a.barFrames() > 0 { // a track with bars: w W the slice's length
 		plain = append(append([]hint{}, plain...), hint{"w W", "slice bars"})
 	}

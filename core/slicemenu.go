@@ -80,6 +80,9 @@ func (a *App) sliceMenu() {
 	}
 	if sel >= 0 {
 		m.tabHead(fmt.Sprintf("SLICE %d", sel+1))
+		if a.barFrames() > 0 { // the length in bars, at once: the end moves (what goes to a pad is the slice as it is)
+			m.items = append(m.items, a.sliceBarsItem())
+		}
 		s := &a.sl.Slices[sel]
 		audition := func() { a.playSlice() }
 		set("Pitch", names(pitchVals, signed), near(pitchVals, s.Pitch), func(v int) { s.Pitch = pitchVals[v]; audition() })
@@ -153,8 +156,7 @@ func (a *App) sliceToolsMenu() {
 	m.items = append(m.items, menuItem{label: "Bars: detect the tempo and bar 1", run: func(int) { a.detectBars(true) }})
 	m.items = append(m.items, menuItem{label: "Bars: bar 1 starts at the cursor", vals: []string{fmt.Sprintf("%.3f s", float64(a.bars.down)/formats.SampleRate)}, run: func(int) { a.setDownbeat() }})
 	set("Bars: the cuts snap to them", []string{"on", "off"}, b2i(a.bars.noSnap), func(v int) { a.bars.noSnap = v == 1 })
-	m.items = append(m.items, menuItem{label: "This slice: ... bars from its start (w W)", vals: names(sliceLens, func(v int) string { return count(v, "bar") }), val: 2,
-		run: func(v int) { a.setSliceBars(sliceLens[v]) }})
+	m.items = append(m.items, a.sliceBarsItem())
 	barN := []int{1, 2, 4, 8, 16}
 	m.items = append(m.items, menuItem{label: "Cut every ... bars from bar 1", vals: names(barN, func(v int) string { return count(v, "bar") }), val: 3,
 		run: func(v int) { a.barCuts(barN[v]) }})

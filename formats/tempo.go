@@ -169,3 +169,14 @@ func DetectTempo(s Sample) Tempo {
 	}
 	return Tempo{BPM: bestBPM, FirstBeat: int(bestPh * tempoHop), Confidence: conf}
 }
+
+// BeatAt is where the first beat of a known tempo lies (the frame): the grid of that tempo laid where the most onset falls on it.
+// -1 when the sample has too little to go by.
+func BeatAt(s Sample, bpm float64) int {
+	on := onsetCurve(s)
+	if len(on) < 200 || bpm <= 0 {
+		return -1
+	}
+	_, ph := gridScore(on, 60*float64(SampleRate)/tempoHop/bpm)
+	return int(ph * tempoHop)
+}

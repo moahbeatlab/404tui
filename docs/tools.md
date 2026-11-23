@@ -690,7 +690,7 @@ The file browser: this computer, the unit's card and its storage. `t` chooses wh
 
 The slicer: cut a sample into slices and play them in an order. `Enter` opens the settings, `t` the tools.
 
-**Keys on a computer:** `a` cut · `b` join · `x` play slice · `.` play order · `,` grid step · `hl` move · `jk` marker · `t` tools · `n` new order · `+ -` zoom in / out · `s a` listen here · `s k` bar 1 here · `y a` auto cut · `y x` to pads · `y b` settings · `s x` record
+**Keys on a computer:** `Space` play from here · `a` cut · `b` join · `x` play slice · `.` play order · `,` grid step · `hl` move · `jk` marker · `t` tools · `n` new order · `+ -` zoom in / out · `s a` listen here · `s k` bar 1 here · `y a` auto cut · `y x` to pads · `y b` settings · `s x` record
 
 **Keys on the handheld:** `A` cut · `B` join · `X` play slice · `R2` play order · `L2` grid step · `<>` move · `^v` marker · `Y+A` auto cut · `Y+X` to pads · `Y+B` settings · `Sel+B` tools · `Y+^v` zoom · `Sel+X` record
 
@@ -732,7 +732,7 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
     - `Bars: detect the tempo and bar 1`
     - `Bars: bar 1 starts at the cursor` — 0.000 s; now 0.000 s
     - `Bars: the cuts snap to them` — on / off; now on
-    - `This slice: ... bars from its start (w W)` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 4 bars
+    - `Length of the slice (w W)` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 1 bar
     - `Cut every ... bars from bar 1` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 8 bars
     - `Cut on the grid at 120 BPM` — 1/4 / 1/8 / 1/16 / 1/32; now 1/8
     - `Auto-cut (Y+A): up to` — 4 slices / 8 slices / 16 slices / 24 slices / 32 slices; now 16 slices
@@ -807,7 +807,7 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
 - `Bars: detect the tempo and bar 1`
 - `Bars: bar 1 starts at the cursor` — 0.000 s; now 0.000 s
 - `Bars: the cuts snap to them` — on / off; now on
-- `This slice: ... bars from its start (w W)` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 4 bars
+- `Length of the slice (w W)` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 1 bar
 - `Cut every ... bars from bar 1` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 8 bars
 - `Cut on the grid at 120 BPM` — 1/4 / 1/8 / 1/16 / 1/32; now 1/8
 - `Auto-cut (Y+A): up to` — 4 slices / 8 slices / 16 slices / 24 slices / 32 slices; now 16 slices
@@ -880,7 +880,7 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
         - `Bars: detect the tempo and bar 1`
         - `Bars: bar 1 starts at the cursor` — 0.000 s; now 0.000 s
         - `Bars: the cuts snap to them` — on / off; now on
-        - `This slice: ... bars from its start (w W)` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 4 bars
+        - `Length of the slice (w W)` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 1 bar
         - `Cut every ... bars from bar 1` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 8 bars
         - `Cut on the grid at 120 BPM` — 1/4 / 1/8 / 1/16 / 1/32; now 1/8
         - `Auto-cut (Y+A): up to` — 4 slices / 8 slices / 16 slices / 24 slices / 32 slices; now 16 slices
