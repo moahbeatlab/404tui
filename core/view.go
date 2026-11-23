@@ -707,8 +707,10 @@ func (a *App) drawSlice(g Gfx) {
 	if playing { // where it plays in the whole track
 		g.Mark(2, oy, wc, 2, float64(ph)/float64(sl.Frames), cGood)
 	}
-	g.Mark(2, oy, wc, 2, float64(from)/float64(sl.Frames), cWhite)
-	g.Mark(2, oy, wc, 2, float64(to)/float64(sl.Frames), cWhite)
+	if !Terminal { // the window in the whole track (a computer shows none: the slices' markers and the playhead are enough)
+		g.Mark(2, oy, wc, 2, float64(from)/float64(sl.Frames), cWhite)
+		g.Mark(2, oy, wc, 2, float64(to)/float64(sl.Frames), cWhite)
+	}
 
 	// the numbers
 	ny := oy + 2
