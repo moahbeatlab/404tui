@@ -99,7 +99,15 @@ func (a *App) sliceKey(k Key, repeat int) {
 		} else if zc, err := a.lab.ZeroCrossing(a.sid, a.at, 48); err == nil && a.sliceAt(zc) == i { // no click at the cut
 			a.at = zc
 		}
-		if i < 0 || a.sl.Split(i, a.at) < 0 {
+		if i < 0 { // in no slice (the rest of a slice that was made shorter): a new slice starts here
+			if a.sl.StartIn(a.at) < 0 {
+				a.say("cannot start a slice there: too close to the next one", true)
+				return
+			}
+			a.say(fmt.Sprintf("%d slices: a new one starts here", len(a.sl.Slices)), false)
+			return
+		}
+		if a.sl.Split(i, a.at) < 0 {
 			a.say("cannot cut there: too close to an edge", true)
 			return
 		}

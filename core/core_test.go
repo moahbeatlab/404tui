@@ -4983,3 +4983,37 @@ func TestTheSliceLengthChangesFromTheMenuAtOnce(t *testing.T) {
 		t.Fatalf("a change sets it at once: %+v", sg)
 	}
 }
+
+func TestACutWhereNoSliceIsStartsOne(t *testing.T) {
+	a, _ := newApp(t)
+	const bar = 92160
+	s := formats.Sample{Channels: 1, Samples: make([]int16, 20*bar)}
+	mb, _ := a.lab.Decode(s.WAV(), ".wav")
+	var m lab.Meta
+	json.Unmarshal(mb, &m)
+	a.assignPad(0, m.ID, "song_125")
+	a.refresh()
+	a.cur, a.bank = 0, 0
+	a.go_(Slice)
+	a.bars.down = 0
+	a.at = 2 * bar
+	keys(t, a, "A") // slices: 0-2, 2-20 bars
+	a.at = 12 * bar
+	keys(t, a, "A") // 0-2, 2-12, 12-20
+	a.at = 2*bar + 10
+	a.setSliceBars(4) // 2-6, then nothing up to 12
+	a.at = 8*bar + 300
+	keys(t, a, "A")
+	i := a.sliceAt(8 * bar)
+	if i < 0 || a.sl.Slices[i].Start != 8*bar || a.sl.Slices[i].End != 12*bar || len(a.sl.Slices) != 4 {
+		t.Fatalf("a cut in no slice starts one, up to the next slice: %+v (%q)", a.sl.Slices, a.msg)
+	}
+	if len(a.sl.Order) != 4 {
+		t.Fatalf("it plays in the order too: %v", a.sl.Order)
+	}
+	a.at = 8*bar + 2*bar
+	keys(t, a, "A")
+	if len(a.sl.Slices) != 5 {
+		t.Fatalf("and it is cut as any other: %+v", a.sl.Slices)
+	}
+}

@@ -385,6 +385,34 @@ func (s *Slicing) Remove(i int) bool {
 	return true
 }
 
+// StartIn starts a new slice at a frame that no slice holds: it runs to the next slice (or the end of the sample), and plays
+// last in the order. It returns its index, -1 when a slice holds the frame or the room left is too short.
+func (s *Slicing) StartIn(frame int) int {
+	if frame < 0 || frame >= s.Frames {
+		return -1
+	}
+	end, at := s.Frames, len(s.Slices)
+	for i, sl := range s.Slices {
+		if frame >= sl.Start && frame < sl.End {
+			return -1
+		}
+		if sl.Start > frame && sl.Start < end {
+			end, at = sl.Start, i
+		}
+	}
+	if end-frame < MinSliceFrames {
+		return -1
+	}
+	for i := range s.Order {
+		if s.Order[i] >= at {
+			s.Order[i]++
+		}
+	}
+	s.Slices = slices.Insert(s.Slices, at, Slice{Start: frame, End: end, Chance: 100, Gain: 100})
+	s.Order = append(s.Order, at)
+	return at
+}
+
 // Clone is a copy that shares nothing with the original.
 func (s *Slicing) Clone() *Slicing {
 	c := *s

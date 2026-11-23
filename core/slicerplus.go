@@ -71,7 +71,9 @@ func (a *App) tapKey(k Key) {
 			}
 		}
 		i := a.sliceAt(at)
-		if i < 0 || a.sl.Split(i, at) < 0 {
+		switch {
+		case i < 0 && a.sl.StartIn(at) >= 0: // in no slice: a new one starts here
+		case i < 0 || a.sl.Split(i, at) < 0:
 			a.say("cannot cut there", true)
 			return
 		}
