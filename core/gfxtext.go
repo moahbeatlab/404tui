@@ -40,15 +40,7 @@ func SetTextTheme(i int) {
 	terminalColours = map[color.RGBA]color.RGBA{
 		cBg: tBg, cPanel: tPanel, cPanel2: tTile, cLine: tLine, cDim: tDim, cText: tText,
 		cAmber: tAccent, cAmberD: tAccentD, cWhite: tWhite, cGood: tGood, cBad: tBad,
-		// what has played in the slicer: the slices' colours most of the way to the ground, so dim in a dark theme and a light one
-		cAmberP: mixCol(tAccent, tPanel, 0.6), cBlueD: mixCol(cBlue, tPanel, 0.6), cBandP: mixCol(tAccentD, tPanel, 0.5),
 	}
-}
-
-// mixCol is a colour f of the way from a to b.
-func mixCol(a, b color.RGBA, f float64) color.RGBA {
-	m := func(x, y uint8) uint8 { return uint8(float64(x)*(1-f) + float64(y)*f + 0.5) }
-	return color.RGBA{m(a.R, b.R), m(a.G, b.G), m(a.B, b.B), 255}
 }
 
 func init() { SetTextTheme(0) }

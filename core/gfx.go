@@ -48,9 +48,6 @@ var (
 	cGood   = rgb(0x5fd38d)
 	cBad    = rgb(0xff6b5e)
 	cBlue   = rgb(0x5fafff) // the second colour of the slices
-	cBlueD  = rgb(0x1f3d5c) // and its dim one (what has played)
-	cAmberP = rgb(0x6b4d00) // the amber of what has played
-	cBandP  = rgb(0x2e2205) // a band of what has played (no shape)
 )
 
 // A canvas is the frame as pixels: what the handheld shows (and what a screenshot is).

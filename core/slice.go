@@ -49,46 +49,7 @@ func (a *App) view() (from, to int) {
 	frames := a.sl.Frames
 	width := max(frames>>a.zoom, min(frames, 2000))
 	from = min(max(a.at-width/2, 0), max(frames-width, 0))
-	if a.page >= 0 && Terminal { // a page that stands while it plays
-		from = min(max(a.page, 0), max(frames-width, 0))
-	}
 	return from, from + width
-}
-
-// The page: on a computer the view stands still while the sample plays (from the cursor, a slice, the order) and the playhead runs
-// across it; when it gets to 85% of the width (or out of it) the next page comes, with the playhead a little in from its left
-// edge. After it stopped the page stays until the cursor moves, so what was looked at stays where it was.
-
-// playPos is where in the sample what plays now is: the cursor while it plays from there, else the playhead of a slice or the order.
-func (a *App) playPos() (int, bool) {
-	if a.tap {
-		return a.at, true
-	}
-	return a.playhead()
-}
-
-// pageTick turns the page with the playhead.
-func (a *App) pageTick() {
-	if !Terminal || a.sl == nil || a.scr != Slice {
-		return
-	}
-	pos, ok := a.playPos()
-	if !ok {
-		if a.page >= 0 && a.at != a.pageAt {
-			a.page = -1
-		}
-		return
-	}
-	if a.page < 0 {
-		a.page, _ = a.view()
-	}
-	a.pageAt = a.at
-	from, to := a.view()
-	w := to - from
-	if pos < from || pos >= from+w*85/100 {
-		col := max(w/max(contentCols-4, 1), 1) // a page starts on a column of the shape, so the pages line up
-		a.page = max(pos-w/20, 0) / col * col
-	}
 }
 
 func (a *App) sliceAt(frame int) int {
