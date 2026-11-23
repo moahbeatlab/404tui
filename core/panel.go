@@ -74,6 +74,9 @@ func (a *App) hints() (plain, shift []hint) {
 	if Terminal && a.scr == Slice && !a.tap && !a.lane && !a.Modal() && a.barFrames() > 0 { // a track with bars: w W the slice's length
 		plain = append(append([]hint{}, plain...), hint{"w W", "slice bars"})
 	}
+	if Terminal && a.scr == Slice && !a.tap && !a.lane && !a.Modal() { // ( ) < > nudge the slice's start and end by ear
+		plain = append(append([]hint{}, plain...), hint{"( )", "start ±5 ms"}, hint{"lt gt", "end ±5 ms"})
+	}
 	if Terminal && a.scr == Slice && !a.tap && !a.lane && !a.Modal() { // the keyboard zooms with + and -
 		plain = append(append([]hint{}, plain...), hint{"n", "new order"}, hint{"+ -", "zoom in / out"})
 		sh := make([]hint, 0, len(shift))
@@ -498,6 +501,7 @@ func tkLine(s string) string {
 }
 
 var keyWords = strings.NewReplacer(
+	"lt gt", "< >", // the keyboard's own < > (the slicer's end), not the D-pad's
 	"A+^<>", "e hjkl", "Sel+^", "s k", "Sel+v", "s j", "Sel+B", "s b", "Sel+A", "s a", "Sel+X", "s x", "Y+A", "y a", "Y+B", "y b", "Y+X", "y x", "Y+", "y ", "L1 R1", "[ ]", "L1", "[", "R1", "]", "L2", ",", "R2", ".",
 	"^v<>", "hjkl", "<>", "hl", "^v", "jk", "hold Y", "y, then", "<", "h", ">", "l")
 

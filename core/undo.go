@@ -46,6 +46,19 @@ func (a *App) Press(k Key, repeat int) {
 	a.slSkip = false
 }
 
+// slicerStep runs a change of the slicing that does not come through Press (a keyboard's own key) as one step of the slicer's undo.
+func (a *App) slicerStep(f func()) {
+	before, _, _ := a.slicingNow()
+	f()
+	if now, _, _ := a.slicingNow(); before != "" && now != "" && now != before {
+		a.slUndo = append(a.slUndo, before)
+		if len(a.slUndo) > 200 {
+			a.slUndo = a.slUndo[1:]
+		}
+		a.slRedo = nil
+	}
+}
+
 // slicingNow is the slicing in front as text (empty off the slicer's screen), with the sample it belongs to.
 func (a *App) slicingNow() (string, int, int) {
 	if a.scr != Slice || a.sl == nil {

@@ -560,7 +560,7 @@ func (a *App) SliceBarsKey(d int) {
 			}
 		}
 	}
-	a.setSliceBars(next)
+	a.slicerStep(func() { a.setSliceBars(next) })
 }
 
 // dropSlicing lets go of the slicing when the sample it cuts changed: the slicer on a pad that is among pads (all of them when

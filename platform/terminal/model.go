@@ -450,9 +450,22 @@ func (m *Model) key(msg tea.KeyMsg) {
 		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
 			k = map[string]core.Key{"{": core.L1, "}": core.R1}[s]
 		}
+	case "(", ")": // the slicer: the slice's start 5 ms earlier or later (a slice of whole bars moves as a whole)
+		if m.app.ScreenName() == "SLICE" && m.armed == noShift && !m.aHeld {
+			m.app.SliceNudgeKey(false, map[string]int{"(": -1, ")": 1}[s])
+		}
+		return
 	case ",", "<":
+		if s == "<" && m.app.ScreenName() == "SLICE" && m.armed == noShift && !m.aHeld && !m.app.Modal() { // the slice's end 5 ms earlier
+			m.app.SliceNudgeKey(true, -1)
+			return
+		}
 		k = core.L2
 	case ".", ">":
+		if s == ">" && m.app.ScreenName() == "SLICE" && m.armed == noShift && !m.aHeld && !m.app.Modal() { // and later
+			m.app.SliceNudgeKey(true, 1)
+			return
+		}
 		k = core.R2
 	default:
 		return

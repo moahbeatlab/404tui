@@ -5274,3 +5274,55 @@ func TestMarkersGoTheWayTheOrderPlays(t *testing.T) {
 		t.Fatalf("back from the last one: %d", a.at/bar)
 	}
 }
+
+func TestASliceIsNudgedByEar(t *testing.T) {
+	Terminal = true
+	defer func() { Terminal = false }()
+	a, _ := newApp(t)
+	const bar = 92160 // 125 BPM
+	const ms5 = 240
+	s := formats.Sample{Channels: 1, Samples: make([]int16, 32*bar)}
+	mb, _ := a.lab.Decode(s.WAV(), ".wav")
+	var m lab.Meta
+	json.Unmarshal(mb, &m)
+	a.assignPad(0, m.ID, "song_125")
+	a.refresh()
+	a.cur, a.bank = 0, 0
+	a.go_(Slice)
+	a.bars.down = 0
+	for _, at := range []int{8 * bar, 16 * bar, 24 * bar} {
+		a.at = at
+		keys(t, a, "A")
+	}
+	// slices: 0-8, 8-16, 16-24, 24-32 bars
+	a.at = 8 * bar
+	a.slMarks = map[int]bool{8 * bar: true}
+	a.SliceNudgeKey(false, -1) // whole bars: the slice moves as a whole, the shared markers with it
+	sl := a.sl.Slices
+	if sl[1].Start != 8*bar-ms5 || sl[1].End != 16*bar-ms5 || sl[0].End != 8*bar-ms5 || sl[2].Start != 16*bar-ms5 {
+		t.Fatalf("5 ms earlier as a whole: %+v", sl[:3])
+	}
+	if !strings.Contains(a.msg, "-5 ms from bar 9.1") || !strings.Contains(a.msg, "8 bars ✓") {
+		t.Fatalf("it says where it is: %q", a.msg)
+	}
+	if a.sliceAt(a.at) != 1 || !a.slMarks[8*bar-ms5] {
+		t.Fatalf("the cursor and the mark go with it: %d %v", a.at, a.slMarks)
+	}
+	a.SliceNudgeKey(true, 1) // the end alone
+	if sl := a.sl.Slices; sl[1].End != 16*bar || sl[2].Start != 16*bar || sl[1].Start != 8*bar-ms5 {
+		t.Fatalf("the end 5 ms later: %+v", sl[:3])
+	}
+	a.SliceNudgeKey(false, 1) // not whole bars any more: the start alone
+	if sl := a.sl.Slices; sl[1].Start != 8*bar || sl[1].End != 16*bar || sl[0].End != 8*bar {
+		t.Fatalf("the start alone: %+v", sl[:2])
+	}
+	keys(t, a, "Y+{") // undo
+	if a.sl.Slices[1].Start != 8*bar-ms5 {
+		t.Fatalf("undone: %+v (%q)", a.sl.Slices[1], a.msg)
+	}
+	a.at = 0
+	a.SliceNudgeKey(false, -1)
+	if a.sl.Slices[0].Start != 0 || !strings.Contains(a.msg, "cannot") {
+		t.Fatalf("not before the sample: %+v %q", a.sl.Slices[0], a.msg)
+	}
+}
