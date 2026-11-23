@@ -28,7 +28,7 @@ func (a *App) openSlicer() {
 		a.say(err.Error(), true)
 		return
 	}
-	a.sid, a.spad = id, n
+	a.sid, a.spad, a.sfile = id, n, ""
 	a.sl = formats.NewSlicing(s.Frames(), 1)
 	a.resetBars()
 	a.at, a.zoom = 0, 0
@@ -281,7 +281,7 @@ func (a *App) slicesToPadsPick(shuffled bool) {
 
 func (a *App) slicesToPadsFrom(first int, shuffled bool) {
 	sb, _ := json.Marshal(a.sl)
-	base := a.info.Pads[a.spad].Name
+	base := a.sliceName()
 	done := 0
 	order := a.padOrder()
 	if shuffled { // the slices on the pads in a random order

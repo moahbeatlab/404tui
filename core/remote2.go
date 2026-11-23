@@ -122,7 +122,7 @@ func (a *App) remoteSlicer(from, to, cols int) *RSlicer {
 	if a.sl == nil || a.scr != Slice {
 		return nil
 	}
-	s := &RSlicer{Pad: a.spad, Label: a.label(a.spad), Name: a.info.Pads[a.spad].Name, Frames: a.sl.Frames, Rate: 48000, At: a.at, Sel: a.sliceAt(a.at),
+	s := &RSlicer{Pad: a.spad, Label: a.sliceLabel(), Name: a.sliceName(), Frames: a.sl.Frames, Rate: 48000, At: a.at, Sel: a.sliceAt(a.at),
 		Order: a.sl.Order, Mode: modeNames[int(a.sl.Mode)%len(modeNames)], Slices: []RSlice{}, Playing: a.orderOn, Active: -1, CanUndo: len(a.slUndo) > 0, CanRedo: len(a.slRedo) > 0}
 	if a.orderOn {
 		if i := a.playingStep(); i >= 0 && i < len(a.placed) && !a.placed[i].Rest {

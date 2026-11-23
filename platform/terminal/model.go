@@ -339,6 +339,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 		}
 		return
 	case "s", "S":
+		if s == "S" && m.app.ScreenName() == "FILES" && m.armed == noShift && !m.aHeld && !m.app.Modal() { // FILES: S opens the file in the slicer
+			m.disarm()
+			m.app.SliceFileKey()
+			return
+		}
 		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() { // SEQ: s is solo
 			m.app.SeqTrack(2)
 			return
@@ -365,6 +370,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 	case "r": // PADS and SEQ: rename the pad
 		if m.armed == noShift && !m.aHeld && !m.app.Modal() && (m.app.ScreenName() == "PADS" || m.app.ScreenName() == "SEQ") {
 			m.app.RenamePadKey()
+		}
+		return
+	case "w", "W": // the slicer: the slice under the cursor longer or shorter, in bars
+		if m.app.ScreenName() == "SLICE" && m.armed == noShift && !m.aHeld {
+			m.app.SliceBarsKey(map[string]int{"w": 1, "W": -1}[s])
 		}
 		return
 	case "e", "E":

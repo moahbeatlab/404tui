@@ -536,8 +536,7 @@ func (a *App) fileRows() int {
 func (a *App) drawSlice(g Gfx) {
 	sl := a.sl
 	sec := func(f int) float64 { return float64(f) / 48000 }
-	name := a.info.Pads[a.spad].Name
-	g.Text(2, 1, fmt.Sprintf("%s  %s", a.label(a.spad), fit(name, 40)), cAmber, true)
+	g.Text(2, 1, fmt.Sprintf("%s  %s", a.sliceLabel(), fit(a.sliceName(), 60)), cAmber, true)
 
 	wc, wr := contentCols-4, a.sliceWaveRows()
 	g.Fill(1, 2, contentCols-2, wr, cPanel)

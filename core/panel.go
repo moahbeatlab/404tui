@@ -56,6 +56,9 @@ func (a *App) hints() (plain, shift []hint) {
 		}
 		shift = sh
 	}
+	if Terminal && a.scr == Slice && !a.tap && !a.lane && !a.Modal() && a.barFrames() > 0 { // a track with bars: w W the slice's length
+		plain = append(append([]hint{}, plain...), hint{"w W", "slice bars"})
+	}
 	if Terminal && a.scr == Slice && !a.tap && !a.lane && !a.Modal() { // the keyboard zooms with + and -
 		plain = append(append([]hint{}, plain...), hint{"n", "new order"}, hint{"+ -", "zoom in / out"})
 		sh := make([]hint, 0, len(shift))
@@ -123,7 +126,7 @@ func (a *App) hints() (plain, shift []hint) {
 		if a.set.AutoListen {
 			auto = "auto play: ON"
 		}
-		plain = append(append([]hint{}, plain...), hint{"m", "mark file"}, hint{"M", "mark all"}, hint{"^A", auto})
+		plain = append(append([]hint{}, plain...), hint{"S", "to the slicer"}, hint{"m", "mark file"}, hint{"M", "mark all"}, hint{"^A", auto})
 	}
 	if Terminal && a.scr == Files && !a.Modal() && a.prompt == nil && a.kb == nil { // t: load files from where
 		out := make([]hint, 0, len(plain)+1)
@@ -614,7 +617,9 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 				g.Text(x, row(15+i), l, cText, false)
 			}
 		}
-		if id, err := a.decode(e); err == nil {
+		if id, ready, err := a.decodeOrQueue(e); !ready && err == nil { // a long file, decoding in the background
+			g.Text(x, row(3), fit(a.bgText(joinPath(a.dir, e.name)), w), cAmber, false)
+		} else if err == nil {
 			s, _ := a.lab.Sample(id)
 			g.Text(x, row(3), fmt.Sprintf("%.2f s", float64(s.Frames())/48000), cDim, false)
 			if _, in := a.aud[a.padN()]; in {
@@ -643,7 +648,7 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 			a.drawInfoGroups(g, x, row(2), w, y1, a.sliceInfoGroups(), 2)
 			return
 		}
-		g.Text(x, row(0), fmt.Sprintf("%s %s", a.label(a.spad), fit(a.info.Pads[a.spad].Name, w-4)), cAmber, true)
+		g.Text(x, row(0), fmt.Sprintf("%s %s", a.sliceLabel(), fit(a.sliceName(), w-4)), cAmber, true)
 		g.Text(x, row(1), fmt.Sprintf("%.2fs  %d slices", float64(a.sl.Frames)/48000, len(a.sl.Slices)), cDim, false)
 		g.Text(x, row(2), fmt.Sprintf("%s  zoom %dx", orderMode(a.sl), 1<<a.zoom), cDim, false)
 		if sel := a.sliceAt(a.at); sel >= 0 {

@@ -82,6 +82,7 @@ func (a *App) Tick() {
 	a.freezeTick()
 	a.jobTick()
 	a.tapTick()
+	a.bgDecodeTick()
 	a.liveTick()
 	a.fetchTick()
 	a.eventLogTick()

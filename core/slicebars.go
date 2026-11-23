@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -51,10 +52,8 @@ func bpmOfName(name string) float64 {
 // resetBars starts the bar grid of a sample that comes into the slicer: the tempo from its name, bar 1 at its start.
 func (a *App) resetBars() {
 	a.bars = sliceBars{}
-	if a.spad >= 0 && a.spad < len(a.info.Pads) {
-		if v := bpmOfName(a.info.Pads[a.spad].Name); v > 0 {
-			a.bars = sliceBars{bpm: v, fromTag: true}
-		}
+	if v := bpmOfName(a.sliceName()); v > 0 {
+		a.bars = sliceBars{bpm: v, fromTag: true}
 	}
 }
 
@@ -259,7 +258,7 @@ func (a *App) sliceTo(i, n int) {
 	var m lab.Meta
 	json.Unmarshal(mb, &m)
 	sg := a.sl.Slices[i]
-	base := fit(strings.TrimSpace(a.info.Pads[a.spad].Name), 10)
+	base := fit(strings.TrimSpace(a.sliceName()), 10)
 	name := fmt.Sprintf("%s_s%d", base, i+1)
 	if a.barFrames() > 0 && sg.Start >= a.bars.down {
 		name = fmt.Sprintf("%s_b%d", base, int(float64(sg.Start-a.bars.down)/a.barFrames()+0.5)+1)
@@ -303,4 +302,135 @@ func (a *App) loopSlice() bool {
 	a.soundUntil = time.Now().Add(24 * time.Hour) // X stops it
 	a.say(fmt.Sprintf("slice %d in a loop (%s): x stops it", i+1, a.barsText(s.Frames())), false)
 	return true
+}
+
+// sliceLens are the lengths in bars a slice can be set to.
+var sliceLens = []int{1, 2, 4, 8, 16}
+
+// setSliceBars makes the slice under the cursor n bars long from its start: its end moves (the slices it now covers go, the one it
+// reaches starts later; a shorter slice leaves the rest to no slice).
+func (a *App) setSliceBars(n int) {
+	bf := a.barFrames()
+	i := a.sliceAt(a.at)
+	if bf <= 0 || i < 0 {
+		a.say("no bars yet: set the tempo of the track (tools, Bars) and bar 1", true)
+		return
+	}
+	st := a.sl.Slices[i].Start
+	k := int(math.Round(float64(st-a.bars.down) / bf))
+	end := st + int(math.Round(float64(n)*bf))
+	if a.barLine(k) == st { // on a bar line: to the bar line n bars on, exactly
+		end = a.barLine(k + n)
+	}
+	if end > a.sl.Frames {
+		a.say(fmt.Sprintf("%s from here goes past the end of the sample", count(n, "bar")), true)
+		return
+	}
+	for j := len(a.sl.Slices) - 1; j > i; j-- {
+		switch sg := &a.sl.Slices[j]; {
+		case sg.End <= end:
+			a.sl.Remove(j)
+		case sg.Start < end:
+			sg.Start = end
+		}
+	}
+	a.sl.Slices[i].End = end
+	a.say(fmt.Sprintf("slice %d: %s", i+1, a.barsText(end-st)), false)
+}
+
+// SliceBarsKey is w (longer) and W (shorter) of a keyboard in the slicer: the slice under the cursor becomes 1, 2, 4, 8 or 16 bars.
+func (a *App) SliceBarsKey(d int) {
+	if a.scr != Slice || a.sl == nil || a.Modal() || a.prompt != nil || a.lane {
+		return
+	}
+	a.CancelShift()
+	i := a.sliceAt(a.at)
+	if i < 0 || a.barFrames() <= 0 {
+		a.setSliceBars(1) // says what is missing
+		return
+	}
+	cur := float64(a.sl.Slices[i].End-a.sl.Slices[i].Start) / a.barFrames()
+	next := sliceLens[0]
+	if d > 0 {
+		next = sliceLens[len(sliceLens)-1]
+		for _, l := range sliceLens {
+			if float64(l) > cur+0.01 {
+				next = l
+				break
+			}
+		}
+	} else {
+		for _, l := range sliceLens {
+			if float64(l) < cur-0.01 {
+				next = l
+			}
+		}
+	}
+	a.setSliceBars(next)
+}
+
+// ---- a file in the slicer, on no pad
+
+// sliceName is the name of what the slicer holds: the file's (without its extension), else the pad's.
+func (a *App) sliceName() string {
+	if a.sfile != "" {
+		return strings.TrimSuffix(a.sfile, filepath.Ext(a.sfile))
+	}
+	if a.spad >= 0 && a.spad < len(a.info.Pads) {
+		return a.info.Pads[a.spad].Name
+	}
+	return ""
+}
+
+// sliceLabel is where it is: FILE, or the pad.
+func (a *App) sliceLabel() string {
+	if a.sfile != "" {
+		return "FILE"
+	}
+	return a.label(a.spad)
+}
+
+// SliceFileKey is S of a keyboard on FILES: the file under the cursor in the slicer, on no pad.
+func (a *App) SliceFileKey() {
+	if a.scr != Files || a.Modal() || a.prompt != nil || a.kb != nil {
+		return
+	}
+	a.CancelShift()
+	a.sliceFile()
+}
+
+// sliceFile opens the slicer on the file under the cursor of FILES, on no pad: the pad in front only gives the bank (its tempo,
+// where the slices go). A long file that is still decoding opens when it is ready.
+func (a *App) sliceFile() {
+	e, ok := a.current()
+	if !ok || e.dir || e.project || isMIDIFile(e.name) {
+		a.say("the slicer takes a sample file", true)
+		return
+	}
+	id, ready, err := a.decodeOrQueue(e)
+	if err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	if !ready {
+		a.bgThen(func() { a.sliceFile() }, "opens in the slicer")
+		return
+	}
+	s, err := a.lab.Sample(id)
+	if err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	a.stopPreview()
+	a.sid, a.spad, a.sfile = id, a.padN(), filepath.Base(e.name)
+	a.sl = formats.NewSlicing(s.Frames(), 1)
+	a.at, a.zoom = 0, 0
+	a.slUndo, a.slRedo = nil, nil
+	a.resetBars()
+	a.go_(Slice)
+	said := fmt.Sprintf("%s in the slicer, on no pad: keep slices on pads from the tools", fit(a.sliceName(), 30))
+	if a.bars.bpm > 0 {
+		said += fmt.Sprintf("; %s BPM from its name, %s sets bar 1", bpmText(a.bars.bpm), downbeatKey())
+	}
+	a.say(said, false)
 }

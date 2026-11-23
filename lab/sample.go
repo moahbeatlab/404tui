@@ -64,6 +64,16 @@ func (l *Lab) Decode(b []byte, ext string) ([]byte, error) {
 	return json.Marshal(m)
 }
 
+// KeepImported keeps a sample decoded elsewhere (in the background) as Decode would, and gives its Meta.
+func (l *Lab) KeepImported(imp formats.Imported) ([]byte, error) {
+	if imp.Sample.Frames() == 0 {
+		return nil, errors.New("that file has no audio in it")
+	}
+	m := l.meta(l.keep(imp.Sample))
+	m.SrcRate, m.Resampled = imp.SourceRate, imp.Resampled()
+	return json.Marshal(m)
+}
+
 // Meta is the Meta of a sample.
 func (l *Lab) Meta(id int) ([]byte, error) {
 	if _, err := l.Sample(id); err != nil {

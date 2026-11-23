@@ -274,6 +274,7 @@ func (a *App) filesMenu() {
 	})
 	add(fmt.Sprintf("Paste here (%d)", len(a.fclip)), func(int) { a.pasteFiles() })
 	add("Delete...", func(int) { a.deleteFilesAsk() })
+	add("Open in the slicer, on no pad (S)", func(int) { a.sliceFile() })
 	add("Rename...", func(int) { a.renameFile() })
 	m.head("THIS FOLDER")
 	add("New folder...", func(int) { a.newFolder() })

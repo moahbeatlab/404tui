@@ -28,7 +28,7 @@ MIDI files (`.mid`) are in the list too: `a` on one makes a pattern of a track o
 
 ## Keys
 
-**On a computer:** `a` to a pad... · `Space` listen · `x` stop · `, .` skip 10 s back or forward through the file that plays (the panel shows where it is: `1:23 / 5:40` and a line on its shape) · `j k` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where / file tools · `m` mark file · `M` mark all · `Ctrl-A` auto play (the file under the cursor plays at once, in the pattern while it loops) · `y x` places · `y a` or `/` search · `#` categories · `y b` favourite.
+**On a computer:** `a` to a pad... · `Space` listen · `x` stop · `, .` skip 10 s back or forward through the file that plays (the panel shows where it is: `1:23 / 5:40` and a line on its shape) · `j k` browse · `l` open (a long file, a whole song, decodes in the background: the cursor never waits; the panel says *decoding...*, and `Space` or `a` on it goes on by itself when it is ready. With **ffmpeg** on the computer an 8-minute MP3 takes a second or two, without it about 15 s) · `h` up · `[ ]` page · `Esc` pads · `t` from where / file tools · `S` the file to the slicer, on no pad (a whole song is cut there into loops, and only the loops you keep take pads; the files menu has it too) · `m` mark file · `M` mark all · `Ctrl-A` auto play (the file under the cursor plays at once, in the pattern while it loops) · `y x` places · `y a` or `/` search · `#` categories · `y b` favourite.
 
 **On the handheld:** `A` to pad · `X` listen · `L2 R2` skip 10 s through the file that plays · D-pad browse, open and up · `L1 R1` page · `B` pads · `Y+X` places · `Y+A` search · `Y+B` favourite · `Sel+A` mark · `Sel+B` files menu.
 

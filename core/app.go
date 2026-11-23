@@ -234,9 +234,12 @@ type App struct {
 	lvl               *levelMeter // the level of the sound
 	tap               bool        // the slicer's tap: the sample plays, A cuts
 	tapT0             time.Time
-	tapStart          int       // the frame the tap (listening from the cursor) started at
-	bars              sliceBars // the bar grid of the track in the slicer
-	lane              bool      // the slicer's order lane
+	sfile             string           // the slicer holds this file (its name), not the sample of a pad
+	bg                *bgDecode        // the long file decoded in the background on FILES
+	bgFailed          map[string]error // the long files that did not decode
+	tapStart          int              // the frame the tap (listening from the cursor) started at
+	bars              sliceBars        // the bar grid of the track in the slicer
+	lane              bool             // the slicer's order lane
 	laneAt            int
 	joinStack         []joinState     // the samples the slicer had before the last one was added
 	joinPick          bool            // the file browser is choosing a sample for the slicer
@@ -884,8 +887,13 @@ func (a *App) ToggleAutoListen() {
 func (a *App) listenHere() {
 	e, ok := a.current()
 	if ok && !e.dir && !e.project && audioExts[strings.ToLower(pathExt(e.name))] {
-		if id, err := a.decode(e); err == nil {
+		id, ready, err := a.decodeOrQueue(e)
+		if ready {
 			a.listen(e, id)
+			return
+		}
+		if err == nil { // decoding in the background: it plays when it is ready (bgDecodeTick)
+			a.stopPreview()
 			return
 		}
 	}
@@ -1141,7 +1149,7 @@ func (a *App) go_(s Screen) {
 		}
 	}
 	a.scr = s
-	if s == Slice && (a.sl == nil || a.spad != a.padN()) {
+	if s == Slice && (a.sl == nil || a.sfile == "" && a.spad != a.padN()) { // a file in the slicer stays there
 		a.openSlicer()
 		if a.sl == nil {
 			a.scr = Pads
@@ -1346,9 +1354,14 @@ func (a *App) filesKey(k Key) {
 			a.say("a MIDI file: A makes a pattern of it", false)
 			return
 		}
-		id, err := a.decode(e)
+		id, ready, err := a.decodeOrQueue(e)
 		if err != nil {
 			a.say(err.Error(), true)
+			return
+		}
+		if !ready {
+			a.stopPreview()
+			a.bgWaiting(X)
 			return
 		}
 		a.listen(e, id)
@@ -1373,9 +1386,13 @@ func (a *App) filesKey(k Key) {
 			a.importMIDIEntry(e)
 			return
 		}
-		id, err := a.decode(e)
+		id, ready, err := a.decodeOrQueue(e)
 		if err != nil {
 			a.say(err.Error(), true)
+			return
+		}
+		if !ready {
+			a.bgWaiting(A)
 			return
 		}
 		if a.joinPick { // a sample for the slicer: it is joined, and the slicer is back
@@ -1557,12 +1574,22 @@ func (a *App) decodePath(p, ext string) (int, error) {
 	return m.ID, nil
 }
 
-// evictPreviews frees the files decoded longest ago, keeping 8: browsing a big folder must not fill the memory.
+// evictPreviews frees the files decoded longest ago, keeping 8 and about 300 MB (three or four whole songs): browsing a big folder
+// must not fill the memory. The file in the slicer and the one in the pattern stay.
 func (a *App) evictPreviews() {
-	for len(a.prevOrder) > 8 {
+	total := func() int {
+		n := 0
+		for _, id := range a.prev {
+			if s, err := a.lab.Sample(id); err == nil {
+				n += len(s.Samples)
+			}
+		}
+		return n
+	}
+	for len(a.prevOrder) > 8 || len(a.prevOrder) > 1 && total() > 150_000_000 {
 		old := a.prevOrder[0]
 		id := a.prev[old]
-		inUse := false
+		inUse := a.sfile != "" && id == a.sid
 		for _, v := range a.aud {
 			inUse = inUse || v == id
 		}

@@ -2,6 +2,7 @@ package formats
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -58,7 +59,12 @@ func ReadAudio(path string) (Imported, error) {
 // DecodeAudio decodes audio already in memory, as it arrives from the unit's file API. ext
 // picks the format and may be empty, in which case the content is sniffed.
 func DecodeAudio(b []byte, ext string) (Imported, error) {
-	decoded, err := decode(b, strings.TrimPrefix(strings.ToLower(ext), "."))
+	return DecodeAudioContext(context.Background(), b, ext)
+}
+
+// DecodeAudioContext is DecodeAudio that gives up when ctx is done (an MP3 is decoded a part at a time, so a long one can be let go).
+func DecodeAudioContext(ctx context.Context, b []byte, ext string) (Imported, error) {
+	decoded, err := decode(ctx, b, strings.TrimPrefix(strings.ToLower(ext), "."))
 	if err != nil {
 		return Imported{}, err
 	}
@@ -93,7 +99,7 @@ func quantize(v float32) int16 {
 	return int16(math.Max(-32768, math.Min(32767, math.Round(float64(v)*32768))))
 }
 
-func decode(b []byte, ext string) (pcm, error) {
+func decode(ctx context.Context, b []byte, ext string) (pcm, error) {
 	kind := ext
 	switch {
 	case bytes.HasPrefix(b, []byte("RIFF")), bytes.HasPrefix(b, []byte("RF64")):
@@ -113,7 +119,7 @@ func decode(b []byte, ext string) (pcm, error) {
 	case "flac":
 		return decodeFLAC(b)
 	case "mp3":
-		return decodeMP3(b)
+		return decodeMP3(ctx, b)
 	}
 	return pcm{}, ErrNoAudioTrack
 }
@@ -149,14 +155,25 @@ func decodeFLAC(b []byte) (pcm, error) {
 }
 
 // decodeMP3 always yields stereo: the decoder duplicates a mono stream into both channels.
-func decodeMP3(b []byte) (pcm, error) {
+func decodeMP3(ctx context.Context, b []byte) (pcm, error) {
 	dec, err := mp3.NewDecoder(bytes.NewReader(b))
 	if err != nil {
 		return pcm{}, fmt.Errorf("decoding audio: %w", err)
 	}
-	raw, err := io.ReadAll(dec)
-	if err != nil && len(raw) == 0 {
-		return pcm{}, fmt.Errorf("decoding audio: %w", err)
+	raw := make([]byte, 0, max(dec.Length(), 0))
+	buf := make([]byte, 1<<18)
+	for {
+		if err := ctx.Err(); err != nil {
+			return pcm{}, err
+		}
+		n, rerr := dec.Read(buf)
+		raw = append(raw, buf[:n]...)
+		if rerr != nil {
+			if !errors.Is(rerr, io.EOF) && len(raw) == 0 {
+				return pcm{}, fmt.Errorf("decoding audio: %w", rerr)
+			}
+			break
+		}
 	}
 	out := make([]float32, len(raw)/2)
 	for i := range out {

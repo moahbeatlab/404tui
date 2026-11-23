@@ -149,6 +149,8 @@ func (a *App) sliceToolsMenu() {
 	m.items = append(m.items, menuItem{label: barsLabel, vals: []string{barsVal}, run: func(int) { a.askBarTempo() }})
 	m.items = append(m.items, menuItem{label: "Bars: bar 1 starts at the cursor", vals: []string{fmt.Sprintf("%.3f s", float64(a.bars.down)/formats.SampleRate)}, run: func(int) { a.setDownbeat() }})
 	set("Bars: the cuts snap to them", []string{"on", "off"}, b2i(a.bars.noSnap), func(v int) { a.bars.noSnap = v == 1 })
+	m.items = append(m.items, menuItem{label: "This slice: ... bars from its start (w W)", vals: names(sliceLens, func(v int) string { return count(v, "bar") }), val: 2,
+		run: func(v int) { a.setSliceBars(sliceLens[v]) }})
 	barN := []int{1, 2, 4, 8, 16}
 	m.items = append(m.items, menuItem{label: "Cut every ... bars from bar 1", vals: names(barN, func(v int) string { return count(v, "bar") }), val: 3,
 		run: func(v int) { a.barCuts(barN[v]) }})
@@ -313,7 +315,7 @@ func (a *App) resultTo(n int) {
 		a.say(err.Error(), true)
 		return
 	}
-	name := fmt.Sprintf("%s_mix", fit(a.info.Pads[a.spad].Name, 12))
+	name := fmt.Sprintf("%s_mix", fit(a.sliceName(), 12))
 	err = a.assignPad(n, id, name)
 	a.lab.Free(id)
 	if err != nil {

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/moahbeatlab/404tui/app"
@@ -4773,9 +4774,121 @@ func TestALoopIsCutOutOfATrackOnItsBars(t *testing.T) {
 	if out, _ := a.lab.Sample(id); out.Frames() != 4*bar {
 		t.Fatalf("the pad's sample is 4 bars long: %d frames", out.Frames())
 	}
+	// the slice of bars 5-8 made 2 bars long, then longer again with w: the slice after it starts where it ends
+	a.at = lead + 5*bar
+	a.setSliceBars(2)
+	if sg := a.sl.Slices[i]; sg.End != lead+6*bar || a.barsText(sg.End-sg.Start) != "2 bars ✓" {
+		t.Fatalf("2 bars from bar 5: %+v", sg)
+	}
+	a.scr = Slice
+	a.SliceBarsKey(1)
+	a.SliceBarsKey(1)
+	if sg := a.sl.Slices[i]; sg.End != lead+12*bar || a.sl.Slices[i+1].Start != lead+12*bar {
+		t.Fatalf("w: 4 then 8 bars, over the next slice: %+v / %+v", sg, a.sl.Slices[i+1])
+	}
+	a.SliceBarsKey(-1)
+	if sg := a.sl.Slices[i]; sg.End != lead+8*bar {
+		t.Fatalf("W: back to 4 bars: %+v", sg)
+	}
+	a.setSliceBars(16)
+	if !strings.Contains(a.msg, "past the end") {
+		t.Fatalf("16 bars do not fit: %q", a.msg)
+	}
 	// every 4 bars from bar 1
 	a.barCuts(4)
 	if len(a.sl.Slices) != 5 || a.sl.Slices[2].Start != lead+4*bar || a.sl.Slices[4].Start != lead+12*bar {
 		t.Fatalf("a slice before bar 1, 4-bar slices, the rest: %+v", a.sl.Slices)
+	}
+}
+
+func TestALongFileIsDecodedInTheBackground(t *testing.T) {
+	a, au := newApp(t)
+	Terminal = true
+	defer func() { Terminal = false }()
+	s := formats.Sample{Channels: 2, Samples: make([]int16, 2*48000*30)} // 30 s: 5.8 MB
+	if err := os.WriteFile(filepath.Join(a.Root, "000_song.wav"), s.WAV(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.go_(Files)
+	a.dir = a.Root
+	a.list()
+	a.fcur = slices.IndexFunc(a.entries, func(e entry) bool { return e.name == "000_song.wav" })
+	e, _ := a.current()
+	if _, ready, err := a.decodeOrQueue(e); ready || err != nil || a.bg == nil {
+		t.Fatalf("a long file is decoded in the background: ready %v, err %v", ready, err)
+	}
+	played := au.Played
+	a.filesKey(X)
+	if au.Played != played || !strings.Contains(a.msg, "plays when it is ready") {
+		t.Fatalf("Space waits for it: %q", a.msg)
+	}
+	for i := 0; i < 500 && a.bg != nil; i++ {
+		time.Sleep(10 * time.Millisecond)
+		a.Tick()
+	}
+	if a.bg != nil {
+		t.Fatal("the decoding ends")
+	}
+	if au.Played != played+1 || a.fplay == nil {
+		t.Fatal("it plays when it is ready")
+	}
+	if _, ready, _ := a.decodeOrQueue(e); !ready {
+		t.Fatal("then it is kept")
+	}
+	// another long file lets go of the one that decodes
+	a.startBgDecode(filepath.Join(a.Root, "x.mp3"), ".mp3")
+	first := a.bg
+	a.startBgDecode(filepath.Join(a.Root, "y.mp3"), ".mp3")
+	if a.bg == first || a.bg.path != filepath.Join(a.Root, "y.mp3") {
+		t.Fatal("one file at a time: the newest")
+	}
+}
+
+func TestALongFileDecodesWithoutFfmpegToo(t *testing.T) {
+	saved := ffmpegFound
+	none := ""
+	ffmpegFound = &none
+	defer func() { ffmpegFound = saved }()
+	p := filepath.Join(t.TempDir(), "song.wav")
+	s := formats.Sample{Channels: 2, Samples: make([]int16, 2*48000)}
+	os.WriteFile(p, s.WAV(), 0o644)
+	imp, err := decodeFast(context.Background(), p, ".wav")
+	if err != nil || imp.Sample.Frames() != 48000 {
+		t.Fatalf("decoded by the program: %v, %d frames", err, imp.Sample.Frames())
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := formats.DecodeAudioContext(ctx, []byte("ID3xxxx"), ".mp3"); err == nil {
+		t.Fatal("a cancelled decoding gives up")
+	}
+}
+
+func TestAFileGoesToTheSlicerOnNoPad(t *testing.T) {
+	a, _ := newApp(t)
+	s := formats.Sample{Channels: 2, Samples: make([]int16, 2*48000*4)}
+	if err := os.WriteFile(filepath.Join(a.Root, "000_loop_124.wav"), s.WAV(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.go_(Files)
+	a.dir = a.Root
+	a.list()
+	a.fcur = slices.IndexFunc(a.entries, func(e entry) bool { return e.name == "000_loop_124.wav" })
+	pads := a.info.Pads
+	a.SliceFileKey()
+	if a.scr != Slice || a.sl == nil || a.sfile != "000_loop_124.wav" || a.sliceLabel() != "FILE" || a.bars.bpm != 124 {
+		t.Fatalf("S opens the file in the slicer: screen %v, file %q, bpm %v", a.scr, a.sfile, a.bars.bpm)
+	}
+	if a.sl.Frames != 4*48000 {
+		t.Fatalf("the whole file: %d frames", a.sl.Frames)
+	}
+	for i := range pads {
+		if pads[i].File != a.info.Pads[i].File {
+			t.Fatal("no pad gets the file")
+		}
+	}
+	a.go_(Pads)
+	a.go_(Slice)
+	if a.sfile == "" || a.sl == nil {
+		t.Fatal("the file stays in the slicer when the screens change")
 	}
 }

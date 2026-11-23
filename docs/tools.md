@@ -634,7 +634,7 @@ On a computer: the 16 projects of the unit when one is plugged in (online), else
 
 The file browser: this computer, the unit's card and its storage. `t` chooses where the files are loaded from (the computer, the samples folder, the unit's SD card, a USB drive, favourites) and leads to the file tools.
 
-**Keys on a computer:** `a` to a pad... · `Space` listen · `x` stop · `, .` skip 10 s · `jk` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where · `m` mark file · `M` mark all · `^A` auto play: off · `g hl` screen (1-6) · `y x` places · `y a` search · `y b` favourite · `s a` mark · `s x` record
+**Keys on a computer:** `a` to a pad... · `Space` listen · `x` stop · `, .` skip 10 s · `jk` browse · `l` open · `h` up · `[ ]` page · `Esc` pads · `t` from where · `S` to the slicer · `m` mark file · `M` mark all · `^A` auto play: off · `g hl` screen (1-6) · `y x` places · `y a` search · `y b` favourite · `s a` mark · `s x` record
 
 **Keys on the handheld:** `A` to pad A3 · `X` listen · `^v` browse · `>` open · `<` up · `L1 R1` page · `B` pads · `Y+<>` screen · `Y+X` places · `Y+A` search · `Y+B` favourite · `Sel+A` mark · `Sel+B` files menu · `Sel+X` record
 
@@ -672,6 +672,7 @@ The file browser: this computer, the unit's card and its storage. `t` chooses wh
 - `Cut (1)`
 - `Paste here (0)`
 - `Delete...`
+- `Open in the slicer, on no pad (S)`
 - `Rename...`
 
 *This Folder*
@@ -730,6 +731,7 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
     - `Bars: the tempo of the track` — not set; now not set
     - `Bars: bar 1 starts at the cursor` — 0.000 s; now 0.000 s
     - `Bars: the cuts snap to them` — on / off; now on
+    - `This slice: ... bars from its start (w W)` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 4 bars
     - `Cut every ... bars from bar 1` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 8 bars
     - `Cut on the grid at 120 BPM` — 1/4 / 1/8 / 1/16 / 1/32; now 1/8
     - `Auto-cut (Y+A): up to` — 4 slices / 8 slices / 16 slices / 24 slices / 32 slices; now 16 slices
@@ -803,6 +805,7 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
 - `Bars: the tempo of the track` — not set; now not set
 - `Bars: bar 1 starts at the cursor` — 0.000 s; now 0.000 s
 - `Bars: the cuts snap to them` — on / off; now on
+- `This slice: ... bars from its start (w W)` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 4 bars
 - `Cut every ... bars from bar 1` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 8 bars
 - `Cut on the grid at 120 BPM` — 1/4 / 1/8 / 1/16 / 1/32; now 1/8
 - `Auto-cut (Y+A): up to` — 4 slices / 8 slices / 16 slices / 24 slices / 32 slices; now 16 slices
@@ -874,6 +877,7 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
         - `Bars: the tempo of the track` — not set; now not set
         - `Bars: bar 1 starts at the cursor` — 0.000 s; now 0.000 s
         - `Bars: the cuts snap to them` — on / off; now on
+        - `This slice: ... bars from its start (w W)` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 4 bars
         - `Cut every ... bars from bar 1` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 8 bars
         - `Cut on the grid at 120 BPM` — 1/4 / 1/8 / 1/16 / 1/32; now 1/8
         - `Auto-cut (Y+A): up to` — 4 slices / 8 slices / 16 slices / 24 slices / 32 slices; now 16 slices

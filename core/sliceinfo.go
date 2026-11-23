@@ -9,7 +9,7 @@ import (
 
 // sliceHeader is the two lines over the groups: the pad and its sample, then the sample's length, the slices and the zoom.
 func (a *App) sliceHeader(g Gfx, x, y, w int) {
-	g.Text(x, y, fmt.Sprintf("%s %s", a.label(a.spad), fit(a.info.Pads[a.spad].Name, w-4)), cAmber, true)
+	g.Text(x, y, fmt.Sprintf("%s %s", a.sliceLabel(), fit(a.sliceName(), w-4)), cAmber, true)
 	g.Text(x, y+1, fit(fmt.Sprintf("%.2f s  %d slices  zoom %dx", float64(a.sl.Frames)/48000, len(a.sl.Slices), 1<<a.zoom), w), cDim, false)
 }
 
