@@ -142,11 +142,15 @@ func (a *App) sliceToolsMenu() {
 	barsVal := "not set"
 	if a.bars.bpm > 0 {
 		barsVal = bpmText(a.bars.bpm) + " BPM"
-		if a.bars.fromTag {
+		switch {
+		case a.bars.fromTag:
 			barsVal += " (its name)"
+		case a.bars.conf > 0:
+			barsVal += fmt.Sprintf(" (heard, %.0f%%)", a.bars.conf*100)
 		}
 	}
 	m.items = append(m.items, menuItem{label: barsLabel, vals: []string{barsVal}, run: func(int) { a.askBarTempo() }})
+	m.items = append(m.items, menuItem{label: "Bars: detect the tempo and bar 1", run: func(int) { a.detectBars(true) }})
 	m.items = append(m.items, menuItem{label: "Bars: bar 1 starts at the cursor", vals: []string{fmt.Sprintf("%.3f s", float64(a.bars.down)/formats.SampleRate)}, run: func(int) { a.setDownbeat() }})
 	set("Bars: the cuts snap to them", []string{"on", "off"}, b2i(a.bars.noSnap), func(v int) { a.bars.noSnap = v == 1 })
 	m.items = append(m.items, menuItem{label: "This slice: ... bars from its start (w W)", vals: names(sliceLens, func(v int) string { return count(v, "bar") }), val: 2,

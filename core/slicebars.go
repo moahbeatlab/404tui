@@ -21,6 +21,7 @@ import (
 type sliceBars struct {
 	bpm     float64 // the track's tempo; 0: no bar grid
 	fromTag bool    // the tempo was read from the name
+	conf    float64 // the tempo was detected, this sure (0..1); 0: not detected
 	down    int     // a downbeat (frames): bar 1 starts there
 	downSet bool    // the downbeat was set (else the start of the sample)
 	noSnap  bool    // the cuts go where they are put, not to the nearest bar line
@@ -54,6 +55,42 @@ func (a *App) resetBars() {
 	a.bars = sliceBars{}
 	if v := bpmOfName(a.sliceName()); v > 0 {
 		a.bars = sliceBars{bpm: v, fromTag: true}
+		return
+	}
+	if a.sl != nil && a.sl.Frames >= 8*formats.SampleRate { // a long sample with no tempo in its name: it is heard for one
+		a.detectBars(false)
+	}
+}
+
+// detectBars finds the tempo of the sample in the slicer and puts bar 1 on its first beat (the onset there, when there is one
+// within 25 ms). Loud says what it found.
+func (a *App) detectBars(loud bool) {
+	s, err := a.lab.Sample(a.sid)
+	if err != nil {
+		return
+	}
+	tp := formats.DetectTempo(s)
+	if tp.BPM <= 0 {
+		if loud {
+			a.say("no steady beat found: set the tempo by hand (tools, Bars)", true)
+		}
+		return
+	}
+	at := tp.FirstBeat
+	if on, err := a.lab.Transients(a.sid, 256, a.autoSensitivity()); err == nil {
+		best, bestD := -1, formats.SampleRate/40
+		for _, o := range on {
+			if d := abs(o - at); d <= bestD {
+				best, bestD = o, d
+			}
+		}
+		if best >= 0 {
+			at = best
+		}
+	}
+	a.bars = sliceBars{bpm: tp.BPM, conf: math.Max(tp.Confidence, 0.01), down: at, downSet: true}
+	if loud {
+		a.say(fmt.Sprintf("%s BPM (%.0f%% sure), bar 1 at %.3f s: %s moves bar 1 to the cursor", bpmText(tp.BPM), tp.Confidence*100, float64(at)/formats.SampleRate, downbeatKey()), false)
 	}
 }
 
@@ -429,8 +466,11 @@ func (a *App) sliceFile() {
 	a.resetBars()
 	a.go_(Slice)
 	said := fmt.Sprintf("%s in the slicer, on no pad: keep slices on pads from the tools", fit(a.sliceName(), 30))
-	if a.bars.bpm > 0 {
+	switch {
+	case a.bars.fromTag:
 		said += fmt.Sprintf("; %s BPM from its name, %s sets bar 1", bpmText(a.bars.bpm), downbeatKey())
+	case a.bars.bpm > 0:
+		said += fmt.Sprintf("; %s BPM heard (%.0f%% sure), bar 1 at %.3f s", bpmText(a.bars.bpm), a.bars.conf*100, float64(a.bars.down)/formats.SampleRate)
 	}
 	a.say(said, false)
 }

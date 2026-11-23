@@ -10,6 +10,7 @@ import (
 	"github.com/moahbeatlab/404tui/midiin"
 	"github.com/moahbeatlab/404tui/proto"
 	"github.com/moahbeatlab/404tui/record"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -4890,5 +4891,31 @@ func TestAFileGoesToTheSlicerOnNoPad(t *testing.T) {
 	a.go_(Slice)
 	if a.sfile == "" || a.sl == nil {
 		t.Fatal("the file stays in the slicer when the screens change")
+	}
+}
+
+func TestTheSlicerHearsTheTempoOfASongWithoutOneInItsName(t *testing.T) {
+	a, _ := newApp(t)
+	const lead, beat = 12000, 23040 // 125 BPM
+	s := formats.Sample{Channels: 1, Samples: make([]int16, lead+64*beat+4800)}
+	for b := 0; b < 64; b++ {
+		for k := 0; k < 6000; k++ {
+			f := 50 + 100*math.Exp(-float64(k)/1500)
+			s.Samples[lead+b*beat+k] = int16(20000 * math.Sin(2*math.Pi*f*float64(k)/48000) * math.Exp(-float64(k)/4000))
+		}
+	}
+	if err := os.WriteFile(filepath.Join(a.Root, "000_my_song.wav"), s.WAV(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.go_(Files)
+	a.dir = a.Root
+	a.list()
+	a.fcur = slices.IndexFunc(a.entries, func(e entry) bool { return e.name == "000_my_song.wav" })
+	a.SliceFileKey()
+	if a.bars.bpm != 125 || a.bars.conf == 0 || abs(a.bars.down-lead) > 480 {
+		t.Fatalf("125 BPM heard, bar 1 on the first kick: %+v (%q)", a.bars, a.msg)
+	}
+	if !strings.Contains(a.msg, "125 BPM heard") {
+		t.Fatalf("it says so: %q", a.msg)
 	}
 }
