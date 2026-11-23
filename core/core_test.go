@@ -4933,6 +4933,16 @@ func TestTheCursorGoesFromBarToBar(t *testing.T) {
 	a.cur, a.bank = 0, 0
 	a.go_(Slice)
 	a.bars.down = 1000
+	a.at = 1000 + 4*bar
+	keys(t, a, "A")
+	a.slicesToPads(false)
+	for _, p := range []int{1, 2} {
+		if v := a.padValue(p, 0x6F, 0); v != 12500 {
+			t.Fatalf("the slices on pads have the track's 125 BPM: %s %d (%q)", a.label(p), v, a.msg)
+		}
+	}
+	a.MarkSlice(true)
+	a.MarkSlice(true)
 	a.at = 1000 + 3*bar + 500
 	keys(t, a, "]")
 	if a.at != 1000+4*bar || a.barText(a.at) != "bar 5.1" {
@@ -5176,6 +5186,13 @@ func TestOnlyTheMarkedSlicesGoToPads(t *testing.T) {
 	}
 	if after-before != 2 {
 		t.Fatalf("only the 2 marked slices go to pads: %d", after-before)
+	}
+	if a.bars.bpm > 0 {
+		for i, p := range a.info.Pads {
+			if p.File && strings.Contains(p.Name, "_0") && a.padValue(i, 0x6F, 0) != int32(math.Round(a.bars.bpm*100)) {
+				t.Fatalf("%s has the track's tempo: %d", a.label(i), a.padValue(i, 0x6F, 0))
+			}
+		}
 	}
 	a.MarkSlice(true)
 	if a.slicesMarked() != n {

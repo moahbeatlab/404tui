@@ -435,11 +435,18 @@ func (a *App) sliceTo(i, n int) {
 	said := fmt.Sprintf("slice %d on %s", i+1, a.label(n))
 	if a.barFrames() > 0 {
 		a.lab.SetPadParam(n, 0x6B, 1) // loop
-		a.lab.SetPadParam(n, 0x6F, int32(math.Round(a.bars.bpm*100)))
+		a.setPadTempo(n, a.bars.bpm)
 		said += fmt.Sprintf(" as a loop, %s at %s BPM", a.barsText(sg.End-sg.Start), bpmText(a.bars.bpm))
 	}
 	a.refresh()
 	a.say(said, false)
+}
+
+// setPadTempo gives a pad the tempo it is at (its BPM setting, which the unit's BPM sync goes by); 0 leaves it as it is.
+func (a *App) setPadTempo(n int, bpm float64) {
+	if bpm > 0 {
+		a.lab.SetPadParam(n, 0x6F, int32(math.Round(bpm*100)))
+	}
 }
 
 // loopSlice plays the slice under the cursor in a loop (whole bars, on a computer): the seam is heard; X again stops it.

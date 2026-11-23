@@ -331,6 +331,11 @@ func (a *App) resultTo(n int) {
 		a.say(err.Error(), true)
 		return
 	}
+	if a.sl.Division > 0 { // played on the grid: at the bank's tempo
+		a.setPadTempo(n, a.tempoOf(a.spad/16))
+	} else {
+		a.setPadTempo(n, a.bars.bpm)
+	}
 	delete(a.pcm, n)
 	a.refresh()
 	a.say(fmt.Sprintf("the result is on %s", a.label(n)), false)

@@ -32,7 +32,7 @@ Cut a sample into slices and play them in an order. It opens on the sample of th
 
 ![The slice tools](img/pc-slice-tools.png)
 
-- **Choose the slices that go.** `m` marks the slice under the cursor (a green dot after its number), `M` marks every slice or none. With slices marked, *Slices to pads* (and `y x`) puts only those on pads, in their order; with none marked, all of them. The marks are kept with the slicing.
+- **Choose the slices that go.** `m` marks the slice under the cursor (a green dot after its number), `M` marks every slice or none. With slices marked, *Slices to pads* (and `y x`) puts only those on pads, in their order; with none marked, all of them. Every pad a slice goes to gets the track's tempo as its BPM (the bars' tempo: from the name, heard or set), so the unit's BPM sync plays it right; the result of the order rendered on the grid gets the bank's. The marks are kept with the slicing.
 - **Keep what you made.** `y x` sends the slices to pads: they land on consecutive pads from the one you choose, and the pad tiles show their lengths. With a pattern under them, SEQ then has the pattern that plays the slices.
 - **Undo.** `u` takes back the last change (a removed slice, a cut in equal parts, a mangle...), `R` redoes it, and it goes on back.
 

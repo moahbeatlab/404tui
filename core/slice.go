@@ -320,11 +320,16 @@ func (a *App) slicesToPadsFrom(first int, shuffled bool) {
 		a.lab.Free(m.ID)
 		if err == nil {
 			delete(a.pcm, n)
+			a.setPadTempo(n, a.bars.bpm) // the track's tempo (from its name, heard or set)
 			done++
 		}
 	}
 	a.refresh()
-	a.say(fmt.Sprintf("%d slices on %s to %s: the markers stay (1 shows the pads)", done, a.label(first), a.label(first+done-1)), false)
+	said := fmt.Sprintf("%d slices on %s to %s", done, a.label(first), a.label(first+done-1))
+	if a.bars.bpm > 0 {
+		said += fmt.Sprintf(" at %s BPM", bpmText(a.bars.bpm))
+	}
+	a.say(said+": the markers stay (1 shows the pads)", false)
 }
 
 // padOrder is the slices in the order they go to pads: the play order (each slice once, at its first place), then the
