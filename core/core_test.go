@@ -5236,3 +5236,41 @@ func TestAPlayingSliceShowsWhereItIs(t *testing.T) {
 		t.Fatal("stopped: no playhead")
 	}
 }
+
+func TestMarkersGoTheWayTheOrderPlays(t *testing.T) {
+	a, _ := newApp(t)
+	const bar = 92160
+	s := formats.Sample{Channels: 1, Samples: make([]int16, 20*bar)}
+	mb, _ := a.lab.Decode(s.WAV(), ".wav")
+	var m lab.Meta
+	json.Unmarshal(mb, &m)
+	a.assignPad(0, m.ID, "song_125")
+	a.refresh()
+	a.cur, a.bank = 0, 0
+	a.go_(Slice)
+	a.bars.down = 0
+	a.at = 2 * bar
+	keys(t, a, "A") // 0-2, 2-20
+	a.at = 12 * bar
+	keys(t, a, "A") // 0-2, 2-12, 12-20
+	a.at = 2*bar + 10
+	a.setSliceBars(4) // 2-6, a gap to 12
+	a.at = 8 * bar
+	keys(t, a, "A") // 0-2, 2-6, 8-12 (new: plays last), 12-20
+	if fmt.Sprint(a.sl.Order) != "[0 1 3 2]" {
+		t.Fatalf("the new slice plays last: %v", a.sl.Order)
+	}
+	a.at = 2 * bar
+	var got []int
+	for i := 0; i < 3; i++ {
+		keys(t, a, "U")
+		got = append(got, a.at/bar)
+	}
+	if fmt.Sprint(got) != "[12 8 8]" {
+		t.Fatalf("on: from bar 2 to the slices as they play (12, then 8, which is last): %v", got)
+	}
+	keys(t, a, "D")
+	if a.at != 12*bar {
+		t.Fatalf("back from the last one: %d", a.at/bar)
+	}
+}

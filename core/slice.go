@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -146,6 +147,9 @@ func (a *App) sliceKey(k Key, repeat int) {
 
 // jump is the next slice start after the cursor (or the one before it).
 func (a *App) jump(next bool) int {
+	if at, ok := a.jumpInOrder(next); ok {
+		return at
+	}
 	best := -1
 	for _, s := range a.sl.Slices {
 		if next && s.Start > a.at && (best < 0 || s.Start < best) {
@@ -162,6 +166,38 @@ func (a *App) jump(next bool) int {
 		return 0
 	}
 	return best
+}
+
+// jumpInOrder is the start of the slice after (or before) the one under the cursor in the order it plays in (each slice once, where
+// it first plays), as the cells under the shape show it: after a slice that was started in a gap, which plays last, j k go the way
+// it plays, not the way the slices lie. Back from inside a slice is its own start first. False: the cursor is in no slice, or the
+// order has no slices to go by.
+func (a *App) jumpInOrder(next bool) (int, bool) {
+	i := a.sliceAt(a.at)
+	if i < 0 || len(a.sl.Order) == 0 {
+		return 0, false
+	}
+	var seq []int
+	seen := map[int]bool{}
+	for _, o := range a.sl.Order {
+		if o >= 0 && o < len(a.sl.Slices) && !seen[o] {
+			seen[o] = true
+			seq = append(seq, o)
+		}
+	}
+	p := slices.Index(seq, i)
+	if p < 0 {
+		return 0, false
+	}
+	switch {
+	case !next && a.at > a.sl.Slices[i].Start:
+		return a.sl.Slices[i].Start, true
+	case next && p+1 < len(seq):
+		return a.sl.Slices[seq[p+1]].Start, true
+	case !next && p > 0:
+		return a.sl.Slices[seq[p-1]].Start, true
+	}
+	return a.sl.Slices[i].Start, true // the first or the last of the order: it stays
 }
 
 func (a *App) playSlice() {

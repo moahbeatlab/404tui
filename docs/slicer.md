@@ -11,7 +11,7 @@ Cut a sample into slices and play them in an order. It opens on the sample of th
 
 ## What you do here
 
-- **Cut.** `a` cuts at the cursor, `b` joins the slice with the next (removes the marker), `h l` move, `j k` move a marker. *Auto-cut* (`y a`) cuts at the onsets of the sound, up to a number of slices you choose (4 to 32) and with a sensitivity (low to high):
+- **Cut.** `a` cuts at the cursor, `b` joins the slice with the next (removes the marker), `h l` move, `j k` go from slice to slice in the order they play (as the cells under the waveform show it: a slice started in a gap plays last, so it comes last; in a gap they go by position). *Auto-cut* (`y a`) cuts at the onsets of the sound, up to a number of slices you choose (4 to 32) and with a sensitivity (low to high):
   on a drum break it finds the hits. The tools also cut in equal parts (2 to 32), at random places, on the grid of the bank's tempo (1/4 to 1/32), and *tap* (cut while the sample plays).
 - **A loop out of a whole track.** `S` on the track in FILES opens it here **on no pad** (the top line says FILE; the pad in front gives the bank, where kept slices go). Only the loops you keep take pads. A track on a pad opens here as before.
   - **Listen from the cursor** (`Space`, or `s a`; Select+A on the handheld; or the tools, *Cut*): the track plays from the cursor and the cursor goes with it. `,` `.` skip 10 s back or forward, `+ -` zoom in and out (the view follows the cursor), `a` cuts where it plays, `b` or `x` stops.
