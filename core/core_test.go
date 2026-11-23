@@ -4649,3 +4649,43 @@ func TestLocalTagsAreFoundByTheCategorySearch(t *testing.T) {
 		t.Fatal("the tags were kept, and can be taken off")
 	}
 }
+
+func TestAFileThatPlaysIsSkippedThroughOnFiles(t *testing.T) {
+	a, au := newApp(t)
+	s := formats.Sample{Channels: 2, Samples: make([]int16, 2*48000*60)} // a minute
+	if err := os.WriteFile(filepath.Join(a.Root, "000_song.wav"), s.WAV(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1000, 0)
+	a.Now = func() time.Time { return now }
+	a.go_(Files)
+	a.dir = a.Root
+	a.list()
+	a.fcur = slices.IndexFunc(a.entries, func(e entry) bool { return e.name == "000_song.wav" })
+	if a.fcur < 0 {
+		t.Fatal("the song is listed")
+	}
+	keys(t, a, "}")
+	if a.fplay != nil || !strings.Contains(a.msg, "nothing plays") {
+		t.Fatalf("nothing plays yet: %q", a.msg)
+	}
+	keys(t, a, "X")
+	if a.fplay == nil || a.fplay.from != 0 {
+		t.Fatalf("X plays the file from its start: %+v", a.fplay)
+	}
+	played := au.Played
+	now = now.Add(5 * time.Second)
+	keys(t, a, "}")
+	if a.fplay.from != 15*48000 || au.Played != played+1 || !strings.Contains(a.msg, "0:15 / 1:00") {
+		t.Fatalf("R2 goes on 10 s later: from %d, %q", a.fplay.from, a.msg)
+	}
+	keys(t, a, "{ {")
+	if a.fplay.from != 0 {
+		t.Fatalf("L2 goes back 10 s, not before the start: %d", a.fplay.from)
+	}
+	now = now.Add(55 * time.Second)
+	keys(t, a, "}")
+	if !strings.Contains(a.msg, "end") {
+		t.Fatalf("past the end: %q", a.msg)
+	}
+}

@@ -128,6 +128,7 @@ type entry struct {
 type App struct {
 	midiRun  *midiBatch // the MIDI files that are being imported into one pattern
 	midiInto int        // the pattern the last MIDI file went into: the next form starts on it
+	fplay    *filePlay  // the file of FILES that plays, to skip through it
 	midiPad  int        // the pad (sample) the last melody of a MIDI file was on, plus one (0: none yet)
 	midiMode int        // what the last MIDI import did in the pattern (see midiForm.mode), plus one (0: none yet)
 	lab      *lab.Lab
@@ -463,6 +464,10 @@ func (a *App) triggerKey(whole bool) {
 		} else {
 			a.clearMarks()
 		}
+		return
+	}
+	if a.scr == Files { // L2 and R2 skip back and forth through the file that plays
+		a.fileSkipKey(whole)
 		return
 	}
 	if a.scr == Seq && !whole { // L2 plays the note under the cursor
@@ -1174,6 +1179,7 @@ func (a *App) padsKey(k Key) {
 }
 
 func (a *App) stop() {
+	a.fplay = nil
 	a.playPat = 0
 	a.placed = nil
 	if a.Audio != nil {
@@ -1196,6 +1202,7 @@ func (a *App) looping() bool { return a.seqOn || a.arpOn || a.orderOn }
 
 // stopPreview stops a sound that was being auditioned: while a loop plays, only that sound.
 func (a *App) stopPreview() {
+	a.fplay = nil
 	if a.looping() {
 		if pv, ok := a.Audio.(previewer); ok {
 			pv.StopPreview()
@@ -1417,7 +1424,7 @@ func (a *App) listen(e entry, id int) {
 		a.say(fmt.Sprintf("%s plays in the pattern as %s: A keeps it", fit(filepath.Base(e.name), 24), a.label(pad)), false)
 		return
 	}
-	a.play(s)
+	a.playFileFrom(id, s, 0)
 }
 
 // padInPattern says whether the pattern in front has notes on the pad.

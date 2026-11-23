@@ -108,6 +108,8 @@ func (a *App) hints() (plain, shift []hint) {
 				continue
 			case h.key == "B" && h.what == "stop":
 				continue
+			case h.key == "L2 R2" && h.what == "skip 10 s":
+				h = hint{", .", h.what}
 			}
 			out = append(out, h)
 		}
@@ -257,7 +259,16 @@ func (a *App) rawHints() (plain, shift []hint) {
 		if a.searchQ != "" {
 			up = hint{"<", "end search"}
 		}
-		return []hint{pick, listen, {"^v", "browse"}, {">", "open"}, up, {"L1 R1", "page"}, {"B", "pads"}},
+		hs := []hint{pick, listen, {"^v", "browse"}, {">", "open"}, up, {"L1 R1", "page"}, {"B", "pads"}}
+		if _, playing := a.filePos(); Terminal || playing { // skipping through the file that plays (the handheld has room only while it plays)
+			skip := hint{"L2 R2", "skip 10 s"}
+			if Terminal {
+				hs = append(hs[:2], append([]hint{skip}, hs[2:]...)...)
+			} else {
+				hs[1] = skip
+			}
+		}
+		return hs,
 			[]hint{screen, {"Y+X", "places"}, {"Y+A", "search"}, {"Y+B", "favourite"}, {"Sel+A", "mark"}, {"Sel+B", "files menu"}, {"Sel+X", "record"}}
 	case Slice:
 		if a.tap {
@@ -593,6 +604,10 @@ func (a *App) context(g Gfx, x, y0, w, y1 int) {
 			if Terminal { // a computer: the shape of the sample is in the panel, and the ranger's third column keeps to folders
 				g.Fill(x, row(5), w, 7, cPanel2)
 				a.wave(g, id, 0, s.Frames(), x, row(5), w, 7, cAmber)
+				if at, ok := a.filePos(); ok && a.fplay.id == id && s.Frames() > 0 { // where it plays: a line, and the time
+					g.Fill(x+min(w-1, at*w/s.Frames()), row(5), 1, 7, cText)
+					g.Text(x, row(12), fit(fmt.Sprintf("%s / %s   %s skip 10 s", clockTime(at), clockTime(s.Frames()), fileSkipKeys()), w), cText, false)
+				}
 			} else if contentCols < rangerMinCols { // the ranger's right pane shows the shape
 				g.Fill(x, row(4), w, 2, cPanel2)
 				a.wave(g, id, 0, s.Frames(), x, row(4), w, 2, cText)
