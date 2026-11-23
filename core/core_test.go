@@ -4749,7 +4749,10 @@ func TestALoopIsCutOutOfATrackOnItsBars(t *testing.T) {
 	if a.tapStart != lead+2*bar+480000 {
 		t.Fatalf("R2 skips 10 s: %d", a.tapStart)
 	}
-	keys(t, a, "{ { {")
+	for i := 0; i < 3; i++ { // three presses, not a held key: as if typed apart
+		a.skipHeld = skipHold{}
+		keys(t, a, "{")
+	}
 	if a.tapStart != 0 {
 		t.Fatalf("L2 goes back, not before the start: %d", a.tapStart)
 	}
