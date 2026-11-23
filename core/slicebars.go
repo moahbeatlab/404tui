@@ -149,7 +149,7 @@ func (a *App) barText(f int) string {
 	if f < a.bars.down {
 		return "before bar 1"
 	}
-	pos := float64(f-a.bars.down) / bf
+	pos := (float64(f-a.bars.down) + 0.5) / bf // half a frame: a bar line is never a hair before itself
 	bar := int(pos)
 	beat := int((pos-float64(bar))*4) + 1
 	return fmt.Sprintf("bar %d.%d", bar+1, beat)
@@ -198,6 +198,58 @@ func (a *App) setDownbeat() {
 	a.at = at
 	a.bars.down, a.bars.downSet = at, true
 	a.say(fmt.Sprintf("bar 1 starts at %.3f s: the cuts snap to the bars of %s BPM", float64(a.at)/formats.SampleRate, bpmText(a.bars.bpm)), false)
+}
+
+// fitBars makes the cursor a bar line too: bar 1 stays, the tempo becomes the one that puts a bar line here (the bar nearest the
+// cursor by the tempo as it was). While the track plays, the onset just before the key is taken. The further from bar 1, the
+// closer the tempo.
+func (a *App) fitBars() {
+	bf := a.barFrames()
+	if a.sl == nil || bf <= 0 {
+		a.say("no bars yet: set the tempo of the track (tools, Bars) and bar 1", true)
+		return
+	}
+	at := a.at
+	if a.tap {
+		at = a.onsetBefore(at, formats.SampleRate/5)
+	}
+	k := int(math.Round(float64(at-a.bars.down) / bf))
+	if k < 1 {
+		a.say("put the cursor on the first beat of a later bar (the further from bar 1 the better), then "+tk("Sel+v"), true)
+		return
+	}
+	old := a.bars.bpm
+	bpm := 4 * 60 * formats.SampleRate * float64(k) / float64(at-a.bars.down)
+	if r := math.Round(bpm); math.Abs(bpm-r) < 0.03 {
+		bpm = r
+	} else {
+		bpm = math.Round(bpm*100) / 100
+	}
+	if bpm < 40 || bpm > 300 {
+		a.say("that does not make a tempo: is bar 1 right?", true)
+		return
+	}
+	a.bars.bpm, a.bars.fromTag, a.bars.conf = bpm, false, 0
+	a.at = at
+	a.say(fmt.Sprintf("bar %d starts here: %s BPM (was %s), bar 1 stays", k+1, bpmText(bpm), bpmText(old)), false)
+}
+
+// onsetBefore is the onset just before a frame (up to within), else the frame.
+func (a *App) onsetBefore(at, within int) int {
+	on, err := a.lab.Transients(a.sid, 256, a.autoSensitivity())
+	if err != nil {
+		return at
+	}
+	best := -1
+	for _, o := range on {
+		if o <= at && at-o <= within && o > best {
+			best = o
+		}
+	}
+	if best < 0 {
+		return at
+	}
+	return best
 }
 
 // askBarTempo asks for the track's tempo.

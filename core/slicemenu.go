@@ -155,6 +155,7 @@ func (a *App) sliceToolsMenu() {
 	}
 	m.items = append(m.items, menuItem{label: barsLabel, vals: []string{barsVal}, run: func(int) { a.askBarTempo() }})
 	m.items = append(m.items, menuItem{label: "Bars: detect the tempo and bar 1", run: func(int) { a.detectBars(true) }})
+	m.items = append(m.items, menuItem{label: "Bars: a later bar starts at the cursor (" + tk("Sel+v") + ")", run: func(int) { a.fitBars() }})
 	m.items = append(m.items, menuItem{label: "Bars: bar 1 starts at the cursor", vals: []string{fmt.Sprintf("%.3f s", float64(a.bars.down)/formats.SampleRate)}, run: func(int) { a.setDownbeat() }})
 	set("Bars: the cuts snap to them", []string{"on", "off"}, b2i(a.bars.noSnap), func(v int) { a.bars.noSnap = v == 1 })
 	m.items = append(m.items, a.sliceBarsItem())

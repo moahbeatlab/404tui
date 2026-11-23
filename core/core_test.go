@@ -5059,3 +5059,25 @@ func TestTheSlicerCanHideTheShape(t *testing.T) {
 		t.Fatal("v shows it again")
 	}
 }
+
+func TestTwoBarLinesSetTheTempo(t *testing.T) {
+	a, _ := newApp(t)
+	const bar = 90000 // 128 BPM
+	s := formats.Sample{Channels: 1, Samples: make([]int16, 40*bar)}
+	mb, _ := a.lab.Decode(s.WAV(), ".wav")
+	var m lab.Meta
+	json.Unmarshal(mb, &m)
+	a.assignPad(0, m.ID, "song_130") // the name says 130: wrong
+	a.refresh()
+	a.cur, a.bank = 0, 0
+	a.go_(Slice)
+	a.bars.down = 5000
+	a.at = 5000 + 16*bar // the first beat of bar 17
+	keys(t, a, "S+D")
+	if a.bars.bpm != 128 || a.bars.down != 5000 {
+		t.Fatalf("a bar line at bar 17 makes it 128 BPM, bar 1 staying: %+v (%q)", a.bars, a.msg)
+	}
+	if a.barText(5000+32*bar) != "bar 33.1" || a.barText(a.barLine(6)) != "bar 7.1" {
+		t.Fatalf("a bar line is its bar's first beat: %q %q", a.barText(5000+32*bar), a.barText(a.barLine(6)))
+	}
+}

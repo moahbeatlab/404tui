@@ -463,7 +463,7 @@ func (a *App) sliceShiftHints() []hint {
 	rest := []hint{{"Y+B", "settings"}, {"Sel+B", "tools"}, {"Y+^v", "zoom"}, {"Sel+X", "record"}}
 	switch {
 	case Terminal:
-		return append(append([]hint{listen, down}, chops...), rest...)
+		return append(append([]hint{listen, down, {"Sel+v", "bar line here"}}, chops...), rest...)
 	case a.barFrames() > 0:
 		return append([]hint{listen, down}, rest...)
 	}
@@ -495,7 +495,7 @@ func tkLine(s string) string {
 }
 
 var keyWords = strings.NewReplacer(
-	"A+^<>", "e hjkl", "Sel+^", "s k", "Sel+B", "s b", "Sel+A", "s a", "Sel+X", "s x", "Y+A", "y a", "Y+B", "y b", "Y+X", "y x", "Y+", "y ", "L1 R1", "[ ]", "L1", "[", "R1", "]", "L2", ",", "R2", ".",
+	"A+^<>", "e hjkl", "Sel+^", "s k", "Sel+v", "s j", "Sel+B", "s b", "Sel+A", "s a", "Sel+X", "s x", "Y+A", "y a", "Y+B", "y b", "Y+X", "y x", "Y+", "y ", "L1 R1", "[ ]", "L1", "[", "R1", "]", "L2", ",", "R2", ".",
 	"^v<>", "hjkl", "<>", "hl", "^v", "jk", "hold Y", "y, then", "<", "h", ">", "l")
 
 // keyBlock draws key letters (amber) and what they do; dim when the other set is the one in force.

@@ -824,6 +824,8 @@ func (a *App) selShifted(k Key) {
 			a.startTap()
 		case k == Up && a.sl != nil && !a.lane: // bar 1 starts at the cursor
 			a.setDownbeat()
+		case k == Down && a.sl != nil && !a.lane: // a later bar starts at the cursor: the tempo from the two
+			a.fitBars()
 		}
 	case Seq:
 		if k == B {
