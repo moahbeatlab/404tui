@@ -330,6 +330,21 @@ func (a *App) jumpBar(fwd bool) {
 	a.say(a.barText(at), false)
 }
 
+// ToggleSliceWave is v of a keyboard in the slicer: the shape of the sound drawn or not (the slices and the bars only); kept.
+func (a *App) ToggleSliceWave() {
+	if a.scr != Slice || a.Modal() || a.prompt != nil {
+		return
+	}
+	a.CancelShift()
+	a.set.SliceNoWave = !a.set.SliceNoWave
+	a.saveSettings()
+	if a.set.SliceNoWave {
+		a.say("the slices and the bars only, no shape (v shows it again)", false)
+	} else {
+		a.say("the shape of the sound again (v hides it)", false)
+	}
+}
+
 // ---- one slice to a pad
 
 // sliceToPad asks for a pad and puts the slice under the cursor there as a loop, its tempo the track's.
@@ -485,6 +500,24 @@ func (a *App) SliceBarsKey(d int) {
 		}
 	}
 	a.setSliceBars(next)
+}
+
+// dropSlicing lets go of the slicing when the sample it cuts changed: the slicer on a pad that is among pads (all of them when
+// none is named). A file in the slicer is no pad's, so it stays; so do the markers when other pads change.
+func (a *App) dropSlicing(pads ...int) {
+	if a.sl == nil || a.sfile != "" {
+		return
+	}
+	if len(pads) == 0 {
+		a.sl = nil
+		return
+	}
+	for _, p := range pads {
+		if p == a.spad {
+			a.sl = nil
+			return
+		}
+	}
 }
 
 // ---- a file in the slicer, on no pad

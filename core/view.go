@@ -543,7 +543,38 @@ func (a *App) drawSlice(g Gfx) {
 	from, to := a.view()
 	sel := a.sliceAt(a.at)
 	frac := func(f int) float64 { return float64(f-from) / float64(max(to-from, 1)) }
-	if Terminal { // as in the classic program: the slice is a quiet ground, its dots in its own colour, scaled to the whole sample
+	if Terminal && a.set.SliceNoWave { // no shape: each slice a band of its colour, the bars lines through them
+		if sel >= 0 {
+			x0, x1 := max(frac(sl.Slices[sel].Start), 0), min(frac(sl.Slices[sel].End), 1)
+			if x1 > x0 {
+				c0, c1 := 2+int(x0*float64(wc)), 2+min(int(x1*float64(wc)+0.999), wc)
+				g.Fill(c0, 2, max(c1-c0, 1), wr, cPanel2)
+			}
+		}
+		for i, sg := range sl.Slices {
+			lo, hi := max(sg.Start, from), min(sg.End, to)
+			if hi <= lo {
+				continue
+			}
+			c0, c1 := int(frac(lo)*float64(wc)), min(int(frac(hi)*float64(wc)+0.999), wc)
+			col := cAmberD
+			if i%2 == 1 {
+				col = cBlue
+			}
+			g.Fill(2+c0, 2+wr/3, max(c1-c0, 1), max(wr/3, 1), col)
+		}
+		if bf := a.barFrames(); bf > 0 && float64(to-from)/bf <= float64(wc)/2 {
+			for k := max(int(math.Floor(float64(from-a.bars.down)/bf)), 0); ; k++ {
+				at := a.barLine(k)
+				if at >= to {
+					break
+				}
+				if at >= from {
+					g.Mark(2, 2, wc, wr, frac(at), cLine)
+				}
+			}
+		}
+	} else if Terminal { // as in the classic program: the slice is a quiet ground, its dots in its own colour, scaled to the whole sample
 		if sel >= 0 {
 			x0, x1 := max(frac(sl.Slices[sel].Start), 0), min(frac(sl.Slices[sel].End), 1)
 			if x1 > x0 {
@@ -637,7 +668,9 @@ func (a *App) drawSlice(g Gfx) {
 	// the overview, with the window in it
 	oy := 2 + wr
 	g.Fill(1, oy, contentCols-2, 2, cPanel)
-	a.wave(g, a.sid, 0, sl.Frames, 2, oy, wc, 2, cDim)
+	if !(Terminal && a.set.SliceNoWave) {
+		a.wave(g, a.sid, 0, sl.Frames, 2, oy, wc, 2, cDim)
+	}
 	for _, sg := range sl.Slices {
 		g.Mark(2, oy, wc, 2, float64(sg.Start)/float64(sl.Frames), cAmber)
 	}

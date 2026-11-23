@@ -372,6 +372,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.RenamePadKey()
 		}
 		return
+	case "v": // the slicer: the shape of the sound or not
+		if m.app.ScreenName() == "SLICE" && m.armed == noShift && !m.aHeld {
+			m.app.ToggleSliceWave()
+		}
+		return
 	case "w", "W": // the slicer: the slice under the cursor longer or shorter, in bars
 		if m.app.ScreenName() == "SLICE" && m.armed == noShift && !m.aHeld {
 			m.app.SliceBarsKey(map[string]int{"w": 1, "W": -1}[s])

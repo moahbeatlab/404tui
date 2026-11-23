@@ -315,10 +315,7 @@ func (a *App) slicesToPadsFrom(first int, shuffled bool) {
 		}
 	}
 	a.refresh()
-	a.bank, a.cur = first/16, first%16
-	a.sl = nil
-	a.scr = Pads
-	a.say(fmt.Sprintf("%d slices on %s...", done, a.label(first)), false)
+	a.say(fmt.Sprintf("%d slices on %s to %s: the markers stay (1 shows the pads)", done, a.label(first), a.label(first+done-1)), false)
 }
 
 // padOrder is the slices in the order they go to pads: the play order (each slice once, at its first place), then the

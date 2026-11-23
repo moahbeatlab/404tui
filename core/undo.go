@@ -223,7 +223,7 @@ func (a *App) restoreProject(s *lab.Snap) {
 	}
 	a.pcm = map[int]int{}
 	a.aud = nil
-	a.sl = nil
+	a.dropSlicing() // the pads' samples were let go: a pad's slicing goes (a file's stays)
 	a.tap, a.lane, a.joinPick = false, false, false
 	a.refresh()
 	if a.scr == Slice { // the screen needs a slicing: open the pad's sample again, or go back to the pads

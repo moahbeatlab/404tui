@@ -111,8 +111,8 @@ func TestAssignSliceAndSequence(t *testing.T) {
 	}
 	n := a.Slices()
 	keys(t, a, "Y+X")
-	if a.Screen() != Pads {
-		t.Fatal("slices to pads goes back to PADS")
+	if a.Screen() != Slice || a.Slices() != n {
+		t.Fatal("slices to pads stays in the slicer, the markers too")
 	}
 	for i := 1; i <= n; i++ {
 		if !a.info.Pads[loopPad+i].File {
@@ -121,6 +121,7 @@ func TestAssignSliceAndSequence(t *testing.T) {
 	}
 
 	// the sequencer: A puts a note, A again takes it off, the menu fills a row
+	a.go_(Pads)
 	keys(t, a, "Y+R")
 	if a.Screen() != Seq {
 		t.Fatalf("screen %v", a.Screen())
@@ -490,8 +491,8 @@ func TestSlicesNeverLandOnUsedPads(t *testing.T) {
 	}
 	before := names()
 	keys(t, a, "Y+R Y+R Y+R R*6 A Y+X") // to SLICE: cut the kick in two, put the slices on pads
-	if a.scr != Pads {
-		t.Fatalf("expected the pads after Y+X, on %v: %s", a.scr, a.msg)
+	if a.scr != Slice || a.sl == nil || len(a.sl.Slices) != 2 {
+		t.Fatalf("the slicer stays with its markers after Y+X, on %v: %s", a.scr, a.msg)
 	}
 	if got := names(); got != before {
 		t.Fatalf("slices overwrote pads: %v -> %v", before, got)
@@ -907,13 +908,12 @@ func TestShuffledOrderIsVisibleAndGoesToThePads(t *testing.T) {
 
 	// to pads: the slice at the first place of the order is on the first pad
 	first := a.sl.Order[0]
-	pad0 := a.spad + 1
-	_ = pad0
+	pad0 := a.freeRun(len(a.sl.Slices), a.spad+1)
 	keys(t, a, "Y+X")
-	if a.scr != Pads {
+	if a.scr != Slice {
 		t.Fatalf("screen %v", a.scr)
 	}
-	name := a.info.Pads[a.bank*16+a.cur].Name
+	name := a.info.Pads[pad0].Name
 	if !strings.HasSuffix(name, fmt.Sprintf("_%02d", first+1)) {
 		t.Fatalf("the first pad has %q, wanted slice %d", name, first+1)
 	}
@@ -5015,5 +5015,47 @@ func TestACutWhereNoSliceIsStartsOne(t *testing.T) {
 	keys(t, a, "A")
 	if len(a.sl.Slices) != 5 {
 		t.Fatalf("and it is cut as any other: %+v", a.sl.Slices)
+	}
+}
+
+func TestTheMarkersStayUntilAnotherPadIsSliced(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	keys(t, a, "Y+R Y+R Y+R R*6 A") // the kick in two
+	n, sliced := len(a.sl.Slices), a.spad
+	a.slicesToPads(false)
+	keys(t, a, "Y+R Y+R") // to other screens and back
+	a.bank, a.cur = 0, (sliced+1)%16
+	a.go_(Slice)
+	if a.sl == nil || len(a.sl.Slices) != n || a.spad != sliced {
+		t.Fatal("the slicing stays when the screens and the pad in front change")
+	}
+	a.transform((sliced+1)%16, "reverse", 0) // another pad changes
+	if a.sl == nil {
+		t.Fatal("a change of another pad keeps the markers")
+	}
+	a.transform(sliced, "reverse", 0) // the sliced pad changes: the markers go
+	if a.sl != nil {
+		t.Fatal("a change of the sliced pad's sample lets go of its slicing")
+	}
+}
+
+func TestTheSlicerCanHideTheShape(t *testing.T) {
+	a, _ := newApp(t)
+	Terminal = true
+	defer func() { Terminal = false }()
+	keys(t, a, kit)
+	a.go_(Slice)
+	if a.sl == nil {
+		t.Skip("no slicer")
+	}
+	a.ToggleSliceWave()
+	if !a.set.SliceNoWave {
+		t.Fatal("v hides the shape")
+	}
+	a.Render() // draws without the shape
+	a.ToggleSliceWave()
+	if a.set.SliceNoWave {
+		t.Fatal("v shows it again")
 	}
 }

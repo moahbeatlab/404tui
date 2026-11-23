@@ -105,6 +105,7 @@ func (a *App) sliceMenu() {
 		}})
 	}
 	m.tabHead("PLAY")
+	set("The shape of the sound (v)", []string{"shown", "hidden: slices and bars only"}, b2i(a.set.SliceNoWave), func(v int) { a.set.SliceNoWave = v == 1; a.saveSettings() })
 	set("Play order", modeNames, int(a.sl.Mode), func(v int) { a.sl.Mode = formats.PlayMode(v) })
 	bpm := a.tempoOf(a.spad / 16)
 	set(fmt.Sprintf("Grid, at %s BPM of bank %c", bpmText(bpm), 'A'+rune(a.spad/16)), gridNames, near(formats.Divisions, a.sl.Division), func(v int) { a.sl.Division = formats.Divisions[v] })

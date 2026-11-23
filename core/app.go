@@ -1153,7 +1153,7 @@ func (a *App) go_(s Screen) {
 		}
 	}
 	a.scr = s
-	if s == Slice && (a.sl == nil || a.sfile == "" && a.spad != a.padN()) { // a file in the slicer stays there
+	if s == Slice && a.sl == nil { // the slicing in the slicer stays (another pad is sliced from its menu, Slice...)
 		a.openSlicer()
 		if a.sl == nil {
 			a.scr = Pads
@@ -1438,7 +1438,7 @@ func (a *App) assignFile(id int, name string, n int) {
 	a.stopPreview()
 	a.replay() // a pattern that plays goes on with the new sample
 	a.say(fmt.Sprintf("%s on %s", fit(name, 20), a.label(n)), false)
-	a.sl = nil
+	a.dropSlicing(n)
 	a.go_(Pads)
 }
 

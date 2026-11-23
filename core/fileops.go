@@ -183,7 +183,11 @@ func (a *App) assignInOrder(all []string) {
 func (a *App) finishAssign(first, done int) {
 	a.fmarks = nil
 	a.aud = nil
-	a.sl = nil
+	pads := make([]int, 0, done)
+	for p := first; p < first+done; p++ {
+		pads = append(pads, p)
+	}
+	a.dropSlicing(pads...)
 	a.refresh()
 	a.stopPreview()
 	a.replay()

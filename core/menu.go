@@ -278,7 +278,14 @@ func (a *App) padToolsMenu(n int) *menu {
 	m.head("SAMPLE")
 	add("Pick a sample...", func(int) { a.go_(Files); a.assignTo = n + 1 }) // the sample chosen there goes on this pad: no second question
 	if has {
-		add("Slice...", func(int) { a.go_(Slice) })
+		add("Slice...", func(int) { // this pad: its slicing goes on when it is the one in the slicer, else a new one
+			if a.sl == nil || a.sfile != "" || a.spad != n {
+				a.openSlicer()
+			}
+			if a.sl != nil {
+				a.go_(Slice)
+			}
+		})
 		add("Chord...", func(int) { a.openOnePadMenu(n, true) })
 		add("Arp...", func(int) { a.openOnePadMenu(n, false) })
 		add("Keyboard from it...", func(int) { a.openKeyboardMenu(n) })
@@ -331,7 +338,7 @@ func (a *App) transform(n int, op string, arg int) {
 		a.say(err.Error(), true)
 		return
 	}
-	a.sl = nil
+	a.dropSlicing(n)
 	a.refresh()
 	a.say(fmt.Sprintf("%s: %s %s", a.label(n), op, map[bool]string{true: fmt.Sprintf("%+d", arg), false: ""}[op == "pitch"]), false)
 }
@@ -346,7 +353,7 @@ func (a *App) transformMany(pads []int, op string, arg int) {
 		}
 		done++
 	}
-	a.sl = nil
+	a.dropSlicing(pads...)
 	a.refresh()
 	a.say(fmt.Sprintf("%s on %d pads", op, done), false)
 }
@@ -415,7 +422,7 @@ func (a *App) carryKey(k Key) {
 			delete(a.pcm, to)
 			a.say(fmt.Sprintf("%s moved to %s", a.label(c.from), a.label(to)), false)
 		}
-		a.sl = nil
+		a.dropSlicing(c.from, to)
 		a.refresh()
 	}
 }
