@@ -137,7 +137,21 @@ func (a *App) sliceToolsMenu() {
 		run: func(v int) { a.equalParts(parts[v]) }})
 	m.items = append(m.items, menuItem{label: "Cut at random places", vals: names(parts, func(v int) string { return fmt.Sprint(v) }), val: 2,
 		run: func(v int) { a.randomParts(parts[v]) }})
-	m.items = append(m.items, menuItem{label: "Tap: cut while the sample plays", run: func(int) { a.startTap() }})
+	m.items = append(m.items, menuItem{label: "Listen from the cursor: A cuts where it plays", run: func(int) { a.startTap() }})
+	barsLabel := "Bars: the tempo of the track"
+	barsVal := "not set"
+	if a.bars.bpm > 0 {
+		barsVal = bpmText(a.bars.bpm) + " BPM"
+		if a.bars.fromTag {
+			barsVal += " (its name)"
+		}
+	}
+	m.items = append(m.items, menuItem{label: barsLabel, vals: []string{barsVal}, run: func(int) { a.askBarTempo() }})
+	m.items = append(m.items, menuItem{label: "Bars: bar 1 starts at the cursor", vals: []string{fmt.Sprintf("%.3f s", float64(a.bars.down)/formats.SampleRate)}, run: func(int) { a.setDownbeat() }})
+	set("Bars: the cuts snap to them", []string{"on", "off"}, b2i(a.bars.noSnap), func(v int) { a.bars.noSnap = v == 1 })
+	barN := []int{1, 2, 4, 8, 16}
+	m.items = append(m.items, menuItem{label: "Cut every ... bars from bar 1", vals: names(barN, func(v int) string { return count(v, "bar") }), val: 3,
+		run: func(v int) { a.barCuts(barN[v]) }})
 	grids := []float64{1, 0.5, 0.25, 0.125}
 	m.items = append(m.items, menuItem{label: fit(fmt.Sprintf("Cut on the grid at %.0f BPM", a.tempo()), 40), vals: []string{"1/4", "1/8", "1/16", "1/32"}, val: 1,
 		run: func(v int) { a.gridParts(grids[v]) }})
@@ -164,6 +178,7 @@ func (a *App) sliceToolsMenu() {
 	)
 	m.tabHead("KEEP")
 	m.items = append(m.items,
+		menuItem{label: "This slice to a pad (a loop at the track's tempo)...", run: func(int) { a.sliceToPad() }},
 		menuItem{label: "Result to a pad (choose bank and pad)...", run: func(int) { a.resultToPad() }},
 		menuItem{label: "Slices to pads (choose the first)...", run: func(int) { a.slicesToPadsPick(false) }},
 		menuItem{label: "Slices to pads, random order...", run: func(int) { a.slicesToPadsPick(true) }},

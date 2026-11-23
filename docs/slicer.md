@@ -13,6 +13,11 @@ Cut a sample into slices and play them in an order. It opens on the sample of th
 
 - **Cut.** `a` cuts at the cursor, `b` joins the slice with the next (removes the marker), `h l` move, `j k` move a marker. *Auto-cut* (`y a`) cuts at the onsets of the sound, up to a number of slices you choose (4 to 32) and with a sensitivity (low to high):
   on a drum break it finds the hits. The tools also cut in equal parts (2 to 32), at random places, on the grid of the bank's tempo (1/4 to 1/32), and *tap* (cut while the sample plays).
+- **A loop out of a whole track.** Put the track on a pad and open it here.
+  - **Listen from the cursor** (`s a`, Select+A on the handheld; or the tools, *Cut*): the track plays from the cursor and the cursor goes with it. `,` `.` skip 10 s back or forward, `a` cuts where it plays, `b` or `x` stops.
+  - **Bars.** The tempo is read from the track's name (`track_125`, `124 BPM`); else set it in the tools (*Bars: the tempo of the track*). `s k` (Select+Up) puts bar 1 at the cursor; while the track plays it takes the onset just before the key (up to 200 ms). Then the cursor line says where it is (`bar 17.1`), dim lines mark the bars when zoomed in, and every cut goes onto the nearest bar line (*Bars: the cuts snap to them* turns that off). *Cut every ... bars from bar 1* cuts the whole track in 1 to 16 bars.
+  - **The length in bars:** the slice line says `8 bars ✓` when a slice is whole bars to a millisecond; `x` then plays it **in a loop**, so the seam is heard.
+  - **Keep it:** *This slice to a pad...* (tools, *Keep*) puts the slice under the cursor on a pad you choose, named by its bar (`test_track_b17`), with loop on and the pad's BPM set to the track's.
 - **Zoom.** `+` and `-` zoom in and out on the waveform.
 - **Play.** `x` plays the slice under the cursor, `.` plays the whole order in a loop (and again stops it), `n` makes a **new order** at once and plays it, and another `n` another one, while it plays; `x` stops. `,` steps the grid.
 - **Settings of a slice** (`Enter`, or `y b`): pitch, gain, reverse, fade in and out, roll (2 to 8 hits, louder or quieter, with its own pitch) and chance. A second page, *Play*, sets the order mode (in order, random, no repeat, shuffle), the grid, swing, humanize and the length.
@@ -29,8 +34,8 @@ Cut a sample into slices and play them in an order. It opens on the sample of th
 
 ## Keys
 
-**On a computer:** `a` cut · `b` join · `x` play slice · `.` play order · `,` grid step · `h l` move · `j k` marker · `t` tools · `n` new order · `+ -` zoom · `Enter` settings · `y a` auto cut · `y x` to pads · `y b` settings · `u` undo, `R` redo.
+**On a computer:** `a` cut · `b` join · `x` play slice (whole bars: in a loop) · `s a` listen from the cursor (`, .` skip 10 s) · `s k` bar 1 here · `.` play order · `,` grid step · `h l` move · `j k` marker · `t` tools · `n` new order · `+ -` zoom · `Enter` settings · `y a` auto cut · `y x` to pads · `y b` settings · `u` undo, `R` redo.
 
-**On the handheld:** `A` cut · `B` join · `X` play slice · `R2` play order · `L2` grid step · D-pad move and marker · `Y+A` auto cut · `Y+X` to pads · `Y+B` settings · `Sel+B` tools · `Y+^v` zoom.
+**On the handheld:** `A` cut · `B` join · `X` play slice · `Sel+A` listen from the cursor (`L2 R2` skip 10 s) · `Sel+Up` bar 1 here · `R2` play order · `L2` grid step · D-pad move and marker · `Y+A` auto cut · `Y+X` to pads · `Y+B` settings · `Sel+B` tools · `Y+^v` zoom.
 
 Every setting and tool with its values: [tools.md](tools.md#slice). From a pad, `t` then *Slice...* opens the slicer on its sample ([pads.md](pads.md)).

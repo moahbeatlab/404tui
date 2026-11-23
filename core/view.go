@@ -613,6 +613,17 @@ func (a *App) drawSlice(g Gfx) {
 			put("~", cText)
 		}
 	}
+	if bf := a.barFrames(); bf > 0 && float64(to-from)/bf <= float64(wc)/4 { // the bar lines, when there is room for them
+		for k := int(math.Floor(float64(from-a.bars.down)/bf)) - 1; ; k++ {
+			at := a.barLine(k)
+			if at >= to {
+				break
+			}
+			if at >= from {
+				g.Mark(2, 2, wc, wr, frac(at), cDim)
+			}
+		}
+	}
 	g.Mark(2, 2, wc, wr, min(max(frac(a.at), 0), 1), cWhite)
 
 	// the overview, with the window in it
@@ -629,9 +640,17 @@ func (a *App) drawSlice(g Gfx) {
 	ny := oy + 2
 	if sel >= 0 {
 		sg := sl.Slices[sel]
-		g.Text(2, ny, fit(fmt.Sprintf("SLICE %d/%d   %.3f - %.3f s   %.3f s long", sel+1, len(sl.Slices), sec(sg.Start), sec(sg.End), sec(sg.End-sg.Start)), contentCols-4), cText, true)
+		line := fmt.Sprintf("SLICE %d/%d   %.3f - %.3f s   %.3f s long", sel+1, len(sl.Slices), sec(sg.Start), sec(sg.End), sec(sg.End-sg.Start))
+		if b := a.barsText(sg.End - sg.Start); b != "" {
+			line += "   " + b
+		}
+		g.Text(2, ny, fit(line, contentCols-4), cText, true)
 	}
-	g.Text(2, ny+1, fmt.Sprintf("cursor %.3f s", sec(a.at)), cDim, false)
+	cur := fmt.Sprintf("cursor %.3f s", sec(a.at))
+	if b := a.barText(a.at); b != "" {
+		cur += fmt.Sprintf("  %s  (%s BPM)", b, bpmText(a.bars.bpm))
+	}
+	g.Text(2, ny+1, cur, cDim, false)
 	// the order as it plays: one cell per step, the slice's number in it, whatever the mode and the grid make of the order. A
 	// step that stays silent (chance) is dim, the slices under the cursor are lit, the step that sounds is amber.
 	plan := a.slicePlan()

@@ -234,7 +234,9 @@ type App struct {
 	lvl               *levelMeter // the level of the sound
 	tap               bool        // the slicer's tap: the sample plays, A cuts
 	tapT0             time.Time
-	lane              bool // the slicer's order lane
+	tapStart          int       // the frame the tap (listening from the cursor) started at
+	bars              sliceBars // the bar grid of the track in the slicer
+	lane              bool      // the slicer's order lane
 	laneAt            int
 	joinStack         []joinState     // the samples the slicer had before the last one was added
 	joinPick          bool            // the file browser is choosing a sample for the slicer
@@ -464,6 +466,10 @@ func (a *App) triggerKey(whole bool) {
 		} else {
 			a.clearMarks()
 		}
+		return
+	}
+	if a.scr == Slice && a.tap { // listening from the cursor: L2 and R2 skip
+		a.tapSkipKey(whole)
 		return
 	}
 	if a.scr == Files { // L2 and R2 skip back and forth through the file that plays
@@ -804,8 +810,13 @@ func (a *App) selShifted(k Key) {
 			a.askText("what BUS 2 is used for", "the unit does not tell the effect by itself", a.set.BusNotes[1], func(s string) { a.set.BusNotes[1] = s; a.saveSettings() })
 		}
 	case Slice:
-		if k == B {
+		switch {
+		case k == B:
 			a.sliceToolsMenu()
+		case k == A && a.sl != nil && !a.tap && !a.lane: // listen from the cursor
+			a.startTap()
+		case k == Up && a.sl != nil && !a.lane: // bar 1 starts at the cursor
+			a.setDownbeat()
 		}
 	case Seq:
 		if k == B {
@@ -1180,6 +1191,7 @@ func (a *App) padsKey(k Key) {
 
 func (a *App) stop() {
 	a.fplay = nil
+	a.soundUntil = time.Time{} // nothing sounds any more
 	a.playPat = 0
 	a.placed = nil
 	if a.Audio != nil {

@@ -272,13 +272,17 @@ func (a *App) rawHints() (plain, shift []hint) {
 			[]hint{screen, {"Y+X", "places"}, {"Y+A", "search"}, {"Y+B", "favourite"}, {"Sel+A", "mark"}, {"Sel+B", "files menu"}, {"Sel+X", "record"}}
 	case Slice:
 		if a.tap {
-			return []hint{{"A", "cut here"}, {"B", "stop tap"}}, nil
+			hs := []hint{{"A", "cut here"}, {"L2 R2", "skip 10 s"}, {"B", "stop"}}
+			if a.barFrames() > 0 {
+				hs = append(hs, hint{"Sel+^", "bar 1 here"})
+			}
+			return hs, nil
 		}
 		if a.lane {
 			return []hint{{"<>", "step"}, {"^v", "other slice"}, {"A", "repeat"}, {"B", "drop"}, {"L1 R1", "carry"}, {"X", "play"}}, []hint{{"Y+B", "leave the lane"}, {"Y+A", "shuffle"}, {"Y+X", "back to 1,2,3"}}
 		}
 		return []hint{{"A", "cut"}, {"B", "join"}, {"X", "play slice"}, {"R2", "play order"}, {"L2", "grid step"}, {"<>", "move"}, {"^v", "marker"}},
-			[]hint{{"Y+A", "auto cut"}, {"Y+X", "to pads"}, {"Y+B", "settings"}, {"Sel+B", "tools"}, {"Y+^v", "zoom"}, {"Sel+X", "record"}}
+			a.sliceShiftHints()
 	case Seq:
 		if a.aHeld { // A is down: what the arrows do now
 			return []hint{{"^v", "velocity"}, {"<>", "length"}, {"L1 R1", "move note"}, {map[bool]string{true: "e", false: "A"}[Terminal], "let go: done"}}, nil
@@ -433,6 +437,21 @@ func (a *App) drawPanel(g Gfx) {
 	a.context(g, x, y+2, w, ky-1)
 }
 
+// sliceShiftHints are the slicer's shifted keys. The handheld has room for six: with a track's tempo (a long track cut into
+// loops) listening and the downbeat take the places of the auto cut and the slices to pads.
+func (a *App) sliceShiftHints() []hint {
+	listen, down := hint{"Sel+A", "listen here"}, hint{"Sel+^", "bar 1 here"}
+	chops := []hint{{"Y+A", "auto cut"}, {"Y+X", "to pads"}}
+	rest := []hint{{"Y+B", "settings"}, {"Sel+B", "tools"}, {"Y+^v", "zoom"}, {"Sel+X", "record"}}
+	switch {
+	case Terminal:
+		return append(append([]hint{listen, down}, chops...), rest...)
+	case a.barFrames() > 0:
+		return append([]hint{listen, down}, rest...)
+	}
+	return append(chops, rest...)
+}
+
 // tk writes a button's name as the key of the keyboard when the app is shown in a terminal (D-pad: h j k l, L1 R1: [ ],
 // L2 R2: , . ; Y and Select are keys that hold for the next one): the panel and the hints then name what to press.
 func tk(s string) string {
@@ -458,7 +477,7 @@ func tkLine(s string) string {
 }
 
 var keyWords = strings.NewReplacer(
-	"A+^<>", "e hjkl", "Sel+B", "s b", "Sel+A", "s a", "Sel+X", "s x", "Y+A", "y a", "Y+B", "y b", "Y+X", "y x", "Y+", "y ", "L1 R1", "[ ]", "L1", "[", "R1", "]", "L2", ",", "R2", ".",
+	"A+^<>", "e hjkl", "Sel+^", "s k", "Sel+B", "s b", "Sel+A", "s a", "Sel+X", "s x", "Y+A", "y a", "Y+B", "y b", "Y+X", "y x", "Y+", "y ", "L1 R1", "[ ]", "L1", "[", "R1", "]", "L2", ",", "R2", ".",
 	"^v<>", "hjkl", "<>", "hl", "^v", "jk", "hold Y", "y, then", "<", "h", ">", "l")
 
 // keyBlock draws key letters (amber) and what they do; dim when the other set is the one in force.

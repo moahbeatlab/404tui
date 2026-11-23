@@ -689,7 +689,7 @@ The file browser: this computer, the unit's card and its storage. `t` chooses wh
 
 The slicer: cut a sample into slices and play them in an order. `Enter` opens the settings, `t` the tools.
 
-**Keys on a computer:** `a` cut · `b` join · `x` play slice · `.` play order · `,` grid step · `hl` move · `jk` marker · `t` tools · `n` new order · `+ -` zoom in / out · `y a` auto cut · `y x` to pads · `y b` settings · `s x` record
+**Keys on a computer:** `a` cut · `b` join · `x` play slice · `.` play order · `,` grid step · `hl` move · `jk` marker · `t` tools · `n` new order · `+ -` zoom in / out · `s a` listen here · `s k` bar 1 here · `y a` auto cut · `y x` to pads · `y b` settings · `s x` record
 
 **Keys on the handheld:** `A` cut · `B` join · `X` play slice · `R2` play order · `L2` grid step · `<>` move · `^v` marker · `Y+A` auto cut · `Y+X` to pads · `Y+B` settings · `Sel+B` tools · `Y+^v` zoom · `Sel+X` record
 
@@ -726,7 +726,11 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
 
     - `Cut in equal parts` — 2 / 4 / 8 / 16 / 32; now 8
     - `Cut at random places` — 2 / 4 / 8 / 16 / 32; now 8
-    - `Tap: cut while the sample plays`
+    - `Listen from the cursor: A cuts where it plays`
+    - `Bars: the tempo of the track` — not set; now not set
+    - `Bars: bar 1 starts at the cursor` — 0.000 s; now 0.000 s
+    - `Bars: the cuts snap to them` — on / off; now on
+    - `Cut every ... bars from bar 1` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 8 bars
     - `Cut on the grid at 120 BPM` — 1/4 / 1/8 / 1/16 / 1/32; now 1/8
     - `Auto-cut (Y+A): up to` — 4 slices / 8 slices / 16 slices / 24 slices / 32 slices; now 16 slices
     - `Auto-cut (Y+A): sensitivity` — low / less / normal / more / high; now normal
@@ -753,6 +757,7 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
 
     *Page Keep*
 
+    - `This slice to a pad (a loop at the track's tempo)...`
     - `Result to a pad (choose bank and pad)...`
     - `Slices to pads (choose the first)...`
     - `Slices to pads, random order...`
@@ -794,7 +799,11 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
 
 - `Cut in equal parts` — 2 / 4 / 8 / 16 / 32; now 8
 - `Cut at random places` — 2 / 4 / 8 / 16 / 32; now 8
-- `Tap: cut while the sample plays`
+- `Listen from the cursor: A cuts where it plays`
+- `Bars: the tempo of the track` — not set; now not set
+- `Bars: bar 1 starts at the cursor` — 0.000 s; now 0.000 s
+- `Bars: the cuts snap to them` — on / off; now on
+- `Cut every ... bars from bar 1` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 8 bars
 - `Cut on the grid at 120 BPM` — 1/4 / 1/8 / 1/16 / 1/32; now 1/8
 - `Auto-cut (Y+A): up to` — 4 slices / 8 slices / 16 slices / 24 slices / 32 slices; now 16 slices
 - `Auto-cut (Y+A): sensitivity` — low / less / normal / more / high; now normal
@@ -821,6 +830,7 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
 
 *Page Keep*
 
+- `This slice to a pad (a loop at the track's tempo)...`
 - `Result to a pad (choose bank and pad)...`
 - `Slices to pads (choose the first)...`
 - `Slices to pads, random order...`
@@ -860,7 +870,11 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
 
         - `Cut in equal parts` — 2 / 4 / 8 / 16 / 32; now 8
         - `Cut at random places` — 2 / 4 / 8 / 16 / 32; now 8
-        - `Tap: cut while the sample plays`
+        - `Listen from the cursor: A cuts where it plays`
+        - `Bars: the tempo of the track` — not set; now not set
+        - `Bars: bar 1 starts at the cursor` — 0.000 s; now 0.000 s
+        - `Bars: the cuts snap to them` — on / off; now on
+        - `Cut every ... bars from bar 1` — 1 bar / 2 bars / 4 bars / 8 bars / 16 bars; now 8 bars
         - `Cut on the grid at 120 BPM` — 1/4 / 1/8 / 1/16 / 1/32; now 1/8
         - `Auto-cut (Y+A): up to` — 4 slices / 8 slices / 16 slices / 24 slices / 32 slices; now 16 slices
         - `Auto-cut (Y+A): sensitivity` — low / less / normal / more / high; now normal
@@ -874,6 +888,7 @@ The slicer: cut a sample into slices and play them in an order. `Enter` opens th
 
         *Page Keep*
 
+        - `This slice to a pad (a loop at the track's tempo)...`
         - `Result to a pad (choose bank and pad)...`
         - `Slices to pads (choose the first)...`
         - `Slices to pads, random order...`

@@ -14,17 +14,21 @@ import (
 
 // ---- tap
 
-// startTap plays the whole sample; every A puts a cut where it is playing (moved back to the onset just before it, up to 100 ms), B stops.
+// startTap plays the sample from the cursor (from its start when the cursor is at the end); every A puts a cut where it is playing
+// (on the nearest bar line when the bars snap, else moved back to the onset just before it, up to 100 ms), L2 and R2 skip 10 s,
+// B or X stops.
 func (a *App) startTap() {
-	s, err := a.lab.Sample(a.sid)
-	if err != nil {
-		a.say(err.Error(), true)
+	if a.sl == nil {
 		return
 	}
 	a.lane = false
-	a.tap, a.tapT0, a.at = true, time.Now(), 0
-	a.play(s)
-	a.say("tap: A cuts where it plays, B stops", false)
+	from := a.at
+	if from >= a.sl.Frames-formats.SampleRate/10 {
+		from = 0
+	}
+	a.tap = true
+	a.tapFrom(from)
+	a.say(fmt.Sprintf("listening from %s: %s cuts where it plays, %s skip 10 s, %s stops", clockTime(from), tk("A"), tk("L2 R2"), tk("B")), false)
 }
 
 func (a *App) stopTap() {
@@ -40,7 +44,7 @@ func (a *App) tapTick() {
 	if !a.tap || a.sl == nil {
 		return
 	}
-	pos := int(time.Since(a.tapT0).Seconds() * formats.SampleRate)
+	pos := a.tapStart + int(time.Since(a.tapT0).Seconds()*formats.SampleRate)
 	if pos >= a.sl.Frames {
 		a.stopTap()
 		return
@@ -53,7 +57,9 @@ func (a *App) tapKey(k Key) {
 	case A:
 		pos := a.at
 		at := pos
-		if on, err := a.lab.Transients(a.sid, 128, a.autoSensitivity()); err == nil {
+		if a.snapping() {
+			at = a.nearestBar(pos)
+		} else if on, err := a.lab.Transients(a.sid, 128, a.autoSensitivity()); err == nil {
 			best := -1
 			for _, o := range on {
 				if o <= pos && pos-o <= formats.SampleRate/10 && o > best {
@@ -69,8 +75,12 @@ func (a *App) tapKey(k Key) {
 			a.say("cannot cut there", true)
 			return
 		}
-		a.say(fmt.Sprintf("%d slices (cut at %.3f s)", len(a.sl.Slices), float64(at)/formats.SampleRate), false)
-	case B:
+		said := fmt.Sprintf("%d slices (cut at %.3f s", len(a.sl.Slices), float64(at)/formats.SampleRate)
+		if b := a.barText(at); b != "" {
+			said += ", " + b
+		}
+		a.say(said+")", false)
+	case B, X:
 		a.stopTap()
 	}
 }

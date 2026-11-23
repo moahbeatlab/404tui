@@ -30,6 +30,7 @@ func (a *App) openSlicer() {
 	}
 	a.sid, a.spad = id, n
 	a.sl = formats.NewSlicing(s.Frames(), 1)
+	a.resetBars()
 	a.at, a.zoom = 0, 0
 	a.slUndo, a.slRedo = nil, nil
 }
@@ -92,7 +93,10 @@ func (a *App) sliceKey(k Key, repeat int) {
 		a.at = a.jump(k == Up)
 	case A:
 		i := a.sliceAt(a.at)
-		if zc, err := a.lab.ZeroCrossing(a.sid, a.at, 48); err == nil && a.sliceAt(zc) == i { // no click at the cut
+		if a.snapping() { // on the bar line: the loop is whole bars
+			a.at = a.nearestBar(a.at)
+			i = a.sliceAt(a.at)
+		} else if zc, err := a.lab.ZeroCrossing(a.sid, a.at, 48); err == nil && a.sliceAt(zc) == i { // no click at the cut
 			a.at = zc
 		}
 		if i < 0 || a.sl.Split(i, a.at) < 0 {
@@ -115,6 +119,9 @@ func (a *App) sliceKey(k Key, repeat int) {
 		if Terminal && (a.orderOn || time.Now().Before(a.soundUntil)) { // on a computer X stops what sounds
 			a.stop()
 			a.say("stopped", false)
+			return
+		}
+		if a.loopSlice() { // a slice of whole bars plays in a loop
 			return
 		}
 		a.playSlice()

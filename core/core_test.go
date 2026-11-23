@@ -4689,3 +4689,93 @@ func TestAFileThatPlaysIsSkippedThroughOnFiles(t *testing.T) {
 		t.Fatalf("past the end: %q", a.msg)
 	}
 }
+
+func TestALoopIsCutOutOfATrackOnItsBars(t *testing.T) {
+	for name, want := range map[string]float64{"test_track_125": 125, "Deep 122.5 BPM": 122.5, "kick_909": 0, "song_124_Am": 124, "loop 98bpm": 98} {
+		if got := bpmOfName(name); got != want {
+			t.Errorf("the tempo of %q is %v, not %v", name, got, want)
+		}
+	}
+	a, au := newApp(t)
+	// a track of 125 BPM: 0.37 s before bar 1, 12 bars; a click on every bar line
+	const bar = 92160
+	lead := 17760
+	s := formats.Sample{Channels: 1, Samples: make([]int16, lead+12*bar+4800)}
+	for k := 0; k < 12; k++ {
+		s.Samples[lead+k*bar] = 20000
+	}
+	mb, err := a.lab.Decode(s.WAV(), ".wav")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m lab.Meta
+	json.Unmarshal(mb, &m)
+	if err := a.assignPad(0, m.ID, "test_track_125"); err != nil {
+		t.Fatal(err)
+	}
+	a.refresh()
+	a.cur, a.bank = 0, 0
+	a.go_(Slice)
+	if a.sl == nil || a.bars.bpm != 125 || !a.bars.fromTag {
+		t.Fatalf("the tempo is read from the name: %+v", a.bars)
+	}
+	// the downbeat, then cuts a little off the bar lines: they go onto them
+	a.at = lead
+	keys(t, a, "S+U")
+	if a.bars.down != lead || a.barText(lead+bar*4+bar/2) != "bar 5.3" {
+		t.Fatalf("bar 1 at the cursor: %d, %q", a.bars.down, a.barText(lead+bar*4+bar/2))
+	}
+	a.at = lead + 4*bar - 700
+	keys(t, a, "A")
+	a.at = lead + 8*bar + 900
+	keys(t, a, "A")
+	i := a.sliceAt(lead + 5*bar)
+	sg := a.sl.Slices[i]
+	if sg.Start != lead+4*bar || sg.End != lead+8*bar || a.barsText(sg.End-sg.Start) != "4 bars ✓" {
+		t.Fatalf("the slice is bars 5-8 exactly: %d-%d %q", sg.Start, sg.End, a.barsText(sg.End-sg.Start))
+	}
+	// listening from the cursor, skipping
+	a.at = lead + 2*bar
+	keys(t, a, "S+A")
+	if !a.tap || a.tapStart != lead+2*bar {
+		t.Fatalf("Sel+A listens from the cursor: %v %d", a.tap, a.tapStart)
+	}
+	keys(t, a, "}")
+	if a.tapStart != lead+2*bar+480000 {
+		t.Fatalf("R2 skips 10 s: %d", a.tapStart)
+	}
+	keys(t, a, "{ { {")
+	if a.tapStart != 0 {
+		t.Fatalf("L2 goes back, not before the start: %d", a.tapStart)
+	}
+	keys(t, a, "B")
+	if a.tap {
+		t.Fatal("B stops listening")
+	}
+	// the slice to a pad: a loop of 4 bars at 125 BPM
+	a.at = lead + 5*bar
+	played := au.Played
+	Terminal = true
+	keys(t, a, "X")
+	Terminal = false
+	if au.Loops == 0 || au.Played != played {
+		t.Fatal("a slice of whole bars plays in a loop")
+	}
+	a.stop()
+	a.sliceTo(i, 20)
+	if f := a.info.Pads[20]; !f.File || !strings.HasSuffix(f.Name, "_b5") {
+		t.Fatalf("the slice is on B5, named by its bar: %+v", f)
+	}
+	if a.padValue(20, 0x6B, 0) != 1 || a.padValue(20, 0x6F, 0) != 12500 {
+		t.Fatalf("a loop at 125 BPM: loop %d, bpm %d", a.padValue(20, 0x6B, 0), a.padValue(20, 0x6F, 0))
+	}
+	id, _ := a.padSample(20)
+	if out, _ := a.lab.Sample(id); out.Frames() != 4*bar {
+		t.Fatalf("the pad's sample is 4 bars long: %d frames", out.Frames())
+	}
+	// every 4 bars from bar 1
+	a.barCuts(4)
+	if len(a.sl.Slices) != 5 || a.sl.Slices[2].Start != lead+4*bar || a.sl.Slices[4].Start != lead+12*bar {
+		t.Fatalf("a slice before bar 1, 4-bar slices, the rest: %+v", a.sl.Slices)
+	}
+}
