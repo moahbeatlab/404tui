@@ -541,6 +541,7 @@ func (a *App) drawSlice(g Gfx) {
 	wc, wr := contentCols-4, a.sliceWaveRows()
 	g.Fill(1, 2, contentCols-2, wr, cPanel)
 	from, to := a.view()
+	ph, playing := a.playPos()
 	sel := a.sliceAt(a.at)
 	frac := func(f int) float64 { return float64(f-from) / float64(max(to-from, 1)) }
 	if Terminal && a.set.SliceNoWave { // no shape: each slice a band of its colour, the bars lines through them
@@ -556,12 +557,22 @@ func (a *App) drawSlice(g Gfx) {
 			if hi <= lo {
 				continue
 			}
-			c0, c1 := int(frac(lo)*float64(wc)), min(int(frac(hi)*float64(wc)+0.999), wc)
-			col := cAmberD
+			col, played := cAmberD, cBandP
 			if i%2 == 1 {
-				col = cBlue
+				col, played = cBlue, cBlueD
 			}
-			g.Fill(2+c0, 2+wr/3, max(c1-c0, 1), max(wr/3, 1), col)
+			band := func(lo, hi int, col color.RGBA) {
+				c0, c1 := int(frac(lo)*float64(wc)), min(int(frac(hi)*float64(wc)+0.999), wc)
+				g.Fill(2+c0, 2+wr/3, max(c1-c0, 1), max(wr/3, 1), col)
+			}
+			if mid := min(max(ph, lo), hi); playing && mid > lo { // what has played is dim
+				band(lo, mid, played)
+				if mid < hi {
+					band(mid, hi, col)
+				}
+				continue
+			}
+			band(lo, hi, col)
 		}
 		if bf := a.barFrames(); bf > 0 && float64(to-from)/bf <= float64(wc)/2 {
 			for k := max(int(math.Floor(float64(from-a.bars.down)/bf)), 0); ; k++ {
@@ -590,12 +601,22 @@ func (a *App) drawSlice(g Gfx) {
 				continue
 			}
 			c0, c1 := int(frac(lo)*float64(wc)), min(int(frac(hi)*float64(wc)+0.999), wc)
-			col := cAmber
+			col, played := cAmber, cAmberP
 			if i%2 == 1 {
-				col = cBlue
+				col, played = cBlue, cBlueD
 			}
 			if sg.Chance == 0 {
-				col = cDim
+				col, played = cDim, cLine
+			}
+			if mid := min(max(ph, lo), hi); playing && mid > lo { // what has played is dim, split on a column
+				cm := int(frac(mid)*float64(wc) + 0.5)
+				if cm > c0 {
+					a.waveScaled(g, a.sid, lo, mid, 2+c0, 2, cm-c0, wr, played, pk)
+				}
+				if c1 > cm {
+					a.waveScaled(g, a.sid, mid, hi, 2+cm, 2, c1-cm, wr, col, pk)
+				}
+				continue
 			}
 			a.waveScaled(g, a.sid, lo, hi, 2+c0, 2, max(c1-c0, 1), wr, col, pk)
 		}
@@ -663,7 +684,7 @@ func (a *App) drawSlice(g Gfx) {
 			g.Text(cx, 1+wr, "╵"+fmt.Sprint(k+1), cDim, false)
 		}
 	}
-	if ph, ok := a.playhead(); ok && ph >= from && ph < to { // what plays: a green line
+	if ph, ok := a.playhead(); ok && ph >= from && ph < to { // what plays (a slice, the order): a green line
 		g.Mark(2, 2, wc, wr, frac(ph), cGood)
 		if Terminal {
 			g.Text(2+min(int(frac(ph)*float64(wc)), wc-1), 1+wr, "▲", cGood, true)
@@ -682,6 +703,9 @@ func (a *App) drawSlice(g Gfx) {
 	}
 	for _, sg := range sl.Slices {
 		g.Mark(2, oy, wc, 2, float64(sg.Start)/float64(sl.Frames), cAmber)
+	}
+	if playing { // where it plays in the whole track
+		g.Mark(2, oy, wc, 2, float64(ph)/float64(sl.Frames), cGood)
 	}
 	g.Mark(2, oy, wc, 2, float64(from)/float64(sl.Frames), cWhite)
 	g.Mark(2, oy, wc, 2, float64(to)/float64(sl.Frames), cWhite)

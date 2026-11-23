@@ -13,6 +13,12 @@ type peakKey struct {
 	n int
 }
 
+// peakMemoKey is a view's peaks as they were read: the sample, the frames and the columns.
+type peakMemoKey struct {
+	k              peakKey
+	from, to, cols int
+}
+
 type peakBlocks struct {
 	ch   int
 	maxs []int16
@@ -37,13 +43,27 @@ func buildBlocks(s formats.Sample) *peakBlocks {
 }
 
 // peaks is formats.Sample.Peaks through the block cache.
-func (a *App) peaks(id, from, to, cols int) ([]int, error) {
+func (a *App) peaks(id, from, to, cols int) (out []int, err error) {
 	s, err := a.lab.Sample(id)
 	if err != nil {
 		return nil, err
 	}
 	frames := s.Frames()
 	from, to = max(from, 0), min(to, frames)
+	if len(s.Samples) > 0 && cols > 0 { // a view that stands (a page while it plays) is not read again every frame
+		mk := peakMemoKey{peakKey{&s.Samples[0], len(s.Samples)}, from, to, cols}
+		if out, ok := a.peakMemo[mk]; ok {
+			return out, nil
+		}
+		defer func() {
+			if err == nil {
+				if a.peakMemo == nil || len(a.peakMemo) > 256 {
+					a.peakMemo = map[peakMemoKey][]int{}
+				}
+				a.peakMemo[mk] = out
+			}
+		}()
+	}
 	if cols <= 0 || to <= from || len(s.Samples) == 0 || (to-from)/cols < 2*peakBlock {
 		return s.Peaks(from, to, cols), nil
 	}
@@ -56,7 +76,7 @@ func (a *App) peaks(id, from, to, cols int) ([]int, error) {
 		pb = buildBlocks(s)
 		a.peakCache[key] = pb
 	}
-	out := make([]int, cols)
+	out = make([]int, cols)
 	for c := range out {
 		lo := (from + int(int64(c)*int64(to-from)/int64(cols))) / peakBlock
 		hi := (from + int(int64(c+1)*int64(to-from)/int64(cols))) / peakBlock

@@ -5274,3 +5274,49 @@ func TestMarkersGoTheWayTheOrderPlays(t *testing.T) {
 		t.Fatalf("back from the last one: %d", a.at/bar)
 	}
 }
+
+func TestTheViewStandsWhileItPlaysAndTurnsAPage(t *testing.T) {
+	Terminal = true
+	defer func() { Terminal = false }()
+	a, _ := newApp(t)
+	const bar = 92160
+	s := formats.Sample{Channels: 1, Samples: make([]int16, 32*bar)}
+	mb, _ := a.lab.Decode(s.WAV(), ".wav")
+	var m lab.Meta
+	json.Unmarshal(mb, &m)
+	a.assignPad(0, m.ID, "song_125")
+	a.refresh()
+	a.cur, a.bank = 0, 0
+	a.go_(Slice)
+	a.zoom = 2 // 8 bars in view
+	a.at = 4 * bar
+	from0, _ := a.view()
+	a.tap = true
+	a.pageTick()
+	for _, at := range []int{5 * bar, 6 * bar} { // it plays on: the view stands while the playhead is in its first 85%
+		a.at = at
+		a.pageTick()
+		if f, _ := a.view(); f != from0 {
+			t.Fatalf("at bar %d the view moved: %d, not %d", at/bar, f, from0)
+		}
+	}
+	a.at = from0 + 7*bar // past 85% of 8 bars: the next page, the playhead near its left
+	a.pageTick()
+	f, to := a.view()
+	if f == from0 || a.at < f || a.at > f+(to-f)/10 {
+		t.Fatalf("the page did not turn: %d-%d for the playhead at %d", f, to, a.at)
+	}
+	a.tap = false
+	a.pageTick()
+	if f2, _ := a.view(); f2 != f {
+		t.Fatal("stopped: the page stays")
+	}
+	a.at += bar
+	a.pageTick()
+	if f3, _ := a.view(); f3 == f {
+		t.Fatal("the cursor moved: the view follows the cursor again")
+	}
+	a.tap = true
+	_ = a.RenderCells() // what has played is drawn dim without trouble
+	a.tap = false
+}

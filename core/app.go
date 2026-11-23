@@ -181,10 +181,11 @@ type App struct {
 	mg                mangleSet // the dice of the slicer
 	autoMax           int       // the most slices Y+A cuts at the onsets (0: 16)
 	peakCache         map[peakKey]*peakBlocks
-	waveMemo          waveCache // the slicer's waveform for the page, as it was last worked out
-	aHeld             bool      // A is down in SEQ: the arrows edit the note under it
-	aDelete           bool      // A went down on a note: if nothing is edited, letting go takes it off
-	aPad              int       // the note being edited
+	peakMemo          map[peakMemoKey][]int // the peaks of the views drawn lately
+	waveMemo          waveCache             // the slicer's waveform for the page, as it was last worked out
+	aHeld             bool                  // A is down in SEQ: the arrows edit the note under it
+	aDelete           bool                  // A went down on a note: if nothing is edited, letting go takes it off
+	aPad              int                   // the note being edited
 	aTick             uint32
 	aSession          int // counts the holds of A, so that an edit session is one undo step
 	undoSes           int
@@ -207,6 +208,7 @@ type App struct {
 	usedCache         map[int]string  // the patterns that use each pad, read once per change
 	peakMax           map[peakKey]int // the loudest value of each sample, for the slicer's scale
 	slPlay            slicePlay       // the slice x played, for the playhead
+	page, pageAt      int             // the start of the page the slicer's view stands on while it plays (-1: none), the cursor then
 	soundUntil        time.Time       // when the sample that plays ends, for Space (play or stop)
 	patStrip          bool            // SEQ on a terminal: the arrows choose the pattern in the row of 16 boxes (p)
 	seqOneBar         bool            // SEQ on a wide terminal: one bar in view, though the window has the room for more
@@ -319,7 +321,7 @@ type App struct {
 
 // New starts an app on a folder of samples, with an empty project.
 func New(root, outDir string, a Audio) *App {
-	app := &App{mon: perform.New(), recDone: make(chan recResult, 4), pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, dcur: map[string]int{}, playing: -1, slot: 1, rowFocus: -1, fetchBusy: -1}
+	app := &App{mon: perform.New(), recDone: make(chan recResult, 4), pat: 1, lab: lab.New(), Root: root, OutDir: outDir, Audio: a, AudioLate: make(chan Audio, 1), pcm: map[int]int{}, prev: map[string]int{}, dcur: map[string]int{}, playing: -1, slot: 1, rowFocus: -1, fetchBusy: -1, page: -1}
 	app.lab.NewProject("PROJECT_01")
 	app.dir = root
 	app.loadSettings()
