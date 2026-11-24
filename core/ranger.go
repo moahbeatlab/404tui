@@ -122,8 +122,11 @@ func (a *App) drawRanger(g Gfx) {
 	a.drawFileList(g, a.dir, 2+pw, cw-2, a.entries, a.fcur, true)
 	e, ok := a.current()
 	pt := ""
-	if ok && (e.dir || !Terminal) { // a computer's third column is for folders (the shape of a sample is in the panel)
+	if ok && (e.dir || !Terminal) { // a computer's third column is for folders and a track's tags (the shape of a sample is in the panel)
 		pt = e.name
+	}
+	if ok && !e.dir && !e.project && Terminal {
+		pt = "tags"
 	}
 	pane(1+pw+cw, pvw, pt, false)
 	a.drawPreview(g, 1+pw+cw+2, pvw-4)
@@ -157,6 +160,7 @@ func (a *App) drawPreview(g Gfx, x, w int) {
 		a.drawFileList(g, path, x-1, w+2, ents, -1, false)
 	default:
 		if Terminal {
+			a.drawFileTags(g, path, x, w)
 			return
 		}
 		g.Text(x, 2, fit(filepath.Base(e.name), w), cText, true)

@@ -199,21 +199,22 @@ type App struct {
 	undoKey           Key
 	undoAt            time.Time
 	set               settings
-	dcur              map[string]int  // the cursor in each folder of the file browser, for the next visit
-	searchQ           string          // the search in the file browser, "" for none
-	searchDirs        bool            // the search looks for folders, not files
-	tags              *app.TagIndex   // the tags of the unit's samples, read when first needed
-	rParent, rChild   rangerCache     // the side columns of the ranger view
-	usedCache         map[int]string  // the patterns that use each pad, read once per change
-	peakMax           map[peakKey]int // the loudest value of each sample, for the slicer's scale
-	slPlay            slicePlay       // the slice x played, for the playhead
-	skipHeld          skipHold        // L2 or R2 held down on FILES (or listening in the slicer): since when, the last skip
-	soundUntil        time.Time       // when the sample that plays ends, for Space (play or stop)
-	patStrip          bool            // SEQ on a terminal: the arrows choose the pattern in the row of 16 boxes (p)
-	seqOneBar         bool            // SEQ on a wide terminal: one bar in view, though the window has the room for more
-	orderOn           bool            // SLICE: the order plays in a loop
-	orderFrames       int             // its length
-	slUndo, slRedo    []string        // the slicing before each change, as text, for undo and redo on the slicer's screen
+	dcur              map[string]int           // the cursor in each folder of the file browser, for the next visit
+	searchQ           string                   // the search in the file browser, "" for none
+	searchDirs        bool                     // the search looks for folders, not files
+	tags              *app.TagIndex            // the tags of the unit's samples, read when first needed
+	rParent, rChild   rangerCache              // the side columns of the ranger view
+	fileTagMemo       map[string]fileTagsCache // the tags of the files shown in the third column, by path
+	usedCache         map[int]string           // the patterns that use each pad, read once per change
+	peakMax           map[peakKey]int          // the loudest value of each sample, for the slicer's scale
+	slPlay            slicePlay                // the slice x played, for the playhead
+	skipHeld          skipHold                 // L2 or R2 held down on FILES (or listening in the slicer): since when, the last skip
+	soundUntil        time.Time                // when the sample that plays ends, for Space (play or stop)
+	patStrip          bool                     // SEQ on a terminal: the arrows choose the pattern in the row of 16 boxes (p)
+	seqOneBar         bool                     // SEQ on a wide terminal: one bar in view, though the window has the room for more
+	orderOn           bool                     // SLICE: the order plays in a loop
+	orderFrames       int                      // its length
+	slUndo, slRedo    []string                 // the slicing before each change, as text, for undo and redo on the slicer's screen
 	slSkip            bool
 	ltags             *localTags       // your tags on this computer's samples
 	assignTo          int              // FILES, from a pad's "Pick a sample": the pad (1..160) the sample goes on, 0 for none
