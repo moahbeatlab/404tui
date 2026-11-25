@@ -205,6 +205,7 @@ type App struct {
 	tags              *app.TagIndex            // the tags of the unit's samples, read when first needed
 	rParent, rChild   rangerCache              // the side columns of the ranger view
 	fileTagMemo       map[string]fileTagsCache // the tags of the files shown in the third column, by path
+	tempoJob          *tempoJob                // the BPM check of the pads, while it hears them
 	usedCache         map[int]string           // the patterns that use each pad, read once per change
 	peakMax           map[peakKey]int          // the loudest value of each sample, for the slicer's scale
 	slPlay            slicePlay                // the slice x played, for the playhead
