@@ -155,7 +155,7 @@ func (a *App) bgElapsed() string {
 func (a *App) bgText(path string) string {
 	if a.bg != nil && a.bg.path == path {
 		s := "decoding... " + a.bgElapsed()
-		if ffmpegPath() == "" && strings.EqualFold(pathExt(path), ".mp3") {
+		if ext := strings.ToLower(pathExt(path)); ffmpegPath() == "" && (ext == ".mp3" || ext == ".m4a") {
 			s += " (ffmpeg would be faster)"
 		}
 		return s

@@ -127,3 +127,48 @@ func TestATrackSaysWhatItIs(t *testing.T) {
 		t.Errorf("wav: %+v", got)
 	}
 }
+
+func mp4Box(typ string, parts ...[]byte) []byte {
+	var body []byte
+	for _, p := range parts {
+		body = append(body, p...)
+	}
+	return append(binary.BigEndian.AppendUint32(nil, uint32(8+len(body))), append([]byte(typ), body...)...)
+}
+
+func mp4Data(typ uint32, v []byte) []byte {
+	return mp4Box("data", binary.BigEndian.AppendUint32(nil, typ), make([]byte, 4), v)
+}
+
+func TestAnM4aSaysWhatItIs(t *testing.T) {
+	mvhd := make([]byte, 100)
+	binary.BigEndian.PutUint32(mvhd[12:], 1000)   // time scale
+	binary.BigEndian.PutUint32(mvhd[16:], 355000) // 355 s
+	entry := make([]byte, 28)
+	binary.BigEndian.PutUint16(entry[16:], 2)
+	binary.BigEndian.PutUint32(entry[24:], 44100<<16)
+	stsd := mp4Box("stsd", make([]byte, 8), mp4Box("mp4a", entry))
+	ilst := mp4Box("ilst",
+		mp4Box("\xa9nam", mp4Data(1, []byte("Give Me Something"))),
+		mp4Box("\xa9ART", mp4Data(1, []byte("The Black 80s"))),
+		mp4Box("tmpo", mp4Data(21, []byte{0, 124})),
+		mp4Box("----", mp4Box("mean", make([]byte, 4), []byte("com.apple.iTunes")), mp4Box("name", make([]byte, 4), []byte("initialkey")), mp4Data(1, []byte("8A"))),
+	)
+	moov := mp4Box("moov", mp4Box("mvhd", mvhd), mp4Box("trak", mp4Box("mdia", mp4Box("minf", mp4Box("stbl", stsd)))),
+		mp4Box("udta", mp4Box("meta", make([]byte, 4), ilst)))
+	// the sound first, its index (moov) at the end, as many programs write it
+	file := append(append(mp4Box("ftyp", []byte("M4A \x00\x00\x00\x00")), mp4Box("mdat", make([]byte, 5000))...), moov...)
+	p := filepath.Join(t.TempDir(), "a.m4a")
+	os.WriteFile(p, file, 0o644)
+	got, err := ReadFileTags(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Title != "Give Me Something" || got.Artist != "The Black 80s" || got.BPM != "124" || got.Key != "8A" ||
+		got.Seconds != 355 || got.Rate != 44100 || got.Channels != 2 {
+		t.Errorf("m4a: %+v", got)
+	}
+	if !IsAudioFile("Track.M4A") {
+		t.Error("an .m4a is not taken as audio")
+	}
+}

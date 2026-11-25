@@ -420,7 +420,7 @@ func (a *App) readDir(dir string, projects bool) ([]entry, error) {
 			continue
 		}
 		switch strings.ToLower(pathExt(n)) {
-		case ".wav", ".aif", ".aiff", ".flac", ".mp3", ".smp", ".mid", ".midi":
+		case ".wav", ".aif", ".aiff", ".flac", ".mp3", ".m4a", ".smp", ".mid", ".midi":
 			var size int64
 			if local {
 				if fi, err := os.Stat(filepath.Join(dir, n)); err == nil {

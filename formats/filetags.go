@@ -46,6 +46,8 @@ func ReadFileTags(path string) (FileTags, error) {
 	case bytes.HasPrefix(head, []byte("fLaC")):
 		b, _ := readHead(f, maxTagRead)
 		return flacTags(b), nil
+	case len(head) >= 8 && string(head[4:8]) == "ftyp":
+		return mp4Tags(f, st.Size()), nil
 	case bytes.HasPrefix(head, []byte("RIFF")) && len(head) >= 12 && string(head[8:12]) == "WAVE":
 		b, _ := readHead(f, maxTagRead)
 		return wavTags(b), nil
@@ -556,4 +558,134 @@ func mergeTags(a, b FileTags) FileTags {
 		}
 	}
 	return a
+}
+
+// mp4Tags reads an .m4a: the length from mvhd, the rate and channels from the sound's sample entry, and the iTunes tags
+// (moov/udta/meta/ilst). The moov box may be at the end of the file, after the sound.
+func mp4Tags(f *os.File, size int64) FileTags {
+	var t FileTags
+	var moov []byte
+	for at := int64(0); at+8 <= size; {
+		var h [16]byte
+		if _, err := f.ReadAt(h[:8], at); err != nil {
+			break
+		}
+		n, typ := int64(binary.BigEndian.Uint32(h[:4])), string(h[4:8])
+		hl := int64(8)
+		switch n {
+		case 1:
+			if _, err := f.ReadAt(h[8:16], at+8); err != nil {
+				return t
+			}
+			n, hl = int64(binary.BigEndian.Uint64(h[8:16])), 16
+		case 0:
+			n = size - at
+		}
+		if n < hl {
+			break
+		}
+		if typ == "moov" && n <= maxTagRead {
+			moov = make([]byte, n-hl)
+			f.ReadAt(moov, at+hl)
+			break
+		}
+		at += n
+	}
+	if moov == nil {
+		return t
+	}
+	mp4Walk(&t, moov, "moov")
+	if t.Seconds > 0 && t.Kbps == 0 {
+		t.Kbps = int(float64(size) * 8 / t.Seconds / 1000)
+	}
+	return t
+}
+
+// mp4Walk goes through the boxes in b (the body of a box of type parent).
+func mp4Walk(t *FileTags, b []byte, parent string) {
+	for len(b) >= 8 {
+		n := int(binary.BigEndian.Uint32(b[:4]))
+		typ := string(b[4:8])
+		if n < 8 || n > len(b) {
+			return
+		}
+		body := b[8:n]
+		b = b[n:]
+		switch {
+		case typ == "mvhd" && len(body) >= 20:
+			if body[0] == 1 && len(body) >= 32 {
+				scale, dur := binary.BigEndian.Uint32(body[20:]), binary.BigEndian.Uint64(body[24:])
+				if scale > 0 {
+					t.Seconds = float64(dur) / float64(scale)
+				}
+			} else {
+				scale, dur := binary.BigEndian.Uint32(body[12:]), binary.BigEndian.Uint32(body[16:])
+				if scale > 0 {
+					t.Seconds = float64(dur) / float64(scale)
+				}
+			}
+		case typ == "trak" || typ == "mdia" || typ == "minf" || typ == "stbl" || typ == "udta" || typ == "ilst":
+			mp4Walk(t, body, typ)
+		case typ == "meta" && len(body) >= 4: // a full box: version and flags first
+			mp4Walk(t, body[4:], typ)
+		case typ == "stsd" && len(body) >= 8:
+			mp4Walk(t, body[8:], typ)
+		case parent == "stsd" && (typ == "mp4a" || typ == "alac") && len(body) >= 28 && t.Rate == 0:
+			t.Channels = int(binary.BigEndian.Uint16(body[16:]))
+			t.Rate = int(binary.BigEndian.Uint32(body[24:]) >> 16)
+		case parent == "ilst":
+			mp4Item(t, typ, body)
+		}
+	}
+}
+
+// mp4Item reads one iTunes tag: its data box (type, locale, the value), or a named one (----: mean, name, data).
+func mp4Item(t *FileTags, typ string, b []byte) {
+	var name, val string
+	var raw []byte
+	for len(b) >= 8 {
+		n := int(binary.BigEndian.Uint32(b[:4]))
+		if n < 8 || n > len(b) {
+			return
+		}
+		k, body := string(b[4:8]), b[8:n]
+		b = b[n:]
+		switch {
+		case k == "name" && len(body) >= 4:
+			name = string(body[4:])
+		case k == "data" && len(body) >= 8:
+			raw = body[8:]
+			val = strings.TrimSpace(string(raw))
+		}
+	}
+	switch typ {
+	case "\xa9nam":
+		setNamed(t, "TITLE", val)
+	case "\xa9ART", "aART":
+		setNamed(t, "ARTIST", val)
+	case "\xa9alb":
+		setNamed(t, "ALBUM", val)
+	case "\xa9day":
+		setNamed(t, "DATE", val)
+	case "\xa9gen":
+		setNamed(t, "GENRE", val)
+	case "gnre":
+		if len(raw) >= 2 {
+			if g := int(binary.BigEndian.Uint16(raw)) - 1; g >= 0 && g < len(id3Genres) && t.Genre == "" {
+				t.Genre = id3Genres[g]
+			}
+		}
+	case "tmpo":
+		if len(raw) >= 2 && t.BPM == "" {
+			if v := binary.BigEndian.Uint16(raw); v > 0 {
+				t.BPM = strconv.Itoa(int(v))
+			}
+		}
+	case "\xa9cmt":
+		setNamed(t, "COMMENT", val)
+	case "\xa9pub":
+		setNamed(t, "LABEL", val)
+	case "----":
+		setNamed(t, strings.ToUpper(name), val)
+	}
 }

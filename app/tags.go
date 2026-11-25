@@ -85,7 +85,7 @@ var (
 	// stopTags say nothing about the sound: file types, the folders everything lives in, and
 	// the names sample packs put on every file ("h2" is a label, "vol2" a release).
 	stopTags = map[string]bool{
-		"wav": true, "wave": true, "aif": true, "aiff": true, "flac": true, "mp3": true, "ogg": true,
+		"wav": true, "wave": true, "aif": true, "aiff": true, "flac": true, "mp3": true, "m4a": true, "ogg": true,
 		"the": true, "and": true, "sd": true, "sample": true, "samples": true,
 		"import": true, "export": true, "collections": true, "preview": true, "previews": true,
 		"pack": true, "packs": true, "kit": true, "kits": true, "sp": true, "mini": true,
@@ -128,7 +128,7 @@ func TagsFor(path, base string) []string {
 			tags = append(tags, t)
 		}
 	}
-	if strings.EqualFold(path[strings.LastIndexByte(path, '.')+1:], "mp3") && strings.LastIndexByte(rel, '/') >= 0 {
+	if ext := strings.ToLower(path[strings.LastIndexByte(path, '.')+1:]); (ext == "mp3" || ext == "m4a") && strings.LastIndexByte(rel, '/') >= 0 {
 		// The name of a song is an artist and a title: only the folders say what it is.
 		rel = rel[:strings.LastIndexByte(rel, '/')]
 	}

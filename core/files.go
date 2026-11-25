@@ -29,7 +29,7 @@ func (a *App) cd(dir string) {
 	}
 }
 
-var audioExts = map[string]bool{".wav": true, ".aif": true, ".aiff": true, ".flac": true, ".mp3": true, ".smp": true}
+var audioExts = map[string]bool{".wav": true, ".aif": true, ".aiff": true, ".flac": true, ".mp3": true, ".m4a": true, ".smp": true}
 
 // searchList fills the list with the audio files below the folder whose path has all the words of the search. It gives up
 // after 1.5 s, 40000 files looked at or 400 found, and says so.

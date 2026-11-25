@@ -16,7 +16,7 @@ import (
 )
 
 // AudioExtensions are the file extensions that can be imported.
-var AudioExtensions = []string{"wav", "wave", "bwf", "aif", "aiff", "flac", "mp3"}
+var AudioExtensions = []string{"wav", "wave", "bwf", "aif", "aiff", "flac", "mp3", "m4a"}
 
 // IsAudioFile reports whether a file name has an importable extension.
 func IsAudioFile(name string) bool {
@@ -110,6 +110,8 @@ func decode(ctx context.Context, b []byte, ext string) (pcm, error) {
 		kind = "flac"
 	case bytes.HasPrefix(b, []byte("ID3")) || (len(b) > 1 && b[0] == 0xFF && b[1]&0xE0 == 0xE0):
 		kind = "mp3"
+	case len(b) >= 12 && string(b[4:8]) == "ftyp":
+		kind = "m4a"
 	}
 	switch kind {
 	case "wav", "wave", "bwf":
@@ -120,6 +122,8 @@ func decode(ctx context.Context, b []byte, ext string) (pcm, error) {
 		return decodeFLAC(b)
 	case "mp3":
 		return decodeMP3(ctx, b)
+	case "m4a", "mp4", "aac":
+		return decodeExternal(ctx, b, kind)
 	}
 	return pcm{}, ErrNoAudioTrack
 }
