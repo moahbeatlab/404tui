@@ -320,7 +320,6 @@ func (a *App) padToolsMenu(n int) *menu {
 	m.head(fmt.Sprintf("BANK %c", 'A'+a.bank))
 	add("Find a pad by name...", func(int) { a.findPad() })
 	add("Set up the pads that were never set up", func(int) { a.setupPads(false) })
-	add("Check the BPM of the pads (heard, named)...", func(int) { a.checkTempos() })
 	add("Switches for every pad of the bank...", func(int) { a.bankSwitchesMenu() })
 	add("Set the buses of the bank by the names...", func(int) { a.busScanMenu() })
 	add("Export the bank to a folder", func(int) { a.exportBank() })
