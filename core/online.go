@@ -85,6 +85,12 @@ func (a *App) offlineMenu() {
 		add("Rename project...", func(int) { a.nameOffline(n) })
 		add("Move it to another number (1..16)...", func(int) { a.renameOffline(n) })
 	}
+	if !ok {
+		add("New project here...", func(int) { a.newOfflineHere(n) })
+	}
+	if c := a.cardOffer(); c != "" {
+		add("Use the SD card: "+fit(cardLabel(c), 36), func(int) { a.useCard(c) })
+	}
 	add("Name the project of the editor...", func(int) { a.nameEditorProject() })
 	add("Open a project from a folder...", func(int) { a.openProjectFolder() })
 	add("Write the project of the editor here", func(int) {
@@ -269,6 +275,11 @@ func (a *App) modeMenu() {
 	m.head("OTHER PROJECTS")
 	add("Open a project from a folder...", func(int) { a.openProjectFolder() })
 	m.head("OFFLINE FOLDER")
+	for _, c := range spCards() {
+		if filepath.Clean(c) != filepath.Clean(a.offlineDir()) {
+			add("SD card: "+fit(cardLabel(c), 40), func(int) { a.useCard(c) })
+		}
+	}
 	add("Choose the folder of the offline projects...", func(int) {
 		a.pickFolder("the folder of the offline projects", a.offlineDir(), func(dir string) {
 			a.set.OfflineDir = dir

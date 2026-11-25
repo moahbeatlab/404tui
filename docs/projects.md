@@ -41,11 +41,13 @@ Backups and exports open a **folder chooser** (`l` opens a folder, `h` goes up, 
 Open a project from a folder, write the project of the editor into the folder (a slot of the 16), or export it into any folder. `o` opens a project from any folder: the folder chooser marks project folders; a project folder is opened in the editor, and a folder that holds
 `PROJECT_nn` folders becomes the offline folder. The project open last offline is remembered.
 
+**A new project on the SP card.** Put the card in the computer: PROJECTS finds it by itself (a drive with an `EXPORT/PROJECT` folder, at its top or a folder or two down) and says *an SP card is in: c uses it*; `c` (or *Use the SD card* in the menu) makes the card's `EXPORT/PROJECT` the offline folder, so the 16 tiles are the card's `PROJECT_01`..`PROJECT_16`. On an empty tile, *New project here...* asks for a name, writes an empty project there and opens it in the editor (work in the editor that is not saved is asked about first); put samples on its pads and *Write the project of the editor here* again. On the unit, `SHIFT + SUB PAD`, `SUB PAD`, OK and the pad of its number play it from the card (or IMPORT PROJECT copies it in). When the chosen folder is not there (the card is out), the top line says so in red.
+
 **Names.** A project has a name inside it (up to 31 characters, what the unit shows on its project list); the tiles show it. *Rename project...* (on a project that is there) writes a new name into its `PADCONF.BIN` and changes nothing else; *Move it to another number (1..16)...* gives it another PROJECT_nn folder. *Name the project of the editor...* (on any tile, an empty one too) names the project in the editor: it is written with that name by *Write the project of the editor here*, an export or a send to the unit. Online, the unit's menu renames a project on the unit. A project is a folder with a `PADCONF.BIN` (and its patterns and samples); from the command line: `sp404 -project <folder>`.
 
 ## Keys
 
-**On a computer:** `a` project menu · `h j k l` choose · `Esc` back · `o` open from a folder · `t` project menu · `1`-`6` a screen.
+**On a computer:** `a` project menu · `h j k l` choose · `Esc` back · `o` open from a folder · `c` use the SP card that is in (offline) · `t` project menu · `1`-`6` a screen.
 
 **On the handheld (UNIT):** `A` project menu · `X` look again · D-pad choose · `L1 R1` page · `B` back.
 

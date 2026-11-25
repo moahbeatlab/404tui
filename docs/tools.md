@@ -572,7 +572,7 @@ The note under the cursor: `Velocity` 1 to 127, `Length` from 15 ticks to the en
 
 On a computer: the 16 projects of the unit when one is plugged in (online), else those of a folder on this computer (offline). The program looks for the unit all the time, and the start screen (the launcher) offers `u` online, `o` offline (the project open last), `f` a folder and `1`-`4` the projects opened last. `a` opens a project's menu, `t` chooses online or offline and the offline folder. On the handheld this screen is called UNIT.
 
-**Keys on a computer:** `a` project menu · `hjkl` choose · `Esc` back · `o` open from a folder · `t` project menu · `g hl` screen (1-6) · `s x` record
+**Keys on a computer:** `a` project menu · `hjkl` choose · `Esc` back · `o` open from a folder · `t` project menu · `c` use the SD card · `g hl` screen (1-6) · `s x` record
 
 **Keys on the handheld:** `A` project menu · `X` look again · `^v` choose · `L1 R1` page · `B` back · `Y+<>` screen · `Sel+X` record
 
@@ -611,6 +611,10 @@ On a computer: the 16 projects of the unit when one is plugged in (online), else
 
 ### Project menu of the offline folder (`a`, offline)
 
+- `New project here...`
+  - **the editor has work that is not saved** (a dialog):
+    - `Leave it and start PROJECT_01 new`
+    - `No`
 - `Name the project of the editor...`
 - `Open a project from a folder...`
 - `Write the project of the editor here`

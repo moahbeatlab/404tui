@@ -369,6 +369,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.OpenProjectKey()
 		}
 		return
+	case "c": // PROJECTS offline: the SP card that is in the computer becomes the offline folder
+		if m.armed == noShift && !m.aHeld && !m.app.Modal() && m.app.ScreenName() == "UNIT" {
+			m.app.UseCardKey()
+		}
+		return
 	case "r": // PADS and SEQ: rename the pad
 		if m.armed == noShift && !m.aHeld && !m.app.Modal() && (m.app.ScreenName() == "PADS" || m.app.ScreenName() == "SEQ") {
 			m.app.RenamePadKey()

@@ -278,7 +278,8 @@ func (a *App) unitContext(g Gfx, x, y, w int) {
 			g.Text(x, y+5, "A  open it in the editor", cDim, false)
 		} else {
 			g.Text(x, y+4, "empty", cDim, false)
-			g.Text(x, y+5, "A  write the project here", cDim, false)
+			g.Text(x, y+5, "A  a new project here, or", cDim, false)
+			g.Text(x, y+6, "   write the editor's", cDim, false)
 		}
 		if n, ok := a.lastOffline(); ok {
 			g.Text(x, y+7, fit(fmt.Sprintf("last open offline: %d", n+1), w), cDim, false)
@@ -345,8 +346,18 @@ func (a *App) drawProjects(g Gfx) {
 		if a.link != nil {
 			note = "  a unit is plugged in: t goes online"
 		}
+		if a.cardOffer() != "" {
+			note = "  an SP card is in: c uses it"
+		}
+		if a.offlineMissing() {
+			note = "  this folder is not there (the card is out?)"
+		}
 		g.Text(2+len("OFFLINE")+2, 1, where, cText, false)
-		g.Text(contentCols-1-len(note), 1, note, cDim, false)
+		nc := cDim
+		if a.offlineMissing() {
+			nc = cBad
+		}
+		g.Text(contentCols-1-len(note), 1, note, nc, false)
 		names = make([]string, 16)
 		for i := range names {
 			if dir, ok := a.offlineProject(i); ok {

@@ -138,6 +138,9 @@ func (a *App) hints() (plain, shift []hint) {
 	}
 	if Terminal && a.scr == Unit && !a.Modal() && a.prompt == nil {
 		plain = append(append([]hint{}, plain...), hint{"o", "open from a folder"}, hint{"t", "project menu"})
+		if !a.onlineNow() {
+			plain = append(plain, hint{"c", "use the SD card"})
+		}
 	}
 	if Terminal && a.scr == Files && !a.Modal() && a.prompt == nil && a.kb == nil {
 		auto := "auto play: off"

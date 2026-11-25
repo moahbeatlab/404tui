@@ -1730,3 +1730,56 @@ func TestProjectsAreNamed(t *testing.T) {
 		t.Fatalf("the menu says its name: %q", a.menu.title)
 	}
 }
+
+func TestANewProjectIsMadeOnTheCard(t *testing.T) {
+	a, _ := newApp(t)
+	vols := t.TempDir()
+	card := filepath.Join(vols, "SP404", "ROLAND", "SP-404MKII", "EXPORT", "PROJECT")
+	os.MkdirAll(card, 0o755)
+	os.MkdirAll(filepath.Join(vols, "Stick", "music"), 0o755) // a drive that is no SP card
+	old := mountRoots
+	mountRoots = func() []string { return []string{vols} }
+	sdCards.at = time.Time{}
+	defer func() { mountRoots = old; sdCards.at = time.Time{} }()
+	a.set.OfflineDir = t.TempDir()
+	a.go_(Unit)
+	a.offlineChosen = true
+	if got := spCards(); len(got) != 1 || got[0] != card {
+		t.Fatalf("the card is found two folders down, and only it: %v", got)
+	}
+	if a.cardOffer() != card {
+		t.Fatal("the card is offered while the offline folder is another")
+	}
+	a.UseCardKey()
+	if a.offlineDir() != card || a.cardOffer() != "" {
+		t.Fatalf("c makes the card the offline folder: %s", a.offlineDir())
+	}
+	// a new project on an empty tile: named, written to the card, open in the editor
+	a.unitCur = 4
+	a.newOfflineHere(4)
+	if a.prompt == nil {
+		t.Fatal("the name is asked")
+	}
+	a.prompt.onDone("Friday set")
+	dir, ok := a.offlineProject(4)
+	if !ok || offlineName(dir) != "Friday set" || filepath.Dir(dir) != card {
+		t.Fatalf("PROJECT_05 is on the card with its name: %v %q %s", ok, offlineName(dir), dir)
+	}
+	if a.slot != 5 || a.info.Name != "Friday set" || a.hasWork() || !a.saved || a.scr != Pads {
+		t.Fatalf("the editor holds the new, empty project: slot %d %q work %v saved %v", a.slot, a.info.Name, a.hasWork(), a.saved)
+	}
+	for _, d := range []string{"PTN", "SMPL"} {
+		if st, err := os.Stat(filepath.Join(dir, d)); err != nil || !st.IsDir() {
+			t.Errorf("it has the folders the unit's exports have: %s", d)
+		}
+	}
+	// the card taken out: the screen says so, and nothing is written
+	os.RemoveAll(filepath.Join(vols, "SP404"))
+	if !a.offlineMissing() {
+		t.Fatal("a card that is out is noticed")
+	}
+	a.newOfflineHere(5)
+	if a.prompt != nil && a.prompt.title != "" && strings.Contains(a.prompt.title, "PROJECT_06") {
+		t.Fatal("no new project is asked for on a card that is out")
+	}
+}
