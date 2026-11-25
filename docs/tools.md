@@ -114,8 +114,11 @@ The settings of the pad under the cursor, written into the project at once. With
 - `Find a pad by name...`
 - `Set up the pads that were never set up`
 - `Check the BPM of the pads (heard, named)...`
-  - **checking the BPM of bank A** (a dialog):
-    - `Stop (B)`
+  - **tempos of bank A: 0 of 3 differ** (a dialog):
+    - `Every BPM is right: close`
+
+    *Right, Or Nothing To Go By*
+
     - `A1 kick_808      96.00  too short`
     - `A2 snare_tight   96.00  too short`
     - `A3 hat_closed    96.00  too short`

@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
@@ -67,10 +66,6 @@ func TestTheBPMOfThePadsIsCheckedBeforeItIsSet(t *testing.T) {
 	putOnPad(t, a, 6, houseLoop(140, 8), "Half", 70)        // A7: half time is the same tempo
 	keys(t, a, "A [")
 	chooseMenu(t, a, "Check the BPM")
-	if a.tempoJob == nil || !strings.Contains(menuOf(a).title, "checking the BPM of bank A") {
-		t.Fatal("the check shows its progress")
-	}
-	waitTempos(t, a)
 	m := menuOf(a)
 	if m == nil || !strings.Contains(m.title, "2 of 7 differ") {
 		t.Fatalf("A4 and A6 differ: %+v", m)
@@ -95,41 +90,11 @@ func TestTheBPMOfThePadsIsCheckedBeforeItIsSet(t *testing.T) {
 	}
 	keys(t, a, "A [")
 	chooseMenu(t, a, "Check the BPM")
-	waitTempos(t, a)
 	if m := menuOf(a); !strings.Contains(m.title, "1 of 7 differ") {
 		t.Fatalf("A6 is left: %q", m.title)
 	}
 	chooseMenu(t, a, "Set the 1 that differ")
 	if padBPM(a, 5) != 125 || padBPM(a, 6) != 70 || padBPM(a, 4) != 126 {
 		t.Fatalf("A6 to its name's 125, A5 and A7 kept: %.2f %.2f %.2f", padBPM(a, 5), padBPM(a, 4), padBPM(a, 6))
-	}
-}
-
-func waitTempos(t *testing.T, a *App) {
-	t.Helper()
-	for i := 0; i < 500 && a.tempoJob != nil; i++ {
-		time.Sleep(10 * time.Millisecond)
-		a.tempoTick()
-	}
-	if a.tempoJob != nil {
-		t.Fatal("the check did not finish")
-	}
-}
-
-func TestTheBPMCheckStopsWhenClosed(t *testing.T) {
-	a, _ := newApp(t)
-	for n := 0; n < 6; n++ {
-		putOnPad(t, a, n, houseLoop(124, 16), "Loop", 120)
-	}
-	keys(t, a, "A [")
-	chooseMenu(t, a, "Check the BPM")
-	j := a.tempoJob
-	keys(t, a, "B")
-	a.tempoTick()
-	if a.tempoJob != nil || !j.stop.Load() || a.menu != nil {
-		t.Fatal("B closes the progress and stops the check")
-	}
-	if padBPM(a, 0) != 120 {
-		t.Fatal("a stopped check sets nothing")
 	}
 }
