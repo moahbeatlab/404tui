@@ -41,3 +41,25 @@ func TestABuildWithoutMIDISaysSo(t *testing.T) {
 		t.Errorf("error %v", err)
 	}
 }
+
+type hubSource struct{ opened []string }
+
+func (h *hubSource) Ports() ([]string, error) {
+	return []string{"H2MIDI-Pro Port 1", "H2MIDI-Pro Port 2"}, nil
+}
+func (h *hubSource) Open(part string, on func(Event)) (func(), string, error) {
+	h.opened = append(h.opened, part)
+	return func() {}, part, nil
+}
+
+func TestOpenAllListensToEveryPortOfAHub(t *testing.T) {
+	h := &hubSource{}
+	stop, names, err := OpenAll(h, func(Event) {})
+	if err != nil || len(names) != 2 || len(h.opened) != 2 {
+		t.Fatalf("both ports: %v %v", names, err)
+	}
+	stop()
+	if _, _, err := OpenAll(unavailable{}, func(Event) {}); err == nil {
+		t.Fatal("no MIDI is an error")
+	}
+}

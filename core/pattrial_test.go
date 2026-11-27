@@ -171,7 +171,7 @@ func TestVariationLeavesTheSource(t *testing.T) {
 		made++
 		v, _ := a.lab.PatternBytes(21)
 		if bytes.Equal(v, src) {
-			t.Fatalf("%s changes nothing", generate.Variations[k])
+			t.Fatalf("%s changes nothing: %s", generate.Variations[k], a.Message())
 		}
 		if now, _ := a.lab.PatternBytes(20); !bytes.Equal(now, src) {
 			t.Fatal("the source stays as it was")
@@ -274,5 +274,46 @@ func TestTrialUndoAndRedoGoThroughTheRolls(t *testing.T) {
 	a.menuKey(B)
 	if a.trialUndo != nil {
 		t.Fatal("the dialog is closed: undo is the project's again")
+	}
+}
+
+// from the generator's dialog the kept pattern gets variations: slight ones first, each kept one in the next free pattern of the same bank,
+// every one made of the kept pattern
+func TestGeneratorKeptPatternGetsVariationsInItsBank(t *testing.T) {
+	a, _ := newApp(t)
+	keys(t, a, kit)
+	a.go_(Seq)
+	a.genRand = rand.New(rand.NewSource(3))
+	a.openPattern(20) // B4
+	st, _ := generate.StyleByName("house")
+	a.generateOne(st, "single", 2)
+	menuItemNamed(t, a, varyKeptLabel).run(0)
+	if !strings.Contains(a.Message(), "keep the pattern first") || a.menu == nil {
+		t.Fatalf("a trial not kept has no variations yet: %s", a.Message())
+	}
+	menuItemNamed(t, a, "Keep it (B throws it away)").run(0)
+	kept, _ := a.lab.PatternBytes(20)
+	menuItemNamed(t, a, varyKeptLabel).run(0)
+	if a.menu == nil || !strings.HasPrefix(a.menu.title, "variation of") || a.menu.items[1].val != 0 {
+		t.Fatalf("the variations of the kept pattern, slight first: %v", a.menu)
+	}
+	var slots []int
+	for k := 0; k < 2; k++ {
+		if a.pat < 17 || a.pat > 32 || a.pat == 20 {
+			t.Fatalf("variation %d is in %d, not in bank B next to B4", k+1, a.pat)
+		}
+		b, _ := a.lab.PatternBytes(a.pat)
+		if bytes.Equal(b, kept) {
+			t.Fatal("the variation differs from the kept pattern")
+		}
+		slots = append(slots, a.pat)
+		menuItemNamed(t, a, "Keep it (B throws it away)").run(0)
+		menuItemNamed(t, a, diceLabel).run(0) // the next variation, in the next free slot
+	}
+	if slots[0] == slots[1] {
+		t.Fatalf("each kept variation has its own slot: %v", slots)
+	}
+	if b, _ := a.lab.PatternBytes(20); !bytes.Equal(b, kept) {
+		t.Fatal("the kept pattern is never changed")
 	}
 }

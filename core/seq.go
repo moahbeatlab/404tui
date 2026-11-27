@@ -252,18 +252,29 @@ func (a *App) seqShifted(k Key) {
 	}
 }
 
-// addTrackPick asks for a pad (the dialog the patterns are chosen in), starting on the next pad with a sample that is not a row yet.
+// addTrackPick asks for a pad (the dialog the patterns are chosen in), starting in the bank of the pattern, on its first pad with
+// a sample that is not a row yet (or on the next such pad after the cursor, when that bank has none).
 func (a *App) addTrackPick() {
 	shown := map[int]bool{}
 	for _, p := range a.rows {
 		shown[p] = true
 	}
-	start := a.rowPad()
-	for off := 1; off < 160; off++ {
-		p := (a.rowPad() + off) % 160
+	bank := (a.pat - 1) / 16 * 16
+	start := bank
+	if len(a.rows) > 0 {
+		start = a.rowPad()
+	}
+	found := false
+	for p := bank; p < bank+16; p++ {
 		if a.info.Pads[p].File && !shown[p] {
-			start = p
+			start, found = p, true
 			break
+		}
+	}
+	for off := 1; off < 160 && !found; off++ {
+		p := (start + off) % 160
+		if a.info.Pads[p].File && !shown[p] {
+			start, found = p, true
 		}
 	}
 	a.pickPad("Add a track: choose a pad", start, true, a.addTrackNote)
@@ -290,7 +301,7 @@ func (a *App) setPattern(n int) {
 	a.pat = (n+159)%160 + 1
 	a.step = min(a.step, a.steps()-1)
 	a.autoRows()
-	if a.seqOn {
+	if a.seqOn && a.playPat == 0 { // a loop that is not a pattern of its own follows the view; a pattern goes on (n queues this one)
 		a.replay()
 	}
 }
@@ -376,8 +387,12 @@ func (a *App) seqMenu() {
 	m.tabHead("PATTERN")
 	run("Choose a pattern (bank, then pattern)...", a.openPicker)
 	run("New pattern from a template...", a.templatesMenu)
-	run("Export this pattern as a MIDI file", a.exportMIDI)
+	m.head("GENERATE")
+	run("Generate a pattern (style, kit, variation)...", a.generatorMenu)
+	run("Melody (bass, lead, arp, stabs, pad) in the key of the bank...", a.melodyMenu)
 	run(variationLabel, a.variationMenu)
+	m.head("THIS PATTERN")
+	run("Export this pattern as a MIDI file", a.exportMIDI)
 	set("Loop only the bar in focus (Y+A)", []string{"off", "on"}, b2i(a.freeze), func(v int) {
 		if (v == 1) != a.freeze {
 			a.toggleFreeze()
@@ -606,6 +621,21 @@ func (a *App) mixDoc(d lab.PatternDoc, bpm float64, lo, hi int, play func(pad in
 	perTick := 60 / bpm / formats.PPQ * formats.SampleRate
 	n := int(float64(hi-lo) * perTick)
 	mix := make([]int32, n*2)
+	// the pad's level and pan, as the unit mixes it (the centre leaves both sides as they are, a side turned away goes to nothing)
+	type gains struct{ l, r int64 }
+	padGain := map[int]gains{}
+	gainOf := func(pad int) gains {
+		if g, ok := padGain[pad]; ok {
+			return g
+		}
+		level, bal := int64(a.padValue(pad, 0x69, 127)), int64(a.padValue(pad, 0x78, 64))
+		if raw, err := a.lab.PadParam(pad, 0x78); err != nil || raw == 0 { // a pad that was never set up: zeros, it plays as it is
+			level, bal = 127, 64
+		}
+		g := gains{level * min((115-bal)*1000/51, 1000), level * min((bal-13)*1000/51, 1000)} // level 0..127 times 0..1000
+		padGain[pad] = g
+		return g
+	}
 	for _, nt := range d.Notes {
 		if int(nt.Tick) < lo || int(nt.Tick) >= hi || !play(nt.Pad) {
 			continue
@@ -623,12 +653,14 @@ func (a *App) mixDoc(d lab.PatternDoc, bpm float64, lo, hi int, play func(pad in
 			continue
 		}
 		at := int(float64(int(nt.Tick)-lo) * perTick)
-		g := int32(nt.Vel)
+		pg := gainOf(nt.Pad)
+		gl, gr := int64(nt.Vel)*pg.l, int64(nt.Vel)*pg.r // velocity x level x pan
+		const full = 127 * 127 * 1000
 		for f := 0; f < s.Frames() && at+f < n; f++ {
-			l := int32(s.Samples[f*s.Channels])
-			r := int32(s.Samples[f*s.Channels+s.Channels-1])
-			mix[(at+f)*2] += l * g / 127
-			mix[(at+f)*2+1] += r * g / 127
+			l := int64(s.Samples[f*s.Channels])
+			r := int64(s.Samples[f*s.Channels+s.Channels-1])
+			mix[(at+f)*2] += int32(l * gl / full)
+			mix[(at+f)*2+1] += int32(r * gr / full)
 		}
 	}
 	out := make([]int16, len(mix))
@@ -641,6 +673,91 @@ func (a *App) mixDoc(d lab.PatternDoc, bpm float64, lo, hi int, play func(pad in
 type looper interface{ Loop(formats.Sample) error }
 type replacer interface {
 	ReplaceLoop(formats.Sample) error
+}
+
+// nexter is an output that can have a loop go on with another sound from its next round, without a break.
+type nexter interface {
+	NextLoop(formats.Sample) error
+}
+
+// durOf is how long a sound plays.
+func durOf(s formats.Sample) time.Duration {
+	return time.Duration(len(s.Samples)/max(s.Channels, 1)) * time.Second / formats.SampleRate
+}
+
+// renderPat is render for another pattern than the one in view.
+func (a *App) renderPat(p int) (formats.Sample, bool) {
+	old := a.pat
+	a.pat = p
+	defer func() { a.pat = old }()
+	return a.render()
+}
+
+// SeqQueue is n of a keyboard on SEQ: the pattern in view plays next. While another plays it takes over at the end of the round,
+// as the unit does it (Space stops it all); on the one that plays, nothing waits any more; an empty one leaves what plays alone.
+// Nothing playing: it starts. Switching the view does not render anything, so going through the patterns is quick.
+func (a *App) SeqQueue() {
+	if a.scr != Seq || a.Modal() || a.prompt != nil || a.aHeld {
+		return
+	}
+	a.CancelShift()
+	a.advanceQueue()
+	if !a.seqOn {
+		a.startLoop()
+		return
+	}
+	if a.playPat == 0 {
+		return
+	}
+	nx, ok := a.Audio.(nexter)
+	if !ok {
+		a.say("this audio output cannot queue a pattern: Space stops, Space plays this one", true)
+		return
+	}
+	if a.pat == a.playPat {
+		if a.queued != 0 {
+			if s, ok := a.render(); ok {
+				nx.NextLoop(s)
+			}
+			a.queued = 0
+		}
+		a.say(fmt.Sprintf("%s goes on playing", a.label(a.pat-1)), false)
+		return
+	}
+	s, ok := a.render()
+	if !ok {
+		if a.queued != 0 {
+			if s, ok := a.renderPat(a.playPat); ok {
+				nx.NextLoop(s)
+			}
+			a.queued = 0
+		}
+		a.say(fmt.Sprintf("%s is empty: %s goes on playing", a.label(a.pat-1), a.label(a.playPat-1)), false)
+		return
+	}
+	if err := nx.NextLoop(s); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	if a.loopDur <= 0 {
+		if cur, ok := a.renderPat(a.playPat); ok {
+			a.loopDur = durOf(cur)
+		}
+	}
+	at := a.seqStart
+	if a.loopDur > 0 {
+		at = a.seqStart.Add((a.clock().Sub(a.seqStart)/a.loopDur + 1) * a.loopDur)
+	}
+	a.queued, a.queuedAt, a.queuedDur = a.pat, at, durOf(s)
+	a.say(fmt.Sprintf("%s plays after this round of %s (Space stops)", a.label(a.pat-1), a.label(a.playPat-1)), false)
+}
+
+// advanceQueue: the round is over, the pattern that waited is the one that plays (the playhead goes over to it).
+func (a *App) advanceQueue() {
+	if a.queued == 0 || !a.seqOn || a.clock().Before(a.queuedAt) {
+		return
+	}
+	a.playPat, a.seqStart, a.loopDur, a.queued = a.queued, a.queuedAt, a.queuedDur, 0
 }
 
 func (a *App) togglePlay() {
@@ -668,7 +785,7 @@ func (a *App) startLoop() {
 		a.say(err.Error(), true)
 		return
 	}
-	a.seqOn, a.seqStart = true, a.clock()
+	a.seqOn, a.seqStart, a.loopDur, a.queued = true, a.clock(), durOf(s), 0
 }
 
 // replay puts an edit into the loop that plays, without a gap.
@@ -676,7 +793,16 @@ func (a *App) replay() {
 	if !a.seqOn {
 		return
 	}
-	if a.playPat != 0 && a.playPat != a.pat { // another pattern is in view: what plays is not touched (Space stops it, Space plays this one)
+	a.advanceQueue()
+	if a.playPat != 0 && a.playPat != a.pat { // another pattern is in view: what plays is not touched; the one that waits gets the edit
+		if a.queued == a.pat {
+			if s, ok := a.render(); ok {
+				if nx, ok := a.Audio.(nexter); ok {
+					nx.NextLoop(s)
+					a.queuedDur = durOf(s)
+				}
+			}
+		}
 		return
 	}
 	s, ok := a.render()
@@ -686,6 +812,7 @@ func (a *App) replay() {
 	}
 	if r, ok := a.Audio.(replacer); ok {
 		r.ReplaceLoop(s)
+		a.loopDur = durOf(s)
 	}
 }
 
@@ -698,6 +825,7 @@ func (a *App) clock() time.Time {
 
 // playStep is the step the loop is at, -1 when it is not playing.
 func (a *App) playStep() int {
+	a.advanceQueue()
 	if !a.seqOn || a.playPat != 0 && a.playPat != a.pat { // nothing plays, or another pattern does: no playhead in this one
 		return -1
 	}
@@ -1099,6 +1227,9 @@ func (a *App) trackMode(pad int) int { return a.trk[a.pat][pad] }
 
 // audible is whether the pad's notes play: with any solo only the solos do, otherwise all but the muted ones.
 func (a *App) audible(pad int) bool {
+	if a.synthPad == pad+1 { // the synth plays it
+		return false
+	}
 	m := a.trk[a.pat]
 	if len(m) == 0 {
 		return true

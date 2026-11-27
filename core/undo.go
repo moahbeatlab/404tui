@@ -102,6 +102,7 @@ func (a *App) slicerUndo(redo bool) bool {
 func (a *App) pressProject(k Key, repeat int) {
 	if a.toolBase != nil && a.menu == nil { // the tool's dialog is gone: its trial stands as it is
 		a.toolBase = nil
+		a.trialUndo = nil
 	}
 	if a.yHeld && a.splash == nil && (k == L2 || k == R2) {
 		if a.toolBase != nil {

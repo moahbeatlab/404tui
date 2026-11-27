@@ -65,6 +65,8 @@ func (j *job) state() (done, total int, name string, err error, finished bool) {
 // Tick runs what has to happen without a key: looking for the unit while the UNIT screen is in front.
 func (a *App) Tick() {
 	a.splashTick()
+	a.advanceQueue()
+	a.synthSync()
 	if a.connCh != nil {
 		select {
 		case l := <-a.connCh:

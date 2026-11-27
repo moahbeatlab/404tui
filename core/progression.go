@@ -48,6 +48,16 @@ var progressions = []struct {
 	{"Gospel lift", "joyful, soulful", "I IV", []progStep{{0, 'M'}, {5, 'M'}}},                                             // classic house piano: C F
 	{"Mixolydian anthem", "bright, rocking", "I bVII IV I", []progStep{{0, 'M'}, {10, 'M'}, {5, 'M'}, {0, 'M'}}},           // C Bb F C
 	{"Neo soul turn", "smooth, romantic", "IV III vi v I", []progStep{{5, 'M'}, {4, 'D'}, {9, 'm'}, {7, 'm'}, {0, 'D'}}},   // future bass and lo-fi: Fmaj7 E7 Am7 Gm7 C7
+	// the emotional EDM progressions of the MC-101 notes (brainfck.org/t/roland-mc-101, "Chords progressions")
+	{"Euphoric lift", "uplifting, joyful, euphoric", "v VI VII i", []progStep{{7, 'm'}, {8, 'M'}, {10, 'M'}, {0, 'm'}}}, // D#m: A#m B C# D#m
+	{"Deep and serious", "deep, serious", "VI VII i VII", []progStep{{8, 'M'}, {10, 'M'}, {0, 'm'}, {10, 'M'}}},         // Bm: G A Bm A
+	{"Sad descent", "sad", "i VII iv VI", []progStep{{0, 'm'}, {10, 'M'}, {5, 'm'}, {8, 'M'}}},                          // Gm: Gm F Cm Eb
+	{"Feel good", "feel good, euphoric", "VI III VII i", []progStep{{8, 'M'}, {3, 'M'}, {10, 'M'}, {0, 'm'}}},           // Bm: G D A Bm
+	{"Happy-sad", "feel good but kinda sad", "VI i VII v", []progStep{{8, 'M'}, {0, 'm'}, {10, 'M'}, {7, 'm'}}},         // G#m: E G#m F# D#m
+	{"Pump up", "pumping, driving", "i i VI iv", []progStep{{0, 'm'}, {0, 'm'}, {8, 'M'}, {5, 'm'}}},                    // Gm: Gm Gm Eb Cm
+	{"Pump up, happy", "pumping, kinda happy", "i i III VI", []progStep{{0, 'm'}, {0, 'm'}, {3, 'M'}, {8, 'M'}}},        // Gm: Gm Gm Bb Eb
+	{"Chill", "chilled, relaxed", "VI i VII i", []progStep{{8, 'M'}, {0, 'm'}, {10, 'M'}, {0, 'm'}}},                    // C#m: A C#m B C#m
+	{"Happy", "happy", "IV V I I", []progStep{{5, 'M'}, {7, 'D'}, {0, 'M'}, {0, 'M'}}},                                  // C: F G C C
 }
 
 // progColors are how rich the chords of a progression are. A major chord's eleventh is raised (#11): the plain one clashes with the
@@ -321,6 +331,70 @@ func (a *App) progList(n int, parent *menu, picked func()) {
 		if a.arpOn && o.progOn {
 			a.stop()
 		}
+	}
+	a.menu = l
+}
+
+// melProgList is the box of the Melody dialog's chords (A or Enter on its Chords row): the style's loops, the key's one chord, then
+// every progression, the minor ones and the major ones, each with its chords in the melody's key. The foot tells the feeling and the
+// numerals of the one under the cursor; A takes it (the trial is written again, a step of the dialog's undo), B goes back as it was.
+func (a *App) melProgList(parent *menu) {
+	row := -1
+	for i, it := range parent.items {
+		if it.label == "Chords" && !it.header {
+			row = i
+		}
+	}
+	if row < 0 {
+		return
+	}
+	st := &a.mel
+	l := &menu{title: "chords in " + sharpNames[st.key] + " " + melModes[st.mode].name, parent: parent, footH: 3}
+	at := map[int]int{} // menu row -> the Chords value (0 the style's, 1 one chord, 2+ a progression)
+	take := func(v int) {
+		a.menu = parent
+		parent.items[row].val = v
+		if f := parent.items[row].onChange; f != nil {
+			f(v)
+		}
+		a.say("chords: "+parent.items[row].vals[v], false)
+	}
+	add := func(v int, label, vals string) {
+		at[len(l.items)] = v
+		if v == st.prog {
+			l.cur = len(l.items)
+		}
+		l.items = append(l.items, menuItem{label: label, vals: []string{vals}, keepOpen: true, run: func(int) { take(v) }})
+	}
+	l.head("THE STYLE'S")
+	add(0, "the style's loop", melStyles[st.style]+": a roll of the dice picks one")
+	add(1, "one chord", sharpNames[st.key]+", every bar")
+	for _, minor := range []bool{true, false} {
+		if minor {
+			l.head("MINOR (KEY IS THE MINOR TONIC)")
+		} else {
+			l.head("MAJOR")
+		}
+		for i, p := range progressions {
+			if progMinor(i) == minor {
+				add(i+2, p.name, strings.Join(progNames(i, st.key, 0), " "))
+			}
+		}
+	}
+	l.foot = func(g Gfx, col, row, cols int) {
+		v, ok := at[l.cur]
+		if !ok {
+			return
+		}
+		mood, roman := "the style's own loops (Style); NOW shows each bar's chord", "a roll of the dice can take another of them"
+		switch {
+		case v == 1:
+			mood, roman = "still: only the key's own chord", "i (or I)"
+		case v >= 2:
+			mood, roman = "Feels: "+progressions[v-2].mood, progressions[v-2].roman+"   (A: take it, B: back)"
+		}
+		g.Text(col+2, row+1, fit(mood, cols-4), cAmber, true)
+		g.Text(col+2, row+2, fit(roman, cols-4), cDim, false)
 	}
 	a.menu = l
 }

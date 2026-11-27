@@ -107,6 +107,9 @@ func (a *App) remoteMenu() *RMenu {
 	out.Depth++
 	for i := range m.items {
 		it := &m.items[i]
+		if it.hidden {
+			continue
+		}
 		ri := RItem{Index: m.fullIndex(it), Label: menuLabel(it.label)}
 		switch {
 		case it.header || it.tab:
@@ -146,7 +149,7 @@ func (m *menu) find(index int) *menuItem {
 		return nil
 	}
 	it := m.at(index)
-	if it.header || it.tab {
+	if it.header || it.tab || it.hidden {
 		return nil
 	}
 	if m.tabs != nil {

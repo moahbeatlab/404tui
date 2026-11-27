@@ -19,6 +19,7 @@ const (
 	tapPlay tapKind = iota
 	tapLoop
 	tapReplace
+	tapNext
 	tapPreview
 	tapStopPreview
 	tapStop
@@ -73,6 +74,14 @@ func (t *castTapFull) ReplaceLoop(s formats.Sample) error {
 	t.note(tapReplace, s)
 	return t.rep.ReplaceLoop(s)
 }
+func (t *castTapFull) NextLoop(s formats.Sample) error {
+	nx, ok := t.inner.(nexter)
+	if !ok { // an output without it: at once, as a replacement
+		return t.ReplaceLoop(s)
+	}
+	t.note(tapNext, s)
+	return nx.NextLoop(s)
+}
 func (t *castTapFull) Preview(s formats.Sample) error {
 	t.note(tapPreview, s)
 	return t.prev.Preview(s)
@@ -100,7 +109,7 @@ func (t *castTap) mix(n int) []int16 {
 	ev := append([]tapEvent(nil), t.ev...)
 	t.mu.Unlock()
 	acc := make([]int32, n*2)
-	var cur, pre []int16
+	var cur, pre, next []int16
 	var curAt, preAt int
 	var looping bool
 	frame := func(at time.Duration) int { return min(max(int(math.Round(at.Seconds()*formats.SampleRate)), 0), n) }
@@ -114,6 +123,8 @@ func (t *castTap) mix(n int) []int16 {
 					curAt = 0
 					if !looping {
 						cur = nil
+					} else if next != nil { // the round is over: the sound that waits takes over
+						cur, next = next, nil
 					}
 				}
 			}
@@ -130,8 +141,14 @@ func (t *castTap) mix(n int) []int16 {
 		render(frame(e.at))
 		switch e.kind {
 		case tapPlay, tapLoop:
-			pre = nil
+			pre, next = nil, nil
 			cur, curAt, looping = e.pcm, 0, e.kind == tapLoop
+		case tapNext:
+			if cur != nil && looping {
+				next = e.pcm
+			} else {
+				cur, curAt, looping = e.pcm, 0, true
+			}
 		case tapReplace:
 			if cur != nil && looping && len(e.pcm) > 0 {
 				cur, curAt = e.pcm, curAt%(len(e.pcm)/2)
@@ -143,7 +160,7 @@ func (t *castTap) mix(n int) []int16 {
 		case tapStopPreview:
 			pre = nil
 		case tapStop:
-			cur, pre = nil, nil
+			cur, pre, next = nil, nil, nil
 		}
 		if len(cur) == 0 {
 			cur = nil
