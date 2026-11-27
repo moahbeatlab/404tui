@@ -234,11 +234,31 @@ func (m *Model) key(msg tea.KeyMsg) {
 		}
 		m.disarm()
 		return
-	case "n": // the slicer: a new order of the slices, at once
+	case "n": // the slicer: a new order of the slices, at once; PADS: rename the pad; a tool's dialog: another roll of the dice
+		if m.armed == noShift && m.app.MenuDice() {
+			m.disarm()
+			return
+		}
 		if m.app.ScreenName() == "SLICE" && m.armed == noShift && !m.app.Modal() {
 			m.disarm()
 			m.app.NewOrder()
 			return
+		}
+		if m.app.ScreenName() == "PADS" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			m.app.RenamePadKey()
+		}
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() { // SEQ: the pattern in view plays next
+			m.app.SeqQueue()
+		}
+		return
+	case "c": // SEQ: copy the pattern into the next empty slot
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			m.app.SeqCopy()
+		}
+		return
+	case "d": // SEQ: clear the track
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			m.app.SeqClearTrack()
 		}
 		return
 	case "+", "=": // the slicer: zoom in
@@ -327,6 +347,8 @@ func (m *Model) key(msg tea.KeyMsg) {
 			switch {
 			case m.app.ScreenName() == "SEQ" && s == "m":
 				m.app.SeqTrack(1)
+			case m.app.ScreenName() == "SEQ": // M: the mixer, or the grid again
+				m.app.SeqMixer()
 			case m.app.ScreenName() == "FILES" && s == "m":
 				m.app.MarkFile()
 			case m.app.ScreenName() == "FILES":
@@ -376,13 +398,19 @@ func (m *Model) key(msg tea.KeyMsg) {
 			m.app.Dispatch(core.Event{Key: core.A, Down: true})
 		}
 		return
-	case "up", "k", "K":
+	case "H", "J", "K", "L": // SEQ: the pattern before and after, the row of tiles above and below; elsewhere the arrows
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+			m.app.SeqPattern(map[string]int{"H": -1, "L": 1, "K": -4, "J": 4}[s])
+			return
+		}
+		k = map[string]core.Key{"H": core.Left, "J": core.Down, "K": core.Up, "L": core.Right}[s]
+	case "up", "k":
 		k = core.Up
-	case "down", "j", "J":
+	case "down", "j":
 		k = core.Down
-	case "left", "h", "H":
+	case "left", "h":
 		k = core.Left
-	case "right", "l", "L":
+	case "right", "l":
 		k = core.Right
 	case " ": // play and stop
 		if m.app.PlayStop() {
@@ -404,6 +432,11 @@ func (m *Model) key(msg tea.KeyMsg) {
 		}
 		k = core.B
 	case "esc", "backspace":
+		if m.app.MixerOn() && !m.app.Modal() { // the mixer: back to the grid (b is the bus there)
+			m.disarm()
+			m.app.SeqMixer()
+			return
+		}
 		k = core.B
 	case "x", "X":
 		k = core.X
@@ -415,7 +448,7 @@ func (m *Model) key(msg tea.KeyMsg) {
 			k = core.L2
 		}
 	case "[", "]": // SEQ: the bank (the pattern at the same place); elsewhere L1 and R1
-		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() {
+		if m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() && !m.app.MixerOn() { // (the mixer: pan)
 			m.app.SeqBank(map[string]int{"[": -1, "]": 1}[s])
 			return
 		}
@@ -433,6 +466,10 @@ func (m *Model) key(msg tea.KeyMsg) {
 		k = core.L2
 	case ".", ">":
 		k = core.R2
+		if s == "." && m.app.ScreenName() == "SEQ" && m.armed == noShift && !m.aHeld && !m.app.Modal() { // SEQ: add a track (m and s mute and solo)
+			m.app.SeqAddTrack()
+			return
+		}
 	default:
 		return
 	}

@@ -133,6 +133,8 @@ func (winSource) Open(part string, on func(Event)) (func(), string, error) {
 	}, names[id], nil
 }
 
+func (winSource) OutPorts() ([]string, error) { return outputs(), nil }
+
 // outputs names the outputs there are, by their device number. A MIDIOUTCAPSW starts like an input's.
 func outputs() []string {
 	n, _, _ := procOutNum.Call()

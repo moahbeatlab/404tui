@@ -27,6 +27,7 @@ import (
 
 	"github.com/moahbeatlab/404tui/formats"
 	"github.com/moahbeatlab/404tui/lab"
+	"github.com/moahbeatlab/404tui/midiin"
 )
 
 // Key is one of the eight keys, and the two shoulder buttons for paging.
@@ -191,7 +192,13 @@ type App struct {
 	genRand           *rand.Rand      // the dice of the generator's seeds (made from the clock when first needed)
 	trialUndo         func(redo bool) // undo and redo inside a dialog that rolls patterns: its rolls (nil: none is open)
 	tt2               trackState2
-	tt                trackState  // the settings of the track tools
+	tt                trackState // the settings of the track tools
+	mel               melodySet  // the settings of the melody tool
+	toolNoPlay        bool       // the tool dialog that opens next does not start the loop on the computer
+	synth             *synthOut  // a track sent as MIDI notes to the synth behind the unit, while the pattern loops
+	synthPad          int        // the pad that is played by the synth, plus one: quiet on the computer meanwhile
+	midiOut           midiin.Out // the unit's MIDI output, open once it was needed
+	midiOutName       string
 	scopeRow          bool        // the timing tools act on the row under the cursor only, not on every pad
 	undo              []undoEntry // the project before each change, newest last
 	redo              []undoEntry
@@ -207,6 +214,7 @@ type App struct {
 	peakMax           map[peakKey]int // the loudest value of each sample, for the slicer's scale
 	soundUntil        time.Time       // when the sample that plays ends, for Space (play or stop)
 	patStrip          bool            // SEQ on a terminal: the arrows choose the pattern in the row of 16 boxes (p)
+	mixer             bool            // SEQ on a terminal: the mixer in place of the grid (M)
 	seqOneBar         bool            // SEQ on a wide terminal: one bar in view, though the window has the room for more
 	orderOn           bool            // SLICE: the order plays in a loop
 	orderFrames       int             // its length
@@ -269,6 +277,10 @@ type App struct {
 	castRun           *castRun            // the terminal cast that runs (Ctrl-T)
 	castLog           *perflog.Log        // the log the keys and the screen go to while a recording runs
 	playPat           int                 // the pattern that loops (1..160), 0 when none: the view can be on another pattern
+	loopDur           time.Duration       // how long a round of the loop that plays is
+	queued            int                 // the pattern that takes over at the end of the round (the view went to it), 0 when none
+	queuedAt          time.Time           // when it takes over
+	queuedDur         time.Duration       // and how long its round is
 	trk               map[int]map[int]int // SEQ: pattern -> pad -> mute/solo
 	freeze            bool                // SEQ: loop only the bar in focus
 	frozenPage        int
@@ -629,6 +641,10 @@ func (a *App) press(k Key, repeat int) {
 	}
 	if a.menu != nil {
 		a.menuKey(k)
+		return
+	}
+	if a.mixer && a.scr == Seq && !a.aHeld && !a.yHeld && !a.selHeld { // the mixer: its own keys, the shoulders too
+		a.mixerKey(k, repeat)
 		return
 	}
 	if a.aHeld && a.scr == Seq && (k == L1 || k == R1) { // A held: L1 and R1 move the note
@@ -1022,6 +1038,106 @@ func (a *App) SeqTrack(mode int) {
 	a.replay()
 }
 
+// SeqPattern is H J K L of a keyboard on SEQ: the pattern d slots on (the tiles are 4 a row: H L one, K J a row).
+func (a *App) SeqPattern(d int) {
+	if a.scr != Seq || a.Modal() || a.prompt != nil || a.aHeld {
+		return
+	}
+	a.CancelShift()
+	a.setPattern(a.pat + d)
+	a.row = min(a.row, max(len(a.rows)-1, 0))
+	what := "empty"
+	if dc, ok := a.doc(); ok {
+		what = fmt.Sprintf("%d bars, %s", dc.Bars, count(len(dc.Notes), "note"))
+	}
+	switch {
+	case a.seqOn && a.queued == a.pat:
+		what += " · plays next"
+	case a.seqOn && a.playPat != 0 && a.pat != a.playPat:
+		what += fmt.Sprintf(" · %s plays: n plays this one after its round", a.label(a.playPat-1))
+	}
+	a.say(fmt.Sprintf("pattern %s: %s", a.label(a.pat-1), what), false)
+}
+
+// SeqCopy is c of a keyboard on SEQ: the pattern goes into the next empty slot, and the view goes to the copy (what plays goes on).
+func (a *App) SeqCopy() {
+	if a.scr != Seq || a.Modal() || a.prompt != nil || a.aHeld {
+		return
+	}
+	a.CancelShift()
+	if _, ok := a.doc(); !ok {
+		a.say("pattern "+a.label(a.pat-1)+" is empty: nothing to copy", true)
+		return
+	}
+	from, to := a.pat, a.freePattern()
+	if to < 0 {
+		a.say("all 160 patterns are used", true)
+		return
+	}
+	pre := a.lab.Snapshot()
+	if err := a.lab.CopyPattern(from, to); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	a.commitUndo(pre, A, 0)
+	a.refresh()
+	a.setPattern(to)
+	msg := fmt.Sprintf("%s copied to %s (u takes it back)", a.label(from-1), a.label(to-1))
+	if a.seqOn && a.playPat != 0 && a.playPat != a.pat {
+		msg += ": n plays it next"
+	}
+	a.say(msg, false)
+}
+
+// SeqAddTrack is . of a keyboard on SEQ: choose a pad for a new track, starting in the bank of the pattern.
+func (a *App) SeqAddTrack() {
+	if a.scr != Seq || a.Modal() || a.prompt != nil || a.aHeld {
+		return
+	}
+	a.CancelShift()
+	a.addTrackPick()
+}
+
+// SeqClearTrack is d of a keyboard on SEQ (the grid and the mixer): the track under the cursor leaves the pattern, every note of
+// it (u brings them back).
+func (a *App) SeqClearTrack() {
+	if a.scr != Seq || a.Modal() || a.prompt != nil || a.aHeld || len(a.rows) == 0 {
+		return
+	}
+	a.CancelShift()
+	pad := a.rowPad()
+	n := len(a.trackNotes(pad))
+	if n == 0 {
+		a.say(a.label(pad)+" has no notes in this pattern", true)
+		return
+	}
+	pre := a.lab.Snapshot()
+	args, _ := json.Marshal(lab.PatternArgs{Pad: pad})
+	if err := a.lab.PatternOp(a.pat, "clearPad", args); err != nil {
+		a.say(err.Error(), true)
+		return
+	}
+	a.commitUndo(pre, A, 0)
+	a.refresh()
+	// the track leaves the pattern: its row goes (unless it is the only one), the cursor on the track after it, or before
+	extras := a.rowExtra[:0]
+	for _, p := range a.rowExtra {
+		if p != pad {
+			extras = append(extras, p)
+		}
+	}
+	a.rowExtra = extras
+	switch {
+	case a.row+1 < len(a.rows):
+		a.rowFocus = a.rows[a.row+1]
+	case a.row > 0:
+		a.rowFocus = a.rows[a.row-1]
+	}
+	a.autoRows()
+	a.replay()
+	a.say(fmt.Sprintf("%s removed from pattern %s: %s gone (u brings them back)", a.label(pad), a.label(a.pat-1), count(n, "note")), false)
+}
+
 // ToggleBars is the z key of a keyboard on SEQ: one bar in view, or as many as the window holds.
 func (a *App) ToggleBars() {
 	if a.scr != Seq || a.menu != nil || a.prompt != nil {
@@ -1174,7 +1290,7 @@ func (a *App) padsKey(k Key) {
 }
 
 func (a *App) stop() {
-	a.playPat = 0
+	a.playPat, a.queued = 0, 0
 	a.placed = nil
 	if a.Audio != nil {
 		a.Audio.Stop()

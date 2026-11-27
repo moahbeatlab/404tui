@@ -73,6 +73,7 @@ type menuItem struct {
 	header   bool          // a heading for the items below it: not chosen, only read
 	tab      bool          // a heading that is also a tab (the menu has tabs)
 	keepOpen bool
+	hidden   bool // not shown, not chosen (a setting that does not apply now, as one type's settings under another)
 }
 
 func (m *menu) item() *menuItem { m.settle(); return &m.items[m.cur] }
@@ -89,7 +90,7 @@ func (m *menu) head(label string) { m.items = append(m.items, menuItem{label: la
 func (m *menu) step(d int) {
 	for i := 0; i < len(m.items); i++ {
 		m.cur = (m.cur + d + len(m.items)) % len(m.items)
-		if !m.items[m.cur].header {
+		if !m.items[m.cur].header && !m.items[m.cur].hidden {
 			return
 		}
 	}
@@ -97,7 +98,7 @@ func (m *menu) step(d int) {
 
 // settle puts the cursor on an item that can be chosen (the menu opens on one).
 func (m *menu) settle() {
-	if len(m.items) > 0 && m.items[m.cur].header {
+	if len(m.items) > 0 && (m.items[m.cur].header || m.items[m.cur].hidden) {
 		m.step(1)
 	}
 }
@@ -144,7 +145,7 @@ func (a *App) menuKey(k Key) {
 			}
 		} else {
 			m.cur = max(0, min(m.cur+d*8, len(m.items)-1))
-			if m.items[m.cur].header {
+			if m.items[m.cur].header || m.items[m.cur].hidden {
 				m.step(d)
 			}
 		}
@@ -190,16 +191,26 @@ func (a *App) drawMenu(g Gfx) {
 	if m.tabs != nil {
 		tabRows = 1
 	}
-	vis := min(len(m.items), max(Rows-3-3-tabRows-m.footH, 3))
-	top := max(0, min(m.cur-vis/2, len(m.items)-vis))
+	var rows []int // the items shown (a hidden one is left out), and where the cursor is among them
+	at := 0
+	for i, it := range m.items {
+		if i == m.cur {
+			at = len(rows)
+		}
+		if !it.hidden {
+			rows = append(rows, i)
+		}
+	}
+	vis := min(len(rows), max(Rows-3-3-tabRows-m.footH, 3))
+	top := max(0, min(at-vis/2, len(rows)-vis))
 	hr := 3 + tabRows + vis + m.footH // the rows of the dialog: a blank one at the top and the bottom for the frame
 	x := (contentCols - wc) / 2
 	y := 1 + max((Rows-3-hr)/2, 0)
 	g.Fill(x, y, wc, hr, cPanel2)
 	g.Frame(x, y, wc, hr, cAmber)
 	title := strings.ToUpper(m.title)
-	if len(m.items) > vis {
-		title += fmt.Sprintf("  %d/%d", m.cur+1, len(m.items))
+	if len(rows) > vis {
+		title += fmt.Sprintf("  %d/%d", at+1, len(rows))
 	}
 	g.Text(x+2, y+1, fit(title, wc-6), cAmber, true)
 	if m.tabs != nil {
@@ -216,7 +227,7 @@ func (a *App) drawMenu(g Gfx) {
 	}
 	iy := y + 2 + tabRows
 	for r := 0; r < vis; r++ {
-		i := top + r
+		i := rows[top+r]
 		it := m.items[i]
 		yy := iy + r
 		if it.header {
@@ -250,7 +261,7 @@ func (a *App) drawMenu(g Gfx) {
 	if top > 0 {
 		g.Text(x+wc-4, y+1, "^", cAmber, true)
 	}
-	if top+vis < len(m.items) {
+	if top+vis < len(rows) {
 		g.Text(x+wc-4, y+hr-2, "v", cAmber, true)
 	}
 }
@@ -421,3 +432,31 @@ func (a *App) carryKey(k Key) {
 }
 
 var _ = formats.PPQ
+
+// diceLabel is the item of a tool's dialog that rolls the dice again (n on a keyboard).
+const diceLabel = "Another roll of the dice"
+
+// menuDice is the open menu's roll of the dice, nil when it has none.
+func (a *App) menuDice() *menuItem {
+	if a.menu == nil {
+		return nil
+	}
+	for _, list := range [][]menuItem{a.menu.items, a.menu.full} {
+		for i := range list {
+			if list[i].label == diceLabel && list[i].run != nil {
+				return &list[i]
+			}
+		}
+	}
+	return nil
+}
+
+// MenuDice rolls the dice of the open dialog (n on a keyboard): false when it has none.
+func (a *App) MenuDice() bool {
+	it := a.menuDice()
+	if it == nil {
+		return false
+	}
+	it.run(it.val)
+	return true
+}
